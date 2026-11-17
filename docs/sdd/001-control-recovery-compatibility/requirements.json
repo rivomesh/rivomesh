@@ -664,8 +664,8 @@
         "en": "Consistency-gap ledger and honest watermarks"
       },
       "gap": {
-        "zh-CN": "持久计划/原生SKIP凭据/缺口台账及公开缺口告警已通过PG/MySQL原生合同和两种控制库真实同步恢复；普通APPLY不删除缺口。验证关闭缺口、补偿闭环及全部目标语义仍未完成。",
-        "en": "Durable plans/native SKIP receipts/gap ledger and public warnings pass native PG/MySQL contracts and real recovery on both control stores. Normal APPLY retains gaps. Verified gap closure,compensation and complete destination semantics remain open."
+        "zh-CN": "持久计划/原生SKIP凭据/缺口台账及公开告警已验收；新增内部共同点全表重扫与原子核验记录，H2/PG/MySQL内部合同已通过，仍待公开API/UI、真实同步链路验收及补偿闭环，不将历史MATCH当成实时一致。",
+        "en": "Durable plans/native SKIP receipts/gap ledger and public warnings are accepted. Internal fresh common-cut scans and atomic verification records are added;H2/PG/MySQL internal contracts pass;public API/UI,real-CDC acceptance and compensation remain open. Historical MATCH is not current live equality."
       },
       "acceptance": {
         "zh-CN": "记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。",
@@ -685,7 +685,9 @@
         "sync-app/src/main/resources/console/recovery.js",
         "tests/ui/recovery-cases.mjs",
         "docs/zh-CN/transaction-skip.md",
-        "docs/en/transaction-skip.md"
+        "docs/en/transaction-skip.md",
+        "docs/sdd/001-control-recovery-compatibility/design-gap-verification.md",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/GapVerificationLedgerTest.java"
       ]
     },
     {
@@ -935,7 +937,7 @@
       "dependsOn": [],
       "evidence": [
         "docs/zh-CN/performance.md",
-        "docs/benchmarks/2026-11-15-runtime/matrix.json"
+        "docs/verification/baseline.json"
       ]
     },
     {
@@ -1347,19 +1349,20 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "已有白名单对象、UNIQUE/GSI转换和v2兼容；完整动态DDL、复杂类型及显式迁移/回退仍缺。",
-        "en": "Supported objects/index conversion and v2 compatibility exist;full dynamic DDL,types and explicit migration/rollback remain open."
+        "zh-CN": "已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。",
+        "en": "Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility."
       },
       "acceptance": {
-        "zh-CN": "对象变化有历史schema和计划，身份键不降级；发布v2/v3/新控制与缺口状态迁移、备份/回退或安全拒绝方案；各产品不支持项明确。",
-        "en": "Preserve schema history/plans and identity keys;publish v2/v3/new control-gap schema migrations,backup/rollback or safe refusal with product-specific limits."
+        "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
+        "en": "Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits."
       },
       "dependsOn": [
         "SO-01"
       ],
       "evidence": [
         "docs/zh-CN/pipeline-v3.md",
-        "docs/zh-CN/rename-migration.md"
+        "docs/zh-CN/rename-migration.md",
+        "docs/zh-CN/first-release.md"
       ]
     },
     {

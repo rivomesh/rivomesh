@@ -39,7 +39,7 @@ Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bo
 | RC-05 | P0 / DONE | Uncertain commit and checkpoint reconciliation | Protocol6 original-Agent/LOCAL-journal bounded profile accepted on PG/MySQL control stores:whole-task pause,fresh evidence,native fencing,cross-entry ADMIN confirmation,atomic ACK/receipt and idempotent retry,with both pauses retained. Skip,compensation and full additional matrices remain separate. |
 | RC-06 | P0 / NEW | Failed-transaction before-image compensation | COMMON_CUT repair exists but does not reconstruct the failed transaction pre-state. |
 | RC-07 | P0 / PARTIAL | Guided manual corrective data entry | Report-driven repair exists without independent failed-transaction/manual patches. |
-| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Durable plans/native SKIP receipts/gap ledger and public warnings pass native PG/MySQL contracts and real recovery on both control stores. Normal APPLY retains gaps. Verified gap closure,compensation and complete destination semantics remain open. |
+| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Durable plans/native SKIP receipts/gap ledger and public warnings are accepted. Internal fresh common-cut scans and atomic verification records are added;H2/PG/MySQL internal contracts pass;public API/UI,real-CDC acceptance and compensation remain open. Historical MATCH is not current live equality. |
 | RC-09 | P0 / PARTIAL | Durable distributed recovery jobs | COMMON_CUT has local durable operations/receipts;distributed/new modes do not. |
 | RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | SQL,analytical and queue consistency protocols differ. |
 
@@ -68,7 +68,7 @@ Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bo
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| DO-01 | P0 / PARTIAL | Bilingual traceable SDD baseline | This change creates the v0.5 inventory;module designs,spec change control and implementation evidence closure remain open. |
+| DO-01 | P0 / PARTIAL | Bilingual traceable SDD baseline | This change creates the v0.1 inventory;module designs,spec change control and implementation evidence closure remain open. |
 | DO-02 | P1 / PARTIAL | Deployment and cluster operations docs | Existing deployment artifacts do not cover new cluster control/session models. |
 | DO-03 | P1 / PARTIAL | Recovery scenarios and FAQ | Existing reconciliation FAQ does not cover new skip,patch and distributed faults. |
 | DO-04 | P1 / PARTIAL | Configuration/API/compatibility and upgrade docs | Partial handbooks lack new APIs and a unified profile index. |
@@ -85,7 +85,7 @@ Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bo
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
 | LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Helm/native static checks do not establish live-cluster safety. |
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | Small benchmark tools exist;large-transaction/catalog/cache/capacity standards remain incomplete. |
-| LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects/index conversion and v2 compatibility exist;full dynamic DDL,types and explicit migration/rollback remain open. |
+| LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Summaries/details/DOM/HTTP exist;full catalogs,cleanup,visual/accessibility evidence do not. |
 | LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Local accounts/hash-chained audit exist;external identity/anchors,licenses/NOTICE/SBOM/contribution workflows remain open. |
 
@@ -122,7 +122,7 @@ Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bo
 | SO-05 | [validation.md](../../../docs/validation.md) / [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |
-| JV-01 | [performance.md](../../../docs/zh-CN/performance.md) / [matrix.json](../../../docs/benchmarks/2026-11-15-runtime/matrix.json) |
+| JV-01 | [performance.md](../../../docs/zh-CN/performance.md) / [baseline.json](../../../docs/verification/baseline.json) |
 | JV-02 | [performance.md](../../../docs/zh-CN/performance.md) |
 | JV-03 | [verify-artifact.py](../../../tests/verify-artifact.py) / [performance.md](../../../docs/zh-CN/performance.md) |
 | JV-04 | [performance.md](../../../docs/zh-CN/performance.md) / [values.yaml](../../../deploy/helm/rivomesh/values.yaml) |

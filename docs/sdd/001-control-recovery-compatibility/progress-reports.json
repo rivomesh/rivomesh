@@ -2,16 +2,16 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-17T20:36:00+08:00",
-  "nextReportAt": "2026-11-17T21:36:00+08:00",
+  "lastReportAt": "2026-11-17T21:36:29+08:00",
+  "nextReportAt": "2026-11-17T22:36:29+08:00",
   "completedSincePrevious": [
-    "Java/Maven namespace io.github.rivomesh",
-    "Initial GitHub main push",
-    "Experimental skip UI and protocol7 deployment profiles",
-    "Bilingual skip operations and FAQ",
-    "PG/MySQL native34 protocol/data-format guard contracts on c4 candidate"
+    "RC-03 bounded complete-transaction skip accepted",
+    "First cleanup batch published:historical probes/mode migration/snapshots/preview tools removed",
+    "73 affected contracts,PG/MySQL native role/mode checks,PG32 skip,accounts and deployment checks pass"
   ],
-  "inProgress": [],
+  "inProgress": [
+    "RC-08 verified gap closure using common-cut row validation"
+  ],
   "reportContents": [
     "Current totals",
     "New completions since previous report",
@@ -20,27 +20,29 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 9,
-    "PARTIAL": 33,
+    "DONE": 10,
+    "PARTIAL": 32,
     "NEW": 6
   },
   "lastReportedPublishedCommits": [
-    "e606b650d36c448ab02f625811ab1b07b4997b58",
-    "5c256df"
+    "f57221cb51c656a82df64f4dcd2dad1e95bec673"
   ],
   "currentSdd": {
     "DONE": 10,
     "PARTIAL": 32,
     "NEW": 6
   },
-  "currentAcceptedArtifact": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
   "newSinceLastReport": [
-    "RC-03 bounded complete-transaction skip accepted",
-    "Public gap-state filtering fixed",
-    "Both native34 and both multi-node CDC26 profiles pass"
+    "RC-08 internal common-cut gap verification:atomic durable receipt,idempotent replay and rollback;public API/UI pending",
+    "61 focused H2 contracts and49 JAR-first native contracts each on PostgreSQL17/MySQL8.4 pass",
+    "Removed obsolete SDD iteration inventory,prerelease compatibility requirements and13 duplicate benchmark reports"
   ],
   "nextTasks": [
-    "RC-08:verified gap closure",
-    "RC-06:before-image compensation"
-  ]
+    "RC-06 before-image compensation",
+    "RC-07 typed corrective input",
+    "Consolidate V2/V3 execution branches"
+  ],
+  "currentCandidateArtifact": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
+  "currentCandidateScope": "Internal gap verification only;public API/UI and real-CDC closure still open",
+  "lastAcceptedPublicWorkflowArtifact": "aafb7f9ff03147b652f8a5773de61a936e6db39d47254ab00c5486849d676207"
 }

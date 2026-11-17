@@ -36,7 +36,7 @@ for entry in sorted(classes.rglob('*')):
         test_hash.update(str(entry.relative_to(classes)).encode() + b'\0' + entry.read_bytes())
 manifest = dict(status='RUNNING', product=args.product, artifactSha256=digest,
                 testClassesSha256=test_hash.hexdigest(), harnessSourceSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                scope='32 current skip model/journal/native/coordinator contracts;complete connector matrix remains open')
+                scope='49 current skip and gap-verification model/journal/native/coordinator contracts;complete connector matrix remains open')
 log = output / 'native.log'
 with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') as temporary:
     home = Path(temporary)
@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
               'environment': {**{key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},},
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',
-                          '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--reports-dir=' + container_path(output) + '/junit']}
+                          '--select-class=io.github.rivomesh.cdc.GapVerificationPlanTest', '--select-class=io.github.rivomesh.cdc.JdbcGapVerificationTest', '--select-class=io.github.rivomesh.cdc.GapVerificationLedgerTest', '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--reports-dir=' + container_path(output) + '/junit']}
     compose_file = home / 'compose.json'
     compose_file.write_text(json.dumps({'services': {'database': db, 'runner': runner}}))
     compose = ['docker', 'compose', '-p', project, '-f', str(compose_file)]
@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
                 for key in totals:
                     totals[key] += int(suite.attrib.get(key, 0))
             manifest['results'] = totals
-            assert totals == {'tests': 32, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
+            assert totals == {'tests': 49, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
             manifest['status'] = 'PASS'
         except Exception:
             manifest['status'] = 'FAIL'

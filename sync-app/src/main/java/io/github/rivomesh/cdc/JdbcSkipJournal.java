@@ -14,10 +14,11 @@ final class JdbcSkipJournal {
     static void verifyTables(JdbcJournal j,Connection c)throws Exception{
         try(Statement s=c.createStatement()){
             try(ResultSet ignored=s.executeQuery("SELECT operation_id,request_hash,plan_hash,payload,run_state,resolution,resolution_hash FROM "+j.table("skip_plan")+" WHERE 1=0")){}
-            try(ResultSet ignored=s.executeQuery("SELECT subscription_id,stream_seq,operation_id,plan_hash,receipt_hash,payload FROM "+j.table("gap")+" WHERE 1=0")){}
+            try(ResultSet ignored=s.executeQuery("SELECT subscription_id,stream_seq,operation_id,plan_hash,receipt_hash,payload,verification_id,verification_hash FROM "+j.table("gap")+" WHERE 1=0")){}
+            try(ResultSet ignored=s.executeQuery("SELECT operation_id,plan_hash,receipt_hash,payload,created_at FROM "+j.table("gap_verification")+" WHERE 1=0")){}
         }catch(SQLException missing){if(missing(missing))throw new IllegalStateException("SKIP_METADATA_LOST");throw missing;}
-        if(j.settings.driver.startsWith("com.mysql"))try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_failure','rm3_skip_plan','rm3_gap')")){
-            p.setString(1,j.settings.namespace);try(ResultSet r=p.executeQuery()){int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new IllegalStateException("SKIP_METADATA_NOT_TRANSACTIONAL");}if(count!=5)throw new IllegalStateException("SKIP_METADATA_LOST");}
+        if(j.settings.driver.startsWith("com.mysql"))try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_failure','rm3_skip_plan','rm3_gap','rm3_gap_verification')")){
+            p.setString(1,j.settings.namespace);try(ResultSet r=p.executeQuery()){int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new IllegalStateException("SKIP_METADATA_NOT_TRANSACTIONAL");}if(count!=6)throw new IllegalStateException("SKIP_METADATA_LOST");}
         }
     }
     /** Additive DDL only while preparing a first format3 recovery; format4 never recreates history. */
@@ -29,7 +30,8 @@ final class JdbcSkipJournal {
             FailureCheckpointInspection.verify(evidence.review,new JdbcFailureReview(j).inspect(c,evidence.review.subscription.id,evidence.review.subscription.errorGeneration,4L*1024*1024));
             c.rollback();c.setAutoCommit(true);
             j.ddl(c,"CREATE TABLE IF NOT EXISTS "+j.table("skip_plan")+" (pipeline_id VARCHAR(128) NOT NULL,operation_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,request_hash VARCHAR(64) NOT NULL,plan_hash VARCHAR(64) NOT NULL,payload "+j.text()+" NOT NULL,run_state VARCHAR(16) NOT NULL,resolution "+j.text()+",resolution_hash VARCHAR(64),PRIMARY KEY(pipeline_id,operation_id))");
-            j.ddl(c,"CREATE TABLE IF NOT EXISTS "+j.table("gap")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,operation_id VARCHAR(128) NOT NULL,plan_hash VARCHAR(64) NOT NULL,receipt_hash VARCHAR(64) NOT NULL,payload "+j.text()+" NOT NULL,created_at VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,subscription_id,stream_seq),UNIQUE(pipeline_id,operation_id))");
+            j.ddl(c,"CREATE TABLE IF NOT EXISTS "+j.table("gap")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,operation_id VARCHAR(128) NOT NULL,plan_hash VARCHAR(64) NOT NULL,receipt_hash VARCHAR(64) NOT NULL,payload "+j.text()+" NOT NULL,created_at VARCHAR(64) NOT NULL,verification_id VARCHAR(128),verification_hash VARCHAR(64),PRIMARY KEY(pipeline_id,subscription_id,stream_seq),UNIQUE(pipeline_id,operation_id))");
+            j.ddl(c,"CREATE TABLE IF NOT EXISTS "+j.table("gap_verification")+" (pipeline_id VARCHAR(128) NOT NULL,operation_id VARCHAR(128) NOT NULL,plan_hash VARCHAR(64) NOT NULL,receipt_hash VARCHAR(64) NOT NULL,payload "+j.text()+" NOT NULL,created_at VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,operation_id))");
             c.setAutoCommit(false);deadline.verify();verifyTables(j,c);c.commit();
         }
     }

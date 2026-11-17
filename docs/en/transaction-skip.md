@@ -2,6 +2,8 @@
 
 Status:RC-03 bounded profile accepted;RC-08 verified gap closure remains open. [Evidence](../verification/README.md). Java8,MySQL8.4 source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores are accepted. Native MySQL target contracts pass;its full public skip matrix and other destinations remain open. Shared-task clusters default to disabled;standalone administrator controls still require complete evidence/explicit approval. [中文](../zh-CN/transaction-skip.md).
 
+Internal gap verification provides fresh whole-table scans at a common cut and atomic receipts,with passing H2/PG/MySQL contracts. Administrator API/UI and real-CDC closure acceptance remain pending;operators cannot yet close gaps through the console. See the [design and boundaries](../sdd/001-control-recovery-compatibility/design-gap-verification.en.md).
+
 ## Scope and consequences
 
 The initial scope is a MySQL source and transactional PostgreSQL/MySQL destinations. The next complete incremental transaction must have retained raw and normalized evidence. Only the synchronization service may write the destination. Schema, snapshot, ownership and dependency checks must pass. Cross-table transactions cannot be split. Snapshot, capture/decode, unknown transaction boundaries and other destination products are excluded.

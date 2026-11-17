@@ -2,6 +2,8 @@
 
 状态：RC-03首批限定档案已验收，RC-08验证关闭缺口仍未完成。[证据](../verification/README.md)。已验收Java8、MySQL8.4源、原Agent/LOCAL日志、PostgreSQL业务目标及PG/MySQL控制库；MySQL目标原生合同已通过，其完整公开跳过矩阵及其他产品仍待补验。共享任务集群默认关闭；独立控制器提供管理员入口，仍要求完整证据与显式审批。English: [Transaction skipping](../en/transaction-skip.md)。
 
+内部缺口核验组件已实现共同点全表重扫及原子核验凭据，H2/PG/MySQL合同通过。管理员API/UI和真实同步链路的核验关闭尚未接入，当前不能通过界面关闭缺口；详见[设计与边界](../sdd/001-control-recovery-compatibility/design-gap-verification.md)。
+
 ## 适用范围
 
 目前限定MySQL源、事务型PostgreSQL/MySQL目标、已经持久保存原始及规范化内容的下一笔完整增量事务。目标只能由同步服务写入；表结构、快照、归属及依赖检查必须通过。不能拆分跨表事务，也不能用于全量快照、采集/解码失败、未知事务边界或其他目标产品。

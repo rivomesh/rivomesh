@@ -20,3 +20,7 @@ The compact [baseline](baseline.json) preserves the exact bounded acceptance pro
 最新清理前的功能档案：Java8、MySQL8.4双库源、原Agent/LOCAL日志、PostgreSQL业务目标，PG/MySQL控制库各26项真实同步检查，PG/MySQL原生合同各34项、96 DOM及发布包51项专项。34项中含现已删除的开发版兼容探针；清理后的原生恢复回归改为32项，不能将两者相加。首次全量回归的租约过期与51项定向重跑情况在baseline.json中如实保留。
 
 The cleaned baseline removes automatic control-mode migration and historical binary tests. Namespace mode remains fixed and mismatches refuse;lease fencing,data integrity and current recovery tests remain. V2/V3 execution consolidation is a separate pending cleanup batch.
+
+当前内部缺口核验：Java8构建包 `68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68`，61项H2专项及PostgreSQL17/MySQL8.4各49项发布包优先合同通过。两种产品均使用合成源事务，不能替代真实采集链路或管理界面闭环验收；RC-08仍为PARTIAL。所有8份界面资源与前一基线完全相同，96 DOM结果仅按字节一致复用。
+
+Current internal gap verification passes bounded native contracts;public closure API/UI and real-CDC workflow acceptance remain open. Older per-run benchmark files are replaced by compact provenance in baseline.json. No full source/vendor/JDK/K8s recertification is claimed.

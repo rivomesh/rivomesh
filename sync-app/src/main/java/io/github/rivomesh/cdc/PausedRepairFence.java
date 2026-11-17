@@ -31,6 +31,8 @@ public final class PausedRepairFence implements AutoCloseable {
         if(!Objects.equals(cut.generation,state.get("generation"))||!"PAUSED".equals(state.get("state"))||cut.epoch!=(long)state.get("epoch")||cut.errorGeneration!=(long)state.get("errorGeneration")||cut.sequence!=(long)state.get("next")-1||cut.sequence!=(long)state.get("normalized")||!Objects.equals(Codec.encode(cut.capturedPosition),state.get("captured")==null?"null":state.get("captured")))throw new IllegalStateException("VALIDATION_BARRIER_MOVED");
         if(expired.get()||connection.isClosed())throw new IllegalStateException("REPAIR_FENCE_EXPIRED");
     }
+    Connection transaction()throws Exception{verify();return connection;}
+    void commitRecord()throws Exception{verify();connection.commit();}
     @Override public void close()throws Exception{
         if(closed)return;closed=true;timer.shutdownNow();try{if(!connection.isClosed())connection.rollback();}finally{connection.close();}
     }

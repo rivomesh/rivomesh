@@ -130,37 +130,49 @@
       "product": "gbase8c",
       "manual": "docs/zh-CN/gbase8c-v3.md",
       "previousEvidenceId": "2026-11-15-gbase8c",
-      "recordedScope": "# GBase 8c native acceptance / 南大通用 8c 原生验收\n\n2026-11-15. **First profile accepted; adapter remains EXPERIMENTAL and the full Rivomesh objective is incomplete.** [中文手册](../../zh-CN/gbase8c-v3.md) / [English](../../en/gbase8c-v3.md).\n\n## Final current release\n\nSHA-256 `2b462813f74210cab0b2f93a40d700c27c45dffd5ac0de5061995638fa4e6034`,187636341bytes. `pipeline-final.log`,session11839 exit0, repeats the **complete** native/mixed-fault profile against the final actual JAR, including both artifact gates and cleanup of own project73902. `package-final.log`:157root Java/SDK cases pass,0failure/error/skip. `release-unit-final.log`,session48182 exit0:155application cases independently pass with the final JAR first. Repeated executions are not additional distinct scenarios.\n\n`runtime-comparison.json` compares66512classes and every resource with accepted24a: only AdapterCatalog.class changed to describe verified capabilities. The full native case was nevertheless repeated, with production Java/assets frozen. `preview-final.log`, `preview-http-final.log` and `preview-status-final.log` verify the separate Docker preview uses this same final SHA, serves all6current UI resources with no-store, authenticates admin and denies unauthenticated APIs. Native browser inventory is empty; no screenshot/accessibility claim. Private credentials/state stay under ignored target/. Root TODO unchanged SHA256 `0e77e9ea608a9fedd041851753dc6b59f462c49ee86151b750692bac7e6ad4f7`.\n\n## Accepted runtime\n\nSHA-256 `24a6440ac419094160eef123c0a7ba55ecdb0a972e35f4a51eaf89160b3ab667`,187636327 bytes. `pipeline-24a-passed.log`,session59387 exit0, actual Java8 fat JAR, MySQL8.4.13, PostgreSQL17.12 and vendor GBase8cV6 S1.3.0B19 build8a2447f6 ARM64, PG/UTF8. All production Java/assets remained frozen for the complete case and both artifact gates passed. Own project68401 was cleaned after success.\n\n- Native product/version/mode/encoding/session checks pass. The actual A/Oracle-mode database is rejected, PostgreSQL"
+      "historicalArtifactSha256": "2b462813f74210cab0b2f93a40d700c27c45dffd5ac0de5061995638fa4e6034",
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     },
     {
       "product": "dm",
       "manual": "docs/zh-CN/dm-v3.md",
       "previousEvidenceId": "2026-11-15-dm",
-      "recordedScope": "# DM8 native-mode acceptance / 达梦原生验收\n\n2026-11-15. **首批配置通过，目录保持EXPERIMENTAL；整个Rivomesh目标尚未完成。** [中文手册](../../zh-CN/dm-v3.md) / [English](../../en/dm-v3.md)。\n\n## Final current release\n\nFinal immutable SHA256 `2753680903200ace25175d36fa4d9f9d3f699e2e0574f664b466535c8659a16b`,186792196bytes. `pipeline-final.log`,session33970 exit0, reruns the **complete** native/empty-layout/mixed-fault profile against the final actual JAR, including artifact gates and cleanup of own project5957. `package-final.log`:151root Java/SDK cases pass,0failure/error/skip. `release-unit-final.log`,session28304 exit0:149application cases independently pass with the final JAR first. `ui-final.log`:40DOM checks pass. These repeated executions are not additional distinct scenarios.\n\n`runtime-comparison.json` compares66166classes and every archive resource with acceptedffc42c: only AdapterCatalog.class changes to describe verified capabilities. Other runtime/resource bytes are identical, and final native acceptance was still repeated. Production sources/assets remained frozen during each native run. `artifact-final.log` verifies source asset equality, driver services and Java8 vendor/application bytecode. Root TODO unchanged SHA256 `0e77e9ea608a9fedd041851753dc6b59f462c49ee86151b750692bac7e6ad4f7`.\n\n## Accepted runtime and scope\n\n`pipeline-ffc42c-passed.log`, actual Java8 fat JAR SHA256 `ffc42c7e55998e1e6aa56346a8dd119f72a404e1281e510c4d8055a2c1a60001`,186792152bytes, session70919 exit0. Native DM8.1.4.80 ARM64/vendor JDBC8.1.3.140, source MySQL8.4.13 and peer PostgreSQL17.12. Source, release classes and console assets stayed frozen for the complete case; both artifact gates passed.\n\n- Every connection checks actual DM product/banner, native COMPATIBLE_MODE0, UTF8, CASE_SENSITIVE1, BLANK_PAD_MODE1, NORMAL/PRIMARY+OPEN and COMMIT_WRITE WAIT; sets session UTC and preserves empty strings. No global parameters/promotion/license bypass.\n- Actual two-schema business/checkpoint commit, committed replay, d"
+      "historicalArtifactSha256": "2753680903200ace25175d36fa4d9f9d3f699e2e0574f664b466535c8659a16b",
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     },
     {
       "product": "kingbase",
       "manual": "docs/zh-CN/kingbase-v3.md",
       "previousEvidenceId": "2026-11-15-kingbase",
-      "recordedScope": "# Kingbase PG/UTF8 native acceptance / 金仓原生验收\n\n2026-11-15. **首批配置通过，能力仍为 EXPERIMENTAL；不代表全部版本/模式、集群或整个 Rivomesh 目标完成。** 中文手册：[Kingbase](../../zh-CN/kingbase-v3.md)，English：[Kingbase](../../en/kingbase-v3.md)。\n\n## Final current release\n\nFinal SHA256 `075f6bc61b32464e764538ebcb097fea0c3df7dd28471fa5a8c63a3e1a807be8`,185388742bytes. `pipeline-final.log`,session85091 exit0, repeats the **complete** native and mixed profile against the final frozen actual JAR, including final artifact checks and cleanup of own project60592. `package-final.log`:145root Java/SDK executions pass,0failure/error/skip. `release-unit-final.log`,session79034 exit0:143application cases separately pass with the final fat JAR first. `ui-final.log`:39DOM checks pass. Repeated executions are not additional distinct scenarios.\n\n`runtime-comparison.json` compares65739class entries and all archive resources with native-accepted7c0c2b: the only changed entry is AdapterCatalog.class updating capability notes to the verified first-profile scope. All other runtime/resource bytes are identical; the final full native run was nevertheless repeated. Source/UI stayed frozen throughout each native run. `artifact-final.log` verifies source assets, driver services and Java8 bytecode. Root TODO remains unchanged, SHA256 `0e77e9ea608a9fedd041851753dc6b59f462c49ee86151b750692bac7e6ad4f7`.\n\n## Accepted actual runtime\n\n`pipeline-7c0c2b-passed.log`, actual Java8 fat JAR SHA256 `7c0c2b7b640e8138f06e0e8f43bec53232fda3e2772be8dac92b2a8640b22d4c`,185388682bytes. Session16765 exited0, including final distributable asset/class gate. Actual source MySQL8.4.13, peer PostgreSQL17.12 ARM64, KingbaseES V009R001C001B0025 ARM64, PG/UTF8 mode, vendor JDBC9.0.1.\n\n- Native profile checks writable mode, UTF8/empty strings/case comparison and sets UTC/standard strings/local synchronous commit. Changes an actual session to synchronous_commit=off, verifies correction to on, then proves a read-only endpoint gives a retryable connection error"
+      "historicalArtifactSha256": "075f6bc61b32464e764538ebcb097fea0c3df7dd28471fa5a8c63a3e1a807be8",
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     },
     {
       "product": "doris",
       "manual": "docs/zh-CN/doris-v3.md",
       "previousEvidenceId": "2026-11-15-doris-hardening",
-      "recordedScope": "# Doris SQL-mode and encoding hardening / SQL 模式与字符校验\n\n2026-11-15. Accepted native release SHA-256 `11667063fff1ee2c39d23df260b5b3bfe3d4e944c9009a1b696e890515ae1fd8` (145805476 bytes), preserved privately in `target/release-evidence/doris-hardening-11667063.jar`.\n\n- Maven: 2 Classic SDK +114 application tests, zero failure/error/skip.\n- Actual Java 8 release/native Doris 4.1.3: full original materializer restart and older-nonempty FE/BE backup refusal repeated after switching catalog/receipt/row predicates to binary prepared parameters.\n- Added actual EMPTY and NO_BACKSLASH_ESCAPES session profiles. Quoted/backslash table names, quote/backslash/Unicode/emoji text, snapshot, CDC and a new materializer/JDBC session preserving checkpoint all passed. The session mode was queried and checked, not assumed from a URL. The native placeholder probe included SQL-looking text and checked exact returned bytes/text.\n- The adapter forces useServerPrepStmts=true and emulateUnsupportedPstmts=false; unsupported prepared protocols fail instead of silently falling back to literal interpolation. DDL comments accept internal safe identifiers only. Existing ownership/schema metadata and fingerprints remain compatible.\n- Malformed UTF-16 input now throws a safe deterministic DORIS_TEXT_ENCODING_INVALID argument failure (no row/cause payload); unit coverage verifies it is not retried. Valid supplementary Unicode remains accepted.\n- Original target cluster/TLS/other-JDK/capacity and arbitrary partial-table rollback limits remain. The earlier526mixed source pipeline predates this change. It is now supplemented by an actual current 9a087 mixed pipeline below.\n\nFirst launch used an incorrect probe binary path; that probe is not acceptance. Official image actually provides /usr/bin/mysql. Native script initially invoked without bash lacked execute permission; it ran successfully with bash. No production configuration or unrelated containers were changed. Own rivomesh-doris-dev-421 volumes/conta"
+      "historicalArtifactSha256": "11667063fff1ee2c39d23df260b5b3bfe3d4e944c9009a1b696e890515ae1fd8",
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     },
     {
       "product": "hive",
       "manual": "docs/zh-CN/hive-v3.md",
       "previousEvidenceId": "2026-11-15-hive",
-      "recordedScope": "# Hive experimental acceptance / Hive 实验适配验收\n\n2026-11-15. **Current independent native and corrected real MySQL mixed profiles passed.** 原生用例与真实源采集链路分别有证据，完整平台需求仍未完成。\n\n## Current release and verified scope\n\nNative-accepted release SHA-256 `5c23ea0d7f05c726f731ebf985392bb2fea4572797432cfcc773a287209cacb6`,184135976bytes; preserved privately at `target/release-evidence/hive-cache-5c23ea.jar`. The first profile requires server default, writer and every reader to disable `hive.query.results.cache.enabled`. This release retains the earlier data/checkpoint layout and refuses an enabled writer session with `HIVE_QUERY_CACHE_DISABLED_REQUIRED`.\n\n| Evidence | Actual scope |\n|---|---|\n| `package-cache.log` | Root selected unit/API:2 Classic SDK+126 application=128 passing;0failure/error/skip |\n| `release-unit-cache.log` | Separate actual-fat-JAR-first execution:126 application cases passing; not126 additional distinct scenarios |\n| `native-cache.log` | Complete Java8/native Hive case, terminal accepted marker, same final JAR hash and own-project cleanup |\n| `ui-cache-guidance.log` |33DOM checks, including bilingual cache-recovery instructions; guidance packaged in9ba60d UI release; see byte comparison below |\n| `deployment-plan.log` | Static Helm/native parity, roles, grants and deployment checks; not live Kubernetes acceptance |\n\nIndependent native case uses released MessageSink/JdbcJournal/Hive classes. Harness is freshly compiled only against the release JAR; synthetic transactions/SourcePosition exercise the Sink contract, not actual binlog capture. It verified:\n\n- Native enabled-cache session rejected before initialization. A test-only reflective access to the real materializer client sets the native session flag, then calls real `prepare`; no alternate production class is substituted.\n- Managed full-ACID ORC history/latest-version views, PK movement/replay, keyless identical2→1 deletion, stale native versions unable to replace newer data.\n- Exact uint64 maximum,65digit/"
+      "historicalArtifactSha256": "5c23ea0d7f05c726f731ebf985392bb2fea4572797432cfcc773a287209cacb6",
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     },
     {
       "product": "classic",
       "manual": "docs/zh-CN/classic-v3.md",
       "previousEvidenceId": "2026-11-15-classic",
-      "recordedScope": "# Classic acceptance, 2026-11-15\n\nUnmodified native, pipeline, artifact and DOM output copied from this workspace.\nThe native log is one actual-release Java8 transport/restore fixture. The pipeline\nlog is one actual-release LOCAL-H2 MySQL8.4 + Classic5.19.12 + PostgreSQL17 case;\nit is not an eight-message-product or cluster matrix.\n\nThe final Maven run `target/classic-final-unit-package.log` passed2 SDK tests and\n63 selected core/API tests, no failures/errors/skips. UI20 cases passed.\n`runtime-comparison.json` compares all final class bytes with the accepted\npipeline release: only capability-catalog text changed. It also compares runtime\nresources, excluding Maven metadata/manifest. Final artifact identity is in\n`artifact.log`. Broker TLS/replication/power-loss/capacity/all-JRE acceptance remain\npending. Client5.16.8 is Java8-compatible and inactive upstream; do not infer its\nsupport lifecycle from broker5.19.12.\n"
+      "historicalArtifactSha256": null,
+      "scope": "Historical bounded native profile;adapter remains EXPERIMENTAL. Current constraints are in the linked manual;this change does not recertify the connector.",
+      "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673"
     }
   ],
   "latestAcceptedBeforeCleanup": {
@@ -178,11 +190,8 @@
     "businessChecksPerControlProduct": 26
   },
   "cleanupValidation": {
-    "artifact": "target/release-evidence/current/rivomesh.jar",
     "artifactSha256": "aafb7f9ff03147b652f8a5773de61a936e6db39d47254ab00c5486849d676207",
-    "testClasses": "target/release-evidence/current/test-classes",
     "testClassesSha256": "64075754e19b842ede707f418c495e4dcedf8be85370fc22690e66168d2ed762",
-    "sourceManifest": "target/release-evidence/current/sources.json",
     "sourceManifestSha256": "03890778985a801c53589d8b4179181bbcd9765b927366a9e7931328572e4269",
     "status": "PASS_CLEANUP_SCOPE",
     "scope": "Current control-mode invariance,role races,account recovery and PostgreSQL skip contracts. No full source/vendor/JDK/K8s recertification claim.",
@@ -201,5 +210,134 @@
       "allEightConsoleAssetsIdentical": true
     },
     "nativeRoleFixtureSha256": "600d17878f2cd7c0af538b8b2cef8db354762386fa35250acfae8ab48142ab07"
+  },
+  "historicalRuntimeProfile": {
+    "artifactSha256": "2985bbbb51b84ec8de97d8a9b44c88d5a5a1d737032b1e13263d03d4a9134aa0",
+    "scope": "MySQL source -> PostgreSQL target, one keyed ASCII table, snapshot/CDC and exact content checks. Not whole-platform/JDBC/MQ/TLS/failover acceptance or a hardware throughput standard.",
+    "profiles": [
+      {
+        "java": "8",
+        "journalMode": "LOCAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"1.8.0_512\"\nOpenJDK Runtime Environment (Temurin)(build 1.8.0_512-b09)\nOpenJDK 64-Bit Server VM (Temurin)(build 25.512-b09, mixed mode)"
+      },
+      {
+        "java": "8",
+        "journalMode": "EXTERNAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"1.8.0_512\"\nOpenJDK Runtime Environment (Temurin)(build 1.8.0_512-b09)\nOpenJDK 64-Bit Server VM (Temurin)(build 25.512-b09, mixed mode)"
+      },
+      {
+        "java": "11",
+        "journalMode": "LOCAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"11.0.33\" 2026-10-20\nOpenJDK Runtime Environment Temurin-11.0.33+10 (build 11.0.33+10)\nOpenJDK 64-Bit Server VM Temurin-11.0.33+10 (build 11.0.33+10, mixed mode, sharing)"
+      },
+      {
+        "java": "11",
+        "journalMode": "EXTERNAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"11.0.33\" 2026-10-20\nOpenJDK Runtime Environment Temurin-11.0.33+10 (build 11.0.33+10)\nOpenJDK 64-Bit Server VM Temurin-11.0.33+10 (build 11.0.33+10, mixed mode, sharing)"
+      },
+      {
+        "java": "17",
+        "journalMode": "LOCAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"17.0.21\" 2026-10-20\nOpenJDK Runtime Environment Temurin-17.0.21+9 (build 17.0.21+9)\nOpenJDK 64-Bit Server VM Temurin-17.0.21+9 (build 17.0.21+9, mixed mode, sharing)"
+      },
+      {
+        "java": "17",
+        "journalMode": "EXTERNAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"17.0.21\" 2026-10-20\nOpenJDK Runtime Environment Temurin-17.0.21+9 (build 17.0.21+9)\nOpenJDK 64-Bit Server VM Temurin-17.0.21+9 (build 17.0.21+9, mixed mode, sharing)"
+      },
+      {
+        "java": "21",
+        "journalMode": "LOCAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+      },
+      {
+        "java": "21",
+        "journalMode": "EXTERNAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+      },
+      {
+        "java": "25",
+        "journalMode": "LOCAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"25.0.5\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-25.0.5+8 (build 25.0.5+8-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.5+8 (build 25.0.5+8-LTS, mixed mode, sharing)"
+      },
+      {
+        "java": "25",
+        "journalMode": "EXTERNAL",
+        "status": "PASSED",
+        "actualJavaVersion": "openjdk version \"25.0.5\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-25.0.5+8 (build 25.0.5+8-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.5+8 (build 25.0.5+8-LTS, mixed mode, sharing)"
+      }
+    ],
+    "provenanceCommit": "f57221cb51c656a82df64f4dcd2dad1e95bec673",
+    "currentCandidateRecertified": false
+  },
+  "currentValidation": {
+    "artifact": "target/release-evidence/current/rivomesh.jar",
+    "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
+    "testClasses": "target/release-evidence/current/test-classes",
+    "testClassesSha256": "2d9f15b0be501ee96796c4fb40290680fc348376aff10391be716692192798a7",
+    "sourceManifest": "target/release-evidence/current/sources.json",
+    "sourceManifestSha256": "70eccaed77dcf9211b29a5b43c2fbee4577088248f6c6df3fcea49eb0ad33f84",
+    "status": "PASS_INTERNAL_GAP_VERIFICATION",
+    "scope": "Java8;61 focused H2 contracts plus49 JAR-first native contracts on each of PG17/MySQL8.4 journals and business targets. Synthetic source transactions;public gap closure API/UI and real-CDC closure acceptance remain open.",
+    "unitContracts": 61,
+    "domReuse": {
+      "tests": 96,
+      "artifactSha256": "aafb7f9ff03147b652f8a5773de61a936e6db39d47254ab00c5486849d676207",
+      "allEightConsoleAssetsIdentical": true
+    },
+    "nativeProducts": {
+      "POSTGRESQL": {
+        "tests": 49,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cleanupExitCode": 0,
+        "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
+        "images": {
+          "postgres:17": {
+            "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:8-jre": {
+            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+            "architecture": "arm64"
+          }
+        }
+      },
+      "MYSQL": {
+        "tests": 49,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "cleanupExitCode": 0,
+        "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
+        "images": {
+          "mysql:8.4": {
+            "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:8-jre": {
+            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+            "architecture": "arm64"
+          }
+        }
+      }
+    },
+    "sddCounts": {
+      "DONE": 10,
+      "PARTIAL": 32,
+      "NEW": 6
+    },
+    "sourceManifestScope": "Build/test/deployment inputs;documentation excluded to avoid self-referential evidence hashes",
+    "brokenMarkdownLinks": 0
   }
 }

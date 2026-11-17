@@ -39,7 +39,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | RC-05 | P0 / DONE | 不确定提交与断点核对 | 协议6原Agent/LOCAL日志、PG/MySQL控制库限定档案已验收：全任务暂停、新证据、原生围栏、管理员跨入口确认、ACK/回执原子提交及幂等重试，保持原暂停。跳过、补偿和其他完整矩阵另行追踪。 |
 | RC-06 | P0 / NEW | 失败事务前镜像补偿 | 已有共同校验点修复，尚不能让落后的失败目标回到原事务可重放状态。 |
 | RC-07 | P0 / PARTIAL | 界面手工补数据与修正 | 已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。 |
-| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 持久计划/原生SKIP凭据/缺口台账及公开缺口告警已通过PG/MySQL原生合同和两种控制库真实同步恢复；普通APPLY不删除缺口。验证关闭缺口、补偿闭环及全部目标语义仍未完成。 |
+| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 持久计划/原生SKIP凭据/缺口台账及公开告警已验收；新增内部共同点全表重扫与原子核验记录，H2/PG/MySQL内部合同已通过，仍待公开API/UI、真实同步链路验收及补偿闭环，不将历史MATCH当成实时一致。 |
 | RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。 |
 | RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | SQL、分析库、消息队列一致性协议不同，不能复用一个伪事务实现。 |
 
@@ -68,7 +68,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| DO-01 | P0 / PARTIAL | 双语SDD基线与范围可追踪 | 本轮建立v0.5基线；详细模块设计、规格变更管理和实现证据闭环仍需完成。 |
+| DO-01 | P0 / PARTIAL | 双语SDD基线与范围可追踪 | 本轮建立v0.1基线；详细模块设计、规格变更管理和实现证据闭环仍需完成。 |
 | DO-02 | P1 / PARTIAL | 四类部署与多节点运维文档 | 现有Linux/Docker/Helm/原生K8s文件未覆盖新集群控制与会话模型。 |
 | DO-03 | P1 / PARTIAL | 恢复场景和FAQ完整手册 | 现有校验/共同点修复FAQ不能覆盖新跳过、补数据与跨节点故障。 |
 | DO-04 | P1 / PARTIAL | 配置/API/兼容性与升级文档 | 已有部分手册，缺新接口与统一源/目标/JDK档案索引。 |
@@ -85,7 +85,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
 | LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | Helm/原生清单通过静态检查，不能证明真实集群安全。 |
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | 有小规模基准工具，超大事务分片、目录分页、有界缓存与容量标准未完整完成。 |
-| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象、UNIQUE/GSI转换和v2兼容；完整动态DDL、复杂类型及显式迁移/回退仍缺。 |
+| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
 | LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。 |
 | LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 本地账号及链式审计已有；OIDC/目录、外部审计锚点、许可证/NOTICE/SBOM/贡献流程仍缺。 |
 
@@ -122,7 +122,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | SO-05 | [validation.md](../../../docs/validation.md) / [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |
-| JV-01 | [performance.md](../../../docs/zh-CN/performance.md) / [matrix.json](../../../docs/benchmarks/2026-11-15-runtime/matrix.json) |
+| JV-01 | [performance.md](../../../docs/zh-CN/performance.md) / [baseline.json](../../../docs/verification/baseline.json) |
 | JV-02 | [performance.md](../../../docs/zh-CN/performance.md) |
 | JV-03 | [verify-artifact.py](../../../tests/verify-artifact.py) / [performance.md](../../../docs/zh-CN/performance.md) |
 | JV-04 | [performance.md](../../../docs/zh-CN/performance.md) / [values.yaml](../../../deploy/helm/rivomesh/values.yaml) |

@@ -64,7 +64,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-RC-05 · Uncertain commit and checkpoint reconciliation · P0 · Depends on: RC-02
   Deliver: If commit leads ACK,verify content and recover acknowledgment instead of compensating or declaring an unapplied skip;identity,generation,epoch,error/config/hash/checkpoint mismatches refuse action.
   Acceptance: AC-RC-05
-  Accepted:protocol6 cross-entry ADMIN confirmation,native comparison,whole-task pause/fencing,atomic ACK/receipt,retry and upgrade under the [bounded profile](../../verification/README.md). Skip,compensation and gaps remain separate requirements.
+  Accepted:protocol6 cross-entry ADMIN confirmation,native comparison,whole-task pause/fencing,atomic ACK/receipt,and retry under the [bounded profile](../../verification/README.md). Skip,compensation and gaps remain separate requirements.
 - [ ] T-RC-06 · Failed-transaction before-image compensation · P0 · Depends on: RC-02, RC-05
   Deliver: Reconstruct initial affected identity state across repeated keys,PK moves,insert/delete chains,keyless occurrences,JSON/generated values;modify only reviewed scope;commit compensation/receipt atomically without rewriting the source transaction/GTID.
   Acceptance: AC-RC-06
@@ -74,7 +74,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
   Deliver: Track skipped transactions/ranges,destinations,reason,actor,hashes and original evidence;separate applied progress,safe coverage and running-with-gaps;only verification evidence closes a gap and accepted loss is not equality.
   Acceptance: AC-RC-08
-  Gap records,public warnings and restart recovery pass;verified closure/compensation remain open.
+  Gap records,public warnings and restart recovery pass. Internal fresh scans and atomic verification records follow the [design](design-gap-verification.en.md);public API/UI,real-CDC acceptance and compensation remain incomplete.
 - [ ] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
   Deliver: Remote plans,approval,cancellation,receipts and evidence locations are traceable;controller/agent kill recovers the same request with idempotent commits/rollback;skip is not cutover approval.
   Acceptance: AC-RC-09
@@ -159,7 +159,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Bound memory/disk for large transactions/catalogs/slow sinks and publish multi-run hardware/workload results without linear extrapolation or count-only correctness.
   Acceptance: AC-LG-07
 - [ ] T-LG-08 · Historical DDL,types,indexes and state migration · P1 · Depends on: SO-01
-  Deliver: Preserve schema history/plans and identity keys;publish v2/v3/new control-gap schema migrations,backup/rollback or safe refusal with product-specific limits.
+  Deliver: Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits.
   Acceptance: AC-LG-08
 - [ ] T-LG-09 · Report retention and real-browser acceptance · P1 · Depends on: CP-06, SE-05, RC-09
   Deliver: Provide authorized report/receipt search,retention and active-file protection;real browsers verify cluster/session/confirmation/recovery/pagination and accessibility.
