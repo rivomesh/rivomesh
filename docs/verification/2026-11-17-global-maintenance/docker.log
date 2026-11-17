@@ -1,0 +1,7 @@
+PASS opt-in global-control two-release/native parity, protected task-key Secret reference, budgets and invalid global/key settings; live K8s acceptance remains separate
+PASS shared identity/session/audit opt-in profile and two native manifests; task routing remains separate
+PASS shared-registry two-release/native parity, stable node IDs/Secret references and invalid store/lease rejection; global task routing remains local
+PASS managed-access persisted-directory profile/default compatibility; live PVC startup acceptance remains separate
+PASS exact task grants/default+scoped native parity, empty grants and invalid wildcard/duplicate/scoped-admin rejection
+PASS Helm lint/default+RBAC native parity, Secret references, existing PVC, invalid limits/roles/no-admin/duplicate identities/credentials/literal-token rejection
+PASS nonroot Docker/health/auth/UI/config permissions/idempotency/volume restart

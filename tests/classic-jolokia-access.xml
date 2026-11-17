@@ -1,0 +1,7 @@
+<restrict>
+  <cors><allow-origin>http://classic:8161</allow-origin><allow-origin>http://classic:8161/</allow-origin><strict-checking/></cors>
+  <commands><command>read</command><command>search</command><command>exec</command></commands>
+  <allow>
+    <mbean><name>org.apache.activemq:*</name><attribute>*</attribute><operation>*</operation></mbean>
+  </allow>
+</restrict>

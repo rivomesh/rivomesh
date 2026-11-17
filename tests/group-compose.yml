@@ -1,0 +1,28 @@
+x-group-node: &group-node
+  image: ${SYNC_MYSQL_IMAGE:-mysql:8.4}
+  environment:
+    MYSQL_ROOT_PASSWORD: Sync@Test123
+    MYSQL_ROOT_HOST: "%"
+  healthcheck:
+    test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+    interval: 3s
+    timeout: 5s
+    retries: 60
+services:
+  mysql:
+    command: ["--server-id=1", "--report-host=mysql", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]
+  mysql-2:
+    <<: *group-node
+    command: ["--server-id=2", "--report-host=mysql-2", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]
+  mysql-3:
+    <<: *group-node
+    command: ["--server-id=3", "--report-host=mysql-3", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]
+  tests:
+    environment:
+      JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+    depends_on:
+      mysql-2:
+        condition: service_healthy
+      mysql-3:
+        condition: service_healthy
+    command: ["mvn", "-B", "-s", "build/settings.xml", "-Dsync.group=true", "-DtestSuite=group", "-Dtest=GroupIntegrationTest", "-Dsurefire.failIfNoSpecifiedTests=false", "verify"]

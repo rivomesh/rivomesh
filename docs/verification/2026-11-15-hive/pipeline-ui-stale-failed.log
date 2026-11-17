@@ -1,0 +1,348 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 184135976 bytes; SHA-256 5c23ea0d7f05c726f731ebf985392bb2fea4572797432cfcc773a287209cacb6
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-hive-pipeline-50599_hive-meta Creating 
+ Volume rivomesh-hive-pipeline-50599_hive-data Creating 
+ Volume rivomesh-hive-pipeline-50599_hive-data Creating 
+ Network rivomesh-hive-pipeline-50599_default Creating 
+ Volume rivomesh-hive-pipeline-50599_hive-meta Creating 
+ Network rivomesh-hive-pipeline-50599_default Creating 
+ Volume rivomesh-hive-pipeline-50599_hive-data Created 
+ Volume rivomesh-hive-pipeline-50599_hive-data Created 
+ Volume rivomesh-hive-pipeline-50599_hive-meta Created 
+ Volume rivomesh-hive-pipeline-50599_hive-meta Created 
+ Network rivomesh-hive-pipeline-50599_default Created 
+ Network rivomesh-hive-pipeline-50599_default Created 
+ Container rivomesh-hive-pipeline-50599-init-run-4e0e1727224d Creating 
+ Container rivomesh-hive-pipeline-50599-init-run-4e0e1727224d Created 
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.18.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Metastore connection URL:	 jdbc:derby:/opt/hive/rivomesh-meta/metastore_db;create=true
+Metastore connection Driver :	 org.apache.derby.jdbc.EmbeddedDriver
+Metastore connection User:	 APP
+Failed to get schema version, Cause:Table/View 'VERSION' does not exist.
+Use --verbose for detailed stacktrace.
+*** schemaTool failed ***
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.18.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Initializing the schema to: 4.0.0
+Metastore connection URL:	 jdbc:derby:/opt/hive/rivomesh-meta/metastore_db;create=true
+Metastore connection Driver :	 org.apache.derby.jdbc.EmbeddedDriver
+Metastore connection User:	 APP
+Starting metastore schema initialization to 4.0.0
+Initialization script hive-schema-4.0.0.derby.sql
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Initialization script completed
+ Container rivomesh-hive-pipeline-50599-postgres-1 Creating 
+ Container rivomesh-hive-pipeline-50599-hive-1 Creating 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Creating 
+ Container rivomesh-hive-pipeline-50599-hive-1 Created 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Created 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Created 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Starting 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Starting 
+ Container rivomesh-hive-pipeline-50599-hive-1 Starting 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Started 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Started 
+ Container rivomesh-hive-pipeline-50599-hive-1 Started 
+ Container rivomesh-hive-pipeline-50599-hive-1 Waiting 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Waiting 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Waiting 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Healthy 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Healthy 
+ Container rivomesh-hive-pipeline-50599-hive-1 Healthy 
+ Container rivomesh-hive-pipeline-50599-tests-run-54c8b4432808 Creating 
+ Container rivomesh-hive-pipeline-50599-tests-run-54c8b4432808 Created 
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+HIVE_PIPELINE_SNAPSHOT_ACCEPTED
+HIVE_PIPELINE_CDC_ACCEPTED
+HIVE_PIPELINE_PHASE: stop
+ Container rivomesh-hive-pipeline-50599-hive-1 Stopping 
+ Container rivomesh-hive-pipeline-50599-hive-1 Stopped 
+HIVE_PIPELINE_PHASE: start
+ Container rivomesh-hive-pipeline-50599-hive-1 Starting 
+ Container rivomesh-hive-pipeline-50599-hive-1 Started 
+ Container rivomesh-hive-pipeline-50599-hive-1 Waiting 
+ Container rivomesh-hive-pipeline-50599-hive-1 Healthy 
+HIVE_PIPELINE_OUTAGE_RECOVERY_ACCEPTED
+HIVE_PIPELINE_WORKER_RESTART_ACCEPTED
+HIVE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Hive4.0.1, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, Hive outage with independent SQL progress/catchup, worker SIGKILL resume, SQL error repair/retry while Hive continues, missing-view isolation and honest pause fences
+Traceback (most recent call last):
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/verify-artifact.py", line 21, in <module>
+    assert jar.read("console/" + resource) == (root / "sync-app/src/main/resources/console" / resource).read_bytes(), "Stale console asset: " + resource
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Stale console asset: app.js
+ Container rivomesh-hive-pipeline-50599-postgres-1 Stopping 
+ Container rivomesh-hive-pipeline-50599-hive-1 Stopping 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Stopping 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Stopped 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Removing 
+ Container rivomesh-hive-pipeline-50599-postgres-1 Removed 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Stopped 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Removing 
+ Container rivomesh-hive-pipeline-50599-mysql-1 Removed 
+ Container rivomesh-hive-pipeline-50599-hive-1 Stopped 
+ Container rivomesh-hive-pipeline-50599-hive-1 Removing 
+ Container rivomesh-hive-pipeline-50599-hive-1 Removed 
+ Volume rivomesh-hive-pipeline-50599_hive-data Removing 
+ Volume rivomesh-hive-pipeline-50599_hive-meta Removing 
+ Network rivomesh-hive-pipeline-50599_default Removing 
+ Volume rivomesh-hive-pipeline-50599_hive-data Removed 
+ Volume rivomesh-hive-pipeline-50599_hive-meta Removed 
+ Network rivomesh-hive-pipeline-50599_default Removed 

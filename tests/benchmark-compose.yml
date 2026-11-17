@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.4
+    cpus: ${RIVOMESH_BENCH_CPUS:-1}
+    mem_limit: ${RIVOMESH_BENCH_DB_MEMORY:-1g}
+    environment:
+      MYSQL_ROOT_PASSWORD: Bench@Test123
+      MYSQL_ROOT_HOST: "%"
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON", "--innodb-buffer-pool-size=256M"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Bench@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  postgres:
+    image: postgres:17.12
+    cpus: ${RIVOMESH_BENCH_CPUS:-1}
+    mem_limit: ${RIVOMESH_BENCH_DB_MEMORY:-1g}
+    environment:
+      POSTGRES_PASSWORD: Bench@Test123
+      POSTGRES_DB: bench
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "fsync=on", "-c", "synchronous_commit=on"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bench"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  worker:
+    image: ${RIVOMESH_BENCH_WORKER_IMAGE:-eclipse-temurin:8-jre}
+    cpus: ${RIVOMESH_BENCH_CPUS:-1}
+    mem_limit: ${RIVOMESH_BENCH_WORKER_MEMORY:-1g}
+    working_dir: /bench
+    command: ["java", "-Xms128m", "-Xmx256m", "-jar", "app.jar", "run", "pipeline.json"]
+    volumes:
+      - ${RIVOMESH_BENCH_DIR:?benchmark directory required}:/bench

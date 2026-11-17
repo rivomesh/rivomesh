@@ -1,0 +1,338 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 184135976 bytes; SHA-256 5c23ea0d7f05c726f731ebf985392bb2fea4572797432cfcc773a287209cacb6
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-hive-native-43441_hive-meta Creating 
+ Volume rivomesh-hive-native-43441_hive-data Creating 
+ Volume rivomesh-hive-native-43441_hive-meta Creating 
+ Volume rivomesh-hive-native-43441_hive-data Creating 
+ Network rivomesh-hive-native-43441_default Creating 
+ Network rivomesh-hive-native-43441_default Creating 
+ Volume rivomesh-hive-native-43441_hive-meta Created 
+ Volume rivomesh-hive-native-43441_hive-meta Created 
+ Volume rivomesh-hive-native-43441_hive-data Created 
+ Volume rivomesh-hive-native-43441_hive-data Created 
+ Network rivomesh-hive-native-43441_default Created 
+ Network rivomesh-hive-native-43441_default Created 
+ Container rivomesh-hive-native-43441-init-run-eb2ab98407f4 Creating 
+ Container rivomesh-hive-native-43441-init-run-eb2ab98407f4 Created 
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.18.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Metastore connection URL:	 jdbc:derby:/opt/hive/rivomesh-meta/metastore_db;create=true
+Metastore connection Driver :	 org.apache.derby.jdbc.EmbeddedDriver
+Metastore connection User:	 APP
+Failed to get schema version, Cause:Table/View 'VERSION' does not exist.
+Use --verbose for detailed stacktrace.
+*** schemaTool failed ***
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.18.0.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Initializing the schema to: 4.0.0
+Metastore connection URL:	 jdbc:derby:/opt/hive/rivomesh-meta/metastore_db;create=true
+Metastore connection Driver :	 org.apache.derby.jdbc.EmbeddedDriver
+Metastore connection User:	 APP
+Starting metastore schema initialization to 4.0.0
+Initialization script hive-schema-4.0.0.derby.sql
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Initialization script completed
+ Container rivomesh-hive-native-43441-hive-1 Creating 
+ Container rivomesh-hive-native-43441-hive-1 Created 
+ Container rivomesh-hive-native-43441-hive-1 Starting 
+ Container rivomesh-hive-native-43441-hive-1 Started 
+ Container rivomesh-hive-native-43441-hive-1 Waiting 
+ Container rivomesh-hive-native-43441-hive-1 Healthy 
+ Container rivomesh-hive-native-43441-tests-run-2c23f0823e89 Creating 
+ Container rivomesh-hive-native-43441-tests-run-2c23f0823e89 Created 
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+HIVE_UNSAFE_CACHE_PROFILE_REFUSED
+HIVE_UNCERTAIN_PUBLICATION_REPLAY_ACCEPTED
+HIVE_NATIVE_DATA_ACCEPTED
+ Container rivomesh-hive-native-43441-hive-1 Stopping 
+ Container rivomesh-hive-native-43441-hive-1 Stopped 
+ Volume rivomesh-hive-native-43441_hive-backup Creating 
+ Volume rivomesh-hive-native-43441_hive-backup Creating 
+ Volume rivomesh-hive-native-43441_hive-backup Created 
+ Volume rivomesh-hive-native-43441_hive-backup Created 
+ Container rivomesh-hive-native-43441-store-run-b52e0f2e10e4 Creating 
+ Container rivomesh-hive-native-43441-store-run-b52e0f2e10e4 Created 
+ Container rivomesh-hive-native-43441-hive-1 Starting 
+ Container rivomesh-hive-native-43441-hive-1 Started 
+ Container rivomesh-hive-native-43441-hive-1 Waiting 
+ Container rivomesh-hive-native-43441-hive-1 Healthy 
+HIVE_NATIVE_RESTART_ACCEPTED
+ Container rivomesh-hive-native-43441-hive-1 Stopping 
+ Container rivomesh-hive-native-43441-hive-1 Stopped 
+ Container rivomesh-hive-native-43441-store-run-08ec35676703 Creating 
+ Container rivomesh-hive-native-43441-store-run-08ec35676703 Created 
+ Container rivomesh-hive-native-43441-hive-1 Starting 
+ Container rivomesh-hive-native-43441-hive-1 Started 
+ Container rivomesh-hive-native-43441-hive-1 Waiting 
+ Container rivomesh-hive-native-43441-hive-1 Healthy 
+HIVE_MATERIALIZER_ACCEPTED: actual release Java8/isolated JDBC/native ACID ORC history/views, PK move/replay, keyless multiplicity/delete, injected native confirmation loss/replay, exact uint64/65digit-decimal/JSON/base64, stale-version refusal, server/client restart and actual older nonempty warehouse+metastore backup refusal
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 184135976 bytes; SHA-256 5c23ea0d7f05c726f731ebf985392bb2fea4572797432cfcc773a287209cacb6
+ Container rivomesh-hive-native-43441-hive-1 Stopping 
+ Container rivomesh-hive-native-43441-hive-1 Stopped 
+ Container rivomesh-hive-native-43441-hive-1 Removing 
+ Container rivomesh-hive-native-43441-hive-1 Removed 
+ Volume rivomesh-hive-native-43441_hive-data Removing 
+ Volume rivomesh-hive-native-43441_hive-meta Removing 
+ Volume rivomesh-hive-native-43441_hive-backup Removing 
+ Network rivomesh-hive-native-43441_default Removing 
+ Volume rivomesh-hive-native-43441_hive-meta Removed 
+ Volume rivomesh-hive-native-43441_hive-data Removed 
+ Volume rivomesh-hive-native-43441_hive-backup Removed 
+ Network rivomesh-hive-native-43441_default Removed 

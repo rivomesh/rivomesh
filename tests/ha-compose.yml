@@ -1,0 +1,19 @@
+services:
+  mysql-replica:
+    image: ${SYNC_MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_ROOT_PASSWORD: Sync@Test123
+      MYSQL_ROOT_HOST: "%"
+    command: ["--server-id=2", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    environment:
+      JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+    depends_on:
+      mysql-replica:
+        condition: service_healthy
+    command: ["mvn", "-B", "-s", "build/settings.xml", "-Dsync.ha=true", "-DtestSuite=ha", "-Dtest=ClusterIntegrationTest", "-Dsurefire.failIfNoSpecifiedTests=false", "verify"]

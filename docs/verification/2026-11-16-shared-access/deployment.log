@@ -1,0 +1,5 @@
+PASS shared identity/session/audit opt-in profile and two native manifests; task routing remains separate
+PASS shared-registry two-release/native parity, stable node IDs/Secret references and invalid store/lease rejection; global task routing remains local
+PASS managed-access persisted-directory profile/default compatibility; live PVC startup acceptance remains separate
+PASS exact task grants/default+scoped native parity, empty grants and invalid wildcard/duplicate/scoped-admin rejection
+PASS Helm lint/default+RBAC native parity, Secret references, existing PVC, invalid limits/roles/no-admin/duplicate identities/credentials/literal-token rejection

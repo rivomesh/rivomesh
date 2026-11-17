@@ -1,0 +1,102 @@
+{{- if and .Values.cluster.recoveryCommit (not .Values.cluster.recoveryReview) }}{{ fail "cluster.recoveryCommit requires recoveryReview" }}{{ end }}
+{{- if and .Values.cluster.sharedTasks (or (not .Values.cluster.enabled) (not .Values.cluster.sharedAccess)) }}{{ fail "cluster.sharedTasks requires enabled sharedAccess" }}{{ end }}
+{{- if and .Values.cluster.recoveryReview (or (not .Values.cluster.enabled) (not .Values.cluster.sharedTasks)) }}{{ fail "cluster.recoveryReview requires enabled sharedTasks" }}{{ end }}
+{{- if .Values.cluster.enabled }}
+{{- if lt (int .Values.cluster.leaseMillis) (mul (int .Values.cluster.heartbeatMillis) 3) }}{{ fail "cluster.leaseMillis must be at least three heartbeat intervals" }}{{ end }}
+{{- if not .Values.cluster.url }}{{ fail "cluster.url is required" }}{{ end }}
+{{- if not .Values.cluster.existingSecret }}{{ fail "cluster.existingSecret is required" }}{{ end }}
+{{- end }}
+{{- if gt (int .Values.sessions.idleSeconds) (int .Values.sessions.absoluteSeconds) }}{{ fail "sessions.absoluteSeconds must be at least idleSeconds" }}{{ end }}
+{{- if gt (int .Values.platform.maxRunningTasks) (int .Values.platform.maxTasks) }}
+{{- fail "platform.maxRunningTasks must not exceed platform.maxTasks" }}
+{{- end }}
+{{- $administrator := .Values.auth.legacyTokenEnabled }}
+{{- $identities := dict }}
+{{- $credentials := dict }}
+{{- if .Values.auth.legacyTokenEnabled }}
+{{- $_ := set $identities "legacy-admin" true }}
+{{- $_ := set $credentials (printf "%s/%s" .Values.auth.existingSecret .Values.auth.key) true }}
+{{- end }}
+{{- range .Values.auth.users }}
+{{- if hasKey $identities .id }}{{ fail "auth user IDs must be unique and cannot collide with legacy-admin" }}{{ end }}
+{{- $_ := set $identities .id true }}
+{{- $credential := printf "%s/%s" .secretRef.name .secretRef.key }}
+{{- if hasKey $credentials $credential }}{{ fail "each auth user must use a distinct Secret key" }}{{ end }}
+{{- $_ := set $credentials $credential true }}
+{{- if and (eq .role "ADMIN") (hasKey . "taskIds") }}{{ fail "ADMIN is deployment-wide; taskIds applies only to VIEWER/OPERATOR" }}{{ end }}
+{{- if eq .role "ADMIN" }}{{- $administrator = true }}{{- end }}
+{{- end }}
+{{- if and (not $administrator) (or (eq .Values.auth.mode "CONFIG") (gt (len .Values.auth.users) 0)) }}{{ fail "bootstrap configuration requires an ADMIN; empty MANAGED mode requires initialized storage" }}{{ end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+data:
+  platform.yml: |
+    bind: 0.0.0.0
+    port: 8080
+    accessMode: {{ .Values.auth.mode }}
+    {{- if .Values.auth.legacyTokenEnabled }}
+    authToken: ${RIVOMESH_TOKEN}
+    {{- end }}
+    {{- if .Values.auth.users }}
+    users:
+      {{- range $index, $user := .Values.auth.users }}
+      - id: {{ $user.id | quote }}
+        role: {{ $user.role | quote }}
+        {{- if hasKey $user "taskIds" }}
+        taskIds: {{ $user.taskIds | toJson }}
+        {{- end }}
+        token: {{ printf "${RIVOMESH_USER_TOKEN_%d}" $index | quote }}
+      {{- end }}
+    {{- end }}
+    tasksDirectory: /app/data/tasks
+    dataDirectory: /app/data/controller
+    maxTasks: {{ .Values.platform.maxTasks }}
+    maxRunningTasks: {{ .Values.platform.maxRunningTasks }}
+    workerHeapMiB: {{ .Values.platform.workerHeapMiB }}
+    controlThreads: {{ .Values.platform.controlThreads }}
+    pollMillis: {{ .Values.platform.pollMillis }}
+    autoStart: {{ .Values.platform.autoStart }}
+    auditMaxEvents: {{ .Values.platform.auditMaxEvents | int }}
+    sessions:
+      enabled: {{ .Values.sessions.enabled }}
+      secureCookie: {{ .Values.sessions.secureCookie }}
+      rememberBrowser: {{ .Values.sessions.rememberBrowser }}
+      idleSeconds: {{ .Values.sessions.idleSeconds }}
+      absoluteSeconds: {{ .Values.sessions.absoluteSeconds }}
+      maximum: {{ .Values.sessions.maximum }}
+      {{- if .Values.sessions.publicOrigin }}
+      publicOrigin: {{ .Values.sessions.publicOrigin | quote }}
+      {{- end }}
+    {{- if .Values.cluster.enabled }}
+    cluster:
+      sharedAccess: {{ .Values.cluster.sharedAccess }}
+      {{- if .Values.cluster.separateExecution }}
+      separateExecution: true
+      role: {{ .Values.cluster.role | quote }}
+      {{- end }}
+      {{- if .Values.cluster.sharedTasks }}
+      sharedTasks: true
+      {{- if .Values.cluster.recoveryReview }}
+      recoveryReview: true
+      {{- end }}
+      {{- if .Values.cluster.recoveryCommit }}
+      recoveryCommit: true
+      {{- end }}
+      taskKey: ${RIVOMESH_TASK_KEY}
+      maximumTasks: {{ .Values.cluster.maximumTasks | int }}
+      maximumCommands: {{ .Values.cluster.maximumCommands | int }}
+      {{- end }}
+      id: {{ .Values.cluster.id | quote }}
+      nodeId: ${RIVOMESH_NODE_ID}
+      driver: {{ .Values.cluster.driver | quote }}
+      url: {{ .Values.cluster.url | quote }}
+      namespace: {{ .Values.cluster.namespace | quote }}
+      username: ${RIVOMESH_CONTROL_USERNAME}
+      password: ${RIVOMESH_CONTROL_PASSWORD}
+      advertiseUrl: {{ default (printf "http://%s.%s.svc:%v" .Release.Name .Release.Namespace .Values.service.port) .Values.cluster.advertiseUrl | quote }}
+      heartbeatMillis: {{ .Values.cluster.heartbeatMillis | int }}
+      leaseMillis: {{ .Values.cluster.leaseMillis | int }}
+      maximumNodes: {{ .Values.cluster.maximumNodes | int }}
+    {{- end }}

@@ -1,0 +1,2 @@
+ACCOUNTS_LEGACY_UPGRADE_ACCEPTED: actual old release audit rows retain their exact export/hash content
+ACCOUNTS_NATIVE_ACCEPTED: Java8 actual release HTTP, explicit activation, grants, token rotation, last-admin guard, SIGKILL persistence, older/missing directory and old-program refusal, controller lock, offline recovery preserving RUNNING intent without launching workers, and exact legacy/new audit proofs; artifact=35465b6ef7bfdc5bccfceb97a0fb63da715e950c93aa515061e7963b4985370b

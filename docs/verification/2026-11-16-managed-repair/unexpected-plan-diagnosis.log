@@ -1,0 +1,71 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187749623 bytes; SHA-256 69c07f7db8dbd5c5aa8985e9e757b21b5a2e802791b150548c144728c8d3d9b9
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Network rivomesh-validation-barrier-73006_default Creating 
+ Network rivomesh-validation-barrier-73006_default Creating 
+ Network rivomesh-validation-barrier-73006_default Created 
+ Network rivomesh-validation-barrier-73006_default Created 
+ Container rivomesh-validation-barrier-73006-postgres-1 Creating 
+ Container rivomesh-validation-barrier-73006-mysql-1 Creating 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Creating 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Created 
+ Container rivomesh-validation-barrier-73006-mysql-1 Created 
+ Container rivomesh-validation-barrier-73006-postgres-1 Created 
+ Container rivomesh-validation-barrier-73006-postgres-1 Starting 
+ Container rivomesh-validation-barrier-73006-mysql-1 Starting 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-73006-postgres-1 Started 
+ Container rivomesh-validation-barrier-73006-mysql-1 Started 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-73006-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-73006-postgres-1 Waiting 
+ Container rivomesh-validation-barrier-73006-postgres-1 Healthy 
+ Container rivomesh-validation-barrier-73006-mysql-1 Healthy 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Healthy 
+ Volume rivomesh-validation-barrier-73006_maven-cache Creating 
+ Volume rivomesh-validation-barrier-73006_maven-cache Creating 
+ Volume rivomesh-validation-barrier-73006_maven-cache Created 
+ Volume rivomesh-validation-barrier-73006_maven-cache Created 
+ Container rivomesh-validation-barrier-73006-tests-run-eec1ed17c289 Creating 
+ Container rivomesh-validation-barrier-73006-tests-run-eec1ed17c289 Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+VALIDATION_JOURNAL_PROFILE: LOCAL/H2
+VALIDATION_TYPED_TARGET_READ_ACCEPTED: native PostgreSQL/MySQL bool/float32/float64/bytes/Unicode/date/timestamp/microsecond TIME/JSON/uint64/65digit decimal/NULL and partial-close fence release
+MANAGED_DIFFERENCE_DETAILS_ACCEPTED: actual SQL missing/extra/changed and keyless identity details, one-item keyset pages, raw values/null/absent distinctions and viewer refusal; no repair performed
+ Container rivomesh-validation-barrier-73006-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-73006-mysql-1 Stopped 
+COMMON_CUT_REPAIR_ACCEPTED: real PostgreSQL/MySQL keyed/keyless roots, reviewed CLI plan/hash, live drift refusal, SQL rollback, lost commit reply, SIGKILL before/after commit, durable receipt replay, exact occurrence restoration and unchanged CDC checkpoints; no automatic resume
+ Container rivomesh-validation-barrier-73006-mysql-1 Starting 
+ Container rivomesh-validation-barrier-73006-mysql-1 Started 
+ Container rivomesh-validation-barrier-73006-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-73006-mysql-1 Healthy 
+NATIVE_UNEXPECTED_REPAIR_FAILURE
+java.lang.IllegalStateException: TARGET_TRIGGERS_REQUIRE_PLAN
+	at io.rivomesh.cdc.JdbcSink.validateShape(JdbcSink.java:190)
+	at io.rivomesh.cdc.JdbcSink.checkRepairDependencies(JdbcSink.java:280)
+	at io.rivomesh.PipelineRepair.plan(PipelineRepair.java:20)
+	at io.rivomesh.platform.TaskBackend.repair(TaskBackend.java:46)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance$TracingBackend.repair(ValidationBarrierAcceptance.java:50)
+	at io.rivomesh.platform.TaskService.reconcile(TaskService.java:375)
+	at io.rivomesh.platform.TaskService.lambda$schedule$14(TaskService.java:352)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+	at java.lang.Thread.run(Thread.java:750)
+
+ Container rivomesh-validation-barrier-73006-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-73006-postgres-1 Stopping 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-73006-postgres-1 Stopped 
+ Container rivomesh-validation-barrier-73006-postgres-1 Removing 
+ Container rivomesh-validation-barrier-73006-postgres-1 Removed 
+ Container rivomesh-validation-barrier-73006-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-73006-mysql-1 Removing 
+ Container rivomesh-validation-barrier-73006-mysql-1 Removed 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Stopped 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Removing 
+ Container rivomesh-validation-barrier-73006-mysql-target-1 Removed 
+ Network rivomesh-validation-barrier-73006_default Removing 
+ Volume rivomesh-validation-barrier-73006_maven-cache Removing 
+ Volume rivomesh-validation-barrier-73006_maven-cache Removed 
+ Network rivomesh-validation-barrier-73006_default Removed 

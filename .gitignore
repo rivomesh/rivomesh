@@ -1,0 +1,18 @@
+**/target/
+.idea/
+*.iml
+.DS_Store
+.env
+.env.*
+!.env.example
+config/local.yml
+config/tasks/*
+!config/tasks/.gitkeep
+data/
+**/node_modules/
+*.log
+**/__pycache__/
+*.pyc
+
+# Reviewed verification archives are deliberate repository evidence.
+!docs/verification/**/*.log

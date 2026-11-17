@@ -1,0 +1,87 @@
+{
+  "artifactSha256": "bcaae9309898a33ecfe919d69bfa6c43227647524498f8269682df44942cbcbe",
+  "testClassesSha256": "33e2a463aab6492887072effd232e377995d3114ee507ce4198b79c691743927",
+  "scope": [
+    "io.rivomesh.cdc.FailureReviewTest",
+    "io.rivomesh.cdc.FanoutDispatcherTest",
+    "io.rivomesh.cdc.JournalTest",
+    "io.rivomesh.cdc.NormalizationTest",
+    "io.rivomesh.cdc.SnapshotDispatcherTest",
+    "io.rivomesh.cdc.FailureEvidenceStoreTest",
+    "io.rivomesh.platform.ManagedFailureReviewTest"
+  ],
+  "harnessSourceSha256": "dbda7084c424f1eebe6d27da5d111ddde403abc49f93ae54716a12aef7be785e",
+  "profiles": [
+    {
+      "jdk": 8,
+      "image": "eclipse-temurin:8-jre",
+      "imageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+      "architecture": "arm64",
+      "exitCode": 0,
+      "results": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "log": "java8.log"
+    },
+    {
+      "jdk": 11,
+      "image": "eclipse-temurin:11-jre",
+      "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe",
+      "architecture": "arm64",
+      "exitCode": 0,
+      "results": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "log": "java11.log"
+    },
+    {
+      "jdk": 17,
+      "image": "eclipse-temurin:17-jre",
+      "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990",
+      "architecture": "arm64",
+      "exitCode": 0,
+      "results": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "log": "java17.log"
+    },
+    {
+      "jdk": 21,
+      "image": "eclipse-temurin:21-jre",
+      "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+      "architecture": "arm64",
+      "exitCode": 0,
+      "results": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "log": "java21.log"
+    },
+    {
+      "jdk": 25,
+      "image": "eclipse-temurin:25-jre",
+      "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3",
+      "architecture": "arm64",
+      "exitCode": 0,
+      "results": {
+        "tests": 52,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "log": "java25.log"
+    }
+  ],
+  "notCovered": "Real source/destination/JDK/TLS/SDK matrix, manual skip/patch or UI raw review"
+}

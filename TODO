@@ -1,0 +1,6 @@
+1、如果因为binlog 同步问题卡住，可以手动跳过，类似mysql从库的操作。
+也可以手动补充有问题的数据。
+2、源增加支持mysql5.7 mysql8.0 mysql8.2 mysql8.4  pg oracle
+3、支持JAVA8 java11 JAVA17 java21 java25
+
+4、落实完整的文档

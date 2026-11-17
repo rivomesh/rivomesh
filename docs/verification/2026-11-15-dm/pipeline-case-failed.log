@@ -1,0 +1,65 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 186791270 bytes; SHA-256 8229cfe6a3658e92e0c3a28829af3f88ee2c9fd15560a625d7c6c77f6db3b0ab
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-dm-pipeline-88232_dm-data Creating 
+ Network rivomesh-dm-pipeline-88232_default Creating 
+ Volume rivomesh-dm-pipeline-88232_dm-data Creating 
+ Network rivomesh-dm-pipeline-88232_default Creating 
+ Volume rivomesh-dm-pipeline-88232_dm-data Created 
+ Volume rivomesh-dm-pipeline-88232_dm-data Created 
+ Network rivomesh-dm-pipeline-88232_default Created 
+ Network rivomesh-dm-pipeline-88232_default Created 
+ Container rivomesh-dm-pipeline-88232-dm-1 Creating 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Creating 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Creating 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Created 
+ Container rivomesh-dm-pipeline-88232-dm-1 Created 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Created 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Starting 
+ Container rivomesh-dm-pipeline-88232-dm-1 Starting 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Starting 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Started 
+ Container rivomesh-dm-pipeline-88232-dm-1 Started 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Started 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Waiting 
+ Container rivomesh-dm-pipeline-88232-dm-1 Waiting 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Waiting 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Healthy 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Healthy 
+ Container rivomesh-dm-pipeline-88232-dm-1 Healthy 
+ Container rivomesh-dm-pipeline-88232-tests-run-1b012f54e027 Creating 
+ Container rivomesh-dm-pipeline-88232-tests-run-1b012f54e027 Created 
+DM_FIXTURE_MYSQL_VERSION: 8.4.13
+DM_FIXTURE_POSTGRES_VERSION: PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+DM_NATIVE_PROFILE: {product=DM DBMS, version=8.1.4.80, compatibilityMode=0, encoding=UTF8, caseSensitive=1, blankPadMode=1, role=NORMAL, status=OPEN, commitWrite=IMMEDIATE,WAIT}
+Exception in thread "main" dm.jdbc.driver.DMException: Error in line: 1
+Invalid table or view name [CONTRACT_ROWS]
+	at dm.jdbc.driver.DBError.throwException(SourceFile:738)
+	at dm.jdbc.a.a.y.r(SourceFile:623)
+	at dm.jdbc.a.a.f.r(SourceFile:138)
+	at dm.jdbc.a.a.y.z(SourceFile:555)
+	at dm.jdbc.a.a.y.L(SourceFile:536)
+	at dm.jdbc.a.a.a(SourceFile:269)
+	at dm.jdbc.a.a.a(SourceFile:803)
+	at dm.jdbc.driver.DmdbStatement.executeInner(SourceFile:771)
+	at dm.jdbc.driver.DmdbStatement.do_executeQuery(SourceFile:226)
+	at dm.jdbc.driver.DmdbStatement.executeQuery(SourceFile:1125)
+	at io.rivomesh.acceptance.DmPipelineAcceptance.nativeContract(DmPipelineAcceptance.java:90)
+	at io.rivomesh.acceptance.DmPipelineAcceptance.run(DmPipelineAcceptance.java:98)
+	at io.rivomesh.acceptance.DmPipelineAcceptance.main(DmPipelineAcceptance.java:120)
+
+ Container rivomesh-dm-pipeline-88232-mysql-1 Stopping 
+ Container rivomesh-dm-pipeline-88232-dm-1 Stopping 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Stopping 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Stopped 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Removing 
+ Container rivomesh-dm-pipeline-88232-postgres-1 Removed 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Stopped 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Removing 
+ Container rivomesh-dm-pipeline-88232-mysql-1 Removed 
+ Container rivomesh-dm-pipeline-88232-dm-1 Stopped 
+ Container rivomesh-dm-pipeline-88232-dm-1 Removing 
+ Container rivomesh-dm-pipeline-88232-dm-1 Removed 
+ Volume rivomesh-dm-pipeline-88232_dm-data Removing 
+ Network rivomesh-dm-pipeline-88232_default Removing 
+ Volume rivomesh-dm-pipeline-88232_dm-data Removed 
+ Network rivomesh-dm-pipeline-88232_default Removed 

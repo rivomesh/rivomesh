@@ -1,0 +1,42 @@
+[
+  {
+    "file": "native.log",
+    "source": "target/task-scopes-final-native.log",
+    "sha256": "fe6a38e4c27d9ccb95a062d8bdfa9e73bf440d2585f88413c0c2247f6630d97f"
+  },
+  {
+    "file": "sql-pipeline.log",
+    "source": "target/task-scopes-final-real-pipeline.log",
+    "sha256": "bce57ea9172e75682cd1bc0325822cfc978b5ee35c43d1e63e21eb3bb8624cbd"
+  },
+  {
+    "file": "maven-unit.log",
+    "source": "target/task-authorization-unit-package.log",
+    "sha256": "03cd8bfe078a044517bd42c3f3461d2f5c909cbd6e2bae72ebd66eb62fe57f2c"
+  },
+  {
+    "file": "release-unit.log",
+    "source": "target/task-scopes-final-release-units.log",
+    "sha256": "05dd52c6a23aa5735848f79b67a92eb475dcddbf03fa6837e7ede44acef4beba"
+  },
+  {
+    "file": "ui.log",
+    "source": "target/ui-task-scopes-final.log",
+    "sha256": "54ac51f56df5bbd6b3078d02b310e35b864dd82d7d0075d7dacfb95a3e627eb9"
+  },
+  {
+    "file": "deployment.log",
+    "source": "target/deployment-task-scopes-fixed.log",
+    "sha256": "35a830b276a76bb25c89c2dfaec96bd74a7d2bd89701bdc28b29e0d7cc191ef2"
+  },
+  {
+    "file": "artifact.log",
+    "source": "target/artifact-task-scopes-final.log",
+    "sha256": "77ccd8451dec5e5c2666034688162c90f5880d944d011b3bbc1759651641a5c1"
+  },
+  {
+    "file": "package.log",
+    "source": "target/task-scopes-final-package.log",
+    "sha256": "5d05623fa9a3f82d0d9f50359079de67dac3ab4235c1a869a083f870d1dd12dd"
+  }
+]

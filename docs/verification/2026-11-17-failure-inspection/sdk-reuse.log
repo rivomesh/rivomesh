@@ -1,0 +1,1 @@
+PASS: 7 unchanged SDK JAR hashes and 17 source/POM hashes checked against aa17 source baseline. App-only build; no new reactor/SDK matrix claim.

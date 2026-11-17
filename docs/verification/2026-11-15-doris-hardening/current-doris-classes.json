@@ -1,0 +1,7 @@
+{
+  "baselineSha256": "11667063fff1ee2c39d23df260b5b3bfe3d4e944c9009a1b696e890515ae1fd8",
+  "currentSha256": "9a087db5fd615099ab8e780b2bde70c43b2d0f232961d8580134d119285ee593",
+  "scope": "Doris adapter classes only; not a whole-runtime comparison",
+  "classes": 14,
+  "changed": []
+}

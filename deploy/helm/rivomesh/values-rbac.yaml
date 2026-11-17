@@ -1,0 +1,13 @@
+# Secret values are provisioned independently; this file contains references only.
+auth:
+  legacyTokenEnabled: false
+  users:
+    - id: migration-admin
+      role: ADMIN
+      secretRef: {name: rivomesh-accounts, key: admin-token}
+    - id: migration-operator
+      role: OPERATOR
+      secretRef: {name: rivomesh-accounts, key: operator-token}
+    - id: migration-reader
+      role: VIEWER
+      secretRef: {name: rivomesh-accounts, key: viewer-token}

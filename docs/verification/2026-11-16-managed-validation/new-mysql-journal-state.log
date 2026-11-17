@@ -1,0 +1,1 @@
+{"desired": "STOPPED", "operations": [{"action": "START", "code": "SQL_42000_1049", "status": "FAILED"}]}

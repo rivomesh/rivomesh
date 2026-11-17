@@ -1,0 +1,35 @@
+services:
+  classic-store:
+    image: apache/activemq:5.19.12
+    user: "0:0"
+    entrypoint: ["sh"]
+    volumes:
+      - classic-data:/store
+      - classic-backup:/backup
+  classic:
+    image: apache/activemq:5.19.12
+    mem_limit: 1g
+    environment:
+      ACTIVEMQ_OPTS_MEMORY: -Xms64m -Xmx384m
+    volumes:
+      - ./classic-broker.xml:/opt/apache-activemq/conf/activemq.xml:ro
+      - ./classic-jetty-realm.properties:/opt/apache-activemq/conf/jetty-realm.properties:ro
+      - ./classic-jolokia-access.xml:/opt/apache-activemq/conf/jolokia-access.xml:ro
+      - classic-data:/opt/apache-activemq/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/61616; exec 4<>/dev/tcp/127.0.0.1/8161'"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      RIVOMESH_CLASSIC_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-classic-manual}
+    volumes:
+      - ..:/project
+    depends_on:
+      classic: {condition: service_healthy}
+volumes:
+  classic-data:
+  classic-backup:

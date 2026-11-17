@@ -1,0 +1,13 @@
+{
+  "artifact": "target/release-evidence/execution-roles-final.jar",
+  "artifactSha256": "aae849e314456bfd06c271b5ffa9aab2acd1db1e7a92de0cb22cc930cacd59b0",
+  "bytes": 187926138,
+  "testClasses": "target/release-evidence/execution-roles-tests-aae849e31445",
+  "testClassesSha256": "e3106848259dd2b12f73bf2c68a3eb0436812f2755eed0f336c291e6a0a51245",
+  "sourceManifest": "target/release-evidence/execution-roles-sources.json",
+  "sourceManifestSha256": "8da57b6a67fe738ee0ad2a8012e8e532022037eea763582eb709ef498f2959e2",
+  "appTests": 346,
+  "domTests": 76,
+  "sdkReuseManifest": "target/sdk-cache-manifest.json",
+  "scope": "Opt-in protocol4 controller/Agent/combined roles and probe-only Agent; native separated-lifecycle acceptance pending"
+}

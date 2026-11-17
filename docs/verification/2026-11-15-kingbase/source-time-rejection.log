@@ -1,0 +1,6 @@
+Exception in thread "main" java.lang.IllegalArgumentException: SOURCE_TYPE_REQUIRES_PROFILE: time
+	at io.rivomesh.MysqlCdcSource.describe(MysqlCdcSource.java:75)
+	at io.rivomesh.MysqlCdcSource.discover(MysqlCdcSource.java:55)
+	at io.rivomesh.PipelineEngine.check(PipelineEngine.java:171)
+	at io.rivomesh.PipelineMain.execute(PipelineMain.java:16)
+	at io.rivomesh.Main.main(Main.java:11)

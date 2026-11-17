@@ -1,0 +1,54 @@
+services:
+  oceanbase:
+    image: oceanbase/oceanbase-ce:4.3.5.6-106000012026040916
+    mem_limit: 6g
+    cpus: 6
+    environment:
+      MODE: mini
+      OB_MEMORY_LIMIT: 5G
+      OB_SYSTEM_MEMORY: 1G
+      OB_TENANT_MEMORY_SIZE: 2G
+      OB_TENANT_LOG_DISK_SIZE: 2G
+      OB_TENANT_MIN_CPU: 1
+      OB_DATAFILE_SIZE: 2G
+      OB_LOG_DISK_SIZE: 5G
+      OB_TENANT_PASSWORD: Sync@Test123
+    volumes:
+      - ob-data:/root/ob
+      - ob-config:/root/.obd/cluster
+    healthcheck:
+      test: ["CMD-SHELL", "obclient -h127.0.0.1 -P2881 -uroot@test -p'Sync@Test123' -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 90
+    stop_grace_period: 60s
+  mysql:
+    image: mysql:8.4
+    environment: {MYSQL_ROOT_PASSWORD: "Sync@Test123", MYSQL_ROOT_HOST: "%"}
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  postgres:
+    image: postgres:17.12
+    environment: {POSTGRES_DB: sync_test, POSTGRES_USER: sync_test, POSTGRES_PASSWORD: "Sync@Test123"}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sync_test -d sync_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      MAVEN_OPTS: -Xmx768m
+      RIVOMESH_OB_DIR: ${RIVOMESH_OB_DIR:-/project/target/oceanbase-manual}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+volumes:
+  ob-data:
+  ob-config:
+  maven-cache:

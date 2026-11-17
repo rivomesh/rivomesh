@@ -1,0 +1,37 @@
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+[36m╷[0m
+[36m├─[0m [36mJUnit Platform Suite[0m [32m✔[0m
+[36m├─[0m [36mJUnit Jupiter[0m [32m✔[0m
+[36m│  ├─[0m [36mManagedValidationTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrawDetailsRequireAdminAndAuditDoesNotContainBusinessValues()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mpersistedScopeIsIdempotentAndLongValidationDoesNotBlockOtherControls()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mownerReceiptUsesTheSameNormalizationForRetryWithNullTargetScope()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrestartReusesThePersistedReportIdWithoutStartingAWorker()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mhttpEnforcesAdminMutationAndTaskScopedSummaryReads()[0m [32m✔[0m
+[36m│  │  └─[0m [34mcancellationIsDurableAuditedAndNeverResumesTheTask()[0m [32m✔[0m
+[36m│  └─[0m [36mGlobalControlHttpTest[0m [32m✔[0m
+[36m│     ├─[0m [34mownerReopenResumesOnlyAfterAdmissionAndAReplacementDirectoryCannotTakeOver()[0m [32m✔[0m
+[36m│     ├─[0m [34mprotocolUpgradeRequiresStoppedMembersAndRefusesAnExpiredLegacyMember()[0m [32m✔[0m
+[36m│     ├─[0m [34mremoteValidationRetainsTheReportIdentityRequiredByTheConsole()[0m [32m✔[0m
+[36m│     ├─[0m [34mownerScopedOperatorCanControlBThroughAWithoutLocalNodePermission()[0m [32m✔[0m
+[36m│     ├─[0m [34mpersistedGlobalBindingRefusesDisableChangedNodeMissingDirectoryAndWrongKey()[0m [32m✔[0m
+[36m│     ├─[0m [34mremoteRepairRetainsTheReviewedPlanIdentityRequiredByTheConsole()[0m [32m✔[0m
+[36m│     ├─[0m [34menablingGlobalTasksRefusesExistingLocalTasksBeforeUpgradingTheStore()[0m [32m✔[0m
+[36m│     └─[0m [34mseparateHttpEntriesCreateAndControlTheRealOwnerAndReturnGlobalState()[0m [32m✔[0m
+[36m└─[0m [36mJUnit Vintage[0m [32m✔[0m
+
+Test run finished after 27079 ms
+[         5 containers found      ]
+[         0 containers skipped    ]
+[         5 containers started    ]
+[         0 containers aborted    ]
+[         5 containers successful ]
+[         0 containers failed     ]
+[        14 tests found           ]
+[         0 tests skipped         ]
+[        14 tests started         ]
+[         0 tests aborted         ]
+[        14 tests successful      ]
+[         0 tests failed          ]
+

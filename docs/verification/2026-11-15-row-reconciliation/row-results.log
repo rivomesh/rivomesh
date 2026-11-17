@@ -1,0 +1,8 @@
+{"changed": 1, "code": "VALIDATION_DIFFERENCES", "extra": 2, "missing": 2, "mode": "LOCAL", "stagedRows": 21, "state": "COMPLETE", "tableResults": 6}
+{"changed": 0, "code": "VALIDATION_MATCH", "extra": 0, "missing": 0, "mode": "LOCAL", "stagedRows": 12, "state": "COMPLETE", "tableResults": 3}
+{"changed": 1, "code": "VALIDATION_DIFFERENCES", "extra": 2, "missing": 2, "mode": "POSTGRESQL", "stagedRows": 21, "state": "COMPLETE", "tableResults": 6}
+{"changed": 0, "code": "VALIDATION_MATCH", "extra": 0, "missing": 0, "mode": "POSTGRESQL", "stagedRows": 12, "state": "COMPLETE", "tableResults": 3}
+{"changed": 1, "code": "VALIDATION_DIFFERENCES", "extra": 2, "missing": 2, "mode": "MYSQL", "stagedRows": 21, "state": "COMPLETE", "tableResults": 6}
+{"changed": 0, "code": "VALIDATION_MATCH", "extra": 0, "missing": 0, "mode": "MYSQL", "stagedRows": 12, "state": "COMPLETE", "tableResults": 3}
+{"changed": 1, "code": "VALIDATION_DIFFERENCES", "extra": 2, "missing": 2, "mode": "GAUSS", "stagedRows": 21, "state": "COMPLETE", "tableResults": 6}
+{"changed": 0, "code": "VALIDATION_MATCH", "extra": 0, "missing": 0, "mode": "GAUSS", "stagedRows": 12, "state": "COMPLETE", "tableResults": 3}

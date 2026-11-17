@@ -1,0 +1,37 @@
+[
+  {
+    "file": "native.log",
+    "source": "target/audit-native-port-fixed.log",
+    "sha256": "52b64393847fd7880bc31b4796ba5bef284d381f7b37fcf85c5e44d5b4ac5860"
+  },
+  {
+    "file": "sql-pipeline.log",
+    "source": "target/audit-real-configuration-pipeline.log",
+    "sha256": "2dd7d250f05c574fd62fb36513a37a788d34387ae82f4d63912794838849a9f7"
+  },
+  {
+    "file": "unit.log",
+    "source": "target/audit-final-unit-package.log",
+    "sha256": "c88b7214828758464a5830d81108c7ddaa875ec26035012c7e8c66cbb7adc0ab"
+  },
+  {
+    "file": "ui.log",
+    "source": "target/ui-audit-identity.log",
+    "sha256": "af4641f4b057c18cc617bc983bcfb90e0a5112aad9a61c8d347356d308cdff70"
+  },
+  {
+    "file": "tool.log",
+    "source": "target/audit-export-tool-final.log",
+    "sha256": "fa439246082331676580de8eb591c739a89e0beb3d1dbefd8517ede09b3ea538"
+  },
+  {
+    "file": "deployment.log",
+    "source": "target/deployment-audit-fixed.log",
+    "sha256": "91f23171497197ef3f0b01570d21ce7162c819a521d280d5c10c1f011328b984"
+  },
+  {
+    "file": "artifact.log",
+    "source": "target/artifact-audit-final.log",
+    "sha256": "7b3562872aa2043298c8885b7c3cc78117154f24087bbea4e017c67f8d7df964"
+  }
+]

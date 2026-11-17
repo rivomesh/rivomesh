@@ -1,0 +1,31 @@
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://activemq.apache.org/schema/core http://activemq.apache.org/schema/core/activemq-core.xsd">
+  <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"/>
+  <broker xmlns="http://activemq.apache.org/schema/core" id="broker" brokerName="rivomesh-core" persistent="true" useJmx="true" schedulerSupport="false" dataDirectory="${activemq.data}">
+    <managementContext><managementContext createConnector="false"/></managementContext>
+    <destinationPolicy><policyMap><policyEntries>
+      <policyEntry queue=">" gcInactiveDestinations="false" expireMessagesPeriod="0" producerFlowControl="true" memoryLimit="64mb" maxBrowsePageSize="128"/>
+    </policyEntries></policyMap></destinationPolicy>
+    <plugins>
+      <simpleAuthenticationPlugin><users>
+        <authenticationUser username="admin" password="Classic@Test123" groups="publishers"/>
+        <authenticationUser username="consumer" password="Consumer@Test123" groups="readers"/>
+      </users></simpleAuthenticationPlugin>
+      <authorizationPlugin><map><authorizationMap><authorizationEntries>
+        <!-- OpenWire accounts cannot implicitly create missing queues. Bootstrap uses authenticated JMX. -->
+        <authorizationEntry queue="rivomesh.*" read="publishers,readers" write="publishers" admin="administrators"/>
+        <authorizationEntry queue="rivomesh.*.receipts" read="publishers" write="publishers" admin="administrators"/>
+        <authorizationEntry topic="ActiveMQ.Advisory.>" read="administrators" write="administrators" admin="administrators"/>
+      </authorizationEntries></authorizationMap></map></authorizationPlugin>
+    </plugins>
+    <persistenceAdapter><kahaDB directory="${activemq.data}/kahadb" journalDiskSyncStrategy="always" enableJournalDiskSyncs="true" checksumJournalFiles="true" checkForCorruptJournalFiles="true"/></persistenceAdapter>
+    <systemUsage><systemUsage sendFailIfNoSpaceAfterTimeout="3000"><memoryUsage><memoryUsage limit="128 mb"/></memoryUsage><storeUsage><storeUsage limit="2 gb"/></storeUsage><tempUsage><tempUsage limit="128 mb"/></tempUsage></systemUsage></systemUsage>
+    <transportConnectors><transportConnector name="openwire" uri="tcp://0.0.0.0:61616?maximumConnections=100&amp;wireFormat.maxFrameSize=20971520"/></transportConnectors>
+  </broker>
+  <import resource="jetty.xml"/>
+  <!-- Isolated Docker test network only; no web ports are published to the host. -->
+  <bean id="rivomeshFixtureNetwork" class="org.springframework.beans.factory.config.MethodInvokingFactoryBean" depends-on="inetAccessIncludeLoopbackV6">
+    <property name="targetObject" ref="inetAccessHandler"/><property name="targetMethod" value="include"/>
+    <property name="arguments"><list><value>172.16.0.0/12</value></list></property>
+  </bean>
+</beans>

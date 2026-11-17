@@ -1,0 +1,13 @@
+{
+  "artifact": "target/release-evidence/failure-inspection-first.jar",
+  "artifactSha256": "b63e2018b3a72f38f615ca1a8f78f765923717e6faf5723fa9259d1c3ecf6eab",
+  "bytes": 187935384,
+  "testClasses": "target/release-evidence/failure-inspection-tests-b63e2018b3a7",
+  "testClassesSha256": "1cfadd5e7a24bd394cdb532ae3cfbf4cb1c170deef2a7af840174a28e54330cb",
+  "sourceManifest": "target/release-evidence/failure-inspection-sources.json",
+  "sourceManifestSha256": "7ab2b57b16016a14b07c01c387f92cd74eea2382e930509ce2c31fe54dee6b7a",
+  "appTests": 357,
+  "domTests": 76,
+  "sdkReuseManifest": "target/sdk-cache-manifest.json",
+  "scope": "Internal failure-stage diagnostics and bounded paused-head inspection; native acceptance pending; no manual skip/patch execution"
+}

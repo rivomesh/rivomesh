@@ -1,0 +1,20 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.rivomesh</groupId><artifactId>rivomesh</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>rivomesh-gbase8c-driver</artifactId>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-antrun-plugin</artifactId><version>3.1.0</version><executions><execution><id>verified-vendor-jdbc</id><phase>generate-resources</phase><goals><goal>run</goal></goals><configuration><target>
+      <mkdir dir="${project.build.directory}/vendor"/>
+      <get src="https://g1.cdn.gbase.cn/products/34/mcd8BDMKR72UWFZQsfqGW/GBase-JDBC-aarch64.zip" dest="${project.build.directory}/vendor/gbase8c-jdbc-3.0.0B02.zip" skipexisting="true"/>
+      <checksum file="${project.build.directory}/vendor/gbase8c-jdbc-3.0.0B02.zip" algorithm="SHA-256" property="vendor.zip.sha256"/>
+      <fail message="GBASE8C_VENDOR_ZIP_DIGEST_MISMATCH"><condition><not><equals arg1="${vendor.zip.sha256}" arg2="3c2645993cd2e20a19941fc4d4bb5aba0f02ca378766543b6dd259a50c382721"/></not></condition></fail>
+      <unzip src="${project.build.directory}/vendor/gbase8c-jdbc-3.0.0B02.zip" dest="${project.build.directory}/vendor"/>
+      <checksum file="${project.build.directory}/vendor/gbase8c-jdbc-3.0.0B02.jar" algorithm="SHA-256" property="vendor.jar.sha256"/>
+      <fail message="GBASE8C_VENDOR_JAR_DIGEST_MISMATCH"><condition><not><equals arg1="${vendor.jar.sha256}" arg2="fe115f05124f6b9f37e49c829a0def28f7d09a6d871dd62a0c9f856b0aaa7e91"/></not></condition></fail>
+      <unzip src="${project.build.directory}/vendor/gbase8c-jdbc-3.0.0B02.jar" dest="${project.build.outputDirectory}"/>
+      <mkdir dir="${project.build.outputDirectory}/META-INF/rivomesh-licenses"/>
+      <copy file="${project.build.outputDirectory}/META-INF/LICENSE" tofile="${project.build.outputDirectory}/META-INF/rivomesh-licenses/gbase8c-jdbc.txt"/>
+    </target></configuration></execution></executions></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.2</version><configuration><forceCreation>true</forceCreation></configuration></plugin>
+  </plugins></build>
+</project>

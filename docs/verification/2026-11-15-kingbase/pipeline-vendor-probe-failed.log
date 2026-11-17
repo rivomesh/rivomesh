@@ -1,0 +1,62 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 185388628 bytes; SHA-256 8a6bc53af59a9607f81f6dbd7fb7a003142b45f0021cbf4c67700a03291ce62e
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Creating 
+ Network rivomesh-kingbase-pipeline-40681_default Creating 
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Creating 
+ Network rivomesh-kingbase-pipeline-40681_default Creating 
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Created 
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Created 
+ Network rivomesh-kingbase-pipeline-40681_default Created 
+ Network rivomesh-kingbase-pipeline-40681_default Created 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Creating 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Creating 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Creating 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Created 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Created 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Created 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Starting 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Starting 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Starting 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Started 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Started 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Started 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Waiting 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Waiting 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Waiting 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Healthy 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Healthy 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Healthy 
+ Container rivomesh-kingbase-pipeline-40681-tests-run-527f739bbdf5 Creating 
+ Container rivomesh-kingbase-pipeline-40681-tests-run-527f739bbdf5 Created 
+KINGBASE_NATIVE_PROFILE: {product=KingbaseES, version=KingbaseES V009R001C001B0025 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (NeoKylin 4.8.5-36), 64-bit, mode=pg, encoding=UTF8, synchronousCommit=on}
+Exception in thread "main" com.kingbase8.util.KSQLException: ERROR: unrecognized configuration parameter "database_mode"
+	at com.kingbase8.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:3719)
+	at com.kingbase8.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:3144)
+	at com.kingbase8.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:412)
+	at com.kingbase8.jdbc.KbStatement.executeInternal_(KbStatement.java:859)
+	at com.kingbase8.jdbc.KbStatement.execute(KbStatement.java:746)
+	at com.kingbase8.jdbc.KbStatement.executeWithFlags(KbStatement.java:649)
+	at com.kingbase8.jdbc.KbStatement.executeCachedSql(KbStatement.java:623)
+	at com.kingbase8.jdbc.KbStatement.executeWithFlags(KbStatement.java:584)
+	at com.kingbase8.jdbc.KbStatement.executeQuery(KbStatement.java:448)
+	at io.rivomesh.cdc.KingbaseProfile.check(KingbaseProfile.java:17)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.nativeContract(KingbasePipelineAcceptance.java:75)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.run(KingbasePipelineAcceptance.java:98)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.main(KingbasePipelineAcceptance.java:120)
+
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Stopping 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Stopping 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Stopping 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Stopped 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Removing 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Stopped 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Removing 
+ Container rivomesh-kingbase-pipeline-40681-kingbase-1 Removed 
+ Container rivomesh-kingbase-pipeline-40681-postgres-1 Removed 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Stopped 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Removing 
+ Container rivomesh-kingbase-pipeline-40681-mysql-1 Removed 
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Removing 
+ Network rivomesh-kingbase-pipeline-40681_default Removing 
+ Volume rivomesh-kingbase-pipeline-40681_kb-data Removed 
+ Network rivomesh-kingbase-pipeline-40681_default Removed 

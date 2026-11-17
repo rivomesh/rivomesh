@@ -1,0 +1,471 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "image",
+    "auth",
+    "persistence",
+    "platform",
+    "sessions",
+    "cluster",
+    "controllerHeapMiB"
+  ],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": [
+        "repository",
+        "tag"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "required": [
+        "existingSecret",
+        "key",
+        "legacyTokenEnabled",
+        "users",
+        "mode"
+      ],
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "legacyTokenEnabled": {
+          "type": "boolean"
+        },
+        "users": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "role",
+              "secretRef"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "VIEWER",
+                  "OPERATOR",
+                  "ADMIN"
+                ]
+              },
+              "secretRef": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "key"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$"
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 253,
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                  }
+                }
+              },
+              "taskIds": {
+                "type": "array",
+                "maxItems": 10000,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                }
+              }
+            }
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "CONFIG",
+            "MANAGED"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "maxTasks",
+        "maxRunningTasks",
+        "workerHeapMiB",
+        "controlThreads",
+        "pollMillis",
+        "autoStart",
+        "auditMaxEvents"
+      ],
+      "properties": {
+        "maxTasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "maxRunningTasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "workerHeapMiB": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 65536
+        },
+        "controlThreads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "pollMillis": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "autoStart": {
+          "type": "boolean"
+        },
+        "auditMaxEvents": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 10000000
+        }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "required": [
+        "size"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "minLength": 1
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "storageClass": {
+          "type": "string"
+        }
+      }
+    },
+    "sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "secureCookie",
+        "rememberBrowser",
+        "idleSeconds",
+        "absoluteSeconds",
+        "maximum",
+        "publicOrigin"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "secureCookie": {
+          "type": "boolean"
+        },
+        "rememberBrowser": {
+          "type": "boolean"
+        },
+        "idleSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 86400
+        },
+        "absoluteSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 604800
+        },
+        "maximum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "publicOrigin": {
+          "type": "string"
+        }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "id",
+        "nodeId",
+        "driver",
+        "url",
+        "namespace",
+        "existingSecret",
+        "usernameKey",
+        "passwordKey",
+        "advertiseUrl",
+        "heartbeatMillis",
+        "leaseMillis",
+        "maximumNodes",
+        "sharedAccess",
+        "sharedTasks",
+        "taskKeyKey",
+        "maximumTasks",
+        "maximumCommands",
+        "separateExecution",
+        "role"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "nodeId": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+        },
+        "driver": {
+          "type": "string",
+          "enum": [
+            "org.postgresql.Driver",
+            "com.mysql.cj.jdbc.Driver"
+          ]
+        },
+        "url": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,62}$"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "usernameKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passwordKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "advertiseUrl": {
+          "type": "string"
+        },
+        "heartbeatMillis": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        },
+        "leaseMillis": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000
+        },
+        "maximumNodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "sharedAccess": {
+          "type": "boolean"
+        },
+        "sharedTasks": {
+          "type": "boolean"
+        },
+        "taskKeyKey": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "maximumTasks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000
+        },
+        "maximumCommands": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "separateExecution": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "COMBINED",
+            "CONTROLLER",
+            "AGENT"
+          ]
+        },
+        "recoveryReview": {
+          "type": "boolean"
+        },
+        "recoveryCommit": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sharedTasks": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "sharedAccess": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "separateExecution": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "sharedAccess": {
+                "const": true
+              },
+              "sharedTasks": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "CONTROLLER",
+                  "AGENT"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "separateExecution": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "recoveryReview"
+            ],
+            "properties": {
+              "recoveryReview": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "sharedAccess": {
+                "const": true
+              },
+              "sharedTasks": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "recoveryCommit"
+            ],
+            "properties": {
+              "recoveryCommit": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "sharedAccess": {
+                "const": true
+              },
+              "sharedTasks": {
+                "const": true
+              },
+              "recoveryReview": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "controllerHeapMiB": {
+      "type": "integer",
+      "minimum": 128,
+      "maximum": 65536
+    }
+  }
+}

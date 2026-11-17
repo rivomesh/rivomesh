@@ -1,0 +1,5 @@
+8.4.13
+PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+/rivomesh-hive-pipeline-50599-hive-1 apache/hive:4.0.1 sha256:e0e865f33ecfbaeba4a96b3f15ab67aa4dd2602102962aa3dcca082879c68367
+/rivomesh-hive-pipeline-50599-mysql-1 mysql:8.4 sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7
+/rivomesh-hive-pipeline-50599-postgres-1 postgres:17.12 sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de

@@ -1,0 +1,8 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion><parent><groupId>io.github.rivomesh</groupId><artifactId>rivomesh</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>rivomesh-hive-transport</artifactId>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.8.1</version><executions><execution><id>private-hive-sdk</id><phase>generate-resources</phase><goals><goal>copy</goal></goals><configuration><artifactItems><artifactItem><groupId>org.apache.hive</groupId><artifactId>hive-jdbc</artifactId><version>4.0.1</version><classifier>standalone</classifier><type>jar</type><outputDirectory>${project.build.outputDirectory}/rivomesh-sdk</outputDirectory><destFileName>hive-jdbc-4.0.1-standalone.jar</destFileName></artifactItem></artifactItems></configuration></execution></executions></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.2</version><configuration><forceCreation>true</forceCreation></configuration></plugin>
+  </plugins></build>
+</project>

@@ -1,0 +1,486 @@
+npm notice run rivomesh-console-tests@0.1.0 test
+npm notice run node --test console.test.mjs
+TAP version 13
+# Subtest: admin reveals raw differences as text, distinguishes NULL, and sends page cursors
+ok 1 - admin reveals raw differences as text, distinguishes NULL, and sends page cursors
+  ---
+  duration_ms: 205.023208
+  type: 'test'
+  ...
+# Subtest: summary readers do not receive raw-detail buttons
+ok 2 - summary readers do not receive raw-detail buttons
+  ---
+  duration_ms: 72.031042
+  type: 'test'
+  ...
+# Subtest: validation submits explicit SQL targets and budgets without including messaging targets
+ok 3 - validation submits explicit SQL targets and budgets without including messaging targets
+  ---
+  duration_ms: 35.579166
+  type: 'test'
+  ...
+# Subtest: viewer and operator can see validation history but cannot start or cancel jobs
+ok 4 - viewer and operator can see validation history but cannot start or cancel jobs
+  ---
+  duration_ms: 51.730667
+  type: 'test'
+  ...
+# Subtest: validation cancellation carries the current revision and is separate from resuming
+ok 5 - validation cancellation carries the current revision and is separate from resuming
+  ---
+  duration_ms: 32.783666
+  type: 'test'
+  ...
+# Subtest: login keeps the token out of persistent browser storage and renders availability honestly
+ok 6 - login keeps the token out of persistent browser storage and renders availability honestly
+  ---
+  duration_ms: 22.8015
+  type: 'test'
+  ...
+# Subtest: viewer and operator accounts show their role and cannot create pipelines
+ok 7 - viewer and operator accounts show their role and cannot create pipelines
+  ---
+  duration_ms: 60.194541
+  type: 'test'
+  ...
+# Subtest: an old unauthorized response cannot clear a newer authenticated session
+ok 8 - an old unauthorized response cannot clear a newer authenticated session
+  ---
+  duration_ms: 29.349
+  type: 'test'
+  ...
+# Subtest: operation history and creation attribution use escaped authenticated identity text
+ok 9 - operation history and creation attribution use escaped authenticated identity text
+  ---
+  duration_ms: 21.758667
+  type: 'test'
+  ...
+# Subtest: wizard validates, masks its plan, creates a stopped task and never auto-starts
+ok 10 - wizard validates, masks its plan, creates a stopped task and never auto-starts
+  ---
+  duration_ms: 61.374417
+  type: 'test'
+  ...
+# Subtest: v3 wizard maps two databases to independent targets and masks every credential
+ok 11 - v3 wizard maps two databases to independent targets and masks every credential
+  ---
+  duration_ms: 37.6355
+  type: 'test'
+  ...
+# Subtest: Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+ok 12 - Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+  ---
+  duration_ms: 43.276
+  type: 'test'
+  ...
+# Subtest: source snapshot preparation is distinct from destination confirmation
+ok 13 - source snapshot preparation is distinct from destination confirmation
+  ---
+  duration_ms: 25.824958
+  type: 'test'
+  ...
+# Subtest: Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+ok 14 - Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+  ---
+  duration_ms: 43.499958
+  type: 'test'
+  ...
+# Subtest: Redis wizard saves a durable stream without leaking hidden fields from another broker
+ok 15 - Redis wizard saves a durable stream without leaking hidden fields from another broker
+  ---
+  duration_ms: 41.936458
+  type: 'test'
+  ...
+# Subtest: v3 target recovery carries its own generation while global source errors stay distinct
+ok 16 - v3 target recovery carries its own generation while global source errors stay distinct
+  ---
+  duration_ms: 25.672875
+  type: 'test'
+  ...
+# Subtest: retryable destination failures remain automatic and visible without a manual resume action
+ok 17 - retryable destination failures remain automatic and visible without a manual resume action
+  ---
+  duration_ms: 20.823958
+  type: 'test'
+  ...
+# Subtest: destination cards show consumer resources and delivery guarantees as escaped text
+ok 18 - destination cards show consumer resources and delivery guarantees as escaped text
+  ---
+  duration_ms: 22.676208
+  type: 'test'
+  ...
+# Subtest: RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+ok 19 - RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+  ---
+  duration_ms: 38.104916
+  type: 'test'
+  ...
+# Subtest: Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+ok 20 - Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+  ---
+  duration_ms: 30.44125
+  type: 'test'
+  ...
+# Subtest: message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+ok 21 - message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+  ---
+  duration_ms: 39.341666
+  type: 'test'
+  ...
+# Subtest: resume carries the precise error generation and untrusted names remain text
+ok 22 - resume carries the precise error generation and untrusted names remain text
+  ---
+  duration_ms: 22.664459
+  type: 'test'
+  ...
+# Subtest: ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+ok 23 - ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+  ---
+  duration_ms: 36.445125
+  type: 'test'
+  ...
+# Subtest: operation results expose index decisions as safe text
+ok 24 - operation results expose index decisions as safe text
+  ---
+  duration_ms: 19.448917
+  type: 'test'
+  ...
+# Subtest: Classic wizard requires broker/admin URL and explains consumer selector
+ok 25 - Classic wizard requires broker/admin URL and explains consumer selector
+  ---
+  duration_ms: 30.009958
+  type: 'test'
+  ...
+# Subtest: configuration editing preserves opaque credentials and requires preview before save
+ok 26 - configuration editing preserves opaque credentials and requires preview before save
+  ---
+  duration_ms: 25.25175
+  type: 'test'
+  ...
+# Subtest: migration previews and running tasks cannot apply configuration
+ok 27 - migration previews and running tasks cannot apply configuration
+  ---
+  duration_ms: 21.166209
+  type: 'test'
+  ...
+# Subtest: old preview responses cannot overwrite a newer editor draft
+ok 28 - old preview responses cannot overwrite a newer editor draft
+  ---
+  duration_ms: 20.66175
+  type: 'test'
+  ...
+# Subtest: save retries retain the same request identity and restore requires reviewing changes
+ok 29 - save retries retain the same request identity and restore requires reviewing changes
+  ---
+  duration_ms: 31.771041
+  type: 'test'
+  ...
+# Subtest: logout and close fence late configuration responses and erase drafts
+ok 30 - logout and close fence late configuration responses and erase drafts
+  ---
+  duration_ms: 20.365958
+  type: 'test'
+  ...
+# Subtest: audit permission, safe rendering, fixed-window pagination and page export
+ok 31 - audit permission, safe rendering, fixed-window pagination and page export
+  ---
+  duration_ms: 55.151875
+  type: 'test'
+  ...
+# Subtest: late audit responses after logout cannot restore security records
+ok 32 - late audit responses after logout cannot restore security records
+  ---
+  duration_ms: 20.911958
+  type: 'test'
+  ...
+# Subtest: audit export refuses a changed retention boundary
+ok 33 - audit export refuses a changed retention boundary
+  ---
+  duration_ms: 18.858125
+  type: 'test'
+  ...
+# Subtest: scoped session displays exact grant count and clears grants on logout
+ok 34 - scoped session displays exact grant count and clears grants on logout
+  ---
+  duration_ms: 21.305458
+  type: 'test'
+  ...
+# Subtest: Doris wizard configures native analytical writes, replicas and explicit redirects
+ok 35 - Doris wizard configures native analytical writes, replicas and explicit redirects
+  ---
+  duration_ms: 32.928416
+  type: 'test'
+  ...
+# Subtest: OceanBase wizard requires v3 and keeps tenant JDBC configuration separate from brokers
+ok 36 - OceanBase wizard requires v3 and keeps tenant JDBC configuration separate from brokers
+  ---
+  duration_ms: 34.429708
+  type: 'test'
+  ...
+# Subtest: Hive wizard requires an explicit index-omission acknowledgement and v3
+ok 37 - Hive wizard requires an explicit index-omission acknowledgement and v3
+  ---
+  duration_ms: 37.483541
+  type: 'test'
+  ...
+# Subtest: Hive cache failure explains safe recovery in both languages
+ok 38 - Hive cache failure explains safe recovery in both languages
+  ---
+  duration_ms: 28.09925
+  type: 'test'
+  ...
+# Subtest: account activation is explicit and newly generated tokens stay out of previews and storage
+ok 39 - account activation is explicit and newly generated tokens stay out of previews and storage
+  ---
+  duration_ms: 27.034083
+  type: 'test'
+  ...
+# Subtest: account grants retain unloaded IDs and lost-response retries retain the request identity
+ok 40 - account grants retain unloaded IDs and lost-response retries retain the request identity
+  ---
+  duration_ms: 24.059209
+  type: 'test'
+  ...
+# Subtest: accounts close clears credentials and old directory responses cannot reopen the view
+ok 41 - accounts close clears credentials and old directory responses cannot reopen the view
+  ---
+  duration_ms: 24.688041
+  type: 'test'
+  ...
+# Subtest: only administrators see account controls and languages retain unsaved token masking
+ok 42 - only administrators see account controls and languages retain unsaved token masking
+  ---
+  duration_ms: 43.445625
+  type: 'test'
+  ...
+# Subtest: account changes show their subject in the audit view without interpreting markup
+ok 43 - account changes show their subject in the audit view without interpreting markup
+  ---
+  duration_ms: 20.3815
+  type: 'test'
+  ...
+# Subtest: Kingbase wizard is v3-only, uses the vendor URL and preserves explicit mappings
+ok 44 - Kingbase wizard is v3-only, uses the vendor URL and preserves explicit mappings
+  ---
+  duration_ms: 52.657708
+  type: 'test'
+  ...
+# Subtest: DM wizard exposes its lossless text plan and requires acknowledgement before submit
+ok 45 - DM wizard exposes its lossless text plan and requires acknowledgement before submit
+  ---
+  duration_ms: 43.604875
+  type: 'test'
+  ...
+# Subtest: GBase 8c wizard is v3-only, uses the vendor URL and preserves explicit mappings
+ok 46 - GBase 8c wizard is v3-only, uses the vendor URL and preserves explicit mappings
+  ---
+  duration_ms: 44.320209
+  type: 'test'
+  ...
+# Subtest: repair planning requires explicit scope and carries the current task revision
+ok 47 - repair planning requires explicit scope and carries the current task revision
+  ---
+  duration_ms: 29.866166
+  type: 'test'
+  ...
+# Subtest: repair execution requires a freshly reviewed plan and explicit confirmation without HTML execution
+ok 48 - repair execution requires a freshly reviewed plan and explicit confirmation without HTML execution
+  ---
+  duration_ms: 39.672667
+  type: 'test'
+  ...
+# Subtest: restricted roles cannot select, review, confirm or cancel a repair
+ok 49 - restricted roles cannot select, review, confirm or cancel a repair
+  ---
+  duration_ms: 81.162875
+  type: 'test'
+  ...
+# Subtest: refresh and another page restore a cookie session without resubmitting the access token
+ok 50 - refresh and another page restore a cookie session without resubmitting the access token
+  ---
+  duration_ms: 36.642708
+  type: 'test'
+  ...
+# Subtest: an expired startup session shows login without sending control or creation requests
+ok 51 - an expired startup session shows login without sending control or creation requests
+  ---
+  duration_ms: 16.056667
+  type: 'test'
+  ...
+# Subtest: normal requests use cookies and CSRF; logout revokes the server session before a new page restores
+ok 52 - normal requests use cookies and CSRF; logout revokes the server session before a new page restores
+  ---
+  duration_ms: 34.054917
+  type: 'test'
+  ...
+# Subtest: logout queues behind a delayed login and revokes its eventual cookie
+ok 53 - logout queues behind a delayed login and revokes its eventual cookie
+  ---
+  duration_ms: 16.437958
+  type: 'test'
+  ...
+# Subtest: a failed logout is visible and does not claim the server credential was revoked
+ok 54 - a failed logout is visible and does not claim the server credential was revoked
+  ---
+  duration_ms: 20.538
+  type: 'test'
+  ...
+# Subtest: sign-out in another tab clears permissions and outstanding dialogs immediately
+ok 55 - sign-out in another tab clears permissions and outstanding dialogs immediately
+  ---
+  duration_ms: 39.803875
+  type: 'test'
+  ...
+# Subtest: an outstanding refresh from an old session cannot block rendering a newer login
+ok 56 - an outstanding refresh from an old session cannot block rendering a newer login
+  ---
+  duration_ms: 23.046
+  type: 'test'
+  ...
+# Subtest: self token rotation exchanges the saved new credential instead of reusing the revoked cookie
+ok 57 - self token rotation exchanges the saved new credential instead of reusing the revoked cookie
+  ---
+  duration_ms: 23.50575
+  type: 'test'
+  ...
+# Subtest: a different cookie session discovered during refresh clears the previous identity drafts
+ok 58 - a different cookie session discovered during refresh clears the previous identity drafts
+  ---
+  duration_ms: 23.595584
+  type: 'test'
+  ...
+# Subtest: administrator sees shared node metadata and task observations without suggesting remote task control
+ok 59 - administrator sees shared node metadata and task observations without suggesting remote task control
+  ---
+  duration_ms: 20.331208
+  type: 'test'
+  ...
+# Subtest: restricted accounts cannot open the global node registry
+ok 60 - restricted accounts cannot open the global node registry
+  ---
+  duration_ms: 34.926625
+  type: 'test'
+  ...
+# Subtest: node pagination preserves server cursor and visibly marks stale leases
+ok 61 - node pagination preserves server cursor and visibly marks stale leases
+  ---
+  duration_ms: 18.101792
+  type: 'test'
+  ...
+# Subtest: registry failure removes old healthy cards instead of presenting cached success
+ok 62 - registry failure removes old healthy cards instead of presenting cached success
+  ---
+  duration_ms: 19.589292
+  type: 'test'
+  ...
+# Subtest: late node responses cannot restore inventory after logout
+ok 63 - late node responses cannot restore inventory after logout
+  ---
+  duration_ms: 19.997833
+  type: 'test'
+  ...
+# Subtest: shared identity mode explains cross-node revocation in both languages
+ok 64 - shared identity mode explains cross-node revocation in both languages
+  ---
+  duration_ms: 20.561458
+  type: 'test'
+  ...
+# Subtest: shared account editing preserves original and unloaded node scopes
+ok 65 - shared account editing preserves original and unloaded node scopes
+  ---
+  duration_ms: 22.436791
+  type: 'test'
+  ...
+# Subtest: shared new accounts default to the current node and require explicit all-node expansion
+ok 66 - shared new accounts default to the current node and require explicit all-node expansion
+  ---
+  duration_ms: 20.237041
+  type: 'test'
+  ...
+# Subtest: empty selected node scope does not silently become all nodes
+ok 67 - empty selected node scope does not silently become all nodes
+  ---
+  duration_ms: 21.082541
+  type: 'test'
+  ...
+# Subtest: session header explains node-limited access and clears it on logout
+ok 68 - session header explains node-limited access and clears it on logout
+  ---
+  duration_ms: 17.061625
+  type: 'test'
+  ...
+# Subtest: global task pagination shows authorized total, owner and page metrics
+ok 69 - global task pagination shows authorized total, owner and page metrics
+  ---
+  duration_ms: 26.132208
+  type: 'test'
+  ...
+# Subtest: global wizard loads additional owner choices and submits the selected owner
+ok 70 - global wizard loads additional owner choices and submits the selected owner
+  ---
+  duration_ms: 32.116583
+  type: 'test'
+  ...
+# Subtest: global YAML import uses placement and never submits a file after session replacement
+ok 71 - global YAML import uses placement and never submits a file after session replacement
+  ---
+  duration_ms: 26.806125
+  type: 'test'
+  ...
+# Subtest: a late global page cannot restore old data after sign-out and sign-in
+ok 72 - a late global page cannot restore old data after sign-out and sign-in
+  ---
+  duration_ms: 23.225625
+  type: 'test'
+  ...
+# Subtest: global pending configuration and uncertain delivery remain visible without local-control labels
+ok 73 - global pending configuration and uncertain delivery remain visible without local-control labels
+  ---
+  duration_ms: 18.877875
+  type: 'test'
+  ...
+# Subtest: controller-only entry skips controller pages and selects an execution Agent
+ok 74 - controller-only entry skips controller pages and selects an execution Agent
+  ---
+  duration_ms: 22.894125
+  type: 'test'
+  ...
+# Subtest: controller-only entry with no Agent never defaults execution to itself
+ok 75 - controller-only entry with no Agent never defaults execution to itself
+  ---
+  duration_ms: 28.23875
+  type: 'test'
+  ...
+# Subtest: node cards distinguish management, execution Agent and combined roles in both languages
+ok 76 - node cards distinguish management, execution Agent and combined roles in both languages
+  ---
+  duration_ms: 33.012333
+  type: 'test'
+  ...
+# Subtest: paused destinations show phase-specific recovery guidance in both languages without adding skip
+ok 77 - paused destinations show phase-specific recovery guidance in both languages without adding skip
+  ---
+  duration_ms: 23.054584
+  type: 'test'
+  ...
+# Subtest: missing or corrupt phase diagnostics remain unknown and render untrusted fields as text
+ok 78 - missing or corrupt phase diagnostics remain unknown and render untrusted fields as text
+  ---
+  duration_ms: 23.263209
+  type: 'test'
+  ...
+# Subtest: initial preparation and snapshot faults have distinct guidance without an invented incremental sequence
+ok 79 - initial preparation and snapshot faults have distinct guidance without an invented incremental sequence
+  ---
+  duration_ms: 22.521208
+  type: 'test'
+  ...
+1..79
+# tests 79
+# suites 0
+# pass 79
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3148.097375

@@ -1,0 +1,46 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 185382237 bytes; SHA-256 d74e7f6f0c57cf1fc3449c2b2a8a822421eb87e4b257639a1c87f115bc951cb0
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Recreate 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Creating 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Creating 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Created 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Created 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Recreated 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Starting 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Starting 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Starting 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Started 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Started 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Started 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Waiting 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Waiting 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Waiting 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Healthy 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Healthy 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Healthy 
+ Container rivomesh-kingbase-dev-4512-tests-run-b698b1ca534a Creating 
+ Container rivomesh-kingbase-dev-4512-tests-run-b698b1ca534a Created 
+KINGBASE_NATIVE_PROFILE: {product=KingbaseES, version=KingbaseES V009R001C001B0025 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (NeoKylin 4.8.5-36), 64-bit, mode=pg, encoding=UTF8, synchronousCommit=on}
+KINGBASE_NATIVE_CONTRACT_ACCEPTED: PG/UTF8/session profile, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen
+Exception in thread "main" java.lang.AssertionError: CLI operation failed
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.require(KingbasePipelineAcceptance.java:23)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.command(KingbasePipelineAcceptance.java:36)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.run(KingbasePipelineAcceptance.java:90)
+	at io.rivomesh.acceptance.KingbasePipelineAcceptance.main(KingbasePipelineAcceptance.java:103)
+
+ Container rivomesh-kingbase-dev-4512-mysql-1 Stopping 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Stopping 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Stopping 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Stopped 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Removing 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Stopped 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Removing 
+ Container rivomesh-kingbase-dev-4512-kingbase-1 Removed 
+ Container rivomesh-kingbase-dev-4512-postgres-1 Removed 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Stopped 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Removing 
+ Container rivomesh-kingbase-dev-4512-mysql-1 Removed 
+ Volume rivomesh-kingbase-dev-4512_kb-data Removing 
+ Network rivomesh-kingbase-dev-4512_default Removing 
+ Network rivomesh-kingbase-dev-4512_default Removed 
+ Volume rivomesh-kingbase-dev-4512_kb-data Removed 

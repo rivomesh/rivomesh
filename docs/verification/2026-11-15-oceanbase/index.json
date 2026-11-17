@@ -1,0 +1,62 @@
+[
+  {
+    "file": "maven-unit.log",
+    "source": "target/oceanbase-catalog-package.log",
+    "sha256": "99be77829290617ef45b15a7f7371c4da9d49e5730d2fc4efbf597a797089ace"
+  },
+  {
+    "file": "release-unit.log",
+    "source": "target/oceanbase-release-units.log",
+    "sha256": "0cf5bddb7a1a5ec671f2071da75bdb26ff76bb3a5031a7278e43d5b21baa5789"
+  },
+  {
+    "file": "ui.log",
+    "source": "target/ui-oceanbase-first.log",
+    "sha256": "078809c79d87ec84eeb16f5e9543279a270f2879c6f11382b22ef4fb0337ed8d"
+  },
+  {
+    "file": "artifact.log",
+    "source": "target/artifact-oceanbase-catalog.log",
+    "sha256": "e888b027ba142bcf1562387d71783c6dc6f8faf045400245f939ea9375b748ba"
+  },
+  {
+    "file": "pipeline-first-failed.log",
+    "source": "target/oceanbase-first-pipeline.log",
+    "sha256": "ee74652358b1a779382a0b3b1f35ab57c7ce60d7a80e36cadf4a45242964719b"
+  },
+  {
+    "file": "pipeline-catalog-failed.log",
+    "source": "target/oceanbase-catalog-pipeline.log",
+    "sha256": "d43b4bc7383f095990df2567ecac80277e0ed8a56e9b611fa2f7459867619a6c"
+  },
+  {
+    "file": "pipeline-memory-failed.log",
+    "source": "target/oceanbase-tenant-memory-pipeline.log",
+    "sha256": "002a25c243a43a7c079df2f9d5888866de34d883a28267ddf9af218a6de345ce"
+  },
+  {
+    "file": "pipeline-cpu-failed.log",
+    "source": "target/oceanbase-cpu-profile-pipeline.log",
+    "sha256": "05a79d128b5f284964d549ce775a4334f783b85ca8a033a3a531b8d5b2459a2d"
+  },
+  {
+    "file": "resource-memory.log",
+    "source": "target/oceanbase-restart-memory-probe.log",
+    "sha256": "ab0ea21348c3ebb832df5a5418341d2d080156e628c7e6029ae6fa882fd3700d"
+  },
+  {
+    "file": "resource-cpu.log",
+    "source": "target/oceanbase-cpu-restart-memory.log",
+    "sha256": "7c06352f9b69de855074df9fdce2b33aad78fc24ba1f46f9e3760490905905cc"
+  },
+  {
+    "file": "first-native-indexes.log",
+    "source": "target/oceanbase-native-indexes.log",
+    "sha256": "73ac85e61958ea61e2d42bebc3846d8887141196ca3a5d839b05f585ae8ad07e"
+  },
+  {
+    "file": "doris-class-comparison.json",
+    "source": "target/doris-hardening-oceanbase-class-comparison.json",
+    "sha256": "eaeb507fc617282a428c2807d0ee02af7a0fe048a39928f3845db87e731fa538"
+  }
+]

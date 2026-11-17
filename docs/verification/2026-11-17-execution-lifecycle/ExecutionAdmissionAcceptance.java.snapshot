@@ -1,0 +1,73 @@
+package io.rivomesh.platform;
+
+import io.rivomesh.*;
+import java.nio.file.*;
+import java.sql.*;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Actual vendor transactions; fixture Workers, not a separate business CDC claim. */
+public final class ExecutionAdmissionAcceptance {
+    static void require(boolean ok,String code){if(!ok)throw new AssertionError(code);}
+    static PlatformConfig config(Path home,String cluster,String node,ClusterConfig.Role role){
+        PlatformConfig c=OwnerControlAcceptance.configuration(home.resolve(node));c.port=0;c.sessions.secureCookie=false;c.cluster.id=cluster;c.cluster.nodeId=node;c.cluster.sharedTasks=true;c.cluster.taskKey=OwnerControlAcceptance.env("RIVOMESH_OWNER_KEY");c.cluster.separateExecution=true;c.cluster.role=role;return c;
+    }
+    static TaskService service(PlatformConfig c)throws Exception{return new TaskService(c,new OwnerControlAcceptance.Backend(),new OwnerControlAcceptance.Workers());}
+    static AccessControl.Principal actor(TaskService tasks){return tasks.authenticate("Bearer "+OwnerControlAcceptance.env("RIVOMESH_OWNER_TOKEN"));}
+    static final class Authority {
+        final GlobalTaskStore store;final DurableCommands commands;final TaskService service;
+        Authority(PlatformConfig c,TaskService service)throws Exception{this.service=service;store=new GlobalTaskStore(c.cluster,service.sharedAccess(),c.cluster.taskKey,service.globalTaskIdentity(),c.cluster.maximumTasks);commands=new DurableCommands(c.cluster,service.sharedAccess(),store,c.cluster.maximumCommands);}
+        void create(String directory,String id)throws Exception{
+            Config c=new Config();c.jobId="job";c.source.host="fixture-mysql";c.source.database="sales";c.source.username="reader";c.source.password="fixture-source-private";c.target.url="jdbc:postgresql://fixture-target:5432/business";c.target.username="writer";c.target.password="fixture-target-private";c.target.schema="sales";c.target.metadataSchema="sync_metadata";
+            TaskRequest request=TaskRequest.of(TaskRequest.Kind.CREATE,null);request.requestId=id;request.yaml=Model.JSON.writeValueAsString(c);commands.create("job","worker",directory,request,actor(service));
+        }
+    }
+    static String oldAgent(PlatformConfig b)throws Exception{try(TaskService tasks=service(b);ConsoleServer server=new ConsoleServer(b,tasks)){server.start();return tasks.ownerDirectoryIdentity();}}
+    interface Attempt {void run()throws Exception;}
+    static String attempt(Attempt action,String success)throws Exception{try{action.run();return success;}catch(TaskService.Conflict rejected){return rejected.getMessage();}}
+    static void staleBinding(Path home)throws Exception{
+        PlatformConfig a=config(home,"native_role_stale","entry",ClusterConfig.Role.CONTROLLER),b=config(home,"native_role_stale","worker",ClusterConfig.Role.AGENT);String directory=oldAgent(b);b.cluster.role=ClusterConfig.Role.CONTROLLER;
+        try(TaskService first=service(a);TaskService second=service(b);ConsoleServer one=new ConsoleServer(a,first);ConsoleServer two=new ConsoleServer(b,second)){
+            one.start();two.start();Authority authority=new Authority(a,first);require("OWNER_ROLE_REQUIRED".equals(attempt(()->authority.create(directory,"native_stale_binding_create"),"CREATED")),"STALE_BINDING_ADMITTED");
+            try{authority.store.get("job",actor(first));throw new AssertionError("REJECTED_TASK_WAS_COMMITTED");}catch(NoSuchElementException expected){}
+            require(((Number)authority.store.page("",20,actor(first)).get("total")).intValue()==0,"REJECTED_TASK_COUNTER_ADVANCED");
+        }
+        System.out.println("NATIVE_STALE_AGENT_BINDING_REJECTED: task/config/request/counters roll back when owner role changed before commit");
+    }
+    static void lateAdmission(Path home)throws Exception{
+        PlatformConfig a=config(home,"native_role_late","entry",ClusterConfig.Role.CONTROLLER),b=config(home,"native_role_late","worker",ClusterConfig.Role.AGENT);String directory=oldAgent(b);b.cluster.role=ClusterConfig.Role.CONTROLLER;
+        try(TaskService first=service(a);ConsoleServer one=new ConsoleServer(a,first)){
+            one.start();Authority authority=new Authority(a,first);
+            try(TaskService second=service(b);ConsoleServer two=new ConsoleServer(b,second)){authority.create(directory,"native_after_constructor_create");require("CONTROLLER_OWNS_TASKS".equals(attempt(two::start,"REGISTERED")),"LATE_TASK_DID_NOT_BLOCK_CONTROLLER");}
+            b.cluster.role=ClusterConfig.Role.AGENT;try(TaskService restored=service(b);ConsoleServer agent=new ConsoleServer(b,restored)){
+                agent.start();long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(45);while(!"SUCCEEDED".equals(authority.commands.view("native_after_constructor_create",actor(first)).get("status"))){if(System.nanoTime()>deadline)throw new AssertionError("ORIGINAL_AGENT_RECOVERY_TIMEOUT");Thread.sleep(50);}require("job".equals(restored.view("job").get("id")),"ORIGINAL_AGENT_TASK_LOST");
+            }
+        }
+        System.out.println("NATIVE_LATE_ADMISSION_FENCED: controller registration rechecks ownership and original Agent completes the accepted request");
+    }
+    static void simultaneous(Path home,int iteration)throws Exception{
+        String cluster="native_role_race_"+iteration;PlatformConfig a=config(home,cluster,"entry",ClusterConfig.Role.CONTROLLER),b=config(home,cluster,"worker",ClusterConfig.Role.AGENT);String directory=oldAgent(b);b.cluster.role=ClusterConfig.Role.CONTROLLER;
+        ExecutorService threads=Executors.newFixedThreadPool(2);
+        try(TaskService first=service(a);ConsoleServer one=new ConsoleServer(a,first);TaskService second=service(b);ConsoleServer two=new ConsoleServer(b,second);JdbcControlStore registry=new JdbcControlStore(a.cluster)){
+            one.start();Authority authority=new Authority(a,first);CountDownLatch entered=new CountDownLatch(2);Future<String> creation,registration;
+            try(Connection barrier=registry.connect()){
+                barrier.setAutoCommit(false);try(PreparedStatement p=registry.prepare(barrier,"SELECT node_id FROM "+registry.table("node")+" WHERE cluster_id=? AND node_id=? FOR UPDATE",cluster,"worker");ResultSet rows=p.executeQuery()){require(rows.next(),"ROLE_RACE_NODE_MISSING");}
+                if(iteration==1){registration=threads.submit(()->{entered.countDown();return attempt(two::start,"REGISTERED");});Thread.sleep(500);creation=threads.submit(()->{entered.countDown();return attempt(()->authority.create(directory,"native_simultaneous_create"),"CREATED");});}
+                else{creation=threads.submit(()->{entered.countDown();return attempt(()->authority.create(directory,"native_simultaneous_create"),"CREATED");});if(iteration==0)Thread.sleep(500);registration=threads.submit(()->{entered.countDown();return attempt(two::start,"REGISTERED");});}
+                require(entered.await(10,TimeUnit.SECONDS),"ROLE_RACE_THREADS_NOT_STARTED");Thread.sleep(100);barrier.commit();
+            }
+            String made=creation.get(45,TimeUnit.SECONDS),registered=registration.get(45,TimeUnit.SECONDS);require("CREATED".equals(made)&&"CONTROLLER_OWNS_TASKS".equals(registered)||"OWNER_ROLE_REQUIRED".equals(made)&&"REGISTERED".equals(registered),"ROLE_RACE_OUTCOME_"+made+"_"+registered);
+            require(((Number)authority.store.page("",20,actor(first)).get("total")).intValue()==("CREATED".equals(made)?1:0),"ROLE_RACE_PARTIAL_AUTHORITY");System.out.println("NATIVE_ROLE_COMMIT_RACE: round="+iteration+",creation="+made+",registration="+registered);
+        }finally{threads.shutdownNow();threads.awaitTermination(10,TimeUnit.SECONDS);}
+    }
+    static void protocolUpgrade(Path home)throws Exception{
+        ClusterConfig next=config(home,"native_role_upgrade","management",ClusterConfig.Role.CONTROLLER).cluster,previous=Model.JSON.readValue(Model.JSON.writeValueAsString(next),ClusterConfig.class);previous.separateExecution=false;previous.role=ClusterConfig.Role.COMBINED;previous.nodeId="legacy";
+        try(JdbcControlStore old=new JdbcControlStore(previous)){
+            ControlStore.Node node=new ControlStore.Node();node.id="legacy";node.incarnation=UUID.randomUUID().toString();ControlStore.Lease lease=old.register(node,Collections.emptyList());require("GLOBAL_TASK_QUIESCENCE_REQUIRED".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){}},"UPGRADED")),"LIVE_PROTOCOL3_UPGRADED");
+            try(Connection c=old.connect()){old.update(c,"UPDATE "+old.table("node")+" SET lease_until=0 WHERE cluster_id=? AND node_id=?",previous.id,"legacy");}require("GLOBAL_TASK_QUIESCENCE_REQUIRED".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){}},"UPGRADED")),"EXPIRED_PROTOCOL3_UPGRADED");old.stopped(lease);
+            try(JdbcControlStore upgraded=new JdbcControlStore(next)){require("CONTROL_STORE_PROTOCOL_MISMATCH".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(previous)){}},"ADMITTED")),"OLD_PROTOCOL3_READMITTED");}
+        }
+        System.out.println("NATIVE_EXECUTION_PROTOCOL_UPGRADE: live/expired legacy members refuse upgrade; STOPPED upgrades to4 and old mode is refused");
+    }
+    public static void main(String[] args)throws Exception{Path home=Paths.get(args[0]);staleBinding(home.resolve("stale"));lateAdmission(home.resolve("late"));for(int n=0;n<3;n++)simultaneous(home.resolve("race_"+n),n);protocolUpgrade(home.resolve("upgrade"));System.out.println("EXECUTION_ADMISSION_NATIVE_ACCEPTED: "+OwnerControlAcceptance.env("RIVOMESH_OWNER_DRIVER")+" actual transactions and mixed-protocol refusal; fixture Workers only");}
+}

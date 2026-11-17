@@ -1,0 +1,35 @@
+services:
+  clickhouse-store:
+    image: clickhouse/clickhouse-server:25.8.33.6
+    user: "0:0"
+    entrypoint: ["sh"]
+    volumes:
+      - clickhouse-data:/store
+      - clickhouse-backup:/backup
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8.33.6
+    mem_limit: 2g
+    environment:
+      CLICKHOUSE_USER: rivomesh
+      CLICKHOUSE_PASSWORD: ClickHouse@Test123
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/rivomesh.xml:ro
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user rivomesh --password 'ClickHouse@Test123' --query 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      RIVOMESH_CLICKHOUSE_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-clickhouse-manual}
+    volumes:
+      - ..:/project
+    depends_on:
+      clickhouse: {condition: service_healthy}
+volumes:
+  clickhouse-data:
+  clickhouse-backup:

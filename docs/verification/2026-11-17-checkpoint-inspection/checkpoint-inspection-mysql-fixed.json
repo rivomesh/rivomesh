@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "product": "MYSQL",
+  "artifactSha256": "99a1e86599c9b09c50df7d1de8be5521205e5e5742cbd25db2c7f514803e7433",
+  "testClassesSha256": "7e4c4fbdda53adcac609bd3d37a5ec9b7cfb8f428f8a2cee64d1ad3aae572c3f",
+  "harnessSourceSha256": "c0e1fd00d8e6d41f82ed82b80865e01f64e5c700071d61f10f4df504a306163a",
+  "scope": "14 checkpoint inspection contracts on native journal and target,3 fanout contracts on H2; no manual mutation or complete connector matrix",
+  "images": {
+    "mysql:8.4": {
+      "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "architecture": "arm64"
+    },
+    "eclipse-temurin:8-jre": {
+      "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+      "architecture": "arm64"
+    }
+  },
+  "results": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "cleanupExitCode": 0
+}

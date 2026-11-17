@@ -1,0 +1,96 @@
+services:
+  control-store:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: rivomesh
+      POSTGRES_DB: rivomesh_control
+      POSTGRES_PASSWORD: ${RIVOMESH_CONTROL_PASSWORD:?Use tools/dev-preview.py}
+    volumes:
+      - control-store:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "rivomesh", "-d", "rivomesh_control"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  console:
+    image: maven:3.9-eclipse-temurin-8
+    user: "${RIVOMESH_PREVIEW_UID}:${RIVOMESH_PREVIEW_GID}"
+    init: true
+    working_dir: /app
+    entrypoint: ["java", "-Xmx512m", "-cp", "/app/ui:/app/runtime/rivomesh.jar", "io.github.rivomesh.Main", "serve", "/app/config/platform.yml"]
+    depends_on:
+      control-store:
+        condition: service_healthy
+    environment:
+      RIVOMESH_NODE_ID: preview-a
+      RIVOMESH_NODE_URL: http://console:8080
+      RIVOMESH_CONTROL_PASSWORD: ${RIVOMESH_CONTROL_PASSWORD}
+      RIVOMESH_PREVIEW_TOKEN: ${RIVOMESH_PREVIEW_TOKEN:?Use tools/dev-preview.py}
+    ports:
+      - "127.0.0.1:18088:8080"
+    volumes:
+      - ${RIVOMESH_PREVIEW_HOME}/runtime:/app/runtime:ro
+      - ${RIVOMESH_PREVIEW_HOME}/state:/app/data
+      - ./platform.yml:/app/config/platform.yml:ro
+      - ../../sync-app/src/main/resources/console:/app/ui/console:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    stop_grace_period: 90s
+    mem_limit: 1536m
+    cpus: 2
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app/runtime/rivomesh.jar", "io.github.rivomesh.platform.Healthcheck"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+  console-b:
+    image: maven:3.9-eclipse-temurin-8
+    user: "${RIVOMESH_PREVIEW_UID}:${RIVOMESH_PREVIEW_GID}"
+    init: true
+    working_dir: /app
+    entrypoint: ["java", "-Xmx512m", "-cp", "/app/ui:/app/runtime/rivomesh.jar", "io.github.rivomesh.Main", "serve", "/app/config/platform.yml"]
+    depends_on:
+      console:
+        condition: service_healthy
+      control-store:
+        condition: service_healthy
+    environment:
+      RIVOMESH_NODE_ID: preview-b
+      RIVOMESH_NODE_URL: http://console-b:8080
+      RIVOMESH_CONTROL_PASSWORD: ${RIVOMESH_CONTROL_PASSWORD}
+      RIVOMESH_PREVIEW_TOKEN: ${RIVOMESH_PREVIEW_TOKEN:?Use tools/dev-preview.py}
+    ports:
+      - "127.0.0.1:18089:8080"
+    volumes:
+      - ${RIVOMESH_PREVIEW_HOME}/runtime:/app/runtime:ro
+      - ${RIVOMESH_PREVIEW_HOME}/state-node-b:/app/data
+      - ./platform.yml:/app/config/platform.yml:ro
+      - ../../sync-app/src/main/resources/console:/app/ui/console:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    stop_grace_period: 90s
+    mem_limit: 1536m
+    cpus: 2
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app/runtime/rivomesh.jar", "io.github.rivomesh.platform.Healthcheck"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+
+volumes:
+  control-store:

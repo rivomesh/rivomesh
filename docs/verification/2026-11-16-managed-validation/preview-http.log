@@ -1,0 +1,4 @@
+DEVELOPMENT_PREVIEW_ACCEPTED: health/readiness, seven source UI resources/no-store, administrator session, unauthorized denial and copied vendor-driver JAR
+URL: http://127.0.0.1:18088 account=admin; credentials omitted
+Runtime SHA-256: 34a4675fe853e2976392d1909a9b45d551f0d939e9c82ae448988a6d7a93ce4b
+GBase catalog: [{"id": "GBASE_8C", "role": "SINK", "status": "EXPERIMENTAL", "note": "V6_S1.3.0B19 PG/UTF8 / vendor JDBC3.0.0B02: first native transactions and actual MySQL8.4+PostgreSQL17 snapshot/CDC/TIME/keyless/text-key/outage/worker-kill/SQL-repair/missing-table isolation verified; other modes/distributed/security/capacity pending; 8a/8s are separate families"}, {"id": "GBASE_8A", "role": "SINK", "status": "PLANNED", "note": ""}, {"id": "GBASE_8S", "role": "SINK", "status": "PLANNED", "note": ""}]

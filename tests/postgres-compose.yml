@@ -1,0 +1,30 @@
+services:
+  mysql-target:
+    image: ${SYNC_MYSQL_TARGET_IMAGE:-public.ecr.aws/docker/library/mysql:8.4}
+    environment:
+      MYSQL_ROOT_PASSWORD: Sync@Test123
+      MYSQL_ROOT_HOST: "%"
+    command: ["--server-id=90"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  postgres:
+    image: ${SYNC_POSTGRES_IMAGE:-public.ecr.aws/docker/library/postgres:17}
+    environment:
+      POSTGRES_USER: sync_test
+      POSTGRES_PASSWORD: Sync@Test123
+      POSTGRES_DB: sync_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sync_test -d sync_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    depends_on:
+      mysql-target:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: ["mvn", "-B", "-s", "build/settings.xml", "-Dsync.integration=true", "-Dsync.v3.integration=true", "-DtestSuite=postgres", "-Dtarget.type=POSTGRESQL", "-Dtarget.driver=org.postgresql.Driver", "-Dtarget.url=jdbc:postgresql://postgres:5432/sync_test?connectTimeout=3&socketTimeout=10", "-Dtest=ConversionTest,FailoverRulesTest,PlatformTest,JournalTest,JournalIntegrationTest,JdbcSinkTest,NormalizationTest,FanoutDispatcherTest,JdbcSinkIntegrationTest,JsonValuesTest,TargetStoreIntegrationTest,SyncIntegrationTest,PlatformIntegrationTest,JsonIntegrationTest,MysqlCdcSourceIntegrationTest,PipelineIntegrationTest,PlatformV3IntegrationTest,PipelineConfigTest", "-Dsurefire.failIfNoSpecifiedTests=false", "verify"]

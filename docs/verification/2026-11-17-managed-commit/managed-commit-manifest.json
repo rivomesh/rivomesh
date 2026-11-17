@@ -1,0 +1,12 @@
+{
+  "artifact": "target/release-evidence/managed-commit-first.jar",
+  "artifactSha256": "9f97b4d98c103e895c9d1262cd19dcd0946b21b6fc0f72fff2267e59c727de00",
+  "bytes": 187993279,
+  "testClasses": "target/release-evidence/managed-commit-tests-9f97b4d98c10",
+  "testClassesSha256": "a7a90a6ecfae0989a238619256b0e6ecb77cc6bf2705ccb34e6f0c7e57859898",
+  "sourceManifest": "target/release-evidence/managed-commit-sources.json",
+  "sourceManifestSha256": "c9e9a1554f2d777def799930c83a6cfb2736eb96194419875f4dab12efd6bb49",
+  "status": "PASS_BOUNDED_RC05",
+  "scope": "Accepted RC-05 Java8 original-Agent/LOCAL-journal whole-pipeline-paused confirmation:416 actual-JAR app tests,87 DOM,38 native contracts per PostgreSQL/MySQL product,and23 real multi-node CDC/control checks per PostgreSQL17/MySQL8.4 control store;native transactional PG/MySQL acknowledgment with public real-CDC PostgreSQL confirmation;skip,compensation,relocation,realK8s and full matrices remain separate",
+  "evidence": "docs/verification/2026-11-17-managed-commit/README.md"
+}

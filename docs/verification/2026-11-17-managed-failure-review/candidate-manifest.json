@@ -1,0 +1,14 @@
+{
+  "artifact": "target/release-evidence/managed-failure-review-final.jar",
+  "artifactSha256": "bcaae9309898a33ecfe919d69bfa6c43227647524498f8269682df44942cbcbe",
+  "bytes": 187969804,
+  "testClasses": "target/release-evidence/managed-failure-review-final-tests-bcaae9309898",
+  "testClassesSha256": "33e2a463aab6492887072effd232e377995d3114ee507ce4198b79c691743927",
+  "sourceManifest": "target/release-evidence/managed-failure-review-final-sources.json",
+  "sourceManifestSha256": "22cdf75e4689f42812f8a7655dca4c422bbfd1599c0c59782ffe3ee58f5de3f7",
+  "appTests": 383,
+  "domTests": 83,
+  "sdkReuseManifest": "target/sdk-cache-manifest.json",
+  "scope": "Accepted RC-02 bounded protocol5 fixed-Agent managed evidence review:383app/JAR,83DOM,5x52,23SQL/storage per product and21real CDC/review lifecycle checks per PG/MySQL control store;manual mutations/relocation/full matrices remain open",
+  "evidence": "docs/verification/2026-11-17-managed-failure-review/README.md"
+}

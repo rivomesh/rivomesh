@@ -1,0 +1,54 @@
+[
+  {
+    "file": "artifact.log",
+    "sha256": "20183f09a6938133c9483dcdf3d2cb293e0000a0ee70e3347c1d2cb3c3d2db80"
+  },
+  {
+    "file": "deployment.log",
+    "sha256": "bcf70f5837e907fab4e1be9f1a98b33686e5b9f20f04a93813f5acce7093c5c6"
+  },
+  {
+    "file": "native-final.log",
+    "sha256": "0c3bbda5566b5bab993920c8efadb8029be5140ba9212fabb788b353abc094c4"
+  },
+  {
+    "file": "native-port-failed.log",
+    "sha256": "bdc3802f8aff578cb92bcd52e7f22b7872bdd050ce63ce319771bbd8c94163b1"
+  },
+  {
+    "file": "native-proxy-failed.log",
+    "sha256": "0e0c5768dcb69333c1b166d28b429380836a7881a1da34f8b6e31eeb3aa67c75"
+  },
+  {
+    "file": "native-runtime.log",
+    "sha256": "031cb99a6ed38ef2ce8ab9941111c73d933bf9284849ae00792e34e090bb53b7"
+  },
+  {
+    "file": "package-first.log",
+    "sha256": "79b6c2372e2eb4408c902e44097ccbacbbcd36205e2a4c9fa3566ba1754ca20b"
+  },
+  {
+    "file": "package-runtime.log",
+    "sha256": "1c65605ab11a53ace81df73e5faf34dc5f8c356d6fb975bdf2c52b546e1e94b2"
+  },
+  {
+    "file": "package-ui-final.log",
+    "sha256": "b8a0fcee5c93b5a17a63774769cf8d27a7abc90a83ca491f1d37c95975a61429"
+  },
+  {
+    "file": "release-unit.log",
+    "sha256": "1655458016f317090ae41d2e2961b970058bd9547345fe390b2057f3df5be446"
+  },
+  {
+    "file": "runtime-comparison.json",
+    "sha256": "af834fa7bc45f54853d9218d4dbc0024a73b4fe8e77d7dc690d502797c352f72"
+  },
+  {
+    "file": "sql-final.log",
+    "sha256": "10100fd18827585a9581543f4dc3b3653fbef16f2265ff85c1aa1837f2c64a78"
+  },
+  {
+    "file": "ui.log",
+    "sha256": "970cc386a706c0f45c4afabdda2da1dca346902f4bd4915c250a6c49f1680abc"
+  }
+]

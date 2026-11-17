@@ -1,0 +1,35 @@
+services:
+  pulsar:
+    image: apachepulsar/pulsar:4.0.14
+    environment:
+      PULSAR_MEM: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m
+      PULSAR_PREFIX_advertisedAddress: pulsar
+      PULSAR_PREFIX_numIOThreads: "2"
+      PULSAR_PREFIX_numHttpServerThreads: "4"
+      PULSAR_PREFIX_numOrderedExecutorThreads: "2"
+      PULSAR_PREFIX_numExecutorThreadPoolSize: "2"
+      PULSAR_PREFIX_numCacheExecutorThreadPoolSize: "2"
+      PULSAR_PREFIX_allowAutoTopicCreation: "false"
+      PULSAR_PREFIX_brokerDeleteInactiveTopicsEnabled: "false"
+      PULSAR_PREFIX_topicLevelPoliciesEnabled: "true"
+      PULSAR_PREFIX_systemTopicEnabled: "true"
+      PULSAR_PREFIX_backlogQuotaDefaultRetentionPolicy: producer_exception
+    command: ["bash", "-c", "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone --no-functions-worker --no-stream-storage"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/admin/v2/namespaces/public/default >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      MAVEN_OPTS: -Xmx768m
+      RIVOMESH_PULSAR_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-pulsar-manual}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+    depends_on:
+      pulsar: {condition: service_healthy}
+volumes:
+  maven-cache:

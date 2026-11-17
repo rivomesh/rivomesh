@@ -1,0 +1,43 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 145805476 bytes; SHA-256 11667063fff1ee2c39d23df260b5b3bfe3d4e944c9009a1b696e890515ae1fd8
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Container rivomesh-doris-dev-421-doris-1 Running 
+ Container rivomesh-doris-dev-421-doris-1 Waiting 
+ Container rivomesh-doris-dev-421-doris-1 Healthy 
+ Container rivomesh-doris-dev-421-tests-run-6de6c6bda483 Creating 
+ Container rivomesh-doris-dev-421-tests-run-6de6c6bda483 Created 
+ Container rivomesh-doris-dev-421-doris-1 Stopping 
+ Container rivomesh-doris-dev-421-doris-1 Stopped 
+ Volume rivomesh-doris-dev-421_backup Creating 
+ Volume rivomesh-doris-dev-421_backup Creating 
+ Volume rivomesh-doris-dev-421_backup Created 
+ Volume rivomesh-doris-dev-421_backup Created 
+ Container rivomesh-doris-dev-421-store-run-de0db816d677 Creating 
+ Container rivomesh-doris-dev-421-store-run-de0db816d677 Created 
+ Container rivomesh-doris-dev-421-doris-1 Starting 
+ Container rivomesh-doris-dev-421-doris-1 Started 
+ Container rivomesh-doris-dev-421-doris-1 Waiting 
+ Container rivomesh-doris-dev-421-doris-1 Healthy 
+ Container rivomesh-doris-dev-421-doris-1 Stopping 
+ Container rivomesh-doris-dev-421-doris-1 Stopped 
+ Container rivomesh-doris-dev-421-store-run-b6be8baf4340 Creating 
+ Container rivomesh-doris-dev-421-store-run-b6be8baf4340 Created 
+ Container rivomesh-doris-dev-421-doris-1 Starting 
+ Container rivomesh-doris-dev-421-doris-1 Started 
+ Container rivomesh-doris-dev-421-doris-1 Waiting 
+ Container rivomesh-doris-dev-421-doris-1 Healthy 
+DORIS_SQL_MODE_ACCEPTED: EMPTY; binary prepared values, quoted/backslash table, Unicode snapshot/CDC/reopen
+DORIS_SQL_MODE_ACCEPTED: NO_BACKSLASH_ESCAPES; binary prepared values, quoted/backslash table, Unicode snapshot/CDC/reopen
+DORIS_MATERIALIZER_ACCEPTED: actual release Java8/JDBC/Stream Load, auto MoW schema/views, nonunique BTREE/GSI indexes, PK move/replay, keyless multiplicity/delete, server/client restart and actual older nonempty native backup refusal
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 145805476 bytes; SHA-256 11667063fff1ee2c39d23df260b5b3bfe3d4e944c9009a1b696e890515ae1fd8
+ Container rivomesh-doris-dev-421-doris-1 Stopping 
+ Container rivomesh-doris-dev-421-doris-1 Stopped 
+ Container rivomesh-doris-dev-421-doris-1 Removing 
+ Container rivomesh-doris-dev-421-doris-1 Removed 
+ Volume rivomesh-doris-dev-421_be-storage Removing 
+ Volume rivomesh-doris-dev-421_backup Removing 
+ Volume rivomesh-doris-dev-421_fe-meta Removing 
+ Network rivomesh-doris-dev-421_default Removing 
+ Volume rivomesh-doris-dev-421_be-storage Removed 
+ Network rivomesh-doris-dev-421_default Removed 
+ Volume rivomesh-doris-dev-421_backup Removed 
+ Volume rivomesh-doris-dev-421_fe-meta Removed 

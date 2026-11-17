@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<configuration>
+  <property><name>javax.jdo.option.ConnectionURL</name><value>jdbc:derby:/opt/hive/rivomesh-meta/metastore_db;create=true</value></property>
+  <property><name>javax.jdo.option.ConnectionDriverName</name><value>org.apache.derby.jdbc.EmbeddedDriver</value></property>
+  <property><name>hive.metastore.warehouse.dir</name><value>file:/opt/hive/data/warehouse</value></property>
+  <property><name>hive.support.concurrency</name><value>true</value></property>
+  <property><name>hive.query.results.cache.enabled</name><value>false</value></property>
+  <property><name>hive.txn.manager</name><value>org.apache.hadoop.hive.ql.lockmgr.DbTxnManager</value></property>
+  <property><name>hive.compactor.initiator.on</name><value>true</value></property>
+  <property><name>hive.compactor.worker.threads</name><value>1</value></property>
+  <property><name>hive.server2.authentication</name><value>NOSASL</value></property>
+  <property><name>hive.server2.enable.doAs</name><value>false</value></property>
+  <property><name>hive.execution.engine</name><value>mr</value></property>
+  <property><name>mapreduce.framework.name</name><value>local</value></property>
+  <property><name>fs.defaultFS</name><value>file:///</value></property>
+  <property><name>hive.exec.mode.local.auto</name><value>true</value></property>
+  <property><name>hive.fetch.task.conversion</name><value>more</value></property>
+  <property><name>hive.exec.scratchdir</name><value>/tmp/rivomesh-hive</value></property>
+  <property><name>hive.exec.dynamic.partition.mode</name><value>nonstrict</value></property>
+  <property><name>hive.server2.thrift.bind.host</name><value>0.0.0.0</value></property>
+  <property><name>hive.server2.thrift.port</name><value>10000</value></property>
+</configuration>

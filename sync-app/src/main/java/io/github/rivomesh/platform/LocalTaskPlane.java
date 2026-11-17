@@ -1,0 +1,43 @@
+package io.github.rivomesh.platform;
+
+import java.util.*;
+
+/** The same authorization and business implementation backs standalone and owner execution. */
+final class LocalTaskPlane implements TaskControlPlane {
+    private final TaskService tasks;
+    LocalTaskPlane(TaskService tasks){this.tasks=tasks;}
+    public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
+        if(request.kind==TaskRequest.Kind.CONFIG_PREVIEW)request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
+    }
+    public Map<String,Object> invoke(TaskRequest supplied,AccessControl.Principal proposed)throws Exception{
+        TaskRequest r=supplied.snapshot();AccessControl.Principal actor=tasks.currentPrincipal(proposed);
+        if(r.kind==TaskRequest.Kind.ACTION&&!actor.operates())throw new SecurityException("FORBIDDEN");
+        if(r.admin()&&!actor.administers())throw new SecurityException("FORBIDDEN");
+        if(r.kind!=TaskRequest.Kind.LIST&&r.kind!=TaskRequest.Kind.CREATE&&(!tasks.nodeAllowed(actor)||!actor.task(r.taskId)))throw new NoSuchElementException("TASK_NOT_FOUND");
+        if(r.skipRecovery()&&!tasks.skipRecoveryEnabled())throw new TaskService.Conflict("SKIP_DISABLED");
+        if(r.commitRecovery()&&!tasks.commitRecoveryEnabled())throw new TaskService.Conflict("FAILURE_ACK_DISABLED");
+        if(r.failureReview()&&!tasks.failureReviewEnabled())throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
+        switch(r.kind){
+            case LIST:return tasks.list(actor);
+            case VIEW:return tasks.view(r.taskId);
+            case CREATE:return tasks.create(r.yaml,r.requestId,actor);
+            case CONFIGURATION:return tasks.configuration(r.taskId);
+            case CONFIG_HISTORY:return tasks.configurationHistory(r.taskId,r.cursor);
+            case CONFIG_PREVIEW:return tasks.previewConfiguration(r.taskId,r.document,r.revision);
+            case CONFIG_UPDATE:return tasks.updateConfiguration(r.taskId,r.document,r.revision,r.requestId,actor);
+            case RESTORE_PREVIEW:return tasks.previewRestoreConfiguration(r.taskId,r.reference,r.revision);
+            case RESTORE:return tasks.restoreConfiguration(r.taskId,r.reference,r.revision,r.requestId,actor);
+            case VALIDATION_REPORT:return tasks.validationReport(r.taskId,r.reportId,actor);
+            case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
+            case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);
+            case FAILURE_EVIDENCE_SUMMARY:return tasks.failureEvidence(r.taskId,r.reference,null,0,1,actor);
+            case FAILURE_EVIDENCE_EVENTS:return tasks.failureEvidence(r.taskId,r.reference,r.action,Integer.parseInt(r.cursor),r.limit,actor);
+            case SKIP_PLAN:return tasks.skipPlan(r.taskId,r.reference,"NATIVE".equals(r.action),actor);
+            case SKIP_PLANS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,false,actor);
+            case GAPS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,true,actor);
+            case ACTION:return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip);
+            default:throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
+        }
+    }
+}

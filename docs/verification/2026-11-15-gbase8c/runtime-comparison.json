@@ -1,0 +1,8 @@
+{
+  "previousSha256": "24a6440ac419094160eef123c0a7ba55ecdb0a972e35f4a51eaf89160b3ab667",
+  "currentSha256": "2b462813f74210cab0b2f93a40d700c27c45dffd5ac0de5061995638fa4e6034",
+  "changedEntries": [
+    "io/rivomesh/platform/AdapterCatalog.class"
+  ],
+  "classesCompared": 66512
+}

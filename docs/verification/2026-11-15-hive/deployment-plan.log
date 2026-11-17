@@ -1,0 +1,2 @@
+PASS exact task grants/default+scoped native parity, empty grants and invalid wildcard/duplicate/scoped-admin rejection
+PASS Helm lint/default+RBAC native parity, Secret references, existing PVC, invalid limits/roles/no-admin/duplicate identities/credentials/literal-token rejection

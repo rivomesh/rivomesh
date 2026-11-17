@@ -1,0 +1,7 @@
+CREATE SCHEMA
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "t_pkey" for table "t"
+CREATE TABLE
+INSERT 0 1
+100|400
+NOTICE:  drop cascades to table char_probe.t
+DROP SCHEMA

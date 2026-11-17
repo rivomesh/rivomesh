@@ -1,0 +1,49 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694335 bytes; SHA-256 8b55a1cc5b0204c61a202d55947ee0bbeb4b41912e66f8768bb232984445ecff
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Network rivomesh-validation-barrier-46751_default Creating 
+ Network rivomesh-validation-barrier-46751_default Creating 
+ Network rivomesh-validation-barrier-46751_default Created 
+ Network rivomesh-validation-barrier-46751_default Created 
+ Container rivomesh-validation-barrier-46751-postgres-1 Creating 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Creating 
+ Container rivomesh-validation-barrier-46751-mysql-1 Creating 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Created 
+ Container rivomesh-validation-barrier-46751-mysql-1 Created 
+ Container rivomesh-validation-barrier-46751-postgres-1 Created 
+ Container rivomesh-validation-barrier-46751-postgres-1 Starting 
+ Container rivomesh-validation-barrier-46751-mysql-1 Starting 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-46751-postgres-1 Started 
+ Container rivomesh-validation-barrier-46751-mysql-1 Started 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-46751-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-46751-postgres-1 Waiting 
+ Container rivomesh-validation-barrier-46751-postgres-1 Healthy 
+ Container rivomesh-validation-barrier-46751-mysql-1 Healthy 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Healthy 
+ Container rivomesh-validation-barrier-46751-tests-run-4c46bb2247dd Creating 
+ Container rivomesh-validation-barrier-46751-tests-run-4c46bb2247dd Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+VALIDATION_JOURNAL_PROFILE: LOCAL/H2
+Exception in thread "main" java.lang.AssertionError: Typed target read changed values: MYSQL fixtureExpected=[{"present":true,"value":"1"},{"present":true,"value":"true"},{"present":true,"value":"0x1.99999ap-4"},{"present":true,"value":"0x1.3c0ca428c59fbp0"},{"present":true,"value":"AP+A"},{"present":true,"value":"报价'☃😀"},{"present":true,"value":"2024-02-29"},{"present":true,"value":"2024-02-29T12:34:56.123456"},{"present":true,"value":"2024-02-29T12:34:56.123456"},{"present":true,"value":"-00:00:00.000001"},{"present":true,"value":"{\"a\":[true,null],\"n\":18446744073709551615}"},{"present":true,"value":"18446744073709551615"},{"present":true,"value":"12345678901234567890123456789012345.12345678901234567890123456789"}] fixtureActual=[[{"present":true,"value":"2"},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null},{"present":true,"value":null}], [{"present":true,"value":"1"},{"present":true,"value":"true"},{"present":true,"value":"0x1.99999ap-4"},{"present":true,"value":"0x1.3c0ca428c59fbp0"},{"present":true,"value":"AP+A"},{"present":true,"value":"报价'☃😀"},{"present":true,"value":"2024-02-29"},{"present":true,"value":"2024-02-29T12:34:56.123456"},{"present":true,"value":"2024-02-29T12:34:56.123456"},{"present":true,"value":"00:00:00.000001"},{"present":true,"value":"{\"a\":[true,null],\"n\":18446744073709551615}"},{"present":true,"value":"18446744073709551615"},{"present":true,"value":"12345678901234567890123456789012345.12345678901234567890123456789"}]]
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.require(ValidationBarrierAcceptance.java:23)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.typedReaders(ValidationBarrierAcceptance.java:102)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.run(ValidationBarrierAcceptance.java:170)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.main(ValidationBarrierAcceptance.java:184)
+
+ Container rivomesh-validation-barrier-46751-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-46751-postgres-1 Stopping 
+ Container rivomesh-validation-barrier-46751-postgres-1 Stopped 
+ Container rivomesh-validation-barrier-46751-postgres-1 Removing 
+ Container rivomesh-validation-barrier-46751-postgres-1 Removed 
+ Container rivomesh-validation-barrier-46751-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-46751-mysql-1 Removing 
+ Container rivomesh-validation-barrier-46751-mysql-1 Removed 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Stopped 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Removing 
+ Container rivomesh-validation-barrier-46751-mysql-target-1 Removed 
+ Network rivomesh-validation-barrier-46751_default Removing 
+ Network rivomesh-validation-barrier-46751_default Removed 

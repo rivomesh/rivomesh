@@ -1,0 +1,55 @@
+services:
+  rocket-init:
+    image: apache/rocketmq:5.5.0
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chown -R rocketmq:rocketmq /home/rocketmq/store"]
+    volumes:
+      - rocket-data:/home/rocketmq/store
+  rocketnamesrv:
+    image: apache/rocketmq:5.5.0
+    environment:
+      JAVA_OPT_EXT: -Xms128m -Xmx256m -Xmn64m
+    command: ["sh", "mqnamesrv"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9876'"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  rocketbroker:
+    image: apache/rocketmq:5.5.0
+    environment:
+      JAVA_OPT_EXT: -Xms256m -Xmx512m -Xmn128m -XX:MaxDirectMemorySize=128m
+    volumes:
+      - ./rocketmq-broker.properties:/home/rocketmq/broker.properties:ro
+      - rocket-data:/home/rocketmq/store
+    command: ["sh", "mqbroker", "-c", "/home/rocketmq/broker.properties"]
+    depends_on:
+      rocketnamesrv: {condition: service_healthy}
+      rocket-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "sh mqadmin getBrokerConfig -b rocketbroker:10911 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      MAVEN_OPTS: -Xmx768m
+      RIVOMESH_ROCKETMQ_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-rocket-manual}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+    depends_on:
+      rocketbroker: {condition: service_healthy}
+  rocket-store:
+    image: apache/rocketmq:5.5.0
+    user: "0:0"
+    entrypoint: ["sh"]
+    volumes:
+      - rocket-data:/store
+      - rocket-backup:/backup
+volumes:
+  maven-cache:
+  rocket-data:
+  rocket-backup:

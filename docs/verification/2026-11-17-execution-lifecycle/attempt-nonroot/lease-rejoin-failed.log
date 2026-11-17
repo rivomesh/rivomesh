@@ -1,0 +1,13 @@
+PASS Agent command opens probes only; management roles are visible through controller sessions
+PASS Every controller and Agent runs as UID10001 with independent named data volumes
+PASS Controllers create Agent-owned task and share revision
+PASS Two source databases to two targets; snapshot keyed/keyless/JSON/generated values
+PASS Cross-database transaction insert/update/delete and keyless multiplicity
+PASS Actual Agent/Worker CDC continues after SIGKILL of one and then every management container
+Traceback (most recent call last):
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 252, in <module>
+    wait(lambda n=node: http(n, '/api/session')['nodeRole'] == 'CONTROLLER', 'management rejoin ' + node)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 71, in wait
+    raise AssertionError('Timed out: ' + label)
+AssertionError: Timed out: management rejoin node-b

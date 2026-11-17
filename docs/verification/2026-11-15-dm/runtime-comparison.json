@@ -1,0 +1,7 @@
+{
+  "classes": 66166,
+  "onlyChangedEntries": [
+    "io/rivomesh/platform/AdapterCatalog.class"
+  ],
+  "basis": "Final verified capability description; other runtime classes/resources byte-identical to native-accepted ffc42c."
+}

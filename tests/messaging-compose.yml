@@ -1,0 +1,186 @@
+services:
+  artemis-init:
+    image: apache/artemis:2.57.0
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chown -R artemis:artemis /var/lib/artemis-instance/data"]
+    volumes:
+      - artemis-data:/var/lib/artemis-instance/data
+  artemis:
+    image: apache/artemis:2.57.0
+    environment:
+      ARTEMIS_USER: rivomesh
+      ARTEMIS_PASSWORD: Artemis@Test123
+      ANONYMOUS_LOGIN: "false"
+      EXTRA_ARGS: --http-host 0.0.0.0 --relax-jolokia --no-autotune
+      JAVA_ARGS_APPEND: -Xms128m -Xmx512m -XX:MaxDirectMemorySize=128m
+    volumes:
+      - ./artemis-broker.xml:/var/lib/artemis-instance/etc-override/broker.xml:ro
+      - artemis-data:/var/lib/artemis-instance/data
+    command: ["run"]
+    depends_on:
+      artemis-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "./bin/artemis check node --url tcp://127.0.0.1:61616 --user rivomesh --password Artemis@Test123 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 15s
+      retries: 40
+  rocket-init:
+    image: apache/rocketmq:5.5.0
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chown -R rocketmq:rocketmq /home/rocketmq/store"]
+    volumes:
+      - rocket-data:/home/rocketmq/store
+  rocketnamesrv:
+    image: apache/rocketmq:5.5.0
+    environment:
+      JAVA_OPT_EXT: -Xms128m -Xmx256m -Xmn64m
+    command: ["sh", "mqnamesrv"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9876'"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+  rocketbroker:
+    image: apache/rocketmq:5.5.0
+    environment:
+      JAVA_OPT_EXT: -Xms256m -Xmx512m -Xmn128m -XX:MaxDirectMemorySize=128m
+    volumes:
+      - ./rocketmq-broker.properties:/home/rocketmq/broker.properties:ro
+      - rocket-data:/home/rocketmq/store
+    command: ["sh", "mqbroker", "-c", "/home/rocketmq/broker.properties"]
+    depends_on:
+      rocketnamesrv: {condition: service_healthy}
+      rocket-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "sh mqadmin getBrokerConfig -b rocketbroker:10911 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+  pulsar:
+    image: apachepulsar/pulsar:4.0.14
+    environment:
+      PULSAR_MEM: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m
+      PULSAR_PREFIX_advertisedAddress: pulsar
+      PULSAR_PREFIX_numIOThreads: "2"
+      PULSAR_PREFIX_numHttpServerThreads: "4"
+      PULSAR_PREFIX_numOrderedExecutorThreads: "2"
+      PULSAR_PREFIX_numExecutorThreadPoolSize: "2"
+      PULSAR_PREFIX_numCacheExecutorThreadPoolSize: "2"
+      PULSAR_PREFIX_allowAutoTopicCreation: "false"
+      PULSAR_PREFIX_brokerDeleteInactiveTopicsEnabled: "false"
+      PULSAR_PREFIX_topicLevelPoliciesEnabled: "true"
+      PULSAR_PREFIX_systemTopicEnabled: "true"
+      PULSAR_PREFIX_backlogQuotaDefaultRetentionPolicy: producer_exception
+    command: ["bash", "-c", "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone --no-functions-worker --no-stream-storage"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/admin/v2/namespaces/public/default >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: sync_test
+      POSTGRES_USER: sync_test
+      POSTGRES_PASSWORD: Sync@Test123
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sync_test -d sync_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction", "--protected-mode", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  redis-unsafe:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--appendonly", "no", "--maxmemory-policy", "allkeys-lru", "--protected-mode", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  mysql:
+    image: ${SYNC_MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_ROOT_PASSWORD: Sync@Test123
+      MYSQL_ROOT_HOST: "%"
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  rabbit:
+    image: rabbitmq:4.1.4-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: rivomesh
+      RABBITMQ_DEFAULT_PASS: Broker@Test123
+    healthcheck:
+      # Probing as root can create .erlang.cookie before broker startup, making it
+      # unreadable to rabbitmq. Use the broker UID for the readiness command too.
+      test: ["CMD", "su-exec", "rabbitmq", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  nats:
+    image: nats:2.11.8-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  kafka:
+    image: apache/kafka:3.9.2
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx256m
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      MAVEN_OPTS: -Xmx768m
+      # Optional diagnostic flags are inherited by the isolated worker JVM too.
+      _JAVA_OPTIONS: ${RIVOMESH_TEST_JAVA_OPTIONS:-}
+      JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties -Dorg.slf4j.simpleLogger.log.org.apache.kafka=warn
+      RIVOMESH_BROKER_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-manual}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+    depends_on:
+      mysql: {condition: service_healthy}
+      rabbit: {condition: service_healthy}
+      nats: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      redis-unsafe: {condition: service_healthy}
+      pulsar: {condition: service_healthy}
+      rocketbroker: {condition: service_healthy}
+      artemis: {condition: service_healthy}
+volumes:
+  maven-cache:
+  rocket-data:
+  artemis-data:

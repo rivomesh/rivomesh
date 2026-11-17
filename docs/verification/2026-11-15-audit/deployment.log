@@ -1,0 +1,1 @@
+PASS Helm lint/default+RBAC native parity, Secret references, existing PVC, invalid limits/roles/no-admin/duplicate identities/credentials/literal-token rejection

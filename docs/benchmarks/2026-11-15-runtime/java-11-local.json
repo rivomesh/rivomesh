@@ -1,0 +1,106 @@
+{
+  "formatVersion": 1,
+  "runId": "rivomesh-bench-fd4240a3079f",
+  "status": "PASSED",
+  "startedAt": "2026-11-14T23:53:41.401799+00:00",
+  "host": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "logicalCpus": 10,
+    "processor": "Apple M1 Pro",
+    "physicalMemoryBytes": 17179869184,
+    "loadAverageAtStart": [
+      10.65771484375,
+      17.8681640625,
+      23.75341796875
+    ],
+    "journalFilesystemCapacityAtStart": {
+      "totalBytes": 994662584320,
+      "freeBytes": 89047003136
+    },
+    "loadAverageAtEnd": [
+      9.82421875,
+      16.30810546875,
+      22.73583984375
+    ]
+  },
+  "storageDescription": "Shared Apple M1 Pro 16 GiB, Docker Desktop VM and unrelated workloads; local SQL runtime smoke checks, not a capacity standard",
+  "workload": {
+    "rows": 1000,
+    "payload_bytes": 256,
+    "chunk_size": 1000,
+    "timeout": 180,
+    "java": "11",
+    "journal_mode": "LOCAL",
+    "storage_description": "Shared Apple M1 Pro 16 GiB, Docker Desktop VM and unrelated workloads; local SQL runtime smoke checks, not a capacity standard"
+  },
+  "measurements": {
+    "sourceLoadSeconds": 0.279099874664098,
+    "snapshotVisibilitySeconds": 43.46101079182699,
+    "snapshotRowsPerSecond": 23.00912891303609,
+    "snapshotSourceContentSha256": "559952bdb06f28ca2c7ecba7d68fc6e5eab38e37c52372d8ce71461667afb92e",
+    "snapshotTargetContentSha256": "559952bdb06f28ca2c7ecba7d68fc6e5eab38e37c52372d8ce71461667afb92e",
+    "snapshotContentSha256": "559952bdb06f28ca2c7ecba7d68fc6e5eab38e37c52372d8ce71461667afb92e",
+    "sourceMutationSeconds": 0.43406729120761156,
+    "cdcCatchUpSeconds": 1.3004140830598772,
+    "cdcChanges": 1200,
+    "cdcChangesPerSecond": 922.7829932265862,
+    "afterWritesCatchUpSeconds": 0.8663467918522656,
+    "cdcSourceContentSha256": "53a2d1a59430af7e1b816e6e0959ea1add776a21fdffab8720d599dd803420a4",
+    "cdcTargetContentSha256": "53a2d1a59430af7e1b816e6e0959ea1add776a21fdffab8720d599dd803420a4",
+    "cdcContentSha256": "53a2d1a59430af7e1b816e6e0959ea1add776a21fdffab8720d599dd803420a4"
+  },
+  "limits": {
+    "cpusPerContainer": "1",
+    "databaseMemory": "1g",
+    "workerMemory": "1g",
+    "workerHeapMiB": 256
+  },
+  "scope": "One source, one target, one keyed table, LOCAL journal, ASCII payload; startup-inclusive snapshot visibility and write-inclusive CDC catch-up. Not peak throughput, p99 latency, crash recovery, a hardware standard or an SLO.",
+  "artifactSha256": "2985bbbb51b84ec8de97d8a9b44c88d5a5a1d737032b1e13263d03d4a9134aa0",
+  "docker": {
+    "ServerVersion": "29.9.2",
+    "NCPU": 10,
+    "MemTotal": 16745824256,
+    "Driver": "overlay2",
+    "OperatingSystem": "Docker Desktop",
+    "Architecture": "aarch64"
+  },
+  "containers": [
+    {
+      "imageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "image": "mysql:8.4",
+      "nanoCpus": 1000000000,
+      "memoryBytes": 1073741824,
+      "mountTypes": [
+        "volume"
+      ]
+    },
+    {
+      "imageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "image": "postgres:17.12",
+      "nanoCpus": 1000000000,
+      "memoryBytes": 1073741824,
+      "mountTypes": [
+        "volume"
+      ]
+    }
+  ],
+  "databaseRuntime": {
+    "mysqlVersionFlushSyncBuffer": "8.4.13\t1\t1\t268435456",
+    "postgresVersionDurabilityBuffer": "PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit\non|on|256MB"
+  },
+  "journalEvidence": {
+    "mode": "LOCAL",
+    "databaseBytes": 4521984
+  },
+  "worker": {
+    "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe",
+    "nanoCpus": 1000000000,
+    "memoryBytes": 1073741824,
+    "javaVersion": "openjdk version \"11.0.33\" 2026-10-20\nOpenJDK Runtime Environment Temurin-11.0.33+10 (build 11.0.33+10)\nOpenJDK 64-Bit Server VM Temurin-11.0.33+10 (build 11.0.33+10, mixed mode, sharing)"
+  },
+  "cleanupExitCode": 0,
+  "finishedAt": "2026-11-14T23:54:45.781800+00:00"
+}

@@ -1,0 +1,14 @@
+{
+  "artifact": "target/release-evidence/failure-evidence-foundation.jar",
+  "artifactSha256": "ea1837cbc7fbb02a019ecba62d8d02b31a76901e0942c7e4b79c3014a0357767",
+  "bytes": 187960677,
+  "testClasses": "target/release-evidence/failure-evidence-tests-ea1837cbc7fb",
+  "testClassesSha256": "7f56737deebd8f07841217feb894817eb6f56e27f8636e2f22b6dd2bd1a4baa4",
+  "sourceManifest": "target/release-evidence/failure-evidence-sources.json",
+  "sourceManifestSha256": "0eb9b8094b976053da718468d405b234ce775925259766fd252e0faeb66aebc1",
+  "appTests": 375,
+  "domTests": 79,
+  "sdkReuseManifest": "target/sdk-cache-manifest.json",
+  "scope": "Accepted internal durable evidence foundation:375app/JAR,79DOM,5x44H2/filesystem,PG/MySQL21each;public creation/raw UI and manual mutation remain open",
+  "evidence": "docs/verification/2026-11-17-failure-evidence/README.md"
+}

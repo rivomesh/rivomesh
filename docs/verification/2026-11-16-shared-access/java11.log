@@ -1,0 +1,99 @@
+openjdk version "11.0.33" 2026-10-20
+OpenJDK Runtime Environment Temurin-11.0.33+10 (build 11.0.33+10)
+OpenJDK 64-Bit Server VM Temurin-11.0.33+10 (build 11.0.33+10, mixed mode, sharing)
+[36m╷[0m
+[36m├─[0m [36mJUnit Platform Suite[0m [32m✔[0m
+[36m├─[0m [36mJUnit Jupiter[0m [32m✔[0m
+[36m│  ├─[0m [36mBrowserSessionsTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mreloadUsesCookieAndLogoutRevokesCredentialWithoutLeakingSecrets()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mproductionCookieAndProxyOriginAreExplicitAndRememberingIsOptional()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrotationDisableAndGrantChangesInvalidatePreviouslyIssuedSessions()[0m [32m✔[0m
+[36m│  │  ├─[0m [34msessionConfigurationRejectsUnsafeOriginShapesAndInvalidLimits()[0m [32m✔[0m
+[36m│  │  ├─[0m [34midleAbsoluteExpiryCapacityAndReauthenticationAreBounded()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mselfRotationRequiresANewSessionAndTheSavedNewToken()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mdisabledBrowserSessionsKeepApiCompatibleAndRestartRequiresNewLogin()[0m [32m✔[0m
+[36m│  │  └─[0m [34mexplicitBearerNeverFallsBackAndConflictingIdentitiesAreRejected()[0m [32m✔[0m
+[36m│  ├─[0m [36mControlStoreTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mactiveCollisionExpiredReplacementAndOldHeartbeatShutdownAreFenced()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mseparateStoresReadTheSameBoundedRedactedRegistry()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mtwoHttpEndpointsShareNodeObservationsWithoutSharingLocalDirectories()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnodeAndObservationPublishRollBackTogether()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcapacityProtocolAndClusterIsolationAreEnforced()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mstandaloneNodeIdSurvivesRestartWithoutClaimingASharedCluster()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mkeysetPaginationAndCursorValidationAreStable()[0m [32m✔[0m
+[36m│  │  └─[0m [34mconcurrentClaimOfOneNodeHasOnlyOneWinner()[0m [32m✔[0m
+[36m│  ├─[0m [36mSharedAccessTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcookieRestoresAtAnotherControllerAndSurvivesControllerShutdownAndRestart()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mlargeLegalDirectorySupportsConcurrentSessionReadsWithoutCopyingScopesIntoSqlSess...[0m [32m✔[0m
+[36m│  │  ├─[0m [34mmissingAuthorityRefusesOldTokenAndWillNotRebootstrapFromConfig()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mincompatiblePolicyIsRejectedAndRecoveryRevokesSessionsEverywhere()[0m [32m✔[0m
+[36m│  │  ├─[0m [34minvalidNodeScopesAreRejectedAndOmittedUpdatesPreserveExistingScope()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mfailedRecoveryCannotMutateTheVerifiedDirectorySnapshot()[0m [32m✔[0m
+[36m│  │  ├─[0m [34msharedRealmRefusesRegistryOnlyHttpMembers()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mauthorityUpgradeRequiresExplicitStoppedMembersNotExpiredHeartbeats()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mmissingAuditEventsMakesReadinessFailAndRestoringThemPreservesSessions()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrotationAndGrantsInvalidateEveryNodesSessionAndStaleMutationActor()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mmanagedLocalDirectoryImportsWithAnchorAndCannotFallBackToLocalState()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mconcurrentSharedAuditIsOneChainAndRetriedOutboxEventsAppearOnlyOnce()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mauditDigestRemainsCompatibleWithPublishedSha256Vectors()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mauditFailureRollsBackTokenChangeAndSessionRevocationTogether()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mimportedTaskAccessStaysOnItsOriginalNodeUntilAnAdministratorExpandsIt()[0m [32m✔[0m
+[36m│  │  └─[0m [34mdatabaseClockExpiryAndGlobalCapacityIgnoreCallerClockSkew()[0m [32m✔[0m
+[36m│  ├─[0m [36mWorkerEnvironmentTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcontrollerCredentialReferencesAreRejectedInsteadOfCopied()[0m [32m✔[0m
+[36m│  │  └─[0m [34mactualChildReceivesOnlyReferencedTaskValuesAndEssentialOsSettings()[0m [32m✔[0m
+[36m│  ├─[0m [36mControlCipherTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34msameContentHasDifferentNoncesAndStableScopedSignatures()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mlimitsCountUtf8BytesAndRejectOversizedDatabaseValuesBeforeDecoding()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mconfigurationCommandAndVersionSubstitutionIsRejected()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mseparateEndpointsCanReadButDatabaseAndOtherRealmsCannot()[0m [32m✔[0m
+[36m│  │  └─[0m [34minvalidKeysAndEnvelopesNeverRevealPayloads()[0m [32m✔[0m
+[36m│  ├─[0m [36mGlobalTaskStoreTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcommandAdmissionHookRollsBackTheTaskVersionAndReceiptOnFailure()[0m [32m✔[0m
+[36m│  │  ├─[0m [34msameRequestIsIdempotentAcrossEndpointsButOtherContentIsRejected()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mwrongKeyStoreAndPolicyNeverSeedAReplacementAuthority()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mpagesAreBoundedStableAndFilterBothNodeAndTaskGrantsInSql()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mdatabaseRecordOrPayloadSubstitutionIsRefused()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mforgedRolesCannotElevateThePersistedAccount()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mmissingAuthorityCannotBeReseededFromTaskRowsOrAnOldBinding()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrootCounterTamperingCannotResetCapacityOrOrdering()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mconcurrentCreateReservesOneGlobalIdAndOneInitialVersion()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mzeroNodeGrantNeverBecomesGlobalAndRevocationInvalidatesPaging()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mauditFailureRollsBackVersionRequestAndTaskAtomically()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mmissingCatalogRowsOrChangedAccessAuthorityRefuseStartup()[0m [32m✔[0m
+[36m│  │  └─[0m [34mbothEntrypointsShareConfigurationRevisionAndNeverStorePlainCredentials()[0m [32m✔[0m
+[36m│  ├─[0m [36mTaskPlaneTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mfixedOperationsPreserveLocalCreationAndDuplicateReceipts()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mstaleAccountsAndUnsignedIdentitiesCannotInvokeBusinessOperations()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mworkerDispatchCannotElevateAViewerByForgingItsRole()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrequestSnapshotsRejectUnsupportedVersionsActionsAndMutableDocuments()[0m [32m✔[0m
+[36m│  │  └─[0m [34mhttpReadsReachTheControlPlaneAndKeepEndpointAuthorization()[0m [32m✔[0m
+[36m│  ├─[0m [36mLocalJournalLifecycleTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mstatusOfANeverStartedTaskDoesNotCreateALocalDatabase()[0m [32m✔[0m
+[36m│  │  └─[0m [34mpausedAndStoppedTasksRetainTheSameUsableTcpEndpointUntilControllerClose()[0m [32m✔[0m
+[36m│  └─[0m [36mDurableCommandsTest[0m [32m✔[0m
+[36m│     ├─[0m [34mduplicatesReplayAcrossEntriesAndDifferentBodiesCannotReuseTheId()[0m [32m✔[0m
+[36m│     ├─[0m [34mcreatedTaskConfigurationAndCommandAreAtomicAndStoredEncrypted()[0m [32m✔[0m
+[36m│     ├─[0m [34maConfigurationCannotCreateAnUnreservedTaskId()[0m [32m✔[0m
+[36m│     ├─[0m [34mcancellationHasAParentAndReservedAdmissionWhenNormalCapacityIsFull()[0m [32m✔[0m
+[36m│     ├─[0m [34malteredIndexMetadataIsRejectedByAuthenticatedEnvelope()[0m [32m✔[0m
+[36m│     ├─[0m [34mofflineOwnerCommandsRemainPendingAndAreVisibleFromAnotherEntry()[0m [32m✔[0m
+[36m│     ├─[0m [34mlostRootAndLostCommandsCannotBeSilentlyReseeded()[0m [32m✔[0m
+[36m│     ├─[0m [34mrevisionsAndCapacityRejectWithoutAdvancingOtherTasks()[0m [32m✔[0m
+[36m│     └─[0m [34madmissionUsesTheRealRoleAndFreshDirectoryRevision()[0m [32m✔[0m
+[36m└─[0m [36mJUnit Vintage[0m [32m✔[0m
+
+Test run finished after 43793 ms
+[        12 containers found      ]
+[         0 containers skipped    ]
+[        12 containers started    ]
+[         0 containers aborted    ]
+[        12 containers successful ]
+[         0 containers failed     ]
+[        68 tests found           ]
+[         0 tests skipped         ]
+[        68 tests started         ]
+[         0 tests aborted         ]
+[        68 tests successful      ]
+[         0 tests failed          ]
+

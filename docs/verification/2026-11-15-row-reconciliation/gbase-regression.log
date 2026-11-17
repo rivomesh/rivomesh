@@ -1,0 +1,70 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694420 bytes; SHA-256 acdb9a58b77151e3c30ddfdcdb3587fd4680a503edc5d7585288ca0bbc05ea8c
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Creating 
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Creating 
+ Network rivomesh-gbase8c-pipeline-62750_default Creating 
+ Network rivomesh-gbase8c-pipeline-62750_default Creating 
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Created 
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Created 
+ Network rivomesh-gbase8c-pipeline-62750_default Created 
+ Network rivomesh-gbase8c-pipeline-62750_default Created 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Creating 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Creating 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Creating 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Created 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Created 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Created 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Starting 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Starting 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Starting 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Started 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Started 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Started 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Waiting 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Waiting 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Waiting 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Healthy 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Healthy 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Healthy 
+ Container rivomesh-gbase8c-pipeline-62750-tests-run-b1c1ad72cfe7 Creating 
+ Container rivomesh-gbase8c-pipeline-62750-tests-run-b1c1ad72cfe7 Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+GBASE8C_FIXTURE_MYSQL_VERSION: 8.4.13
+GBASE8C_FIXTURE_POSTGRES_VERSION: PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+GBASE8C_NATIVE_PROFILE: {product=GBase8c, version=(GBase8cV6 S1.3.0B19 build 8a2447f6) compiled at 2026-09-23 14:25:09 commit 0 last mr 22  on aarch64-unknown-linux-gnu, compiled by g++ (GCC) 10.3.0, 64-bit, mode=PG, encoding=UTF8, synchronousCommit=on}
+GBASE8C_INTERVAL_READBACK: rawType=float8,raw=90062.1000000000058,numeric6=90062.100000
+GBASE8C_NATIVE_CONTRACT_ACCEPTED: PG/UTF8/session profile, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen
+GBASE8C_NATIVE_TYPES_ACCEPTED: exact65digit decimal/uint64/JSON/binary/generated, empty strings, Unicode/quotes, NULL, microseconds, negative duration and ordinary index metadata
+GBASE8C_TIME_SOURCE_PROBE: native=25:01:02.1,TIME_TO_SEC=90062,MICROSECOND=100000
+GBASE8C_SNAPSHOT_ACCEPTED
+GBASE8C_TIME_SOURCE_PROBE: native=-25:01:02.1,TIME_TO_SEC=-90062,MICROSECOND=100000
+GBASE8C_CDC_KEYLESS_ACCEPTED: allTIME precisions including negative fractions, keyless duration identity/delete/update
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Stopping 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Stopped 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Starting 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Started 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Waiting 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Healthy 
+GBASE8C_OUTAGE_CATCHUP_ACCEPTED
+GBASE8C_WORKER_RESTART_ACCEPTED
+GBASE8C_POSTGRES_REPAIR_ACCEPTED
+GBASE8C_NATIVE_SQL_REPAIR_ACCEPTED
+GBASE8C_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Gbase8cV6_S1.3.0B19 PG mode, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, target outage with independent SQL progress/catchup, worker SIGKILL resume, independent SQL error rollback/repair/retry, persistent pause, missing-table isolation and transactional fences
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694420 bytes; SHA-256 acdb9a58b77151e3c30ddfdcdb3587fd4680a503edc5d7585288ca0bbc05ea8c
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Stopping 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Stopping 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Stopping 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Stopped 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Removing 
+ Container rivomesh-gbase8c-pipeline-62750-postgres-1 Removed 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Stopped 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Removing 
+ Container rivomesh-gbase8c-pipeline-62750-mysql-1 Removed 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Stopped 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Removing 
+ Container rivomesh-gbase8c-pipeline-62750-gbase8c-1 Removed 
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Removing 
+ Network rivomesh-gbase8c-pipeline-62750_default Removing 
+ Volume rivomesh-gbase8c-pipeline-62750_gbase-data Removed 
+ Network rivomesh-gbase8c-pipeline-62750_default Removed 

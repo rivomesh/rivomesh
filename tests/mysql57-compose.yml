@@ -1,0 +1,5 @@
+services:
+  mysql:
+    image: ${SYNC_MYSQL57_IMAGE:-public.ecr.aws/docker/library/mysql:5.7}
+    platform: linux/amd64
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-slave-updates=ON"]

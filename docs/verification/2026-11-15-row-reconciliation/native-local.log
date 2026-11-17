@@ -1,0 +1,65 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694420 bytes; SHA-256 acdb9a58b77151e3c30ddfdcdb3587fd4680a503edc5d7585288ca0bbc05ea8c
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Network rivomesh-validation-barrier-63448_default Creating 
+ Network rivomesh-validation-barrier-63448_default Creating 
+ Network rivomesh-validation-barrier-63448_default Created 
+ Network rivomesh-validation-barrier-63448_default Created 
+ Container rivomesh-validation-barrier-63448-postgres-1 Creating 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Creating 
+ Container rivomesh-validation-barrier-63448-mysql-1 Creating 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Created 
+ Container rivomesh-validation-barrier-63448-postgres-1 Created 
+ Container rivomesh-validation-barrier-63448-mysql-1 Created 
+ Container rivomesh-validation-barrier-63448-postgres-1 Starting 
+ Container rivomesh-validation-barrier-63448-mysql-1 Starting 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-63448-postgres-1 Started 
+ Container rivomesh-validation-barrier-63448-mysql-1 Started 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-63448-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-63448-postgres-1 Waiting 
+ Container rivomesh-validation-barrier-63448-postgres-1 Healthy 
+ Container rivomesh-validation-barrier-63448-mysql-1 Healthy 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Healthy 
+ Container rivomesh-validation-barrier-63448-tests-run-71688d7defd7 Creating 
+ Container rivomesh-validation-barrier-63448-tests-run-71688d7defd7 Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+VALIDATION_JOURNAL_PROFILE: LOCAL/H2
+VALIDATION_TYPED_TARGET_READ_ACCEPTED: native PostgreSQL/MySQL bool/float32/float64/bytes/Unicode/date/timestamp/microsecond TIME/JSON/uint64/65digit decimal/NULL and partial-close fence release
+VALIDATION_SOURCE_VIEWS_ACCEPTED: real global-write blocking/release, shared MVCC, pinned metadata, changed-schema refusal, gate/read deadlines and incomplete-cursor abort
+VALIDATION_PROCESS_LOSS_ACCEPTED: SIGKILL releases the actual source gate before its configured deadline
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Stopped 
+VALIDATION_SOURCE_STORE_PROCESS_LOSS_ACCEPTED: actual target scan holder SIGKILL releases its SQL checkpoint lock; private H2 source seal and partial target row reopen for discard/retry
+VALIDATION_SOURCE_STAGING_ACCEPTED: paused journal identity pages, keyless multiset/occurrence matching, typed source rows and durable sealed reopen
+VALIDATION_TARGET_MATCH_ACCEPTED: actual PostgreSQL rows match the pinned source, including JSON/Unicode/wide decimals/signed TIME/keyless IDs, with an offline unselected target
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Healthy 
+ Container rivomesh-validation-barrier-63448-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-63448-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-63448-mysql-1 Starting 
+ Container rivomesh-validation-barrier-63448-mysql-1 Started 
+ Container rivomesh-validation-barrier-63448-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-63448-mysql-1 Healthy 
+VALIDATION_TARGET_DIFFERENCES_ACCEPTED: source actually stopped after sealing; PostgreSQL missing/extra/changed rows and wrong keyless identity detected; untouched MySQL target matches; persisted row detail/pagination and CLI stage/report/replay verified
+VALIDATION_PIPELINE_BARRIER_ACCEPTED: actual GTID/normalized/SQL-ACK cut, selected targets with offline peer, source MVCC after new writes, physical epoch fences, concurrent-control refusal, resumed CDC catch-up, persisted pause and missing-metadata refusal
+VALIDATION_BARRIER_ACCEPTED: source locks/MVCC/faults, actual SQL cut, sealed source process recovery and real PostgreSQL/MySQL row comparison; repair remains separate
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694420 bytes; SHA-256 acdb9a58b77151e3c30ddfdcdb3587fd4680a503edc5d7585288ca0bbc05ea8c
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-63448-postgres-1 Stopping 
+ Container rivomesh-validation-barrier-63448-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-63448-postgres-1 Stopped 
+ Container rivomesh-validation-barrier-63448-postgres-1 Removing 
+ Container rivomesh-validation-barrier-63448-postgres-1 Removed 
+ Container rivomesh-validation-barrier-63448-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-63448-mysql-1 Removing 
+ Container rivomesh-validation-barrier-63448-mysql-1 Removed 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Stopped 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Removing 
+ Container rivomesh-validation-barrier-63448-mysql-target-1 Removed 
+ Network rivomesh-validation-barrier-63448_default Removing 
+ Network rivomesh-validation-barrier-63448_default Removed 

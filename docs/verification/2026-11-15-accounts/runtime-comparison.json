@@ -1,0 +1,10 @@
+{
+  "acceptedRuntimeSha256": "35465b6ef7bfdc5bccfceb97a0fb63da715e950c93aa515061e7963b4985370b",
+  "currentArtifactSha256": "c6b2638b624c1757b2309b20e6518e2d81885337910bba63484e0cd755794646",
+  "comparedClasses": 65135,
+  "allClassesIdentical": true,
+  "changedEntries": [
+    "console/audit.js"
+  ],
+  "scope": "All archive contents compared; only audit subject presentation changed. No runtime/SDK/config resource changes."
+}

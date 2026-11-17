@@ -1,0 +1,378 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ----------------------< io.rivomesh:rivomesh-app >----------------------
+[INFO] Building rivomesh-app 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ rivomesh-app ---
+[INFO] Copying 7 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ rivomesh-app ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ rivomesh-app ---
+[INFO] skip non existing resourceDirectory /project/sync-app/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ rivomesh-app ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 83 source files with javac [debug target 8] to target/test-classes
+[INFO] /project/sync-app/src/test/java/io/rivomesh/MessagePipelineIntegrationTest.java: /project/sync-app/src/test/java/io/rivomesh/MessagePipelineIntegrationTest.java uses or overrides a deprecated API.
+[INFO] /project/sync-app/src/test/java/io/rivomesh/MessagePipelineIntegrationTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ rivomesh-app ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running io.rivomesh.OceanBaseConfigTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.359 s -- in io.rivomesh.OceanBaseConfigTest
+[INFO] Running io.rivomesh.cdc.DorisSqlClientTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.041 s -- in io.rivomesh.cdc.DorisSqlClientTest
+[INFO] Running io.rivomesh.cdc.DmStorageTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in io.rivomesh.cdc.DmStorageTest
+[INFO] Running io.rivomesh.cdc.Gbase8cProfileTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.027 s -- in io.rivomesh.cdc.Gbase8cProfileTest
+[INFO] Running io.rivomesh.cdc.JdbcSinkTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.742 s -- in io.rivomesh.cdc.JdbcSinkTest
+[INFO] Running io.rivomesh.cdc.JsonValuesTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.044 s -- in io.rivomesh.cdc.JsonValuesTest
+[INFO] Running io.rivomesh.cdc.TargetReadTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.172 s -- in io.rivomesh.cdc.TargetReadTest
+[INFO] Running io.rivomesh.cdc.ClassicAdminClientTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.152 s -- in io.rivomesh.cdc.ClassicAdminClientTest
+[INFO] Running io.rivomesh.cdc.DorisHttpClientTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.042 s -- in io.rivomesh.cdc.DorisHttpClientTest
+[INFO] Running io.rivomesh.cdc.ClickHouseHttpClientTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.035 s -- in io.rivomesh.cdc.ClickHouseHttpClientTest
+[INFO] Running io.rivomesh.cdc.JournalTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.968 s -- in io.rivomesh.cdc.JournalTest
+[INFO] Running io.rivomesh.cdc.HiveRowsTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in io.rivomesh.cdc.HiveRowsTest
+[INFO] Running io.rivomesh.cdc.FanoutDispatcherTest
+TARGET_PAUSED slow SQL_23514
+  type=java.sql.SQLException
+  sqlstate=23514 vendor=0
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.apply(FanoutDispatcherTest.java:17)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:52)
+    at io.rivomesh.cdc.FanoutDispatcherTest.sqlFaultIsIsolatedAndAnUncertainCommitIsReconciledBeforeReplay(FanoutDispatcherTest.java:27)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+TARGET_RETRYING slow TARGET_CONNECTION_RETRY
+  type=java.io.IOException
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.apply(FanoutDispatcherTest.java:17)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:52)
+    at io.rivomesh.cdc.FanoutDispatcherTest.sqlFaultIsIsolatedAndAnUncertainCommitIsReconciledBeforeReplay(FanoutDispatcherTest.java:28)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+TARGET_PAUSED fast SQL_23514
+  type=java.sql.SQLException
+  sqlstate=23514 vendor=0
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.activate(FanoutDispatcherTest.java:16)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:36)
+    at io.rivomesh.cdc.FanoutDispatcherTest.activationAndSecondTransactionApplyFaultsHaveDistinctDurableLocations(FanoutDispatcherTest.java:48)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+TARGET_PAUSED fast SQL_23514
+  type=java.sql.SQLException
+  sqlstate=23514 vendor=0
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.apply(FanoutDispatcherTest.java:17)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:52)
+    at io.rivomesh.cdc.FanoutDispatcherTest.activationAndSecondTransactionApplyFaultsHaveDistinctDurableLocations(FanoutDispatcherTest.java:50)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.925 s -- in io.rivomesh.cdc.FanoutDispatcherTest
+[INFO] Running io.rivomesh.cdc.RepairTest
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.878 s -- in io.rivomesh.cdc.RepairTest
+[INFO] Running io.rivomesh.cdc.ClickHouseIndexPlanTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in io.rivomesh.cdc.ClickHouseIndexPlanTest
+[INFO] Running io.rivomesh.cdc.MessageSinkTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.429 s -- in io.rivomesh.cdc.MessageSinkTest
+[INFO] Running io.rivomesh.cdc.NormalizationTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.096 s -- in io.rivomesh.cdc.NormalizationTest
+[INFO] Running io.rivomesh.cdc.DmProfileTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in io.rivomesh.cdc.DmProfileTest
+[INFO] Running io.rivomesh.cdc.RowValuesTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in io.rivomesh.cdc.RowValuesTest
+[INFO] Running io.rivomesh.cdc.DorisRowsTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in io.rivomesh.cdc.DorisRowsTest
+[INFO] Running io.rivomesh.cdc.KingbaseProfileTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in io.rivomesh.cdc.KingbaseProfileTest
+[INFO] Running io.rivomesh.cdc.ValidationBarrierJournalTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.301 s -- in io.rivomesh.cdc.ValidationBarrierJournalTest
+[INFO] Running io.rivomesh.cdc.OceanBaseProfileTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in io.rivomesh.cdc.OceanBaseProfileTest
+[INFO] Running io.rivomesh.cdc.HiveIndexPlanTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in io.rivomesh.cdc.HiveIndexPlanTest
+[INFO] Running io.rivomesh.cdc.HiveSqlClientTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in io.rivomesh.cdc.HiveSqlClientTest
+[INFO] Running io.rivomesh.cdc.FailureReviewTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.367 s -- in io.rivomesh.cdc.FailureReviewTest
+[INFO] Running io.rivomesh.PipelineConfigTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.029 s -- in io.rivomesh.PipelineConfigTest
+[INFO] Running io.rivomesh.platform.SharedAccessTest
+[INFO] Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 14.60 s -- in io.rivomesh.platform.SharedAccessTest
+[INFO] Running io.rivomesh.platform.WorkerEnvironmentTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.470 s -- in io.rivomesh.platform.WorkerEnvironmentTest
+[INFO] Running io.rivomesh.platform.AuditStoreTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.929 s -- in io.rivomesh.platform.AuditStoreTest
+[INFO] Running io.rivomesh.platform.TaskAuthorizationTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.577 s -- in io.rivomesh.platform.TaskAuthorizationTest
+[INFO] Running io.rivomesh.platform.CommandDispatchTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.318 s -- in io.rivomesh.platform.CommandDispatchTest
+[INFO] Running io.rivomesh.platform.PlatformAuditTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.875 s -- in io.rivomesh.platform.PlatformAuditTest
+[INFO] Running io.rivomesh.platform.TaskPlaneTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.704 s -- in io.rivomesh.platform.TaskPlaneTest
+[INFO] Running io.rivomesh.platform.GlobalTaskStoreTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.140 s -- in io.rivomesh.platform.GlobalTaskStoreTest
+[INFO] Running io.rivomesh.platform.ControlCipherTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.036 s -- in io.rivomesh.platform.ControlCipherTest
+[INFO] Running io.rivomesh.platform.GlobalConfigurationTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.612 s -- in io.rivomesh.platform.GlobalConfigurationTest
+[INFO] Running io.rivomesh.platform.LocalJournalLifecycleTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.297 s -- in io.rivomesh.platform.LocalJournalLifecycleTest
+[INFO] Running io.rivomesh.platform.OwnerRuntimeTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.597 s -- in io.rivomesh.platform.OwnerRuntimeTest
+[INFO] Running io.rivomesh.platform.BrowserSessionsTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 9.262 s -- in io.rivomesh.platform.BrowserSessionsTest
+[INFO] Running io.rivomesh.platform.DurableCommandsTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.197 s -- in io.rivomesh.platform.DurableCommandsTest
+[INFO] Running io.rivomesh.platform.ExecutionRolesTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 24.14 s -- in io.rivomesh.platform.ExecutionRolesTest
+[INFO] Running io.rivomesh.platform.OwnerQueriesTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.182 s -- in io.rivomesh.platform.OwnerQueriesTest
+[INFO] Running io.rivomesh.platform.PlatformTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.798 s -- in io.rivomesh.platform.PlatformTest
+[INFO] Running io.rivomesh.platform.ControlStoreTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.148 s -- in io.rivomesh.platform.ControlStoreTest
+[INFO] Running io.rivomesh.platform.PlatformConfigurationTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.817 s -- in io.rivomesh.platform.PlatformConfigurationTest
+[INFO] Running io.rivomesh.platform.AccountManagementTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.340 s -- in io.rivomesh.platform.AccountManagementTest
+[INFO] Running io.rivomesh.platform.OwnerExecutionTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.304 s -- in io.rivomesh.platform.OwnerExecutionTest
+[INFO] Running io.rivomesh.platform.GlobalResourcesTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.067 s -- in io.rivomesh.platform.GlobalResourcesTest
+[INFO] Running io.rivomesh.platform.GlobalTaskPlaneTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.860 s -- in io.rivomesh.platform.GlobalTaskPlaneTest
+[INFO] Running io.rivomesh.platform.AgentDirectoryTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.059 s -- in io.rivomesh.platform.AgentDirectoryTest
+[INFO] Running io.rivomesh.platform.ManagedValidationTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.581 s -- in io.rivomesh.platform.ManagedValidationTest
+[INFO] Running io.rivomesh.platform.ConfigurationDocumentsTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in io.rivomesh.platform.ConfigurationDocumentsTest
+[INFO] Running io.rivomesh.platform.ManagedRepairTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.650 s -- in io.rivomesh.platform.ManagedRepairTest
+[INFO] Running io.rivomesh.platform.GlobalControlHttpTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 20.13 s -- in io.rivomesh.platform.GlobalControlHttpTest
+[INFO] Running io.rivomesh.FailoverRulesTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.031 s -- in io.rivomesh.FailoverRulesTest
+[INFO] Running io.rivomesh.HiveConfigTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.002 s -- in io.rivomesh.HiveConfigTest
+[INFO] Running io.rivomesh.DorisConfigTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.014 s -- in io.rivomesh.DorisConfigTest
+[INFO] Running io.rivomesh.ConversionTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in io.rivomesh.ConversionTest
+[INFO] Running io.rivomesh.FailureDiagnosticsTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.001 s -- in io.rivomesh.FailureDiagnosticsTest
+[INFO] Running io.rivomesh.MysqlDurationTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.030 s -- in io.rivomesh.MysqlDurationTest
+[INFO] Running io.rivomesh.validation.ValidationStoreTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.266 s -- in io.rivomesh.validation.ValidationStoreTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 357, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] --- jar:3.4.2:jar (default-jar) @ rivomesh-app ---
+[INFO] Building jar: /project/sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar
+[INFO] 
+[INFO] --- shade:3.6.2:shade (default) @ rivomesh-app ---
+[WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+[WARNING] Discovered module-info.class. Shading will break its strong encapsulation.
+[WARNING] checker-qual-3.42.0.jar, commons-pool2-2.13.1.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/LICENSE.txt
+[WARNING] gson-2.14.0.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 157 overlapping classes and resources: 
+[WARNING]   - META-INF/maven/com.google.code.gson/gson/pom.properties
+[WARNING]   - META-INF/maven/com.google.code.gson/gson/pom.xml
+[WARNING]   - com.google.gson.ExclusionStrategy
+[WARNING]   - com.google.gson.FieldAttributes
+[WARNING]   - com.google.gson.FieldNamingPolicy
+[WARNING]   - com.google.gson.FieldNamingPolicy$1
+[WARNING]   - com.google.gson.FieldNamingPolicy$2
+[WARNING]   - com.google.gson.FieldNamingPolicy$3
+[WARNING]   - com.google.gson.FieldNamingPolicy$4
+[WARNING]   - com.google.gson.FieldNamingPolicy$5
+[WARNING]   - 147 more...
+[WARNING] netty-codec-4.2.18.Final.jar, netty-codec-base-4.2.18.Final.jar, netty-codec-compression-4.2.18.Final.jar, netty-codec-marshalling-4.2.18.Final.jar, netty-codec-protobuf-4.2.18.Final.jar, netty-handler-4.2.18.Final.jar, netty-resolver-4.2.18.Final.jar, netty-transport-4.2.18.Final.jar, netty-transport-native-unix-common-4.2.18.Final.jar define 1 overlapping classes: 
+[WARNING]   - META-INF.versions.11.module-info
+[WARNING] netty-transport-native-unix-common-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-transport-native-unix-common/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-transport-native-unix-common/pom.xml
+[WARNING] kafka-clients-3.9.2.jar, mysql-connector-j-8.4.0.jar define 1 overlapping resource: 
+[WARNING]   - LICENSE
+[WARNING] jackson-annotations-2.17.3.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/com.fasterxml.jackson.core/jackson-annotations/pom.properties
+[WARNING]   - META-INF/maven/com.fasterxml.jackson.core/jackson-annotations/pom.xml
+[WARNING] jackson-annotations-2.17.3.jar, jackson-core-2.17.3.jar, jackson-databind-2.17.3.jar, jackson-dataformat-yaml-2.17.3.jar, postgresql-42.7.4.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-gaussdb-driver-0.1.0-SNAPSHOT.jar, rivomesh-gbase8c-driver-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/LICENSE
+[WARNING] checker-qual-3.42.0.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 349 overlapping classes: 
+[WARNING]   - org.checkerframework.checker.builder.qual.CalledMethods
+[WARNING]   - org.checkerframework.checker.builder.qual.NotCalledMethods
+[WARNING]   - org.checkerframework.checker.builder.qual.ReturnsReceiver
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.CalledMethods
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.CalledMethodsBottom
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.CalledMethodsPredicate
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.EnsuresCalledMethods
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.EnsuresCalledMethods$List
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.EnsuresCalledMethodsIf
+[WARNING]   - org.checkerframework.checker.calledmethods.qual.EnsuresCalledMethodsIf$List
+[WARNING]   - 339 more...
+[WARNING] bcprov-lts8on-2.73.12.1.jar, commons-pool2-2.13.1.jar, error_prone_annotations-2.48.0.jar, gson-2.14.0.jar, jackson-core-2.17.3.jar, jackson-databind-2.17.3.jar, jackson-dataformat-yaml-2.17.3.jar, json-20260719.jar, jspecify-1.0.0.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar, snakeyaml-2.3.jar define 1 overlapping classes: 
+[WARNING]   - META-INF.versions.9.module-info
+[WARNING] netty-codec-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-codec/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-codec/pom.xml
+[WARNING] jspecify-1.0.0.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar define 4 overlapping classes: 
+[WARNING]   - org.jspecify.annotations.NonNull
+[WARNING]   - org.jspecify.annotations.NullMarked
+[WARNING]   - org.jspecify.annotations.NullUnmarked
+[WARNING]   - org.jspecify.annotations.Nullable
+[WARNING] DmJdbcDriver18-8.1.3.140.jar, amqp-client-5.36.0.jar, bcprov-lts8on-2.73.12.1.jar, checker-qual-3.42.0.jar, commons-pool2-2.13.1.jar, error_prone_annotations-2.48.0.jar, gson-2.14.0.jar, h2-2.2.224.jar, jackson-annotations-2.17.3.jar, jackson-core-2.17.3.jar, jackson-databind-2.17.3.jar, jackson-dataformat-yaml-2.17.3.jar, jedis-8.0.2.jar, jnats-2.26.4.jar, json-20260719.jar, jspecify-1.0.0.jar, kafka-clients-3.9.2.jar, kingbase8-9.0.1.jar, lz4-java-1.10.1.jar, mysql-binlog-connector-java-0.30.3.jar, mysql-connector-j-8.4.0.jar, netty-buffer-4.1.73.Final.jar, netty-codec-4.2.18.Final.jar, netty-codec-base-4.2.18.Final.jar, netty-codec-compression-4.2.18.Final.jar, netty-codec-marshalling-4.2.18.Final.jar, netty-codec-protobuf-4.2.18.Final.jar, netty-common-4.1.73.Final.jar, netty-handler-4.2.18.Final.jar, netty-resolver-4.2.18.Final.jar, netty-transport-4.2.18.Final.jar, netty-transport-native-unix-common-4.2.18.Final.jar, postgresql-42.7.4.jar, protobuf-java-3.25.1.jar, redis-authx-core-0.1.1-beta2.jar, rivomesh-app-0.1.0-SNAPSHOT.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-gaussdb-driver-0.1.0-SNAPSHOT.jar, rivomesh-gbase8c-driver-0.1.0-SNAPSHOT.jar, rivomesh-hive-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar, slf4j-api-1.7.36.jar, slf4j-simple-1.7.36.jar, snakeyaml-2.3.jar, snappy-java-1.1.10.5.jar, zstd-jni-1.5.7-3.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/MANIFEST.MF
+[WARNING] rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar, snakeyaml-2.3.jar define 4 overlapping classes and resources: 
+[WARNING]   - META-INF.versions.9.org.yaml.snakeyaml.internal.Logger
+[WARNING]   - META-INF.versions.9.org.yaml.snakeyaml.internal.Logger$Level
+[WARNING]   - META-INF/maven/org.yaml/snakeyaml/pom.properties
+[WARNING]   - META-INF/maven/org.yaml/snakeyaml/pom.xml
+[WARNING] jackson-annotations-2.17.3.jar, jackson-core-2.17.3.jar, jackson-databind-2.17.3.jar, jackson-dataformat-yaml-2.17.3.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/NOTICE
+[WARNING] netty-resolver-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-resolver/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-resolver/pom.xml
+[WARNING] lz4-java-1.10.1.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/at.yawk.lz4/lz4-java/pom.properties
+[WARNING]   - META-INF/maven/at.yawk.lz4/lz4-java/pom.xml
+[WARNING] netty-buffer-4.1.73.Final.jar, netty-codec-4.2.18.Final.jar, netty-codec-base-4.2.18.Final.jar, netty-codec-compression-4.2.18.Final.jar, netty-codec-marshalling-4.2.18.Final.jar, netty-codec-protobuf-4.2.18.Final.jar, netty-common-4.1.73.Final.jar, netty-handler-4.2.18.Final.jar, netty-resolver-4.2.18.Final.jar, netty-transport-4.2.18.Final.jar, netty-transport-native-unix-common-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/io.netty.versions.properties
+[WARNING] commons-pool2-2.13.1.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/NOTICE.txt
+[WARNING] netty-common-4.1.73.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 4 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-common/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-common/pom.xml
+[WARNING]   - META-INF/maven/org.jctools/jctools-core/pom.properties
+[WARNING]   - META-INF/maven/org.jctools/jctools-core/pom.xml
+[WARNING] netty-buffer-4.1.73.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-buffer/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-buffer/pom.xml
+[WARNING] rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 81 overlapping classes and resources: 
+[WARNING]   - META-INF/maven/com.google.code.findbugs/jsr305/pom.properties
+[WARNING]   - META-INF/maven/com.google.code.findbugs/jsr305/pom.xml
+[WARNING]   - META-INF/maven/com.google.guava/failureaccess/pom.properties
+[WARNING]   - META-INF/maven/com.google.guava/failureaccess/pom.xml
+[WARNING]   - META-INF/maven/com.google.guava/guava/pom.properties
+[WARNING]   - META-INF/maven/com.google.guava/guava/pom.xml
+[WARNING]   - META-INF/maven/com.google.guava/listenablefuture/pom.properties
+[WARNING]   - META-INF/maven/com.google.guava/listenablefuture/pom.xml
+[WARNING]   - META-INF/maven/com.google.j2objc/j2objc-annotations/pom.properties
+[WARNING]   - META-INF/maven/com.google.j2objc/j2objc-annotations/pom.xml
+[WARNING]   - 71 more...
+[WARNING] netty-transport-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 4 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-transport/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-transport/pom.xml
+[WARNING]   - META-INF/native-image/io.netty/netty-transport/generated/handlers/reflect-config.json
+[WARNING]   - META-INF/native-image/io.netty/netty-transport/reflect-config.json
+[WARNING] netty-handler-4.2.18.Final.jar, rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 5 overlapping resources: 
+[WARNING]   - META-INF/maven/io.netty/netty-handler/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-handler/pom.xml
+[WARNING]   - META-INF/native-image/io.netty/netty-handler/generated/handlers/reflect-config.json
+[WARNING]   - META-INF/native-image/io.netty/netty-handler/native-image.properties
+[WARNING]   - META-INF/native-image/io.netty/netty-handler/reflect-config.json
+[WARNING] rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/LICENSE.md
+[WARNING] rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, slf4j-simple-1.7.36.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/org.slf4j/slf4j-simple/pom.properties
+[WARNING]   - META-INF/maven/org.slf4j/slf4j-simple/pom.xml
+[WARNING] rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 20 overlapping resources: 
+[WARNING]   - META-INF/maven/commons-beanutils/commons-beanutils/pom.properties
+[WARNING]   - META-INF/maven/commons-beanutils/commons-beanutils/pom.xml
+[WARNING]   - META-INF/maven/commons-collections/commons-collections/pom.properties
+[WARNING]   - META-INF/maven/commons-collections/commons-collections/pom.xml
+[WARNING]   - META-INF/maven/commons-logging/commons-logging/pom.properties
+[WARNING]   - META-INF/maven/commons-logging/commons-logging/pom.xml
+[WARNING]   - META-INF/maven/io.netty/netty-codec-http/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-codec-http/pom.xml
+[WARNING]   - META-INF/maven/io.netty/netty-codec-socks/pom.properties
+[WARNING]   - META-INF/maven/io.netty/netty-codec-socks/pom.xml
+[WARNING]   - 10 more...
+[WARNING] jackson-core-2.17.3.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 181 overlapping classes and resources: 
+[WARNING]   - META-INF/FastDoubleParser-LICENSE
+[WARNING]   - META-INF/FastDoubleParser-NOTICE
+[WARNING]   - META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.properties
+[WARNING]   - META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.xml
+[WARNING]   - META-INF/thirdparty-LICENSE
+[WARNING]   - com.fasterxml.jackson.core.Base64Variant
+[WARNING]   - com.fasterxml.jackson.core.Base64Variant$PaddingReadBehaviour
+[WARNING]   - com.fasterxml.jackson.core.Base64Variants
+[WARNING]   - com.fasterxml.jackson.core.ErrorReportConfiguration
+[WARNING]   - com.fasterxml.jackson.core.ErrorReportConfiguration$Builder
+[WARNING]   - 171 more...
+[WARNING] rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar, slf4j-api-1.7.36.jar define 2 overlapping resources: 
+[WARNING]   - META-INF/maven/org.slf4j/slf4j-api/pom.properties
+[WARNING]   - META-INF/maven/org.slf4j/slf4j-api/pom.xml
+[WARNING] bcprov-lts8on-2.73.12.1.jar, jspecify-1.0.0.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/versions/9/OSGI-INF/MANIFEST.MF
+[WARNING] error_prone_annotations-2.48.0.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 28 overlapping classes and resources: 
+[WARNING]   - META-INF/maven/com.google.errorprone/error_prone_annotations/pom.properties
+[WARNING]   - META-INF/maven/com.google.errorprone/error_prone_annotations/pom.xml
+[WARNING]   - com.google.errorprone.annotations.CanIgnoreReturnValue
+[WARNING]   - com.google.errorprone.annotations.CheckReturnValue
+[WARNING]   - com.google.errorprone.annotations.CompatibleWith
+[WARNING]   - com.google.errorprone.annotations.CompileTimeConstant
+[WARNING]   - com.google.errorprone.annotations.DoNotCall
+[WARNING]   - com.google.errorprone.annotations.DoNotMock
+[WARNING]   - com.google.errorprone.annotations.ForOverride
+[WARNING]   - com.google.errorprone.annotations.FormatMethod
+[WARNING]   - 18 more...
+[WARNING] bcprov-lts8on-2.73.12.1.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar define 10 overlapping classes and resources: 
+[WARNING]   - META-INF.versions.11.org.bouncycastle.jcajce.provider.asymmetric.edec.BC11XDHPrivateKey
+[WARNING]   - META-INF.versions.11.org.bouncycastle.jcajce.provider.asymmetric.edec.BC11XDHPublicKey
+[WARNING]   - META-INF.versions.15.org.bouncycastle.jcajce.provider.asymmetric.edec.BC15EdDSAPrivateKey
+[WARNING]   - META-INF.versions.15.org.bouncycastle.jcajce.provider.asymmetric.edec.BC15EdDSAPublicKey
+[WARNING]   - META-INF.versions.17.org.bouncycastle.jcajce.provider.asymmetric.mlkem.MLKEMDecapsulatorSpi
+[WARNING]   - META-INF.versions.17.org.bouncycastle.jcajce.provider.asymmetric.mlkem.MLKEMEncapsulatorSpi
+[WARNING]   - META-INF.versions.17.org.bouncycastle.jcajce.provider.asymmetric.mlkem.MLKEMSpi
+[WARNING]   - META-INF/versions/11/OSGI-INF/MANIFEST.MF
+[WARNING]   - META-INF/versions/15/OSGI-INF/MANIFEST.MF
+[WARNING]   - META-INF/versions/17/OSGI-INF/MANIFEST.MF
+[WARNING] rivomesh-artemis-transport-0.1.0-SNAPSHOT.jar, rivomesh-classic-transport-0.1.0-SNAPSHOT.jar, rivomesh-pulsar-transport-0.1.0-SNAPSHOT.jar, rivomesh-rocketmq-transport-0.1.0-SNAPSHOT.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/DEPENDENCIES
+[WARNING] maven-shade-plugin has detected that some files are
+[WARNING] present in two or more JARs. When this happens, only one
+[WARNING] single version of the file is copied to the uber jar.
+[WARNING] Usually this is not harmful and you can skip these warnings,
+[WARNING] otherwise try to manually exclude artifacts based on
+[WARNING] mvn dependency:tree -Ddetail=true and the above output.
+[WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
+[INFO] Replacing original artifact with shaded artifact.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  02:43 min
+[INFO] Finished at: 2026-11-17T04:45:17Z
+[INFO] ------------------------------------------------------------------------

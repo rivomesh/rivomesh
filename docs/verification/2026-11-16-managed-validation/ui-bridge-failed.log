@@ -1,0 +1,913 @@
+npm notice run rivomesh-console-tests@0.1.0 test
+npm notice run node --test console.test.mjs
+TAP version 13
+# Subtest: login keeps the token out of persistent browser storage and renders availability honestly
+not ok 1 - login keeps the token out of persistent browser storage and renders availability honestly
+  ---
+  duration_ms: 167.767125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:39:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:40:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: viewer and operator accounts show their role and cannot create pipelines
+not ok 2 - viewer and operator accounts show their role and cannot create pipelines
+  ---
+  duration_ms: 21.153708
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:52:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:55:14)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: an old unauthorized response cannot clear a newer authenticated session
+not ok 3 - an old unauthorized response cannot clear a newer authenticated session
+  ---
+  duration_ms: 18.595583
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:64:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:65:167)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: operation history and creation attribution use escaped authenticated identity text
+not ok 4 - operation history and creation attribution use escaped authenticated identity text
+  ---
+  duration_ms: 15.761291
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:72:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:73:327)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: wizard validates, masks its plan, creates a stopped task and never auto-starts
+not ok 5 - wizard validates, masks its plan, creates a stopped task and never auto-starts
+  ---
+  duration_ms: 15.337583
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:78:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:79:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: v3 wizard maps two databases to independent targets and masks every credential
+not ok 6 - v3 wizard maps two databases to independent targets and masks every credential
+  ---
+  duration_ms: 17.300125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:99:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:100:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+not ok 7 - Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+  ---
+  duration_ms: 13.618125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:114:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:115:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: source snapshot preparation is distinct from destination confirmation
+not ok 8 - source snapshot preparation is distinct from destination confirmation
+  ---
+  duration_ms: 15.846417
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:124:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:126:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+not ok 9 - Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+  ---
+  duration_ms: 21.098667
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:129:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:130:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Redis wizard saves a durable stream without leaking hidden fields from another broker
+not ok 10 - Redis wizard saves a durable stream without leaking hidden fields from another broker
+  ---
+  duration_ms: 14.760542
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:142:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:143:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: v3 target recovery carries its own generation while global source errors stay distinct
+not ok 11 - v3 target recovery carries its own generation while global source errors stay distinct
+  ---
+  duration_ms: 23.049292
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:156:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:158:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: retryable destination failures remain automatic and visible without a manual resume action
+not ok 12 - retryable destination failures remain automatic and visible without a manual resume action
+  ---
+  duration_ms: 12.004083
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:164:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:166:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: destination cards show consumer resources and delivery guarantees as escaped text
+not ok 13 - destination cards show consumer resources and delivery guarantees as escaped text
+  ---
+  duration_ms: 11.29575
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:169:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:171:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+not ok 14 - RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+  ---
+  duration_ms: 14.514875
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:174:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:175:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+not ok 15 - Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+  ---
+  duration_ms: 14.686666
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:187:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:188:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+not ok 16 - message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+  ---
+  duration_ms: 17.200334
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:195:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:196:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: resume carries the precise error generation and untrusted names remain text
+not ok 17 - resume carries the precise error generation and untrusted names remain text
+  ---
+  duration_ms: 13.187542
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:211:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:213:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+not ok 18 - ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+  ---
+  duration_ms: 11.961916
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:223:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:224:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: operation results expose index decisions as safe text
+not ok 19 - operation results expose index decisions as safe text
+  ---
+  duration_ms: 16.817125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:233:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:235:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Classic wizard requires broker/admin URL and explains consumer selector
+not ok 20 - Classic wizard requires broker/admin URL and explains consumer selector
+  ---
+  duration_ms: 25.401292
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:239:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:240:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: configuration editing preserves opaque credentials and requires preview before save
+not ok 21 - configuration editing preserves opaque credentials and requires preview before save
+  ---
+  duration_ms: 20.903375
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:262:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupConfiguration (file://<workspace>/rivomesh/tests/ui/console.test.mjs:245:191)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:263:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: migration previews and running tasks cannot apply configuration
+not ok 22 - migration previews and running tasks cannot apply configuration
+  ---
+  duration_ms: 17.997958
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:266:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupConfiguration (file://<workspace>/rivomesh/tests/ui/console.test.mjs:245:191)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:267:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: old preview responses cannot overwrite a newer editor draft
+not ok 23 - old preview responses cannot overwrite a newer editor draft
+  ---
+  duration_ms: 10.90775
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:270:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupConfiguration (file://<workspace>/rivomesh/tests/ui/console.test.mjs:245:191)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:271:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: save retries retain the same request identity and restore requires reviewing changes
+not ok 24 - save retries retain the same request identity and restore requires reviewing changes
+  ---
+  duration_ms: 15.320125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:274:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupConfiguration (file://<workspace>/rivomesh/tests/ui/console.test.mjs:245:191)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:275:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: logout and close fence late configuration responses and erase drafts
+not ok 25 - logout and close fence late configuration responses and erase drafts
+  ---
+  duration_ms: 10.667084
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:278:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupConfiguration (file://<workspace>/rivomesh/tests/ui/console.test.mjs:245:191)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:279:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: audit permission, safe rendering, fixed-window pagination and page export
+not ok 26 - audit permission, safe rendering, fixed-window pagination and page export
+  ---
+  duration_ms: 10.678291
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:284:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:285:52)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: late audit responses after logout cannot restore security records
+not ok 27 - late audit responses after logout cannot restore security records
+  ---
+  duration_ms: 14.507333
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:293:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:294:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: audit export refuses a changed retention boundary
+not ok 28 - audit export refuses a changed retention boundary
+  ---
+  duration_ms: 15.77625
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:296:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:297:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: scoped session displays exact grant count and clears grants on logout
+not ok 29 - scoped session displays exact grant count and clears grants on logout
+  ---
+  duration_ms: 26.764041
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:301:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:302:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Doris wizard configures native analytical writes, replicas and explicit redirects
+not ok 30 - Doris wizard configures native analytical writes, replicas and explicit redirects
+  ---
+  duration_ms: 11.432584
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:306:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:307:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: OceanBase wizard requires v3 and keeps tenant JDBC configuration separate from brokers
+not ok 31 - OceanBase wizard requires v3 and keeps tenant JDBC configuration separate from brokers
+  ---
+  duration_ms: 11.362791
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:311:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:312:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Hive wizard requires an explicit index-omission acknowledgement and v3
+not ok 32 - Hive wizard requires an explicit index-omission acknowledgement and v3
+  ---
+  duration_ms: 12.149875
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:315:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:316:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Hive cache failure explains safe recovery in both languages
+not ok 33 - Hive cache failure explains safe recovery in both languages
+  ---
+  duration_ms: 13.413958
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:319:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:321:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: account activation is explicit and newly generated tokens stay out of previews and storage
+not ok 34 - account activation is explicit and newly generated tokens stay out of previews and storage
+  ---
+  duration_ms: 10.218708
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:333:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupAccounts (file://<workspace>/rivomesh/tests/ui/console.test.mjs:325:11)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:334:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: account grants retain unloaded IDs and lost-response retries retain the request identity
+not ok 35 - account grants retain unloaded IDs and lost-response retries retain the request identity
+  ---
+  duration_ms: 15.994875
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:336:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupAccounts (file://<workspace>/rivomesh/tests/ui/console.test.mjs:325:11)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:337:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: accounts close clears credentials and old directory responses cannot reopen the view
+not ok 36 - accounts close clears credentials and old directory responses cannot reopen the view
+  ---
+  duration_ms: 10.591041
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:339:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    setupAccounts (file://<workspace>/rivomesh/tests/ui/console.test.mjs:325:11)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:340:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: only administrators see account controls and languages retain unsaved token masking
+not ok 37 - only administrators see account controls and languages retain unsaved token masking
+  ---
+  duration_ms: 10.6215
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:342:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:343:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: account changes show their subject in the audit view without interpreting markup
+not ok 38 - account changes show their subject in the audit view without interpreting markup
+  ---
+  duration_ms: 13.981917
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:347:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:348:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: Kingbase wizard is v3-only, uses the vendor URL and preserves explicit mappings
+not ok 39 - Kingbase wizard is v3-only, uses the vendor URL and preserves explicit mappings
+  ---
+  duration_ms: 10.430541
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:352:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:353:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: DM wizard exposes its lossless text plan and requires acknowledgement before submit
+not ok 40 - DM wizard exposes its lossless text plan and requires acknowledgement before submit
+  ---
+  duration_ms: 10.196042
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:367:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:368:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: GBase 8c wizard is v3-only, uses the vendor URL and preserves explicit mappings
+not ok 41 - GBase 8c wizard is v3-only, uses the vendor URL and preserves explicit mappings
+  ---
+  duration_ms: 12.359125
+  type: 'test'
+  location: '<workspace>/rivomesh/tests/ui/console.test.mjs:379:1'
+  failureType: 'testCodeFailure'
+  error: 'messages is not defined'
+  code: 'ERR_TEST_FAILURE'
+  name: 'ReferenceError'
+  stack: |-
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:6:16)
+    eval (eval at setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91), <anonymous>:37:3)
+    eval (<anonymous>)
+    setup (file://<workspace>/rivomesh/tests/ui/console.test.mjs:35:91)
+    TestContext.<anonymous> (file://<workspace>/rivomesh/tests/ui/console.test.mjs:380:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 0
+# fail 41
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1545.607667

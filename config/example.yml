@@ -1,0 +1,36 @@
+jobId: mysql-to-gaussdb
+nodeId: sync-node-1 # 每个服务节点使用不同名称；支持 ${SYNC_NODE_ID}
+leaseMillis: 30000
+heartbeatMillis: 5000
+source:
+  clusterId: business-mysql-cluster # 逻辑复制拓扑 ID，切主后保持不变
+  topology: AUTO # AUTO / ASYNC / GROUP_REPLICATION；仅支持单主写入
+  host: 127.0.0.1
+  port: 3306
+  # 配置候选地址后，host/port 不再用于选主；地址可以增减，所有节点必须属于同一完整复制拓扑。
+  # nodes:
+  #   - host: mysql-primary.example
+  #     port: 3306
+  #   - host: mysql-standby.example
+  #     port: 3306
+  database: business
+  username: sync_user
+  password: ${MYSQL_PASSWORD}
+  # JDBC 与 binlog 连接会校验同一物理后端；恢复进度使用 GTID，允许主库 UUID 改变。
+  jdbcOptions: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&zeroDateTimeBehavior=EXCEPTION&connectTimeout=10000&socketTimeout=60000
+  sslMode: DISABLED
+  serverId: 910001
+  healthCheckMillis: 5000
+  binlogIdleTimeoutMillis: 30000
+target:
+  driver: io.github.rivomesh.gaussdb.jdbc.Driver
+  url: jdbc:postgresql://127.0.0.1:8000/gaussdb?prepareThreshold=0&connectTimeout=10&socketTimeout=60
+  username: sync_user
+  password: ${GAUSSDB_PASSWORD}
+  schema: business
+  metadataSchema: sync_meta
+chunkSize: 1000
+pollIntervalMillis: 1000
+retryDelayMillis: 5000
+maxRetryDelayMillis: 60000
+maxTransactionRows: 100000

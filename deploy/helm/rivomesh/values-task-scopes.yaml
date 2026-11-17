@@ -1,0 +1,15 @@
+# Exact task grants; choose this profile instead of values-rbac.yaml.
+auth:
+  legacyTokenEnabled: false
+  users:
+    - id: migration-admin
+      role: ADMIN
+      secretRef: {name: rivomesh-accounts, key: admin-token}
+    - id: migration-operator
+      role: OPERATOR
+      taskIds: [sales-migration, orders-migration]
+      secretRef: {name: rivomesh-accounts, key: operator-token}
+    - id: migration-reader
+      role: VIEWER
+      taskIds: [sales-migration]
+      secretRef: {name: rivomesh-accounts, key: viewer-token}

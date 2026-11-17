@@ -1,0 +1,37 @@
+[
+  {
+    "file": "maven-unit.log",
+    "source": "target/doris-hardening-package.log",
+    "sha256": "b60c65ef00966d61d69ec846f897eb3e8622f73634c4bf2d72f49761230b1d3f"
+  },
+  {
+    "file": "native.log",
+    "source": "target/doris-hardening-native.log",
+    "sha256": "9bac95f95389433ccf6808425973423ff25981b1e1f91d5c5ab5f547efe37439"
+  },
+  {
+    "file": "mode-probe.log",
+    "source": "target/doris-hardening-mode-values.log",
+    "sha256": "3e1b601cc060bf8c9f0274c5297ab75a60ae977e4455fc2453219484c9b7b2ab"
+  },
+  {
+    "file": "pipeline-current.log",
+    "source": "target/doris-hardening-mixed-final.log",
+    "sha256": "f2500a0405b539eb9f763dbfad8cb76821e0d7bb42bcca7927622d0f8950b1a1"
+  },
+  {
+    "file": "current-artifact.log",
+    "source": "target/artifact-oceanbase-catalog.log",
+    "sha256": "e888b027ba142bcf1562387d71783c6dc6f8faf045400245f939ea9375b748ba"
+  },
+  {
+    "file": "current-release-unit.log",
+    "source": "target/oceanbase-release-units.log",
+    "sha256": "0cf5bddb7a1a5ec671f2071da75bdb26ff76bb3a5031a7278e43d5b21baa5789"
+  },
+  {
+    "file": "current-doris-classes.json",
+    "source": "target/doris-hardening-oceanbase-class-comparison.json",
+    "sha256": "eaeb507fc617282a428c2807d0ee02af7a0fe048a39928f3845db87e731fa538"
+  }
+]

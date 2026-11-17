@@ -1,0 +1,33 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.github.rivomesh</groupId><artifactId>rivomesh</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>rivomesh-rocketmq-transport</artifactId>
+  <dependencies>
+    <dependency><groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-client</artifactId><version>5.5.1</version><optional>true</optional><exclusions><exclusion><groupId>org.rocksdb</groupId><artifactId>rocksdbjni</artifactId></exclusion></exclusions></dependency>
+  </dependencies>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.2</version><configuration><forceCreation>true</forceCreation></configuration></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-shade-plugin</artifactId><executions><execution><phase>package</phase><goals><goal>shade</goal></goals><configuration>
+      <createDependencyReducedPom>false</createDependencyReducedPom>
+      <relocations>
+        <relocation><pattern>io.netty</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.netty</shadedPattern></relocation>
+        <relocation><pattern>com.alibaba.fastjson</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.fastjson</shadedPattern></relocation>
+        <relocation><pattern>com.alibaba.fastjson2</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.fastjson2</shadedPattern></relocation>
+        <relocation><pattern>com.google.common</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.guava</shadedPattern></relocation>
+        <relocation><pattern>com.google.protobuf</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.protobuf</shadedPattern></relocation>
+        <relocation><pattern>io.grpc</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.grpc</shadedPattern></relocation>
+        <relocation><pattern>io.opentelemetry</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.opentelemetry</shadedPattern></relocation>
+        <relocation><pattern>okhttp3</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.okhttp3</shadedPattern></relocation>
+        <relocation><pattern>okio</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.okio</shadedPattern></relocation>
+        <relocation><pattern>kotlin</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.kotlin</shadedPattern></relocation>
+        <relocation><pattern>org.apache.commons.lang3</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.lang3</shadedPattern></relocation>
+        <relocation><pattern>org.yaml.snakeyaml</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.snakeyaml</shadedPattern></relocation>
+        <relocation><pattern>io.opentracing</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.opentracing</shadedPattern></relocation>
+        <relocation><pattern>com.github.luben</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.luben</shadedPattern></relocation>
+        <relocation><pattern>net.jpountz</pattern><shadedPattern>io.github.rivomesh.rocketmq.internal.jpountz</shadedPattern></relocation>
+      </relocations>
+      <filters><filter><artifact>*:*</artifact><excludes><exclude>META-INF/*.SF</exclude><exclude>META-INF/*.RSA</exclude><exclude>META-INF/*.DSA</exclude></excludes></filter></filters>
+      <transformers><transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/></transformers>
+    </configuration></execution></executions></plugin>
+  </plugins></build>
+</project>

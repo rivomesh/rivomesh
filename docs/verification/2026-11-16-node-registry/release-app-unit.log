@@ -1,0 +1,305 @@
+TARGET_PAUSED slow SQL_23514
+  type=java.sql.SQLException
+  sqlstate=23514 vendor=0
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.apply(FanoutDispatcherTest.java:17)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:43)
+    at io.rivomesh.cdc.FanoutDispatcherTest.sqlFaultIsIsolatedAndAnUncertainCommitIsReconciledBeforeReplay(FanoutDispatcherTest.java:27)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+TARGET_RETRYING slow TARGET_CONNECTION_RETRY
+  type=java.io.IOException
+    at io.rivomesh.cdc.FanoutDispatcherTest$FaultSink.apply(FanoutDispatcherTest.java:17)
+    at io.rivomesh.cdc.FanoutDispatcher.drain(FanoutDispatcher.java:43)
+    at io.rivomesh.cdc.FanoutDispatcherTest.sqlFaultIsIsolatedAndAnUncertainCommitIsReconciledBeforeReplay(FanoutDispatcherTest.java:28)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.junit.platform.commons.util.ReflectionUtils.invokeMethod(ReflectionUtils.java:766)
+╷
+├─ JUnit Platform Suite ✔
+├─ JUnit Jupiter ✔
+│  ├─ FanoutDispatcherTest ✔
+│  │  ├─ sourceNormalizationFaultStopsAllSubscribersWithoutMislabelingTargetErrors() ✔
+│  │  └─ sqlFaultIsIsolatedAndAnUncertainCommitIsReconciledBeforeReplay() ✔
+│  ├─ Gbase8cProfileTest ✔
+│  │  ├─ invalidModeRefusesBeforeChangingSessionOrRunningDdl() ✔
+│  │  ├─ sessionGuaranteesAreCheckedAgainAfterReconnect() ✔
+│  │  ├─ wrongVendorRefusesBeforeAnyVendorSpecificQuery() ✔
+│  │  ├─ productAndModeAreIndependentRequirements() ✔
+│  │  └─ vendorDriverCoexistsWithOtherPostgresProtocolDrivers() ✔
+│  ├─ ConversionTest ✔
+│  │  ├─ identifierQuotingCannotChangeTheSqlStructure() ✔
+│  │  └─ unsignedAndTemporalBinlogValuesPreserveTheirRangeAndPrecision() ✔
+│  ├─ PlatformConfigurationTest ✔
+│  │  ├─ semanticAndJournalChangesRequireMigrationAndSecretReferencesCannotMove() ✔
+│  │  ├─ externallyLoadedTasksAcquireAnUnattributedBaselineOnTheirFirstEdit() ✔
+│  │  ├─ corruptVersionBlocksLaunchAndNeverFallsBackToAnOlderProjection() ✔
+│  │  ├─ actualHttpRoutesRestrictConfigurationBeforeDecodingAndNeverReturnSavedCredential... ✔
+│  │  ├─ committedHistoryOutlivesBoundedOperationHistoryAndIgnoresOrphanVersions() ✔
+│  │  ├─ projectionFailureDoesNotLoseCommittedVersionOrLaunchAStaleConfig() ✔
+│  │  ├─ redactedEditsAreIdempotentVersionedAndRestoredWithoutResettingIntent() ✔
+│  │  └─ aWorkerThatDoesNotStopCannotBeReplacedWithAnEditedConfiguration() ✔
+│  ├─ ValidationStoreTest ✔
+│  │  ├─ reportPrivacyDoesNotChangeAnExistingParentDirectoryPermissions() ✔
+│  │  ├─ sameMultisetWithDifferentOccurrenceIdsIsNotAValidKeylessReplica() ✔
+│  │  ├─ sourceSealAndRowChecksumsAreVerifiedBeforeComparison() ✔
+│  │  ├─ largeRawRowsAreRefusedBeforeDetailsAreReturned() ✔
+│  │  ├─ quotaFailureCannotPublishACompleteReport() ✔
+│  │  ├─ sourceSealIsIndependentOfSetIterationOrderAfterDeserialization() ✔
+│  │  ├─ anActiveReportRejectsASecondWriter() ✔
+│  │  ├─ targetRetryDiscardsPartialTargetsAndRetainsTheSealedSource() ✔
+│  │  ├─ corruptDifferenceHashesCannotReleaseRawRows() ✔
+│  │  ├─ incompleteSourceCannotBeContinuedAsANewMvccView() ✔
+│  │  ├─ persistedDifferencesAreKeysetPagedAndRetainBothBeforeAndExpectedRows() ✔
+│  │  ├─ aSealedSourceSurvivesRestartAndDoesNotNeedALiveSourceConnection() ✔
+│  │  ├─ rawPayloadCorruptionIsDetectedBeforeReturningRepairValues() ✔
+│  │  ├─ completedSourceTablesCannotImportAdditionalOccurrenceIds() ✔
+│  │  ├─ missingSummaryProjectionIsRecoveredFromTheDurableManifest() ✔
+│  │  ├─ missingJournalOccurrenceAndCorruptPayloadAreRejected() ✔
+│  │  └─ boundedDetailsRequireAnActualDifferenceAndRejectForeignScopes() ✔
+│  ├─ FailoverRulesTest ✔
+│  │  ├─ gtidUnionNeverDiscardsPreviouslyReadTransactions() ✔
+│  │  ├─ promotionRequiresCapturedAndSnapshotDependencyGtids() ✔
+│  │  ├─ sqlErrorsAreClassifiedWithoutSkippingTransactions() ✔
+│  │  └─ multipleWritersAndUnhealthyReplicationNeverGetSelected() ✔
+│  ├─ DorisConfigTest ✔
+│  │  ├─ unsupportedJournalsPoliciesAndMalformedEndpointConfigurationsAreRejected() ✔
+│  │  ├─ typedOptionsSeparateMaterializationIdentityFromConnectionTuning() ✔
+│  │  └─ finiteSocketsDisableTheConnectorCancellationTimerEvenWhenUrlRequestsIt() ✔
+│  ├─ ClassicAdminClientTest ✔
+│  │  ├─ credentialsStayInHeadersAndDuplicateJsonKeysAreRejected() ✔
+│  │  ├─ absenceRequiresAnExplicitSuccessfulEmptySearch() ✔
+│  │  ├─ redirectsAndHttp200JmxErrorsCannotBecomeSuccess() ✔
+│  │  └─ subscriptionsUseTheActualSelectorMbeanWithoutAnInventedBrowserAttribute() ✔
+│  ├─ TaskAuthorizationTest ✔
+│  │  ├─ listsAndAllTaskRoutesEnforceExactGrantsBeforeReadingBodies() ✔
+│  │  ├─ grantsAreAnImmutableCredentialSnapshotAndReloadCanRevokeAccess() ✔
+│  │  └─ invalidScopesAndScopedAdministratorsAreRejected() ✔
+│  ├─ FailureDiagnosticsTest ✔
+│  │  └─ sqlDiagnosticsExposeOnlyStructuredCodesNotMessages() ✔
+│  ├─ RowValuesTest ✔
+│  │  ├─ integerBoundariesAndNumericEquivalentKeysArePreserved() ✔
+│  │  ├─ fractionalOnlyDecimalAllowsZeroAndFullDeclaredScale() ✔
+│  │  └─ maliciousNumericExponentsAreRejectedBeforeExpandingToPlainText() ✔
+│  ├─ ManagedValidationTest ✔
+│  │  ├─ rawDetailsRequireAdminAndAuditDoesNotContainBusinessValues() ✔
+│  │  ├─ persistedScopeIsIdempotentAndLongValidationDoesNotBlockOtherControls() ✔
+│  │  ├─ restartReusesThePersistedReportIdWithoutStartingAWorker() ✔
+│  │  ├─ httpEnforcesAdminMutationAndTaskScopedSummaryReads() ✔
+│  │  └─ cancellationIsDurableAuditedAndNeverResumesTheTask() ✔
+│  ├─ ConfigurationDocumentsTest ✔
+│  │  ├─ encodedJdbcCredentialsAndOptionsNeverAppearInEditorResponses() ✔
+│  │  └─ oldReferencesAndMovingCredentialsBetweenTargetsAreRejected() ✔
+│  ├─ DmProfileTest ✔
+│  │  ├─ nativeInstanceAndDurableCommitAreRequired() ✔
+│  │  └─ missingObjectDiagnosisUsesTheRealVendorRatherThanAllDataExceptions() ✔
+│  ├─ AccountManagementTest ✔
+│  │  ├─ auditAnchorSurvivesEventRetention() ✔
+│  │  ├─ offlineRecoveryRequiresControllerLockAndDoesNotReviveOtherCredentials() ✔
+│  │  ├─ missingOrOlderDirectoryCannotSilentlyRestoreBootstrapCredentials() ✔
+│  │  ├─ staleVersionsCollisionsAndDeletedIdentityReuseAreRejected() ✔
+│  │  ├─ realHttpRequiresAdminAndChangedGrantsTakeEffectOnTheNextRequest() ✔
+│  │  ├─ configurationModeNeedsExplicitActivationAndLastAdministratorSurvives() ✔
+│  │  ├─ legacyAuditPayloadRemainsByteVerifiableAfterSchemaExtension() ✔
+│  │  └─ scopesRotationRevocationAndReplayPersistWithoutPlaintextTokens() ✔
+│  ├─ ClickHouseHttpClientTest ✔
+│  │  ├─ connectionLossAfterReceivingTheBodyDoesNotReplayTheWrite() ✔
+│  │  ├─ neverFollowsRedirectOrRetriesAmbiguousWrites() ✔
+│  │  ├─ exceptionHeaderAndOversizedBodyFailWithoutLeakingContents() ✔
+│  │  ├─ postsCredentialsInHeadersAndRequiresCompleteJson() ✔
+│  │  └─ http200WithAppendedExceptionCannotBecomeAnAcknowledgement() ✔
+│  ├─ JsonValuesTest ✔
+│  │  ├─ precisionNullsAndSemanticComparisonAreExplicit() ✔
+│  │  └─ addingAnEmbeddedJournalDoesNotEnableArbitraryDriversThroughTheLegacyTaskApi() ✔
+│  ├─ HiveSqlClientTest ✔
+│  │  ├─ arbitraryDriverScriptsDiscoveryAndCredentialUrlsAreRejected() ✔
+│  │  ├─ finiteNativeSocketAndRetryBoundsOverrideCallerValues() ✔
+│  │  └─ nativeProgressTokensRejectInventedOrTruncatedReceipts() ✔
+│  ├─ JournalTest ✔
+│  │  ├─ missingLogOrSnapshotPartsAreDetectedRatherThanAcknowledgedPast() ✔
+│  │  ├─ concurrentProducersUseTheLockedStreamCounterRatherThanDatabaseSequences() ✔
+│  │  ├─ snapshotCapacityAndManifestsAreCheckedBeforeCommit() ✔
+│  │  ├─ completedSnapshotArtifactsResumeWithDuplicateRowsAndIncompleteSessionsRestartSaf... ✔
+│  │  ├─ retryDiagnosticsCannotResumeAPauseAdvanceCheckpointsOrBypassFencing() ✔
+│  │  ├─ durableFanoutNeverCollectsAnOfflineSubscribersHistory() ✔
+│  │  ├─ sharedPipelinePauseAndSourceErrorsCannotBeBypassedByAnotherOwner() ✔
+│  │  ├─ snapshotPreviewSeparatesSourceArtifactsFromEveryTargetsDurableAcknowledgments() ✔
+│  │  ├─ capacityFailureNeverAdvancesTheCapturedPosition() ✔
+│  │  ├─ schemasAndSubscriptionsCannotSilentlyChangeIdentity() ✔
+│  │  └─ ownerEpochsFenceOldAppendAndAcknowledgmentAfterTakeover() ✔
+│  ├─ HiveConfigTest ✔
+│  │  └─ nativeOptionsAreExplicitAndAcknowledgementDoesNotResetIdentity() ✔
+│  ├─ OceanBaseConfigTest ✔
+│  │  └─ explicitProductSelectsMysqlProtocolButNotAnUnverifiedJournal() ✔
+│  ├─ TargetReadTest ✔
+│  │  ├─ readerHoldsTheSamePhysicalFenceUntilClosed() ✔
+│  │  ├─ typedRowsMatchCanonicalSourceAndCheckpointChangesAreRejected() ✔
+│  │  ├─ deadlineAndOversizedLobDoNotProduceSuccessfulRows() ✔
+│  │  └─ keylessReadsPreserveOccurrenceIdsAndPartialCloseReleasesFence() ✔
+│  ├─ ManagedRepairTest ✔
+│  │  ├─ executionCancellationIsDurableAndKeepsTaskPaused() ✔
+│  │  ├─ planIdIsPersistedBeforeWorkAndRequestReplayCannotCreateAnotherPlan() ✔
+│  │  ├─ httpRejectsRestrictedRolesBeforeRepairWorkOrPlanReads() ✔
+│  │  └─ persistedPendingPlanReplaysSameIdentityAcrossControllerRestart() ✔
+│  ├─ RepairTest ✔
+│  │  ├─ keyedRepairCommitsReceiptWithUnchangedCheckpointAndSurvivesReplay() ✔
+│  │  ├─ sqlFailureAfterDeletesRollsBackWholeTableAndLeavesNoReceipt() ✔
+│  │  ├─ targetTriggerIsRefusedEvenWhenItsBodyHasNoVisibleSideEffect() ✔
+│  │  ├─ pausedFenceBlocksResumeUntilReleasedAndRejectsAnOldCut() ✔
+│  │  ├─ changedLiveTargetIsRefusedWithoutBusinessWritesOrReceipt() ✔
+│  │  ├─ changedPlanResourceBudgetRequiresANewApprovalHash() ✔
+│  │  ├─ receiptSchemaWithoutItsIdentityKeyIsRefused() ✔
+│  │  ├─ keylessRepairRestoresExactOccurrenceIdsWithoutCollapsingDuplicates() ✔
+│  │  ├─ incomingCascadingForeignKeyIsRefusedBeforeAnyBusinessWrite() ✔
+│  │  ├─ outgoingForeignKeyUsesRepairSpecificRefusalBeforeTheGeneralShapeGuard() ✔
+│  │  ├─ changedReceiptCannotAuthorizeReplay() ✔
+│  │  └─ persistedPlanHashScopeAndReportContentsCannotBeChangedSilently() ✔
+│  ├─ ControlStoreTest ✔
+│  │  ├─ activeCollisionExpiredReplacementAndOldHeartbeatShutdownAreFenced() ✔
+│  │  ├─ separateStoresReadTheSameBoundedRedactedRegistry() ✔
+│  │  ├─ twoHttpEndpointsShareNodeObservationsWithoutSharingLocalDirectories() ✔
+│  │  ├─ nodeAndObservationPublishRollBackTogether() ✔
+│  │  ├─ capacityProtocolAndClusterIsolationAreEnforced() ✔
+│  │  ├─ standaloneNodeIdSurvivesRestartWithoutClaimingASharedCluster() ✔
+│  │  ├─ keysetPaginationAndCursorValidationAreStable() ✔
+│  │  └─ concurrentClaimOfOneNodeHasOnlyOneWinner() ✔
+│  ├─ JdbcSinkTest ✔
+│  │  ├─ atomicBusinessCheckpointRecoveryAndEpochFencing() ✔
+│  │  ├─ keylessSnapshotPreservesMultiplicityAndRetriesWithoutDuplicates() ✔
+│  │  ├─ administrativeOpenNeverRecreatesMissingCheckpointMetadata() ✔
+│  │  ├─ indexPolicyNeverDowngradesIdentityAndRequiresPlansForUnportableDefinitions() ✔
+│  │  ├─ anEmptyTableCannotHaveTwoPublishersAndLostTablesRequireARebuildPlan() ✔
+│  │  └─ incompleteImagesAndSnapshotsNeverAdvanceCheckpoints() ✔
+│  ├─ KingbaseProfileTest ✔
+│  │  ├─ invalidModeRefusesBeforeChangingSessionOrRunningDdl() ✔
+│  │  ├─ sessionGuaranteesAreCheckedAgainAfterReconnect() ✔
+│  │  ├─ wrongVendorRefusesBeforeAnyVendorSpecificQuery() ✔
+│  │  └─ productAndModeAreIndependentRequirements() ✔
+│  ├─ HiveIndexPlanTest ✔
+│  │  └─ omissionRequiresApprovalWithoutWeakeningMaterializedIdentity() ✔
+│  ├─ DorisHttpClientTest ✔
+│  │  ├─ publishTimeoutAndPendingLabelsRetryButOnlyFinishedLabelsConfirm() ✔
+│  │  ├─ droppedRowsDuplicateJsonAndWrongLabelsNeverConfirm() ✔
+│  │  ├─ strictNativeHeadersAndExactRowsAreRequired() ✔
+│  │  ├─ credentialsFollowOnlyAnExplicitSamePathRedirect() ✔
+│  │  └─ networkErrorsAreSafeAndRetriableWhileBadOriginsAreRejected() ✔
+│  ├─ OceanBaseProfileTest ✔
+│  │  └─ vendorModeAndUserTenantAreAllRequired() ✔
+│  ├─ PlatformAuditTest ✔
+│  │  ├─ crashAfterAuditCommitBeforeOutboxRemovalDoesNotDuplicateEvent() ✔
+│  │  ├─ deletingAuditDatabaseCannotSilentlyStartANewHistory() ✔
+│  │  ├─ authenticationDenialsAndConfigReadsAreAuditedWithoutSecrets() ✔
+│  │  ├─ asyncResultsAndActorsSurviveControllerRestart() ✔
+│  │  └─ auditFailureBlocksHttpMutationAndDurableOutboxReplaysOnRestart() ✔
+│  ├─ ValidationBarrierJournalTest ✔
+│  │  ├─ normalizationAndTargetAckMustBothReachTheCut() ✔
+│  │  ├─ sourceMovementAndWrongGenerationCannotPauseOrRewriteProgress() ✔
+│  │  ├─ rowSnapshotsWithoutTheSelectedTargetsSnapshotAckAreNotReady() ✔
+│  │  └─ selectedTargetsCanQuiesceWhileAnUnselectedTargetIsOffline() ✔
+│  ├─ ClickHouseIndexPlanTest ✔
+│  │  ├─ identitiesArePreservedAndExplicitDataOnlyModeHasAnAuditableOmission() ✔
+│  │  ├─ uniqueGlobalAndCompositeBecomeDeduplicatedNonUniquePerColumnIndexes() ✔
+│  │  ├─ unsupportedSqlIsReportedAndNeverRenderedIntoDdl() ✔
+│  │  └─ decimalAndNullableNumbersHaveNumericIndexesWhileTemporalTextUsesBloom() ✔
+│  ├─ DorisSqlClientTest ✔
+│  │  ├─ observedBackendStartupErrorsRetryWithSafeStructuredDiagnostics() ✔
+│  │  └─ genericSyntaxAndAuthorizationDoNotBecomeStartupRetries() ✔
+│  ├─ PlatformTest ✔
+│  │  ├─ preparingSourceSnapshotsDoesNotDeclareUninitializedTargetsStreaming() ✔
+│  │  ├─ destinationViewsExposeConsumerSetupWithoutSecretsOrMutableConfiguration() ✔
+│  │  ├─ oneInvalidFileDoesNotPreventOtherIndependentConfigurations() ✔
+│  │  ├─ commandsAreDurableIdempotentAndRejectStaleRequests() ✔
+│  │  ├─ v3LocalJournalImportsCannotSelectOtherPathsAndMappingsCannotOverlapV2() ✔
+│  │  ├─ workerCapacityQueuesTasksWithoutExceedingTheConfiguredBudget() ✔
+│  │  ├─ kafkaSubscriptionsCannotShareOnePhysicalTopicBehindDifferentMappings() ✔
+│  │  ├─ fileEditsCannotChangeTheConfigurationOfAnAlreadyLoadedWorker() ✔
+│  │  ├─ credentialConfigurationRejectsAmbiguityAndRequiresAnAdministrator() ✔
+│  │  ├─ httpRolesProtectEveryMutationBeforeItReachesTheTaskService() ✔
+│  │  ├─ v3ImportsKeepOneManagedJournalAcrossWorkerSnapshotsAndControllerRestart() ✔
+│  │  ├─ collisionChecksAndCorruptStateDoNotStartUnsafeTasks() ✔
+│  │  ├─ httpRequiresAuthPreservesSecretsAndServesTheActualUi() ✔
+│  │  └─ pulsarDefaultPortAndDifferentMappingsCannotHideASharedPhysicalTopic() ✔
+│  ├─ PipelineConfigTest ✔
+│  │  ├─ classicRequiresFixedAuthenticatedBrokerAndSeparateManagementEndpoint() ✔
+│  │  ├─ embeddedSqlDriverAndUrlOptionsCannotBeImportedAsTargetsOrLocalPaths() ✔
+│  │  ├─ passwordsAndTuningCanRotateWhileSemanticChangesRequireAMigration() ✔
+│  │  ├─ sourceMappingsCannotCollideOrDisappear() ✔
+│  │  ├─ kafkaTopicAndSecurityProfilesRequireExplicitValidPlans() ✔
+│  │  ├─ dmUsesVendorUrlAndExplicitTextReviewWithoutEnablingItsJournal() ✔
+│  │  ├─ rocketUsesGenerationBoundNamesAndRejectsUnverifiedDurabilityAndCredentials() ✔
+│  │  ├─ kingbaseUsesVendorDriverAndCannotBeUsedAsAnUnverifiedJournal() ✔
+│  │  ├─ artemisRequiresRetainedQueuePrefixCredentialsAndOneLocalCopy() ✔
+│  │  ├─ messageSettingsSeparateSecretsFromStreamIdentity() ✔
+│  │  ├─ pulsarRequiresPersistentTopicClusterAdminAndStableDurability() ✔
+│  │  ├─ clickhouseUsesHttpVersionedRowsWithExplicitLimitsAndStableTuning() ✔
+│  │  ├─ gbase8cHasAnExplicitVendorFamilyAndDoesNotEnableItsJournal() ✔
+│  │  └─ redisRequiresAnExplicitStreamAndDirectEndpoint() ✔
+│  ├─ BrowserSessionsTest ✔
+│  │  ├─ reloadUsesCookieAndLogoutRevokesCredentialWithoutLeakingSecrets() ✔
+│  │  ├─ productionCookieAndProxyOriginAreExplicitAndRememberingIsOptional() ✔
+│  │  ├─ rotationDisableAndGrantChangesInvalidatePreviouslyIssuedSessions() ✔
+│  │  ├─ sessionConfigurationRejectsUnsafeOriginShapesAndInvalidLimits() ✔
+│  │  ├─ idleAbsoluteExpiryCapacityAndReauthenticationAreBounded() ✔
+│  │  ├─ selfRotationRequiresANewSessionAndTheSavedNewToken() ✔
+│  │  ├─ disabledBrowserSessionsKeepApiCompatibleAndRestartRequiresNewLogin() ✔
+│  │  └─ explicitBearerNeverFallsBackAndConflictingIdentitiesAreRejected() ✔
+│  ├─ DmStorageTest ✔
+│  │  ├─ stringsAndIndexableBinaryRetainCapacityAndLargeObjectsNeedIndexPlan() ✔
+│  │  ├─ nativeDaySecondIntervalPreservesDurationRatherThanWrappingClock() ✔
+│  │  └─ wideDecimalsAndJsonHaveExplicitLosslessTextPlans() ✔
+│  ├─ MessageSinkTest ✔
+│  │  ├─ nativeProgressReceiptsAreGenerationScopedCompareAndSetAndLeaseFenced() ✔
+│  │  ├─ changingTheBrokerClusterCannotSilentlyReuseExistingPublicationCheckpoints() ✔
+│  │  ├─ crossDatabaseManifestsDescribeEveryNamespaceAndReconstructTheCommittedContentHas... ✔
+│  │  ├─ brokerConfirmationLossReplaysStableIdsAndCheckpointNeverLeadsConfirmation() ✔
+│  │  ├─ anEstablishedPublicationCannotInventAMissingRequiredNativeProgressBaseline() ✔
+│  │  ├─ losingInitializedBrokerDestinationsCannotRecreateEmptyChannelsAtAnOldCheckpoint(... ✔
+│  │  ├─ oversizedRowsAndMissingIdentityAreRejectedBeforeTransactionBegin() ✔
+│  │  └─ snapshotOccurrencesAndPrimaryKeyChangesHaveUnambiguousConsumerKeys() ✔
+│  ├─ MysqlDurationTest ✔
+│  │  ├─ signedDurationsAreCanonicalWithoutClockWrapping() ✔
+│  │  ├─ everyRowsEventUsesTheDurationOverrideWithoutChangingOtherCodecs() ✔
+│  │  ├─ legacySigned24BitAndMalformedPayloadsAreExplicit() ✔
+│  │  └─ binaryTime2AllPrecisionsRetainNegativeFractions() ✔
+│  ├─ HiveRowsTest ✔
+│  │  ├─ decimalWidthNeverSilentlyRoundsToHivePrecision() ✔
+│  │  ├─ fullImagesNullsAndNativeRangesAreCheckedBeforeSql() ✔
+│  │  ├─ caseInsensitiveStorageRejectsAmbiguousColumnsAndReservedInternals() ✔
+│  │  ├─ binaryAndJsonRetainTheirDeclaredWireText() ✔
+│  │  └─ textUsesBase64ExpressionsAndRejectsMalformedUnicode() ✔
+│  ├─ NormalizationTest ✔
+│  │  ├─ duplicateOccurrencesBaselineFilteringAtomicFailureAndSlowReplay() ✔
+│  │  ├─ aFullJournalCanNormalizeItsReservedCommitAndReclaimExactlyOnce() ✔
+│  │  ├─ normalizationCannotJumpOverACommitOrInventRawContent() ✔
+│  │  └─ floatRenderingDifferencesDoNotLoseKeylessOccurrences() ✔
+│  ├─ DorisRowsTest ✔
+│  │  ├─ missingNullOverflowNonfiniteAndMalformedUtf8CannotReachLoad() ✔
+│  │  ├─ reservedColumnsAndOversizedRowsAreRejected() ✔
+│  │  ├─ precisionAndWireRepresentationsSurviveNativeJsonEncoding() ✔
+│  │  └─ indexConversionPreservesIdentityAndReportsLostBusinessSemantics() ✔
+│  └─ AuditStoreTest ✔
+│     ├─ committedEventsSurviveRestartAndRetriesDoNotDuplicate() ✔
+│     ├─ changedContentBlocksReopen() ✔
+│     ├─ missingCommittedTailBlocksReopen() ✔
+│     ├─ retentionHasAnExplicitAnchorAndExpiredCursorsNeverSkipSilently() ✔
+│     └─ concurrentAppendsRemainContiguousAndPagesHaveFixedUpperBounds() ✔
+└─ JUnit Vintage ✔
+
+Test run finished after 93832 ms
+[        47 containers found      ]
+[         0 containers skipped    ]
+[        47 containers started    ]
+[         0 containers aborted    ]
+[        47 containers successful ]
+[         0 containers failed     ]
+[       221 tests found           ]
+[         0 tests skipped         ]
+[       221 tests started         ]
+[         0 tests aborted         ]
+[       221 tests successful      ]
+[         0 tests failed          ]
+

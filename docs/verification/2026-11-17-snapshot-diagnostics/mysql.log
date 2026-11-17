@@ -1,0 +1,53 @@
+ Network rivomesh-failure-7eab3c917e_default Creating 
+ Network rivomesh-failure-7eab3c917e_default Creating 
+ Network rivomesh-failure-7eab3c917e_default Created 
+ Network rivomesh-failure-7eab3c917e_default Created 
+ Container rivomesh-failure-7eab3c917e-database-1 Creating 
+ Container rivomesh-failure-7eab3c917e-database-1 Created 
+ Container rivomesh-failure-7eab3c917e-database-1 Starting 
+ Container rivomesh-failure-7eab3c917e-database-1 Started 
+ Container rivomesh-failure-7eab3c917e-database-1 Waiting 
+ Container rivomesh-failure-7eab3c917e-database-1 Healthy 
+ Container rivomesh-failure-7eab3c917e-runner-run-82e36c823e67 Creating 
+ Container rivomesh-failure-7eab3c917e-runner-run-82e36c823e67 Created 
+openjdk version "1.8.0_512"
+OpenJDK Runtime Environment (Temurin)(build 1.8.0_512-b09)
+OpenJDK 64-Bit Server VM (Temurin)(build 25.512-b09, mixed mode)
+ Container rivomesh-failure-7eab3c917e-runner-run-f98f7f7f6fd2 Creating 
+ Container rivomesh-failure-7eab3c917e-runner-run-f98f7f7f6fd2 Created 
+[36m╷[0m
+[36m├─[0m [36mJUnit Platform Suite[0m [32m✔[0m
+[36m├─[0m [36mJUnit Jupiter[0m [32m✔[0m
+[36m│  └─[0m [36mFailureReviewTest[0m [32m✔[0m
+[36m│     ├─[0m [34mstatusDiagnosticsContainNoTransactionValuesAndCorruptionRemainsVisible()[0m [32m✔[0m
+[36m│     ├─[0m [34mforgedLengthsAndSharedRawNormalizedBudgetCannotBypassBoundedRead()[0m [32m✔[0m
+[36m│     ├─[0m [34msnapshotOrPreparationFaultDoesNotIdentifyTheNextIncrementalTransaction()[0m [32m✔[0m
+[36m│     ├─[0m [34mconcurrentResumeAcknowledgeAndCollectionCannotMixInspectionStates()[0m [32m✔[0m
+[36m│     ├─[0m [34mmissingDiagnosticTableAndOlderWriterNewGenerationRemainUnknown()[0m [32m✔[0m
+[36m│     ├─[0m [34mstateGenerationMissingHeadAndLegacyDiagnosticsNeverGrantPermission()[0m [32m✔[0m
+[36m│     ├─[0m [34mfailedDiagnosticPersistenceRollsBackPauseAndErrorGeneration()[0m [32m✔[0m
+[36m│     ├─[0m [34mrestartRetainsAtomicFailureAndReadsWithoutAdvancingOrNormalizing()[0m [32m✔[0m
+[36m│     ├─[0m [34mmissingHistoryAndMislocatedDiagnosticRefuseWithoutAcknowledge()[0m [32m✔[0m
+[36m│     └─[0m [34mrawNormalizedAndDiagnosticCorruptionAreDistinctRefusals()[0m [32m✔[0m
+[36m└─[0m [36mJUnit Vintage[0m [32m✔[0m
+
+Test run finished after 3490 ms
+[         4 containers found      ]
+[         0 containers skipped    ]
+[         4 containers started    ]
+[         0 containers aborted    ]
+[         4 containers successful ]
+[         0 containers failed     ]
+[        10 tests found           ]
+[         0 tests skipped         ]
+[        10 tests started         ]
+[         0 tests aborted         ]
+[        10 tests successful      ]
+[         0 tests failed          ]
+
+ Container rivomesh-failure-7eab3c917e-database-1 Stopping 
+ Container rivomesh-failure-7eab3c917e-database-1 Stopped 
+ Container rivomesh-failure-7eab3c917e-database-1 Removing 
+ Container rivomesh-failure-7eab3c917e-database-1 Removed 
+ Network rivomesh-failure-7eab3c917e_default Removing 
+ Network rivomesh-failure-7eab3c917e_default Removed 

@@ -1,0 +1,10 @@
+package io.github.rivomesh.cdc;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+class RowValuesTest {
+    TableSchema schema(TableSchema.Type type,int precision,int scale){TableSchema t=new TableSchema();t.id="table";t.database="source";t.name="values";TableSchema.Column c=new TableSchema.Column();c.name="id";c.type=type;c.precision=precision;c.scale=scale;t.columns.add(c);t.primaryKey.add(c.name);return t;}
+    @Test void maliciousNumericExponentsAreRejectedBeforeExpandingToPlainText(){TableSchema t=schema(TableSchema.Type.DECIMAL,65,30);for(String value:Arrays.asList("1e2147483647","1e-2147483647"))assertEquals("VALIDATION_NUMERIC_RANGE",assertThrows(IllegalArgumentException.class,()->RowValues.canonical(t,Collections.singletonList(Cell.value(value)))).getMessage());}
+    @Test void integerBoundariesAndNumericEquivalentKeysArePreserved(){TableSchema signed=schema(TableSchema.Type.INT64,0,0),unsigned=schema(TableSchema.Type.UINT64,0,0);assertEquals(RowValues.identity(signed,Collections.singletonList(Cell.value("1")),null),RowValues.identity(signed,Collections.singletonList(Cell.value("1.00")),null));assertDoesNotThrow(()->RowValues.canonical(signed,Collections.singletonList(Cell.value("-9223372036854775808"))));assertDoesNotThrow(()->RowValues.canonical(unsigned,Collections.singletonList(Cell.value("18446744073709551615"))));assertThrows(IllegalArgumentException.class,()->RowValues.canonical(signed,Collections.singletonList(Cell.value("9223372036854775808"))));assertThrows(IllegalArgumentException.class,()->RowValues.canonical(unsigned,Collections.singletonList(Cell.value("-1"))));}
+    @Test void fractionalOnlyDecimalAllowsZeroAndFullDeclaredScale(){TableSchema t=schema(TableSchema.Type.DECIMAL,2,2);assertDoesNotThrow(()->RowValues.canonical(t,Collections.singletonList(Cell.value("0.00"))));assertDoesNotThrow(()->RowValues.canonical(t,Collections.singletonList(Cell.value("0.99"))));assertThrows(IllegalArgumentException.class,()->RowValues.canonical(t,Collections.singletonList(Cell.value("1.00"))));}
+}

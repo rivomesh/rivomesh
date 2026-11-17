@@ -1,0 +1,52 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187694325 bytes; SHA-256 02772549fab60a7271bf8ea10d372f2c6a1dff73b71397fe6f7715cb98016349
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Network rivomesh-validation-barrier-40241_default Creating 
+ Network rivomesh-validation-barrier-40241_default Creating 
+ Network rivomesh-validation-barrier-40241_default Created 
+ Network rivomesh-validation-barrier-40241_default Created 
+ Container rivomesh-validation-barrier-40241-postgres-1 Creating 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Creating 
+ Container rivomesh-validation-barrier-40241-mysql-1 Creating 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Created 
+ Container rivomesh-validation-barrier-40241-mysql-1 Created 
+ Container rivomesh-validation-barrier-40241-postgres-1 Created 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-40241-postgres-1 Starting 
+ Container rivomesh-validation-barrier-40241-mysql-1 Starting 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-40241-postgres-1 Started 
+ Container rivomesh-validation-barrier-40241-mysql-1 Started 
+ Container rivomesh-validation-barrier-40241-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-40241-postgres-1 Waiting 
+ Container rivomesh-validation-barrier-40241-postgres-1 Healthy 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Healthy 
+ Container rivomesh-validation-barrier-40241-mysql-1 Healthy 
+ Container rivomesh-validation-barrier-40241-tests-run-082337e4a5f8 Creating 
+ Container rivomesh-validation-barrier-40241-tests-run-082337e4a5f8 Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+VALIDATION_JOURNAL_PROFILE: LOCAL/H2
+Exception in thread "main" java.lang.IllegalStateException: TARGET_COLUMN_TYPE_MISMATCH
+	at io.rivomesh.cdc.JdbcSink.validateShape(JdbcSink.java:174)
+	at io.rivomesh.cdc.JdbcSink.prepare(JdbcSink.java:205)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.typedReaders(ValidationBarrierAcceptance.java:100)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.run(ValidationBarrierAcceptance.java:170)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.main(ValidationBarrierAcceptance.java:184)
+Caused by: java.lang.IllegalStateException: column=c2, expected=FLOAT32, actual=double, jdbc=8, precision=22, scale=0
+	... 5 more
+
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-40241-postgres-1 Stopping 
+ Container rivomesh-validation-barrier-40241-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-40241-postgres-1 Stopped 
+ Container rivomesh-validation-barrier-40241-postgres-1 Removing 
+ Container rivomesh-validation-barrier-40241-postgres-1 Removed 
+ Container rivomesh-validation-barrier-40241-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-40241-mysql-1 Removing 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Stopped 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Removing 
+ Container rivomesh-validation-barrier-40241-mysql-1 Removed 
+ Container rivomesh-validation-barrier-40241-mysql-target-1 Removed 
+ Network rivomesh-validation-barrier-40241_default Removing 
+ Network rivomesh-validation-barrier-40241_default Removed 

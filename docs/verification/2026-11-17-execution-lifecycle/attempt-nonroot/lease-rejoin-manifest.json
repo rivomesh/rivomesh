@@ -1,0 +1,18 @@
+{
+  "artifactSha256": "aa17cf5b6d9c21e302af818c5f48ff7c46bbb32d3a532ab1fa0491abe43403bf",
+  "status": "FAIL",
+  "checks": [
+    "Agent command opens probes only; management roles are visible through controller sessions",
+    "Every controller and Agent runs as UID10001 with independent named data volumes",
+    "Controllers create Agent-owned task and share revision",
+    "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+    "Cross-database transaction insert/update/delete and keyless multiplicity",
+    "Actual Agent/Worker CDC continues after SIGKILL of one and then every management container"
+  ],
+  "executionProfile": "SEPARATE_AGENT",
+  "controlProduct": "POSTGRESQL",
+  "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+  "runtimeImage": "rivomesh:execution-admission-aa17cf5b6d9c",
+  "failureType": "AssertionError",
+  "cleanupExitCode": 0
+}

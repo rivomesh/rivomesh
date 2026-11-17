@@ -1,0 +1,28 @@
+PASS Agent command opens probes only; management roles are visible through controller sessions
+PASS Every controller and Agent runs as UID10001 with independent named data volumes
+PASS Controllers create Agent-owned task and share revision
+PASS Two source databases to two targets; snapshot keyed/keyless/JSON/generated values
+PASS Cross-database transaction insert/update/delete and keyless multiplicity
+PASS Actual Agent/Worker CDC continues after SIGKILL of one and then every management container
+PASS Management rejoin observes the original Agent and committed rows without moving owner identity
+PASS LOCAL journal CDC retains the same Worker during control-store outage; management refuses control and recovers after lease expiry
+PASS Native SQL constraint error pauses target; explicit generation-bound replay catches up
+PASS Offline STOP survives SIGKILL/reopen and prevents restoring old RUNNING intent
+PASS Original private journal resumes after owner restart; missed binlog data catches up
+PASS Masked configuration references, remote preview/edit and shared history across entries
+PASS Reviewed configuration history restores as a new globally active version
+Traceback (most recent call last):
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 329, in <module>
+    validation, _ = action('VALIDATE', complete=not args.initial_owner_artifact, validation={'targets': ['pg', 'my'], 'gateMillis': 15000, 'sourceMillis': 60000, 'targetMillis': 30000})
+                    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 170, in action
+    wait(lambda: outcome(request), name)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 65, in wait
+    result = check()
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 170, in <lambda>
+    wait(lambda: outcome(request), name)
+                 ~~~~~~~^^^^^^^^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/global-control-pipeline.py", line 158, in outcome
+    raise AssertionError('Command failed: ' + request + '/' + str(operation.get('code')))
+AssertionError: Command failed: gc_validate_038c7445b3ef428cabee8e5e41bb4e6a/VALIDATION_BARRIER_MOVED

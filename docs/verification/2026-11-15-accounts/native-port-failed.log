@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/accounts-run.py", line 167, in <module>
+    main()
+    ~~~~^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/accounts-run.py", line 105, in main
+    active.write_text(prefix + '/new.jar\n'); command('docker', 'start', name); ready(root_token)
+                                                                                ~~~~~^^^^^^^^^^^^
+  File "/Users/jiayin/workspace/dev/cscec/java/rivomesh/tests/accounts-run.py", line 83, in ready
+    raise AssertionError('Controller readiness timeout')
+AssertionError: Controller readiness timeout

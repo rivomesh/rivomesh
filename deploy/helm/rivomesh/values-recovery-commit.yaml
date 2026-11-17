@@ -1,0 +1,7 @@
+# Overlay for every controller/Agent. Requires normal STOPPED quiescence before protocol6.
+cluster:
+  enabled: true
+  sharedAccess: true
+  sharedTasks: true
+  recoveryReview: true
+  recoveryCommit: true

@@ -1,0 +1,65 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment: {MYSQL_ROOT_PASSWORD: "Sync@Test123", MYSQL_ROOT_HOST: "%"}
+    command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-transaction-compression=OFF", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-replica-updates=ON"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  mysql-target:
+    image: mysql:8.4
+    environment: {MYSQL_ROOT_PASSWORD: "Sync@Test123", MYSQL_ROOT_HOST: "%"}
+    command: ["--server-id=90"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  mysql-journal:
+    image: mysql:8.4
+    environment: {MYSQL_ROOT_PASSWORD: "Sync@Test123", MYSQL_ROOT_HOST: "%"}
+    command: ["--server-id=91"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD='Sync@Test123' mysql -h127.0.0.1 -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  gaussdb:
+    image: opengauss/opengauss-server:latest
+    shm_size: 512mb
+    environment:
+      GS_PASSWORD: Sync@Test123
+      GS_DB: sync_test
+      GS_USERNAME: sync_test
+      GS_HOST_AUTH_METHOD: sha256
+      OTHER_PG_CONF: password_encryption_type = 2
+    healthcheck:
+      test: ["CMD-SHELL", "su - omm -c 'gsql -d sync_test -c \"SELECT 1\"' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  postgres:
+    image: postgres:17.12
+    environment: {POSTGRES_DB: sync_test, POSTGRES_USER: sync_test, POSTGRES_PASSWORD: "Sync@Test123"}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sync_test -d sync_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+      RIVOMESH_VALIDATION_WAIT_SECONDS: ${RIVOMESH_VALIDATION_WAIT_SECONDS:-90}
+      RIVOMESH_TEST_ARTIFACT: ${RIVOMESH_TEST_ARTIFACT:-sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar}
+      RIVOMESH_MANAGED_ONLY: ${RIVOMESH_MANAGED_ONLY:-false}
+      RIVOMESH_VALIDATION_DIR: ${RIVOMESH_VALIDATION_DIR:-/project/target/validation-manual}
+      RIVOMESH_VALIDATION_JOURNAL: ${RIVOMESH_VALIDATION_JOURNAL:-LOCAL}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+volumes:
+  maven-cache:

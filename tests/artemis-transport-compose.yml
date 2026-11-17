@@ -1,0 +1,48 @@
+services:
+  artemis-init:
+    image: apache/artemis:2.57.0
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chown -R artemis:artemis /var/lib/artemis-instance/data"]
+    volumes:
+      - artemis-data:/var/lib/artemis-instance/data
+  artemis-store:
+    image: apache/artemis:2.57.0
+    user: "0:0"
+    entrypoint: ["sh"]
+    volumes:
+      - artemis-data:/store
+      - artemis-backup:/backup
+  artemis:
+    image: apache/artemis:2.57.0
+    environment:
+      ARTEMIS_USER: rivomesh
+      ARTEMIS_PASSWORD: Artemis@Test123
+      ANONYMOUS_LOGIN: "false"
+      EXTRA_ARGS: --http-host 0.0.0.0 --relax-jolokia --no-autotune
+      JAVA_ARGS_APPEND: -Xms128m -Xmx512m -XX:MaxDirectMemorySize=128m
+    volumes:
+      - ./artemis-broker.xml:/var/lib/artemis-instance/etc-override/broker.xml:ro
+      - artemis-data:/var/lib/artemis-instance/data
+    command: ["run"]
+    depends_on:
+      artemis-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "./bin/artemis check node --url tcp://127.0.0.1:61616 --user rivomesh --password Artemis@Test123 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 15s
+      retries: 40
+  tests:
+    image: maven:3.9-eclipse-temurin-8
+    working_dir: /project
+    environment:
+      MAVEN_OPTS: -Xmx768m
+      RIVOMESH_ARTEMIS_RESTART_DIR: /project/target/broker-tests/${RIVOMESH_TEST_PROJECT:-artemis-manual}
+    volumes:
+      - ..:/project
+      - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
+    depends_on:
+      artemis: {condition: service_healthy}
+volumes:
+  maven-cache:
+  artemis-data:
+  artemis-backup:

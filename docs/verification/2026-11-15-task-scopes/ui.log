@@ -1,0 +1,184 @@
+TAP version 13
+# Subtest: login keeps the token out of persistent browser storage and renders availability honestly
+ok 1 - login keeps the token out of persistent browser storage and renders availability honestly
+  ---
+  duration_ms: 136.807541
+  type: 'test'
+  ...
+# Subtest: viewer and operator accounts show their role and cannot create pipelines
+ok 2 - viewer and operator accounts show their role and cannot create pipelines
+  ---
+  duration_ms: 43.2365
+  type: 'test'
+  ...
+# Subtest: an old unauthorized response cannot clear a newer authenticated session
+ok 3 - an old unauthorized response cannot clear a newer authenticated session
+  ---
+  duration_ms: 26.3835
+  type: 'test'
+  ...
+# Subtest: operation history and creation attribution use escaped authenticated identity text
+ok 4 - operation history and creation attribution use escaped authenticated identity text
+  ---
+  duration_ms: 14.926709
+  type: 'test'
+  ...
+# Subtest: wizard validates, masks its plan, creates a stopped task and never auto-starts
+ok 5 - wizard validates, masks its plan, creates a stopped task and never auto-starts
+  ---
+  duration_ms: 32.198584
+  type: 'test'
+  ...
+# Subtest: v3 wizard maps two databases to independent targets and masks every credential
+ok 6 - v3 wizard maps two databases to independent targets and masks every credential
+  ---
+  duration_ms: 32.637459
+  type: 'test'
+  ...
+# Subtest: Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+ok 7 - Kafka wizard saves a dedicated topic and resets its URL when switching to v2
+  ---
+  duration_ms: 29.412709
+  type: 'test'
+  ...
+# Subtest: source snapshot preparation is distinct from destination confirmation
+ok 8 - source snapshot preparation is distinct from destination confirmation
+  ---
+  duration_ms: 24.519333
+  type: 'test'
+  ...
+# Subtest: Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+ok 9 - Pulsar wizard saves persistent topic, cluster and admin endpoint with product-scoped credentials
+  ---
+  duration_ms: 28.332167
+  type: 'test'
+  ...
+# Subtest: Redis wizard saves a durable stream without leaking hidden fields from another broker
+ok 10 - Redis wizard saves a durable stream without leaking hidden fields from another broker
+  ---
+  duration_ms: 27.085916
+  type: 'test'
+  ...
+# Subtest: v3 target recovery carries its own generation while global source errors stay distinct
+ok 11 - v3 target recovery carries its own generation while global source errors stay distinct
+  ---
+  duration_ms: 16.732125
+  type: 'test'
+  ...
+# Subtest: retryable destination failures remain automatic and visible without a manual resume action
+ok 12 - retryable destination failures remain automatic and visible without a manual resume action
+  ---
+  duration_ms: 13.002416
+  type: 'test'
+  ...
+# Subtest: destination cards show consumer resources and delivery guarantees as escaped text
+ok 13 - destination cards show consumer resources and delivery guarantees as escaped text
+  ---
+  duration_ms: 13.908208
+  type: 'test'
+  ...
+# Subtest: RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+ok 14 - RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials
+  ---
+  duration_ms: 26.121333
+  type: 'test'
+  ...
+# Subtest: Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+ok 15 - Artemis wizard selects a retained queue profile and keeps broker authentication enabled
+  ---
+  duration_ms: 26.276334
+  type: 'test'
+  ...
+# Subtest: message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+ok 16 - message wizard exposes its delivery contract, masks tokens, and keeps v2 SQL-only
+  ---
+  duration_ms: 24.640542
+  type: 'test'
+  ...
+# Subtest: resume carries the precise error generation and untrusted names remain text
+ok 17 - resume carries the precise error generation and untrusted names remain text
+  ---
+  duration_ms: 12.864917
+  type: 'test'
+  ...
+# Subtest: ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+ok 18 - ClickHouse wizard exposes versioned visibility and keeps broker fields disabled
+  ---
+  duration_ms: 19.552417
+  type: 'test'
+  ...
+# Subtest: operation results expose index decisions as safe text
+ok 19 - operation results expose index decisions as safe text
+  ---
+  duration_ms: 13.159417
+  type: 'test'
+  ...
+# Subtest: Classic wizard requires broker/admin URL and explains consumer selector
+ok 20 - Classic wizard requires broker/admin URL and explains consumer selector
+  ---
+  duration_ms: 18.414542
+  type: 'test'
+  ...
+# Subtest: configuration editing preserves opaque credentials and requires preview before save
+ok 21 - configuration editing preserves opaque credentials and requires preview before save
+  ---
+  duration_ms: 18.596708
+  type: 'test'
+  ...
+# Subtest: migration previews and running tasks cannot apply configuration
+ok 22 - migration previews and running tasks cannot apply configuration
+  ---
+  duration_ms: 11.770167
+  type: 'test'
+  ...
+# Subtest: old preview responses cannot overwrite a newer editor draft
+ok 23 - old preview responses cannot overwrite a newer editor draft
+  ---
+  duration_ms: 13.930292
+  type: 'test'
+  ...
+# Subtest: save retries retain the same request identity and restore requires reviewing changes
+ok 24 - save retries retain the same request identity and restore requires reviewing changes
+  ---
+  duration_ms: 16.67
+  type: 'test'
+  ...
+# Subtest: logout and close fence late configuration responses and erase drafts
+ok 25 - logout and close fence late configuration responses and erase drafts
+  ---
+  duration_ms: 14.394333
+  type: 'test'
+  ...
+# Subtest: audit permission, safe rendering, fixed-window pagination and page export
+ok 26 - audit permission, safe rendering, fixed-window pagination and page export
+  ---
+  duration_ms: 38.262542
+  type: 'test'
+  ...
+# Subtest: late audit responses after logout cannot restore security records
+ok 27 - late audit responses after logout cannot restore security records
+  ---
+  duration_ms: 12.812291
+  type: 'test'
+  ...
+# Subtest: audit export refuses a changed retention boundary
+ok 28 - audit export refuses a changed retention boundary
+  ---
+  duration_ms: 14.808542
+  type: 'test'
+  ...
+# Subtest: scoped session displays exact grant count and clears grants on logout
+ok 29 - scoped session displays exact grant count and clears grants on logout
+  ---
+  duration_ms: 12.118292
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1227.782416

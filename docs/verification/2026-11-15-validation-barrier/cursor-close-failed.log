@@ -1,0 +1,105 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 187653921 bytes; SHA-256 08061462edfc04df347bd8bcae70ac8d8074f74d5670695b03ba6b0c90385bd0
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Network rivomesh-validation-barrier-91378_default Creating 
+ Network rivomesh-validation-barrier-91378_default Creating 
+ Network rivomesh-validation-barrier-91378_default Created 
+ Network rivomesh-validation-barrier-91378_default Created 
+ Container rivomesh-validation-barrier-91378-postgres-1 Creating 
+ Container rivomesh-validation-barrier-91378-mysql-1 Creating 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Creating 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Created 
+ Container rivomesh-validation-barrier-91378-mysql-1 Created 
+ Container rivomesh-validation-barrier-91378-postgres-1 Created 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Starting 
+ Container rivomesh-validation-barrier-91378-postgres-1 Starting 
+ Container rivomesh-validation-barrier-91378-mysql-1 Starting 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Started 
+ Container rivomesh-validation-barrier-91378-postgres-1 Started 
+ Container rivomesh-validation-barrier-91378-mysql-1 Started 
+ Container rivomesh-validation-barrier-91378-postgres-1 Waiting 
+ Container rivomesh-validation-barrier-91378-mysql-1 Waiting 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Waiting 
+ Container rivomesh-validation-barrier-91378-postgres-1 Healthy 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Healthy 
+ Container rivomesh-validation-barrier-91378-mysql-1 Healthy 
+ Container rivomesh-validation-barrier-91378-tests-run-691755650a6a Creating 
+ Container rivomesh-validation-barrier-91378-tests-run-691755650a6a Created 
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Picked up JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties
+Exception in thread "main" java.sql.SQLException: Error retrieving record: Unexpected Exception: java.io.IOException message given: Socket is closed.
+
+Nested Stack Trace:
+
+
+** BEGIN NESTED EXCEPTION ** 
+
+java.io.IOException
+MESSAGE: Socket is closed.
+
+STACKTRACE:
+
+java.io.IOException: Socket is closed.
+	at com.mysql.cj.protocol.AbstractSocketConnection.getMysqlInput(AbstractSocketConnection.java:68)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeaderLocal(SimplePacketReader.java:72)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeader(SimplePacketReader.java:54)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeader(SimplePacketReader.java:36)
+	at com.mysql.cj.protocol.a.TimeTrackingPacketReader.readHeader(TimeTrackingPacketReader.java:43)
+	at com.mysql.cj.protocol.a.TimeTrackingPacketReader.readHeader(TimeTrackingPacketReader.java:32)
+	at com.mysql.cj.protocol.a.MultiPacketReader.readHeader(MultiPacketReader.java:45)
+	at com.mysql.cj.protocol.a.MultiPacketReader.readHeader(MultiPacketReader.java:35)
+	at com.mysql.cj.protocol.a.ResultsetRowReader.read(ResultsetRowReader.java:62)
+	at com.mysql.cj.protocol.a.ResultsetRowReader.read(ResultsetRowReader.java:33)
+	at com.mysql.cj.protocol.a.NativeProtocol.read(NativeProtocol.java:1563)
+	at com.mysql.cj.protocol.a.result.ResultsetRowsStreaming.next(ResultsetRowsStreaming.java:208)
+	at com.mysql.cj.protocol.a.result.ResultsetRowsStreaming.close(ResultsetRowsStreaming.java:111)
+	at com.mysql.cj.jdbc.result.ResultSetImpl.realClose(ResultSetImpl.java:1867)
+	at com.mysql.cj.jdbc.result.ResultSetImpl.close(ResultSetImpl.java:552)
+	at io.rivomesh.MysqlConsistentRead$Cursor.close(MysqlConsistentRead.java:100)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.directViews(ValidationBarrierAcceptance.java:60)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.run(ValidationBarrierAcceptance.java:101)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.main(ValidationBarrierAcceptance.java:106)
+
+
+** END NESTED EXCEPTION **
+
+
+	at com.mysql.cj.jdbc.exceptions.SQLError.createSQLException(SQLError.java:121)
+	at com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:113)
+	at com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException(SQLExceptionsMapping.java:122)
+	at com.mysql.cj.jdbc.result.ResultSetImpl.realClose(ResultSetImpl.java:1869)
+	at com.mysql.cj.jdbc.result.ResultSetImpl.close(ResultSetImpl.java:552)
+	at io.rivomesh.MysqlConsistentRead$Cursor.close(MysqlConsistentRead.java:100)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.directViews(ValidationBarrierAcceptance.java:60)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.run(ValidationBarrierAcceptance.java:101)
+	at io.rivomesh.acceptance.ValidationBarrierAcceptance.main(ValidationBarrierAcceptance.java:106)
+Caused by: java.io.IOException: Socket is closed.
+	at com.mysql.cj.protocol.AbstractSocketConnection.getMysqlInput(AbstractSocketConnection.java:68)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeaderLocal(SimplePacketReader.java:72)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeader(SimplePacketReader.java:54)
+	at com.mysql.cj.protocol.a.SimplePacketReader.readHeader(SimplePacketReader.java:36)
+	at com.mysql.cj.protocol.a.TimeTrackingPacketReader.readHeader(TimeTrackingPacketReader.java:43)
+	at com.mysql.cj.protocol.a.TimeTrackingPacketReader.readHeader(TimeTrackingPacketReader.java:32)
+	at com.mysql.cj.protocol.a.MultiPacketReader.readHeader(MultiPacketReader.java:45)
+	at com.mysql.cj.protocol.a.MultiPacketReader.readHeader(MultiPacketReader.java:35)
+	at com.mysql.cj.protocol.a.ResultsetRowReader.read(ResultsetRowReader.java:62)
+	at com.mysql.cj.protocol.a.ResultsetRowReader.read(ResultsetRowReader.java:33)
+	at com.mysql.cj.protocol.a.NativeProtocol.read(NativeProtocol.java:1563)
+	at com.mysql.cj.protocol.a.result.ResultsetRowsStreaming.next(ResultsetRowsStreaming.java:208)
+	at com.mysql.cj.protocol.a.result.ResultsetRowsStreaming.close(ResultsetRowsStreaming.java:111)
+	at com.mysql.cj.jdbc.result.ResultSetImpl.realClose(ResultSetImpl.java:1867)
+	... 5 more
+
+ Container rivomesh-validation-barrier-91378-postgres-1 Stopping 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Stopping 
+ Container rivomesh-validation-barrier-91378-mysql-1 Stopping 
+ Container rivomesh-validation-barrier-91378-postgres-1 Stopped 
+ Container rivomesh-validation-barrier-91378-postgres-1 Removing 
+ Container rivomesh-validation-barrier-91378-postgres-1 Removed 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Stopped 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Removing 
+ Container rivomesh-validation-barrier-91378-mysql-1 Stopped 
+ Container rivomesh-validation-barrier-91378-mysql-1 Removing 
+ Container rivomesh-validation-barrier-91378-mysql-target-1 Removed 
+ Container rivomesh-validation-barrier-91378-mysql-1 Removed 
+ Network rivomesh-validation-barrier-91378_default Removing 
+ Network rivomesh-validation-barrier-91378_default Removed 

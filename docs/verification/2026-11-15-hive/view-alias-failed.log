@@ -1,0 +1,39 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 184132535 bytes; SHA-256 cfeacd4cb014e4693a541c2ccafda745f33f63440b709e15d9e1cc2f83c858fb
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Container rivomesh-hive-dev-501-hive-1 Running 
+ Container rivomesh-hive-dev-501-hive-1 Waiting 
+ Container rivomesh-hive-dev-501-hive-1 Healthy 
+ Container rivomesh-hive-dev-501-tests-run-fc5ff15f842a Creating 
+ Container rivomesh-hive-dev-501-tests-run-fc5ff15f842a Created 
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+Exception in thread "main" io.rivomesh.SyncFailure: HIVE_SQL
+	at io.rivomesh.cdc.HiveSqlClient.classified(HiveSqlClient.java:28)
+	at io.rivomesh.cdc.HiveSqlClient.execute(HiveSqlClient.java:30)
+	at io.rivomesh.cdc.HiveMaterializer.create(HiveMaterializer.java:91)
+	at io.rivomesh.cdc.HiveMaterializer.publish(HiveMaterializer.java:101)
+	at io.rivomesh.cdc.MessageSink.send(MessageSink.java:40)
+	at io.rivomesh.cdc.MessageSink.prepare(MessageSink.java:50)
+	at io.rivomesh.cdc.HiveMaterializerAcceptance.snapshot(HiveMaterializerAcceptance.java:18)
+	at io.rivomesh.cdc.HiveMaterializerAcceptance.main(HiveMaterializerAcceptance.java:30)
+Caused by: org.apache.hive.service.cli.HiveSQLException: Error while compiling statement: FAILED: ParseException line 1:423 cannot recognize input near 'AS' '_rivomesh_rank' 'FROM' in selection target
+	at org.apache.hive.jdbc.Utils.verifySuccess(Utils.java:413)
+	at org.apache.hive.jdbc.Utils.verifySuccessWithInfo(Utils.java:399)
+	at org.apache.hive.jdbc.HiveStatement.runAsyncOnServer(HiveStatement.java:348)
+	at org.apache.hive.jdbc.HiveStatement.execute(HiveStatement.java:287)
+	at io.rivomesh.transport.hive.HiveTransport.lambda$execute$2(HiveTransport.java:56)
+	at io.rivomesh.transport.hive.HiveTransport.context(HiveTransport.java:44)
+	at io.rivomesh.transport.hive.HiveTransport.execute(HiveTransport.java:56)
+	... 7 more
+
+ Container rivomesh-hive-dev-501-hive-1 Stopping 
+ Container rivomesh-hive-dev-501-hive-1 Stopped 
+ Container rivomesh-hive-dev-501-hive-1 Removing 
+ Container rivomesh-hive-dev-501-hive-1 Removed 
+ Volume rivomesh-hive-dev-501_hive-meta Removing 
+ Network rivomesh-hive-dev-501_default Removing 
+ Volume rivomesh-hive-dev-501_hive-data Removing 
+ Volume rivomesh-hive-dev-501_hive-meta Removed 
+ Volume rivomesh-hive-dev-501_hive-data Removed 
+ Network rivomesh-hive-dev-501_default Removed 

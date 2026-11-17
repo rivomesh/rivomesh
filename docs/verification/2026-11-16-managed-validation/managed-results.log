@@ -1,0 +1,4 @@
+{"cancelledAttempt": "VALIDATION_CANCELLED", "completedReports": 2, "controllerDesired": "PAUSED", "differences": 0, "mode": "MYSQL", "operations": 6, "retriedSameReport": true, "stagedRows": [14, 16], "validationRequests": 2}
+{"cancelledAttempt": "VALIDATION_CANCELLED", "completedReports": 2, "controllerDesired": "PAUSED", "differences": 0, "mode": "LOCAL", "operations": 6, "retriedSameReport": true, "stagedRows": [14, 16], "validationRequests": 2}
+{"cancelledAttempt": "VALIDATION_CANCELLED", "completedReports": 2, "controllerDesired": "PAUSED", "differences": 0, "mode": "POSTGRESQL", "operations": 6, "retriedSameReport": true, "stagedRows": [14, 16], "validationRequests": 2}
+{"cancelledAttempt": "VALIDATION_CANCELLED", "completedReports": 2, "controllerDesired": "PAUSED", "differences": 0, "mode": "GAUSS", "operations": 6, "retriedSameReport": true, "stagedRows": [14, 16], "validationRequests": 2}

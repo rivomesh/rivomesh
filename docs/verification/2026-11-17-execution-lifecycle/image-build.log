@@ -1,0 +1,46 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 669B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:8-jre-jammy
+#2 ...
+
+#3 [auth] library/eclipse-temurin:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:8-jre-jammy
+#2 DONE 1.9s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/library/eclipse-temurin:8-jre-jammy@sha256:4fa1fa2aa3cd0b12fbecf5df0efdee934088c2e724d2a105d2b29ea7930f4c4f
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 187.97MB 2.1s done
+#6 DONE 2.1s
+
+#7 [2/5] WORKDIR /app
+#7 CACHED
+
+#8 [3/5] RUN groupadd --gid 10001 rivomesh && useradd --uid 10001 --gid 10001 --no-create-home rivomesh     && mkdir -p /app/data/tasks /app/data/controller /app/config     && chown -R 10001:10001 /app
+#8 CACHED
+
+#9 [4/5] COPY --chown=10001:10001 rivomesh.jar /app/rivomesh.jar
+#9 DONE 2.3s
+
+#10 [5/5] COPY --chown=10001:10001 platform.yml /app/config/platform.yml
+#10 DONE 0.0s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 0.3s done
+#11 writing image sha256:82f6319042eae518968c30a2bd1dbb3b97181bf8a11eda74d0faf167dc78c04f done
+#11 naming to docker.io/library/rivomesh:execution-admission-aa17cf5b6d9c done
+#11 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/tcryp0af7xyiwg884k9xml9w9

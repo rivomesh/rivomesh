@@ -1,0 +1,27 @@
+[Unit]
+Description=Rivomesh migration workspace
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rivomesh
+Group=rivomesh
+WorkingDirectory=/opt/rivomesh
+EnvironmentFile=/etc/rivomesh/platform.env
+Environment=JAVA_TOOL_OPTIONS=-Xmx512m
+ExecStart=/usr/bin/java -jar /opt/rivomesh/rivomesh.jar serve /etc/rivomesh/platform.yml
+Restart=on-failure
+RestartSec=5
+StateDirectory=rivomesh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/rivomesh
+KillMode=control-group
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

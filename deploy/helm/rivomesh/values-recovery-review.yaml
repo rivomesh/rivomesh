@@ -1,0 +1,7 @@
+# Overlay for all controller/Agent releases. Requires normal STOPPED quiescence before protocol5.
+# Supply the same control-store/task-key Secret as the existing global profile.
+cluster:
+  enabled: true
+  sharedAccess: true
+  sharedTasks: true
+  recoveryReview: true

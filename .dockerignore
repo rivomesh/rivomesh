@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+**/target
+data
+config/local.yml
+config/tasks
+*.log
+**/node_modules

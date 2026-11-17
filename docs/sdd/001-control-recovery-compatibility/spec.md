@@ -1,0 +1,155 @@
+# Rivomesh SDD需求基线与未完成事项
+
+RM-SDD-001 · v0.8 · 2026-11-17 · IMPLEMENTING
+
+实施中：48项持续追踪，9项DONE、33项PARTIAL、6项NEW，余39项未闭环。RC-02事务审阅及RC-05已提交事务确认限定档案已验收；自动接管、跳过、补偿和完整兼容矩阵继续追踪。
+
+[基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
+
+## 多节点统一控制
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| CP-01 | P0 / DONE | 统一节点注册与状态 | 共享节点目录已通过PostgreSQL/MySQL双节点、kill/重开及控制库中断验收；任务权威/远端命令仍属CP-02/03。 |
+| CP-02 | P0 / PARTIAL | 全局任务、配置与操作权威状态 | 可选固定owner全局HTTP/界面、共享配置及历史已接入；旧任务升级导入、完整业务及规模验收仍未完成。 |
+| CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
+| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已有Worker租约/epoch，缺少统一节点调度、远端生命周期和滚动升级协议。 |
+| CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。 |
+| CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
+
+## 登录状态保持
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| SE-01 | P0 / DONE | 刷新后恢复登录态 | 已完成单控制器刷新/新页面恢复；跨控制器连续性仍属SE-04。 |
+| SE-02 | P0 / DONE | 会话期限、退出和撤销 | 已完成期限、退出、目录修订撤销及可配置记住浏览器；当前内存存储重启失效。 |
+| SE-03 | P0 / DONE | 安全会话传输和CSRF防护 | 已完成受保护Cookie、Origin/CSRF及TLS代理实测；生产TLS由代理终止。 |
+| SE-04 | P0 / DONE | 跨控制节点的会话连续性 | 已通过PostgreSQL/MySQL共享会话双节点、HTTPS、撤销、kill/重开及存储中断恢复验收；全局任务控制仍属CP-02/03。 |
+| SE-05 | P1 / DONE | CLI/API兼容及身份冲突规则 | 已完成Bearer兼容、不回退/身份冲突规则、权限重验、退出竞态及自身轮换。 |
+
+## 人工恢复、跳过与补数据
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| RC-01 | P0 / PARTIAL | 按采集阶段区分故障 | 首次目标准备/快照及增量投递阶段已持久化并通过双入口真实故障/重启验收；完整源连接/读取/解码/DDL阶段及人工操作诊断仍待补。 |
+| RC-02 | P0 / DONE | 失败事务检查与原始证据留存 | 已验收MySQL8.4、固定原Agent/LOCAL日志、PG/MySQL控制库的ADMIN完整事务审阅及持久证据：位置/历史列/镜像、授权分页、重启及日志GC后可读。自动证据目录管理、其他档案、跨Agent迁移与执行语义另行追踪。 |
+| RC-03 | P0 / PARTIAL | 目标应用阶段按完整事务跳过 | 完整事务跳过计划、审批绑定和SKIPPED回执模型已编码，6项模型测试通过；目标原子提交、跨节点操作、取消/恢复和界面仍在开发，尚无可用跳过功能。 |
+| RC-04 | P0 / NEW | 采集/解码阶段的受控缺口恢复 | 目标跳过不能修复尚未形成完整事件的源读取或解析故障。 |
+| RC-05 | P0 / DONE | 不确定提交与断点核对 | 协议6原Agent/LOCAL日志、PG/MySQL控制库限定档案已验收：全任务暂停、新证据、原生围栏、管理员跨入口确认、ACK/回执原子提交及幂等重试，保持原暂停。跳过、补偿和其他完整矩阵另行追踪。 |
+| RC-06 | P0 / NEW | 失败事务前镜像补偿 | 已有共同校验点修复，尚不能让落后的失败目标回到原事务可重放状态。 |
+| RC-07 | P0 / PARTIAL | 界面手工补数据与修正 | 已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。 |
+| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 准备计划、格式4及缺口存储/未完成恢复拦截已编码；原有日志与恢复兼容回归40项通过。新缺口链路、原生回执核对、真实水位和查询界面尚未验收。 |
+| RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。 |
+| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | SQL、分析库、消息队列一致性协议不同，不能复用一个伪事务实现。 |
+
+## 源数据库兼容
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| SO-01 | P0 / PARTIAL | 多源协议与能力配置 | 事件/位置SPI已有，真实源工厂与向导仍以MySQL为主。 |
+| SO-02 | P1 / PARTIAL | MySQL 5.7 完整支持档案 | 有5.7.44基础链路记录，未覆盖当前平台全部必要对象、恢复和运行时组合。 |
+| SO-03 | P1 / PARTIAL | MySQL 8.0 当前V3能力补验 | 有8.0.46历史V2/HA记录，不能直接作为当前V3全功能验收。 |
+| SO-04 | P1 / NEW | MySQL 8.2 新增兼容与验收 | 未发现8.2专用完整真实验收记录，不能用8.0/8.4代替。 |
+| SO-05 | P1 / PARTIAL | MySQL 8.4 扩展兼容与回归 | 8.4已有代表性V3/恢复证据，但不是所有日志特性、认证、拓扑和目标组合。 |
+| SO-06 | P1 / NEW | PostgreSQL 源适配器 | 能力目录仅PLANNED，PG目标驱动不等于PG源。 |
+| SO-07 | P1 / NEW | Oracle 源适配器 | 能力目录仅PLANNED，尚无原生全量/增量实现。 |
+
+## Java运行时兼容
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| JV-01 | P0 / PARTIAL | Java 8/11/17/21/25 可运行发布 | 主代码Java8兼容且有旧包10项SQL矩阵，当前全功能发布未覆盖。 |
+| JV-02 | P1 / PARTIAL | 源/目标/恢复跨JDK矩阵 | 已有十项只覆盖单主键ASCII表和PG目标，不覆盖全部连接器。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商SDK隔离和完整包检查，缺全部JDK组合验证。 |
+| JV-04 | P1 / NEW | 多JDK部署及混合版本升级 | 现有基准可选JRE，生产发布/集群升级策略未完整验收。 |
+
+## 完整文档
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| DO-01 | P0 / PARTIAL | 双语SDD基线与范围可追踪 | 本轮建立v0.5基线；详细模块设计、规格变更管理和实现证据闭环仍需完成。 |
+| DO-02 | P1 / PARTIAL | 四类部署与多节点运维文档 | 现有Linux/Docker/Helm/原生K8s文件未覆盖新集群控制与会话模型。 |
+| DO-03 | P1 / PARTIAL | 恢复场景和FAQ完整手册 | 现有校验/共同点修复FAQ不能覆盖新跳过、补数据与跨节点故障。 |
+| DO-04 | P1 / PARTIAL | 配置/API/兼容性与升级文档 | 已有部分手册，缺新接口与统一源/目标/JDK档案索引。 |
+| DO-05 | P1 / PARTIAL | 文档和证据发布门禁 | 已有验收归档/哈希及预览检查，缺覆盖所有需求的统一门禁。 |
+
+## 历史范围合并保留
+
+| ID | 优先级/状态 | 需求 | 尚缺内容 |
+|---|---|---|---|
+| LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | openGauss/达梦/金仓/GBase8c为首批档案；分布式GaussDB、OceanBase完整恢复及GBase8a/8s等未完成。 |
+| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 当前首用目标要求为空，修复成功也不是业务切换完成。 |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化/恢复已有证据，集群/TLS/权限/容量/全部JDK和新恢复语义未完成。 |
+| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。 |
+| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
+| LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | Helm/原生清单通过静态检查，不能证明真实集群安全。 |
+| LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | 有小规模基准工具，超大事务分片、目录分页、有界缓存与容量标准未完整完成。 |
+| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象、UNIQUE/GSI转换和v2兼容；完整动态DDL、复杂类型及显式迁移/回退仍缺。 |
+| LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。 |
+| LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 本地账号及链式审计已有；OIDC/目录、外部审计锚点、许可证/NOTICE/SBOM/贡献流程仍缺。 |
+
+## 现状证据索引
+
+| ID | 本地证据/实现位置（不代表本项完成） |
+|---|---|
+| CP-01 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [TaskWorker.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskWorker.java) |
+| CP-02 | P0 / PARTIAL | 全局任务、配置与操作权威状态 | 可选固定owner全局HTTP/界面、共享配置及历史已接入；旧任务升级导入、完整业务及规模验收仍未完成。 |
+| CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
+| CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
+| CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。 |
+| CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
+| SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
+| SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |
+| SE-03 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [ConsoleServer.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/ConsoleServer.java) |
+| SE-04 | P0 / DONE | 跨控制节点的会话连续性 | 已通过PostgreSQL/MySQL共享会话双节点、HTTPS、撤销、kill/重开及存储中断恢复验收；全局任务控制仍属CP-02/03。 |
+| SE-05 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [AccessControl.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AccessControl.java) |
+| RC-01 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) |
+| RC-02 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
+| RC-03 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [JdbcSink.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSink.java) |
+| RC-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
+| RC-05 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
+| RC-06 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [common-cut-repair.md](../../../docs/zh-CN/common-cut-repair.md) |
+| RC-07 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [RepairRequest.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java) |
+| RC-08 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
+| RC-09 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
+| RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
+| SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
+| SO-02 | [validation.md](../../../docs/validation.md) / [mysql57-run.sh](../../../tests/mysql57-run.sh) |
+| SO-03 | [validation.md](../../../docs/validation.md) / [matrix.sh](../../../tests/matrix.sh) |
+| SO-04 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [matrix.sh](../../../tests/matrix.sh) |
+| SO-05 | [validation.md](../../../docs/validation.md) / [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) |
+| SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
+| SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |
+| JV-01 | [performance.md](../../../docs/zh-CN/performance.md) / [matrix.json](../../../docs/benchmarks/2026-11-15-runtime/matrix.json) |
+| JV-02 | [performance.md](../../../docs/zh-CN/performance.md) |
+| JV-03 | [verify-artifact.py](../../../tests/verify-artifact.py) / [performance.md](../../../docs/zh-CN/performance.md) |
+| JV-04 | [performance.md](../../../docs/zh-CN/performance.md) / [values.yaml](../../../deploy/helm/rivomesh/values.yaml) |
+| DO-01 | [requirements-and-decisions.md](../../../docs/zh-CN/requirements-and-decisions.md) / [implementation-status.md](../../../docs/zh-CN/implementation-status.md) |
+| DO-02 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) / [console-and-deployment.md](../../../docs/zh-CN/console-and-deployment.md) |
+| DO-03 | [managed-repair.md](../../../docs/zh-CN/managed-repair.md) / [recovery.md](../../../docs/recovery.md) |
+| DO-04 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [validation.md](../../../docs/en/validation.md) |
+| DO-05 | [verify-artifact.py](../../../tests/verify-artifact.py) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
+| LG-01 | [implementation-status.md](../../../docs/zh-CN/implementation-status.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
+| LG-02 | [platform-design.md](../../../docs/zh-CN/platform-design.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
+| LG-03 | [clickhouse-v3.md](../../../docs/zh-CN/clickhouse-v3.md) / [doris-v3.md](../../../docs/zh-CN/doris-v3.md) / [hive-v3.md](../../../docs/zh-CN/hive-v3.md) |
+| LG-04 | [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) / [classic-v3.md](../../../docs/zh-CN/classic-v3.md) |
+| LG-05 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) |
+| LG-06 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) |
+| LG-07 | [performance.md](../../../docs/zh-CN/performance.md) / [benchmark.py](../../../tests/benchmark.py) |
+| LG-08 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [rename-migration.md](../../../docs/zh-CN/rename-migration.md) |
+| LG-09 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
+| LG-10 | [account-management.md](../../../docs/zh-CN/account-management.md) / [security-audit.md](../../../docs/zh-CN/security-audit.md) |
+
+v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/2026-11-17-global-control-foundations/README.md). Historical foundations scope; newer public routing evidence follows.
+
+2026-11-17: fixed-owner public routing/CDC incremental acceptance, with a known maintenance projection gap. [Evidence](../../verification/2026-11-17-global-routing/README.md). CP-02/03 remain PARTIAL.
+
+2026-11-17: [Global maintenance and original UNKNOWN upgrade](../../verification/2026-11-17-global-maintenance/README.md).339application tests,5x143maintenance controls and native business evidence;CP-02/03 remain PARTIAL.
+
+v0.6: CP-07 explicit separated profile accepted;7DONE/33PARTIAL/8NEW,41open. [Evidence](../../verification/2026-11-17-execution-lifecycle/README.md).
+
+v0.7: RC-02 bounded managed review accepted;9DONE/31PARTIAL/8NEW,40open. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
+
+v0.8：RC-05 已提交事务确认限定档案验收；9 DONE、33 PARTIAL、6 NEW，39项未完成。[证据](../../verification/2026-11-17-managed-commit/README.md)。

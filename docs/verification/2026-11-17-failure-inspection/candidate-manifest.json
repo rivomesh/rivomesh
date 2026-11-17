@@ -1,0 +1,14 @@
+{
+  "artifact": "target/release-evidence/failure-diagnostics-final.jar",
+  "artifactSha256": "4a0716e040b09dc3cf9cce9c8eb3dd265a46893070f990bada376bbc72614f64",
+  "bytes": 187937377,
+  "testClasses": "target/release-evidence/failure-diagnostics-tests-4a0716e040b0",
+  "testClassesSha256": "94f7f1288d75d523d080c8db3d0ed5ba2f51ef58e9b8bb2302b91b5e01d54235",
+  "sourceManifest": "target/release-evidence/failure-diagnostics-sources.json",
+  "sourceManifestSha256": "0f1ee6bcd16faf567be432dad918d77f4f482167c8ee22a8d31bb0489664a389",
+  "appTests": 358,
+  "domTests": 78,
+  "sdkReuseManifest": "target/sdk-cache-manifest.json",
+  "scope": "Accepted bounded internal paused-head inspection and UI-safe phases;358app/JAR-first,78DOM,5x27H2 foundation,PG/MySQL9each and real Java8 separated fault/restart;manual skip/patch/gaps remain open",
+  "evidence": "docs/verification/2026-11-17-failure-inspection/README.md"
+}

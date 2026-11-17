@@ -1,0 +1,5 @@
+GLOBAL_CONFIGURATION_NATIVE_ACCEPTED: org.postgresql.Driver cross-entry masked references, owner preview, atomic proposal/command, active-after-owner-success, replay, authenticated history/restore and rejected proposal preserving active; fixture Workers, no public runtime/HTTP/business CDC claim
+ Container rivomesh-owner-d4b6298841-runner-run-d56eb0e68c20 Creating 
+ Container rivomesh-owner-d4b6298841-runner-run-d56eb0e68c20 Created 
+ACTUAL_JAR_FIRST_ARTIFACT_SHA256=565c2b6d34f74c130a2df70a7c3e4566c6e0ae858de34461c65fcb408de20851
+FROZEN_FIXTURE_CLASSES_SHA256=88fd8285ba836d11fcfb5c42420c2b44e86d11c10f09a630bbe9662fb67b2061

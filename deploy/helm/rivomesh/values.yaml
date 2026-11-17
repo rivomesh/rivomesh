@@ -1,0 +1,65 @@
+controllerHeapMiB: 512 # Includes initialized LOCAL journal caches; separate from Worker heaps.
+image:
+  repository: rivomesh
+  tag: 0.1.0-SNAPSHOT
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+auth:
+  mode: CONFIG # MANAGED without bootstrap credentials requires an initialized persistent directory.
+  legacyTokenEnabled: true
+  existingSecret: rivomesh-auth
+  key: token
+  users: [] # Entries: {id, role: VIEWER|OPERATOR|ADMIN, secretRef: {name, key}}
+service:
+  port: 8080
+persistence:
+  existingClaim: ""
+  storageClass: ""
+  size: 10Gi
+platform:
+  maxTasks: 20
+  maxRunningTasks: 2
+  workerHeapMiB: 256
+  controlThreads: 4
+  pollMillis: 3000
+  autoStart: false
+  auditMaxEvents: 1000000
+sessions:
+  enabled: true
+  secureCookie: true
+  rememberBrowser: false
+  idleSeconds: 1800
+  absoluteSeconds: 28800
+  maximum: 1000
+  publicOrigin: "" # Set https://console.example when TLS terminates upstream.
+# Use separate Helm releases/PVCs per node; sharedTasks opts into fixed-owner global control.
+cluster:
+  enabled: false
+  sharedAccess: false # Shared accounts/sessions/audit; task routing remains separate.
+  sharedTasks: false # Opt-in fixed-owner global task control; start with empty task directories.
+  recoveryReview: false # Protocol5 opt-in; stop old members normally before enabling on every node.
+  recoveryCommit: false # Protocol6 opt-in; requires recoveryReview and normally stopped members.
+  separateExecution: false # Protocol4: roles are enforced; old members must stop before upgrade.
+  role: COMBINED # COMBINED, CONTROLLER (no Workers), or AGENT (probes only).
+  taskKeyKey: task-key # Canonical base64-encoded 32-byte key in existingSecret, shared by all members.
+  maximumTasks: 10000
+  maximumCommands: 1000
+  id: rivomesh
+  nodeId: "" # Defaults to the release name, stable across pod recreation.
+  driver: org.postgresql.Driver
+  url: ""
+  namespace: rivomesh_control
+  existingSecret: ""
+  usernameKey: username
+  passwordKey: password
+  advertiseUrl: "" # Defaults to this release's in-cluster Service URL.
+  heartbeatMillis: 2000
+  leaseMillis: 15000
+  maximumNodes: 1000
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

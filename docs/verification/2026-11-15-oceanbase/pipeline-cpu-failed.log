@@ -1,0 +1,66 @@
+ARTIFACT_ACCEPTED: rivomesh-app-0.1.0-SNAPSHOT.jar 145809188 bytes; SHA-256 9a087db5fd615099ab8e780b2bde70c43b2d0f232961d8580134d119285ee593
+PREBUILT_INPUTS_ACCEPTED: focused pipeline rerun; full Maven regression remains separate
+ Volume rivomesh-oceanbase-dev-429_ob-data Creating 
+ Volume rivomesh-oceanbase-dev-429_ob-data Creating 
+ Volume rivomesh-oceanbase-dev-429_ob-config Creating 
+ Volume rivomesh-oceanbase-dev-429_ob-config Creating 
+ Network rivomesh-oceanbase-dev-429_default Creating 
+ Network rivomesh-oceanbase-dev-429_default Creating 
+ Volume rivomesh-oceanbase-dev-429_ob-data Created 
+ Volume rivomesh-oceanbase-dev-429_ob-data Created 
+ Volume rivomesh-oceanbase-dev-429_ob-config Created 
+ Volume rivomesh-oceanbase-dev-429_ob-config Created 
+ Network rivomesh-oceanbase-dev-429_default Created 
+ Network rivomesh-oceanbase-dev-429_default Created 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Creating 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Creating 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Creating 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Created 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Created 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Created 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Starting 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Starting 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Starting 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Started 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Started 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Started 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Waiting 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Waiting 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Waiting 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Healthy 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Healthy 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Healthy 
+ Container rivomesh-oceanbase-dev-429-tests-run-65be61a7cd31 Creating 
+ Container rivomesh-oceanbase-dev-429-tests-run-65be61a7cd31 Created 
+OCEANBASE_NATIVE_PROFILE: {version=5.7.25-OceanBase_CE-v4.3.5.6, mode=MYSQL, tenantId=1002, readConsistency=STRONG}
+OCEANBASE_NATIVE_CONTRACT_ACCEPTED: strong reads, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Stopping 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Stopped 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Starting 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Started 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Waiting 
+Exception in thread "main" java.lang.AssertionError: Timed out waiting for real pipeline; last=null
+	at io.rivomesh.acceptance.OceanBasePipelineAcceptance.await(OceanBasePipelineAcceptance.java:24)
+	at io.rivomesh.acceptance.OceanBasePipelineAcceptance.phase(OceanBasePipelineAcceptance.java:33)
+	at io.rivomesh.acceptance.OceanBasePipelineAcceptance.run(OceanBasePipelineAcceptance.java:81)
+	at io.rivomesh.acceptance.OceanBasePipelineAcceptance.main(OceanBasePipelineAcceptance.java:90)
+
+container rivomesh-oceanbase-dev-429-oceanbase-1 exited (137)
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Stopping 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Stopping 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Stopping 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Stopped 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Removing 
+ Container rivomesh-oceanbase-dev-429-oceanbase-1 Removed 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Stopped 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Removing 
+ Container rivomesh-oceanbase-dev-429-postgres-1 Removed 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Stopped 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Removing 
+ Container rivomesh-oceanbase-dev-429-mysql-1 Removed 
+ Volume rivomesh-oceanbase-dev-429_ob-data Removing 
+ Volume rivomesh-oceanbase-dev-429_ob-config Removing 
+ Network rivomesh-oceanbase-dev-429_default Removing 
+ Volume rivomesh-oceanbase-dev-429_ob-config Removed 
+ Network rivomesh-oceanbase-dev-429_default Removed 
+ Volume rivomesh-oceanbase-dev-429_ob-data Removed 

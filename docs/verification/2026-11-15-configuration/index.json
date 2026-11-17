@@ -1,0 +1,22 @@
+[
+  {
+    "file": "native.log",
+    "source": "target/configuration-final-real-pipeline.log",
+    "sha256": "0109413fedbe823df2d7fb623b7352655581a2c1113c61a8c8e1dc5f318799c1"
+  },
+  {
+    "file": "unit.log",
+    "source": "target/configuration-final-unit-package.log",
+    "sha256": "b1edab23756eefde02196fcaa1e7db6e3f07bdd6fa5410598e5c230b40e0a8d9"
+  },
+  {
+    "file": "ui.log",
+    "source": "target/ui-configuration-final.log",
+    "sha256": "edb42d5929da7d1164805939f50c7ca805640f768e493349651fc93fa41d5ecf"
+  },
+  {
+    "file": "artifact.log",
+    "source": "target/artifact-configuration-final.log",
+    "sha256": "b2ceaa10867cb2d6a41649a60decbc2711d4c75a80f0461782f100bbb3717a2f"
+  }
+]

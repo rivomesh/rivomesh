@@ -1,0 +1,11 @@
+SELECT version() AS version;
+SET hive.txn.manager;
+SET hive.support.concurrency;
+CREATE DATABASE IF NOT EXISTS rm_native_probe;
+CREATE TABLE IF NOT EXISTS rm_native_probe.rows_native(k STRING,v DECIMAL(38,0),txt STRING) CLUSTERED BY(k) INTO 1 BUCKETS STORED AS ORC TBLPROPERTIES('transactional'='true','transactional_properties'='default','rivomesh.owner'='probe','rivomesh.resource'='00000000000000000000000000000001');
+SHOW TBLPROPERTIES rm_native_probe.rows_native;
+DESCRIBE rm_native_probe.rows_native;
+DESCRIBE FORMATTED rm_native_probe.rows_native;
+SHOW CREATE TABLE rm_native_probe.rows_native;
+INSERT INTO rm_native_probe.rows_native SELECT 'key',CAST('18446744073709551615' AS DECIMAL(38,0)),decode(unbase64('6ZuqIFwnXFwK'),'UTF-8');
+SELECT k,CAST(v AS STRING) AS v,txt FROM rm_native_probe.rows_native;

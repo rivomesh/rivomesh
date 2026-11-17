@@ -1,0 +1,3 @@
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+items	0	PRIMARY	1	id	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+items	1	rm_acda877777e0_b2a63a40da1906d9	1	base_value	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
