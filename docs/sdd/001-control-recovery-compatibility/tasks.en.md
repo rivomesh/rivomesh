@@ -2,7 +2,7 @@
 
 RM-SDD-001 · 2026-11-17
 
-Every task requires design/implementation,positive/negative/crash tests,bilingual docs and candidate evidence. The registry,five session tasks and CP-07's limited separated profile are accepted;RC-02 review and RC-05 proven-commit confirmation bounded profiles are accepted,with39tasks remaining open. See [session evidence](../../verification/2026-11-16-browser-sessions/README.md) and [execution lifecycle evidence](../../verification/2026-11-17-execution-lifecycle/README.md). Dependencies guide implementation,not a requirement to block common infrastructure on every vendor profile.
+Each task requires implementation,appropriate fault tests,bilingual docs and scoped evidence. Ten requirements are accepted;38 remain open. See the[single baseline](../../verification/README.md). Dependencies guide implementation order.
 
 ## Unified cluster control
 
@@ -57,14 +57,14 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-RC-03 · Skip a complete destination transaction · P0 · Depends on: RC-02, RC-05, RC-08
   Deliver: For a known next failed transaction,ADMIN reviews destination scope/reason;cross-table events are not split;native SKIP receipt and safe progress commit locally and crash replay never skips another transaction.
   Acceptance: AC-RC-03
-  Accepted:[bounded RC-03 profile](../../verification/2026-11-17-managed-skip/README.md);other products/full matrices stay open.
+  Accepted:[bounded RC-03 profile](../../verification/README.md);other products/full matrices stay open.
 - [ ] T-RC-04 · Controlled capture/decode gap recovery · P0 · Depends on: RC-01, RC-02, RC-08, SO-01
   Deliver: Provide a separate verified transaction/source-range quarantine/exclusion plan affecting all relevant subscriptions with original logs retained;unprovable boundaries are refused with log recovery,valid source or rebaseline alternatives;never fabricate successful application.
   Acceptance: AC-RC-04
 - [x] T-RC-05 · Uncertain commit and checkpoint reconciliation · P0 · Depends on: RC-02
   Deliver: If commit leads ACK,verify content and recover acknowledgment instead of compensating or declaring an unapplied skip;identity,generation,epoch,error/config/hash/checkpoint mismatches refuse action.
   Acceptance: AC-RC-05
-  Accepted:protocol6 cross-entry ADMIN confirmation,native comparison,whole-task pause/fencing,atomic ACK/receipt,retry and upgrade under the [bounded profile](../../verification/2026-11-17-managed-commit/README.md). Skip,compensation and gaps remain separate requirements.
+  Accepted:protocol6 cross-entry ADMIN confirmation,native comparison,whole-task pause/fencing,atomic ACK/receipt,retry and upgrade under the [bounded profile](../../verification/README.md). Skip,compensation and gaps remain separate requirements.
 - [ ] T-RC-06 · Failed-transaction before-image compensation · P0 · Depends on: RC-02, RC-05
   Deliver: Reconstruct initial affected identity state across repeated keys,PK moves,insert/delete chains,keyless occurrences,JSON/generated values;modify only reviewed scope;commit compensation/receipt atomically without rewriting the source transaction/GTID.
   Acceptance: AC-RC-06
@@ -167,17 +167,3 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-10 · External identity,immutable audit and Apache preparation · P2 · Depends on: CP-05, SE-05
   Deliver: Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights.
   Acceptance: AC-LG-10
-
-v0.4: shared identity/session authority is independent of global task configuration, so SE-04 now depends on CP-01; CP-05 remains partial. [Evidence](../../verification/2026-11-16-shared-access/README.md).
-
-v0.5: CP-02/03 PARTIAL;6DONE/33PARTIAL/9NEW. [Evidence](../../verification/2026-11-17-global-control-foundations/README.md).
-
-2026-11-17: [Public fixed-owner routing/CDC evidence](../../verification/2026-11-17-global-routing/README.md); incomplete maintenance projection/migration/HA remain tracked, without changing DONE counts.
-
-v0.6: CP-07 separated LOCAL-journal profile accepted;7DONE/33PARTIAL/8NEW. [Evidence](../../verification/2026-11-17-execution-lifecycle/README.md).
-
-v0.7: RC-02 bounded managed review accepted;8DONE/32PARTIAL/8NEW. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
-
-v0.8:RC-05 proven-commit confirmation bounded profile accepted;9 DONE,31 PARTIAL,8 NEW;39 open. [Evidence](../../verification/2026-11-17-managed-commit/README.md).
-
-v0.9:RC-03 bounded profile accepted;10 DONE,32 PARTIAL,6 NEW;38 open. [Evidence](../../verification/2026-11-17-managed-skip/README.md).

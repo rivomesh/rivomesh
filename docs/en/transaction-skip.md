@@ -1,6 +1,6 @@
 # Complete-transaction skipping and gap recovery
 
-Status:RC-03 bounded profile accepted;RC-08 verified gap closure remains open. [Evidence](../verification/2026-11-17-managed-skip/README.md). Java8,MySQL8.4 source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores are accepted. Native MySQL target contracts pass;its full public skip matrix and other destinations remain open. Shared-task clusters default to disabled;standalone administrator controls still require complete evidence/explicit approval. [中文](../zh-CN/transaction-skip.md).
+Status:RC-03 bounded profile accepted;RC-08 verified gap closure remains open. [Evidence](../verification/README.md). Java8,MySQL8.4 source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores are accepted. Native MySQL target contracts pass;its full public skip matrix and other destinations remain open. Shared-task clusters default to disabled;standalone administrator controls still require complete evidence/explicit approval. [中文](../zh-CN/transaction-skip.md).
 
 ## Scope and consequences
 
@@ -44,14 +44,9 @@ cluster:
   recoverySkip: true
 ```
 
-This enables control protocol 7. Normally stop all old members first and verify STOPPED records;expired leases or killed RUNNING records do not satisfy quiescence. Preserve nodeId, original Agent directory, evidence keys, task key, control database and PVCs. Moving only a cursor to an empty Agent is insufficient. Direct downgrade is unsupported.
+Use the[first-release baseline](first-release.md)for Linux,Docker,Helm and manual Kubernetes. Control mode is fixed at creation;development-candidate automatic migration is unsupported.
 
-- Linux:add flags to the original configuration, normally stop the service, replace the JAR and restart using the same directory/service identity. The Java base package is now `io.github.rivomesh`.
-- Docker/Compose:update every original member configuration, normally stop/recreate containers and retain volumes/identities. Do not use `down -v` against recovery data.
-- Helm:retain original release values, Secrets and PVCs;overlay `deploy/helm/rivomesh/values-recovery-skip.yaml`. This requires normal shutdown before enabling protocol 7 rather than mixed-version rolling activation.
-- Manual Kubernetes:reference `deploy/kubernetes/rivomesh-skip-controller-a.yaml`,`rivomesh-skip-controller-b.yaml` and `rivomesh-skip-agent-a.yaml`. Update existing ConfigMaps/StatefulSets while retaining their names/volumes;sample names must not replace the original Agent identity. Rendered YAML is not live K8s/CSI acceptance.
-
-The first PREPARED plan atomically upgrades journal data format 3 to 4. The task configuration still uses `formatVersion: 3`. The actual older JAR refuses format 4. Pending plans block normal resume. Missing format 4 plan/gap tables are not recreated as empty history;restore the consistent recovery unit.
+The first PREPARED plan atomically upgrades journal data format 3 to 4. The task configuration still uses `formatVersion: 3`. The format3-to4 transition is part of the current journal lifecycle,not compatibility for old development programs. Pending plans block normal resume. Missing format 4 plan/gap tables are not recreated as empty history;restore the consistent recovery unit.
 
 Controlled native metadata migration adds a receipt table and two nullable checkpoint markers. MySQL implicit DDL commit does not release the source-journal fence. Appropriate metadata DDL privileges are required. Nontransactional tables and lost native receipts are not silently converted or rebuilt.
 

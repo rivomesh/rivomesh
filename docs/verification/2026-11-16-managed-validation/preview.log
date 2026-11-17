@@ -1,9 +1,0 @@
- Container rivomesh-dev-preview-console-1 Recreate 
- Container rivomesh-dev-preview-console-1 Recreated 
- Container rivomesh-dev-preview-console-1 Starting 
- Container rivomesh-dev-preview-console-1 Started 
- Container rivomesh-dev-preview-console-1 Waiting 
- Container rivomesh-dev-preview-console-1 Healthy 
-PREVIEW_ACCEPTED: http://127.0.0.1:18088 account=admin; private credentials: <workspace>/rivomesh/target/development-preview/credentials.json
-Backend/driver SHA-256: 34a4675fe853e2976392d1909a9b45d551f0d939e9c82ae448988a6d7a93ce4b
-UI resources are mounted from source; refresh the page after UI edits.

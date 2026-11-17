@@ -2,7 +2,7 @@
 
 RM-SDD-001 · 2026-11-17
 
-每项任务完成必须包括设计/实现、正反向与中断恢复测试、双语文档和候选包证据。已验收节点目录、5项会话任务及CP-07限定分离档案，RC-02事务审阅及RC-05已提交事务确认限定档案已验收，RC-03完整事务跳过限定档案已验收，余38项保持未完成；见[会话证据](../../verification/2026-11-16-browser-sessions/README.md)和[执行生命周期证据](../../verification/2026-11-17-execution-lifecycle/README.md)。依赖是实施顺序，不表示必须等待所有厂商档案才能开发公共框架。
+每项任务完成必须包括设计/实现、正反向与中断恢复测试、双语文档和候选包证据。已验收节点目录、5项会话任务及CP-07限定分离档案，RC-02事务审阅及RC-05已提交事务确认限定档案已验收，RC-03完整事务跳过限定档案已验收，余38项保持未完成；见[会话证据](../../verification/README.md)和[执行生命周期证据](../../verification/README.md)。依赖是实施顺序，不表示必须等待所有厂商档案才能开发公共框架。
 
 ## 多节点统一控制
 
@@ -57,14 +57,14 @@ RM-SDD-001 · 2026-11-17
 - [x] T-RC-03 · 目标应用阶段按完整事务跳过 · P0 · 依赖：RC-02, RC-05, RC-08
   交付：对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。
   验收：AC-RC-03
-  已验收：[RC-03限定档案](../../verification/2026-11-17-managed-skip/README.md)，其他产品与完整矩阵继续追踪。
+  已验收：[RC-03限定档案](../../verification/README.md)，其他产品与完整矩阵继续追踪。
 - [ ] T-RC-04 · 采集/解码阶段的受控缺口恢复 · P0 · 依赖：RC-01, RC-02, RC-08, SO-01
   交付：单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。
   验收：AC-RC-04
 - [x] T-RC-05 · 不确定提交与断点核对 · P0 · 依赖：RC-02
   交付：若目标已提交但ACK未落盘，先验证事务内容并恢复确认，禁止再次补偿/伪记为未应用跳过；来源、世代、epoch、错误版本、配置、原事务摘要或断点不符必须拒绝。
   验收：AC-RC-05
-  已验收：协议6管理员跨入口确认、原生提交核对、全任务暂停/围栏、ACK/回执、重试与升级，限定档案见[证据](../../verification/2026-11-17-managed-commit/README.md)。事务跳过、补偿及缺口台账继续由其他需求追踪。
+  已验收：协议6管理员跨入口确认、原生提交核对、全任务暂停/围栏、ACK/回执、重试与升级，限定档案见[证据](../../verification/README.md)。事务跳过、补偿及缺口台账继续由其他需求追踪。
 - [ ] T-RC-06 · 失败事务前镜像补偿 · P0 · 依赖：RC-02, RC-05
   交付：重建首个受影响身份的事务前状态，正确处理同键多次变更、主键移动、插入后删除、无主键重复行/ROW_ID、JSON与生成值；只修补审阅范围；数据与补偿凭据原子提交，原事务和GTID不改写。
   验收：AC-RC-06
@@ -167,17 +167,3 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-LG-10 · 外部身份、不可变审计与Apache准备 · P2 · 依赖：CP-05, SE-05
   交付：核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。
   验收：AC-LG-10
-
-v0.4：共享身份/会话独立于全局任务配置权威，因此SE-04依赖调整为CP-01；CP-05仅部分完成。 [Evidence](../../verification/2026-11-16-shared-access/README.md).
-
-v0.5: CP-02/03 PARTIAL;6DONE/33PARTIAL/9NEW. [Evidence](../../verification/2026-11-17-global-control-foundations/README.md).
-
-2026-11-17: [Public fixed-owner routing/CDC evidence](../../verification/2026-11-17-global-routing/README.md); incomplete maintenance projection/migration/HA remain tracked, without changing DONE counts.
-
-v0.6: CP-07 separated LOCAL-journal profile accepted;7DONE/33PARTIAL/8NEW. [Evidence](../../verification/2026-11-17-execution-lifecycle/README.md).
-
-v0.7: RC-02 bounded managed review accepted;8DONE/32PARTIAL/8NEW. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
-
-v0.8：RC-05 已提交事务确认限定档案验收；9 DONE、31 PARTIAL、8 NEW，39项未完成。[证据](../../verification/2026-11-17-managed-commit/README.md)。
-
-v0.9：RC-03首批限定档案验收；10 DONE、32 PARTIAL、6 NEW，38项未完成。[证据](../../verification/2026-11-17-managed-skip/README.md)。

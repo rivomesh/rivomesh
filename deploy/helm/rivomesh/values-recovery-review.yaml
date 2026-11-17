@@ -1,4 +1,4 @@
-# Overlay for all controller/Agent releases. Requires normal STOPPED quiescence before protocol5.
+# Configure consistently before first deployment; namespace mode is fixed.
 # Supply the same control-store/task-key Secret as the existing global profile.
 cluster:
   enabled: true

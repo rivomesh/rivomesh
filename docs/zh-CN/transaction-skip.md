@@ -1,6 +1,6 @@
 # 完整事务跳过与缺口恢复
 
-状态：RC-03首批限定档案已验收，RC-08验证关闭缺口仍未完成。[证据](../verification/2026-11-17-managed-skip/README.md)。已验收Java8、MySQL8.4源、原Agent/LOCAL日志、PostgreSQL业务目标及PG/MySQL控制库；MySQL目标原生合同已通过，其完整公开跳过矩阵及其他产品仍待补验。共享任务集群默认关闭；独立控制器提供管理员入口，仍要求完整证据与显式审批。English: [Transaction skipping](../en/transaction-skip.md)。
+状态：RC-03首批限定档案已验收，RC-08验证关闭缺口仍未完成。[证据](../verification/README.md)。已验收Java8、MySQL8.4源、原Agent/LOCAL日志、PostgreSQL业务目标及PG/MySQL控制库；MySQL目标原生合同已通过，其完整公开跳过矩阵及其他产品仍待补验。共享任务集群默认关闭；独立控制器提供管理员入口，仍要求完整证据与显式审批。English: [Transaction skipping](../en/transaction-skip.md)。
 
 ## 适用范围
 
@@ -31,7 +31,7 @@
 
 继续、恢复或取消都保留原计划的审批人/原因；原生回执另记实际执行人，日志决议另记后续恢复人。取消仅适用于已证明目标未提交的计划，不推进ACK，不修复原SQL错误，并使旧错误版本失效。
 
-## 四种部署方式与升级
+## 四种部署方式与首版基线
 
 所有原控制器和Agent配置一致：
 
@@ -44,14 +44,9 @@ cluster:
   recoverySkip: true
 ```
 
-其余身份、存储、密钥和角色配置沿用[全局控制](global-control.md)。开关启用控制协议7。升级前正常停止所有原成员，确认记录为STOPPED；租约过期或强杀遗留RUNNING不能代替正常停止。保留原nodeId、Agent目录、证据密钥、任务密钥、控制库和PVC。不能把原私有目录迁到空Agent后只复制游标，也不支持直接降级。
+身份、存储、密钥及四种部署方式统一见[首版配置基线](first-release.md)。控制模式创建后固定，不再提供开发候选之间的自动升级。
 
-- Linux：在原配置加入开关，正常停止服务、更换JAR后，使用原目录与服务身份启动。入口基础包现为`io.github.rivomesh`。
-- Docker/Compose：更新全部原成员挂载的配置，正常停止并重建容器，保留原卷与节点身份；不能执行`down -v`清除业务恢复数据。
-- Helm：每个原release保留原values/Secret/PVC，再叠加`deploy/helm/rivomesh/values-recovery-skip.yaml`。必须先正常停止旧成员，不能把此协议升级当普通滚动更新。
-- 手工Kubernetes：可参考`deploy/kubernetes/rivomesh-skip-controller-a.yaml`、`rivomesh-skip-controller-b.yaml`和`rivomesh-skip-agent-a.yaml`；既有部署更新原ConfigMap/StatefulSet时保留原名称和卷，不能照示例另建身份替代原Agent。清单验证不等于真实K8s/CSI故障验收。
-
-首次保存跳过意图时，日志数据格式从3单向升级为4，与PREPARED计划在同一事务提交；顶层任务配置仍为`formatVersion: 3`。实际旧版JAR已验证拒绝格式4。待处理计划阻止恢复，必须先继续、确认或安全取消。格式4的计划/缺口表丢失时拒绝重建空历史；应恢复一致的备份单元。
+首次保存跳过意图时，日志数据格式从3单向升级为4，与PREPARED计划在同一事务提交；顶层任务配置仍为`formatVersion: 3`。格式3到4是当前日志在首次准备跳过时的状态转换，不代表承诺支持旧开发程序。待处理计划阻止恢复，必须先继续、确认或安全取消。格式4的计划/缺口表丢失时拒绝重建空历史；应恢复一致的备份单元。
 
 目标原生凭据表与两个可空标记列按受控流程添加；MySQL DDL的隐式提交不代替源日志围栏。需要元数据建表/改表权限。此功能不会自动转换非事务表，不会重建已丢失的目标凭据。
 

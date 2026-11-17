@@ -1,4 +1,0 @@
-{"completedReports": 3, "controllerDesired": "PAUSED", "lastDifferences": {"changed": 1, "extra": 2, "missing": 2}, "mode": "LOCAL", "operations": 8, "rawValuesExported": false, "stagedRows": [14, 16, 18]}
-{"completedReports": 3, "controllerDesired": "PAUSED", "lastDifferences": {"changed": 1, "extra": 2, "missing": 2}, "mode": "MYSQL", "operations": 8, "rawValuesExported": false, "stagedRows": [14, 16, 18]}
-{"completedReports": 3, "controllerDesired": "PAUSED", "lastDifferences": {"changed": 1, "extra": 2, "missing": 2}, "mode": "POSTGRESQL", "operations": 8, "rawValuesExported": false, "stagedRows": [14, 16, 18]}
-{"completedReports": 3, "controllerDesired": "PAUSED", "lastDifferences": {"changed": 1, "extra": 2, "missing": 2}, "mode": "GAUSS", "operations": 8, "rawValuesExported": false, "stagedRows": [14, 16, 18]}

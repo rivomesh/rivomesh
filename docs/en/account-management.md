@@ -80,6 +80,6 @@ Common409 codes: `ACCOUNT_LAST_ADMIN`, `ACCOUNTS_REVISION_CHANGED`, `REQUEST_ID_
 
 **Can the controller be downgraded?** Old programs refuse managed state version2. Synchronization checkpoint formats were not changed by account management, but controller rollback requires a separate migration.
 
-Actual Java8 release acceptance covered old-release audit/hash upgrade, SIGKILL persistence, older/missing directory refusal, old-program refusal, offline recovery and exclusive locking. Real MySQL→PostgreSQL verified grant revocation/rotation during CDC and no permission resurrection on restart, preserving stream/snapshot identity; see [evidence](../verification/2026-11-15-accounts/README.md). OIDC, passwords/MFA, distributed identity storage, multiple writing controllers and live K8s clusters remain unaccepted.
+Actual Java8 release acceptance covered old-release audit/hash upgrade, SIGKILL persistence, older/missing directory refusal, old-program refusal, offline recovery and exclusive locking. Real MySQL→PostgreSQL verified grant revocation/rotation during CDC and no permission resurrection on restart, preserving stream/snapshot identity; see [evidence](../verification/README.md). OIDC, passwords/MFA, distributed identity storage, multiple writing controllers and live K8s clusters remain unaccepted.
 
 See [browser sessions](browser-sessions.md) for reload recovery, sign-out and invalidation of all sessions after directory changes.

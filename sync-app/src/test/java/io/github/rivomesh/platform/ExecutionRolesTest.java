@@ -18,13 +18,6 @@ class ExecutionRolesTest {
         PlatformConfig c=config("a",ClusterConfig.Role.AGENT);c.cluster.separateExecution=false;assertEquals("EXECUTION_ROLE_POLICY_INVALID",assertThrows(IllegalArgumentException.class,c::validate).getMessage());c.cluster.separateExecution=true;c.cluster.sharedTasks=false;assertEquals("EXECUTION_ROLE_POLICY_INVALID",assertThrows(IllegalArgumentException.class,c::validate).getMessage());
         assertFalse(Model.JSON.writeValueAsString(ControlStoreTest.node("legacy")).contains("role"),"Default registry metadata must remain readable by protocol3 members");
     }
-    @Test void executionProtocolUpgradeRequiresStoppedMembersAndRejectsOldMembers()throws Exception{
-        ClusterConfig previous=http.config("legacy").cluster,next=config("a",ClusterConfig.Role.CONTROLLER).cluster;
-        try(JdbcControlStore old=new JdbcControlStore(previous)){
-            ControlStore.Lease lease=old.register(ControlStoreTest.node("legacy"),Collections.emptyList());assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next)).getMessage());ControlStoreTest.expire(previous,"legacy");assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next)).getMessage());old.stopped(lease);
-            try(JdbcControlStore upgraded=new JdbcControlStore(next)){assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(previous)).getMessage());}
-        }
-    }
     @Test void managementEntryExitDoesNotStopAnIndependentAgentAndAgentExposesOnlyProbes()throws Exception{
         PlatformConfig a=config("a",ClusterConfig.Role.CONTROLLER),b=config("b",ClusterConfig.Role.CONTROLLER),worker=config("worker",ClusterConfig.Role.AGENT);PlatformTest.Workers workers=new PlatformTest.Workers(),none=new PlatformTest.Workers();PlatformTest.Backend backend=new PlatformTest.Backend();
         try(TaskService first=new TaskService(a,new PlatformTest.Backend(),none);TaskService second=new TaskService(b,new PlatformTest.Backend(),none);TaskService agent=new TaskService(worker,backend,workers);ConsoleServer one=new ConsoleServer(a,first);ConsoleServer two=new ConsoleServer(b,second);ConsoleServer probes=new ConsoleServer(worker,agent)){
@@ -46,11 +39,11 @@ class ExecutionRolesTest {
             body.put("ownerNodeId","b");PlatformTest.Response rejected=PlatformTest.http(http.base(one),"/api/tasks",PlatformTest.TOKEN,body.toString(),"controller_owner_request");assertEquals(409,rejected.status);assertEquals("OWNER_ROLE_REQUIRED",Model.JSON.readTree(rejected.text).path("code").asText());assertEquals(0,http.get(http.base(one),"/api/tasks",PlatformTest.TOKEN).path("total").asInt());
         }
     }
-    @Test void anExecutionDirectoryCannotBeOpenedAsAControllerBeforeProtocolUpgrade()throws Exception{
-        PlatformConfig c=http.config("b");
+    @Test void anExecutionDirectoryCannotBeReusedAsAController()throws Exception{
+        PlatformConfig c=config("b",ClusterConfig.Role.COMBINED);
         try(TaskService tasks=new TaskService(c,new PlatformTest.Backend(),new PlatformTest.Workers());ConsoleServer server=new ConsoleServer(c,tasks)){server.start();http.create(http.base(server),"job","b");PlatformTest.await(()->http.completed(http.base(server),"job","global_create_job"));}
         c.cluster.separateExecution=true;c.cluster.role=ClusterConfig.Role.CONTROLLER;assertEquals("CONTROLLER_EXECUTION_DIRECTORY_NOT_EMPTY",assertThrows(TaskService.Conflict.class,()->new TaskService(c,new PlatformTest.Backend(),new PlatformTest.Workers())).getMessage());
-        ClusterConfig previous=Model.JSON.readValue(Model.JSON.writeValueAsString(c.cluster),ClusterConfig.class);previous.separateExecution=false;previous.role=ClusterConfig.Role.COMBINED;try(JdbcControlStore untouched=new JdbcControlStore(previous)){assertNotNull(untouched.page("",20));}
+        ClusterConfig previous=Model.JSON.readValue(Model.JSON.writeValueAsString(c.cluster),ClusterConfig.class);previous.role=ClusterConfig.Role.COMBINED;try(JdbcControlStore untouched=new JdbcControlStore(previous)){assertNotNull(untouched.page("",20));}
         c.cluster.role=ClusterConfig.Role.AGENT;try(TaskService restored=new TaskService(c,new PlatformTest.Backend(),new PlatformTest.Workers());ConsoleServer agent=new ConsoleServer(c,restored)){agent.start();assertEquals("job",restored.view("job").get("id"));}
     }
     @Test void aReplacementControllerDirectoryCannotHideTasksOwnedByThatNode()throws Exception{

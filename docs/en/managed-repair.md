@@ -1,6 +1,6 @@
 # Managed data repair
 
-The first managed workflow passed real HTTP/Worker/database acceptance across LOCAL/H2 and external MySQL/PostgreSQL/openGauss journals,with MySQL8.4/PostgreSQL17 business destinations. [Evidence](../verification/2026-11-16-managed-repair/README.md). Full vendor,cluster,capacity and security acceptance remains incomplete.
+The first managed workflow passed real HTTP/Worker/database acceptance across LOCAL/H2 and external MySQL/PostgreSQL/openGauss journals,with MySQL8.4/PostgreSQL17 business destinations. [Evidence](../verification/README.md). Full vendor,cluster,capacity and security acceptance remains incomplete.
 
 ## Workflow
 

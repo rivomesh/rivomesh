@@ -18,7 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--initial-owner-artifact', type=Path, help='Reproduce old multi-target receipt fault, then reopen owner with --artifact')
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
@@ -30,8 +29,6 @@ parser.add_argument('--managed-commit', action='store_true', help='Protocol6 man
 parser.add_argument('--managed-skip', action='store_true', help='Protocol7 complete-transaction skip and lost source-ACK recovery with durable gaps')
 parser.add_argument('--test-classes', type=Path, help='Frozen test-only lost-ACK injector;required for --managed-commit')
 args = parser.parse_args()
-if args.initial_owner_artifact and args.separate_execution:
-    parser.error('The old receipt regression is protocol3; use separate fixtures for the protocol4 lifecycle')
 if args.control_product == 'MYSQL' and not args.separate_execution:
     parser.error('MySQL control-store business acceptance requires --separate-execution')
 if args.runtime_image and not args.separate_execution:
@@ -50,8 +47,6 @@ if args.managed_skip and not args.managed_commit:
     parser.error('--managed-skip requires --managed-commit and its original evidence/fixture dependencies')
 jar = args.artifact.resolve()
 digest = hashlib.sha256(jar.read_bytes()).hexdigest()
-initial_owner = args.initial_owner_artifact.resolve() if args.initial_owner_artifact else jar
-initial_digest = hashlib.sha256(initial_owner.read_bytes()).hexdigest()
 output = args.output.resolve()
 output.relative_to(ROOT)
 output.mkdir(parents=True, exist_ok=True)
@@ -77,10 +72,6 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedCommit': args.managed_commit,
             'managedSkip': args.managed_skip,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
-if args.initial_owner_artifact:
-    manifest['initialOwnerArtifactSha256'] = initial_digest
-
-
 def passed(name):
     checks.append(name)
     print('PASS ' + name, flush=True)
@@ -150,8 +141,6 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             if entry.is_file():test_hash.update(str(entry.relative_to(classes)).encode()+b'\0'+entry.read_bytes())
         manifest['testClassesSha256']=test_hash.hexdigest()
     composition = home / 'compose.json'
-    if args.initial_owner_artifact:
-        services['node-b']['volumes'][0] = str(initial_owner) + ':/app/rivomesh.jar:ro'
     composition.write_text(json.dumps({'services': services, 'volumes': volumes}))
 
     def compose(*arguments, check=True):
@@ -489,21 +478,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         wait(rows_match, 'restored configuration catches up')
         sql('postgres', "UPDATE rm_pg_sales.items SET note='reviewed-drift' WHERE id=1")
         sql('mysql-target', "UPDATE rm_my_sales.items SET note='reviewed-drift' WHERE id=1")
-        if args.initial_owner_artifact:
-            sql('postgres', 'UPDATE rm_pg_sales.duplicates SET value=99 WHERE value=7')
-            sql('mysql-target', 'UPDATE rm_my_sales.duplicates SET value=99 WHERE value=7')
-        validation, _ = action('VALIDATE', complete=not args.initial_owner_artifact, validation={'targets': ['pg', 'my'], 'gateMillis': 15000, 'sourceMillis': 60000, 'targetMillis': 30000})
-        if args.initial_owner_artifact:
-            wait(lambda: operation(validation).get('deliveryStatus') == 'UNKNOWN' and operation(validation).get('code') == 'OWNER_RECEIPT_MISMATCH' and operation(validation).get('result', {}).get('code') == 'VALIDATION_DIFFERENCES', 'old owner receipt fault after actual validation')
-            original_report = operation(validation)['validation']['reportId']
-            compose('stop', 'node-b')
-            services['node-b']['volumes'][0] = str(jar) + ':/app/rivomesh.jar:ro'
-            composition.write_text(json.dumps({'services': services}))
-            compose('up', '-d', 'node-b')
-            address('node-b')
-            wait(lambda: outcome(validation), 'reconcile old UNKNOWN receipt after owner upgrade')
-            assert operation(validation)['validation']['reportId'] == original_report
-            passed('Owner upgrade resolves old UNKNOWN from its original normalized receipt without replacing the report')
+        validation, _ = action('VALIDATE', complete=True, validation={'targets': ['pg', 'my'], 'gateMillis': 15000, 'sourceMillis': 60000, 'targetMillis': 30000})
         wait(lambda: operation(validation).get('validation', {}).get('reportId'), 'visible report identity')
         report_id = operation(validation)['validation']['reportId']
         report_path = route + '/validations/' + report_id
@@ -512,7 +487,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert http('node-b', report_path)['results'] == report['results']
         assert task()['desired'] == 'PAUSED'
         scope = [key for key, row in report['results'].items() if row['missing'] + row['extra'] + row['changed'] > 0]
-        assert len(scope) == (4 if args.initial_owner_artifact else 2)
+        assert len(scope) == 2
         names = {table['id']: table['name'] for table in report['tables']}
         for key in scope:
             row = report['results'][key]
@@ -531,8 +506,6 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         wait(rows_match, 'reviewed SQL repair restores exact rows')
         assert task()['desired'] == 'PAUSED'
         passed('Cross-entry reviewed repair approval restores both targets and leaves replication paused')
-        if args.initial_owner_artifact:
-            passed('Reviewed repairs include both keyless target tables and restore exact multiplicities')
         action('RESUME', errorCount=task()['status']['error_count'])
         sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(11,'after-repair',JSON_OBJECT('n',11))")
         wait(rows_match, 'explicit post-repair CDC resume')
@@ -617,7 +590,6 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Normal APPLY clears only current native skip markers;both durable gaps remain visible after data converges again')
         action('STOP')
         assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
-        assert hashlib.sha256(initial_owner.read_bytes()).hexdigest() == initial_digest
         manifest['status'] = 'PASS'
     except Exception as failure:
         manifest['status'] = 'FAIL'

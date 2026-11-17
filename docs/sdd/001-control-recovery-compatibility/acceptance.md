@@ -6,23 +6,23 @@ RM-SDD-001 · 2026-11-17
 
 | ID | 需求 | 验收合同 | 证据状态 |
 |---|---|---|---|
-| AC-CP-01 | CP-01 | 部署两个节点后，任一管理入口均显示相同节点ID、角色、版本/JDK/架构、容量、心跳时间和任务归属；失联显示过期/未知，不能伪装成健康。 | [PASS](../../verification/2026-11-16-node-registry/README.md) |
-| AC-CP-02 | CP-02 | 同一集群中从A创建/修改任务后B读到同一全局修订；全局taskId唯一，独立任务与源配置仍隔离；单机模式保留可运行配置。 | PARTIAL · [foundations](../../verification/2026-11-17-global-control-foundations/README.md) |
-| AC-CP-03 | CP-03 | 任一入口可控制B的任务：创建、检查、启停、暂停/恢复、重试、校验/修复；命令含全局请求ID/修订/owner代次，重复投递只生效一次，202仅表示接受，返回已执行/拒绝/未知结果。 | PARTIAL · [foundations](../../verification/2026-11-17-global-control-foundations/README.md) |
+| AC-CP-01 | CP-01 | 部署两个节点后，任一管理入口均显示相同节点ID、角色、版本/JDK/架构、容量、心跳时间和任务归属；失联显示过期/未知，不能伪装成健康。 | [PASS](../../verification/README.md) |
+| AC-CP-02 | CP-02 | 同一集群中从A创建/修改任务后B读到同一全局修订；全局taskId唯一，独立任务与源配置仍隔离；单机模式保留可运行配置。 | PARTIAL · [foundations](../../verification/README.md) |
+| AC-CP-03 | CP-03 | 任一入口可控制B的任务：创建、检查、启停、暂停/恢复、重试、校验/修复；命令含全局请求ID/修订/owner代次，重复投递只生效一次，202仅表示接受，返回已执行/拒绝/未知结果。 | PARTIAL · [foundations](../../verification/README.md) |
 | AC-CP-04 | CP-04 | 节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。 | 待验收 |
-| AC-CP-05 | CP-05 | 从A撤销权限后B拒绝新命令；同一远端操作可按请求ID/任务/节点/计划追踪；界面不返回密钥，节点仅获得授权任务必需的密钥引用。 | PARTIAL · [shared-access](../../verification/2026-11-16-shared-access/README.md) |
+| AC-CP-05 | CP-05 | 从A撤销权限后B拒绝新命令；同一远端操作可按请求ID/任务/节点/计划追踪；界面不返回密钥，节点仅获得授权任务必需的密钥引用。 | PARTIAL · [shared-access](../../verification/README.md) |
 | AC-CP-06 | CP-06 | 界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。 | 待验收 |
-| AC-CP-07 | CP-07 | 管理实例故障后其他入口可继续查询/控制；接收但未完成的命令可恢复；按明确策略已有Worker可继续安全同步；仅部署多个replica或共享目录不能算通过。 | DONE · [separated profile](../../verification/2026-11-17-execution-lifecycle/README.md) |
-| AC-SE-01 | SE-01 | 登录后刷新、重新打开同一站点页面可恢复未过期会话和原权限，不需再次输入令牌；过期则回到登录页且不误发操作。 | [通过：单控制器](../../verification/2026-11-16-browser-sessions/README.md) |
-| AC-SE-02 | SE-02 | 可配置空闲/绝对有效期；退出、账号停用、令牌轮换或权限撤销按策略失效；多标签页一致；浏览器关闭后的持久记住登录为单独可配置策略。 | [通过：单控制器](../../verification/2026-11-16-browser-sessions/README.md) |
-| AC-SE-03 | SE-03 | 浏览器端不保存可读的长期认证令牌；会话标识采用受保护cookie/等效方案，生产HTTPS及HttpOnly/SameSite策略可验证；cookie鉴权写操作具备CSRF/Origin检查；会话不进URL或日志。 | [通过：单控制器](../../verification/2026-11-16-browser-sessions/README.md) |
-| AC-SE-04 | SE-04 | 登录A后请求落到B仍合法；重启/切换控制实例按有效期恢复；集群撤销即时按规定传播，不以粘性会话掩盖状态缺失。 | DONE · [shared-access](../../verification/2026-11-16-shared-access/README.md) |
-| AC-SE-05 | SE-05 | 既有CLI/API令牌可继续使用；cookie与Authorization身份冲突有明确拒绝/优先规则；会话恢复重验权限，晚到响应不能复活退出会话，双语提示一致。 | [通过：单控制器](../../verification/2026-11-16-browser-sessions/README.md) |
+| AC-CP-07 | CP-07 | 管理实例故障后其他入口可继续查询/控制；接收但未完成的命令可恢复；按明确策略已有Worker可继续安全同步；仅部署多个replica或共享目录不能算通过。 | DONE · [separated profile](../../verification/README.md) |
+| AC-SE-01 | SE-01 | 登录后刷新、重新打开同一站点页面可恢复未过期会话和原权限，不需再次输入令牌；过期则回到登录页且不误发操作。 | [通过：单控制器](../../verification/README.md) |
+| AC-SE-02 | SE-02 | 可配置空闲/绝对有效期；退出、账号停用、令牌轮换或权限撤销按策略失效；多标签页一致；浏览器关闭后的持久记住登录为单独可配置策略。 | [通过：单控制器](../../verification/README.md) |
+| AC-SE-03 | SE-03 | 浏览器端不保存可读的长期认证令牌；会话标识采用受保护cookie/等效方案，生产HTTPS及HttpOnly/SameSite策略可验证；cookie鉴权写操作具备CSRF/Origin检查；会话不进URL或日志。 | [通过：单控制器](../../verification/README.md) |
+| AC-SE-04 | SE-04 | 登录A后请求落到B仍合法；重启/切换控制实例按有效期恢复；集群撤销即时按规定传播，不以粘性会话掩盖状态缺失。 | DONE · [shared-access](../../verification/README.md) |
+| AC-SE-05 | SE-05 | 既有CLI/API令牌可继续使用；cookie与Authorization身份冲突有明确拒绝/优先规则；会话恢复重验权限，晚到响应不能复活退出会话，双语提示一致。 | [通过：单控制器](../../verification/README.md) |
 | AC-RC-01 | RC-01 | 分别展示源连接/读取、解码、DDL/规范化、目标应用、确认及日志存储错误；UI给出该阶段可用的重试、补偿、事务跳过或缺口恢复路径，不能把所有binlog故障当目标SQL错误。 | 待验收 |
-| AC-RC-02 | RC-02 | 显示源身份、完整事务ID、事件范围、表/目标、原始及规范化摘要、前后镜像可用性和当前断点；原始值仅授权角色可读并分页限额；执行前保留可恢复证据。 | 已验收限定MySQL8.4/LOCAL固定Agent、PG/MySQL控制档案；[bcaae930](../../verification/2026-11-17-managed-failure-review/README.md) |
+| AC-RC-02 | RC-02 | 显示源身份、完整事务ID、事件范围、表/目标、原始及规范化摘要、前后镜像可用性和当前断点；原始值仅授权角色可读并分页限额；执行前保留可恢复证据。 | 已验收限定MySQL8.4/LOCAL固定Agent、PG/MySQL控制档案；[bcaae930](../../verification/README.md) |
 | AC-RC-03 | RC-03 | 对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。 | 待验收 |
 | AC-RC-04 | RC-04 | 单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。 | 待验收 |
-| AC-RC-05 | RC-05 | 若目标已提交但ACK未落盘，先验证事务内容并恢复确认，禁止再次补偿/伪记为未应用跳过；来源、世代、epoch、错误版本、配置、原事务摘要或断点不符必须拒绝。 | [PASS · 限定档案](../../verification/2026-11-17-managed-commit/README.md) |
+| AC-RC-05 | RC-05 | 若目标已提交但ACK未落盘，先验证事务内容并恢复确认，禁止再次补偿/伪记为未应用跳过；来源、世代、epoch、错误版本、配置、原事务摘要或断点不符必须拒绝。 | [PASS · 限定档案](../../verification/README.md) |
 | AC-RC-06 | RC-06 | 重建首个受影响身份的事务前状态，正确处理同键多次变更、主键移动、插入后删除、无主键重复行/ROW_ID、JSON与生成值；只修补审阅范围；数据与补偿凭据原子提交，原事务和GTID不改写。 | 待验收 |
 | AC-RC-07 | RC-07 | 界面提供类型化新增/修改/删除和导入预览；校验精度、NULL、键和内部行身份，禁止无主键误批量修改；计划显示前后值、范围和行数，目标漂移拒绝；不自动修改源库，不绕过外键/触发器保护。 | 待验收 |
 | AC-RC-08 | RC-08 | 记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。 | 待验收 |
@@ -84,12 +84,4 @@ RM-SDD-001 · 2026-11-17
 
 需求ID、任务ID、用例ID、候选包SHA、节点/Agent协议、真实产品/版本/模式、JVM及架构、驱动、存储/持久性、源/目标范围、工作负载、操作前后坐标、回执/缺口ID、正常/错误/重复/中断结果、原始日志位置、脱敏方式、文档入口、遗留边界。状态至少区分NOT_RUN、PASSED、FAILED、EXPERIMENTAL、UNSUPPORTED；单纯存在脚本不能标PASSED。
 
-2026-11-17: [Public fixed-owner routing/CDC evidence](../../verification/2026-11-17-global-routing/README.md); incomplete maintenance projection/migration/HA remain tracked, without changing DONE counts.
-
-v0.6: CP-07 acceptance is limited to the explicit profile recorded in evidence;automatic Agent relocation and the complete matrix remain separate.
-
-v0.7: RC-02 closes inspection/retention for the linked profile,not manual mutation or complete adapter/JDK matrices.
-
-v0.8：RC-05 已提交事务确认限定档案验收；9 DONE、31 PARTIAL、8 NEW，39项未完成。[证据](../../verification/2026-11-17-managed-commit/README.md)。
-
-v0.9：RC-03首批限定档案验收；10 DONE、32 PARTIAL、6 NEW，38项未完成。[证据](../../verification/2026-11-17-managed-skip/README.md)。
+2026-11-17: [Public fixed-owner routing/CDC evidence](../../verification/README.md); incomplete maintenance projection/migration/HA remain tracked, without changing DONE counts.

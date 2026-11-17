@@ -1,6 +1,6 @@
 # RC-05: failed-transaction native checkpoint reconciliation
 
-Status: RC-05 bounded profile accepted;see [evidence](../../verification/2026-11-17-managed-commit/README.md). RC-02 historical evidence semantics remain unchanged;skip and compensation remain separate.
+Status: RC-05 bounded profile accepted;see [evidence](../../verification/README.md). RC-02 historical evidence semantics remain unchanged;skip and compensation remain separate.
 
 Delivery order: expose a read-only comparison in transaction review; add authorized, drift-checked, idempotent acknowledgment of verified commits; make the check mandatory for later skip/compensation operations and accept the complete UI workflow.
 

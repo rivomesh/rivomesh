@@ -4,13 +4,13 @@ RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**10 DONE、32 PARTIAL、6 NEW，38 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/2026-11-17-managed-skip/README.md)限定档案已验收，继续推进缺口验证关闭与补偿。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**10 DONE、32 PARTIAL、6 NEW，38 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，继续推进缺口验证关闭与补偿。
 
 ## 1. 历史起点和核对范围
 
-v0.1整理作为历史起点保留。v0.2已实现单控制器会话，候选包与五JDK会话专项见[证据](../../verification/2026-11-16-browser-sessions/README.md)；该阶段曾更新 Docker 预览；按后续用户要求，现不保留常驻预览。原 TODO 保持原样。
+v0.1整理作为历史起点保留。v0.2已实现单控制器会话，候选包与五JDK会话专项见[证据](../../verification/README.md)；该阶段曾更新 Docker 预览；按后续用户要求，现不保留常驻预览。原 TODO 保持原样。
 
-v0.1整理时的发布包 SHA256：`10d95a3990835f2286f036b962d88fc8533ade427753ad9961ef1429988a88e2`。对应207项根构建测试（205应用+2 SDK）、205项发布包优先应用测试、49项DOM；新修复场景覆盖 LOCAL/H2、外部 MySQL/PostgreSQL/openGauss 日志，业务目标为 MySQL8.4/PostgreSQL17。完整 LOCAL 与外部修复专项范围不同，见[证据](../../verification/2026-11-16-managed-repair/README.md)。这些结果不能当成新增集群、会话、跳过或新源端已经完成。
+v0.1整理时的发布包 SHA256：`10d95a3990835f2286f036b962d88fc8533ade427753ad9961ef1429988a88e2`。对应207项根构建测试（205应用+2 SDK）、205项发布包优先应用测试、49项DOM；新修复场景覆盖 LOCAL/H2、外部 MySQL/PostgreSQL/openGauss 日志，业务目标为 MySQL8.4/PostgreSQL17。完整 LOCAL 与外部修复专项范围不同，见[证据](../../verification/README.md)。这些结果不能当成新增集群、会话、跳过或新源端已经完成。
 
 以下表格记录 v0.1 整理时的历史情况，不代表当前缺口。
 
@@ -126,10 +126,10 @@ Java矩阵必须绑定候选包SHA、实际JVM/架构、驱动、源版本/模�
 
 需求ID关联设计、任务、API/UI、正向/拒绝/重复/中断测试、配置/状态升级、双语文档与同一候选包证据后才可标完成。构建通过不代表连接器通过；静态YAML不代表K8s实机通过；DOM/HTTP不代表视觉或可访问性通过。仅完成本轮整理不能把48项待办改为已实现。
 
-当前增量：SE-01/02/03/04/05已完成，CP-05部分完成。全局任务/远端执行及M1/M2其余部分保持未完成。见[会话设计](design-sessions.md)、[操作手册](../../zh-CN/browser-sessions.md)和[证据](../../verification/2026-11-16-browser-sessions/README.md)。
+当前增量：SE-01/02/03/04/05已完成，CP-05部分完成。全局任务/远端执行及M1/M2其余部分保持未完成。见[会话设计](design-sessions.md)、[操作手册](../../zh-CN/browser-sessions.md)和[证据](../../verification/README.md)。
 
-CP-01节点目录现已通过真实PostgreSQL/MySQL双节点及中断档案。全局任务/命令/身份/会话权威仍未完成。[目录证据](../../verification/2026-11-16-node-registry/README.md)。
+CP-01节点目录现已通过真实PostgreSQL/MySQL双节点及中断档案。全局任务/命令/身份/会话权威仍未完成。[目录证据](../../verification/README.md)。
 
-v0.5验收关闭SE-04；共享会话不依赖全局任务配置实现，依赖调整为CP-01。无常驻预览，使用临时原生/Docker验收。 [Evidence](../../verification/2026-11-16-shared-access/README.md).
+v0.5验收关闭SE-04；共享会话不依赖全局任务配置实现，依赖调整为CP-01。无常驻预览，使用临时原生/Docker验收。 [Evidence](../../verification/README.md).
 
-v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/2026-11-17-global-control-foundations/README.md). Public runtime integration remains open.
+v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/README.md). Public runtime integration remains open.

@@ -1,4 +1,4 @@
-# Overlay for every controller/Agent. Requires normal STOPPED quiescence before protocol6.
+# Configure consistently before first deployment; namespace mode is fixed.
 cluster:
   enabled: true
   sharedAccess: true

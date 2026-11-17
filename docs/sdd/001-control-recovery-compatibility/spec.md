@@ -109,11 +109,11 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | RC-02 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
 | RC-03 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [JdbcSink.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSink.java) |
 | RC-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
-| RC-05 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
-| RC-06 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [common-cut-repair.md](../../../docs/zh-CN/common-cut-repair.md) |
-| RC-07 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [RepairRequest.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java) |
+| RC-05 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) / [README.md](../../../docs/verification/README.md) |
+| RC-06 | [README.md](../../../docs/verification/README.md) / [common-cut-repair.md](../../../docs/zh-CN/common-cut-repair.md) |
+| RC-07 | [README.md](../../../docs/verification/README.md) / [RepairRequest.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java) |
 | RC-08 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
-| RC-09 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
+| RC-09 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [README.md](../../../docs/verification/README.md) |
 | RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-02 | [validation.md](../../../docs/validation.md) / [mysql57-run.sh](../../../tests/mysql57-run.sh) |
@@ -130,7 +130,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | DO-02 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) / [console-and-deployment.md](../../../docs/zh-CN/console-and-deployment.md) |
 | DO-03 | [managed-repair.md](../../../docs/zh-CN/managed-repair.md) / [recovery.md](../../../docs/recovery.md) |
 | DO-04 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [validation.md](../../../docs/en/validation.md) |
-| DO-05 | [verify-artifact.py](../../../tests/verify-artifact.py) / [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) |
+| DO-05 | [verify-artifact.py](../../../tests/verify-artifact.py) / [README.md](../../../docs/verification/README.md) |
 | LG-01 | [implementation-status.md](../../../docs/zh-CN/implementation-status.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-02 | [platform-design.md](../../../docs/zh-CN/platform-design.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-03 | [clickhouse-v3.md](../../../docs/zh-CN/clickhouse-v3.md) / [doris-v3.md](../../../docs/zh-CN/doris-v3.md) / [hive-v3.md](../../../docs/zh-CN/hive-v3.md) |
@@ -139,19 +139,5 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | LG-06 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) |
 | LG-07 | [performance.md](../../../docs/zh-CN/performance.md) / [benchmark.py](../../../tests/benchmark.py) |
 | LG-08 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [rename-migration.md](../../../docs/zh-CN/rename-migration.md) |
-| LG-09 | [README.md](../../../docs/verification/2026-11-16-managed-repair/README.md) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
+| LG-09 | [README.md](../../../docs/verification/README.md) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
 | LG-10 | [account-management.md](../../../docs/zh-CN/account-management.md) / [security-audit.md](../../../docs/zh-CN/security-audit.md) |
-
-v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/2026-11-17-global-control-foundations/README.md). Historical foundations scope; newer public routing evidence follows.
-
-2026-11-17: fixed-owner public routing/CDC incremental acceptance, with a known maintenance projection gap. [Evidence](../../verification/2026-11-17-global-routing/README.md). CP-02/03 remain PARTIAL.
-
-2026-11-17: [Global maintenance and original UNKNOWN upgrade](../../verification/2026-11-17-global-maintenance/README.md).339application tests,5x143maintenance controls and native business evidence;CP-02/03 remain PARTIAL.
-
-v0.6: CP-07 explicit separated profile accepted;7DONE/33PARTIAL/8NEW,41open. [Evidence](../../verification/2026-11-17-execution-lifecycle/README.md).
-
-v0.7: RC-02 bounded managed review accepted;9DONE/31PARTIAL/8NEW,40open. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
-
-v0.8：RC-05 已提交事务确认限定档案验收；9 DONE、33 PARTIAL、6 NEW，39项未完成。[证据](../../verification/2026-11-17-managed-commit/README.md)。
-
-v0.9：RC-03首批限定档案验收；10 DONE、32 PARTIAL、6 NEW，38项未完成。[证据](../../verification/2026-11-17-managed-skip/README.md)。

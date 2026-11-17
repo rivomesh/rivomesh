@@ -12,4 +12,4 @@ Shared audit uses a serialized sequence/hash chain and retention anchor. Retry t
 
 Acceptance requires independent directories sharing SQL: A-login/B-restore, kill-A/B-continuity, logout/rotation/grant revocation across nodes/restart, no local fallback during store failure, import/identity-loss/rollback refusal, concurrent account/session/audit and expiry/capacity/idempotency contracts, native PG/MySQL, UI and bilingual recovery docs. Full CP-05 also requires least-privilege task-secret distribution and cannot close based on shared accounts alone.
 
-SE-04 accepted; CP-05 remains partial. [Evidence](../../verification/2026-11-16-shared-access/README.md).
+SE-04 accepted; CP-05 remains partial. [Evidence](../../verification/README.md).

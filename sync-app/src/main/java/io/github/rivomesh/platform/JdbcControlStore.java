@@ -56,22 +56,17 @@ final class JdbcControlStore implements ControlStore {
             if(mysql)try(PreparedStatement p=prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rmc_cluster','rmc_node','rmc_node_task')",config.namespace);ResultSet rs=p.executeQuery()){
                 int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new TaskService.Conflict("CONTROL_STORE_ENGINE_INVALID");if(!"utf8mb4_bin".equalsIgnoreCase(rs.getString(2)))throw new TaskService.Conflict("CONTROL_STORE_COLLATION_INVALID");}if(count!=3)throw new TaskService.Conflict("CONTROL_STORE_TABLES_MISSING");
             }
-            try{update(c,"INSERT INTO "+table("cluster")+" (cluster_id,format_version,lease_millis,maximum_nodes) VALUES (?,1,?,?)",config.id,config.leaseMillis,config.maximumNodes);}
+            try{update(c,"INSERT INTO "+table("cluster")+" (cluster_id,format_version,lease_millis,maximum_nodes) VALUES (?,?,?,?)",config.id,requiredMode(),config.leaseMillis,config.maximumNodes);}
             catch(SQLException duplicate){if(duplicate.getSQLState()==null||!duplicate.getSQLState().startsWith("23"))throw duplicate;}
             c.setAutoCommit(false);cluster(c);c.commit();
         }catch(SQLException failure){throw new Unavailable();}
     }
+    private int requiredMode(){return config.recoverySkip?7:config.recoveryCommit?6:config.recoveryReview?5:config.separateExecution?4:config.sharedTasks?3:config.sharedAccess?2:1;}
     private void cluster(Connection c)throws SQLException{
         try(PreparedStatement p=prepare(c,"SELECT format_version,lease_millis,maximum_nodes FROM "+table("cluster")+" WHERE cluster_id=? FOR UPDATE",config.id);ResultSet rs=p.executeQuery()){
             if(!rs.next()||rs.getLong(2)!=config.leaseMillis||rs.getInt(3)!=config.maximumNodes)throw new TaskService.Conflict("CONTROL_STORE_PROTOCOL_MISMATCH");
             int format=rs.getInt(1);
-            int required=config.recoverySkip?7:config.recoveryCommit?6:config.recoveryReview?5:config.separateExecution?4:config.sharedTasks?3:config.sharedAccess?2:1;
-            if(config.sharedAccess&&format<required){
-                try(PreparedStatement members=prepare(c,"SELECT COUNT(*) FROM "+table("node")+" WHERE cluster_id=? AND lifecycle<>'STOPPED'",config.id);ResultSet nodes=members.executeQuery()){
-                    nodes.next();if(nodes.getLong(1)>0)throw new TaskService.Conflict(config.sharedTasks?"GLOBAL_TASK_QUIESCENCE_REQUIRED":"SHARED_ACCESS_QUIESCENCE_REQUIRED");
-                }
-                update(c,"UPDATE "+table("cluster")+" SET format_version=? WHERE cluster_id=? AND format_version=?",required,config.id,format);format=required;
-            }
+            int required=requiredMode();
             if(format!=required)throw new TaskService.Conflict("CONTROL_STORE_PROTOCOL_MISMATCH");
         }
     }

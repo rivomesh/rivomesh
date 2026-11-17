@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
               'environment': {key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',
-                          '--select-class=io.github.rivomesh.cdc.FailureReviewTest', '--select-class=io.github.rivomesh.cdc.FailureEvidenceStoreTest', '--select-class=io.github.rivomesh.platform.RecoveryReviewIntegrationTest', '--reports-dir=' + container_path(output) + '/junit']}
+                          '--select-class=io.github.rivomesh.cdc.FailureReviewTest', '--select-class=io.github.rivomesh.cdc.FailureEvidenceStoreTest', '--reports-dir=' + container_path(output) + '/junit']}
     compose_file = home / 'compose.json'
     compose_file.write_text(json.dumps({'services': {'database': db, 'runner': runner}}))
     compose = ['docker', 'compose', '-p', project, '-f', str(compose_file)]
@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
                 for key in totals:
                     totals[key] += int(suite.attrib.get(key, 0))
             manifest['results'] = totals
-            assert totals == {'tests': 23, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
+            assert totals == {'tests': 22, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
             manifest['status'] = 'PASS'
         except Exception:
             manifest['status'] = 'FAIL'

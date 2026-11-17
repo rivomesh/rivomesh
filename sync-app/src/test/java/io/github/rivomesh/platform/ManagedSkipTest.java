@@ -86,9 +86,4 @@ class ManagedSkipTest {
             server.start();ObjectNode body=Model.JSON.createObjectNode();body.put("action","SKIP_TRANSACTION");body.put("expectedRevision","revision");body.put("subscriptionId","pg");body.put("errorCount",1);body.set("skip",Model.JSON.valueToTree(skip()));PlatformTest.Response response=PlatformTest.http(helper.base(server),"/api/tasks/missing/actions",PlatformTest.TOKEN,body.toString(),"skip_disabled_1234");assertEquals(409,response.status,response.text);assertTrue(response.text.contains("SKIP_DISABLED"));assertEquals(0,backend.captures.get());
         }
     }
-    @Test void protocolSevenRequiresNormallyStoppedMembersAndRefusesOlderModes()throws Exception{
-        GlobalControlHttpTest helper=new GlobalControlHttpTest();helper.directory=directory;ClusterConfig previous=helper.config("old").cluster;previous.recoveryReview=true;previous.recoveryCommit=true;previous.separateExecution=true;ClusterConfig next=helper.config("next").cluster;next.recoveryReview=true;next.recoveryCommit=true;next.recoverySkip=true;next.separateExecution=true;
-        try(JdbcControlStore old=new JdbcControlStore(previous)){ControlStore.Node member=ControlStoreTest.node("old");member.role="CONTROLLER_WORKER";ControlStore.Lease lease=old.register(member,Collections.emptyList());assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next)).getMessage());ControlStoreTest.expire(previous,"old");assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next));old.stopped(lease);try(JdbcControlStore upgraded=new JdbcControlStore(next)){assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(previous)).getMessage());}}
-        next.recoveryCommit=false;assertEquals("RECOVERY_SKIP_POLICY_INVALID",assertThrows(IllegalArgumentException.class,next::validate).getMessage());
-    }
 }

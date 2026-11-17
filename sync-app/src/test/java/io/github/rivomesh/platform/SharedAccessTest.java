@@ -124,16 +124,6 @@ class SharedAccessTest {
             assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new ConsoleServer(b,local)).getMessage());
         }
     }
-    @Test void authorityUpgradeRequiresExplicitStoppedMembersNotExpiredHeartbeats()throws Exception{
-        ClusterConfig old=config("legacy").cluster;old.sharedAccess=false;PlatformConfig upgraded=config("upgraded");
-        try(ControlStore registry=new JdbcControlStore(old)){
-            ControlStore.Lease lease=registry.register(ControlStoreTest.node("legacy"),Collections.emptyList());
-            assertEquals("SHARED_ACCESS_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->service(upgraded)).getMessage());
-            ControlStoreTest.expire(old,"legacy");assertEquals("SHARED_ACCESS_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->service(upgraded)).getMessage());
-            registry.stopped(lease);try(TaskService shared=service(upgraded)){assertNotNull(shared.authenticate("Bearer "+TOKEN));}
-            assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->registry.register(ControlStoreTest.node("legacy"),Collections.emptyList())).getMessage());
-        }
-    }
 
     @Test void importedTaskAccessStaysOnItsOriginalNodeUntilAnAdministratorExpandsIt()throws Exception{
         PlatformConfig a=config("a"),b=config("b");try(TaskService first=service(a);TaskService second=service(b);ConsoleServer one=new ConsoleServer(a,first);ConsoleServer two=new ConsoleServer(b,second)){

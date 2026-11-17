@@ -1,4 +1,0 @@
-MYSQL: PASS concurrent two-node registration and actual artifact/runtime metadata
-MYSQL: PASS remote task observation, kill/stale and persistent-directory rejoin with new epoch
-MYSQL: PASS store outage returns503, readiness recovers and nodes renew after expiry
-artifactSha256=e42cd685bcc9fb38a1e0e82819230ac58869a54f40c4417d39cd596337b91d11

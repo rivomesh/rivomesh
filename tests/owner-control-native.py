@@ -16,7 +16,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
-parser.add_argument('--artifact', type=Path, default=ROOT / 'target/release-evidence/shared-access-journal-final.jar')
+parser.add_argument('--artifact', type=Path, default=ROOT / 'sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar')
 parser.add_argument('--test-classes', type=Path, help='Run the frozen native fixture against the release JAR first, without compiling development sources')
 parser.add_argument('--release-manifest', type=Path)
 parser.add_argument('--fixture', choices=('owner','configuration','execution'), default='owner')

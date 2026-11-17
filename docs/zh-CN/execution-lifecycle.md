@@ -2,7 +2,7 @@
 
 [English](../en/execution-lifecycle.md) · [全局控制](global-control.md) · [SDD合同](../sdd/001-control-recovery-compatibility/design-execution-lifecycle.md)
 
-协议4分离档案已通过348项应用构建/发布包优先测试、76项DOM及五JDK各152项专项；PG/MySQL控制库、真实多库双目标、管理全停、控制库中断、接收入口死亡后原命令恢复、非root三进程和SQL并发角色切换均已验收。自动跨Agent接管、完整日志/适配器/JDK矩阵仍待完成。 [Evidence](../verification/2026-11-17-execution-lifecycle/README.md).
+协议4分离档案已通过348项应用构建/发布包优先测试、76项DOM及五JDK各152项专项；PG/MySQL控制库、真实多库双目标、管理全停、控制库中断、接收入口死亡后原命令恢复、非root三进程和SQL并发角色切换均已验收。自动跨Agent接管、完整日志/适配器/JDK矩阵仍待完成。 [Evidence](../verification/README.md).
 
 | 配置 role | 节点目录角色 | 职责 |
 |---|---|---|

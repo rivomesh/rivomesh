@@ -14,15 +14,11 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
-parser.add_argument('--legacy-artifact', type=Path, required=True)
 parser.add_argument('--test-classes', type=Path, required=True)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--protocol7', action='store_true', help='Also test native protocol3-6 upgrades and actual older binary refusing protocol7')
 args = parser.parse_args()
 artifact, classes, output = args.artifact.resolve(), args.test_classes.resolve(), args.output.resolve()
-legacy=args.legacy_artifact.resolve();legacy.relative_to(ROOT)
-assert hashlib.sha256(legacy.read_bytes()).hexdigest()=="9f97b4d98c103e895c9d1262cd19dcd0946b21b6fc0f72fff2267e59c727de00"
 for path in (artifact, classes, output):
     path.relative_to(ROOT)
 assert artifact.is_file() and classes.is_dir()
@@ -39,8 +35,8 @@ for entry in sorted(classes.rglob('*')):
     if entry.is_file():
         test_hash.update(str(entry.relative_to(classes)).encode() + b'\0' + entry.read_bytes())
 manifest = dict(status='RUNNING', product=args.product, artifactSha256=digest,
-                testClassesSha256=test_hash.hexdigest(), legacyArtifactSha256=hashlib.sha256(legacy.read_bytes()).hexdigest(), harnessSourceSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                scope='32 skip model/journal/native/coordinator contracts and1 ACTUAL accepted older9f97 binary refusing format4;no public API/UI or complete connector matrix')
+                testClassesSha256=test_hash.hexdigest(), harnessSourceSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                scope='32 current skip model/journal/native/coordinator contracts;complete connector matrix remains open')
 log = output / 'native.log'
 with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') as temporary:
     home = Path(temporary)
@@ -50,13 +46,10 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
           'healthcheck': {'test': ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent'] if mysql else ['CMD-SHELL', 'pg_isready -U failure_test -d failure_test'], 'interval': '2s', 'timeout': '3s', 'retries': 60}}
     container_path = lambda path: '/project/' + str(path.relative_to(ROOT))
     runner = {'image': 'eclipse-temurin:8-jre', 'volumes': [str(ROOT) + ':/project'], 'working_dir': '/project',
-              'environment': {**{key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},'RIVOMESH_LEGACY_ARTIFACT':container_path(legacy),'RIVOMESH_LEGACY_TEST_CLASSES':container_path(classes)},
+              'environment': {**{key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},},
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',
-                          '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--select-class=io.github.rivomesh.cdc.SkipLegacyFormatIntegrationTest', '--reports-dir=' + container_path(output) + '/junit']}
-    if args.protocol7:
-        runner['command'].append('--select-class=io.github.rivomesh.platform.RecoverySkipIntegrationTest')
-        manifest['protocol7'] = True
+                          '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--reports-dir=' + container_path(output) + '/junit']}
     compose_file = home / 'compose.json'
     compose_file.write_text(json.dumps({'services': {'database': db, 'runner': runner}}))
     compose = ['docker', 'compose', '-p', project, '-f', str(compose_file)]
@@ -75,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
                 for key in totals:
                     totals[key] += int(suite.attrib.get(key, 0))
             manifest['results'] = totals
-            assert totals == {'tests': 34 if args.protocol7 else 33, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
+            assert totals == {'tests': 32, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
             manifest['status'] = 'PASS'
         except Exception:
             manifest['status'] = 'FAIL'

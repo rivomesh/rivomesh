@@ -52,6 +52,16 @@ class ControlStoreTest {
             b.id=a.id;b.leaseMillis=2000;assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(b)).getMessage());
         }
     }
+    @Test void namespaceModeIsCreatedDirectlyAndNeverAutomaticallyMigratedEvenAfterStop()throws Exception{
+        ClusterConfig original=cluster("a");try(ControlStore store=new JdbcControlStore(original)){
+            ControlStore.Lease lease=store.register(node("a"),Collections.emptyList());store.stopped(lease);
+            ClusterConfig changed=cluster("b");changed.sharedAccess=true;
+            assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(changed)).getMessage());
+            try(Connection c=DriverManager.getConnection(original.url,original.username,original.password);Statement query=c.createStatement();ResultSet r=query.executeQuery("SELECT format_version FROM \"rivomesh_control\".\"rmc_cluster\"")){assertTrue(r.next());assertEquals(1,r.getInt(1));}
+        }
+        ClusterConfig current=cluster("direct");current.namespace="current_mode";current.sharedAccess=true;
+        try(ControlStore store=new JdbcControlStore(current);Connection c=DriverManager.getConnection(current.url,current.username,current.password);Statement query=c.createStatement();ResultSet r=query.executeQuery("SELECT format_version FROM \"current_mode\".\"rmc_cluster\"")){assertTrue(r.next());assertEquals(2,r.getInt(1));}
+    }
     @Test void nodeAndObservationPublishRollBackTogether()throws Exception{
         ClusterConfig config=cluster("node");try(ControlStore store=new JdbcControlStore(config)){
             ControlStore.Node node=node("node");ControlStore.Lease lease=store.register(node,Arrays.asList(task("original")));

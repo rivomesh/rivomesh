@@ -1,8 +1,0 @@
-{
-  "Id": "sha256:2fc6ed1abaada4e774aafb06005570d6355d5338263b0382627420222b6f2a23",
-  "Architecture": "arm64",
-  "Os": "linux",
-  "RepoTags": [
-    "rivomesh:global-startup-a6eaffa9fd4d"
-  ]
-}

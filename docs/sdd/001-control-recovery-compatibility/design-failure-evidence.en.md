@@ -20,4 +20,4 @@ Global control opts into protocol5 with`cluster.recoveryReview: true`,requiring 
 
 A durable`FAILURE_REVIEW`action binds destination/error generation and persists evidence ID/original configuration revision before execution. Summary GET and raw/normalized event POST bind original execution directory,reauthorize/audit and limit pages to256KiB/100events. They never automatically resume. Global operation views preserve review IDs. UI opens summaries first,requires explicit raw access,closes on logout and discards stale session responses.
 
-[Managed review acceptance](../../verification/2026-11-17-managed-failure-review/README.md):protocol5 fixed-Agent MySQL8.4/LOCAL profile;manual mutation and other profiles remain separate.
+[Managed review acceptance](../../verification/README.md):protocol5 fixed-Agent MySQL8.4/LOCAL profile;manual mutation and other profiles remain separate.

@@ -2,7 +2,7 @@
 
 [中文](../zh-CN/execution-lifecycle.md) · [Global control](global-control.md) · [SDD contract](../sdd/001-control-recovery-compatibility/design-execution-lifecycle.en.md)
 
-The protocol4 separated profile passes348app/actual-JAR tests,76DOM and5x152controls,PG/MySQL stores,actual multi-database/two-target CDC,all-controller loss,store outage,pending accepting-entry recovery,nonroot processes and SQL role races.Automatic Agent takeover and complete journal/adapter/JDK matrices remain open. [Evidence](../verification/2026-11-17-execution-lifecycle/README.md).
+The protocol4 separated profile passes348app/actual-JAR tests,76DOM and5x152controls,PG/MySQL stores,actual multi-database/two-target CDC,all-controller loss,store outage,pending accepting-entry recovery,nonroot processes and SQL role races.Automatic Agent takeover and complete journal/adapter/JDK matrices remain open. [Evidence](../verification/README.md).
 
 | Configuration role | Registry role | Responsibility |
 |---|---|---|

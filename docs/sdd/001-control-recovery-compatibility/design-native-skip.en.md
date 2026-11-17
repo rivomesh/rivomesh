@@ -1,6 +1,6 @@
 # RC-03 / RC-08: transaction skipping and durable gaps (draft)
 
-Status: not implemented. This design does not claim a skip endpoint or button exists.
+Status:bounded skip is implemented. Historical binary probes and automatic control-mode migration are removed;current consistency boundaries remain.
 
 The first profile uses transactional PostgreSQL/MySQL destinations with the original Agent/journal directory. Pause the whole task,confirm native fencing,and retain fresh complete raw/normalized evidence. Skip only the selected subscriber's next complete transaction. Preserve source GTID/original content and other subscribers' delivery semantics.
 

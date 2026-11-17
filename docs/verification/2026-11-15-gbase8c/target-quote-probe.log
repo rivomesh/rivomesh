@@ -1,4 +1,0 @@
-exit=3
-ERROR:  syntax error at or near "`"
-LINE 1: SELECT count(*) FROM "gb_f974c1822c0445039f79_copy".`items`
-                                                            ^

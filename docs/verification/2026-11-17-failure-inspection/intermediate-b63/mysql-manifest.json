@@ -1,9 +1,0 @@
-{
-  "status": "PASS",
-  "product": "MYSQL",
-  "artifactSha256": "b63e2018b3a72f38f615ca1a8f78f765923717e6faf5723fa9259d1c3ecf6eab",
-  "testClassesSha256": "1cfadd5e7a24bd394cdb532ae3cfbf4cb1c170deef2a7af840174a28e54330cb",
-  "harnessSourceSha256": "49ebef9351848372ea9adee7424c7fd8308c7195f2246080a703efd870a91f63",
-  "scope": "FailureReviewTest SQL storage contracts; no UI, mutation, source CDC or vendor-target acceptance",
-  "cleanupExitCode": 0
-}

@@ -1,5 +1,0 @@
-OWNER_CONTROL_NATIVE_ACCEPTED: org.postgresql.Driver encrypted admission, agent/lease/directory binding, real TaskService create/start/check/stop, lost global reply, once-only local receipt, fresh authorization, encrypted task observations/global pages and expiring read-only query; fixture Workers only, no business CDC or two-JVM HTTP claim
- Container rivomesh-owner-631194e7cd-runner-run-94f3c4e5fc29 Creating 
- Container rivomesh-owner-631194e7cd-runner-run-94f3c4e5fc29 Created 
-ACTUAL_JAR_FIRST_ARTIFACT_SHA256=1e474ad174f9425ac83af2642c5ec707ddb7435ba5ee5e898003c92a5d612019
-FROZEN_FIXTURE_CLASSES_SHA256=0bf7ba7f04249fe4aa1b2803521117748a80631b04991de73706605b15683098

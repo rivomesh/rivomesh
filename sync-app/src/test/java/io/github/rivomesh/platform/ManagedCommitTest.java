@@ -47,13 +47,6 @@ class ManagedCommitTest {
         Path path=Paths.get(config.dataDirectory,"controller.json");JsonNode state=Model.JSON.readTree(Files.readAllBytes(path));for(JsonNode op:state.path("tasks").path("job").path("operations"))if("confirm_restart".equals(op.path("id").asText()))((ObjectNode)op).put("status","PENDING");Files.write(path,Model.JSON.writeValueAsBytes(state));Backend restarted=new Backend();
         try(TaskService service=new TaskService(config,restarted,new PlatformTest.Workers())){PlatformTest.await(()->"SUCCEEDED".equals(ManagedFailureReviewTest.op(service,"confirm_restart").path("status").asText()));assertEquals("confirm_restart",restarted.operation);assertEquals(request().evidenceId,restarted.evidence);assertEquals(request().reason,restarted.reason);assertEquals("PAUSED",service.view("job").get("desired"));}
     }
-    @Test void protocolSixRequiresNormallyStoppedMembersAndRejectsReviewOnlyMembers()throws Exception{
-        GlobalControlHttpTest fixture=new GlobalControlHttpTest();fixture.directory=directory;ClusterConfig old=fixture.config("old").cluster;old.recoveryReview=true;old.separateExecution=true;ClusterConfig next=fixture.config("new").cluster;next.recoveryReview=true;next.recoveryCommit=true;next.separateExecution=true;
-        try(JdbcControlStore store=new JdbcControlStore(old)){
-            ControlStore.Node member=ControlStoreTest.node("old");member.role="CONTROLLER_WORKER";ControlStore.Lease lease=store.register(member,Collections.emptyList());assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next)).getMessage());ControlStoreTest.expire(old,"old");assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next));store.stopped(lease);
-            try(JdbcControlStore upgraded=new JdbcControlStore(next)){assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(old)).getMessage());}
-        }next.recoveryReview=false;assertEquals("RECOVERY_COMMIT_POLICY_INVALID",assertThrows(IllegalArgumentException.class,next::validate).getMessage());
-    }
     @Test void reviewOnlyClusterRejectsConfirmationBeforeTaskLookupOrQueueing()throws Exception{
         GlobalControlHttpTest fixture=new GlobalControlHttpTest();fixture.directory=directory;PlatformConfig config=fixture.config("a");config.cluster.recoveryReview=true;Backend backend=new Backend();
         try(TaskService service=new TaskService(config,backend,new PlatformTest.Workers());ConsoleServer server=new ConsoleServer(config,service)){

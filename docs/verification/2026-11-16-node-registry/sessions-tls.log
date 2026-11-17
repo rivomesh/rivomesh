@@ -1,2 +1,0 @@
-PASS candidate-JAR TLS/cookie/refresh/CSRF/logout/Bearer/no-secret-state
-artifactSha256=e42cd685bcc9fb38a1e0e82819230ac58869a54f40c4417d39cd596337b91d11

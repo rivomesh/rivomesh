@@ -1,6 +1,6 @@
 # 确认目标已提交的事务
 
-状态：RC-05 限定档案已验收：界面、API、协议6准入、原子 ACK/回执与跨入口恢复。[验收证据](../verification/2026-11-17-managed-commit/README.md)。[SDD](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.md) · [English](../en/commit-acknowledgement.md)
+状态：RC-05 限定档案已验收：界面、API、协议6准入、原子 ACK/回执与跨入口恢复。[验收证据](../verification/README.md)。[SDD](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.md) · [English](../en/commit-acknowledgement.md)
 
 适用于 MySQL 源、事务型 PostgreSQL/MySQL 目标、完整增量事务已经保留原始和规范化内容的场景。目标只由同步服务写入。其他产品、全量快照故障、尚未形成完整事务的采集/解码故障均不能使用此操作。
 
@@ -15,26 +15,9 @@
 
 若没有确认按钮，先检查集群开关、整个任务是否暂停、观察是否过期、目标围栏和提交内容是否一致。不要手工更新元数据位点。
 
-## 启用与升级
+## 首次部署
 
-独立控制器可直接使用。共享任务集群默认关闭人工确认，所有管理节点和 Agent 均需配置：
-
-```yaml
-cluster:
-  sharedAccess: true
-  sharedTasks: true
-  recoveryReview: true
-  recoveryCommit: true
-```
-
-这会使用控制协议6；仅审阅继续使用协议5。升级前正常停止全部原成员，确认记录为 STOPPED；过期或被强杀的 RUNNING 记录不能代替正常停止。保留原 nodeId、执行目录、证据密钥、共享控制库、任务密钥和 PVC，逐个启动升级后的管理节点与原 Agent。协议5或其他旧模式不能加入协议6命名空间；不支持直接降级。
-
-- Linux：在原审阅配置上加入 `recoveryCommit: true`，正常停止/更新后用原目录启动。
-- Docker/Compose：在全部原控制器和 Agent 的审阅配置中加入开关，保留原卷；先正常停止再重建容器。
-- Helm：使用原各节点 values，再叠加 `deploy/helm/rivomesh/values-recovery-commit.yaml`。保持原 Secret/PVC 和节点身份。
-- 手工 Kubernetes YAML：在现有审阅 ConfigMap 的 `cluster` 下加入开关，按正常停止的升级流程重新部署原 StatefulSet/PVC。不能直接滚动混用旧节点。
-
-旧日志升级时，已授权的确认操作可在验证既有日志身份、暂停状态和新证据后，只增加 `rm3_recovery_ack` 回执表。不会重建丢失的 job、订阅、目标断点或业务表。MySQL DDL 有隐式提交，因此建表后会重新获取全部围栏并复查，建表本身不会推进 ACK。已有非事务型元数据不会自动转换，必须先处理配置/存储问题。新表创建需要对应日志 schema 的建表权限；表已存在时不必重新建表。
+首次部署时按[首版配置基线](first-release.md)一次设置所有控制器和Agent。当前不提供开发版本的原地升级或自动模式迁移。Linux、Docker、Helm、手工Kubernetes使用相同的身份/存储要求。元数据DDL必须具备相应权限；重启恢复和丢失元数据拒绝仍然保留。
 
 ## API 与回执
 

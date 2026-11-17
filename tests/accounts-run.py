@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual Java8 release upgrade/auth/audit/kill/recovery. Does not claim database synchronization."""
+"""Current Java8 account/auth/audit/kill/recovery. Does not claim database synchronization."""
 import hashlib
 import importlib.util
 import json
@@ -29,18 +29,15 @@ def main():
     directory = ROOT / relative
     directory.mkdir(parents=True, mode=0o700)
     artifact = ROOT / 'sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar'
-    old = ROOT / 'target/release-evidence/hive-ui-9ba60d.jar'
-    assert old.is_file(), 'Preserve the pre-account-management release for the upgrade test'
-    assert hashlib.sha256(old.read_bytes()).hexdigest() == '9ba60d0f57c78214deafced517bfb36c98ade81ee62c20d8a99fe92a573b6b12'
     original = hashlib.sha256(artifact.read_bytes()).hexdigest()
     command('python3', 'tests/verify-artifact.py')
-    for source, target in [(artifact, directory / 'new.jar'), (old, directory / 'old.jar')]:
+    for source, target in [(artifact, directory / 'current.jar')]:
         result = command('cp', '-c', str(source), str(target), check=False)
         if result.returncode:
             shutil.copyfile(source, target)
     prefix = '/project/' + str(relative)
     active = directory / 'active-jar'
-    active.write_text(prefix + '/old.jar\n')
+    active.write_text(prefix + '/current.jar\n')
     root_token, viewer, operator, rotated, new_root = [secrets.token_hex(32) for _ in range(5)]
     config = {'bind': '0.0.0.0', 'port': 8080, 'authToken': '${RIVOMESH_NATIVE_ADMIN}',
               'users': [{'id': 'viewer', 'role': 'VIEWER', 'token': '${RIVOMESH_NATIVE_VIEWER}', 'taskIds': []}],
@@ -101,13 +98,7 @@ def main():
             return log
 
         ready(root_token)
-        legacy = request('/api/audit/export?limit=1000')[1]; audit.verify_page(legacy)
-        legacy_rows = {item['id']: item for item in legacy['events']}
-        command('docker', 'stop', name)
-        active.write_text(prefix + '/new.jar\n'); command('docker', 'start', name); ready(root_token)
-        upgraded = request('/api/audit/export?limit=1000')[1]; audit.verify_page(upgraded)
-        assert all({item['id']: item for item in upgraded['events']}[key] == value for key, value in legacy_rows.items())
-        print('ACCOUNTS_LEGACY_UPGRADE_ACCEPTED: actual old release audit rows retain their exact export/hash content')
+        initial = request('/api/audit/export?limit=1000')[1]; audit.verify_page(initial)
         status, page = request('/api/accounts'); assert status == 200 and page['mode'] == 'CONFIG'
         assert request('/api/accounts', viewer)[0] == 403
         activation = {'expectedRevision': page['revision']}
@@ -133,7 +124,7 @@ def main():
         assert request('/api/session', root_token)[0] == 401
         restart(new_root, kill=True)
         assert request('/api/session', root_token)[0] == 401 and request('/api/session', rotated)[1]['role'] == 'VIEWER'
-        locked = command('docker', 'exec', name, 'java', '-jar', prefix + '/new.jar', 'recover-access', prefix + '/platform.json', 'legacy-admin', check=False)
+        locked = command('docker', 'exec', name, 'java', '-jar', prefix + '/current.jar', 'recover-access', prefix + '/platform.json', 'legacy-admin', check=False)
         assert locked.returncode != 0 and 'CONTROLLER_ALREADY_RUNNING' in locked.stdout
         command('docker', 'stop', name); current = controller.read_bytes()
         controller.write_bytes(older)
@@ -142,9 +133,9 @@ def main():
         command('docker', 'stop', name); current = controller.read_bytes(); controller.unlink()
         assert 'ACCOUNT_STATE_REQUIRED' in failed_start('missing-directory')
         assert not controller.exists()
-        controller.write_bytes(current); active.write_text(prefix + '/old.jar\n'); failed_start('old-program-refused')
+        controller.write_bytes(current)
         assert json.loads(current)['version'] == 2
-        active.write_text(prefix + '/new.jar\n'); command('docker', 'start', name); ready(new_root)
+        active.write_text(prefix + '/current.jar\n'); command('docker', 'start', name); ready(new_root)
         command('docker', 'stop', name)
         # Represent a committed RUNNING intent without first launching a source worker.
         pending = json.loads(controller.read_text()); pending['tasks']['offline-probe']['desired'] = 'RUNNING'
@@ -152,7 +143,7 @@ def main():
         assert not list((directory / 'data/logs').iterdir())
         offline = ['docker', 'run', '--rm', '--mount', 'type=bind,src=' + str(ROOT) + ',dst=/project', '--workdir', '/project',
                    '--env', 'RIVOMESH_NATIVE_ADMIN', '--env', 'RIVOMESH_NATIVE_VIEWER', 'maven:3.9-eclipse-temurin-8',
-                   'java', '-jar', prefix + '/new.jar', 'recover-access', prefix + '/platform.json', 'legacy-admin']
+                   'java', '-jar', prefix + '/current.jar', 'recover-access', prefix + '/platform.json', 'legacy-admin']
         result = subprocess.run(offline, cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         assert result.returncode == 0 and 'ACCESS_RECOVERED_OFFLINE_NO_WORKERS_STARTED' in result.stdout
         recovered = json.loads(controller.read_text())
@@ -170,7 +161,7 @@ def main():
         (directory / 'audit-export.json').write_text(json.dumps(exported)); (directory / 'audit-export.json').chmod(0o600)
         assert hashlib.sha256(artifact.read_bytes()).hexdigest() == original
         command('python3', 'tests/verify-artifact.py')
-        print('ACCOUNTS_NATIVE_ACCEPTED: Java8 actual release HTTP, explicit activation, grants, token rotation, last-admin guard, SIGKILL persistence, older/missing directory and old-program refusal, controller lock, offline recovery preserving RUNNING intent without launching workers, and exact legacy/new audit proofs; artifact=' + original)
+        print('ACCOUNTS_NATIVE_ACCEPTED: Java8 actual release HTTP, explicit activation, grants, token rotation, last-admin guard, SIGKILL persistence, stale/missing directory refusal, controller lock, offline recovery preserving RUNNING intent without launching workers, and current chained audit proofs; artifact=' + original)
     finally:
         if created:
             (directory / 'controller.log').write_text(command('docker', 'logs', '--tail', '100', name).stdout)

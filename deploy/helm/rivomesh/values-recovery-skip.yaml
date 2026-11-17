@@ -1,4 +1,4 @@
-# Experimental overlay for EVERY controller/Agent; normal STOPPED protocol7 upgrade required.
+# Configure consistently before first deployment; namespace mode is fixed.
 # Internal PG/MySQL skip contracts pass; full public skip lifecycle is still under acceptance.
 cluster:
   enabled: true

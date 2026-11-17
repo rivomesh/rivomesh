@@ -16,7 +16,7 @@ cluster:
   nodeId: ${RIVOMESH_NODE_ID}
   sharedAccess: true
   sharedTasks: true
-  recoveryReview: true # Protocol5: normally stop old members before enabling everywhere.
+  recoveryReview: true # Configure consistently before first deployment; namespace mode is fixed.
   separateExecution: true
   role: CONTROLLER
   taskKey: ${RIVOMESH_TASK_KEY}

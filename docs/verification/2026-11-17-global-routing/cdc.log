@@ -1,8 +1,0 @@
-PASS A creates B-owned task; both JVMs share task revision
-PASS Two source databases to two targets; snapshot keyed/keyless/JSON/generated values
-PASS Cross-database transaction insert/update/delete and keyless multiplicity
-PASS Native SQL constraint error pauses target; explicit generation-bound replay catches up
-PASS Offline STOP survives SIGKILL/reopen and prevents restoring old RUNNING intent
-PASS Original private journal resumes after owner restart; missed binlog data catches up
-PASS Masked configuration references, remote preview/edit and shared history across entries
-GLOBAL_CONTROL_CDC_ACCEPTED artifact=a6eaffa9fd4d3298ecb6dc988dc6b11ddf11be1fe68e3f1c0847f249fb5c0876

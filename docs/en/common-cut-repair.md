@@ -1,6 +1,6 @@
 # COMMON_CUT repair: initial CLI
 
-The first MySQL8.4/PostgreSQL17 repair profile passed all four real journal modes. [Evidence](../verification/2026-11-16-common-cut-repair/README.md). Broader production/vendor/capacity acceptance remains incomplete. The console now offers authenticated plan review,execution,cancellation and retry;see [Managed repair](managed-repair.md).
+The first MySQL8.4/PostgreSQL17 repair profile passed all four real journal modes. [Evidence](../verification/README.md). Broader production/vendor/capacity acceptance remains incomplete. The console now offers authenticated plan review,execution,cancellation and retry;see [Managed repair](managed-repair.md).
 
 A completed, sealed SQL row report and its unchanged globally PAUSED cut are required. Initial execution is limited to MySQL/PostgreSQL transactional destinations owned by this task with completed snapshots and matching schemas. Only the synchronizer may write business tables, including during repair. Accepted initial tables are synchronizer-created with no triggers/foreign keys. The executor rejects detected triggers,incoming/outgoing FKs and PostgreSQL row policies/inheritance;MySQL requires verifiable metadata visibility. Full dependency migration planning is not implemented;see the managed handbook. Other vendors, analytical destinations and queues need separate repair protocols/acceptance.
 

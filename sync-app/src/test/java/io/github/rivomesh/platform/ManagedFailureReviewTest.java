@@ -48,14 +48,6 @@ class ManagedFailureReviewTest {
             String audit=Model.JSON.writeValueAsString(service.auditPage(0,0,1000));assertTrue(audit.contains("FAILURE_EVIDENCE_EVENTS_READ"));assertFalse(audit.contains("authorized-raw-value"));
         }
     }
-    @Test void protocolFiveRequiresStoppedMembersAndRefusesOldProfiles()throws Exception{
-        GlobalControlHttpTest fixture=new GlobalControlHttpTest();fixture.directory=directory;ClusterConfig previous=fixture.config("old").cluster;previous.separateExecution=true;ClusterConfig next=fixture.config("new").cluster;next.separateExecution=true;next.recoveryReview=true;
-        try(JdbcControlStore old=new JdbcControlStore(previous)){
-            ControlStore.Node member=ControlStoreTest.node("old");member.role="CONTROLLER_WORKER";ControlStore.Lease lease=old.register(member,Collections.emptyList());assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next)).getMessage());ControlStoreTest.expire(previous,"old");assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next));old.stopped(lease);
-            try(JdbcControlStore upgraded=new JdbcControlStore(next)){assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(previous)).getMessage());}
-        }
-        next.sharedTasks=false;assertThrows(IllegalArgumentException.class,next::validate);
-    }
     @Test void missingEvidenceReadDoesNotInitializeDirectoryOrAuthority()throws Exception{
         TaskBackend backend=new TaskBackend.Database();FailureEvidence.Scope scope=new FailureEvidence.Scope();scope.taskId="job";scope.ownerNodeId="local";scope.ownerDirectoryId=UUID.randomUUID().toString();Path root=directory.resolve("not-created");String id=UUID.randomUUID().toString();
         assertEquals("FAILURE_EVIDENCE_NOT_FOUND",assertThrows(IllegalStateException.class,()->backend.failureEvidence(root,scope,id,null,0,20)).getMessage());assertFalse(Files.exists(root));

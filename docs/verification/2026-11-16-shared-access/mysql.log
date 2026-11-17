@@ -1,8 +1,0 @@
-MYSQL: PASS concurrent two-node registration and actual artifact/runtime metadata
-MYSQL: PASS shared login, cross-node account/token revocation and one verified audit chain
-MYSQL: PASS remote task observation, kill/stale and persistent-directory rejoin with new epoch
-MYSQL: PASS store outage returns503, readiness recovers and nodes renew after expiry
-MYSQL: PASS shared session survives controller kill/reopen and storage outage; logout revokes across nodes
-MYSQL: PASS nontransactional session table refused; InnoDB and existing authority recover
-MYSQL: PASS registry-only member refused by the shared-identity protocol
-artifactSha256=a1ec34fc060b4078cdaa10f357d5933f4df60f5b9616519433c851ddad69fa4a

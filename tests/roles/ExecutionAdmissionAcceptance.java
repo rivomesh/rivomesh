@@ -60,14 +60,18 @@ public final class ExecutionAdmissionAcceptance {
             require(((Number)authority.store.page("",20,actor(first)).get("total")).intValue()==("CREATED".equals(made)?1:0),"ROLE_RACE_PARTIAL_AUTHORITY");System.out.println("NATIVE_ROLE_COMMIT_RACE: round="+iteration+",creation="+made+",registration="+registered);
         }finally{threads.shutdownNow();threads.awaitTermination(10,TimeUnit.SECONDS);}
     }
-    static void protocolUpgrade(Path home)throws Exception{
-        ClusterConfig next=config(home,"native_role_upgrade","management",ClusterConfig.Role.CONTROLLER).cluster,previous=Model.JSON.readValue(Model.JSON.writeValueAsString(next),ClusterConfig.class);previous.separateExecution=false;previous.role=ClusterConfig.Role.COMBINED;previous.nodeId="legacy";
-        try(JdbcControlStore old=new JdbcControlStore(previous)){
-            ControlStore.Node node=new ControlStore.Node();node.id="legacy";node.incarnation=UUID.randomUUID().toString();ControlStore.Lease lease=old.register(node,Collections.emptyList());require("GLOBAL_TASK_QUIESCENCE_REQUIRED".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){}},"UPGRADED")),"LIVE_PROTOCOL3_UPGRADED");
-            try(Connection c=old.connect()){old.update(c,"UPDATE "+old.table("node")+" SET lease_until=0 WHERE cluster_id=? AND node_id=?",previous.id,"legacy");}require("GLOBAL_TASK_QUIESCENCE_REQUIRED".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){}},"UPGRADED")),"EXPIRED_PROTOCOL3_UPGRADED");old.stopped(lease);
-            try(JdbcControlStore upgraded=new JdbcControlStore(next)){require("CONTROL_STORE_PROTOCOL_MISMATCH".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(previous)){}},"ADMITTED")),"OLD_PROTOCOL3_READMITTED");}
+    static void fixedControlMode(Path home)throws Exception{
+        ClusterConfig next=config(home,"native_mode_fixed","management",ClusterConfig.Role.CONTROLLER).cluster,original=Model.JSON.readValue(Model.JSON.writeValueAsString(next),ClusterConfig.class);original.separateExecution=false;original.role=ClusterConfig.Role.COMBINED;original.nodeId="combined";
+        try(JdbcControlStore store=new JdbcControlStore(original)){
+            ControlStore.Node node=new ControlStore.Node();node.id="combined";node.incarnation=UUID.randomUUID().toString();ControlStore.Lease lease=store.register(node,Collections.emptyList());
+            require("CONTROL_STORE_PROTOCOL_MISMATCH".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){ }},"ADMITTED")),"LIVE_MODE_CHANGED");
+            try(Connection c=store.connect()){store.update(c,"UPDATE "+store.table("node")+" SET lease_until=0 WHERE cluster_id=? AND node_id=?",original.id,"combined");}
+            require("CONTROL_STORE_PROTOCOL_MISMATCH".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){ }},"ADMITTED")),"EXPIRED_MODE_CHANGED");store.stopped(lease);
+            require("CONTROL_STORE_PROTOCOL_MISMATCH".equals(attempt(()->{try(JdbcControlStore ignored=new JdbcControlStore(next)){ }},"ADMITTED")),"STOPPED_MODE_CHANGED");
+            try(Connection c=store.connect();PreparedStatement q=store.prepare(c,"SELECT format_version FROM "+store.table("cluster")+" WHERE cluster_id=?",original.id);ResultSet rows=q.executeQuery()){require(rows.next()&&rows.getInt(1)==3,"STORED_MODE_MUTATED");}
         }
-        System.out.println("NATIVE_EXECUTION_PROTOCOL_UPGRADE: live/expired legacy members refuse upgrade; STOPPED upgrades to4 and old mode is refused");
+        next.namespace+="_fresh";try(JdbcControlStore fresh=new JdbcControlStore(next);Connection c=fresh.connect();PreparedStatement q=fresh.prepare(c,"SELECT format_version FROM "+fresh.table("cluster")+" WHERE cluster_id=?",next.id);ResultSet rows=q.executeQuery()){require(rows.next()&&rows.getInt(1)==4,"CURRENT_MODE_NOT_CREATED_DIRECTLY");}
+        System.out.println("NATIVE_CONTROL_MODE_FIXED:live,expired and stopped mode mismatches refuse without metadata mutation;fresh current mode is created directly");
     }
-    public static void main(String[] args)throws Exception{Path home=Paths.get(args[0]);staleBinding(home.resolve("stale"));lateAdmission(home.resolve("late"));for(int n=0;n<3;n++)simultaneous(home.resolve("race_"+n),n);protocolUpgrade(home.resolve("upgrade"));System.out.println("EXECUTION_ADMISSION_NATIVE_ACCEPTED: "+OwnerControlAcceptance.env("RIVOMESH_OWNER_DRIVER")+" actual transactions and mixed-protocol refusal; fixture Workers only");}
+    public static void main(String[] args)throws Exception{Path home=Paths.get(args[0]);staleBinding(home.resolve("stale"));lateAdmission(home.resolve("late"));for(int n=0;n<3;n++)simultaneous(home.resolve("race_"+n),n);fixedControlMode(home.resolve("mode"));System.out.println("EXECUTION_ADMISSION_NATIVE_ACCEPTED: "+OwnerControlAcceptance.env("RIVOMESH_OWNER_DRIVER")+" actual transactions and fixed control-mode validation; fixture Workers only");}
 }

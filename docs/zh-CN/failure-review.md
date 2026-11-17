@@ -2,31 +2,11 @@
 
 [English](../en/failure-review.md) · [故障诊断](failed-transactions.md) · [证据文件与配额](failure-evidence.md)
 
-本页流程已通过[限定档案验收](../verification/2026-11-17-managed-failure-review/README.md)。当前只提供保存和读取历史证据，不执行跳过、补偿、修改GTID或自动恢复。
+本页流程已通过[限定档案验收](../verification/README.md)。当前只提供保存和读取历史证据，不执行跳过、补偿、修改GTID或自动恢复。
 
-## 启用与升级
+## 首次部署
 
-单机管理入口支持管理员审阅。共享全局控制需在所有控制器及Agent配置中显式设置：
-
-```yaml
-cluster:
-  sharedAccess: true
-  sharedTasks: true
-  recoveryReview: true
-```
-
-这会启用控制协议5；默认关闭时保留原协议3/4及既有控制流程。升级前正常停止旧成员，确认注册生命周期为STOPPED，再在所有成员启用新设置并启动。仅租约过期、直接改数据库状态或等待Pod失联不能代替正常停止。协议5建立后，旧模式拒绝加入；没有自动降级流程。
-
-升级继续使用原nodeId、PVC/私有目录及密钥。以下新示例中的release名称用于新部署；升级时不要把原Agent换成演示名称或空目录，否则不会隐式接管原任务。
-
-| 部署 | 入口 |
-|---|---|
-| Linux | [控制器](../../config/platform-controller-review.example.yml)、[Agent](../../config/platform-agent-review.example.yml)，各节点独立目录，使用原systemd服务方式 |
-| Docker Compose | 原[分离部署](../../deploy/docker-compose-execution.yml)叠加[审阅配置](../../deploy/docker-compose-review.yml)，保留原三个数据卷 |
-| Helm | 控制器/Agent values叠加[审阅values](../../deploy/helm/rivomesh/values-recovery-review.yaml)，所有成员使用同一控制库及task-key Secret |
-| 原生Kubernetes | [控制器A](../../deploy/kubernetes/rivomesh-review-controller-a.yaml)、[控制器B](../../deploy/kubernetes/rivomesh-review-controller-b.yaml)、[Agent](../../deploy/kubernetes/rivomesh-review-agent-a.yaml)，按环境修改Secret、存储及地址 |
-
-生产浏览器会话继续使用已有HTTPS/Origin配置。Agent仍只提供探针，不增加管理HTTP入口；从控制器访问原Agent的证据。真实Kubernetes/CSI及混合二进制滚动升级不由这些示例直接保证。
+首次部署时按[首版配置基线](first-release.md)一次设置所有控制器和Agent。当前不提供开发版本的原地升级或自动模式迁移。Linux、Docker、Helm、手工Kubernetes使用相同的身份/存储要求。元数据DDL必须具备相应权限；重启恢复和丢失元数据拒绝仍然保留。
 
 ## 从失败目标开始
 
@@ -71,7 +51,7 @@ cluster:
 
 这是保存证据时的历史观察；重新保存证据才会重新核对，不会因打开旧证据而查询目标。核对只读，不激活目标、不推进 ACK；目标 epoch 落后会明确提示后续写入需要围栏。旧节点没有返回核对字段时，界面显示不可用，不冒充已核对。符合条件的管理员可使用[已提交事务确认](commit-acknowledgement.md)；跳过和补偿仍未实现。
 
-实现与验收追踪见 [RC-05 设计](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.md)。只读核对的[限定验收](../verification/2026-11-17-checkpoint-inspection/README.md)已通过；[人工确认限定档案](../verification/2026-11-17-managed-commit/README.md)也已验收；跳过与补偿继续追踪，不扩大 RC-02 历史档案。
+实现与验收追踪见 [RC-05 设计](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.md)。只读核对的[限定验收](../verification/README.md)已通过；[人工确认限定档案](../verification/README.md)也已验收；跳过与补偿继续追踪，不扩大 RC-02 历史档案。
 
 ## FAQ与当前边界
 

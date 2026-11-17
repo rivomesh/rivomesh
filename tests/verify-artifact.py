@@ -12,37 +12,31 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 artifact = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
-historical_sources = None
+snapshot_sources = None
 if os.environ.get('RIVOMESH_RELEASE_MANIFEST'):
     manifest_path=(root/os.environ['RIVOMESH_RELEASE_MANIFEST']).resolve();manifest_path.relative_to(root)
     manifest=json.loads(manifest_path.read_text());assert artifact.resolve()==(root/manifest['artifact']).resolve(), 'Frozen artifact path differs'
     assert hashlib.sha256(artifact.read_bytes()).hexdigest()==manifest['artifactSha256'], 'Frozen artifact hash differs'
     source_path=(root/manifest['sourceManifest']).resolve();source_path.relative_to(root)
     assert hashlib.sha256(source_path.read_bytes()).hexdigest()==manifest['sourceManifestSha256'], 'Frozen source manifest differs'
-    historical_sources=json.loads(source_path.read_text())
+    snapshot_sources=json.loads(source_path.read_text())
 with zipfile.ZipFile(artifact) as jar:
     names = jar.namelist()
     namespace = 'io/github/rivomesh/'
     legacy_namespace = 'io/' + 'rivomesh/'
-    if historical_sources is not None and legacy_namespace + 'Main.class' in names:
-        namespace = legacy_namespace
-    def runtime(name):
-        return name.replace('io/github/rivomesh/', namespace).replace('io.github.rivomesh.', namespace.replace('/', '.'))
     assert len(names) == len(set(names)), "Duplicate ZIP entries"
     assert not any("/cscec/" in name for name in names), "Old application package present"
-    if historical_sources is None:
-        assert not any(name.startswith(legacy_namespace) for name in names), "Previous application namespace present"
+    assert not any(name.startswith(legacy_namespace) for name in names), "Previous application namespace present"
     assert not any(name.startswith(namespace) and "/internal/" not in name
                    and re.search(r"(?:Test|Acceptance)(?:\$[^/]*)?\.class$", name)
                    for name in names), "Test class included in release"
     resources = ["index.html", "app.js", "app.css", "configuration-editor.js", "audit.js", "accounts.js", "validation.js"]
-    if historical_sources is None or 'sync-app/src/main/resources/console/recovery.js' in historical_sources:
-        resources.append('recovery.js')
+    resources.append('recovery.js')
     for resource in resources:
-        if historical_sources is None:
+        if snapshot_sources is None:
             assert jar.read("console/" + resource) == (root / "sync-app/src/main/resources/console" / resource).read_bytes(), "Stale console asset: " + resource
         else:
-            expected=historical_sources.get('sync-app/src/main/resources/console/'+resource)
+            expected=snapshot_sources.get('sync-app/src/main/resources/console/'+resource)
             assert expected and hashlib.sha256(jar.read('console/'+resource)).hexdigest()==expected, 'Frozen console asset differs: '+resource
     for name in names:
         if name.startswith(namespace) and "/internal/" not in name and name.endswith(".class"):
@@ -95,7 +89,6 @@ with zipfile.ZipFile(artifact) as jar:
         "io/github/rivomesh/rocketmq/internal/netty/channel/Channel.class",
         "io/github/rivomesh/rocketmq/internal/fastjson2/JSON.class",
     ):
-        name = runtime(name)
         assert name in names, "Missing runtime class: " + name
     for name in names:
         if (name.startswith("com/gbase8c/") or name.startswith("com/kingbase8/") or name.startswith("dm/jdbc/")) and name.endswith(".class"):
@@ -113,9 +106,8 @@ with zipfile.ZipFile(artifact) as jar:
     with zipfile.ZipFile(io.BytesIO(sdk)) as private:
         assert struct.unpack(">H", private.read("org/apache/hive/jdbc/HiveDriver.class")[6:8])[0]<=52, "Hive driver requires newer Java"
     assert b"atDebug" not in jar.read("org/slf4j/Logger.class"), "Core SLF4J 1.7 API replaced"
-    assert runtime("Main-Class: io.github.rivomesh.Main") in jar.read("META-INF/MANIFEST.MF").decode(), "Wrong executable entry point"
+    assert "Main-Class: io.github.rivomesh.Main" in jar.read("META-INF/MANIFEST.MF").decode(), "Wrong executable entry point"
     drivers = jar.read("META-INF/services/java.sql.Driver").decode().splitlines()
     for driver in ("com.mysql.cj.jdbc.Driver", "org.postgresql.Driver", "org.h2.Driver", "io.github.rivomesh.gaussdb.jdbc.Driver", "com.kingbase8.Driver", "com.gbase8c.Driver", "dm.jdbc.driver.DmDriver"):
-        driver = runtime(driver)
         assert driver in drivers, "Missing JDBC service: " + driver
 print("ARTIFACT_ACCEPTED:", artifact.name, artifact.stat().st_size, "bytes; SHA-256", hashlib.sha256(artifact.read_bytes()).hexdigest())

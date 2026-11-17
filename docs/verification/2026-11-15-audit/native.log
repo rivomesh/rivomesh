@@ -1,3 +1,0 @@
-AUDIT_NATIVE_ACCEPTED: exact Java8 release; authenticated/denied HTTP, actor-attributed asynchronous CHECK, multi-page native JSON hash verification/private export, SIGKILL/restart retains committed IDs, deleted audit store refuses silent reset; stub database backend
-ARTIFACT_SHA256: 2fa0740f705fb2a649d185e312238727352fd996b2e77b5ee1719f9420c90b95
-EVIDENCE: target/audit-native/rivomesh-audit-e4cefae4d3

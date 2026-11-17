@@ -8,7 +8,7 @@
 
 Members share the control database, cluster.id, namespace, sharedAccess=true, sharedTasks=true and taskKey. Each has a distinct stable nodeId and private persistent task/data directories. taskKey is canonical Base64 text encoding 32 random bytes, supplied through protected environment configuration. Keep it out of task YAML. Never share controller.json. First activation requires empty task directories; existing registered tasks or YAML fail with GLOBAL_TASK_IMPORT_REQUIRED. There is no automatic legacy import tool yet.
 
-The [platform example](../../config/platform-global.example.yml) supports Linux. Back up the control database, private directories and keys first. Old members must stop normally and register STOPPED before the shared protocol upgrade; expiry or loss of contact does not establish that they stopped. After upgrade, old local/registry-only members refuse admission. Disabling sharedTasks, changing nodeId, losing directory identity or using the wrong key does not fall back to local authority.
+The[platform example](../../config/platform-global.example.yml)supports Linux. Follow the[first-release baseline](first-release.md);node modes,identities and keys must agree. Mode mismatches refuse without automatic migration or local fallback.
 
 ```sh
 java -jar rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform-global.example.yml
@@ -62,13 +62,3 @@ Offline STOP waits for the original owner. Restore its private directory/volume 
 **What is already evidenced?** Earlier candidates cover real PostgreSQL/MySQL control stores, two independent JVMs, HTTPS/shared login, A creating B-owned tasks and offline commands. Configuration fixtures also invoke real TaskService with fixture Workers. The startup fix and real cross-node business CDC are under additional acceptance. These do not establish all cluster, adapter or hardware profiles.
 
 **Why is no persistent preview running?** The user requested temporary fixtures only. They remove their own containers/volumes and leave unrelated resources untouched.
-
-## Multi-target maintenance receipts and upgrade recovery
-
-Intermediate candidate463994bca812 exposed inconsistent Set normalization during real two-target validation: comparison completed and remained PAUSED, while receipt inspection recorded UNKNOWN/OWNER_RECEIPT_MISMATCH. The fix applies the same input validation/sorting as local admission and retains the original request,revision,actor and report identity. Candidateb2b9a078 passes339actual-JAR-first tests,5x143maintenance controls,actual two-target validation/repair and original-report recovery from old UNKNOWN; see [evidence](../verification/2026-11-17-global-maintenance/README.md). Never edit shared phases or issue another validation to hide uncertainty.
-
-Next implementation follows the [independent execution lifecycle contract](../sdd/001-control-recovery-compatibility/design-execution-lifecycle.en.md).It is not complete; independent Worker survival after management exit is not a current capability.
-
-2026-11-17: explicit protocol4 controller/Agent separation is accepted for the declared profile;default combined mode remains coupled. [Operations](execution-lifecycle.md) · [Evidence](../verification/2026-11-17-execution-lifecycle/README.md).
-
-Optional protocol5 adds administrator evidence creation,raw/normalized pages and typed image review. See [review operations](failure-review.md) for activation/upgrade and deployment profiles. Default legacy profiles do not upgrade automatically;manual skip,compensation and gaps remain open.

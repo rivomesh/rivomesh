@@ -13,9 +13,9 @@ The UI supports destination phase summaries,original incremental retry,snapshot-
 
 Activation can fail before a transaction is identified,so no invented failed sequence is shown. Legacy pauses without trusted phase records remain Unknown. Corrupt diagnostics are visibly unavailable and raw inspection refuses. Equal SQLStates do not make activation and apply faults equivalent.
 
-Existing global task queries carry summaries through different management entries. Summaries contain only phase,sequence and failure epoch;no event IDs,row values,SQL or credentials. Existing task-view grants apply. Ordinary status does not gain raw-value access. Initial preparation/snapshot have dedicated diagnostics;legacy records may remain Unknown. Complete source connection/read/decode/DDL phases remain open. See [native snapshot evidence](../verification/2026-11-17-snapshot-diagnostics/README.md).
+Existing global task queries carry summaries through different management entries. Summaries contain only phase,sequence and failure epoch;no event IDs,row values,SQL or credentials. Existing task-view grants apply. Ordinary status does not gain raw-value access. Initial preparation/snapshot have dedicated diagnostics;legacy records may remain Unknown. Complete source connection/read/decode/DDL phases remain open. See [native snapshot evidence](../verification/README.md).
 
-[Accepted scope and evidence](../verification/2026-11-17-failure-inspection/README.md) cover internal inspection,two-entry real SQL fault/restart and five-JRE foundation contracts;they do not accept the complete manual recovery workflow.
+[Accepted scope and evidence](../verification/README.md) cover internal inspection,two-entry real SQL fault/restart and five-JRE foundation contracts;they do not accept the complete manual recovery workflow.
 
 ## Internal inspection limits
 

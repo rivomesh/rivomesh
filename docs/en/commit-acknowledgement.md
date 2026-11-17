@@ -1,6 +1,6 @@
 # Confirm an already committed destination transaction
 
-Status: RC-05 bounded profile accepted:UI,API,protocol6 admission,atomic ACK/receipt and cross-entry recovery. [Evidence](../verification/2026-11-17-managed-commit/README.md). [SDD](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.en.md) · [中文](../zh-CN/commit-acknowledgement.md)
+Status: RC-05 bounded profile accepted:UI,API,protocol6 admission,atomic ACK/receipt and cross-entry recovery. [Evidence](../verification/README.md). [SDD](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.en.md) · [中文](../zh-CN/commit-acknowledgement.md)
 
 The initial profile uses a MySQL source and transactional PostgreSQL/MySQL destinations,retained complete raw/normalized transactions,and destinations written only by the synchronization service. Snapshot faults,unbounded/incomplete capture or decode failures,and other destination protocols cannot use this operation.
 
@@ -15,26 +15,9 @@ The initial profile uses a MySQL source and transactional PostgreSQL/MySQL desti
 
 If the form is absent,check the cluster capability,pipeline pause,observation freshness and destination fence. Do not edit checkpoint tables manually.
 
-## Enable and upgrade
+## First deployment
 
-Standalone controllers enable the capability. Shared-task clusters default to disabled;configure every controller and Agent with:
-
-```yaml
-cluster:
-  sharedAccess: true
-  sharedTasks: true
-  recoveryReview: true
-  recoveryCommit: true
-```
-
-This opts into control protocol6;review-only profiles remain protocol5. Normally stop every original member before upgrading. Expired RUNNING records do not count as STOPPED. Preserve original node IDs,directories,evidence keys,control/task secrets and PVCs. Restart upgraded controllers and the original Agent. Older profiles cannot join protocol6;direct downgrade or mixed-version rolling upgrade is unsupported.
-
-- Linux: add the flag to original review configuration and restart with original directories.
-- Docker/Compose: update all original controller/Agent configurations;stop normally before recreating containers and preserve volumes.
-- Helm: overlay original per-node values with `deploy/helm/rivomesh/values-recovery-commit.yaml`;retain Secret/PVC/node identity.
-- Manual Kubernetes manifests: add the flag under the existing review ConfigMap's `cluster`;follow normal-stop upgrade with original StatefulSets/PVCs.
-
-For older journals,the authorized confirmation may create only the additive `rm3_recovery_ack` receipt table after verifying existing identity,pause and fresh evidence. Missing job/subscription/native checkpoints/business tables are never recreated. Because MySQL DDL commits implicitly,confirmation reacquires all locks and revalidates after migration. DDL alone does not change ACK. Nontransactional metadata is refused rather than converted. Creation requires journal-schema DDL permission;an existing receipt table is not recreated.
+Configure all controllers and Agents using the[first-release baseline](first-release.md)before startup. Development-version in-place upgrades/automatic mode migration are unsupported. Linux,Docker,Helm and manual Kubernetes share identity/storage requirements. Metadata DDL requires appropriate privileges;restart recovery and missing-history refusal remain supported.
 
 ## API and receipt
 

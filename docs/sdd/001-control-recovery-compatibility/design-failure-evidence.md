@@ -20,4 +20,4 @@ RC-02/05/09 · 2026-11-17 · [English](design-failure-evidence.en.md)
 
 创建使用`FAILURE_REVIEW`持久动作，沿用目标及错误版本，执行前保存审阅ID及原配置修订。查询为摘要GET与原始/规范化事件POST，绑定原执行目录，限额256KiB/100事件，重验权限并审计；不会自动恢复任务。全局操作视图必须保留审阅ID，不能只返回已成功状态。UI默认展示摘要，原始值需显式点击；退出后关闭审阅内容，晚到响应不得复活旧会话。
 
-[Managed review acceptance](../../verification/2026-11-17-managed-failure-review/README.md):protocol5 fixed-Agent MySQL8.4/LOCAL profile;manual mutation and other profiles remain separate.
+[Managed review acceptance](../../verification/README.md):protocol5 fixed-Agent MySQL8.4/LOCAL profile;manual mutation and other profiles remain separate.

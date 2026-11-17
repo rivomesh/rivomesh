@@ -2,31 +2,11 @@
 
 [中文](../zh-CN/failure-review.md) · [Diagnostics](failed-transactions.md) · [Files/quotas](failure-evidence.md)
 
-This workflow passes the [documented bounded profile](../verification/2026-11-17-managed-failure-review/README.md). Review only retains/reads historical evidence. It does not skip,compensate,change GTIDs or automatically resume.
+This workflow passes the [documented bounded profile](../verification/README.md). Review only retains/reads historical evidence. It does not skip,compensate,change GTIDs or automatically resume.
 
-## Enable and upgrade
+## First deployment
 
-Standalone administration supports administrator review. Shared global control explicitly enables it on every controller/Agent:
-
-```yaml
-cluster:
-  sharedAccess: true
-  sharedTasks: true
-  recoveryReview: true
-```
-
-This selects control protocol5. Defaultoff preserves protocols3/4 and existing workflows. Stop old members normally,confirm registered STOPPED lifecycle,then enable/start all members. Expired leases,manual registry edits or lost Pods do not establish normal stop. Old modes cannot rejoin protocol5;automatic downgrade is not provided.
-
-Preserve original node IDs,PVCs/private directories and keys. New example release names are for fresh deployments;do not replace an existing Agent with a demo name/empty directory during upgrade.
-
-| Deployment | Entry |
-|---|---|
-| Linux |[controller](../../config/platform-controller-review.example.yml),[Agent](../../config/platform-agent-review.example.yml),independent original directories and existing systemd procedure|
-| Compose |[separated deployment](../../deploy/docker-compose-execution.yml) plus [review overlay](../../deploy/docker-compose-review.yml),preserving all three state volumes|
-| Helm |controller/Agent values plus [review values](../../deploy/helm/rivomesh/values-recovery-review.yaml),same control store/task-key Secret|
-| Native Kubernetes |[controllerA](../../deploy/kubernetes/rivomesh-review-controller-a.yaml),[controllerB](../../deploy/kubernetes/rivomesh-review-controller-b.yaml),[Agent](../../deploy/kubernetes/rivomesh-review-agent-a.yaml);adapt Secrets,storage and addresses|
-
-Production browser sessions retain existing HTTPS/Origin requirements. Agents expose probes only;controllers route to the original Agent. These examples alone do not accept live Kubernetes/CSI or mixed-binary rolling upgrades.
+Configure all controllers and Agents using the[first-release baseline](first-release.md)before startup. Development-version in-place upgrades/automatic mode migration are unsupported. Linux,Docker,Helm and manual Kubernetes share identity/storage requirements. Metadata DDL requires appropriate privileges;restart recovery and missing-history refusal remain supported.
 
 ## Start from a paused destination
 
@@ -66,7 +46,7 @@ New review operations attempt a read-only native checkpoint comparison for trans
 
 This is a historical observation made while retaining evidence. Opening old evidence does not query the destination; retain new evidence to compare again. Inspection neither activates targets nor advances ACK. A lagging target epoch is explicitly reported as requiring fencing before a later mutation. Older members returning no observation are shown as unavailable. Eligible administrators can use [proven-commit confirmation](commit-acknowledgement.md);skip and compensation remain unimplemented.
 
-Follow [RC-05 design](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.en.md). The [bounded read-only profile](../verification/2026-11-17-checkpoint-inspection/README.md) passed. The [managed confirmation bounded profile](../verification/2026-11-17-managed-commit/README.md) also passed;skip and compensation remain separate,and RC-02 historical scope is unchanged.
+Follow [RC-05 design](../sdd/001-control-recovery-compatibility/design-checkpoint-recovery.en.md). The [bounded read-only profile](../verification/README.md) passed. The [managed confirmation bounded profile](../verification/README.md) also passed;skip and compensation remain separate,and RC-02 historical scope is unchanged.
 
 ## FAQ and limits
 

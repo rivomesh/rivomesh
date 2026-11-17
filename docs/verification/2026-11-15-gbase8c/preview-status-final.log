@@ -1,3 +1,0 @@
-NAME                             IMAGE                         COMMAND                  SERVICE   CREATED         STATUS                   PORTS
-rivomesh-dev-preview-console-1   maven:3.9-eclipse-temurin-8   "java -Xmx128m -cp /…"   console   2 minutes ago   Up 2 minutes (healthy)   127.0.0.1:18088->8080/tcp
-PREVIEW_ACCEPTED: http://127.0.0.1:18088 account=admin; private credentials: <workspace>/target/development-preview/credentials.json

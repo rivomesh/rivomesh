@@ -2,7 +2,7 @@
 
 [中文](../zh-CN/failure-evidence.md) · [Contract](../sdd/001-control-recovery-compatibility/design-failure-evidence.en.md) · [Recovery](failed-transactions.md)
 
-Storage/capture now backs [managed review](failure-review.md),including administrator/task authorization,audit and protocol5 gates. This page explains files/limits. Successful retention does not prove destination non-commit or authorize skip,compensation or takeover. Earlier internal acceptance is distinct from the [current managed profile](../verification/2026-11-17-managed-failure-review/README.md).
+Storage/capture now backs [managed review](failure-review.md),including administrator/task authorization,audit and protocol5 gates. This page explains files/limits. Successful retention does not prove destination non-commit or authorize skip,compensation or takeover. Earlier internal acceptance is distinct from the [current managed profile](../verification/README.md).
 
 ## Contents and identity
 

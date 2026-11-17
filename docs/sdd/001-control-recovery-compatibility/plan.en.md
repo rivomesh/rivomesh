@@ -4,13 +4,13 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING: transaction skip and gap recov
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **10 DONE,32 PARTIAL,6 NEW;38 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/2026-11-17-managed-skip/README.md)passed bounded profiles;verified gap closure and compensation are next.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **10 DONE,32 PARTIAL,6 NEW;38 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;verified gap closure and compensation are next.
 
 ## Historical baseline
 
-The v0.1 inventory is retained as the historical starting baseline. v0.2 implements single-controller sessions;the current candidate and limited five-JDK session matrix are in [session evidence](../../verification/2026-11-16-browser-sessions/README.md). That phase updated a Docker preview;later user instructions removed the permanent preview. Original TODO stays unchanged.
+The v0.1 inventory is retained as the historical starting baseline. v0.2 implements single-controller sessions;the current candidate and limited five-JDK session matrix are in [session evidence](../../verification/README.md). That phase updated a Docker preview;later user instructions removed the permanent preview. Original TODO stays unchanged.
 
-v0.1 historical SHA256:`10d95a3990835f2286f036b962d88fc8533ade427753ad9961ef1429988a88e2`.207root cases (205app+2SDK),205actual-JAR-first app and49DOM pass. Repair profiles use LOCAL/H2 and external MySQL/PostgreSQL/openGauss journals with MySQL8.4/PostgreSQL17 business destinations. Full LOCAL and focused external coverage differ;see [evidence](../../verification/2026-11-16-managed-repair/README.md). These results do not establish cluster control,persistent sessions,skipping or new source adapters.
+v0.1 historical SHA256:`10d95a3990835f2286f036b962d88fc8533ade427753ad9961ef1429988a88e2`.207root cases (205app+2SDK),205actual-JAR-first app and49DOM pass. Repair profiles use LOCAL/H2 and external MySQL/PostgreSQL/openGauss journals with MySQL8.4/PostgreSQL17 business destinations. Full LOCAL and focused external coverage differ;see [evidence](../../verification/README.md). These results do not establish cluster control,persistent sessions,skipping or new source adapters.
 
 The following table records the v0.1 inventory,not current gaps.
 
@@ -114,10 +114,10 @@ Control-store product/HA,agent enrollment/auth and standalone upgrade;session ex
 
 A requirement closes only with linked design/task/API/UI,positive/refusal/duplicate/crash tests,state/config migration,bilingual docs and the same candidate artifact evidence. Build success is not connector acceptance;static YAML is not liveK8s;DOM/HTTP is not visual/accessibility acceptance. This inventory does not mark48runtime requirements implemented.
 
-Current increment: SE-01/02/03/04/05 complete; CP-05 partial. Global tasks/remote execution and the remainder of M1/M2 are open. See [session design](design-sessions.en.md),[operations](../../en/browser-sessions.md) and [evidence](../../verification/2026-11-16-browser-sessions/README.md).
+Current increment: SE-01/02/03/04/05 complete; CP-05 partial. Global tasks/remote execution and the remainder of M1/M2 are open. See [session design](design-sessions.en.md),[operations](../../en/browser-sessions.md) and [evidence](../../verification/README.md).
 
-CP-01 registry now passes native PostgreSQL/MySQL two-node and outage profiles. Global task/command/identity/session authority remain open. [Registry evidence](../../verification/2026-11-16-node-registry/README.md).
+CP-01 registry now passes native PostgreSQL/MySQL two-node and outage profiles. Global task/command/identity/session authority remain open. [Registry evidence](../../verification/README.md).
 
-v0.5 closes SE-04; shared sessions do not depend on global task configuration, so its dependency changes to CP-01. Temporary native/Docker acceptance replaces a persistent preview. [Evidence](../../verification/2026-11-16-shared-access/README.md).
+v0.5 closes SE-04; shared sessions do not depend on global task configuration, so its dependency changes to CP-01. Temporary native/Docker acceptance replaces a persistent preview. [Evidence](../../verification/README.md).
 
-v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/2026-11-17-global-control-foundations/README.md). Public runtime integration remains open.
+v0.5: CP-02/03 PARTIAL · [Internal foundations evidence](../../verification/README.md). Public runtime integration remains open.

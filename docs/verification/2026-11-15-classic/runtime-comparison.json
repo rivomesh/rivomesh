@@ -1,9 +1,0 @@
-{
-  "acceptedPipelineArtifact": "6eb2a8bb053fcf777b765713e5c21aeb675e586f53c79098e5dffb2103afb954",
-  "finalArtifact": "290adcc746a64c427ccefc6de712b8fbb7bbdc7ed4d48fcd2757485e99b6c2fe",
-  "classCount": 65091,
-  "changedClasses": [
-    "io/rivomesh/platform/AdapterCatalog.class"
-  ],
-  "changedRuntimeResources": []
-}

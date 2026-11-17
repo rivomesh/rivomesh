@@ -1,9 +1,0 @@
-POSTGRESQL: PASS concurrent two-node registration and actual artifact/runtime metadata
-POSTGRESQL HTTPS: PASS shared login, cross-node account/token revocation and one verified audit chain
-POSTGRESQL: PASS actual independent JVMs accept at A, create at B and read one global task/config authority
-POSTGRESQL: PASS offline STOP stays pending/UNKNOWN and executes only after fixed-owner directory reopens
-POSTGRESQL: PASS remote task observation, kill/stale and persistent-directory rejoin with new epoch
-POSTGRESQL: PASS store outage returns503, readiness recovers and nodes renew after expiry
-POSTGRESQL: PASS shared session survives controller kill/reopen and storage outage; logout revokes across nodes
-POSTGRESQL: PASS registry-only member refused by the shared-identity protocol
-artifactSha256=b2b9a078beff8ba845704a2393a3cc5e870f7b9c3c975367693f78c3bf66c238

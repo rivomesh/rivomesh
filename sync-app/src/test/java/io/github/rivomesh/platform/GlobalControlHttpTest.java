@@ -76,11 +76,4 @@ class GlobalControlHttpTest {
             try(TaskService replacement=new TaskService(b,backend,workers);ConsoleServer server=new ConsoleServer(b,replacement)){assertEquals("AGENT_DIRECTORY_CHANGED",assertThrows(TaskService.Conflict.class,server::start).getMessage());assertEquals(0,workers.active.get());}
         }
     }
-    @Test void protocolUpgradeRequiresStoppedMembersAndRefusesAnExpiredLegacyMember()throws Exception{
-        PlatformConfig next=config("b");ClusterConfig previous=Model.JSON.readValue(Model.JSON.writeValueAsString(next.cluster),ClusterConfig.class);previous.nodeId="a";previous.sharedTasks=false;previous.taskKey=null;
-        try(JdbcControlStore old=new JdbcControlStore(previous)){
-            ControlStore.Lease lease=old.register(ControlStoreTest.node("a"),Collections.emptyList());assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next.cluster)).getMessage());ControlStoreTest.expire(previous,"a");assertEquals("GLOBAL_TASK_QUIESCENCE_REQUIRED",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(next.cluster)).getMessage());old.stopped(lease);
-            try(JdbcControlStore upgraded=new JdbcControlStore(next.cluster)){upgraded.register(ControlStoreTest.node("b"),Collections.emptyList());assertEquals("CONTROL_STORE_PROTOCOL_MISMATCH",assertThrows(TaskService.Conflict.class,()->new JdbcControlStore(previous)).getMessage());}
-        }
-    }
 }

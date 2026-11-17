@@ -2,7 +2,7 @@
 
 [English](../en/failure-evidence.md) · [实施契约](../sdd/001-control-recovery-compatibility/design-failure-evidence.md) · [故障处理](failed-transactions.md)
 
-存储与捕获接口已接入[管理界面审阅](failure-review.md)，包含管理员/任务权限、审计及协议5门禁；本页解释底层文件与限额。保存成功不代表目标未提交，也不构成跳过、补偿或业务接管批准。早期内部接口验收不等于当前全部界面档案，最新范围见[验证记录](../verification/2026-11-17-managed-failure-review/README.md)。
+存储与捕获接口已接入[管理界面审阅](failure-review.md)，包含管理员/任务权限、审计及协议5门禁；本页解释底层文件与限额。保存成功不代表目标未提交，也不构成跳过、补偿或业务接管批准。早期内部接口验收不等于当前全部界面档案，最新范围见[验证记录](../verification/README.md)。
 
 ## 保存内容与身份
 
