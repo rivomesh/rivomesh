@@ -24,6 +24,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Replication | MySQL multi-database mappings/fan-out,table creation,chunked snapshot-to-stream,durable progress,keyless/JSON/supported generated columns |
 | Management | Bilingual wizard,configuration revisions,isolated Workers,durable cross-entry commands,accounts/grants/audit |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |
+| Gap verification | Reviewed plans,administrator confirmation,fresh scans,atomic receipts and cross-entry cancellation;bounded PG/MySQL,see [guide](gap-verification.md) for acceptance |
 | Relational targets | Actual MySQL/PostgreSQL/openGauss profiles;experimental DM/Kingbase/GBase8c profiles;OceanBase full recovery and distributed GaussDB remain open |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
 | Messaging | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream have bounded confirmation/recovery profiles;complete cluster/TLS matrices remain open |
@@ -40,7 +41,7 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 
 ## Next work
 
-1. Verified gap closure,before-image compensation and typed corrective data entry.
+1. Full applied/coverage watermarks,other gap-verification protocols,before-image compensation and typed corrective data entry.
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
 3. PostgreSQL/Oracle sources,MySQL8.2 and complete5.7/8.0/8.4 profiles.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.

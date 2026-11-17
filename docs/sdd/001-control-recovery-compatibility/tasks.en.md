@@ -74,7 +74,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
   Deliver: Track skipped transactions/ranges,destinations,reason,actor,hashes and original evidence;separate applied progress,safe coverage and running-with-gaps;only verification evidence closes a gap and accepted loss is not equality.
   Acceptance: AC-RC-08
-  Gap records,public warnings and restart recovery pass. Internal fresh scans and atomic verification records follow the [design](design-gap-verification.en.md);public API/UI,real-CDC acceptance and compensation remain incomplete.
+  Gap records,public warnings and restart recovery pass. Internal fresh scans and atomic verification records follow the [design](design-gap-verification.en.md);API/UI and cross-node approval/cancellation are integrated;real CDC passes on PG/MySQL control;full watermarks and other target semantics remain open.
 - [ ] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
   Deliver: Remote plans,approval,cancellation,receipts and evidence locations are traceable;controller/agent kill recovers the same request with idempotent commits/rollback;skip is not cutover approval.
   Acceptance: AC-RC-09

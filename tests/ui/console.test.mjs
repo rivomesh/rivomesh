@@ -1,3 +1,4 @@
+import {registerGapVerificationTests} from './gap-verification-cases.mjs';
 import {registerRecoveryTests} from './recovery-cases.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -713,3 +714,5 @@ test('running pipeline or stale checkpoint observation cannot expose a commit co
 });
 
 registerRecoveryTests({setup,flush,login});
+
+registerGapVerificationTests({setup,flush,login});

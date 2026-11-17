@@ -13,7 +13,7 @@ class GapVerificationLedgerTest {
     @BeforeEach void prepare()throws Exception{setup=new JdbcGapVerificationTest();setup.directory=directory;setup.prepare();setup.restoreLiveRows();}
     @AfterEach void close()throws Exception{if(setup!=null)setup.close();}
     JdbcJournal journal(){return setup.fixture.journal;}
-    GapVerificationReceipt execute()throws Exception{return JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,setup.plan,directory.resolve("scratch"),10000);}
+    GapVerificationReceipt execute()throws Exception{return JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,setup.plan,directory.resolve("scratch"),10000,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan");}
     String verification()throws Exception{try(Connection c=journal().connect();Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT verification_id FROM "+journal().table("gap"))){assertTrue(r.next());return r.getString(1);}}
     @Test void closureIsDurableIdempotentAndNeverRewritesTheSkipOrResumes()throws Exception{
         String before;try(JdbcSink sink=JdbcSink.existing(setup.fixture.target)){before=Codec.encode(sink.checkpoint());}
@@ -22,19 +22,19 @@ class GapVerificationLedgerTest {
         try(JdbcSink sink=JdbcSink.existing(setup.fixture.target)){assertEquals(before,Codec.encode(sink.checkpoint()));}
         assertEquals("PAUSED",journal().status().get("run_state"));assertEquals(1,journal().status().get("gapCount"));assertEquals(1,JdbcSinkTest.count(setup.fixture.target,"items"));
         journal().resumePipeline(setup.plan.errorGeneration);
-        try(JdbcJournal reopened=new JdbcJournal(journal().settings)){assertEquals(receipt.hash(),JdbcGapVerification.verifyAndClose(reopened,setup.fixture.target,null,setup.plan,directory.resolve("scratch"),10000).hash());}
+        try(JdbcJournal reopened=new JdbcJournal(journal().settings)){assertEquals(receipt.hash(),JdbcGapVerification.verifyAndClose(reopened,setup.fixture.target,null,setup.plan,directory.resolve("scratch"),10000,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan").hash());}
         assertEquals("RUNNING",journal().status().get("run_state"));
     }
     @Test void recordAndGapLinksRollBackTogetherThenRetrySucceeds()throws Exception{
-        assertEquals("INJECTED_AFTER_RECEIPT_WRITE",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndRecord(journal(),setup.fixture.target,setup.report,setup.plan,directory.resolve("scratch"),10000,(c,p)->{JdbcGapVerificationLedger.record(journal(),c,setup.plan,p);throw new IllegalStateException("INJECTED_AFTER_RECEIPT_WRITE");})).getMessage());
+        assertEquals("INJECTED_AFTER_RECEIPT_WRITE",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndRecord(journal(),setup.fixture.target,setup.report,setup.plan,directory.resolve("scratch"),10000,(c,p)->{JdbcGapVerificationLedger.record(journal(),c,setup.plan,p,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan");throw new IllegalStateException("INJECTED_AFTER_RECEIPT_WRITE");})).getMessage());
         assertNull(verification());try(Connection c=journal().connect()){assertNull(JdbcGapVerificationLedger.load(journal(),c,setup.plan.id));}
         assertEquals(setup.plan.hash(),execute().plan.hash());
     }
     @Test void sameRequestWithChangedApprovalAndDifferentRequestForClosedGapAreRefused()throws Exception{
         execute();GapVerificationPlan changed=Codec.decode(Codec.encode(setup.plan),GapVerificationPlan.class);changed.reason="A different reason cannot reuse a committed verification request";
-        assertEquals("GAP_VERIFICATION_REQUEST_CONFLICT",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,changed,directory.resolve("scratch"),10000)).getMessage());
+        assertEquals("GAP_VERIFICATION_REQUEST_CONFLICT",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,changed,directory.resolve("scratch"),10000,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan")).getMessage());
         GapVerificationPlan another=Codec.decode(Codec.encode(setup.plan),GapVerificationPlan.class);another.id="another_verify_request";
-        assertEquals("GAP_ALREADY_VERIFIED",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,another,directory.resolve("scratch"),10000)).getMessage());
+        assertEquals("GAP_ALREADY_VERIFIED",assertThrows(IllegalStateException.class,()->JdbcGapVerification.verifyAndClose(journal(),setup.fixture.target,setup.report,another,directory.resolve("scratch"),10000,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan")).getMessage());
     }
     @Test void changedReceiptOrMissingGapLinkNeverReturnsHistoricalSuccess()throws Exception{
         execute();FailureReviewTest.sql(journal(),"UPDATE "+journal().table("gap_verification")+" SET payload='{}'");assertEquals("GAP_VERIFICATION_RECORD_CHANGED",assertThrows(IllegalStateException.class,this::execute).getMessage());

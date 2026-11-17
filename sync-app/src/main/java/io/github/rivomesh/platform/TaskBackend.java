@@ -62,6 +62,18 @@ public interface TaskBackend {
     }
     default Map<String,Object> skipPlan(TaskDefinition task,String plan,boolean nativeProof)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SKIP_V3_REQUIRED");return io.github.rivomesh.cdc.RecoveryLedger.plan(task.pipeline,plan,nativeProof);}
     default Map<String,Object> recoveryPage(TaskDefinition task,String subscription,String cursor,int limit,boolean gaps)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SKIP_V3_REQUIRED");return gaps?io.github.rivomesh.cdc.RecoveryLedger.gaps(task.pipeline,subscription,cursor,limit):io.github.rivomesh.cdc.RecoveryLedger.plans(task.pipeline,subscription,cursor,limit);}
+    default Map<String,Object> gapVerification(TaskDefinition task,java.nio.file.Path reports,GapVerificationRequest request,boolean execute,String operation,String actor,String createdAt,String subscription,long generation)throws Exception{
+        request.validate(execute);if(task.pipeline==null)throw new IllegalArgumentException("GAP_VERIFICATION_V3_REQUIRED");
+        if(!execute){
+            io.github.rivomesh.recovery.GapVerificationPlan plan=io.github.rivomesh.cdc.GapVerification.prepare(task.pipeline,reports,request.reportId,subscription,request.gaps,operation,actor,request.reason,createdAt,request.maximumMillis,generation);
+            Map<String,Object> result=new LinkedHashMap<>();result.put("code","GAP_VERIFICATION_PLAN_READY");result.put("id",plan.id);result.put("hash",plan.hash());return result;
+        }
+        io.github.rivomesh.recovery.GapVerificationReceipt receipt=io.github.rivomesh.cdc.GapVerification.execute(task.pipeline,reports,request.planId,request.approvedHash,subscription,generation,operation,actor,request.reason);
+        Map<String,Object> result=new LinkedHashMap<>();result.put("code","GAP_VERIFICATION_COMPLETED");result.put("id",request.planId);result.put("hash",receipt.hash());result.put("receipt",io.github.rivomesh.cdc.GapVerification.receiptView(receipt));return result;
+    }
+    default Map<String,Object> gapVerificationPlan(TaskDefinition task,String id)throws Exception{
+        if(task.pipeline==null)throw new IllegalArgumentException("GAP_VERIFICATION_V3_REQUIRED");return io.github.rivomesh.cdc.GapVerification.read(task.pipeline,id);
+    }
     default Map<String,Object> failureEvidence(java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,String id,String view,int from,int limit)throws Exception{
         if(!java.nio.file.Files.isDirectory(directory,java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new IllegalStateException("FAILURE_EVIDENCE_NOT_FOUND");
         if(!java.nio.file.Files.exists(directory.resolve("authority.json"),java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new IllegalStateException("FAILURE_EVIDENCE_AUTHORITY_MISSING");

@@ -14,15 +14,16 @@ public final class GapVerificationPlan {
     public String pipelineId,subscriptionId,fingerprint,generation,sourceType,sourceId;
     public String reportId,certificateHash,sourceSeal,checkpointHash;
     public long epoch,sequence,errorGeneration;
+    public long maximumMillis=300000;
     public Map<String,Gap> gaps=new TreeMap<>();
     public Map<String,Table> tables=new TreeMap<>();
     public static final class Gap {public String planHash,receiptHash;public long sequence;}
-    public static final class Table {public String schemaHash,sourceRoot;public int schemaVersion;public long rows;}
+    public static final class Table {public String database,name,schemaHash,sourceRoot;public int schemaVersion;public long rows;}
 
     public void validate(){
         if(version!=1||!"VERIFY_GAPS_AT_COMMON_CUT".equals(action)||id==null||!id.matches("[A-Za-z0-9_-]{8,128}")||createdBy==null||createdBy.isEmpty()||createdBy.length()>128||reason==null||reason.trim().length()<8||reason.length()>1000)throw invalid();
         try{Instant.parse(createdAt);FailureEvidence.uuid(reportId);}catch(Exception malformed){throw invalid();}
-        if(pipelineId==null||!pipelineId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||generation==null||generation.isEmpty()||sourceType==null||sourceId==null||sourceId.isEmpty()||epoch<1||sequence<1||errorGeneration<0)throw invalid();
+        if(pipelineId==null||!pipelineId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||generation==null||generation.isEmpty()||sourceType==null||sourceId==null||sourceId.isEmpty()||epoch<1||sequence<1||errorGeneration<0||maximumMillis<1000||maximumMillis>86400000)throw invalid();
         for(String hash:Arrays.asList(fingerprint,certificateHash,sourceSeal,checkpointHash))if(!FailureEvidence.hash(hash))throw invalid();
         if(gaps==null||gaps.isEmpty()||gaps.size()>100||tables==null||tables.isEmpty()||tables.size()>1000)throw invalid();
         Set<Long> sequences=new HashSet<>();
@@ -52,7 +53,7 @@ public final class GapVerificationPlan {
                 if(schema==null||!reference.equals(tableId+"/"+schema.version)||!manifest.targetTables.get(target).contains(tableId)||!Objects.equals(cut.schemas.get(tableId),Codec.sha256(Codec.encode(schema))))throw new IllegalStateException("GAP_REPORT_SCHEMA_CHANGED");
                 ValidationStore.TableResult result=manifest.results.get(target+"/"+tableId);
                 if(result==null||!result.matches()||!target.equals(result.target)||!tableId.equals(result.tableId)||result.sourceRows!=result.targetRows||!Objects.equals(result.sourceRoot,result.targetRoot)||!Objects.equals(result.sourceRoot,manifest.sourceRoots.get(tableId)))throw new IllegalStateException("GAP_COMPLETE_MATCH_REQUIRED");
-                store.verifyTarget(target,tableId);Table table=new Table();table.schemaHash=cut.schemas.get(tableId);table.schemaVersion=schema.version;table.sourceRoot=result.sourceRoot;table.rows=result.sourceRows;plan.tables.put(tableId,table);
+                store.verifyTarget(target,tableId);Table table=new Table();table.database=schema.database;table.name=schema.name;table.schemaHash=cut.schemas.get(tableId);table.schemaVersion=schema.version;table.sourceRoot=result.sourceRoot;table.rows=result.sourceRows;plan.tables.put(tableId,table);
             }
         }
         plan.validate();return plan;

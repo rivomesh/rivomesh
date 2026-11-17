@@ -89,12 +89,12 @@ final class DurableCommands {
         if(executionRoles)db.requireExecutionRole(c,task.owner);
         long acceptedCount=root(c);authorize(request,actor);if(read(c,request.requestId)!=null)throw new TaskService.Conflict("REQUEST_ID_REUSED");
         if(request.kind==TaskRequest.Kind.ACTION)try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("task_request")+" WHERE cluster_id=? AND request_id=?",cluster,request.requestId);ResultSet r=p.executeQuery()){if(r.next())throw new TaskService.Conflict("REQUEST_ID_REUSED");}
-        boolean cancellation=request.kind==TaskRequest.Kind.ACTION&&Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL").contains(request.action);Stored parent=null;
+        boolean cancellation=request.kind==TaskRequest.Kind.ACTION&&Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL","GAP_VERIFY_CANCEL").contains(request.action);Stored parent=null;
         try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("command")+" WHERE cluster_id=? AND task_id=? AND phase IN ('PENDING','DISPATCHED','ACCEPTED','UNKNOWN') ORDER BY priority,created_at,request_id",cluster,task.id);ResultSet rows=p.executeQuery()){
             while(rows.next()){
                 Stored candidate=read(c,rows.getString(1));if(!cancellation)throw new TaskService.Conflict("OPERATION_PENDING");
                 if(candidate.priority==0)throw new TaskService.Conflict("CANCEL_ALREADY_REQUESTED");
-                boolean matching=candidate.request.kind==TaskRequest.Kind.ACTION&&("VALIDATE_CANCEL".equals(request.action)?Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(candidate.request.action):Arrays.asList("REPAIR_PLAN","REPAIR_EXECUTE").contains(candidate.request.action));if(matching)parent=candidate;
+                boolean matching=candidate.request.kind==TaskRequest.Kind.ACTION&&("VALIDATE_CANCEL".equals(request.action)?Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(candidate.request.action):"GAP_VERIFY_CANCEL".equals(request.action)?Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(candidate.request.action):Arrays.asList("REPAIR_PLAN","REPAIR_EXECUTE").contains(candidate.request.action));if(matching)parent=candidate;
             }
         }
         if(cancellation&&parent==null)throw new TaskService.Conflict("CANCEL_SCOPE_CHANGED");

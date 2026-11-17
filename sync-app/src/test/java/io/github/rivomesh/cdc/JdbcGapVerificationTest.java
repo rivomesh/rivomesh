@@ -21,6 +21,9 @@ class JdbcGapVerificationTest {
     @BeforeEach void prepare()throws Exception{
         setup=new TransactionSkipRecoveryTest();setup.directory=directory;setup.prepare();fixture=setup.fixture;receipt=setup.execute().receipt;
         try(Connection c=fixture.journal.connect()){original=JdbcSkipJournal.load(fixture.journal,c,setup.operation).plan;}
+        createReport();
+    }
+    void createReport()throws Exception{
         PipelineValidationBarrier.Certificate cut=new PipelineValidationBarrier.Certificate();Map<String,Object> state=fixture.journal.status();cut.id=UUID.randomUUID().toString();cut.createdAt=Instant.now().toString();cut.fingerprint=original.fingerprint;cut.generation=original.generation;cut.epoch=((Number)state.get("epoch")).longValue();cut.sequence=((Number)state.get("lastSequence")).longValue();cut.errorGeneration=((Number)state.get("errorGeneration")).longValue();cut.sourcePosition=fixture.journal.captured();cut.capturedPosition=cut.sourcePosition;cut.selectedTargets.add("target");cut.schemas.put(fixture.table.id,Codec.sha256(Codec.encode(fixture.table)));try(JdbcSink sink=JdbcSink.existing(fixture.target)){cut.targetCheckpoints.put("target",sink.checkpoint());}
         report=ValidationStore.create(directory.resolve("reports"),cut.id,cut,Collections.singletonList(fixture.table),Collections.singletonMap("target",Collections.singleton(fixture.table.id)),new ValidationStore.Limits());
         for(Change change:fixture.normalized.changes)report.source(fixture.table.id,change.after);report.finishSourceTable(fixture.table.id);report.completeSource();for(Change change:fixture.normalized.changes)report.target("target",fixture.table.id,null,change.after);report.finishTarget("target",fixture.table.id);report.complete();

@@ -588,6 +588,32 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert task()['status']['hasGaps'] and task()['status']['gapCount'] == index
             sql('postgres', 'ALTER TABLE rm_pg_sales.items DROP CONSTRAINT managed_skip_block')
             passed('Normal APPLY clears only current native skip markers;both durable gaps remain visible after data converges again')
+            validation,_=action('VALIDATE',node='node-b',validation={'targets':['pg','my'],'gateMillis':15000,'sourceMillis':60000,'targetMillis':30000})
+            report_id=operation(validation)['validation']['reportId']
+            report=http('node-a',route+'/validations/'+report_id)
+            assert report['state']=='COMPLETE' and report['code']=='VALIDATION_MATCH'
+            gaps=http('node-b',route+'/gaps',{'subscriptionId':'pg','after':'0','limit':20})['items']
+            assert len(gaps)==2 and all(row['state']=='OPEN' for row in gaps)
+            gap_generation=task()['status']['error_count']
+            review_request,_=action('GAP_VERIFY_PLAN',node='node-b',subscriptionId='pg',errorCount=gap_generation,gap={'reportId':report_id,'gaps':[row['planId'] for row in gaps],'maximumMillis':30000,'reason':'Review both complete cross-database skip gaps against the new sealed matching report'})
+            verify_path=route+'/gap-verifications/'+review_request
+            review=http('node-a',verify_path)
+            assert review['state']=='PREPARED' and len(review['plan']['gaps'])==2 and len(review['plan']['tables'])==2
+            for role in ('RM_GC_OPERATOR','RM_GC_VIEWER'):
+                assert http('node-a',verify_path,expected=403,token=env[role])['code']=='FORBIDDEN'
+            gap_approval={'planId':review_request,'approvedHash':review['hash'],'reason':'Approved both reviewed gaps and exclusively service-written target tables'}
+            verified,_=action('GAP_VERIFY_EXECUTE',node='node-a',subscriptionId='pg',errorCount=review['plan']['errorGeneration'],gap=gap_approval)
+            receipt=operation(verified)['result']['receipt']
+            assert receipt['outcome']=='VERIFIED_AT_COMMON_CUT'
+            assert http('node-b',verify_path)['receipt']['hash']==receipt['hash']
+            wait(lambda:task()['status'].get('verifiedGapCount')==2,'published verified history')
+            state=task()['status']
+            assert state['hasGaps'] and not state['hasOpenGaps'] and state['openGapCount']==0 and task()['desired']=='PAUSED'
+            after=http('node-a',route+'/gaps',{'subscriptionId':'pg','after':'0','limit':20})['items']
+            assert len(after)==2 and all(row['state']=='VERIFIED_AT_COMMON_CUT' for row in after)
+            assert all(row['verificationId']==review_request for row in after)
+            passed('Cross-entry reviewed gap verification freshly scans two affected tables,atomically records both gaps and preserves SKIP history and the whole-task pause')
+
         action('STOP')
         assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
         manifest['status'] = 'PASS'

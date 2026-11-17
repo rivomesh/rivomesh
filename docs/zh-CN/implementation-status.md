@@ -24,6 +24,7 @@
 | 同步链路 | MySQL多库映射、同源多目标、自动建表、分块全量转增量、持久断点；无主键/JSON/受支持生成列 |
 | 管理 | 中英文向导、配置/修订、独立Worker、跨入口持久命令、账号/权限/审计 |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
+| 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |
 | 关系目标 | MySQL/PostgreSQL/openGauss已有实际档案；达梦/金仓/GBase8c为限定实验档案；OceanBase完整恢复未验收；分布式GaussDB待实机 |
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
 | 消息目标 | Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ Classic/Artemis/Redis Streams/NATS JetStream已有不同范围的确认/恢复档案；全部集群/TLS矩阵未完成 |
@@ -40,7 +41,7 @@ V2/V3双执行链、对应向导和旧配置仍有交叉引用，将作为下一
 
 ## 下一步
 
-1. 验证关闭缺口与失败事务补偿、类型化手工补数据。
+1. 完整应用/覆盖水位、其他目标核验语义、失败事务补偿和类型化手工补数据。
 2. 自动跨Agent接管、排空迁移、完整全局诊断与存储可达性。
 3. PostgreSQL/Oracle源、MySQL8.2，以及5.7/8.0/8.4完整档案。
 4. 分布式GaussDB、其他厂商/消息/分析目标生产矩阵。

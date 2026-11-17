@@ -35,8 +35,9 @@ final class LocalTaskPlane implements TaskControlPlane {
             case FAILURE_EVIDENCE_EVENTS:return tasks.failureEvidence(r.taskId,r.reference,r.action,Integer.parseInt(r.cursor),r.limit,actor);
             case SKIP_PLAN:return tasks.skipPlan(r.taskId,r.reference,"NATIVE".equals(r.action),actor);
             case SKIP_PLANS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,false,actor);
+            case GAP_VERIFICATION:return tasks.gapVerificationPlan(r.taskId,r.reference,actor);
             case GAPS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,true,actor);
-            case ACTION:return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip);
+            case ACTION:return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap);
             default:throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         }
     }

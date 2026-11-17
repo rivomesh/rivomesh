@@ -281,27 +281,21 @@
   },
   "currentValidation": {
     "artifact": "target/release-evidence/current/rivomesh.jar",
-    "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
+    "artifactSha256": "3404041b03ed0a407777366056b509778f4c93e12dea0a4f14572b01670a63ce",
     "testClasses": "target/release-evidence/current/test-classes",
-    "testClassesSha256": "2d9f15b0be501ee96796c4fb40290680fc348376aff10391be716692192798a7",
+    "testClassesSha256": "f1fa7e9f38c3fb1df272e552042d162803ea40dfe2790d85c5f6b6229958e4b9",
     "sourceManifest": "target/release-evidence/current/sources.json",
-    "sourceManifestSha256": "70eccaed77dcf9211b29a5b43c2fbee4577088248f6c6df3fcea49eb0ad33f84",
-    "status": "PASS_INTERNAL_GAP_VERIFICATION",
-    "scope": "Java8;61 focused H2 contracts plus49 JAR-first native contracts on each of PG17/MySQL8.4 journals and business targets. Synthetic source transactions;public gap closure API/UI and real-CDC closure acceptance remain open.",
-    "unitContracts": 61,
-    "domReuse": {
-      "tests": 96,
-      "artifactSha256": "aafb7f9ff03147b652f8a5773de61a936e6db39d47254ab00c5486849d676207",
-      "allEightConsoleAssetsIdentical": true
-    },
+    "sourceManifestSha256": "ec7fca22f6a8f0f37e8eb4df6d88ae6bd16475ff584664a08d09901270c530eb",
+    "sourceManifestScope": "Build/test/deployment inputs;documentation excluded",
+    "status": "PASS_BOUNDED_PUBLIC_GAP_WORKFLOW",
+    "expandedContracts": 87,
+    "finalFocusedContracts": 23,
+    "domTests": 102,
+    "scope": "Java8;public PG business gap-verification workflow with PG17/MySQL8.4 control stores;native PG/MySQL journal/target contracts;102 fresh DOM checks. Full applied/coverage watermarks,other target protocols and broader source/JDK/K8s matrices remain open.",
     "nativeProducts": {
       "POSTGRESQL": {
-        "tests": 49,
-        "failures": 0,
-        "errors": 0,
-        "skipped": 0,
+        "tests": 54,
         "cleanupExitCode": 0,
-        "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
         "images": {
           "postgres:17": {
             "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
@@ -314,12 +308,8 @@
         }
       },
       "MYSQL": {
-        "tests": 49,
-        "failures": 0,
-        "errors": 0,
-        "skipped": 0,
+        "tests": 54,
         "cleanupExitCode": 0,
-        "artifactSha256": "68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68",
         "images": {
           "mysql:8.4": {
             "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
@@ -332,12 +322,26 @@
         }
       }
     },
+    "businessProducts": {
+      "POSTGRESQL": {
+        "checks": 27,
+        "cleanupExitCode": 0,
+        "scope": "Two management entries/original fixed Agent,LOCAL-H2 journal,MySQL8.4 two-database source,PG17 business gap verification and unaffected MySQL8.4 peer",
+        "lastCheck": "Cross-entry reviewed gap verification freshly scans two affected tables,atomically records both gaps and preserves SKIP history and the whole-task pause"
+      },
+      "MYSQL": {
+        "checks": 27,
+        "cleanupExitCode": 0,
+        "scope": "Two management entries/original fixed Agent,LOCAL-H2 journal,MySQL8.4 two-database source,PG17 business gap verification and unaffected MySQL8.4 peer",
+        "lastCheck": "Cross-entry reviewed gap verification freshly scans two affected tables,atomically records both gaps and preserves SKIP history and the whole-task pause"
+      }
+    },
+    "brokenMarkdownLinks": 0,
     "sddCounts": {
       "DONE": 10,
       "PARTIAL": 32,
       "NEW": 6
     },
-    "sourceManifestScope": "Build/test/deployment inputs;documentation excluded to avoid self-referential evidence hashes",
-    "brokenMarkdownLinks": 0
+    "testAccounting": "87 expanded contracts followed by23 focused checks after final changes,including one additional cross-entry case. Overlapping cases are not added. Native54/product and fresh102 DOM are separate profiles."
   }
 }

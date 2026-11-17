@@ -39,7 +39,7 @@ Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bo
 | RC-05 | P0 / DONE | Uncertain commit and checkpoint reconciliation | Protocol6 original-Agent/LOCAL-journal bounded profile accepted on PG/MySQL control stores:whole-task pause,fresh evidence,native fencing,cross-entry ADMIN confirmation,atomic ACK/receipt and idempotent retry,with both pauses retained. Skip,compensation and full additional matrices remain separate. |
 | RC-06 | P0 / NEW | Failed-transaction before-image compensation | COMMON_CUT repair exists but does not reconstruct the failed transaction pre-state. |
 | RC-07 | P0 / PARTIAL | Guided manual corrective data entry | Report-driven repair exists without independent failed-transaction/manual patches. |
-| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Durable plans/native SKIP receipts/gap ledger and public warnings are accepted. Internal fresh common-cut scans and atomic verification records are added;H2/PG/MySQL internal contracts pass;public API/UI,real-CDC acceptance and compensation remain open. Historical MATCH is not current live equality. |
+| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Gap ledger,public warnings and PG/MySQL verification API/UI are implemented;54 native contracts per product and102 DOM checks pass. Real-CDC cross-entry verification passes27 checks with each of PG/MySQL control. Full applied/coverage watermarks and other destination semantics remain open. |
 | RC-09 | P0 / PARTIAL | Durable distributed recovery jobs | COMMON_CUT has local durable operations/receipts;distributed/new modes do not. |
 | RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | SQL,analytical and queue consistency protocols differ. |
 

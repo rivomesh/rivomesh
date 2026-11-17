@@ -18,17 +18,17 @@ final class JdbcGapVerification {
     }
     interface Record<T>{T record(Connection transaction,Observation observation)throws Exception;}
 
-    static GapVerificationReceipt verifyAndClose(JdbcJournal journal,JdbcSink.Settings settings,ValidationStore report,GapVerificationPlan plan,Path scratch,long maximumMillis)throws Exception{
-        verifyScope(journal,settings,plan);
+    static GapVerificationReceipt verifyAndClose(JdbcJournal journal,JdbcSink.Settings settings,ValidationStore report,GapVerificationPlan plan,Path scratch,long maximumMillis,String request,String actor,String reason)throws Exception{
+        verifyScope(journal,settings,plan);GapVerificationReceipt.validateApproval(request,actor,reason);
         if(maximumMillis<1000||maximumMillis>86400000)throw new IllegalArgumentException("GAP_VERIFICATION_LIMIT_INVALID");
         List<String> subscriptions=new ArrayList<>();for(Journal.Subscription sub:journal.subscriptions())subscriptions.add(sub.id);journal.verifyIdentity(plan.fingerprint,subscriptions);
         // A lost commit response can be resolved even after an operator has resumed the pipeline.
         // Replaying a receipt only reports historical success; it never repeats or refreshes a scan.
-        GapVerificationReceipt previous=replay(journal,plan);if(previous!=null)return previous;
-        try{return verifyAndRecord(journal,settings,report,plan,scratch,maximumMillis,(c,observation)->JdbcGapVerificationLedger.record(journal,c,plan,observation));}
+        GapVerificationReceipt previous=replay(journal,plan);if(previous!=null){previous.verifyApproval(request,actor,reason);return previous;}
+        try{return verifyAndRecord(journal,settings,report,plan,scratch,maximumMillis,(c,observation)->JdbcGapVerificationLedger.record(journal,c,plan,observation,request,actor,reason));}
         catch(IllegalStateException concurrent){
             if(!"GAP_ALREADY_VERIFIED".equals(concurrent.getMessage()))throw concurrent;
-            previous=replay(journal,plan);if(previous!=null)return previous;throw concurrent;
+            previous=replay(journal,plan);if(previous!=null){previous.verifyApproval(request,actor,reason);return previous;}throw concurrent;
         }
     }
 
@@ -57,7 +57,7 @@ final class JdbcGapVerification {
                 JdbcGapVerificationLedger.requireOpen(journal,transaction,entry.getKey());
                 originals.add(stored.plan);receipts.put(stored.plan.id,stored.receipt);
             }
-            GapVerificationPlan reconstructed=GapVerificationPlan.create(report,originals,receipts,plan.subscriptionId,plan.id,plan.createdBy,plan.reason);reconstructed.createdAt=plan.createdAt;
+            GapVerificationPlan reconstructed=GapVerificationPlan.create(report,originals,receipts,plan.subscriptionId,plan.id,plan.createdBy,plan.reason);reconstructed.createdAt=plan.createdAt;reconstructed.maximumMillis=plan.maximumMillis;
             if(!plan.hash().equals(reconstructed.hash()))throw new IllegalStateException("GAP_VERIFICATION_PLAN_CHANGED");
             Observation observation=new Observation();observation.planHash=plan.hash();observation.reportId=plan.reportId;observation.sourceSeal=plan.sourceSeal;observation.epoch=plan.epoch;observation.sequence=plan.sequence;
             try(JdbcSink sink=JdbcSink.existing(settings)){

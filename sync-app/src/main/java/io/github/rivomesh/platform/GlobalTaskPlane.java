@@ -49,7 +49,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
                 if(request.kind==TaskRequest.Kind.RESTORE_PREVIEW)return preview(request.taskId,document(selected.yaml),request.revision,actor);
                 commands.update(request.taskId,selected.yaml,request,actor);return get(request.taskId,actor);
             }
-            case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case REPAIR_PLAN:case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:return queries.await(queries.submit(request,actor),actor);
+            case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case REPAIR_PLAN:case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:case GAP_VERIFICATION:return queries.await(queries.submit(request,actor),actor);
             default:throw new TaskService.Conflict("GLOBAL_CONFIGURATION_WORKFLOW_PENDING");
         }
     }
@@ -64,7 +64,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
         for(Map<String,Object> operation:operations){
             Map<?,?> actual=observed.get(operation.get("id"));
             // Keep durable routing/authorization fields authoritative while retaining the owner's public workflow inputs.
-            if(actual!=null)for(String field:Arrays.asList("result","validation","repair","failureEvidenceId","skipPlanId","skip","cancelRequested","finishedAt","errorCount","subscriptionId"))if(actual.containsKey(field))operation.put(field,actual.get(field));
+            if(actual!=null)for(String field:Arrays.asList("result","validation","repair","failureEvidenceId","skipPlanId","skip","gapPlanId","gap","cancelRequested","finishedAt","errorCount","subscriptionId"))if(actual.containsKey(field))operation.put(field,actual.get(field));
         }
         result.put("operations",operations);result.put("authority","SHARED");result.put("activeConfigurationVersion",task.activeConfigurationVersion);result.put("configurationPending",!Objects.equals(task.configurationVersion,task.activeConfigurationVersion));return result;
     }

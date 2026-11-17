@@ -21,6 +21,13 @@ The compact [baseline](baseline.json) preserves the exact bounded acceptance pro
 
 The cleaned baseline removes automatic control-mode migration and historical binary tests. Namespace mode remains fixed and mismatches refuse;lease fencing,data integrity and current recovery tests remain. V2/V3 execution consolidation is a separate pending cleanup batch.
 
-当前内部缺口核验：Java8构建包 `68434933f499f4d17ad76f47542d27c3a61864560ace9f705f0d8d842a02ed68`，61项H2专项及PostgreSQL17/MySQL8.4各49项发布包优先合同通过。两种产品均使用合成源事务，不能替代真实采集链路或管理界面闭环验收；RC-08仍为PARTIAL。所有8份界面资源与前一基线完全相同，96 DOM结果仅按字节一致复用。
+当前公开缺口核验构建包：`3404041b03ed0a407777366056b509778f4c93e12dea0a4f14572b01670a63ce`。
 
-Current internal gap verification passes bounded native contracts;public closure API/UI and real-CDC workflow acceptance remain open. Older per-run benchmark files are replaced by compact provenance in baseline.json. No full source/vendor/JDK/K8s recertification is claimed.
+- 87项扩展合同通过，最终改动后23项专项通过；重叠项不相加。
+- PostgreSQL17/MySQL8.4日志及目标各54项发布包优先合同通过。
+- 102项DOM重新运行通过，覆盖计划范围、摘要审批、取消、响应丢失重试、权限和退出登录。
+- PG17/MySQL8.4控制库各27项真实CDC检查通过：Java8、MySQL8.4双库源、原固定Agent/LOCAL-H2日志、PostgreSQL17业务核验目标、MySQL8.4健康订阅；两管理入口审阅和重新扫描两张表，原子记录两条缺口。测试资源均清理。
+
+RC-08仍为PARTIAL：完整应用/覆盖水位、其他目标的核验语义及更广源/JDK/K8s矩阵未验收。[中文核验指南](../zh-CN/gap-verification.md) / [English](../en/gap-verification.md)。
+
+The same candidate passes bounded native and public real-CDC gap verification. Historical results above are provenance rather than fresh certification. No complete connector/source/JDK/K8s recertification is claimed.

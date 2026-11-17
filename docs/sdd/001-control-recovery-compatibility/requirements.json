@@ -664,8 +664,8 @@
         "en": "Consistency-gap ledger and honest watermarks"
       },
       "gap": {
-        "zh-CN": "持久计划/原生SKIP凭据/缺口台账及公开告警已验收；新增内部共同点全表重扫与原子核验记录，H2/PG/MySQL内部合同已通过，仍待公开API/UI、真实同步链路验收及补偿闭环，不将历史MATCH当成实时一致。",
-        "en": "Durable plans/native SKIP receipts/gap ledger and public warnings are accepted. Internal fresh common-cut scans and atomic verification records are added;H2/PG/MySQL internal contracts pass;public API/UI,real-CDC acceptance and compensation remain open. Historical MATCH is not current live equality."
+        "zh-CN": "缺口台账、公开告警和PG/MySQL核验API/UI已实现；54项原生合同/产品及102项DOM通过，PG/MySQL控制库各27项真实CDC跨入口核验通过。完整应用/覆盖水位及其他目标语义仍未完成。",
+        "en": "Gap ledger,public warnings and PG/MySQL verification API/UI are implemented;54 native contracts per product and102 DOM checks pass. Real-CDC cross-entry verification passes27 checks with each of PG/MySQL control. Full applied/coverage watermarks and other destination semantics remain open."
       },
       "acceptance": {
         "zh-CN": "记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。",
@@ -687,7 +687,11 @@
         "docs/zh-CN/transaction-skip.md",
         "docs/en/transaction-skip.md",
         "docs/sdd/001-control-recovery-compatibility/design-gap-verification.md",
-        "sync-app/src/test/java/io/github/rivomesh/cdc/GapVerificationLedgerTest.java"
+        "sync-app/src/test/java/io/github/rivomesh/cdc/GapVerificationLedgerTest.java",
+        "docs/zh-CN/gap-verification.md",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/GapVerificationServiceTest.java",
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedGapVerificationTest.java",
+        "tests/ui/gap-verification-cases.mjs"
       ]
     },
     {
