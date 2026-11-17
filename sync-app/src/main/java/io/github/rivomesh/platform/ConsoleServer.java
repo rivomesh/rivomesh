@@ -50,7 +50,7 @@ public final class ConsoleServer implements AutoCloseable {
             if(agentOnly){error(exchange,404,"AGENT_PROBE_ONLY");return;}
             if(!path.startsWith("/api/")) {
                 if(!method.equals("GET")){error(exchange,405,"METHOD_NOT_ALLOWED");return;}
-                String resource=path.equals("/")?"index.html":path.equals("/app.js")?"app.js":path.equals("/configuration-editor.js")?"configuration-editor.js":path.equals("/accounts.js")?"accounts.js":path.equals("/validation.js")?"validation.js":path.equals("/audit.js")?"audit.js":path.equals("/app.css")?"app.css":null;
+                String resource=path.equals("/")?"index.html":path.equals("/app.js")?"app.js":path.equals("/configuration-editor.js")?"configuration-editor.js":path.equals("/accounts.js")?"accounts.js":path.equals("/validation.js")?"validation.js":path.equals("/recovery.js")?"recovery.js":path.equals("/audit.js")?"audit.js":path.equals("/app.css")?"app.css":null;
                 if(resource==null){error(exchange,404,"NOT_FOUND");return;}
                 try(InputStream in=getClass().getResourceAsStream("/console/"+resource)) {
                     if(in==null){error(exchange,404,"NOT_FOUND");return;}
@@ -168,6 +168,7 @@ public final class ConsoleServer implements AutoCloseable {
                 if(!principal.administers()&&!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action)){error(exchange,403,"FORBIDDEN");return;}
                 long generation=body.has("errorCount")&&body.get("errorCount").isIntegralNumber()?body.get("errorCount").asLong():-1;
                 ValidationRequest validation=body.hasNonNull("validation")?Model.JSON.treeToValue(body.get("validation"),ValidationRequest.class):null;
+                if(body.hasNonNull("skip")&&(!body.get("skip").isObject()||!body.get("skip").path("acceptDataLoss").isBoolean()))throw new IllegalArgumentException("SKIP_DATA_LOSS_APPROVAL_REQUIRED");
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);request.action=action;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");request.errorCount=generation;request.subscriptionId=body.hasNonNull("subscriptionId")?body.get("subscriptionId").asText():null;request.validation=validation;request.repair=body.hasNonNull("repair")?Model.JSON.treeToValue(body.get("repair"),RepairRequest.class):null;request.commit=body.hasNonNull("commit")?Model.JSON.treeToValue(body.get("commit"),CommitRequest.class):null;request.skip=body.hasNonNull("skip")?Model.JSON.treeToValue(body.get("skip"),SkipRequest.class):null;json(exchange,202,control.invoke(request,principal));return;
             }
             error(exchange,404,"NOT_FOUND");

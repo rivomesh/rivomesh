@@ -510,8 +510,8 @@
         "en": "Skip a complete destination transaction"
       },
       "gap": {
-        "zh-CN": "完整事务跳过计划、审批绑定和SKIPPED回执模型已编码，6项模型测试通过；目标原子提交、跨节点操作、取消/恢复和界面仍在开发，尚无可用跳过功能。",
-        "en": "Complete-transaction skip plans,approval binding and SKIPPED receipt models are coded;6 model contracts pass. Native atomic execution,cross-node actions,cancel/recovery and UI remain in development;no usable skip capability yet."
+        "zh-CN": "跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。",
+        "en": "Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL."
       },
       "acceptance": {
         "zh-CN": "对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。",
@@ -529,7 +529,11 @@
         "sync-app/src/main/java/io/github/rivomesh/recovery/SkipReceipt.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSkipJournal.java",
         "sync-app/src/test/java/io/github/rivomesh/cdc/SkipPlanTest.java",
-        "docs/sdd/001-control-recovery-compatibility/design-native-skip.md"
+        "docs/sdd/001-control-recovery-compatibility/design-native-skip.md",
+        "sync-app/src/main/resources/console/recovery.js",
+        "tests/ui/recovery-cases.mjs",
+        "docs/zh-CN/transaction-skip.md",
+        "docs/en/transaction-skip.md"
       ]
     },
     {
@@ -665,8 +669,8 @@
         "en": "Consistency-gap ledger and honest watermarks"
       },
       "gap": {
-        "zh-CN": "准备计划、格式4及缺口存储/未完成恢复拦截已编码；原有日志与恢复兼容回归40项通过。新缺口链路、原生回执核对、真实水位和查询界面尚未验收。",
-        "en": "Prepared plans,format4 and gap storage/pending-recovery guards are coded;40 existing journal/recovery/model regressions pass. The new gap path,native receipt checks,truthful progress and query UI are not accepted yet."
+        "zh-CN": "跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。",
+        "en": "Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL."
       },
       "acceptance": {
         "zh-CN": "记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。",
@@ -682,7 +686,11 @@
         "sync-app/src/main/java/io/github/rivomesh/recovery/SkipReceipt.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSkipJournal.java",
         "sync-app/src/test/java/io/github/rivomesh/cdc/SkipPlanTest.java",
-        "docs/sdd/001-control-recovery-compatibility/design-native-skip.md"
+        "docs/sdd/001-control-recovery-compatibility/design-native-skip.md",
+        "sync-app/src/main/resources/console/recovery.js",
+        "tests/ui/recovery-cases.mjs",
+        "docs/zh-CN/transaction-skip.md",
+        "docs/en/transaction-skip.md"
       ]
     },
     {

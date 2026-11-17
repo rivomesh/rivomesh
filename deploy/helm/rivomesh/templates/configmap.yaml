@@ -1,4 +1,5 @@
 {{- if and .Values.cluster.recoveryCommit (not .Values.cluster.recoveryReview) }}{{ fail "cluster.recoveryCommit requires recoveryReview" }}{{ end }}
+{{- if and .Values.cluster.recoverySkip (not .Values.cluster.recoveryCommit) }}{{ fail "cluster.recoverySkip requires recoveryCommit" }}{{ end }}
 {{- if and .Values.cluster.sharedTasks (or (not .Values.cluster.enabled) (not .Values.cluster.sharedAccess)) }}{{ fail "cluster.sharedTasks requires enabled sharedAccess" }}{{ end }}
 {{- if and .Values.cluster.recoveryReview (or (not .Values.cluster.enabled) (not .Values.cluster.sharedTasks)) }}{{ fail "cluster.recoveryReview requires enabled sharedTasks" }}{{ end }}
 {{- if .Values.cluster.enabled }}
@@ -83,6 +84,9 @@ data:
       {{- end }}
       {{- if .Values.cluster.recoveryCommit }}
       recoveryCommit: true
+      {{- end }}
+      {{- if .Values.cluster.recoverySkip }}
+      recoverySkip: true
       {{- end }}
       taskKey: ${RIVOMESH_TASK_KEY}
       maximumTasks: {{ .Values.cluster.maximumTasks | int }}

@@ -344,6 +344,9 @@
         },
         "recoveryCommit": {
           "type": "boolean"
+        },
+        "recoverySkip": {
+          "type": "boolean"
         }
       },
       "allOf": [
@@ -455,6 +458,37 @@
                 "const": true
               },
               "recoveryReview": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "recoverySkip"
+            ],
+            "properties": {
+              "recoverySkip": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "sharedAccess": {
+                "const": true
+              },
+              "sharedTasks": {
+                "const": true
+              },
+              "recoveryReview": {
+                "const": true
+              },
+              "recoveryCommit": {
                 "const": true
               }
             }

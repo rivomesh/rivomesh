@@ -1,0 +1,9 @@
+# Experimental overlay for EVERY controller/Agent; normal STOPPED protocol7 upgrade required.
+# Internal PG/MySQL skip contracts pass; full public skip lifecycle is still under acceptance.
+cluster:
+  enabled: true
+  sharedAccess: true
+  sharedTasks: true
+  recoveryReview: true
+  recoveryCommit: true
+  recoverySkip: true

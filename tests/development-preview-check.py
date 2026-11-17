@@ -24,7 +24,7 @@ def get(path, authenticated=False):
 for path in ('/healthz', '/readyz'):
     body, _ = get(path)
     assert json.loads(body)['status'] == 'UP'
-for name in ('index.html', 'app.js', 'app.css', 'configuration-editor.js', 'accounts.js', 'audit.js', 'validation.js'):
+for name in ('index.html', 'app.js', 'app.css', 'configuration-editor.js', 'accounts.js', 'audit.js', 'validation.js', 'recovery.js'):
     body, headers = get('/' if name == 'index.html' else '/' + name)
     assert body == (ROOT / 'sync-app/src/main/resources/console' / name).read_bytes(), 'Stale UI: ' + name
     assert headers['Cache-Control'] == 'no-store'

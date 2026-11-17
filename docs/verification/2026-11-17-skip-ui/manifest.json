@@ -1,0 +1,18 @@
+{
+  "artifact": "target/release-evidence/managed-skip-ui-first.jar",
+  "artifactSha256": "c4f44a65762a8a01a2fbdd36dac7018b2e86b7f1d89b3dfc098db3e6d117af9e",
+  "bytes": 188594185,
+  "testClasses": "target/release-evidence/managed-skip-ui-tests-c4f44a65762a",
+  "testClassesSha256": "ebde967698fa074b5d4832ea67f871be12058be539ddd06e3c87dd96beb55e7d",
+  "sourceManifest": "target/release-evidence/managed-skip-ui-sources.json",
+  "sourceManifestSha256": "a0f2b4726c0d51ec5dea72c78d5127dda2913c8cd7897cea6074423a65553eb7",
+  "status": "PASS_EXPERIMENTAL_UI_HTTP",
+  "scope": "Experimental protocol7 UI/API;96 DOM,36 focused management/HTTP tests,Helm/native parity. Complete protocol7 CDC lifecycle and verified gap closure remain open.",
+  "jarFirstTests": {
+    "tests": 36,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "domTests": 96
+}

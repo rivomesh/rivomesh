@@ -35,7 +35,10 @@ with zipfile.ZipFile(artifact) as jar:
     assert not any(name.startswith(namespace) and "/internal/" not in name
                    and re.search(r"(?:Test|Acceptance)(?:\$[^/]*)?\.class$", name)
                    for name in names), "Test class included in release"
-    for resource in ("index.html", "app.js", "app.css", "configuration-editor.js", "audit.js", "accounts.js", "validation.js"):
+    resources = ["index.html", "app.js", "app.css", "configuration-editor.js", "audit.js", "accounts.js", "validation.js"]
+    if historical_sources is None or 'sync-app/src/main/resources/console/recovery.js' in historical_sources:
+        resources.append('recovery.js')
+    for resource in resources:
         if historical_sources is None:
             assert jar.read("console/" + resource) == (root / "sync-app/src/main/resources/console" / resource).read_bytes(), "Stale console asset: " + resource
         else:

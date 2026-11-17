@@ -1,3 +1,4 @@
+import {registerRecoveryTests} from './recovery-cases.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -10,6 +11,7 @@ const configurationScript=await readFile(new URL('configuration-editor.js',root)
 const auditScript=await readFile(new URL('audit.js',root),'utf8');
 const accountsScript=await readFile(new URL('accounts.js',root),'utf8');
 const validationScript=await readFile(new URL('validation.js',root),'utf8');
+const recoveryScript=await readFile(new URL('recovery.js',root),'utf8');
 const token='test-console-token-at-least-24-bytes';
 const flush=async()=>{for(let i=0;i<4;i++)await new Promise(setImmediate);};
 function setup(initial=[],role='ADMIN',browser={authenticated:false}){
@@ -37,7 +39,7 @@ function setup(initial=[],role='ADMIN',browser={authenticated:false}){
     if(options.method&&options.method!=='GET'&&!(path==='/api/session'&&options.method==='POST'))assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
     if(path==='/api/session/logout'){browser.authenticated=false;return{ok:true,status:200,json:async()=>({status:'SIGNED_OUT'})};}
     let data;
-    if(path==='/api/session')data={id:'test-user',role,recoveryReview:Boolean(browser.recoveryReview),recoveryCommit:Boolean(browser.recoveryCommit),authentication:'COOKIE',csrfToken:'test-csrf',nodeId:'node-a',nodeRole:browser.nodeRole||'CONTROLLER_WORKER',taskControlScope:browser.taskControlScope||'LOCAL',nodeScope:browser.nodeIds??null,permissions:['TASK_READ',...(role!=='VIEWER'?['TASK_CONTROL']:[]),...(role==='ADMIN'?['TASK_CREATE','TASK_CONFIG','AUDIT_READ','ACCOUNT_ADMIN']:[])]};
+    if(path==='/api/session')data={id:'test-user',role,recoveryReview:Boolean(browser.recoveryReview),recoveryCommit:Boolean(browser.recoveryCommit),recoverySkip:Boolean(browser.recoverySkip),authentication:'COOKIE',csrfToken:'test-csrf',nodeId:'node-a',nodeRole:browser.nodeRole||'CONTROLLER_WORKER',taskControlScope:browser.taskControlScope||'LOCAL',nodeScope:browser.nodeIds??null,permissions:['TASK_READ',...(role!=='VIEWER'?['TASK_CONTROL']:[]),...(role==='ADMIN'?['TASK_CREATE','TASK_CONFIG','AUDIT_READ','ACCOUNT_ADMIN']:[])]};
     else if(path==='/api/capabilities')data=[{id:'MYSQL',role:'SOURCE',status:'AVAILABLE',note:''},{id:'PULSAR',role:'SINK',status:'PLANNED',note:''}];
     else if(options.method==='POST'&&path==='/api/tasks'){
       const config=JSON.parse(options.body).config;
@@ -46,7 +48,7 @@ function setup(initial=[],role='ADMIN',browser={authenticated:false}){
     else data={tasks,invalidConfigs:[]};
     return{ok:true,status:200,json:async()=>data};
   };
-  w.eval(script);w.eval(configurationScript);w.eval(auditScript);w.eval(accountsScript);w.eval(validationScript);return{dom,w,d:w.document,calls,authCalls,browser};
+  w.eval(script);w.eval(configurationScript);w.eval(auditScript);w.eval(accountsScript);w.eval(validationScript);w.eval(recoveryScript);return{dom,w,d:w.document,calls,authCalls,browser};
 }
 async function login(ui){await flush();ui.d.getElementById('token').value=token;ui.d.getElementById('login-form').dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();}
 function detailFixture(role='ADMIN'){
@@ -709,3 +711,5 @@ test('running pipeline or stale checkpoint observation cannot expose a commit co
     try{await login(ui);[...ui.d.querySelectorAll('.history button')].find(b=>b.textContent==='查看事务证据').click();await flush();const section=ui.d.querySelector('.failure-checkpoint');assert.equal(section.querySelector('textarea'),null);assert.match(section.textContent,/先暂停整个任务/);}finally{ui.dom.window.close();}
   }
 });
+
+registerRecoveryTests({setup,flush,login});

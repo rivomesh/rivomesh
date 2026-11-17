@@ -1,0 +1,33 @@
+{
+  "artifact": "target/release-evidence/package-namespace-first.jar",
+  "artifactSha256": "48de0f43ef9fb57ed4b826283682dab2efa1ffb02e5ed07e1035b2ee159fc3e3",
+  "bytes": 188593845,
+  "testClasses": "target/release-evidence/package-namespace-tests-48de0f43ef9f",
+  "status": "PASS_NAMESPACE_REFACTOR",
+  "namespace": "io.github.rivomesh",
+  "reactorTests": {
+    "sync-app": {
+      "tests": 485,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 28,
+      "executed": 457
+    },
+    "classic-transport": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "executed": 2
+    }
+  },
+  "sourceManifest": "target/release-evidence/package-namespace-sources.json",
+  "sourceManifestSha256": "eeceddccc8e5d6a2eabd0f232ef9660727d125e9f75d6593ed26b6b386637891",
+  "testClassesSha256": "eebdb5ccb304d5f1734f84ef3d5fe22ee94f7903e1262731a5c40e60a8f33d6e",
+  "domTests": 87,
+  "postgresqlNativeContracts": 33,
+  "mysqlNativeContracts": 33,
+  "postgresqlControlCdcChecks": 23,
+  "sourceCommit": "e606b650d36c448ab02f625811ab1b07b4997b58",
+  "scope": "Renamed Java/Maven namespace with full nine-module Java8 rebuild,457 executed app tests,2 SDK tests,87 DOM,native skip-core33 per product and protocol6 separated-Agent CDC23;public protocol7 skip lifecycle and full matrices remain open"
+}

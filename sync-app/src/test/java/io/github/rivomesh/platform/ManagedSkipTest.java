@@ -64,6 +64,16 @@ class ManagedSkipTest {
             assertEquals(200,PlatformTest.http(base,"/api/tasks/job/gaps",PlatformTest.TOKEN,"{\"subscriptionId\":\"pg\",\"after\":\"0\",\"limit\":20}","gap_page_1234").status);assertEquals(400,PlatformTest.http(base,"/api/tasks/job/gaps",PlatformTest.TOKEN,"{\"subscriptionId\":\"pg\",\"after\":\"-1\"}","bad_gap_page_1234").status);String audit=Model.JSON.writeValueAsString(service.auditPage(0,0,1000));assertTrue(audit.contains("SKIP_PLAN_READ"));assertTrue(audit.contains("DATA_GAPS_READ"));
         }
     }
+    @Test void httpRequiresALiteralBooleanForDataLossApprovalBeforeAcceptingAnyCommand()throws Exception{
+        Backend backend=new Backend();try(TaskService service=new TaskService(config(),backend,new PlatformTest.Workers());ConsoleServer server=new ConsoleServer(config(),service)){
+            createPaused(service);server.start();String base="http://127.0.0.1:"+server.port();ObjectNode body=Model.JSON.createObjectNode();body.put("action","SKIP_TRANSACTION");body.put("expectedRevision",PlatformTest.revision(service,"job"));body.put("subscriptionId","pg");body.put("errorCount",1);
+            for(int invalid=0;invalid<4;invalid++){
+                ObjectNode approval=Model.JSON.valueToTree(skip());if(invalid==0)approval.put("acceptDataLoss","true");else if(invalid==1)approval.put("acceptDataLoss",1);else if(invalid==2)approval.putNull("acceptDataLoss");else approval.remove("acceptDataLoss");body.set("skip",approval);
+                PlatformTest.Response response=PlatformTest.http(base,"/api/tasks/job/actions",PlatformTest.TOKEN,body.toString(),"skip_bad_boolean_"+invalid);assertEquals(400,response.status,response.text);assertEquals("REQUEST_INVALID",Model.JSON.readTree(response.text).path("code").asText());
+            }
+            assertEquals(0,backend.captures.get());body.set("skip",Model.JSON.valueToTree(skip()));PlatformTest.Response accepted=PlatformTest.http(base,"/api/tasks/job/actions",PlatformTest.TOKEN,body.toString(),"skip_literal_boolean_1234");assertEquals(202,accepted.status,accepted.text);PlatformTest.await(()->"SUCCEEDED".equals(ManagedFailureReviewTest.op(service,"skip_literal_boolean_1234").path("status").asText()));assertEquals(1,backend.captures.get());
+        }
+    }
     @Test void commitOnlyClusterRejectsSkipBeforeTaskLookupOrQueueing()throws Exception{
         GlobalControlHttpTest helper=new GlobalControlHttpTest();helper.directory=directory;PlatformConfig config=helper.config("a");config.cluster.recoveryReview=true;config.cluster.recoveryCommit=true;Backend backend=new Backend();try(TaskService service=new TaskService(config,backend,new PlatformTest.Workers());ConsoleServer server=new ConsoleServer(config,service)){
             server.start();ObjectNode body=Model.JSON.createObjectNode();body.put("action","SKIP_TRANSACTION");body.put("expectedRevision","revision");body.put("subscriptionId","pg");body.put("errorCount",1);body.set("skip",Model.JSON.valueToTree(skip()));PlatformTest.Response response=PlatformTest.http(helper.base(server),"/api/tasks/missing/actions",PlatformTest.TOKEN,body.toString(),"skip_disabled_1234");assertEquals(409,response.status,response.text);assertTrue(response.text.contains("SKIP_DISABLED"));assertEquals(0,backend.captures.get());

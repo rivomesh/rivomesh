@@ -144,6 +144,8 @@ class PlatformTest {
             assertEquals("ADMIN",Model.JSON.readTree(http(base,"/api/session",TOKEN,null,null).text).path("role").asText());
             assertTrue(http(base,"/",null,null,null).text.contains("Rivomesh"));
             assertTrue(http(base,"/app.js",null,null,null).text.contains("expectedRevision"));
+            assertTrue(http(base,"/",null,null,null).text.contains("/recovery.js"));
+            Response recovery=http(base,"/recovery.js",null,null,null);assertEquals(200,recovery.status);assertTrue(recovery.text.contains("RivomeshRecovery"));
             String json="{\"config\":"+Model.JSON.writeValueAsString(task("web"))+"}";
             Response created=http(base,"/api/tasks",TOKEN,json,"web_create");assertEquals(201,created.status);assertFalse(created.text.contains("secret"));
             assertEquals(201,http(base,"/api/tasks",TOKEN,json,"web_create").status);

@@ -39,6 +39,7 @@ cluster:
   sharedTasks: false # Opt-in fixed-owner global task control; start with empty task directories.
   recoveryReview: false # Protocol5 opt-in; stop old members normally before enabling on every node.
   recoveryCommit: false # Protocol6 opt-in; requires recoveryReview and normally stopped members.
+  recoverySkip: false # Experimental protocol7; requires recoveryCommit and normally stopped members.
   separateExecution: false # Protocol4: roles are enforced; old members must stop before upgrade.
   role: COMBINED # COMBINED, CONTROLLER (no Workers), or AGENT (probes only).
   taskKeyKey: task-key # Canonical base64-encoded 32-byte key in existingSecret, shared by all members.

@@ -1,5 +1,7 @@
 # Implementation status and next work
 
+2026-11-17 namespace increment: Java/Maven now use `io.github.rivomesh`, published on GitHub `main`. All modules rebuilt;457 app tests,2 SDK tests,87 DOM,33 native contracts per PG/MySQL product and23 PostgreSQL-control multi-node CDC checks passed. [Namespace evidence](../verification/2026-11-17-package-namespace/README.md). Subsequent skip UI wiring passes96 DOM and36 management/HTTP focused tests;protocol7 deployment flags,plan resolution,explicit gap warnings and bilingual operations docs are added. Complete multi-node public skip acceptance remains open. [Transaction skipping (in development)](transaction-skip.md).
+
 Latest read-only increment99a1:checkpoint comparison appears in transaction review;397 actual-JAR app tests,85 DOM,17 contracts per PostgreSQL/MySQL product,and22 PG-control multi-node CDC checks passed. [Evidence](../verification/2026-11-17-checkpoint-inspection/README.md). [Managed commit confirmation](commit-acknowledgement.md) passed its [bounded profile](../verification/2026-11-17-managed-commit/README.md):416 JAR tests,87 DOM,38 native contracts per product and23 multi-node checks per control product. RC-05 closes;transaction skipping and gaps are next.
 
 Development preview is on demand, with no permanent instance. Its containers were removed at the user’s request on2026-11-16; historical preview URLs are currently inactive.

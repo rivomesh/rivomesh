@@ -115,6 +115,13 @@ def manifests():
     committed=command('helm','template','rivomesh-commit',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-commit.yaml')
     assert 'recoveryCommit: true' in committed and 'recoveryReview: true' in committed
     assert subprocess.run(['helm','template','rivomesh',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-commit.yaml','--set','cluster.recoveryReview=false'],cwd=ROOT,capture_output=True).returncode!=0
+    for role,names in (('controller',('rivomesh-skip-controller-a','rivomesh-skip-controller-b')),('agent',('rivomesh-skip-agent-a',))):
+        for name in names:
+            skipped=command('helm','template',name,chart,'--namespace','rivomesh','-f',chart+'/values-'+role+'.yaml','-f',chart+'/values-recovery-skip.yaml')
+            assert skipped==(ROOT/('deploy/kubernetes/'+name+'.yaml')).read_text().strip()
+            assert all(flag+': true' in skipped for flag in ('recoveryReview','recoveryCommit','recoverySkip'))
+    for invalid in ('cluster.recoveryCommit=false','cluster.recoveryReview=false','cluster.sharedTasks=false'):
+        assert subprocess.run(['helm','template','rivomesh',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-skip.yaml','--set',invalid],cwd=ROOT,capture_output=True).returncode!=0,invalid
     for role,names in (('controller',('rivomesh-review-controller-a','rivomesh-review-controller-b')),('agent',('rivomesh-review-agent-a',))):
         for name in names:
             profile=command('helm','template',name,chart,'--namespace','rivomesh','-f',chart+'/values-'+role+'.yaml','-f',chart+'/values-recovery-review.yaml')

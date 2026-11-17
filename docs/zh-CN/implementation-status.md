@@ -1,5 +1,7 @@
 # 实施状态与下一批工作
 
+2026-11-17 包名增量：Java/Maven 基础命名空间已改为 `io.github.rivomesh`，已推送 GitHub `main`。全部模块重建、457项应用测试、2项SDK测试、87项DOM、PG/MySQL各33项原生合同及PG控制库23项多节点CDC检查通过。[更名验收](../verification/2026-11-17-package-namespace/README.md)。后续跳过界面已接线，96项DOM及36项管理/HTTP专项通过；协议7部署开关、计划恢复、显式缺口提示及双语操作手册已补入，完整跨节点跳过验收仍未完成。[事务跳过（开发中）](transaction-skip.md)。
+
 开发预览按需启动，默认不常驻。2026-11-16已按用户要求清理预览容器；历史记录中的预览地址当前未启动。
 更新：2026-11-17。English: [Implementation status](../en/implementation-status.md)。完整需求见[平台方案](platform-design.md)，操作方式见[控制台手册](console-and-deployment.md)。
 
