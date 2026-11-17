@@ -1,6 +1,6 @@
 # Complete-transaction skipping and gap recovery
 
-Status: in development;RC-03/RC-08 remain PARTIAL. Internal PG/MySQL skip contracts and management API/UI tests exist;the complete protocol 7 multi-node CDC/crash lifecycle has not been accepted. Disabled by default for shared-task clusters. Standalone controllers expose administrator controls, still requiring complete evidence and explicit approval. [中文](../zh-CN/transaction-skip.md).
+Status:RC-03 bounded profile accepted;RC-08 verified gap closure remains open. [Evidence](../verification/2026-11-17-managed-skip/README.md). Java8,MySQL8.4 source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores are accepted. Native MySQL target contracts pass;its full public skip matrix and other destinations remain open. Shared-task clusters default to disabled;standalone administrator controls still require complete evidence/explicit approval. [中文](../zh-CN/transaction-skip.md).
 
 ## Scope and consequences
 

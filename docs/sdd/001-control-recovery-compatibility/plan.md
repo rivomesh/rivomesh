@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.8 · 2026-11-17 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**9 DONE、33 PARTIAL、6 NEW，39 项未完成**。[RC-05](design-checkpoint-recovery.md)限定档案已验收，继续推进事务跳过和缺口记录。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**10 DONE、32 PARTIAL、6 NEW，38 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/2026-11-17-managed-skip/README.md)限定档案已验收，继续推进缺口验证关闭与补偿。
 
 ## 1. 历史起点和核对范围
 
@@ -38,7 +38,7 @@ v0.1整理时的发布包 SHA256：`10d95a3990835f2286f036b962d88fc8533ade427753
 | 6 完整文档 | DO-01～DO-05 | 5 |
 | 既有范围合并保留 | LG-01～LG-10 | 10 |
 
-共48项：9项DONE，余39项为6项NEW、33项PARTIAL。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
+共48项：10项DONE，余38项为6项NEW、32项PARTIAL。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
 
 ## 2. 用户已明确的需求，不再当作可选项
 

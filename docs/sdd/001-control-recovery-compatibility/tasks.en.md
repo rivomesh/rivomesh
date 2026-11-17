@@ -54,10 +54,10 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-RC-02 · Failed-transaction inspection and evidence retention · P0 · Depends on: RC-01, CP-05
   Deliver: Show source/transaction identity,event range,affected objects/destinations,raw/normalized hashes,before/after-image availability and checkpoints;bounded raw access is authorized and evidence is retained before action.
   Acceptance: AC-RC-02
-- [ ] T-RC-03 · Skip a complete destination transaction · P0 · Depends on: RC-02, RC-05, RC-08
+- [x] T-RC-03 · Skip a complete destination transaction · P0 · Depends on: RC-02, RC-05, RC-08
   Deliver: For a known next failed transaction,ADMIN reviews destination scope/reason;cross-table events are not split;native SKIP receipt and safe progress commit locally and crash replay never skips another transaction.
   Acceptance: AC-RC-03
-  In progress:plan/native skip receipts,crash recovery,controlled cancellation and the gap ledger passed focused internal PG/MySQL contracts. Management API/protocol7 and authorization are coded with targeted tests. UI integration passes96 DOM and36 management/HTTP tests;deployment and bilingual operations docs are added. Complete cross-node skip lifecycle acceptance remains open;this is not a publicly accepted skip feature.
+  Accepted:[bounded RC-03 profile](../../verification/2026-11-17-managed-skip/README.md);other products/full matrices stay open.
 - [ ] T-RC-04 · Controlled capture/decode gap recovery · P0 · Depends on: RC-01, RC-02, RC-08, SO-01
   Deliver: Provide a separate verified transaction/source-range quarantine/exclusion plan affecting all relevant subscriptions with original logs retained;unprovable boundaries are refused with log recovery,valid source or rebaseline alternatives;never fabricate successful application.
   Acceptance: AC-RC-04
@@ -74,7 +74,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
   Deliver: Track skipped transactions/ranges,destinations,reason,actor,hashes and original evidence;separate applied progress,safe coverage and running-with-gaps;only verification evidence closes a gap and accepted loss is not equality.
   Acceptance: AC-RC-08
-  In progress:plan/native skip receipts,crash recovery,controlled cancellation and the gap ledger passed focused internal PG/MySQL contracts. Management API/protocol7 and authorization are coded with targeted tests. UI integration passes96 DOM and36 management/HTTP tests;deployment and bilingual operations docs are added. Complete cross-node skip lifecycle acceptance remains open;this is not a publicly accepted skip feature.
+  Gap records,public warnings and restart recovery pass;verified closure/compensation remain open.
 - [ ] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
   Deliver: Remote plans,approval,cancellation,receipts and evidence locations are traceable;controller/agent kill recovers the same request with idempotent commits/rollback;skip is not cutover approval.
   Acceptance: AC-RC-09
@@ -179,3 +179,5 @@ v0.6: CP-07 separated LOCAL-journal profile accepted;7DONE/33PARTIAL/8NEW. [Evid
 v0.7: RC-02 bounded managed review accepted;8DONE/32PARTIAL/8NEW. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
 
 v0.8:RC-05 proven-commit confirmation bounded profile accepted;9 DONE,31 PARTIAL,8 NEW;39 open. [Evidence](../../verification/2026-11-17-managed-commit/README.md).
+
+v0.9:RC-03 bounded profile accepted;10 DONE,32 PARTIAL,6 NEW;38 open. [Evidence](../../verification/2026-11-17-managed-skip/README.md).

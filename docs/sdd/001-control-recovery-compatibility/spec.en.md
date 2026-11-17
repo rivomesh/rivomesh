@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.8 · 2026-11-17 · IMPLEMENTING
+RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 
-Implementation:48requirements,9DONE,33PARTIAL,6NEW;39open. RC-02 review and RC-05 proven-commit confirmation bounded profiles are accepted;automatic takeover,skip,compensation and complete compatibility matrices remain tracked.
+Implementation:48requirements,10DONE,32PARTIAL,6NEW;38open. RC-02/RC-05/RC-03 bounded profiles are accepted;verified gap closure,automatic takeover,compensation and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -34,12 +34,12 @@ Implementation:48requirements,9DONE,33PARTIAL,6NEW;39open. RC-02 review and RC-0
 |---|---|---|---|
 | RC-01 | P0 / PARTIAL | Phase-aware fault classification | Initial destination preparation/snapshot and delivery phases pass dual-entry native fault/restart acceptance;complete source phases and manual-action diagnostics remain open. |
 | RC-02 | P0 / DONE | Failed-transaction inspection and evidence retention | Accepted bounded MySQL8.4,fixed original Agent/LOCAL journal,PG/MySQL control profile:ADMIN whole-transaction review,positions/historical columns/images,authorized pages and durable evidence surviving restart/journal GC. Catalog automation,other profiles,Agent migration and execution semantics remain separately tracked. |
-| RC-03 | P0 / PARTIAL | Skip a complete destination transaction | Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL. |
+| RC-03 | P0 / DONE | Skip a complete destination transaction | Protocol7 bounded profile accepted:Java8,MySQL8.4 two-database source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores. Complete transaction skip,native commit/source ACK failure,Agent SIGKILL/reopen and cross-entry recovery pass. Other targets/full matrices remain RC-10/LG-01. |
 | RC-04 | P0 / NEW | Controlled capture/decode gap recovery | Destination skipping cannot fix failures before complete events exist. |
 | RC-05 | P0 / DONE | Uncertain commit and checkpoint reconciliation | Protocol6 original-Agent/LOCAL-journal bounded profile accepted on PG/MySQL control stores:whole-task pause,fresh evidence,native fencing,cross-entry ADMIN confirmation,atomic ACK/receipt and idempotent retry,with both pauses retained. Skip,compensation and full additional matrices remain separate. |
 | RC-06 | P0 / NEW | Failed-transaction before-image compensation | COMMON_CUT repair exists but does not reconstruct the failed transaction pre-state. |
 | RC-07 | P0 / PARTIAL | Guided manual corrective data entry | Report-driven repair exists without independent failed-transaction/manual patches. |
-| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL. |
+| RC-08 | P0 / PARTIAL | Consistency-gap ledger and honest watermarks | Durable plans/native SKIP receipts/gap ledger and public warnings pass native PG/MySQL contracts and real recovery on both control stores. Normal APPLY retains gaps. Verified gap closure,compensation and complete destination semantics remain open. |
 | RC-09 | P0 / PARTIAL | Durable distributed recovery jobs | COMMON_CUT has local durable operations/receipts;distributed/new modes do not. |
 | RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | SQL,analytical and queue consistency protocols differ. |
 
@@ -153,3 +153,5 @@ v0.6: CP-07 explicit separated profile accepted;7DONE/33PARTIAL/8NEW,41open. [Ev
 v0.7: RC-02 bounded managed review accepted;8DONE/32PARTIAL/8NEW,40open. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
 
 v0.8:RC-05 proven-commit confirmation bounded profile accepted;9 DONE,33 PARTIAL,6 NEW;39 open. [Evidence](../../verification/2026-11-17-managed-commit/README.md).
+
+v0.9:RC-03 bounded profile accepted;10 DONE,32 PARTIAL,6 NEW;38 open. [Evidence](../../verification/2026-11-17-managed-skip/README.md).

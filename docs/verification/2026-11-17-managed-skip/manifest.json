@@ -1,0 +1,19 @@
+{
+  "artifact": "target/release-evidence/managed-skip-status-final.jar",
+  "artifactSha256": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
+  "bytes": 188594455,
+  "testClasses": "target/release-evidence/managed-skip-status-tests-656245c6ed5d",
+  "testClassesSha256": "77add1681bc37f749e3e5a22930dfb4aad0732059f7611d642dd9c70a40f289d",
+  "sourceManifest": "target/release-evidence/managed-skip-status-sources.json",
+  "sourceManifestSha256": "d49d586158c24d12a97ca185e2df4e2d309d8bf9560e1b8a339a5dc76e05976f",
+  "status": "PASS_BOUNDED_RC03",
+  "build": "Full reactor488 app cases/29 skipped/one30s fixture lease expiry;focused51 retry PASS without changing production fences or fixture lease",
+  "scope": "Bounded RC03:Java8,MySQL8.4 two-database source,original fixed Agent,LOCAL/H2 journal,PostgreSQL17 target,PG17/MySQL8.4 control stores;native PG/MySQL skip contracts;public complete cross-database skip and source-ACK-loss/Agent-SIGKILL recovery;verified gap closure and full target/source/JDK/K8s matrices remain open",
+  "jarFirstFocusedTests": 51,
+  "domTests": 96,
+  "nativeProducts": {
+    "POSTGRESQL": 34,
+    "MYSQL": 34
+  },
+  "businessChecksPerControlProduct": 26
+}

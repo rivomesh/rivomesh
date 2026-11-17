@@ -1,0 +1,58 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+
+export function registerRecoveryTests({setup,flush,login}){
+ function fixture({role='ADMIN',enabled=true,nativeState='ABSENT',phase='TARGET_APPLY',stale=false}={}){
+  const id='11111111-1111-1111-1111-111111111111',hash='a'.repeat(64),planId='original_skip_1234',planHash='b'.repeat(64);
+  const observation={evidenceId:id,evidenceHash:hash,verdict:'CHECKPOINT_NOT_ADVANCED',journalEpoch:4,errorGeneration:2,acknowledged:1,subscriptionId:'pg',targetFenceRequired:false};
+  const task={id:'skip-job',revision:'paused-revision',formatVersion:3,desired:'PAUSED',status:{run_state:'PAUSED',epoch:4,subscriptions:[{id:'pg',state:'PAUSED',errorGeneration:stale?3:2,acknowledged:1}]},destinations:[{id:'pg',product:'POSTGRESQL'}],operations:[{id:'review-request',action:'FAILURE_REVIEW',status:'SUCCEEDED',failureEvidenceId:id,result:{checkpointObservation:observation}},{id:'failed-skip',action:'SKIP_TRANSACTION',status:'FAILED',skipPlanId:planId}]};
+  const ui=setup([task],role,{authenticated:false,recoveryReview:true,recoveryCommit:true,recoverySkip:enabled}),fallback=ui.w.fetch;
+  ui.w.fetch=async(path,options={})=>{
+   let data;if(path.includes('/failure-evidence/'))data={id,hash,failurePhase:phase,subscriptionId:'pg',errorGeneration:2,rawEvents:1};
+   else if(path.includes('/recovery-plans/'+planId)){ui.calls.push({path,...options});data={planId,planHash,state:'PREPARED',target:'pg',errorGeneration:2,evidenceId:id,reason:'<svg onload=alert(1)>',...(path.endsWith('/inspect')?{nativeProof:{state:nativeState}}:{})};}
+   else return fallback(path,options);
+   return{ok:true,status:200,json:async()=>data};
+  };return{...ui,task,id,hash,planId,planHash};
+ }
+ const clickLabel=(ui,key,root=ui.d)=>{const button=root.querySelector('[data-recovery-label="'+key+'"]');assert.ok(button,key);button.click();};
+ const enterReason=(ui,root,value='Reviewed transaction and destination')=>{const input=root.querySelector('textarea');assert.ok(input);input.value=value;input.dispatchEvent(new ui.w.Event('input'));};
+ async function openReview(ui){await login(ui);[...ui.d.querySelectorAll('.history button')].find(b=>b.textContent==='查看事务证据').click();await flush();}
+ async function inspect(ui){await login(ui);await ui.w.RivomeshRecovery.openPlan(ui.task,ui.planId);clickLabel(ui,'recoveryInspect');await flush();}
+
+ test('skip approval requires explicit loss acceptance and reason,uses the current revision,and never resumes',async()=>{
+  const ui=fixture();try{
+   await openReview(ui);const panel=ui.d.querySelector('.recovery-skip-approval'),button=panel.querySelector('[data-recovery-action="SKIP_TRANSACTION"]');assert.ok(button.disabled);enterReason(ui,panel);assert.ok(button.disabled);const checkbox=panel.querySelector('input[type=checkbox]');checkbox.checked=true;checkbox.dispatchEvent(new ui.w.Event('change'));assert.equal(button.disabled,false);ui.task.revision='latest-paused-revision';button.click();await flush();
+   const actions=ui.calls.filter(c=>c.path.endsWith('/actions'));assert.equal(actions.length,1);assert.deepEqual(JSON.parse(actions[0].body),{action:'SKIP_TRANSACTION',expectedRevision:'latest-paused-revision',subscriptionId:'pg',errorCount:2,skip:{evidenceId:ui.id,evidenceHash:ui.hash,reason:'Reviewed transaction and destination',acceptDataLoss:true}});assert.ok(actions[0].headers['X-Request-ID']);assert.equal(ui.d.querySelector('.failure-review-dialog'),null);
+  }finally{ui.dom.window.close();}
+ });
+ test('skip approval is hidden for disabled capabilities,snapshot faults and stale failure generations',async()=>{
+  for(const options of [{enabled:false},{phase:'TARGET_SNAPSHOT'},{stale:true}]){const ui=fixture(options);try{await openReview(ui);assert.equal(ui.d.querySelector('[data-recovery-action="SKIP_TRANSACTION"]'),null);assert.equal(ui.calls.filter(c=>c.path.endsWith('/actions')).length,0);}finally{ui.dom.window.close();}}
+ });
+ test('opening a pending plan never probes or mutates the destination automatically;committed proof offers only recovery',async()=>{
+  const ui=fixture({nativeState:'COMMITTED'});try{
+   await login(ui);await ui.w.RivomeshRecovery.openPlan(ui.task,ui.planId);assert.equal(ui.calls.filter(c=>c.path.endsWith('/inspect')).length,0);assert.equal(ui.d.querySelector('[data-recovery-action]'),null);clickLabel(ui,'recoveryInspect');await flush();const dialog=ui.d.querySelector('.recovery-dialog');assert.equal(dialog.querySelectorAll('[data-recovery-action]').length,1);const button=dialog.querySelector('[data-recovery-action="SKIP_RECOVER"]');assert.ok(button);assert.equal(dialog.querySelector('input[type=checkbox]'),null);enterReason(ui,dialog);button.click();await flush();const body=JSON.parse(ui.calls.find(c=>c.path.endsWith('/actions')).body);assert.equal(body.action,'SKIP_RECOVER');assert.deepEqual(body.skip,{planId:ui.planId,planHash:ui.planHash,reason:'Reviewed transaction and destination',acceptDataLoss:false});
+  }finally{ui.dom.window.close();}
+ });
+ test('absence proof offers separately authorized retry or cancellation and binds the original plan hash',async()=>{
+  for(const action of ['SKIP_RETRY','SKIP_CANCEL']){const ui=fixture();try{
+   await inspect(ui);const panel=ui.d.querySelector(action==='SKIP_RETRY'?'.recovery-retry':'.recovery-cancel'),button=panel.querySelector('[data-recovery-action]');enterReason(ui,panel);if(action==='SKIP_RETRY'){assert.ok(button.disabled);const check=panel.querySelector('input');check.checked=true;check.dispatchEvent(new ui.w.Event('change'));}else assert.equal(panel.querySelector('input'),null);assert.equal(button.disabled,false);button.click();await flush();const actions=ui.calls.filter(c=>c.path.endsWith('/actions'));assert.equal(actions.length,1);assert.deepEqual(JSON.parse(actions[0].body).skip,{planId:ui.planId,planHash:ui.planHash,reason:'Reviewed transaction and destination',acceptDataLoss:action==='SKIP_RETRY'});assert.equal(JSON.parse(actions[0].body).action,action);
+  }finally{ui.dom.window.close();}}
+ });
+ test('unknown native proof never offers mutation buttons and historical plan values are escaped',async()=>{
+  const ui=fixture({nativeState:'UNKNOWN'});try{await inspect(ui);const dialog=ui.d.querySelector('.recovery-dialog');assert.match(dialog.textContent,/无法证明目标是否已经提交/);assert.match(dialog.textContent,/<svg onload/);assert.equal(dialog.querySelectorAll('svg,script,[data-recovery-action]').length,0);}finally{ui.dom.window.close();}
+ });
+ test('gap warnings are visible to readers even when skip capability is disabled',async()=>{
+  for(const role of ['VIEWER','OPERATOR']){const ui=fixture({role,enabled:false});ui.task.status.hasGaps=true;try{await login(ui);assert.match(ui.d.querySelector('.data-gap-warning').textContent,/不代表目标与源数据一致/);assert.equal(ui.d.querySelector('.recovery-ledger'),null);assert.equal(ui.d.querySelector('[data-recovery-action]'),null);}finally{ui.dom.window.close();}}
+ });
+ test('gap pages are bounded and preserve cursors beyond JavaScript integer precision',async()=>{
+  const ui=fixture(),fallback=ui.w.fetch,cursor='9007199254740993';ui.w.fetch=async(path,options={})=>{if(!path.endsWith('/gaps'))return fallback(path,options);ui.calls.push({path,...options});const request=JSON.parse(options.body);return{ok:true,status:200,json:async()=>({items:[{sequence:cursor,planId:ui.planId,outcome:'SKIPPED'}],next:request.after==='0'?cursor:null})};};
+  try{await login(ui);clickLabel(ui,'recoveryGapsTitle');await flush();assert.match(ui.d.querySelector('.recovery-dialog').textContent,new RegExp(cursor));clickLabel(ui,'recoveryNext',ui.d.querySelector('.recovery-dialog'));await flush();const pages=ui.calls.filter(c=>c.path.endsWith('/gaps')).map(c=>JSON.parse(c.body));assert.deepEqual(pages,[{subscriptionId:'pg',after:'0',limit:20},{subscriptionId:'pg',after:cursor,limit:20}]);}finally{ui.dom.window.close();}
+ });
+ test('logout removes recovery dialogs and discards a late native proof response',async()=>{
+  const ui=fixture(),fallback=ui.w.fetch;let release;ui.w.fetch=(path,options={})=>path.endsWith('/inspect')?new Promise(resolve=>{release=()=>resolve({ok:true,status:200,json:async()=>({planId:ui.planId,planHash:ui.planHash,state:'PREPARED',target:'pg',errorGeneration:2,nativeProof:{state:'COMMITTED'}})});}):fallback(path,options);
+  try{await login(ui);await ui.w.RivomeshRecovery.openPlan(ui.task,ui.planId);clickLabel(ui,'recoveryInspect');await flush();assert.ok(release);ui.d.getElementById('logout').click();await flush();release();await flush();assert.equal(ui.d.querySelector('.recovery-dialog'),null);assert.equal(ui.d.querySelector('[data-recovery-action]'),null);assert.equal(ui.calls.filter(c=>c.path.endsWith('/actions')).length,0);}finally{ui.dom.window.close();}
+ });
+ test('language switching updates skip approval inside an already open evidence dialog',async()=>{
+  const ui=fixture();try{await openReview(ui);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/按完整事务跳过/);ui.d.getElementById('language').click();assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/Skip a complete transaction/);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/accept the resulting data gap/);}finally{ui.dom.window.close();}
+ });
+}

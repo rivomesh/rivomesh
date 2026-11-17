@@ -1,0 +1,82 @@
+ Network rivomesh-skip-6fee459c1f_default Creating 
+ Network rivomesh-skip-6fee459c1f_default Creating 
+ Network rivomesh-skip-6fee459c1f_default Created 
+ Network rivomesh-skip-6fee459c1f_default Created 
+ Container rivomesh-skip-6fee459c1f-database-1 Creating 
+ Container rivomesh-skip-6fee459c1f-database-1 Created 
+ Container rivomesh-skip-6fee459c1f-database-1 Starting 
+ Container rivomesh-skip-6fee459c1f-database-1 Started 
+ Container rivomesh-skip-6fee459c1f-database-1 Waiting 
+ Container rivomesh-skip-6fee459c1f-database-1 Healthy 
+ Container rivomesh-skip-6fee459c1f-runner-run-bbe1c78c07f2 Creating 
+ Container rivomesh-skip-6fee459c1f-runner-run-bbe1c78c07f2 Created 
+openjdk version "1.8.0_512"
+OpenJDK Runtime Environment (Temurin)(build 1.8.0_512-b09)
+OpenJDK 64-Bit Server VM (Temurin)(build 25.512-b09, mixed mode)
+ Container rivomesh-skip-6fee459c1f-runner-run-f2e8d20738a2 Creating 
+ Container rivomesh-skip-6fee459c1f-runner-run-f2e8d20738a2 Created 
+[36m╷[0m
+[36m├─[0m [36mJUnit Platform Suite[0m [32m✔[0m
+[36m├─[0m [36mJUnit Jupiter[0m [32m✔[0m
+[36m│  ├─[0m [36mSkipPlanTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnativeReceiptSaysSkippedAndRejectsAnotherScopeOrHash()[0m [32m✔[0m
+[36m│  │  ├─[0m [34munsupportedFailurePhaseOrMissingNormalizationNeverCreatesASkipApproval()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mchangingApprovalIdentityOrReasonInvalidatesTheRequestBinding()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mprojectionMismatchAndEmptyProjectionAreRefused()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mbindsOneWholeTransactionWithoutCopyingBusinessImagesIntoThePlan()[0m [32m✔[0m
+[36m│  │  └─[0m [34mroundTripKeepsCanonicalHashWithManyHistoricalReferences()[0m [32m✔[0m
+[36m│  ├─[0m [36mSkipJournalTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mrolledBackPrepareDoesNotUpgradeFormatOrLeaveAnIntent()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcancelledIntentKeepsOriginalFailureButInvalidatesOldErrorGeneration()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mfailedAckRollsBackGapAndResolutionAndKeepsThePendingPlan()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcommittedGapReceiptStillResolvesAfterResumeAndPayloadCollection()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mordinaryCheckpointJsonDoesNotAcquireNewNullFields()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mgapAckResolutionAndNewErrorGenerationCommitTogetherAndRemainPaused()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mintentAndFormatUpgradeCommitTogetherAndBlockResumeWithoutAcknowledging()[0m [32m✔[0m
+[36m│  │  └─[0m [34mmissingFormatFourHistoryIsNeverRecreatedByInitialization()[0m [32m✔[0m
+[36m│  ├─[0m [36mSkipTargetTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnativeCommitThenFailedJournalAckReplaysTheSameReceiptAfterReopen()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mconfirmedGapIsCheckedBeforeNormalDeliveryContinuesAndMarkersClearOnNextApply()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnativeFailureAfterReceiptInsertRollsBackBothReceiptAndCheckpoint()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnormalApplyAndCommitConfirmationCannotRelabelTheSkippedHeadAsApplied()[0m [32m✔[0m
+[36m│  │  ├─[0m [34minterruptedColumnMigrationCanFinishButOrdinaryOpensRefusePartialMetadata()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcancellationRequiresNativeAbsenceAndCannotCancelAnAlreadyCommittedSkip()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mnativeSkipCommitsReceiptAndMarkedProgressWithoutWritingBusinessRows()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcancellationOfCommittedSkipRefusesAndPreservesPendingRecovery()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcommittedProofHoldsNativeLockWhileJournalGapAndAckAreCommitted()[0m [32m✔[0m
+[36m│  │  └─[0m [34mmissingNativeReceiptTableIsNotRecreatedOnceRecoveryColumnsExist()[0m [32m✔[0m
+[36m│  ├─[0m [36mTransactionSkipRecoveryTest[0m [32m✔[0m
+[36m│  │  ├─[0m [34malreadyAppliedCommitRequiresReconciliationAndNeverCreatesASkipIntent()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcompleteCoordinatorCreatesExplicitGapWithoutBusinessWritesOrAutomaticResume()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcancelBeforeNativeCommitInvalidatesOldErrorButDoesNotAcknowledgeTheTransaction()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mcompetingRequestsCannotSkipTheSameHeadTwice()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mterminalReceiptReplaysWithoutOpeningLostNativeMetadataAndConflictingReasonsRefus...[0m [32m✔[0m
+[36m│  │  ├─[0m [34muncertainNativeCommitRecoversItsOriginalExecutionActorAndOneGap()[0m [32m✔[0m
+[36m│  │  ├─[0m [34mexplicitLossApprovalAndWholeTaskPauseAreRequired()[0m [32m✔[0m
+[36m│  │  └─[0m [34maNewAdministratorCanExplicitlyRetryTheOriginalUncommittedPlan()[0m [32m✔[0m
+[36m│  ├─[0m [36mSkipLegacyFormatIntegrationTest[0m [32m✔[0m
+[36m│  │  └─[0m [34macceptedOlderBinaryRefusesFormatFourBeforeClaimAndCannotResetItsHistory()[0m [36m13135 ms[0m [32m✔[0m
+[36m│  └─[0m [36mRecoverySkipIntegrationTest[0m [32m✔[0m
+[36m│     └─[0m [34mnativeProtocolsThreeThroughSixRequireNormalStopAndActualOlderBinaryRefusesSeven(...[0m [36m15928 ms[0m [32m✔[0m
+[36m└─[0m [36mJUnit Vintage[0m [32m✔[0m
+
+Test run finished after 98065 ms
+[         9 containers found      ]
+[         0 containers skipped    ]
+[         9 containers started    ]
+[         0 containers aborted    ]
+[         9 containers successful ]
+[         0 containers failed     ]
+[        34 tests found           ]
+[         0 tests skipped         ]
+[        34 tests started         ]
+[         0 tests aborted         ]
+[        34 tests successful      ]
+[         0 tests failed          ]
+
+ Container rivomesh-skip-6fee459c1f-database-1 Stopping 
+ Container rivomesh-skip-6fee459c1f-database-1 Stopped 
+ Container rivomesh-skip-6fee459c1f-database-1 Removing 
+ Container rivomesh-skip-6fee459c1f-database-1 Removed 
+ Network rivomesh-skip-6fee459c1f_default Removing 
+ Network rivomesh-skip-6fee459c1f_default Removed 

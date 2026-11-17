@@ -45,7 +45,7 @@ Hive 实验适配已接通配置、界面和隔离 JDBC，首批独立物化、�
 | 管理界面修复（首版） | [计划审阅、执行与取消](docs/zh-CN/managed-repair.md) | [Managed repair](docs/en/managed-repair.md) |
 | Docker 开发预览 | [开发预览](docs/zh-CN/development-preview.md) | [Development preview](docs/en/development-preview.md) |
 | UNIQUE/GSI 策略、恢复、业务接管及 FAQ | [Gauss 索引策略](docs/zh-CN/gaussdb-index-policy.md) | [Gauss index policy](docs/en/gaussdb-index-policy.md) |
-| 完整事务跳过、计划恢复与缺口（开发中） | [事务跳过](docs/zh-CN/transaction-skip.md) | [Transaction skipping](docs/en/transaction-skip.md) |
+| 完整事务跳过、计划恢复与缺口（首批限定档案） | [事务跳过](docs/zh-CN/transaction-skip.md) | [Transaction skipping](docs/en/transaction-skip.md) |
 | 更名后的构建、配置和任务恢复 | [更名迁移](docs/zh-CN/rename-migration.md) | [Rename migration](docs/en/rename-migration.md) |
 | 当前恢复机制与验证 | [恢复与一致性](docs/recovery.md)、[验证记录](docs/validation.md) | [Recovery](docs/en/recovery.md), [Validation](docs/en/validation.md) |
 

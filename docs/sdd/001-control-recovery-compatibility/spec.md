@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.8 · 2026-11-17 · IMPLEMENTING
+RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 
-实施中：48项持续追踪，9项DONE、33项PARTIAL、6项NEW，余39项未闭环。RC-02事务审阅及RC-05已提交事务确认限定档案已验收；自动接管、跳过、补偿和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，10项DONE、32项PARTIAL、6项NEW，余38项未闭环。RC-02、RC-05及RC-03限定档案已验收；缺口验证关闭、自动接管、补偿和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -34,12 +34,12 @@ RM-SDD-001 · v0.8 · 2026-11-17 · IMPLEMENTING
 |---|---|---|---|
 | RC-01 | P0 / PARTIAL | 按采集阶段区分故障 | 首次目标准备/快照及增量投递阶段已持久化并通过双入口真实故障/重启验收；完整源连接/读取/解码/DDL阶段及人工操作诊断仍待补。 |
 | RC-02 | P0 / DONE | 失败事务检查与原始证据留存 | 已验收MySQL8.4、固定原Agent/LOCAL日志、PG/MySQL控制库的ADMIN完整事务审阅及持久证据：位置/历史列/镜像、授权分页、重启及日志GC后可读。自动证据目录管理、其他档案、跨Agent迁移与执行语义另行追踪。 |
-| RC-03 | P0 / PARTIAL | 目标应用阶段按完整事务跳过 | 跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。 |
+| RC-03 | P0 / DONE | 目标应用阶段按完整事务跳过 | 协议7首批限定档案已验收：Java8、MySQL8.4双库源、原Agent/LOCAL日志、PostgreSQL业务目标、PG/MySQL控制库；完整跨库事务跳过、原生提交后源ACK失败、Agent强杀重开与跨入口确认均通过。其他目标/完整矩阵由RC-10/LG-01继续追踪。 |
 | RC-04 | P0 / NEW | 采集/解码阶段的受控缺口恢复 | 目标跳过不能修复尚未形成完整事件的源读取或解析故障。 |
 | RC-05 | P0 / DONE | 不确定提交与断点核对 | 协议6原Agent/LOCAL日志、PG/MySQL控制库限定档案已验收：全任务暂停、新证据、原生围栏、管理员跨入口确认、ACK/回执原子提交及幂等重试，保持原暂停。跳过、补偿和其他完整矩阵另行追踪。 |
 | RC-06 | P0 / NEW | 失败事务前镜像补偿 | 已有共同校验点修复，尚不能让落后的失败目标回到原事务可重放状态。 |
 | RC-07 | P0 / PARTIAL | 界面手工补数据与修正 | 已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。 |
-| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。 |
+| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 持久计划/原生SKIP凭据/缺口台账及公开缺口告警已通过PG/MySQL原生合同和两种控制库真实同步恢复；普通APPLY不删除缺口。验证关闭缺口、补偿闭环及全部目标语义仍未完成。 |
 | RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。 |
 | RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | SQL、分析库、消息队列一致性协议不同，不能复用一个伪事务实现。 |
 
@@ -153,3 +153,5 @@ v0.6: CP-07 explicit separated profile accepted;7DONE/33PARTIAL/8NEW,41open. [Ev
 v0.7: RC-02 bounded managed review accepted;9DONE/31PARTIAL/8NEW,40open. [Evidence](../../verification/2026-11-17-managed-failure-review/README.md).
 
 v0.8：RC-05 已提交事务确认限定档案验收；9 DONE、33 PARTIAL、6 NEW，39项未完成。[证据](../../verification/2026-11-17-managed-commit/README.md)。
+
+v0.9：RC-03首批限定档案验收；10 DONE、32 PARTIAL、6 NEW，38项未完成。[证据](../../verification/2026-11-17-managed-skip/README.md)。

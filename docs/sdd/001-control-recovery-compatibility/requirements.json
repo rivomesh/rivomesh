@@ -1,9 +1,9 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.8",
+  "version": "0.9",
   "date": "2026-11-17",
   "state": "IMPLEMENTING",
-  "scope": "CP-01,SE-01/02/03/04/05 and CP-07 separated LOCAL-journal profile accepted; global migration/full command matrices and remaining source/recovery/vendor/deployment work stay open",
+  "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
   "baseline": {
     "artifactSha256": "10d95a3990835f2286f036b962d88fc8533ade427753ad9961ef1429988a88e2",
     "rootTests": 207,
@@ -504,14 +504,14 @@
       "id": "RC-03",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "目标应用阶段按完整事务跳过",
         "en": "Skip a complete destination transaction"
       },
       "gap": {
-        "zh-CN": "跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。",
-        "en": "Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL."
+        "zh-CN": "协议7首批限定档案已验收：Java8、MySQL8.4双库源、原Agent/LOCAL日志、PostgreSQL业务目标、PG/MySQL控制库；完整跨库事务跳过、原生提交后源ACK失败、Agent强杀重开与跨入口确认均通过。其他目标/完整矩阵由RC-10/LG-01继续追踪。",
+        "en": "Protocol7 bounded profile accepted:Java8,MySQL8.4 two-database source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores. Complete transaction skip,native commit/source ACK failure,Agent SIGKILL/reopen and cross-entry recovery pass. Other targets/full matrices remain RC-10/LG-01."
       },
       "acceptance": {
         "zh-CN": "对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。",
@@ -533,8 +533,14 @@
         "sync-app/src/main/resources/console/recovery.js",
         "tests/ui/recovery-cases.mjs",
         "docs/zh-CN/transaction-skip.md",
-        "docs/en/transaction-skip.md"
-      ]
+        "docs/en/transaction-skip.md",
+        "docs/verification/2026-11-17-managed-skip/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
+        "archive": "docs/verification/2026-11-17-managed-skip/README.md",
+        "profile": "Java8;MySQL8.4 two-database source;original fixed Agent;LOCAL/H2 journal;PostgreSQL17 business skip target;PG17/MySQL8.4 control stores;native PG/MySQL contracts;both pauses retained"
+      }
     },
     {
       "id": "RC-04",
@@ -669,8 +675,8 @@
         "en": "Consistency-gap ledger and honest watermarks"
       },
       "gap": {
-        "zh-CN": "跳过/原生凭据、崩溃恢复及缺口台账核心已通过PG/MySQL内部专项；协议7管理API及界面已接线，96项DOM/36项管理HTTP专项通过，部署/双语手册已补入。完整跨节点公开跳过链路和缺口验证关闭仍未验收，保持PARTIAL。",
-        "en": "Skip/native receipts,crash recovery and gap-ledger core pass internal PG/MySQL contracts. Protocol7 API/UI wiring passes96 DOM/36 management HTTP focused tests;deployment and bilingual operations docs are added. Complete cross-node public skip lifecycle and verified gap closure remain open;keep PARTIAL."
+        "zh-CN": "持久计划/原生SKIP凭据/缺口台账及公开缺口告警已通过PG/MySQL原生合同和两种控制库真实同步恢复；普通APPLY不删除缺口。验证关闭缺口、补偿闭环及全部目标语义仍未完成。",
+        "en": "Durable plans/native SKIP receipts/gap ledger and public warnings pass native PG/MySQL contracts and real recovery on both control stores. Normal APPLY retains gaps. Verified gap closure,compensation and complete destination semantics remain open."
       },
       "acceptance": {
         "zh-CN": "记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。",
@@ -1422,18 +1428,20 @@
     }
   ],
   "candidateVerification": {
-    "artifactSha256": "9f97b4d98c103e895c9d1262cd19dcd0946b21b6fc0f72fff2267e59c727de00",
-    "mavenAppExecuted": 415,
-    "mavenFinalFocused": 26,
-    "releaseFirstAppTests": 416,
+    "artifactSha256": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
+    "mavenAppExecuted": 459,
+    "mavenInitialPassed": 458,
+    "mavenInitialErrors": 1,
+    "mavenFinalFocused": 51,
+    "releaseFirstFocusedTests": 51,
     "releaseFirstSkipped": 0,
-    "domTests": 87,
+    "domTests": 96,
     "nativeProducts": {
-      "POSTGRESQL": 38,
-      "MYSQL": 38
+      "POSTGRESQL": 34,
+      "MYSQL": 34
     },
-    "businessChecksPerControlProduct": 23,
-    "scope": "Bounded RC-05 Java8 profile;415 Maven before final additive migration and26 final focused contracts;416 final JAR tests;no new five-JRE/full-SDK/TLS/nonroot/realK8s/mixed-old-binary acceptance",
-    "evidence": "docs/verification/2026-11-17-managed-commit/README.md"
+    "businessChecksPerControlProduct": 26,
+    "scope": "Bounded RC03;initial full reactor has one30s fixture lease expiry during678s setup;focused51 retry and final JAR-first51 pass with unchanged production fences/fixture lease. Native34 per product and CDC26 per control store pass. Not a single clean full-reactor run;no full JDK/vendor/TLS/liveK8s claim.",
+    "evidence": "docs/verification/2026-11-17-managed-skip/README.md"
   }
 }

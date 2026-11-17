@@ -27,6 +27,7 @@ parser.add_argument('--snapshot-diagnostics', action='store_true', help='Inject 
 parser.add_argument('--managed-failure-review', action='store_true', help='Protocol5 durable evidence creation and cross-entry authorized raw review')
 parser.add_argument('--checkpoint-inspection', action='store_true', help='Check additive read-only native checkpoint result in managed review')
 parser.add_argument('--managed-commit', action='store_true', help='Protocol6 manual confirmation of a native commit leading journal ACK')
+parser.add_argument('--managed-skip', action='store_true', help='Protocol7 complete-transaction skip and lost source-ACK recovery with durable gaps')
 parser.add_argument('--test-classes', type=Path, help='Frozen test-only lost-ACK injector;required for --managed-commit')
 args = parser.parse_args()
 if args.initial_owner_artifact and args.separate_execution:
@@ -45,6 +46,8 @@ if args.checkpoint_inspection and not args.managed_failure_review:
     parser.error('--checkpoint-inspection requires --managed-failure-review')
 if args.managed_commit and not (args.checkpoint_inspection and args.test_classes and args.test_classes.resolve().is_dir()):
     parser.error('--managed-commit requires --checkpoint-inspection and --test-classes')
+if args.managed_skip and not args.managed_commit:
+    parser.error('--managed-skip requires --managed-commit and its original evidence/fixture dependencies')
 jar = args.artifact.resolve()
 digest = hashlib.sha256(jar.read_bytes()).hexdigest()
 initial_owner = args.initial_owner_artifact.resolve() if args.initial_owner_artifact else jar
@@ -72,6 +75,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedFailureReview': args.managed_failure_review,
             'checkpointInspection': args.checkpoint_inspection,
             'managedCommit': args.managed_commit,
+            'managedSkip': args.managed_skip,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
 if args.initial_owner_artifact:
     manifest['initialOwnerArtifactSha256'] = initial_digest
@@ -121,6 +125,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
         if args.managed_commit:
             config['cluster']['recoveryCommit'] = True
+        if args.managed_skip:
+            config['cluster']['recoverySkip'] = True
         if args.separate_execution:
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node == owner_node else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
         if args.runtime_image:
@@ -531,6 +537,84 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(11,'after-repair',JSON_OBJECT('n',11))")
         wait(rows_match, 'explicit post-repair CDC resume')
         passed('Explicit resume after reviewed repair continues original binlog progress')
+        if args.managed_skip:
+            def pg_sub():
+                return next(s for s in task()['status']['subscriptions'] if s['id'] == 'pg')
+
+            def failed_skip():
+                sub = pg_sub()
+                return sub if sub.get('state') == 'PAUSED' and sub.get('failurePhase') == 'TARGET_APPLY' else None
+
+            def quote(value):
+                return "'" + value.replace("'", "''") + "'"
+
+            baseline_note = sql('mysql', 'SELECT note FROM sales.items WHERE id=1')
+            baseline_amount = sql('mysql', 'SELECT amount FROM billing.ledger WHERE id=1')
+            sql('postgres', "ALTER TABLE rm_pg_sales.items ADD CONSTRAINT managed_skip_block CHECK(note NOT IN ('skip_forbidden_one','skip_forbidden_two'))")
+            for index, uncertain in enumerate((False, True), start=1):
+                forbidden = 'skip_forbidden_two' if uncertain else 'skip_forbidden_one'
+                sql('mysql', "START TRANSACTION; UPDATE sales.items SET note=" + quote(forbidden) + " WHERE id=1; UPDATE billing.ledger SET amount=amount+1 WHERE id=1; COMMIT")
+                failure = wait(failed_skip, 'whole-transaction target failure before skip')
+                wait(lambda: sql('mysql-target', 'SELECT note FROM rm_my_sales.items WHERE id=1') == forbidden, 'healthy subscriber receives original transaction')
+                action('PAUSE', node='node-b')
+                reviewed, _ = action('FAILURE_REVIEW', node='node-a', errorCount=failure['errorGeneration'], subscriptionId='pg')
+                evidence = operation(reviewed)
+                observation = evidence['result']['checkpointObservation']
+                assert observation['verdict'] == 'CHECKPOINT_NOT_ADVANCED' and not observation['targetFenceRequired']
+                approval = {'evidenceId': evidence['failureEvidenceId'], 'evidenceHash': evidence['result']['hash'], 'reason': 'Reviewed the complete cross-database transaction and explicitly accept this destination gap', 'acceptDataLoss': True}
+                for role in ('RM_GC_OPERATOR', 'RM_GC_VIEWER'):
+                    forbidden_body = {'action': 'SKIP_TRANSACTION', 'expectedRevision': task()['revision'], 'subscriptionId': 'pg', 'errorCount': failure['errorGeneration'], 'skip': approval}
+                    assert http('node-b', route + '/actions', forbidden_body, expected=403, token=env[role])['code'] == 'FORBIDDEN'
+                if uncertain:
+                    injected = compose('exec', '-T', owner_node, 'java', '-Xmx128m', '-cp', '/app/rivomesh.jar:/fixture-tests', 'io.github.rivomesh.cdc.ManagedSkipFault', worker_config, 'pg', 'BLOCK_ACK')
+                    assert 'MANAGED_SKIP_BLOCK_ACK' in injected.stdout
+                original_revision = task()['revision']
+                skipped, _ = action('SKIP_TRANSACTION', node='node-b', complete=not uncertain, errorCount=failure['errorGeneration'], subscriptionId='pg', skip=approval)
+                plan_path = route + '/recovery-plans/' + skipped
+                if uncertain:
+                    wait(lambda: operation(skipped)['status'] == 'FAILED', 'injected journal ACK failure')
+                    prepared = http('node-a', plan_path)
+                    assert prepared['state'] == 'PREPARED' and pg_sub()['acknowledged'] == observation['acknowledged']
+                    proof = http('node-b', plan_path + '/inspect', {})
+                    assert proof['nativeProof']['state'] == 'COMMITTED'
+                    resume, _ = action('RESUME', complete=False, errorCount=task()['status']['error_count'])
+                    wait(lambda: operation(resume)['status'] == 'FAILED', 'pending plan refuses ordinary resume')
+                    assert task()['desired'] == 'PAUSED'
+                    compose('kill', '-s', 'SIGKILL', owner_node)
+                    wait(lambda: task().get('ownerState') != 'HEALTHY', 'prepared-plan Agent offline')
+                    compose('up', '-d', owner_node)
+                    wait(lambda: task().get('ownerState') == 'HEALTHY', 'original Agent reopens prepared plan')
+                    proof = http('node-a', plan_path + '/inspect', {})
+                    assert proof['state'] == 'PREPARED' and proof['nativeProof']['state'] == 'COMMITTED'
+                    injected = compose('exec', '-T', owner_node, 'java', '-Xmx128m', '-cp', '/app/rivomesh.jar:/fixture-tests', 'io.github.rivomesh.cdc.ManagedSkipFault', worker_config, 'pg', 'CLEAR_ACK')
+                    assert 'MANAGED_SKIP_CLEAR_ACK' in injected.stdout
+                    recovered, _ = action('SKIP_RECOVER', node='node-a', errorCount=failure['errorGeneration'], subscriptionId='pg', skip={'planId': skipped, 'planHash': prepared['planHash'], 'reason': 'Verified native committed receipt after original Agent restart and recover only the source gap acknowledgment', 'acceptDataLoss': False})
+                    assert operation(recovered)['result']['receipt']['executionRequest'] == skipped
+                plan = http('node-b', plan_path)
+                assert plan['state'] == 'COMPLETED' and len(plan['schemaVersions']) == 2
+                assert pg_sub()['acknowledged'] == observation['sequence'] and pg_sub()['state'] == 'PAUSED'
+                wait(lambda: task()['status'].get('gapCount') == index, 'published durable gap count through the controller')
+                assert task()['desired'] == 'PAUSED' and task()['status']['gapCount'] == index
+                assert sql('postgres', 'SELECT note FROM rm_pg_sales.items WHERE id=1') == baseline_note
+                assert sql('postgres', 'SELECT amount FROM rm_pg_billing.ledger WHERE id=1') == baseline_amount
+                assert sql('postgres', 'SELECT skip_operation FROM rm_pg_meta.rm3_sink_job') == skipped
+                page = http('node-a', route + '/gaps', {'subscriptionId': 'pg', 'after': '0', 'limit': 20})
+                assert len(page['items']) == index and page['items'][-1]['sequence'] == str(observation['sequence'])
+                for role in ('RM_GC_OPERATOR', 'RM_GC_VIEWER'):
+                    assert http('node-a', plan_path, expected=403, token=env[role])['code'] == 'FORBIDDEN'
+                if not uncertain:
+                    replay = {'action': 'SKIP_TRANSACTION', 'expectedRevision': original_revision, 'subscriptionId': 'pg', 'errorCount': failure['errorGeneration'], 'skip': approval}
+                    http('node-a', route + '/actions', replay, request=skipped, expected=202)
+                    assert http('node-a', plan_path)['receipt'] == plan['receipt']
+                passed('Protocol7 ' + ('native skip commit survives source ACK failure and original Agent SIGKILL;another entry recovers exactly one gap' if uncertain else 'administrator skips one complete cross-database transaction;healthy subscriber receives original events and business rows stay unchanged'))
+                action('RESUME_TARGET', errorCount=pg_sub()['errorGeneration'], subscriptionId='pg')
+                action('RESUME', errorCount=task()['status']['error_count'])
+                sql('mysql', 'START TRANSACTION; UPDATE sales.items SET note=' + quote(baseline_note) + ' WHERE id=1; UPDATE billing.ledger SET amount=' + baseline_amount + ' WHERE id=1; COMMIT')
+                wait(rows_match, 'next original APPLY after explicit resume')
+                assert sql('postgres', "SELECT COALESCE(skip_operation,'') FROM rm_pg_meta.rm3_sink_job") == ''
+                assert task()['status']['hasGaps'] and task()['status']['gapCount'] == index
+            sql('postgres', 'ALTER TABLE rm_pg_sales.items DROP CONSTRAINT managed_skip_block')
+            passed('Normal APPLY clears only current native skip markers;both durable gaps remain visible after data converges again')
         action('STOP')
         assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
         assert hashlib.sha256(initial_owner.read_bytes()).hexdigest() == initial_digest

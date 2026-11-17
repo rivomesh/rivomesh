@@ -1,0 +1,46 @@
+{
+  "timezone": "Asia/Taipei",
+  "intervalHours": 1,
+  "delivery": "Active development conversation only;no independent scheduler available",
+  "lastReportAt": "2026-11-17T20:36:00+08:00",
+  "nextReportAt": "2026-11-17T21:36:00+08:00",
+  "completedSincePrevious": [
+    "Java/Maven namespace io.github.rivomesh",
+    "Initial GitHub main push",
+    "Experimental skip UI and protocol7 deployment profiles",
+    "Bilingual skip operations and FAQ",
+    "PG/MySQL native34 protocol/data-format guard contracts on c4 candidate"
+  ],
+  "inProgress": [],
+  "reportContents": [
+    "Current totals",
+    "New completions since previous report",
+    "In-progress tasks and evidence",
+    "Remaining work and blockers",
+    "Published commits and test results"
+  ],
+  "lastReportedSdd": {
+    "DONE": 9,
+    "PARTIAL": 33,
+    "NEW": 6
+  },
+  "lastReportedPublishedCommits": [
+    "e606b650d36c448ab02f625811ab1b07b4997b58",
+    "5c256df"
+  ],
+  "currentSdd": {
+    "DONE": 10,
+    "PARTIAL": 32,
+    "NEW": 6
+  },
+  "currentAcceptedArtifact": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
+  "newSinceLastReport": [
+    "RC-03 bounded complete-transaction skip accepted",
+    "Public gap-state filtering fixed",
+    "Both native34 and both multi-node CDC26 profiles pass"
+  ],
+  "nextTasks": [
+    "RC-08:verified gap closure",
+    "RC-06:before-image compensation"
+  ]
+}

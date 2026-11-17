@@ -1,5 +1,7 @@
 # 实施状态与下一批工作
 
+2026-11-17 RC-03限定档案已验收：完整跨库事务跳过、目标提交后源ACK失败、原Agent强杀重开与跨入口恢复、后续APPLY保留缺口均通过。最终发布包51项专项、96 DOM、PG/MySQL各34项原生合同及两种控制库各26项真实同步检查通过。首次全量回归有1项测试夹具租约过期，51项定向重跑通过，未将其写成一次全量无错运行。[验收证据](../verification/2026-11-17-managed-skip/README.md)。当前SDD为10 DONE、32 PARTIAL、6 NEW，剩余38项；缺口验证关闭及补偿仍未完成。
+
 2026-11-17 包名增量：Java/Maven 基础命名空间已改为 `io.github.rivomesh`，已推送 GitHub `main`。全部模块重建、457项应用测试、2项SDK测试、87项DOM、PG/MySQL各33项原生合同及PG控制库23项多节点CDC检查通过。[更名验收](../verification/2026-11-17-package-namespace/README.md)。后续跳过界面已接线，96项DOM及36项管理/HTTP专项通过；协议7部署开关、计划恢复、显式缺口提示及双语操作手册已补入，完整跨节点跳过验收仍未完成。[事务跳过（开发中）](transaction-skip.md)。
 
 开发预览按需启动，默认不常驻。2026-11-16已按用户要求清理预览容器；历史记录中的预览地址当前未启动。
@@ -15,7 +17,7 @@
 
 协议4分离档案已通过348项应用构建/发布包优先测试、76项DOM及五JDK各152项专项；PG/MySQL控制库、真实多库双目标、管理全停、控制库中断、接收入口死亡后原命令恢复、非root三进程和SQL并发角色切换均已验收。自动跨Agent接管、完整日志/适配器/JDK矩阵仍待完成。 [Evidence](../verification/2026-11-17-execution-lifecycle/README.md).
 
-SDD跟踪：48项中9项DONE，余39项（6NEW、33PARTIAL）。CP-01、5项会话、CP-07分离档案和RC-02事务审阅及RC-05提交确认限定档案已关闭；CP-02/03/05仍部分完成，自动跨Agent接管仍未完成。[清单](../sdd/001-control-recovery-compatibility/tasks.md)。
+SDD跟踪：48项中10项DONE，余38项（6NEW、32PARTIAL）。CP-01、5项会话、CP-07分离档案和RC-02事务审阅及RC-05提交确认限定档案已关闭；CP-02/03/05仍部分完成，自动跨Agent接管仍未完成。[清单](../sdd/001-control-recovery-compatibility/tasks.md)。
 
 ## 本批已实现
 

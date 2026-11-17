@@ -18,6 +18,7 @@ parser.add_argument('--legacy-artifact', type=Path, required=True)
 parser.add_argument('--test-classes', type=Path, required=True)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--protocol7', action='store_true', help='Also test native protocol3-6 upgrades and actual older binary refusing protocol7')
 args = parser.parse_args()
 artifact, classes, output = args.artifact.resolve(), args.test_classes.resolve(), args.output.resolve()
 legacy=args.legacy_artifact.resolve();legacy.relative_to(ROOT)
@@ -53,6 +54,9 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',
                           '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--select-class=io.github.rivomesh.cdc.SkipLegacyFormatIntegrationTest', '--reports-dir=' + container_path(output) + '/junit']}
+    if args.protocol7:
+        runner['command'].append('--select-class=io.github.rivomesh.platform.RecoverySkipIntegrationTest')
+        manifest['protocol7'] = True
     compose_file = home / 'compose.json'
     compose_file.write_text(json.dumps({'services': {'database': db, 'runner': runner}}))
     compose = ['docker', 'compose', '-p', project, '-f', str(compose_file)]
@@ -71,7 +75,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
                 for key in totals:
                     totals[key] += int(suite.attrib.get(key, 0))
             manifest['results'] = totals
-            assert totals == {'tests': 33, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
+            assert totals == {'tests': 34 if args.protocol7 else 33, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
             manifest['status'] = 'PASS'
         except Exception:
             manifest['status'] = 'FAIL'

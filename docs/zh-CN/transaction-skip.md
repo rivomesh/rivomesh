@@ -1,6 +1,6 @@
 # 完整事务跳过与缺口恢复
 
-状态：开发中，RC-03/RC-08仍为PARTIAL。内部PG/MySQL跳过核心、管理API与界面专项已实现；完整跨节点协议7同步/故障链路尚未验收。共享任务集群默认关闭；独立控制器会提供管理员入口，但仍要求完整证据与显式审批。不代表所有目标支持。English: [Transaction skipping](../en/transaction-skip.md)。
+状态：RC-03首批限定档案已验收，RC-08验证关闭缺口仍未完成。[证据](../verification/2026-11-17-managed-skip/README.md)。已验收Java8、MySQL8.4源、原Agent/LOCAL日志、PostgreSQL业务目标及PG/MySQL控制库；MySQL目标原生合同已通过，其完整公开跳过矩阵及其他产品仍待补验。共享任务集群默认关闭；独立控制器提供管理员入口，仍要求完整证据与显式审批。English: [Transaction skipping](../en/transaction-skip.md)。
 
 ## 适用范围
 

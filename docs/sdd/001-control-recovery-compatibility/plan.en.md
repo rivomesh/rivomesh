@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.8 · 2026-11-17 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **9 DONE,33 PARTIAL,6 NEW;39 open**. [RC-05](design-checkpoint-recovery.en.md) passed its bounded profile;transaction skip and gaps are next.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **10 DONE,32 PARTIAL,6 NEW;38 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/2026-11-17-managed-skip/README.md)passed bounded profiles;verified gap closure and compensation are next.
 
 ## Historical baseline
 
@@ -38,7 +38,7 @@ The historical JDK matrix uses SHA256 `2985bbbb51b84ec8de97d8a9b44c88d5a5a1d7370
 | 6 Complete docs | DO-01–DO-05 | 5 |
 | Preserved previous scope | LG-01–LG-10 | 10 |
 
-Currentv0.8:48items total,9DONE,6NEW and33PARTIAL;39remain open. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
+Currentv0.9:48items total,10DONE,6NEW and32PARTIAL;38remain open. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
 
 ## Confirmed scope
 

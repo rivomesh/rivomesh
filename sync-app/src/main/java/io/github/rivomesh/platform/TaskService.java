@@ -583,8 +583,13 @@ public final class TaskService implements AutoCloseable {
     private void stop(Entry e) throws Exception {synchronized(e){if(e.worker!=null){e.worker.stop();if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");e.worker=null;}if(e.permit){slots.release();e.permit=false;}e.workerState="STOPPED";}}
     private static Map<String,Object> publicStatus(Map<String,Object> db,TaskDefinition config) {
         Map<String,Object> out=new LinkedHashMap<>();
-        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","required_gtid","applied_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition"))
+        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","required_gtid","applied_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited"))
             if(db.containsKey(key))out.put(key,db.get(key));
+        if(config.pipeline!=null&&db.get("gapsBySubscription") instanceof Map){
+            Map<?,?> observed=(Map<?,?>)db.get("gapsBySubscription");Map<String,Long> counts=new LinkedHashMap<>();
+            for(io.github.rivomesh.PipelineConfig.Target target:config.pipeline.targets){Object count=observed.get(target.id);if(count instanceof Number&&((Number)count).longValue()>=0&&((Number)count).longValue()<=1001)counts.put(target.id,((Number)count).longValue());}
+            out.put("gapsBySubscription",counts);
+        }
         if(db.containsKey("tables")) {
             List<Map<String,Object>> rows=new ArrayList<>();
             for(Object item:(List<?>)db.get("tables")) {

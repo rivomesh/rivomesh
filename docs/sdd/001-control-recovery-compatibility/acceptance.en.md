@@ -91,3 +91,5 @@ v0.6: CP-07 acceptance is limited to the explicit profile recorded in evidence;a
 v0.7: RC-02 closes inspection/retention for the linked profile,not manual mutation or complete adapter/JDK matrices.
 
 v0.8:RC-05 proven-commit confirmation bounded profile accepted;9 DONE,31 PARTIAL,8 NEW;39 open. [Evidence](../../verification/2026-11-17-managed-commit/README.md).
+
+v0.9:RC-03 bounded profile accepted;10 DONE,32 PARTIAL,6 NEW;38 open. [Evidence](../../verification/2026-11-17-managed-skip/README.md).
