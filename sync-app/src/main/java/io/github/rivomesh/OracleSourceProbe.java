@@ -209,6 +209,9 @@ final class OracleSourceProbe {
                                 throw new IllegalStateException("ORACLE_TEXT_JSON_STORAGE_UNSUPPORTED");
                             column.length=rows.getLong(5);
                             break;
+                        case "DATE":
+                            column.type=TableSchema.Type.DATETIME;
+                            break;
                         default:throw new IllegalStateException("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
                     }
                     schema.columns.add(column);

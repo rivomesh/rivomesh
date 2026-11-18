@@ -35,4 +35,7 @@ public final class TargetOwnership {
     public static void verify(Connection c,String schema,String name,String pipeline,String subscription,String generation)throws SQLException{
         if(!matches(c,schema,name,pipeline,subscription,generation,false))throw new IllegalStateException("DESTINATION_OWNERSHIP_LOST");
     }
+    public static void lockAndVerify(Connection c,String schema,String name,String pipeline,String subscription,String generation)throws SQLException{
+        if(!matches(c,schema,name,pipeline,subscription,generation,true))throw new IllegalStateException("DESTINATION_OWNERSHIP_LOST");
+    }
 }

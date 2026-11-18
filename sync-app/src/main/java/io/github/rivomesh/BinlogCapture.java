@@ -4,7 +4,6 @@ import io.github.rivomesh.Model.*;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.*;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
-import com.github.shyiko.mysql.binlog.network.SSLMode;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -34,12 +33,11 @@ public final class BinlogCapture implements AutoCloseable {
         this.source = source;
         Position position = store.captured(); file = position.file;
         committedGtids = position.gtidSet;
-        client = new BinaryLogClient(source.endpoint().host, source.endpoint().port, config.source.username, config.source.password);
+        client = source.binlogClient();
         client.setServerId(config.source.serverId);
         client.setGtidSet(position.gtidSet);
         client.setGtidSetFallbackToPurged(false);
         client.setUseBinlogFilenamePositionInGtidMode(false);
-        client.setSSLMode(SSLMode.valueOf(config.source.sslMode));
         // Built-in reconnect can resume mid-transaction; application reconnect must use the durable offset.
         client.setKeepAlive(false);
         client.setHeartbeatInterval(1000);

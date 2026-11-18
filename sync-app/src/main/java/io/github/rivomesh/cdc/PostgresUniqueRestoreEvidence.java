@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** Physical evidence for the small, explicitly supported PostgreSQL restoration profile. */
@@ -13,18 +14,8 @@ final class PostgresUniqueRestoreEvidence {
 
     static String observe(Connection c, String schema, TableSchema table, IndexPolicy.Decision plan,
                           String constraint) throws Exception {
-        List<String> identity = new ArrayList<>();
-        try (Statement sql = c.createStatement(); ResultSet r = sql.executeQuery("""
-                SELECT current_setting('server_version_num')::int,current_setting('server_encoding'),
-                       pg_is_in_recovery(),(SELECT system_identifier::text FROM pg_control_system()),
-                       (SELECT oid::text FROM pg_database WHERE datname=current_database())
-                """)) {
-            if (!r.next() || r.getInt(1) / 10000 != 17 || !"UTF8".equals(r.getString(2)) || r.getBoolean(3)) {
-                throw new IllegalStateException("UNIQUE_RESTORE_TARGET_PROFILE_UNSUPPORTED");
-            }
-            identity.add(r.getString(4));
-            identity.add(r.getString(5));
-        }
+        List<String> identity = serverIdentity(c);
+        String indexOid;
         String indexSql = """
                 SELECT r.oid::text,pg_relation_filenode(r.oid)::text,k.oid::text,pg_relation_filenode(k.oid)::text,
                        i.indnkeyatts,i.indnatts,
@@ -38,7 +29,6 @@ final class PostgresUniqueRestoreEvidence {
                   JOIN pg_am am ON am.oid=k.relam
                  WHERE n.nspname=? AND r.relname=? AND k.relnamespace=n.oid AND k.relname=?
                 """;
-        String indexOid;
         try (PreparedStatement sql = c.prepareStatement(indexSql)) {
             sql.setString(1, constraint);
             sql.setString(2, constraint);
@@ -102,6 +92,85 @@ final class PostgresUniqueRestoreEvidence {
                     identity.add(r.getString(13));
                 }
                 if (r.next()) throw new IllegalStateException("UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED");
+            }
+        }
+        return Codec.sha256(Codec.encode(identity));
+    }
+
+    private static List<String> serverIdentity(Connection c) throws Exception {
+        try (Statement sql = c.createStatement(); ResultSet r = sql.executeQuery("""
+                SELECT current_setting('server_version_num')::int,current_setting('server_encoding'),
+                       pg_is_in_recovery(),(SELECT system_identifier::text FROM pg_control_system()),
+                       (SELECT oid::text FROM pg_database WHERE datname=current_database()),
+                       substring(pg_walfile_name(pg_current_wal_insert_lsn()),1,8)
+                """)) {
+            if (!r.next() || r.getInt(1) / 10000 != 17 || !"UTF8".equals(r.getString(2)) || r.getBoolean(3)) {
+                throw new IllegalStateException("UNIQUE_RESTORE_TARGET_PROFILE_UNSUPPORTED");
+            }
+            return new ArrayList<>(List.of(r.getString(4), r.getString(5), r.getString(6)));
+        }
+    }
+
+    static void requireSafeDdlSession(Connection c) throws Exception {
+        try (Statement sql = c.createStatement()) {
+            sql.execute("SET LOCAL synchronous_commit TO on");
+            try (ResultSet rows = sql.executeQuery("SELECT current_setting('fsync')")) {
+                if (!rows.next() || !"on".equals(rows.getString(1))) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_TARGET_DURABILITY_UNSAFE");
+                }
+            }
+            sql.execute("LOCK TABLE pg_catalog.pg_event_trigger IN SHARE MODE");
+            try (ResultSet rows = sql.executeQuery("SELECT 1 FROM pg_catalog.pg_event_trigger WHERE evtenabled<>'D' LIMIT 1")) {
+                if (rows.next()) throw new IllegalStateException("UNIQUE_RESTORE_TARGET_EVENT_TRIGGER_PRESENT");
+            }
+        }
+    }
+
+    static String restoredConstraint(Connection c, String schema, String table, String name,
+                                     List<String> columns) throws Exception {
+        List<String> identity = serverIdentity(c);
+        try (PreparedStatement sql = c.prepareStatement("""
+                SELECT t.oid::text,cn.oid::text,i.indexrelid::text,
+                       pg_relation_filenode(t.oid)::text, pg_relation_filenode(i.indexrelid)::text,
+                       array(SELECT a.attname::text
+                               FROM unnest(cn.conkey) WITH ORDINALITY AS key_position(attnum,position)
+                               JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=key_position.attnum
+                              ORDER BY key_position.position),
+                       array(SELECT i.indcollation[k]::text
+                               FROM generate_series(0,i.indnkeyatts-1) AS key_position(k)
+                              ORDER BY k),
+                       array(SELECT i.indclass[k]::text
+                               FROM generate_series(0,i.indnkeyatts-1) AS key_position(k)
+                              ORDER BY k)
+                  FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
+                  JOIN pg_constraint cn ON cn.conrelid=t.oid AND cn.connamespace=n.oid
+                  JOIN pg_index i ON i.indexrelid=cn.conindid AND i.indrelid=t.oid
+                  JOIN pg_class idx ON idx.oid=i.indexrelid AND idx.relnamespace=n.oid
+                  JOIN pg_am am ON am.oid=idx.relam
+                 WHERE n.nspname=? AND t.relname=? AND cn.conname=? AND idx.relname=cn.conname
+                   AND t.relkind='r' AND t.relpersistence='p' AND NOT t.relispartition
+                   AND cn.contype='u' AND cn.convalidated AND NOT cn.condeferrable AND NOT cn.condeferred
+                   AND am.amname='btree' AND i.indisunique AND NOT i.indisprimary AND NOT i.indisexclusion
+                   AND NOT i.indnullsnotdistinct AND i.indimmediate AND i.indisvalid AND i.indisready AND i.indislive
+                   AND i.indnkeyatts=i.indnatts AND i.indpred IS NULL AND i.indexprs IS NULL
+                   AND NOT EXISTS(SELECT 1 FROM generate_series(0,i.indnkeyatts-1) AS key_position(k)
+                                  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=i.indkey[k]
+                                  JOIN pg_opclass op ON op.oid=i.indclass[k]
+                                  JOIN pg_namespace ns ON ns.oid=op.opcnamespace
+                                  WHERE NOT op.opcdefault OR ns.nspname<>'pg_catalog'
+                                     OR i.indoption[k]<>0 OR i.indcollation[k]<>a.attcollation)
+                """)) {
+            sql.setString(1, schema);
+            sql.setString(2, table);
+            sql.setString(3, name);
+            try (ResultSet r = sql.executeQuery()) {
+                if (!r.next() || !columns.equals(Arrays.asList((String[])r.getArray(6).getArray()))) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_NATIVE_CONSTRAINT_CHANGED");
+                }
+                for (int i = 1; i <= 5; i++) identity.add(r.getString(i));
+                identity.addAll(columns);
+                identity.addAll(Arrays.asList((String[])r.getArray(7).getArray()));
+                identity.addAll(Arrays.asList((String[])r.getArray(8).getArray()));
             }
         }
         return Codec.sha256(Codec.encode(identity));

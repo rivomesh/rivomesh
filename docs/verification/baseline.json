@@ -6695,5 +6695,95 @@
       },
       "cleanupExitCode": 0
     }
+  },
+  "boundedPostgresUniqueRestoreExecution": {
+    "reproduce": "python3 tests/nonempty-target-preview.py --only-restore-execution --verify-unknown-commit --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "da92a97512d7ff77eb0eb8bd1e8f23089475dd0488e91d667a8ad658965a2a38",
+      "checks": [
+        "Constraint review refuses a sealed source with an incomplete target validation report",
+        "The case-sensitive source values match all stored rows at the fenced cut",
+        "Runtime-only MySQL freeze cannot admit DDL or create a receipt",
+        "Execution requires explicit exclusive freeze acknowledgement and the exact reviewed digest",
+        "An enabled PostgreSQL event trigger prevents any managed DDL",
+        "Concurrent identical approvals produce one native enforced constraint and one matching receipt under the held locks",
+        "Losing the exact MySQL session after PostgreSQL DDL rolls the constraint and its receipt back together",
+        "Receipt replay rejects a changed approval actor and a second request for the same UNIQUE",
+        "A lost PostgreSQL commit response reports UNKNOWN and exact request replay resolves the locally durable receipt",
+        "MySQL restart retains its persisted write fence and invalidates the previous binlog cut",
+        "PostgreSQL restart and an offline source retain exact native receipt and constraint replay"
+      ],
+      "status": "PASS",
+      "profile": "UNIQUE_RESTORE_EXECUTION",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "postDdlSourceLossRollbackObserved": true,
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 62
+  },
+  "nativeOracleCivilDate": {
+    "reproduce": "Use the --logminer --pipeline --text-json --date-values flags in tests/oracle-source-probe.py",
+    "native": {
+      "artifactSha256": "99d287b9ed1829c22ebb16fc7d5c0bc02722672a30c943e8a8960bf887f6cb77",
+      "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+      "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "textJson": true,
+      "dateValues": true,
+      "checks": [
+        "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+        "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+        "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+        "A root connection substituted for the PDB is refused before flashback",
+        "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+        "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+        "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+        "An unarchived part of the requested SCN window is refused",
+        "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+        "The active Oracle text constraint rejects lax syntax and duplicate object keys",
+        "Preflight refuses native binary JSON and textual JSON source keys",
+        "Flashback materializes strict JSONB, preserves NULL versus JSON null and retains plain VARCHAR2",
+        "Flashback preserves Oracle DATE leap day, NULL, seconds and two distinct local clocks across a JVM DST gap",
+        "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+        "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+        "Archived JSON updates and a keyless JSON delete preserve typed values and one occurrence",
+        "Archived redo and undo preserve Oracle DATE and NULL, and identify the exact keyless row across the DST gap",
+        "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+        "JSON CDC resumes after SIGKILL with the original Flashback snapshot IDs",
+        "Oracle DATE offline insert and keyless update resume after SIGKILL with original snapshot IDs",
+        "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase",
+        "A BCE Oracle DATE is refused in a closed native archive without losing its sign"
+      ],
+      "status": "PASS",
+      "sourceVersion": "23.26.4.0.0",
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 7
+  },
+  "nativeMysqlTls13": {
+    "reproduce": "python3 tests/mysql-tls-run.py --java-home <Temurin 21 home> --artifact <candidate jar> --output <directory>",
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "c28a871f409b5f46936f063093a245b9b802003d414885d0d63117f1afc371df",
+      "harnessSha256": "ebf9cda3e7e03d01f4d453d27ea916f808cbc96436bc520aa6007479617927d7",
+      "checks": [
+        "The packaged preflight verifies server identities and refuses a wrong source DNS name",
+        "MySQL native session counters identify TLS 1.3 for the actual binlog and JDBC target channels",
+        "Exact generated and JSON data continue over verified TLS without a new snapshot",
+        "After SIGKILL the Worker reconnects securely from the original GTID and snapshot"
+      ],
+      "mysqlVersions": {
+        "source": "8.4.13",
+        "target": "8.4.13"
+      },
+      "runtimeVersion": "21.0.13",
+      "cleanupExitCode": 0
+    },
+    "stagedIntegration": {
+      "artifactSha256": "c28a871f409b5f46936f063093a245b9b802003d414885d0d63117f1afc371df",
+      "focusedJavaPassed": 41,
+      "nativeProfileSkipped": 1
+    }
   }
 }

@@ -27,9 +27,15 @@ public final class PausedRepairFence implements AutoCloseable {
     private void abort(){try{connection.abort(Runnable::run);}catch(Exception unsupported){try{connection.close();}catch(Exception ignored){}}}
     public void verify()throws Exception{
         if(closed||expired.get()||System.nanoTime()-deadline>=0||Thread.currentThread().isInterrupted())throw new IllegalStateException("REPAIR_FENCE_EXPIRED");
-        Map<String,Object> state=journal.locked(connection);
-        if(!Objects.equals(cut.generation,state.get("generation"))||!"PAUSED".equals(state.get("state"))||cut.epoch!=(long)state.get("epoch")||cut.errorGeneration!=(long)state.get("errorGeneration")||cut.sequence!=(long)state.get("next")-1||cut.sequence!=(long)state.get("normalized")||!Objects.equals(Codec.encode(cut.capturedPosition),state.get("captured")==null?"null":state.get("captured")))throw new IllegalStateException("VALIDATION_BARRIER_MOVED");
+        requireCut(journal.locked(connection),cut);
         if(expired.get()||connection.isClosed())throw new IllegalStateException("REPAIR_FENCE_EXPIRED");
+    }
+    static void requireCut(Map<String,Object> state,PipelineValidationBarrier.Certificate cut){
+        if(!Objects.equals(cut.generation,state.get("generation"))
+                ||!"PAUSED".equals(state.get("state"))||cut.epoch!=(long)state.get("epoch")
+                ||cut.errorGeneration!=(long)state.get("errorGeneration")||cut.sequence!=(long)state.get("next")-1
+                ||cut.sequence!=(long)state.get("normalized")||!Objects.equals(Codec.encode(cut.capturedPosition),
+                state.get("captured")==null?"null":state.get("captured")))throw new IllegalStateException("VALIDATION_BARRIER_MOVED");
     }
     Connection transaction()throws Exception{verify();return connection;}
     void commitRecord()throws Exception{verify();connection.commit();}

@@ -30,7 +30,7 @@ final class OracleRedoDml {
         if(forward.operation!=expected||!schema.database.equals(forward.owner)||!schema.name.equals(forward.table)
                 ||!forward.owner.equals(reverse.owner)||!forward.table.equals(reverse.table))
             throw invalid("ORACLE_REDO_TABLE_OR_OPERATION_MISMATCH");
-        Map<String,String> before=null,after=null;
+        Map<String,Literal> before=null,after=null;
         switch(expected){
             case INSERT:
                 requireInverse(reverse,Change.Operation.DELETE);
@@ -67,33 +67,37 @@ final class OracleRedoDml {
         if(reverse.operation!=inverse)throw invalid("ORACLE_REDO_UNDO_MISMATCH");
     }
 
-    private static void merge(Map<String,String> image,Map<String,String> additions){
-        for(Map.Entry<String,String> entry:additions.entrySet()){
+    private static void merge(Map<String,Literal> image,Map<String,Literal> additions){
+        for(Map.Entry<String,Literal> entry:additions.entrySet()){
             if(image.containsKey(entry.getKey())&&!Objects.equals(image.get(entry.getKey()),entry.getValue()))
                 throw invalid("ORACLE_REDO_UNDO_MISMATCH");
             image.put(entry.getKey(),entry.getValue());
         }
     }
 
-    private static void verifySubset(Map<String,String> subset,Map<String,String> image){
-        for(Map.Entry<String,String> entry:subset.entrySet()){
+    private static void verifySubset(Map<String,Literal> subset,Map<String,Literal> image){
+        for(Map.Entry<String,Literal> entry:subset.entrySet()){
             if(!image.containsKey(entry.getKey())||!Objects.equals(image.get(entry.getKey()),entry.getValue()))
                 throw invalid("ORACLE_REDO_UNDO_MISMATCH");
         }
     }
 
-    private static List<Cell> typed(TableSchema schema,Map<String,String> image){
+    private static List<Cell> typed(TableSchema schema,Map<String,Literal> image){
         if(image.size()!=schema.columns.size())throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
         List<Cell> values=new ArrayList<>(schema.columns.size());
         for(TableSchema.Column column:schema.columns){
             if(!image.containsKey(column.name))throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
-            String value=image.get(column.name);
+            Literal literal=image.get(column.name);
+            String value=literal==null?null:literal.value;
             if(value==null&&!column.nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
-            if(value!=null)switch(column.type){
-                case STRING:break;
-                case JSON:value=OracleTextJson.value(value);break;
-                case INT64:case DECIMAL:value=number(column,value);break;
-                default:throw invalid("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
+            if(literal!=null){
+                if(literal.date!=OracleDate.isColumn(column))throw invalid("ORACLE_REDO_LITERAL_TYPE_MISMATCH");
+                switch(column.type){
+                    case STRING:case DATETIME:break;
+                    case JSON:value=OracleTextJson.value(value);break;
+                    case INT64:case DECIMAL:value=number(column,value);break;
+                    default:throw invalid("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
+                }
             }
             values.add(Cell.value(value));
         }
@@ -111,10 +115,12 @@ final class OracleRedoDml {
 
     private static IllegalStateException invalid(String code){return new IllegalStateException(code);}
 
+    private record Literal(String value,boolean date){}
+
     private static final class Statement {
         Change.Operation operation;
         String owner,table;
-        final Map<String,String> values=new LinkedHashMap<>(),predicates=new LinkedHashMap<>();
+        final Map<String,Literal> values=new LinkedHashMap<>(),predicates=new LinkedHashMap<>();
     }
 
     private static final class Parser {
@@ -158,15 +164,34 @@ final class OracleRedoDml {
             return value;
         }
 
-        private String literal(){
-            if(take("NULL"))return null;
-            if(kind!=2&&kind!=4)throw invalid("ORACLE_REDO_LITERAL_UNSUPPORTED");
-            String value=kind==2?token.replace("''","'"):token;
+        private String quotedLiteral(){
+            if(kind!=2)throw invalid("ORACLE_REDO_LITERAL_UNSUPPORTED");
+            String value=token.replace("''","'");
             advance();
-            return value.isEmpty()?null:value;
+            return value;
         }
 
-        private void field(Map<String,String> values,String name,String value){
+        private Literal literal(){
+            if(take("NULL"))return null;
+            if(take("TO_DATE")){
+                require("(");
+                String date=quotedLiteral();
+                require(",");
+                String mask=quotedLiteral();
+                require(")");
+                return new Literal(OracleDate.redoValue(date,mask),true);
+            }
+            if(kind!=2&&kind!=4)throw invalid("ORACLE_REDO_LITERAL_UNSUPPORTED");
+            if(kind==2){
+                String value=quotedLiteral();
+                return value.isEmpty()?null:new Literal(value,false);
+            }
+            Literal value=new Literal(token,false);
+            advance();
+            return value;
+        }
+
+        private void field(Map<String,Literal> values,String name,Literal value){
             if(values.containsKey(name))throw invalid("ORACLE_REDO_DUPLICATE_COLUMN");
             values.put(name,value);
         }
@@ -202,7 +227,8 @@ final class OracleRedoDml {
                 do{
                     if(take("ROWID")){
                         require("=");
-                        if(rowIdFound||literal()==null)throw invalid("ORACLE_REDO_ROWID_INVALID");
+                        Literal rowId=literal();
+                        if(rowIdFound||rowId==null||rowId.date)throw invalid("ORACLE_REDO_ROWID_INVALID");
                         rowIdFound=true;
                     }else{
                         String column=identifier();

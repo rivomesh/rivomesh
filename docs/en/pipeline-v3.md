@@ -78,6 +78,12 @@ Set `source.topology: ASYNC` and supply the primary and replica as candidate `so
 
 The Java 21 native profile used MySQL 8.4.13 asynchronous GTID replication, an external PostgreSQL journal, two management entries and PostgreSQL and MySQL destinations. After the old primary was killed, both entries showed the capture interruption and the two target checkpoints held. External promotion returned a writable source. Rivomesh delivered the new primary's GTID to both destinations with the original configuration revision, journal generation and snapshot IDs. Reproduce with `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <release jar> --output target/mysql-async-proof`. [Verification archive](../verification/README.md)
 
+### Verified TLS for MySQL capture and delivery
+
+Configure `source.sslMode: VERIFY_IDENTITY` for the binlog channel and include `sslMode=VERIFY_IDENTITY` in `source.jdbcOptions` for discovery and snapshots. Each MySQL target has its own JDBC URL and TLS options. Install the CA roots in the execution JDK trust store available to the Agent and its Worker JVMs. Use the certificate's DNS names in the source candidates and target URLs. The verified binlog modes negotiate through the JDK and can connect to a TLS 1.3-only MySQL endpoint. [Connector/J TLS properties](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)
+
+On MySQL 8.4.13, the real binlog and target JDBC sessions reported TLS 1.3. Preflight rejected a wrong source DNS name. After process termination the Worker reused the original GTID and snapshot, and the targets matched exactly. Reproduce with `python3 tests/mysql-tls-run.py --java-home <Temurin 21 directory> --artifact <release jar> --output target/mysql-tls-proof`. [Verification archive](../verification/README.md)
+
 ## Standalone writer transfer with a PostgreSQL journal
 
 For a new standalone MySQL pipeline, set `journal.mode: EXTERNAL`, `journal.product: POSTGRESQL` and `journal.writerAssignment` to a fresh UUID. Use up to eight PostgreSQL/MySQL targets and 256 source tables. Keep the journal, target metadata and source logs accessible on both Workers, and reserve an independent private directory for any report files you generate separately.

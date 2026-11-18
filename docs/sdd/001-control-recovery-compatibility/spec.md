@@ -53,7 +53,7 @@ RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | PostgreSQL 17.12 已实测快照及可切换逻辑槽续传，回到旧时间线时拒绝。18.7 已验收存储型生成列；更多类型、DDL 与多目标共同点待验收。 |
-| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB、归档 LogMiner 到 PostgreSQL 实测支持长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。 |
+| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。 |
 
 ## Java运行时兼容
 
@@ -61,7 +61,7 @@ RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已通过四个 MySQL 版本的独立全量增量、MySQL 8.4.13 异步 GTID 切主及双 SQL 目标续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB 核心档案。更多拓扑、目标、TLS 和恢复组合待验。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测外置 MySQL JDBC 的缺失检查与滚动恢复，以及 PostgreSQL 到 PostgreSQL 的 TLS 1.3、证书/主机名拒绝及安全重连。其余厂商、TLS 协议和恢复组合待验。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测外置 MySQL JDBC、PostgreSQL 双端 TLS 与 MySQL 源快照/binlog/SQL 目标 TLS 1.3、证书身份拒绝和重连。其余厂商、证书和恢复档案待验。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档
@@ -79,7 +79,7 @@ RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
-| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空 PostgreSQL 差异预检和冻结 MySQL 下的只读 UNIQUE 恢复计划已实测，计划复核拒绝索引、数据或源 GTID 漂移。正式基线、执行约束、写入交接和回切待验。 |
+| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空预检和冻结 MySQL 到同库 PostgreSQL 日志/目标的 UNIQUE 执行已实测，含源故障回滚与未知提交查回。正式接管基线、多目标约束、写入交接及回切待验。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 本地与外部日志可选。双 Agent 已实测共享挂载的原报告和闭合操作回执逐字节核验。仍需完善原事件、故障证据的可达性与实际迁移。 |

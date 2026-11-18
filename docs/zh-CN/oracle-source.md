@@ -20,7 +20,7 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main probe-oracle config/o
 
 设置 `archiveWindow.startScn` 和 `archiveWindow.endScnExclusive` 两个十进制字符串可检查指定归档区间。CDB 根账号需要读取 `V_$THREAD` 和 `V_$ARCHIVED_LOG`。检查绑定当前 resetlogs 世代和一个 redo 线程。`CATALOG_CONTIGUOUS` 表示目录里的归档段覆盖完整区间，`ORACLE_ARCHIVE_LOG_GAP` 表示至少一段缺失。恢复前保留原始区间，并用 LogMiner 验证物理日志。
 
-设置 `archiveWindow.decodeCommitted: true` 后，预检用 LogMiner 读取已登记的归档文件。CDB 根账号额外需要 `LOGMINING`、`SYS.DBMS_LOGMNR` 执行权限和 `SYS.V_$LOGMNR_CONTENTS` 读取权限。结果包含已提交事务数、操作计数和有类型变更的 SHA-256。预检将 redo 和 undo 语句作为数据解析。目前接受支持范围内 `NUMBER(p,s)` 和 `VARCHAR2` 列的完整前后镜像，遇到跨区间事务、拆分语句、镜像缺失或未支持的操作及类型会拒绝。采集该区间之前，先为所选表配置相应的补充日志。
+设置 `archiveWindow.decodeCommitted: true` 后，预检用 LogMiner 读取已登记的归档文件。CDB 根账号额外需要 `LOGMINING`、`SYS.DBMS_LOGMNR` 执行权限和 `SYS.V_$LOGMNR_CONTENTS` 读取权限。结果包含已提交事务数、操作计数和有类型变更的 SHA-256。预检将 redo 和 undo 语句作为数据解析。目前接受支持范围内 `NUMBER(p,s)`、`VARCHAR2` 和 `DATE` 列的完整前后镜像，遇到跨区间事务、拆分语句、镜像缺失或未支持的操作及类型会拒绝。采集该区间之前，先为所选表配置相应的补充日志。
 
 解码输出包含最后一笔事务的有类型提交坐标，包括提交 SCN 和 XID。解析器按完整事务分组，并在事务内编号事件。不同 XID 共用提交 SCN、顺序无法证明时会拒绝。实库还验证归档轮换后第二笔事务有独立提交坐标。
 
@@ -33,7 +33,7 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main check config/oracle-s
 java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-source-v3.yml
 ```
 
-使用相同类路径启动拥有 Worker 的进程（组合模式使用 `serve`，分离模式使用 `agent`）。可在界面导入 V3 配置，或在新建任务选择 **V3 → Oracle**，分别填 CDB 根和 PDB 连接、PDB 名称及大写 `OWNER.TABLE` 表名。每个源 owner 显式映射到 PostgreSQL Schema，启动前在选定 Agent 上执行 **检查**。受监督的 Worker 继承所属进程类路径中的外置 Oracle 驱动。首批类型为有明确精度的 `NUMBER(p,s)` 和 `VARCHAR2`，验证有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
+使用相同类路径启动拥有 Worker 的进程（组合模式使用 `serve`，分离模式使用 `agent`）。可在界面导入 V3 配置，或在新建任务选择 **V3 → Oracle**，分别填 CDB 根和 PDB 连接、PDB 名称及大写 `OWNER.TABLE` 表名。每个源 owner 显式映射到 PostgreSQL Schema，启动前在选定 Agent 上执行 **检查**。受监督的 Worker 继承所属进程类路径中的外置 Oracle 驱动。此档案支持有明确精度的 `NUMBER(p,s)`、`VARCHAR2` 和 `DATE`，覆盖有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
@@ -58,4 +58,10 @@ Flashback 和归档采集都验证 JSON 语法、完整单个值及重复对象�
 
 为已同步的列添加或删除这类约束会改变目标列的类型映射。先审核目标结构及已有数据，再按 DDL 恢复流程恢复采集。已有 `IS JSON` 约束时，Oracle 对同一列新增第二条会返回 `ORA-40664`。审核后可在同一次结构迁移中替换原约束。[Oracle ORA-40664](https://docs.oracle.com/en/error-help/db/ora-40664/)
 
-用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。添加 `--text-json` 可覆盖文本 JSON 快照、归档更新、无主键记录和续传。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)
+## Oracle DATE 到 PostgreSQL
+
+Oracle `DATE` 映射为 PostgreSQL `timestamp(6) without time zone`，保留年月日、时分秒与 SQL `NULL`。采集专用的 Oracle 会话固定使用公历和美式英语日期。PostgreSQL 读写使用 `LocalDateTime`，Worker 的时区在夏令时跳变期间也不会移动 Oracle 保存的本地时间。既有目标表的列同样须采用 `timestamp without time zone`。[Oracle DATE 类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html) · [Oracle 日期格式](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Format-Models.html) · [PostgreSQL JDBC 日期及时间类型](https://jdbc.postgresql.org/documentation/query/)
+
+此档案接受 1582-10-15 至 9999-12-31 的日期。采集识别到更早日期时，包括公元前日期，会报告 `ORACLE_DATE_VALUE_OUT_OF_RANGE`。遇到尚未支持的 LogMiner 日期格式则报告 `ORACLE_DATE_FORMAT_UNSUPPORTED`。中断后先核对源值、受影响的表和持久化位点，再重试。Oracle 的各类 `TIMESTAMP` 另行验证。
+
+用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。加入 `--text-json` 验证严格文本 JSON，加入 `--date-values` 验证 Oracle DATE，均覆盖有主键、无主键表的 Flashback、归档 CDC 和恢复。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)

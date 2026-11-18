@@ -4,7 +4,6 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.*;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.*;
-import com.github.shyiko.mysql.binlog.network.SSLMode;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
@@ -201,7 +200,14 @@ public final class MysqlCdcSource implements SourceAdapter {
         Capture(SourcePosition captured,Receiver receiver)throws Exception{
             this.receiver=receiver;Model.Position p=position(captured);committed=p.gtidSet;file=p.file;
             observeCommitTime=selected.isKnownNonGroupWriter()&&originalTimingProfile(config.source);
-            client=new BinaryLogClient(selected.endpoint().host,selected.endpoint().port,config.source.username,config.source.password);client.setServerId(config.source.serverId);client.setGtidSet(committed);client.setGtidSetFallbackToPurged(false);client.setUseBinlogFilenamePositionInGtidMode(false);client.setSSLMode(SSLMode.valueOf(config.source.sslMode));client.setKeepAlive(false);client.setHeartbeatInterval(1000);client.setConnectTimeout(10000);
+            client=selected.binlogClient();
+            client.setServerId(config.source.serverId);
+            client.setGtidSet(committed);
+            client.setGtidSetFallbackToPurged(false);
+            client.setUseBinlogFilenamePositionInGtidMode(false);
+            client.setKeepAlive(false);
+            client.setHeartbeatInterval(1000);
+            client.setConnectTimeout(10000);
             client.setEventDeserializer(MysqlEventDeserializer.create(tableIds));
             client.registerEventListener(e->{
                 if(closing||failure.get()!=null)return;

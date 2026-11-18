@@ -619,7 +619,12 @@ public final class JdbcJournal implements NormalizedJournal {
     /** One incremental progress frame. First-gap lookups use the per-subscription primary key. */
     public Map<String,Object> deliveryProgress()throws Exception{
         try(Connection c=connect()){
-            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);int format;long captured;
+            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);
+            Map<String,Object> result=deliveryProgress(c);c.rollback();return result;
+        }
+    }
+    Map<String,Object> deliveryProgress(Connection c)throws Exception{
+            int format;long captured;
             try(PreparedStatement p=c.prepareStatement("SELECT format_version,next_seq FROM "+table("job")+" WHERE pipeline_id=?")){
                 p.setString(1,settings.pipelineId);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");format=r.getInt(1);captured=r.getLong(2)-1;}
             }
@@ -645,8 +650,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 progress.put(sub.id,row);
             }
             if(settings.deliveryTiming)JdbcDeliveryTiming.enrich(this,c,progress);
-            Map<String,Object> result=new LinkedHashMap<>();result.put("capturedSequence",Long.toString(captured));result.put("subscriptions",progress);c.rollback();return result;
-        }
+            Map<String,Object> result=new LinkedHashMap<>();result.put("capturedSequence",Long.toString(captured));result.put("subscriptions",progress);return result;
     }
     /** Bounded metadata preview for the console; never loads all business schemas or rows. */
     public Map<String,Object> snapshotSummary(int limit)throws Exception{

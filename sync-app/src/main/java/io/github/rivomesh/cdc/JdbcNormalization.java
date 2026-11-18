@@ -1,6 +1,7 @@
 package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.OracleDate;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -37,7 +38,9 @@ final class JdbcNormalization {
                 case FLOAT32:float f=Float.parseFloat(value);if(!Float.isFinite(f))throw new IllegalArgumentException("FLOAT_VALUE_INVALID");value=f==0?"0":Float.toHexString(f);break;
                 case FLOAT64:double d=Double.parseDouble(value);if(!Double.isFinite(d))throw new IllegalArgumentException("FLOAT_VALUE_INVALID");value=d==0?"0":Double.toHexString(d);break;
                 case JSON:value=JsonValues.canonical(value);break;
-                case DATETIME:case TIMESTAMP:value=Timestamp.valueOf(value).toLocalDateTime().toString();break;
+                case DATETIME:case TIMESTAMP:
+                    value=(OracleDate.isColumn(table.columns.get(i))?OracleDate.localTime(value):Timestamp.valueOf(value).toLocalDateTime()).toString();
+                    break;
                 case DATE:value=java.sql.Date.valueOf(value).toString();break;
                 case TIME:value=io.github.rivomesh.MysqlDuration.canonical(value);break;
                 case BOOLEAN:if(!Arrays.asList("true","false","0","1").contains(value))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");value=(value.equals("true")||value.equals("1"))?"true":"false";break;

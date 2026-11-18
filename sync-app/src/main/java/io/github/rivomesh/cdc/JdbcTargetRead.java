@@ -1,10 +1,12 @@
 package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.MysqlDuration;
+import io.github.rivomesh.OracleDate;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -73,7 +75,15 @@ final class JdbcTargetRead implements TargetRead {
             case BYTES:case GEOMETRY:value=binary(result,index,maximum,verify);break;
             case STRING:case JSON:value=text(result,index,maximum,verify);break;
             case DATE:java.sql.Date date=result.getDate(index);value=date==null?null:date.toString();break;
-            case DATETIME:case TIMESTAMP:Timestamp timestamp=result.getTimestamp(index);value=timestamp==null?null:timestamp.toString();break;
+            case DATETIME:case TIMESTAMP:
+                if(product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(column)){
+                    LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);
+                    value=timestamp==null?null:timestamp.toString().replace('T',' ');
+                }else{
+                    Timestamp timestamp=result.getTimestamp(index);
+                    value=timestamp==null?null:timestamp.toString();
+                }
+                break;
             case TIME:
                 if(product.mysqlDialect()||product==TargetProduct.H2)value=result.getString(index);
                 else{BigDecimal micros=result.getBigDecimal(index);value=micros==null?null:MysqlDuration.format(micros.longValueExact());}break;

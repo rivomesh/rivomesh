@@ -43,6 +43,8 @@ final class OracleArchiveRead {
         if(tables.isEmpty()||tables.size()>200)throw invalid("ORACLE_ARCHIVE_TABLE_LIMIT");
         if(maxTransactionRows<1)throw invalid("ORACLE_ARCHIVE_ROW_LIMIT");
         if(range.files.isEmpty())throw invalid("ORACLE_ARCHIVE_LOG_GAP");
+        if(tables.values().stream().flatMap(table->table.columns.stream()).anyMatch(OracleDate::isColumn))
+            OracleDate.prepareSession(root);
         boolean first=true;
         for(String file:range.files){
             String mode=first?"NEW":"ADDFILE";

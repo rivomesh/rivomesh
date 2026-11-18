@@ -3,11 +3,14 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
+import select
 import subprocess
 import tempfile
 import time
@@ -25,7 +28,12 @@ def main():
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
+    profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
+    parser.add_argument('--verify-unknown-commit', action='store_true',
+                        help='Also interrupt the fixture PostgreSQL commit response after local WAL flush')
     args = parser.parse_args()
+    if args.verify_unknown_commit and not args.only_restore_execution:
+        parser.error('--verify-unknown-commit requires --only-restore-execution')
     artifact = args.artifact.resolve()
     output = args.output.resolve()
     output.relative_to(ROOT)
@@ -34,7 +42,9 @@ def main():
     password = secrets.token_hex(20)
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    profile_name = ('UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
+    restoration_profile = args.only_restoration_plan or args.only_restore_execution
+    profile_name = ('UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
+                    'UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
                     'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW')
     report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL', 'profile': profile_name}
     with tempfile.TemporaryDirectory(prefix='adoption-preview-', dir=ROOT / 'target') as temporary:
@@ -77,11 +87,36 @@ def main():
         }
         compose_path = directory / 'compose.json'
         compose_path.write_text(json.dumps({'services': services}))
+        compose_command = ['docker', 'compose', '-p', project, '-f', str(compose_path)]
 
         def compose(*arguments, statement=None, check=True):
-            return subprocess.run(['docker', 'compose', '-p', project, '-f', str(compose_path), *arguments],
+            return subprocess.run([*compose_command, *arguments],
                                   cwd=ROOT, env=environment, input=statement, check=check, capture_output=True,
                                   text=True, timeout=180)
+
+        @contextmanager
+        def sql_session(*arguments):
+            process = subprocess.Popen([*compose_command, 'exec', '-T', *arguments], cwd=ROOT, env=environment,
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                       text=True, bufsize=1)
+            try:
+                yield process
+            finally:
+                process.stdin.close()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait(timeout=10)
+                process.stdout.close()
+
+        def exchange_sql(process, statement):
+            process.stdin.write(statement + '\n')
+            process.stdin.flush()
+            assert select.select([process.stdout], [], [], 8)[0], 'Fixture SQL session did not reply'
+            value = process.stdout.readline()
+            assert value, 'Fixture SQL session closed before replying'
+            return value.strip()
 
         def mysql(statement):
             return compose('exec', '-T', 'source', 'bash', '-c',
@@ -161,20 +196,22 @@ def main():
                            journal={'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'namespace': 'unique_journal',
                                     'url': target['url'], 'username': 'postgres', 'password': target['password']})
             (directory / 'unique.yml').write_text(json.dumps(managed))
-            source_collation = 'utf8mb4_0900_bin' if args.only_restoration_plan else 'utf8mb4_bin'
-            target_collation = 'pg_catalog."C"' if args.only_restoration_plan else 'unique_copy.case_insensitive'
+            source_collation = 'utf8mb4_0900_bin' if restoration_profile else 'utf8mb4_bin'
+            target_collation = 'pg_catalog."C"' if restoration_profile else 'unique_copy.case_insensitive'
+            nickname_source = 'VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin' if args.only_restore_execution else 'VARCHAR(40)'
+            nickname_target = 'VARCHAR(40) COLLATE pg_catalog."C"' if args.only_restore_execution else 'VARCHAR(40)'
             mysql(f"""
                 CREATE DATABASE unique_source;
                 CREATE TABLE unique_source.accounts (
                     id BIGINT PRIMARY KEY, tenant BIGINT,
                     email VARCHAR(80) CHARACTER SET utf8mb4 COLLATE {source_collation},
-                    nickname VARCHAR(40), UNIQUE KEY uq_email(email), UNIQUE KEY uq_scope(tenant,nickname)
+                    nickname {nickname_source}, UNIQUE KEY uq_email(email), UNIQUE KEY uq_scope(tenant,nickname)
                 ) ENGINE=InnoDB;
                 INSERT INTO unique_source.accounts VALUES
                     (1,1,'Sensitive-Mail@example.com','one'), (2,1,'sensitive-mail@example.com','two'),
                     (3,1,NULL,NULL), (4,1,NULL,NULL);
             """)
-            if args.only_restoration_plan:
+            if restoration_profile:
                 mysql("INSERT INTO unique_source.accounts VALUES (5,1,'sensitive-mail@example.com ','three')")
             postgres(f"""
                 CREATE SCHEMA unique_copy;
@@ -182,7 +219,7 @@ def main():
                     (provider=icu,locale='und-u-ks-level2',deterministic=false);
                 CREATE TABLE unique_copy.accounts (
                     id BIGINT PRIMARY KEY, tenant BIGINT,
-                    email VARCHAR(80) COLLATE {target_collation}, nickname VARCHAR(40)
+                    email VARCHAR(80) COLLATE {target_collation}, nickname {nickname_target}
                 );
             """)
 
@@ -193,7 +230,7 @@ def main():
             worker = project + '-cut-worker'
             compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/unique.yml')
             try:
-                expected_rows = '5' if args.only_restoration_plan else '4'
+                expected_rows = '5' if restoration_profile else '4'
                 wait_for(lambda: postgres("SELECT count(*) FROM unique_copy.accounts") == expected_rows,
                          'waiting for the managed snapshot', seconds=100)
                 stage = cli('validate-stage', '/fixture/reports', 'pg').stdout
@@ -209,6 +246,9 @@ def main():
 
                 if args.only_restoration_plan:
                     verify_restoration_plan(cli, review_args)
+                    return
+                if args.only_restore_execution:
+                    verify_restore_execution(cli, review_args)
                     return
 
                 compose('stop', 'source')
@@ -312,12 +352,202 @@ def main():
             refused('UNIQUE_RESTORE_SOURCE_CUT_CHANGED')
             passed('A new source GTID invalidates the restoration plan even when the reviewed table content is unchanged')
 
+        def verify_restore_execution(cli, review_args):
+            mysql('SET GLOBAL super_read_only=ON')
+            review = json.loads(cli('review-unique', *review_args).stdout)
+            table = next(row for row in review['indexes'] if row['sourceIndex'] == 'uq_email')['tableId']
+            freeze_ack = '--acknowledge-exclusive-freeze'
+            actor = 'fixture-migration-operator'
+            bytes_before = postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a")
+            checkpoint_before = postgres("SELECT epoch,stream_seq FROM unique_meta.rm3_sink_job; "
+                                         "SELECT run_state,epoch,next_seq FROM unique_journal.rm3_job")
+
+            def planned(index):
+                args = (*review_args, table, index)
+                return args, json.loads(cli('plan-unique-restore', *args).stdout)
+
+            def restored(args, plan, request, check=True, entered_digest=None, entered_actor=actor, ack=freeze_ack):
+                return cli('restore-unique', *args, entered_digest if entered_digest is not None else plan['planSha256'],
+                           request, entered_actor, ack, check=check)
+
+            def require_refusal(answer, *codes):
+                assert answer.returncode != 0 and not answer.stdout.strip()
+                if not any(code in answer.stderr for code in codes):
+                    match = re.search(r"Exception: ([A-Z][A-Z0-9_]{2,95})\n", answer.stderr)
+                    report['unexpectedRefusalCode'] = match.group(1) if match else 'NO_TYPED_STATUS'
+                    raise AssertionError((codes, report['unexpectedRefusalCode']))
+
+            def constraint_count(name):
+                assert name.isascii() and name.replace('_', '').isalnum()
+                return postgres("SELECT count(*) FROM pg_constraint WHERE conrelid='unique_copy.accounts'::regclass "
+                                f"AND conname='{name}'")
+
+            def receipt_count():
+                return postgres("SELECT count(*) FROM unique_meta.rm3_sink_unique_restore")
+
+            def unchanged():
+                assert bytes_before == postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a")
+                assert checkpoint_before == postgres("SELECT epoch,stream_seq FROM unique_meta.rm3_sink_job; "
+                                                     "SELECT run_state,epoch,next_seq FROM unique_journal.rm3_job")
+
+            plan_args, plan = planned('uq_email')
+            constraint = plan['plan']['targetEvidence']['proposedConstraint']
+            request = str(uuid.uuid4())
+            require_refusal(restored(plan_args, plan, request, check=False), 'UNIQUE_RESTORE_SOURCE_FREEZE_NOT_PERSISTED')
+            assert constraint_count(constraint) == '0'
+            assert postgres("SELECT to_regclass('unique_meta.rm3_sink_unique_restore')::text") == ''
+            passed('Runtime-only MySQL freeze cannot admit DDL or create a receipt')
+
+            mysql('SET PERSIST read_only=ON; SET PERSIST super_read_only=ON')
+            require_refusal(restored(plan_args, plan, request, check=False, ack='unacknowledged'),
+                            'UNIQUE_RESTORE_EXCLUSIVE_FREEZE_ACK_REQUIRED')
+            require_refusal(restored(plan_args, plan, request, check=False, entered_digest='0' * 64),
+                            'UNIQUE_RESTORE_PLAN_CHANGED')
+            assert constraint_count(constraint) == '0'
+            unchanged()
+            passed('Execution requires explicit exclusive freeze acknowledgement and the exact reviewed digest')
+
+            postgres("""CREATE FUNCTION unique_copy.noop_event() RETURNS event_trigger LANGUAGE plpgsql
+                        AS $$ BEGIN RETURN; END $$;
+                        CREATE EVENT TRIGGER fixture_event ON ddl_command_start EXECUTE FUNCTION unique_copy.noop_event()""")
+            require_refusal(restored(plan_args, plan, request, check=False), 'UNIQUE_RESTORE_TARGET_EVENT_TRIGGER_PRESENT')
+            assert constraint_count(constraint) == '0'
+            postgres('DROP EVENT TRIGGER fixture_event; DROP FUNCTION unique_copy.noop_event()')
+            passed('An enabled PostgreSQL event trigger prevents any managed DDL')
+
+            with ThreadPoolExecutor(max_workers=3) as background:
+                guard_name = 'unique_business_reader'
+                holder = background.submit(compose, 'exec', '-T', '-e', f'PGAPPNAME={guard_name}', 'target', 'psql',
+                                           '-X', '-q', '-U', 'postgres', '-d', 'preview', '-c',
+                                           'BEGIN; LOCK TABLE unique_copy.accounts IN ACCESS SHARE MODE; SELECT pg_sleep(30)',
+                                           check=False)
+                try:
+                    wait_for(lambda: postgres("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE "
+                                               f"application_name='{guard_name}' AND wait_event='PgSleep')") == 't',
+                             'holding a live table read lock')
+                    first = background.submit(restored, plan_args, plan, request, check=False)
+                    wait_for(lambda: postgres("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE "
+                                               "relation='unique_copy.accounts'::regclass AND mode='AccessExclusiveLock' "
+                                               "AND NOT granted)") == 't', 'observing the first exclusive write lock')
+                    second = background.submit(restored, plan_args, plan, request, check=False)
+                finally:
+                    postgres(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name='{guard_name}'")
+                    holder.result(timeout=45)
+                responses = [first.result(timeout=80), second.result(timeout=80)]
+            successes = [json.loads(response.stdout) for response in responses if response.returncode == 0]
+            for response in responses:
+                if response.returncode != 0:
+                    require_refusal(response, 'VALIDATION_REPORT_BUSY', 'SQL_55P03')
+            assert len([result for result in successes if not result['replayed']]) == 1
+            confirmed = json.loads(restored(plan_args, plan, request).stdout)
+            assert confirmed['status'] == 'UNIQUE_RESTORED' and confirmed['acknowledged'] and confirmed['replayed']
+            assert all(result['acknowledged'] and result['receipt'] == confirmed['receipt'] for result in successes)
+            assert 'sensitive-mail' not in json.dumps(confirmed).lower()
+            assert receipt_count() == '1' and constraint_count(constraint) == '1'
+            ordinary = plan['plan']['targetEvidence']['ordinaryIndex']
+            assert ordinary.isascii() and ordinary.replace('_', '').isalnum()
+            assert postgres("SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid "
+                            "WHERE i.indrelid='unique_copy.accounts'::regclass AND NOT i.indisunique "
+                            f"AND c.relname='{ordinary}'") == '1'
+            postgres("""DO $$ BEGIN
+                          BEGIN
+                            INSERT INTO unique_copy.accounts VALUES (99,1,'Sensitive-Mail@example.com','tmp');
+                            RAISE EXCEPTION 'UNIQUE was not enforced';
+                          EXCEPTION WHEN unique_violation THEN NULL;
+                          END;
+                        END $$""")
+            unchanged()
+            passed('Concurrent identical approvals produce one native enforced constraint and one matching receipt under the held locks')
+
+            second_args, second_plan = planned('uq_scope')
+            second_constraint = second_plan['plan']['targetEvidence']['proposedConstraint']
+            second_request = str(uuid.uuid4())
+            with (ThreadPoolExecutor(max_workers=1) as background,
+                  sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'preview') as holder,
+                  sql_session('source', 'bash', '-c',
+                              'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -NB --unbuffered') as killer):
+                assert exchange_sql(holder, "BEGIN; LOCK TABLE unique_meta.rm3_sink_unique_restore IN SHARE MODE; SELECT 'HELD';") == 'HELD'
+                assert exchange_sql(killer, "SELECT 'READY';") == 'READY'
+                interrupted = background.submit(restored, second_args, second_plan, second_request, check=False)
+                try:
+                    session = wait_for(lambda: int(exchange_sql(killer, """
+                        SELECT COALESCE(MAX(t.PROCESSLIST_ID),0) FROM performance_schema.user_variables_by_thread v
+                          JOIN performance_schema.threads t ON t.THREAD_ID=v.THREAD_ID
+                         WHERE v.VARIABLE_NAME='rivomesh_unique_freeze_session';
+                        """)) or None, 'pinning the exact freeze session')
+                    wait_for(lambda: exchange_sql(holder, "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE "
+                                               "relation='unique_meta.rm3_sink_unique_restore'::regclass "
+                                               "AND mode='RowExclusiveLock' AND NOT granted);") == 't',
+                             'observing receipt insertion after PostgreSQL DDL')
+                    assert exchange_sql(killer, f"KILL CONNECTION {session}; SELECT 'KILLED';") == 'KILLED'
+                finally:
+                    assert exchange_sql(holder, "ROLLBACK; SELECT 'RELEASED';") == 'RELEASED'
+                interrupted_answer = interrupted.result(timeout=70)
+            assert receipt_count() == '1' and constraint_count(second_constraint) == '0'
+            unchanged()
+            report['postDdlSourceLossRollbackObserved'] = True
+            require_refusal(interrupted_answer, 'UNIQUE_RESTORE_SOURCE_FENCE_LOST', 'UNIQUE_RESTORE_SOURCE_IDENTITY_CHANGED',
+                            'UNIQUE_RESTORE_SOURCE_FREEZE_EXPIRED')
+            passed('Losing the exact MySQL session after PostgreSQL DDL rolls the constraint and its receipt back together')
+
+            require_refusal(restored(plan_args, plan, request, check=False, entered_actor='other-operator'),
+                            'UNIQUE_RESTORE_APPROVAL_CONFLICT')
+            require_refusal(restored(plan_args, plan, str(uuid.uuid4()), check=False), 'UNIQUE_RESTORE_APPROVAL_CONFLICT')
+            passed('Receipt replay rejects a changed approval actor and a second request for the same UNIQUE')
+
+            if args.verify_unknown_commit:
+                assert postgres("SHOW synchronous_standby_names") == ''
+                postgres("ALTER SYSTEM SET synchronous_standby_names='fixture_missing'")
+                try:
+                    postgres("SELECT pg_reload_conf()")
+                    wait_for(lambda: postgres("SHOW synchronous_standby_names") == 'fixture_missing',
+                             'enabling the fixture commit stall')
+                    with ThreadPoolExecutor(max_workers=1) as background:
+                        lost = background.submit(restored, second_args, second_plan, second_request, check=False)
+                        pid = int(wait_for(lambda: postgres("""
+                            SELECT a.pid FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
+                             WHERE a.wait_event='SyncRep' AND l.relation='unique_copy.accounts'::regclass
+                               AND l.mode='AccessExclusiveLock' AND l.granted
+                            """), 'waiting for locally flushed restoration COMMIT'))
+                        assert postgres(f"SELECT pg_terminate_backend({pid})") == 't'
+                        require_refusal(lost.result(timeout=50), 'UNIQUE_RESTORE_COMMIT_UNKNOWN')
+                finally:
+                    postgres("ALTER SYSTEM RESET synchronous_standby_names")
+                    postgres("SELECT pg_reload_conf()")
+                wait_for(lambda: postgres("SHOW synchronous_standby_names") == '', 'releasing the fixture commit stall')
+                resolved = json.loads(restored(second_args, second_plan, second_request).stdout)
+                assert resolved['replayed'] and resolved['acknowledged'] and receipt_count() == '2'
+                assert constraint_count(second_constraint) == '1'
+                unchanged()
+                passed('A lost PostgreSQL commit response reports UNKNOWN and exact request replay resolves the locally durable receipt')
+
+            source_id = mysql('SELECT @@global.server_uuid')
+            compose('restart', 'source')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'source')
+            assert mysql('SELECT @@global.server_uuid') == source_id
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only AND @@global.persisted_globals_load') == '1'
+            if args.verify_unknown_commit:
+                require_refusal(cli('plan-unique-restore', *second_args, check=False), 'UNIQUE_RESTORE_SOURCE_CUT_CHANGED')
+            else:
+                require_refusal(restored(second_args, second_plan, second_request, check=False), 'UNIQUE_RESTORE_SOURCE_CUT_CHANGED')
+                assert constraint_count(second_constraint) == '0'
+            passed('MySQL restart retains its persisted write fence and invalidates the previous binlog cut')
+
+            compose('stop', 'source')
+            compose('restart', 'target')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'target')
+            replay = json.loads(restored(plan_args, plan, request).stdout)
+            assert replay['replayed'] and replay['acknowledged'] and replay['receipt'] == confirmed['receipt']
+            assert receipt_count() == ('2' if args.verify_unknown_commit else '1') and constraint_count(constraint) == '1'
+            unchanged()
+            passed('PostgreSQL restart and an offline source retain exact native receipt and constraint replay')
+
         try:
             compose('up', '-d', '--wait', '--wait-timeout', '140', 'source', 'target')
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_constraints or args.only_restoration_plan:
+            if args.only_constraints or restoration_profile:
                 constraint_review()
                 report['status'] = 'PASS'
                 return

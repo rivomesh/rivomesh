@@ -53,7 +53,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 tracks remaining Java 21 combinations. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
 | SO-06 | P1 / PARTIAL | PostgreSQL source adapter | PostgreSQL 17.12 passed snapshot, failover-slot continuation and old-timeline refusal. 18.7 passed stored generated columns. Broader types, DDL and multi-target common cuts remain. |
-| SO-07 | P1 / PARTIAL | Oracle source adapter | Oracle 26ai archived LogMiner to PostgreSQL passed single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain. |
+| SO-07 | P1 / PARTIAL | Oracle source adapter | Temurin 21 verified Oracle 26ai single-PDB long transactions, archived SCN restart, strict text JSON and civil DATE to PostgreSQL. Native binary JSON, LOB, generated columns and RAC failover remain. |
 
 ## Java runtime compatibility
 
@@ -61,7 +61,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
 | JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 passed four single-primary MySQL releases, MySQL 8.4.13 async GTID primary failover with two SQL destinations, PostgreSQL 17/18 and single-PDB Oracle profiles. More topologies, destinations, TLS and recovery combinations remain. |
-| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified external MySQL JDBC admission and rolling restart, and PostgreSQL-to-PostgreSQL TLS 1.3 with CA/hostname refusal and verified reconnect. Additional vendors, TLS policies and recovery profiles remain. |
+| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified external MySQL JDBC, PostgreSQL endpoint TLS, and MySQL snapshot/binlog/destination TLS 1.3 with certificate identity refusal and reconnect. Further vendors and profiles remain. |
 | JV-04 | P1 / DONE | Java 21 deployment and rolling replacement | Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence. |
 
 ## Complete documentation
@@ -79,7 +79,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | Domestic transactional database matrix | OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain. |
-| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Native nonempty PostgreSQL preview and frozen-MySQL read-only UNIQUE plans passed. Reviewed plans reject index, data or GTID drift. Adoption, constraint execution, writer cutover and failback remain. |
+| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Nonempty comparison and actual frozen-MySQL UNIQUE restoration with a same-database PostgreSQL journal passed, including rollback and uncertain-commit reconciliation. Formal adoption, multi-target constraints, writer handover and failback remain. |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local and external journals are available. Two Agents verified exact report and closed receipt custody on a shared mount. Original events, failure evidence and actual transfer remain. |

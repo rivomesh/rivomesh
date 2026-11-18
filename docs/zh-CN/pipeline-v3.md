@@ -78,6 +78,12 @@ MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿
 
 Java 21 实库档案使用 MySQL 8.4.13 异步 GTID 主备、外部 PostgreSQL 日志、两个管理入口和 PostgreSQL、MySQL 目标。强杀原主后，两入口显示采集中断，两个目标断点保持原值。外部流程完成提升后，Rivomesh 把新主的 GTID 自动投递到两个目标，并复用配置修订、日志代次和快照 ID。复现命令为 `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <发布包> --output target/mysql-async-proof`。[验收归档](../verification/README.md)
 
+### MySQL 采集和投递的 TLS 验证
+
+在 `source.sslMode` 设置 `VERIFY_IDENTITY` 供 binlog 采集使用，在 `source.jdbcOptions` 加入 `sslMode=VERIFY_IDENTITY` 供发现和快照读取使用。每个 MySQL 目标单独设置 JDBC URL 和 TLS 参数。把签发证书的 CA 根证书加入执行 JDK 信任库，Agent 和它启动的 Worker 都应能读取。源候选节点和目标 URL 使用与证书匹配的 DNS 名称。binlog 的证书验证模式由 JDK 协商协议，可连接仅启用 TLS 1.3 的 MySQL。[Connector/J TLS 参数](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)
+
+MySQL 8.4.13 实测 binlog 和目标 JDBC 会话使用 TLS 1.3，预检拒绝错误的源域名。强杀重启后从原 GTID 和快照续传，目标数据逐行一致。复现命令为 `python3 tests/mysql-tls-run.py --java-home <Temurin 21 目录> --artifact <发布包> --output target/mysql-tls-proof`。[验收归档](../verification/README.md)
+
 ## 使用 PostgreSQL 日志接管独立 Worker
 
 新建独立 MySQL 同步任务时，将 `journal.mode` 设为 `EXTERNAL`，`journal.product` 设为 `POSTGRESQL`，并为 `journal.writerAssignment` 生成新的 UUID。该流程支持最多八个 PostgreSQL/MySQL 目标和 256 张源表。两个 Worker 都应能连接原日志库、目标元数据和源日志。单独生成的校验报告保存在自己的私有目录中。

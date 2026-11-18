@@ -102,6 +102,28 @@ final class MysqlUniqueFreeze implements AutoCloseable {
         return sqlMode;
     }
 
+    void verifyDurable() throws SQLException {
+        verify();
+        try (Statement statement = connection.createStatement()) {
+            statement.setQueryTimeout(3);
+            try (ResultSet row = statement.executeQuery("""
+                    SELECT @@global.persisted_globals_load,@@global.read_only,@@global.super_read_only,
+                           @rivomesh_unique_freeze_session,
+                           (SELECT COUNT(*) FROM performance_schema.persisted_variables
+                             WHERE VARIABLE_NAME IN ('read_only','super_read_only')
+                               AND UPPER(VARIABLE_VALUE) IN ('ON','1'))
+                    """)) {
+                if (!row.next() || !marker.equals(row.getString(4))) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_SOURCE_IDENTITY_CHANGED");
+                }
+                if (!row.getBoolean(1) || !row.getBoolean(2) || !row.getBoolean(3) || row.getInt(5) != 2) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_SOURCE_FREEZE_NOT_PERSISTED");
+                }
+            }
+        }
+        checkDeadline();
+    }
+
     RepairProbe.Result scan(TableSchema table, RepairProbe probe) throws Exception {
         String sqlMode = verify();
         try (PreparedStatement shape = connection.prepareStatement("SELECT 1 FROM information_schema.TABLES "

@@ -49,9 +49,23 @@ java -jar rivomesh.jar plan-unique-restore config/task.yml /private/reports <rep
 
 候选键支持映射成 PostgreSQL `bigint` 的有符号整数，或源端 `utf8mb4_0900_bin` VARCHAR 映射到显式使用 `pg_catalog."C"` 的 PostgreSQL `varchar` 或 `text`。检查已有普通 B-tree 索引的列、顺序、排序规则和默认操作符类。GSI、表达式索引及生成键列需要单独规划。此档案按原有语义识别大小写、尾随空格和 NULL。[MySQL 二进制排序规则](https://dev.mysql.com/doc/refman/8.4/en/charset-binary-collations.html) · [PostgreSQL 唯一索引](https://www.postgresql.org/docs/17/indexes-unique.html)
 
-`RESTORE_PLAN_OBSERVED` 返回稳定的计划 SHA-256 摘要，绑定报告封存值、精确位点、当前表内容和目标物理身份。将输出保存用于人工审阅。核对审阅过的摘要时，以 `--expect-sha256 <digest>` 重跑命令。它会再次核验现场状态，普通索引重建等变化会使旧摘要失效。其他库产生的新 GTID 也会拒绝该校验点。现场重算摘要同时覆盖未写入 binlog 的源端数据修改和目标端外部修改。冻结、目标状态或断点变化后需重新验证。持久审批、执行约束恢复、业务写入交接及回切需要独立验收。
+`RESTORE_PLAN_OBSERVED` 返回稳定的计划 SHA-256 摘要，绑定报告封存值、精确位点、当前表内容、日志库 schema、目标物理身份和时间线。将输出保存用于人工审阅。核对审阅过的摘要时，以 `--expect-sha256 <digest>` 重跑命令。它会再次核验现场状态，普通索引重建等变化会使旧摘要失效。其他库产生的新 GTID 也会拒绝该校验点。现场重算摘要同时覆盖未写入 binlog 的源端数据修改和目标端外部修改。冻结、目标状态或断点变化后需重新验证。
 
-后续持久执行需要建立跨连接中断和源实例重启仍有效的写入隔离，并保持至运维完成业务交接。审批绑定计划摘要、目标身份和请求 ID。执行时重新核对冻结边界，在目标写入锁和断点锁内完成 PostgreSQL 约束事务。DDL 与执行回执在同一事务提交，重启后先查回执确认结果，再决定是否重试。
+## 执行已批准的 PostgreSQL UNIQUE 恢复
+
+此命令行档案要求只有一个目标，且 PostgreSQL 外部日志库和目标使用完全相同的 JDBC URL。运维账号需要锁定日志、目标元数据、业务表和事件触发器目录，并创建约束及写入回执。目标存在已启用的事件触发器时会拒绝执行。维护期间由运维人员独占控制两边数据库的启停、复制、权限和业务写入。
+
+直连的单实例 MySQL 必须已启用并持久保存 `read_only` 和 `super_read_only`，同时开启 `persisted_globals_load`。原主机使用相同数据目录和启动选项重启时会加载持久配置。提交 PostgreSQL 前，Rivomesh 会再次核对这两个持久配置、原源端与 binlog 位点，以及持有短锁的会话。写入隔离应保持至回执确认和另行管理的业务交接完成。[MySQL 持久化系统变量](https://dev.mysql.com/doc/refman/8.4/en/persisted-system-variables.html)
+
+审阅版本 2 的恢复计划后，提供原摘要、保持不变的请求 UUID 及运维人员的审计标识。
+
+```sh
+java -jar rivomesh.jar restore-unique config/task.yml /private/reports <reportId> postgres <tableId> <sourceIndex> <digest> <requestUUID> <actor> --acknowledge-exclusive-freeze
+```
+
+命令在源端冻结保护下重新计算计划。日志校验点、订阅、目标断点、快照、表归属及业务表锁均由同一个 PostgreSQL 事务持有。此事务添加一项已验证、不可延迟的 `UNIQUE NULLS DISTINCT`，保留普通索引，并同时写入批准摘要、操作人、请求 ID 和原生约束回执。PostgreSQL 需开启 `fsync`，事务使用同步提交。业务数据、同步暂停状态及写入归属保持原值。[PostgreSQL ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html)
+
+`UNIQUE_RESTORED` 表示 PostgreSQL 已确认提交，或已核验同一请求的原生回执。`UNIQUE_RESTORE_COMMIT_UNKNOWN` 表示连接未能确认提交结果。保持冻结并保留报告，用完全相同的请求重试来核对回执。操作人、范围或摘要变化会与已有审批冲突。回执对应的约束发生变更时，需要人工复核。业务写入交接及回切仍按独立流程执行。
 
 ### 常见问题
 

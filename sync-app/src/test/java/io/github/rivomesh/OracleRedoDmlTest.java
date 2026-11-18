@@ -1,6 +1,7 @@
 package io.github.rivomesh;
 
 import io.github.rivomesh.cdc.Change;
+import io.github.rivomesh.cdc.RowValues;
 import io.github.rivomesh.cdc.TableSchema;
 import org.junit.jupiter.api.Test;
 
@@ -82,5 +83,47 @@ class OracleRedoDmlTest {
             assertEquals("ORACLE_TEXT_JSON_VALUE_INVALID",
                     assertThrows(IllegalStateException.class,()->OracleTextJson.value(invalid)).getMessage());
         }
+    }
+
+    @Test void keepsOracleDateSecondsAndNullAcrossRedoAndUndo()throws Exception{
+        TableSchema table=table();
+        table.columns.get(1).type=TableSchema.Type.DATETIME;
+        table.columns.get(1).sourceType="DATE";
+        String old="TO_DATE('29-feb-2024 15:17:19','dd-mon-yyyy hh24:mi:ss')";
+        String next="TO_DATE(' 2024-03-10 02:17:19','SYYYY-MM-DD HH24:MI:SS')";
+        String redo="update "+ORDERS+" set \"NOTE\" = "+next+" where \"ID\" = '1' and \"NOTE\" = "+old+";";
+        String undo="update "+ORDERS+" set \"NOTE\" = "+old+" where \"ID\" = '1' and \"NOTE\" = "+next+";";
+        Change changed=OracleRedoDml.decode(table,"UPDATE",redo,undo);
+        assertEquals("2024-02-29 15:17:19",changed.before.get(1).value);
+        assertEquals("2024-03-10 02:17:19",changed.after.get(1).value);
+        assertEquals("2024-03-10T02:17:19",RowValues.decode(RowValues.canonical(table,changed.after)).get(1).value);
+        assertEquals("2024-03-10 00:00:00",OracleDate.snapshotValue(" 2024-03-10 00:00:00"));
+        assertNull(OracleDate.snapshotValue(null));
+
+        Change nulled=OracleRedoDml.decode(table,"UPDATE",redo.replace(next,"NULL"),
+                undo.replace("\"NOTE\" = "+next,"\"NOTE\" IS NULL"));
+        assertNull(nulled.after.get(1).value);
+    }
+
+    @Test void OracleDateRejectsUnknownFormatsAndMismatchedLiteralTypes(){
+        assertEquals("ORACLE_DATE_VALUE_OUT_OF_RANGE",assertThrows(IllegalStateException.class,
+                ()->OracleDate.snapshotValue("-2024-02-29 15:17:19")).getMessage());
+        assertEquals("ORACLE_DATE_VALUE_OUT_OF_RANGE",assertThrows(IllegalStateException.class,
+                ()->OracleDate.snapshotValue(" 1582-10-14 15:17:19")).getMessage());
+        assertEquals("ORACLE_DATE_FORMAT_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                ()->OracleDate.redoValue("01-JAN-24 03:04:05","DD-MON-RR HH24:MI:SS")).getMessage());
+        assertEquals("ORACLE_DATE_FORMAT_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                ()->OracleDate.redoValue("29-FEB-2023 03:04:05","DD-MON-YYYY HH24:MI:SS")).getMessage());
+        String date="TO_DATE(' 2024-02-29 15:17:19','SYYYY-MM-DD HH24:MI:SS')";
+        String redo="insert into "+ORDERS+"(\"ID\",\"NOTE\") values ('2',"+date+");";
+        String undo="delete from "+ORDERS+" where \"ID\" = '2' and \"NOTE\" = "+date+";";
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table(),"INSERT",redo,undo)).getMessage());
+        TableSchema table=table();
+        table.columns.get(1).type=TableSchema.Type.DATETIME;
+        table.columns.get(1).sourceType="DATE";
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table,"INSERT",redo.replace(date,"'2024-02-29 15:17:19'"),
+                        undo.replace(date,"'2024-02-29 15:17:19'"))).getMessage());
     }
 }

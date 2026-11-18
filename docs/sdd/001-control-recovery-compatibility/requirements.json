@@ -1082,8 +1082,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 实测 Oracle 26ai 单 PDB 长事务、原 SCN 恢复与严格文本 JSON 到 PostgreSQL JSONB。原生二进制 JSON、LOB、生成列、RAC 和切主待验收。",
-        "en": "Temurin 21 verified Oracle 26ai single-PDB long transactions, original-SCN recovery, and strict textual JSON to PostgreSQL JSONB. Binary JSON, LOBs, generated columns, RAC and promotion remain."
+        "zh-CN": "Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。",
+        "en": "Temurin 21 verified Oracle 26ai single-PDB long transactions, archived SCN restart, strict text JSON and civil DATE to PostgreSQL. Native binary JSON, LOB, generated columns and RAC failover remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1102,7 +1102,8 @@
         "sync-app/src/main/java/io/github/rivomesh/OracleArchiveWindow.java",
         "sync-app/src/main/java/io/github/rivomesh/OracleArchiveRead.java",
         "config/oracle-source-v3.yml",
-        "sync-app/src/main/java/io/github/rivomesh/OracleCdcSource.java"
+        "sync-app/src/main/java/io/github/rivomesh/OracleCdcSource.java",
+        "sync-app/src/main/java/io/github/rivomesh/OracleDate.java"
       ]
     },
     {
@@ -1181,8 +1182,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "Java 21 已实测外置 MySQL JDBC 的缺失检查与滚动恢复，以及 PostgreSQL 到 PostgreSQL 的 TLS 1.3、证书/主机名拒绝及安全重连。其余厂商、TLS 协议和恢复组合待验。",
-        "en": "Java 21 verified external MySQL JDBC admission and rolling restart, and PostgreSQL-to-PostgreSQL TLS 1.3 with CA/hostname refusal and verified reconnect. Additional vendors, TLS policies and recovery profiles remain."
+        "zh-CN": "Java 21 已实测外置 MySQL JDBC、PostgreSQL 双端 TLS 与 MySQL 源快照/binlog/SQL 目标 TLS 1.3、证书身份拒绝和重连。其余厂商、证书和恢复档案待验。",
+        "en": "Java 21 verified external MySQL JDBC, PostgreSQL endpoint TLS, and MySQL snapshot/binlog/destination TLS 1.3 with certificate identity refusal and reconnect. Further vendors and profiles remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1195,7 +1196,8 @@
         "tests/verify-artifact.py",
         "docs/zh-CN/performance.md",
         "tests/global-control-pipeline.py",
-        "tests/postgres-source-run.py"
+        "tests/postgres-source-run.py",
+        "tests/mysql-tls-run.py"
       ]
     },
     {
@@ -1459,8 +1461,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "非空 PostgreSQL 差异预检和冻结 MySQL 下的只读 UNIQUE 恢复计划已实测，计划复核拒绝索引、数据或源 GTID 漂移。正式基线、执行约束、写入交接和回切待验。",
-        "en": "Native nonempty PostgreSQL preview and frozen-MySQL read-only UNIQUE plans passed. Reviewed plans reject index, data or GTID drift. Adoption, constraint execution, writer cutover and failback remain."
+        "zh-CN": "非空预检和冻结 MySQL 到同库 PostgreSQL 日志/目标的 UNIQUE 执行已实测，含源故障回滚与未知提交查回。正式接管基线、多目标约束、写入交接及回切待验。",
+        "en": "Nonempty comparison and actual frozen-MySQL UNIQUE restoration with a same-database PostgreSQL journal passed, including rollback and uncertain-commit reconciliation. Formal adoption, multi-target constraints, writer handover and failback remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1475,7 +1477,8 @@
         "docs/zh-CN/gaussdb-index-policy.md",
         "tests/nonempty-target-preview.py",
         "sync-app/src/main/java/io/github/rivomesh/PipelineConstraintReview.java",
-        "sync-app/src/main/java/io/github/rivomesh/PipelineUniqueRestoration.java"
+        "sync-app/src/main/java/io/github/rivomesh/PipelineUniqueRestoration.java",
+        "sync-app/src/main/java/io/github/rivomesh/recovery/UniqueRestoreOperation.java"
       ]
     },
     {

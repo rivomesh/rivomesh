@@ -33,6 +33,8 @@ def required(check, description, timeout=240):
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
     target = oracle + '-pg'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
+    if options.date_values:
+        env['TZ'] = 'America/New_York'
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     platform = None
     long_transaction = None
@@ -81,6 +83,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def row_note():
         return target_sql('SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=1',checked=False)
 
+    def date_rows(table, key=False):
+        value = """COALESCE(TO_CHAR("EVENT_AT",'YYYY-MM-DD HH24:MI:SS'),'<NULL>')"""
+        column = '"ID"||\'|\'||'+value if key else value
+        order = '"ID"' if key else '"EVENT_AT" NULLS LAST'
+        return target_sql(f'SELECT {column} FROM copy_app."{table}" ORDER BY {order}',checked=False).splitlines()
+
     def rotate():
         sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
 
@@ -119,6 +127,24 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         observed('The active Oracle text constraint rejects lax syntax and duplicate object keys')
         rotate()
         source_tables += ['RIVO_APP.RIVO_JSON_ROWS', 'RIVO_APP.RIVO_JSON_KEYLESS']
+    if options.date_values:
+        sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+            CREATE TABLE rivo_app.rivo_date_rows (id NUMBER(12) PRIMARY KEY, event_at DATE);
+            CREATE TABLE rivo_app.rivo_date_keyless (event_at DATE);
+            INSERT INTO rivo_app.rivo_date_rows VALUES
+                (1,TO_DATE('2024-02-29 15:17:19','YYYY-MM-DD HH24:MI:SS'));
+            INSERT INTO rivo_app.rivo_date_rows VALUES (2,NULL);
+            INSERT INTO rivo_app.rivo_date_keyless VALUES
+                (TO_DATE('2024-03-10 02:17:19','YYYY-MM-DD HH24:MI:SS'));
+            INSERT INTO rivo_app.rivo_date_keyless VALUES
+                (TO_DATE('2024-03-10 03:17:19','YYYY-MM-DD HH24:MI:SS'));
+            COMMIT;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_date_rows TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_date_keyless TO C##RIVO_PROBE;
+            ALTER TABLE rivo_app.rivo_date_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            ALTER TABLE rivo_app.rivo_date_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
+        rotate()
+        source_tables += ['RIVO_APP.RIVO_DATE_ROWS','RIVO_APP.RIVO_DATE_KEYLESS']
 
     started=False
     try:
@@ -208,6 +234,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     required(lambda:target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"',checked=False)=='2',
                              'keyless JSON snapshot',90)
                     observed('Flashback materializes strict JSONB, preserves NULL versus JSON null and retains plain VARCHAR2')
+                if options.date_values:
+                    required(lambda:date_rows('RIVO_DATE_ROWS',key=True)==['1|2024-02-29 15:17:19','2|<NULL>']
+                             and date_rows('RIVO_DATE_KEYLESS')==['2024-03-10 02:17:19','2024-03-10 03:17:19'],
+                             'Oracle DATE Flashback snapshot',90)
+                    assert target_sql('SELECT pg_typeof("EVENT_AT")::text FROM copy_app."RIVO_DATE_ROWS" '
+                                      'WHERE "ID"=1')=='timestamp without time zone'
+                    observed('Flashback preserves Oracle DATE leap day, NULL, seconds and two distinct local clocks across a JVM DST gap')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
@@ -228,6 +261,14 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         UPDATE rivo_app.rivo_json_rows SET payload='[true,{"version":2}]' WHERE id=1;
                         DELETE FROM rivo_app.rivo_json_keyless WHERE ROWNUM=1;
                         COMMIT;""")
+                if options.date_values:
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        UPDATE rivo_app.rivo_date_rows SET event_at=NULL WHERE id=1;
+                        UPDATE rivo_app.rivo_date_rows SET
+                            event_at=TO_DATE('2024-03-10 02:17:19','YYYY-MM-DD HH24:MI:SS') WHERE id=2;
+                        DELETE FROM rivo_app.rivo_date_keyless
+                            WHERE event_at=TO_DATE('2024-03-10 02:17:19','YYYY-MM-DD HH24:MI:SS');
+                        COMMIT;""")
                 rotate()
                 required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
                 observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
@@ -236,6 +277,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
                              'Oracle archived JSON update and keyless removal',60)
                     observed('Archived JSON updates and a keyless JSON delete preserve typed values and one occurrence')
+                if options.date_values:
+                    required(lambda:date_rows('RIVO_DATE_ROWS',key=True)==['1|<NULL>','2|2024-03-10 02:17:19']
+                             and date_rows('RIVO_DATE_KEYLESS')==['2024-03-10 03:17:19'],
+                             'Oracle DATE archived redo and undo',60)
+                    observed('Archived redo and undo preserve Oracle DATE and NULL, and identify the exact keyless row across the DST gap')
 
                 stop_platform(force=True)
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
@@ -246,6 +292,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                         INSERT INTO rivo_app.rivo_json_rows VALUES (4,'{"after":"restart"}',NULL);
                         UPDATE rivo_app.rivo_json_keyless SET "payload"='{"value":8}';
+                        COMMIT;""")
+                if options.date_values:
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        INSERT INTO rivo_app.rivo_date_rows VALUES(3,DATE '2025-01-01');
+                        UPDATE rivo_app.rivo_date_keyless
+                            SET event_at=TO_DATE('2024-03-10 02:11:00','YYYY-MM-DD HH24:MI:SS');
                         COMMIT;""")
                 rotate()
                 required_sql='SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=4'
@@ -262,6 +314,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              'Oracle archived JSON restart',60)
                     assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                     observed('JSON CDC resumes after SIGKILL with the original Flashback snapshot IDs')
+                if options.date_values:
+                    required(lambda:date_rows('RIVO_DATE_ROWS',key=True)==
+                             ['1|<NULL>','2|2024-03-10 02:17:19','3|2025-01-01 00:00:00']
+                             and date_rows('RIVO_DATE_KEYLESS')==['2024-03-10 02:11:00'],
+                             'Oracle DATE archived restart',60)
+                    assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+                    observed('Oracle DATE offline insert and keyless update resume after SIGKILL with original snapshot IDs')
 
                 durable=progress()['capture_scn']
                 sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
@@ -270,6 +329,24 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                 'Oracle DDL accepted as a typed refusal',60)
                 assert result['capture_scn']==durable and result['error_stage']=='DDL'
                 observed('Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase')
+                if options.date_values:
+                    start=sql('SELECT current_scn FROM v$database;').stdout.strip()
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        INSERT INTO rivo_app.rivo_date_rows VALUES
+                            (4,TO_DATE('1900-01-02 03:04:05 BC','YYYY-MM-DD HH24:MI:SS AD','NLS_DATE_LANGUAGE=AMERICAN'));
+                        COMMIT;""")
+                    end=sql('SELECT current_scn FROM v$database;').stdout.strip()
+                    assert start.isdecimal() and end.isdecimal() and int(end)>int(start)
+                    rotate()
+                    probe=folder/'date-boundary.json'
+                    probe.write_text(json.dumps({
+                        'sourceId':'oracle-date-boundary','pdbName':'FREEPDB1','root':endpoint(root_service),
+                        'pdb':endpoint(pdb_service),'tables':['RIVO_APP.RIVO_DATE_ROWS'],
+                        'archiveWindow':{'startScn':start,'endScnExclusive':end,'decodeCommitted':True},
+                    }))
+                    denied=execute(*program,'probe-oracle',str(probe),env=env,checked=False)
+                    assert denied.returncode and 'ORACLE_DATE_VALUE_OUT_OF_RANGE' in denied.stderr, denied.stderr
+                    observed('A BCE Oracle DATE is refused in a closed native archive without losing its sign')
             finally:
                 stop_platform()
                 for path in (folder/'state'/'logs').glob('*.log'):
@@ -294,12 +371,15 @@ def main():
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
     parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
     parser.add_argument('--text-json', action='store_true', help='Also verify constrained VARCHAR2 to PostgreSQL JSONB')
+    parser.add_argument('--date-values', action='store_true', help='Also verify Oracle DATE to PostgreSQL TIMESTAMP')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     if options.pipeline and not options.logminer:
         parser.error('--pipeline requires --logminer')
     if options.text_json and not options.pipeline:
         parser.error('--text-json requires --pipeline')
+    if options.date_values and not options.pipeline:
+        parser.error('--date-values requires --pipeline')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -308,7 +388,7 @@ def main():
     report = {'artifactSha256': hashlib.sha256(options.artifact.read_bytes()).hexdigest(),
               'driverSha256': hashlib.sha256(options.jdbc_driver.read_bytes()).hexdigest(),
               'image': options.image, 'runtimeVersion': execute(options.java,'-version').stderr.splitlines()[0],
-              'textJson': options.text_json, 'checks': [], 'status': 'FAIL'}
+              'textJson': options.text_json, 'dateValues': options.date_values, 'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
         script = ('SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 32767 VERIFY OFF\n'

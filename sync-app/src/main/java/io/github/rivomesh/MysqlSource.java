@@ -1,5 +1,8 @@
 package io.github.rivomesh;
 
+import com.github.shyiko.mysql.binlog.BinaryLogClient;
+import com.github.shyiko.mysql.binlog.network.DefaultSSLSocketFactory;
+import com.github.shyiko.mysql.binlog.network.SSLMode;
 import io.github.rivomesh.Model.*;
 import java.sql.*;
 import java.util.*;
@@ -15,6 +18,18 @@ public final class MysqlSource {
     String identity() { return expected == null ? null : expected.uuid; }
     long serverId() { return expected == null ? 0 : expected.serverId; }
     boolean isKnownNonGroupWriter() { return expected != null && !expected.groupMember; }
+
+    BinaryLogClient binlogClient() {
+        Config.Source settings = config.source;
+        BinaryLogClient client = new BinaryLogClient(endpoint.host, endpoint.port, settings.username, settings.password);
+        SSLMode mode = SSLMode.valueOf(settings.sslMode);
+        client.setSSLMode(mode);
+        if (mode == SSLMode.VERIFY_CA || mode == SSLMode.VERIFY_IDENTITY) {
+            // Use the JDK's enabled TLS protocols and default trust managers for verified connections.
+            client.setSslSocketFactory(new DefaultSSLSocketFactory("TLS"));
+        }
+        return client;
+    }
 
     public Connection connect() throws SQLException {
         Config.Source s = config.source;

@@ -1,7 +1,10 @@
 package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.JdbcConnections;
+import io.github.rivomesh.OracleDate;
+import io.github.rivomesh.PipelineValidationBarrier;
 import io.github.rivomesh.TargetOwnership;
+import io.github.rivomesh.recovery.UniqueRestoreOperation;
 import io.github.rivomesh.repair.*;
 import io.github.rivomesh.validation.ValidationStore;
 import java.nio.file.Path;
@@ -566,7 +569,10 @@ public final class JdbcSink implements SinkAdapter {
                     case BYTES:case GEOMETRY:matches=Arrays.asList(Types.BINARY,Types.VARBINARY,Types.LONGVARBINARY,Types.BLOB).contains(jdbc);break;
                     case JSON:matches=actual.equals(mysql()?"json":"jsonb")||(settings.product==TargetProduct.H2||dm())&&jdbc==Types.CLOB;break;
                     case DATE:matches=jdbc==Types.DATE||(settings.product==TargetProduct.GAUSS||dm())&&jdbc==Types.TIMESTAMP;break;
-                    case DATETIME:case TIMESTAMP:matches=jdbc==Types.TIMESTAMP&&temporalPrecision(c,table,col,m.getScale(i+1))>=6;break;
+                    case DATETIME:case TIMESTAMP:
+                        matches=jdbc==Types.TIMESTAMP&&temporalPrecision(c,table,col,m.getScale(i+1))>=6
+                                &&(!OracleDate.isColumn(col)||actual.equals("timestamp"));
+                        break;
                     case TIME:matches=mysql()?jdbc==Types.TIME:settings.product==TargetProduct.H2?jdbc==Types.VARCHAR:dm()?actual.equals("interval day to second")&&m.getPrecision(i+1)>=2&&m.getScale(i+1)>=6:actual.equals("interval");break;
                     default:matches=false;
                 }
@@ -642,7 +648,10 @@ public final class JdbcSink implements SinkAdapter {
             case BOOLEAN:if(!Arrays.asList("true","false","1","0").contains(v))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");p.setBoolean(n,v.equals("true")||v.equals("1"));break;
             case BYTES:case GEOMETRY:p.setBytes(n,Base64.getDecoder().decode(v));break;
             case DATE:p.setDate(n,java.sql.Date.valueOf(v));break;
-            case DATETIME:case TIMESTAMP:p.setTimestamp(n,Timestamp.valueOf(v));break;
+            case DATETIME:case TIMESTAMP:
+                if(settings.product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
+                else p.setTimestamp(n,Timestamp.valueOf(v));
+                break;
             case JSON:if(mysql()||dm()||settings.product==TargetProduct.H2)p.setString(n,JsonValues.text(v));else p.setObject(n,JsonValues.text(v),Types.OTHER);break;
             case TIME:if(dm())p.setString(n,DmStorage.interval(v));else if(mysql()||settings.product==TargetProduct.H2)p.setString(n,v);else p.setObject(n,v,Types.OTHER);break;
             default:p.setString(n,v);
@@ -696,44 +705,201 @@ public final class JdbcSink implements SinkAdapter {
         if (settings.product != TargetProduct.POSTGRESQL || expected == null) {
             throw new IllegalArgumentException("UNIQUE_RESTORE_TARGET_PROFILE_UNSUPPORTED");
         }
-        IndexPolicy.Decision index = uniqueReviewPlans(model).stream()
-                .filter(candidate -> candidate.sourceName.equals(sourceIndex) && "DOWNGRADE_UNIQUE".equals(candidate.action))
-                .findFirst().orElseThrow(() -> new IllegalStateException("UNIQUE_RESTORE_INDEX_UNSUPPORTED"));
-        String constraint = "rm_u_" + index.targetName.substring("rm_".length());
-        String schema = destination(model);
-        String relation = table(model);
+        IndexPolicy.Decision index = uniqueRestorationIndex(model, sourceIndex);
         try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, maximumMillis)) {
             c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             try (JdbcTargetRead reader = new JdbcTargetRead(c, model, settings.product, validationSql(model),
                     rowBytes, maximumMillis, connection -> {
-                        try (Statement sql = connection.createStatement()) {
-                            sql.execute("SET LOCAL search_path TO pg_catalog");
-                            sql.execute("SET LOCAL row_security TO off");
-                            sql.execute("SET LOCAL statement_timeout TO " + maximumMillis);
-                            sql.execute("SET LOCAL lock_timeout TO '2s'");
-                            sql.execute("LOCK TABLE ONLY " + relation + " IN SHARE MODE");
-                        }
-                        Checkpoint actual = locked(connection, expected.epoch);
-                        if (!Codec.encode(actual).equals(Codec.encode(expected))) {
-                            throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");
-                        }
-                        if (!"COMPLETE".equals(snapshotCheckpoint(connection, model).state)) {
-                            throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");
-                        }
-                        verifyUniqueReviewTable(connection, model);
+                        uniqueRestoreSession(connection, maximumMillis);
+                        lockUniqueTable(connection, model, "SHARE");
+                        verifyUniqueRestoreTarget(connection, expected, model, false);
                     })) {
-                RepairProbe.Result rows = scanRepair(reader, probe);
-                String physicalHash = PostgresUniqueRestoreEvidence.observe(c, schema, model, index, constraint);
-                if (uniqueConflicts(c, model, index, schema, relation).duplicateGroups() != 0) {
-                    throw new IllegalStateException("UNIQUE_RESTORE_DUPLICATES_FOUND");
-                }
+                UniqueRestoreObservation observation = observeUniqueRestore(c, model, index, scanRepair(reader, probe));
                 reader.verify();
                 fence.verify();
                 guard.verify();
-                return new UniqueRestoreObservation(schema, model.name, index.columns, index.targetName,
-                        constraint, physicalHash, rows.rows, rows.root);
+                return observation;
             }
         }
+    }
+
+    public record UniqueRestoreExecution(UniqueRestoreOperation.Receipt receipt, boolean replayed) {}
+
+    @FunctionalInterface
+    public interface CheckUniqueApproval {
+        void verify(UniqueRestoreObservation observed) throws Exception;
+    }
+
+    public UniqueRestoreExecution replayUniqueRestoration(TableSchema model, UniqueRestoreOperation.Approval approval,
+                                                         long maximumMillis) throws Exception {
+        verifyUniqueRestoreScope(model, approval);
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, maximumMillis)) {
+            c.setAutoCommit(false);
+            uniqueRestoreSession(c, maximumMillis);
+            locked(c, null);
+            UniqueRestoreOperation.Receipt receipt = priorUniqueRestore(c, model, approval);
+            guard.verify();
+            c.rollback();
+            return receipt == null ? null : new UniqueRestoreExecution(receipt, true);
+        }
+    }
+
+    /** Cut, target checkpoint, table DDL and native operation receipt share one PostgreSQL transaction. */
+    public UniqueRestoreExecution executeUniqueRestoration(JdbcJournal journal, PipelineValidationBarrier.Certificate cut,
+                                                           TableSchema model, UniqueRestoreOperation.Approval approval,
+                                                           RepairProbe probe, int rowBytes, long maximumMillis,
+                                                           CheckUniqueApproval checkApproval) throws Exception {
+        verifyUniqueRestoreScope(model, approval);
+        if (!settings.url.equals(journal.settings.url) || !settings.driver.equals(journal.settings.driver)
+                || !settings.pipelineId.equals(journal.settings.pipelineId)) {
+            throw new IllegalStateException("UNIQUE_RESTORE_SHARED_DATABASE_REQUIRED");
+        }
+        Checkpoint expected = cut.targetCheckpoints.get(settings.id);
+        if (expected == null) throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");
+        IndexPolicy.Decision index = uniqueRestorationIndex(model, approval.sourceIndex());
+        UniqueRestoreExecution acknowledged = null;
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, maximumMillis)) {
+            // A waiter must see the previous commit after acquiring the journal/target lock pair.
+            c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+            c.setAutoCommit(false);
+            uniqueRestoreSession(c, maximumMillis);
+            Map<String,Object> job = journal.locked(c);
+            locked(c, null);
+            UniqueRestoreOperation.Receipt prior = priorUniqueRestore(c, model, approval);
+            if (prior != null) {
+                guard.verify();
+                c.rollback();
+                return new UniqueRestoreExecution(prior, true);
+            }
+            requireUniqueRestoreCut(c, journal, job, cut);
+            lockUniqueTable(c, model, "ACCESS EXCLUSIVE");
+            verifyUniqueRestoreTarget(c, expected, model, true);
+            PostgresUniqueRestoreEvidence.requireSafeDdlSession(c);
+            try (JdbcTargetRead reader = new JdbcTargetRead(c, model, settings.product, validationSql(model),
+                    rowBytes, maximumMillis, connection -> guard.verify())) {
+                UniqueRestoreObservation observed = observeUniqueRestore(c, model, index, scanRepair(reader, probe));
+                checkApproval.verify(observed);
+                try (Statement sql = c.createStatement()) {
+                    List<String> keys = observed.columns.stream().map(this::q).toList();
+                    sql.execute("ALTER TABLE ONLY " + table(model) + " ADD CONSTRAINT " + q(observed.proposedConstraint)
+                            + " UNIQUE NULLS DISTINCT (" + String.join(",", keys) + ") NOT DEFERRABLE");
+                }
+                String nativeHash = PostgresUniqueRestoreEvidence.restoredConstraint(c, observed.schema, observed.table,
+                        observed.proposedConstraint, observed.columns);
+                UniqueRestoreOperation.Receipt receipt = new UniqueRestoreOperation.Receipt(approval, observed.schema,
+                        observed.table, observed.columns, observed.proposedConstraint, nativeHash, java.time.Instant.now().toString());
+                new PostgresUniqueRestoreLedger(settings.metadataSchema).insert(c, receipt);
+                reader.verify();
+                guard.verify();
+                checkApproval.verify(observed);
+                guard.verify();
+                try {
+                    c.commit();
+                    acknowledged = new UniqueRestoreExecution(receipt, false);
+                } catch (SQLException uncertain) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_COMMIT_UNKNOWN");
+                }
+            }
+        } catch (Exception failure) {
+            if (acknowledged == null) throw failure;
+        }
+        return acknowledged;
+    }
+
+    private void requireUniqueRestoreCut(Connection c, JdbcJournal journal, Map<String,Object> job,
+                                         PipelineValidationBarrier.Certificate cut) throws Exception {
+        PausedRepairFence.requireCut(job, cut);
+        if (!settings.fingerprint.equals(cut.fingerprint) || !settings.fingerprint.equals(job.get("fingerprint"))) {
+            throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");
+        }
+        Journal.Subscription state = journal.subscription(c, settings.id, true);
+        String sequence = Long.toString(cut.sequence);
+        Map<String,Object> progress = journal.deliveryProgress(c);
+        if (state.acknowledged != cut.sequence || !"RUNNING".equals(state.state)
+                || !sequence.equals(progress.get("capturedSequence"))
+                || !(progress.get("subscriptions") instanceof Map<?,?> all) || all.size() != 1
+                || !(all.get(settings.id) instanceof Map<?,?> sub) || !sequence.equals(sub.get("safeCoveredSequence"))) {
+            throw new IllegalStateException("UNIQUE_RESTORE_TARGET_NOT_AT_CUT");
+        }
+        if (sub.get("firstSkippedSequence") != null || sub.get("firstSourceExclusionAfterSequence") != null) {
+            throw new IllegalStateException("UNIQUE_RESTORE_EXCLUSIONS_RECORDED");
+        }
+    }
+
+    private void verifyUniqueRestoreScope(TableSchema model, UniqueRestoreOperation.Approval approval) {
+        if (settings.product != TargetProduct.POSTGRESQL || !settings.pipelineId.equals(approval.pipelineId())
+                || !settings.id.equals(approval.targetId()) || !settings.generation.equals(approval.generation())
+                || !settings.fingerprint.equals(approval.fingerprint()) || !model.id.equals(approval.tableId())
+                || !includes(model)) throw new IllegalStateException("UNIQUE_RESTORE_SCOPE_INVALID");
+    }
+
+    private UniqueRestoreOperation.Receipt priorUniqueRestore(Connection c, TableSchema model,
+                                                              UniqueRestoreOperation.Approval approval) throws Exception {
+        UniqueRestoreOperation.Receipt receipt = new PostgresUniqueRestoreLedger(settings.metadataSchema).find(c, approval);
+        if (receipt == null) return null;
+        IndexPolicy.Decision index = uniqueRestorationIndex(model, approval.sourceIndex());
+        lockUniqueTable(c, model, "ACCESS SHARE");
+        if (!destination(model).equals(receipt.schema()) || !model.name.equals(receipt.table())
+                || !constraintName(index).equals(receipt.constraint()) || !index.columns.equals(receipt.columns())
+                || !"COMPLETE".equals(snapshotCheckpoint(c, model).state)
+                || !receipt.nativeSha256().equals(PostgresUniqueRestoreEvidence.restoredConstraint(c,
+                        receipt.schema(), receipt.table(), receipt.constraint(), receipt.columns()))) {
+            throw new IllegalStateException("UNIQUE_RESTORE_NATIVE_CONSTRAINT_CHANGED");
+        }
+        return receipt;
+    }
+
+    private void uniqueRestoreSession(Connection c, long maximumMillis) throws Exception {
+        try (Statement sql = c.createStatement()) {
+            sql.execute("SET LOCAL search_path TO pg_catalog");
+            sql.execute("SET LOCAL row_security TO off");
+            sql.execute("SET LOCAL statement_timeout TO " + maximumMillis);
+            sql.execute("SET LOCAL idle_in_transaction_session_timeout TO " + maximumMillis);
+            sql.execute("SET LOCAL lock_timeout TO '2s'");
+        }
+    }
+
+    private void lockUniqueTable(Connection c, TableSchema model, String lock) throws SQLException {
+        try (Statement sql = c.createStatement()) {
+            sql.execute("LOCK TABLE ONLY " + table(model) + " IN " + lock + " MODE");
+        }
+    }
+
+    private void verifyUniqueRestoreTarget(Connection c, Checkpoint expected, TableSchema model,
+                                           boolean lockOwnership) throws Exception {
+        Checkpoint actual = locked(c, expected.epoch);
+        if (!Codec.encode(actual).equals(Codec.encode(expected))) {
+            throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");
+        }
+        if (lockOwnership) {
+            TargetOwnership.lockAndVerify(c, destination(model), model.name, settings.pipelineId, settings.id, settings.generation);
+        }
+        if (!"COMPLETE".equals(snapshotCheckpoint(c, model).state)) {
+            throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");
+        }
+        verifyUniqueReviewTable(c, model);
+    }
+
+    private UniqueRestoreObservation observeUniqueRestore(Connection c, TableSchema model, IndexPolicy.Decision index,
+                                                          RepairProbe.Result rows) throws Exception {
+        String schema = destination(model);
+        String constraint = constraintName(index);
+        String physicalHash = PostgresUniqueRestoreEvidence.observe(c, schema, model, index, constraint);
+        if (uniqueConflicts(c, model, index, schema, table(model)).duplicateGroups() != 0) {
+            throw new IllegalStateException("UNIQUE_RESTORE_DUPLICATES_FOUND");
+        }
+        return new UniqueRestoreObservation(schema, model.name, index.columns, index.targetName, constraint,
+                physicalHash, rows.rows, rows.root);
+    }
+
+    private IndexPolicy.Decision uniqueRestorationIndex(TableSchema model, String sourceIndex) {
+        return uniqueReviewPlans(model).stream()
+                .filter(candidate -> candidate.sourceName.equals(sourceIndex) && "DOWNGRADE_UNIQUE".equals(candidate.action))
+                .findFirst().orElseThrow(() -> new IllegalStateException("UNIQUE_RESTORE_INDEX_UNSUPPORTED"));
+    }
+
+    private static String constraintName(IndexPolicy.Decision index) {
+        return "rm_u_" + index.targetName.substring("rm_".length());
     }
 
     /** The caller holds the cut's journal fence. The PostgreSQL transaction only reads and takes locks. */

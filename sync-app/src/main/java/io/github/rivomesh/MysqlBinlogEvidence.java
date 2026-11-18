@@ -11,7 +11,6 @@ import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventHeaderV4Deserializer;
 import com.github.shyiko.mysql.binlog.event.deserialization.NullEventDataDeserializer;
 import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream;
-import com.github.shyiko.mysql.binlog.network.SSLMode;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -42,8 +41,7 @@ final class MysqlBinlogEvidence {
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
         CompletableFuture<Map<String,Object>> checked=new CompletableFuture<>();
         FrameReader frames=new FrameReader(checked::isDone);
-        BinaryLogClient client=new BinaryLogClient(source.endpoint().host,source.endpoint().port,config.source.username,config.source.password);
-        client.setSSLMode(SSLMode.valueOf(config.source.sslMode));
+        BinaryLogClient client=source.binlogClient();
         client.setBlocking(false);
         client.setKeepAlive(false);
         client.setBinlogFilename(file);
