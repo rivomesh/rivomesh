@@ -3,6 +3,7 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.OracleDate;
 import io.github.rivomesh.PostgresDate;
+import io.github.rivomesh.PostgresTimestamp;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -41,7 +42,9 @@ final class JdbcNormalization {
                 case FLOAT64:double d=Double.parseDouble(value);if(!Double.isFinite(d))throw new IllegalArgumentException("FLOAT_VALUE_INVALID");value=d==0?"0":Double.toHexString(d);break;
                 case JSON:value=JsonValues.canonical(value);break;
                 case DATETIME:case TIMESTAMP:
-                    value=(OracleDate.isColumn(table.columns.get(i))?OracleDate.localTime(value):Timestamp.valueOf(value).toLocalDateTime()).toString();
+                    TableSchema.Column temporal=table.columns.get(i);
+                    if(PostgresTimestamp.isColumn(temporal))value=PostgresTimestamp.localTime(value).toString();
+                    else value=(OracleDate.isColumn(temporal)?OracleDate.localTime(value):Timestamp.valueOf(value).toLocalDateTime()).toString();
                     break;
                 case DATE:
                     value=PostgresDate.isColumn(table.columns.get(i))?LocalDate.parse(value).toString():java.sql.Date.valueOf(value).toString();

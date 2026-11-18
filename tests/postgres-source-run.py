@@ -22,7 +22,9 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
 parser.add_argument('--uuid', action='store_true', help='Exercise UUID keys and nullable UUID values')
-parser.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
+temporal = parser.add_mutually_exclusive_group()
+temporal.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
+temporal.add_argument('--timestamp-values', action='store_true', help='Exercise civil and UTC timestamps through both targets')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
 parser.add_argument('--tls', action='store_true',
                     help='Require CA and host verification for SQL and pgoutput and exercise rejected certificates')
@@ -32,6 +34,7 @@ parser.add_argument('--reject-old-primary', action='store_true',
                     help='After promotion, route back to the stopped original primary instead of dropping the slot')
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
+temporal_targets = args.date_values or args.timestamp_values
 if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
 if args.tls and args.failover:
@@ -47,7 +50,8 @@ image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
-              uuid=args.uuid,dateValues=args.date_values,deliveryTiming=args.delivery_timing,tls=args.tls)
+              uuid=args.uuid,dateValues=args.date_values,timestampValues=args.timestamp_values,
+              deliveryTiming=args.delivery_timing,tls=args.tls)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -114,7 +118,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     if args.failover:
         pipeline['source']['postgresql'].update(
             failoverSlot=True,url='jdbc:postgresql://source-rw:5432/sync_test?connectTimeout=3&socketTimeout=15')
-    if args.date_values:
+    if temporal_targets:
         pipeline['targets'].append(dict(
             id='mysql',product='MYSQL',
             url='jdbc:mysql://mysql:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true',
@@ -133,11 +137,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
     document=dict(services=services)
-    if args.date_values:
+    if temporal_targets:
         services['source']['command']+=['-c','datestyle=SQL, DMY']
-        services['runner']['environment']['TZ']='Pacific/Apia'
+        services['runner']['environment']['TZ']='Pacific/Apia' if args.date_values else 'America/Los_Angeles'
         services['mysql']=dict(image='mysql:8.4',environment=dict(
             MYSQL_ROOT_PASSWORD='${RM_PG_PASSWORD}',MYSQL_ROOT_HOST='%'))
+    if args.timestamp_values:
+        services['source']['command']+=['-c','timezone=America/New_York']
+        report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     if args.tls:
         private_certificates=Path(private_tls)
         trust=certificates(private_certificates)
@@ -212,6 +219,25 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                   "FROM copy_sales.date_keyless ORDER BY event_date IS NULL,event_date"))
         return source,pg,my
 
+    def timestamp_rows():
+        pg_format='YYYY-MM-DD HH24:MI:SS.US'
+        my_format='%Y-%m-%d %H:%i:%s.%f'
+
+        def postgres(service,billing,sales,instant):
+            key=(f"SELECT TO_CHAR(civil,'{pg_format}'),COALESCE(TO_CHAR({instant},'{pg_format}'),'<NULL>') "
+                 f"FROM {billing}.time_key ORDER BY civil")
+            keyless=(f"SELECT COALESCE(TO_CHAR({instant},'{pg_format}'),'<NULL>') "
+                     f"FROM {sales}.time_keyless ORDER BY seen NULLS LAST")
+            return sql(service,key),sql(service,keyless)
+
+        source=postgres('source','billing','sales',"seen AT TIME ZONE 'UTC'")
+        pg=postgres('target','copy_billing','copy_sales','seen')
+        my=(mysql(f"SELECT CONCAT(DATE_FORMAT(civil,'{my_format}'),'|',COALESCE(DATE_FORMAT(seen,'{my_format}'),'<NULL>')) "
+                  "FROM copy_billing.time_key ORDER BY civil"),
+            mysql(f"SELECT COALESCE(DATE_FORMAT(seen,'{my_format}'),'<NULL>') "
+                  "FROM copy_sales.time_keyless ORDER BY seen IS NULL,seen"))
+        return source,pg,my
+
     def source_timeline():
         identity=compose('exec','-T',live_source,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres',
                          '-d','dbname=sync_test replication=database','-A','-t','-F','|',
@@ -247,8 +273,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         for query,schema in tables:
             if sql('source',query.format(schema=schema))!=sql('target',query.format(schema='copy_'+schema)):
                 return False
-        if args.date_values:
-            source,pg,my=date_rows()
+        if temporal_targets:
+            source,pg,my=timestamp_rows() if args.timestamp_values else date_rows()
             return source==pg==my
         return True
 
@@ -269,15 +295,17 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         assert result.returncode!=0 and any(fragment in error for fragment in message), f'{name} was not rejected as expected'
 
     try:
-        endpoints=['source','target']+(['mysql'] if args.date_values else [])
+        endpoints=['source','target']+(['mysql'] if temporal_targets else [])
         compose('up','-d',*endpoints)
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
         report['sourceVersion']=sql('source',"SHOW server_version")
-        if args.date_values:
-            report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL DATE target ready')
+        if temporal_targets:
+            report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL target ready')
             report['postgresTargetVersion']=sql('target','SHOW server_version')
             assert sql('source','SHOW DateStyle')=='SQL, DMY'
+        if args.timestamp_values:
+            assert sql('source','SHOW TimeZone')=='America/New_York'
         if args.tls:
             report['targetVersion']=sql('target',"SHOW server_version")
             report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -316,6 +344,22 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                     (DATE '2011-12-30'),(DATE '2011-12-30'),(DATE '2011-12-31'),(NULL);
                 ALTER PUBLICATION rivomesh_test ADD TABLE billing.date_key,sales.date_keyless;
             """)
+        if args.timestamp_values:
+            sql('source',"""
+                CREATE TABLE billing.time_key(civil TIMESTAMP(6) PRIMARY KEY,seen TIMESTAMPTZ(6));
+                CREATE TABLE sales.time_keyless(seen TIMESTAMPTZ(6));
+                ALTER TABLE billing.time_key REPLICA IDENTITY FULL;
+                ALTER TABLE sales.time_keyless REPLICA IDENTITY FULL;
+                INSERT INTO billing.time_key VALUES
+                    ('1000-01-01 00:00:00',NULL),
+                    ('2024-03-10 02:30:00.123456','2024-11-03 01:30:00.123456-04'),
+                    ('2024-11-03 01:30:00.654321','2024-11-03 01:30:00.654321-05'),
+                    ('9999-12-31 23:59:59.499999','1999-12-31 23:59:59.999999+00');
+                INSERT INTO sales.time_keyless VALUES
+                    ('2024-11-03 01:30:00.123456-04'),('2024-11-03 05:30:00.123456+00'),
+                    ('2024-11-03 01:30:00.654321-05'),(NULL);
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.time_key,sales.time_keyless;
+            """)
         if args.failover:
             compose('exec','-T','source','sh','-c',
                     'printf "\\nhost replication postgres samenet scram-sha-256\\n" >> "$PGDATA/pg_hba.conf"')
@@ -349,7 +393,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert check.returncode and 'POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED' in check.stderr
             sql('source',"ALTER PUBLICATION rivomesh_test SET (publish_generated_columns='stored')")
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=3+int(args.uuid)+2*int(args.date_values)
+        table_count=3+int(args.uuid)+2*int(temporal_targets)
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -377,14 +421,31 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+        if temporal_targets:
+            mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert len(mysql_snapshots.splitlines())==table_count
+            temporal_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
         if args.date_values:
             baseline_dates=('1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31',
                             '2011-12-30\n2011-12-30\n2011-12-31\n<NULL>')
             assert date_rows()==(baseline_dates,baseline_dates,baseline_dates)
-            mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
-            assert len(mysql_snapshots.splitlines())==table_count
-            date_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
             passed('DATE snapshots agree in PostgreSQL and MySQL under SQL DateStyle and a skipped JVM local day')
+        if args.timestamp_values:
+            baseline_times=(
+                '\n'.join(('1000-01-01 00:00:00.000000|<NULL>',
+                           '2024-03-10 02:30:00.123456|2024-11-03 05:30:00.123456',
+                           '2024-11-03 01:30:00.654321|2024-11-03 06:30:00.654321',
+                           '9999-12-31 23:59:59.499999|1999-12-31 23:59:59.999999')),
+                '\n'.join(('2024-11-03 05:30:00.123456','2024-11-03 05:30:00.123456',
+                           '2024-11-03 06:30:00.654321','<NULL>')))
+            assert timestamp_rows()==(baseline_times,baseline_times,baseline_times)
+            assert sql('target',"SELECT COUNT(*) FROM information_schema.columns "
+                                "WHERE table_name IN ('time_key','time_keyless') "
+                                "AND data_type='timestamp without time zone' AND datetime_precision=6")=='3'
+            assert mysql("SELECT COUNT(*) FROM information_schema.columns "
+                         "WHERE table_name IN ('time_key','time_keyless') "
+                         "AND data_type='datetime' AND datetime_precision=6")=='3'
+            passed('Both snapshots preserve civil microseconds, distinct DST instants as UTC and SQL NULL')
 
         if args.delivery_timing:
             assert initial['subscriptions'][0]['lastDeliveryTiming']=={'state':'UNKNOWN'}
@@ -464,6 +525,20 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert date_rows()[0]==('1582-10-10|2024-02-29\n2011-12-30|9999-12-31\n9999-12-31|2024-02-29',
                                     '2011-12-30\n2011-12-31\n<NULL>')
             passed('DATE redo changes a primary key and deletes one exact duplicate without changing the adjacent local date')
+        if args.timestamp_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.time_key SET civil='2024-03-10 02:30:00.123457',seen='2024-03-10 01:59:59.999999-05'
+                    WHERE civil='2024-03-10 02:30:00.123456';
+                DELETE FROM sales.time_keyless WHERE ctid=(
+                    SELECT ctid FROM sales.time_keyless WHERE seen='2024-11-03 05:30:00.123456+00' LIMIT 1);
+                COMMIT;
+            """)
+            require(equal,'timestamp key change and exact keyless occurrence delivered to both targets')
+            keyed,keyless=timestamp_rows()[0]
+            assert '2024-03-10 02:30:00.123457|2024-03-10 06:59:59.999999' in keyed
+            assert keyless.splitlines()==['2024-11-03 05:30:00.123456','2024-11-03 06:30:00.654321','<NULL>']
+            passed('Native redo changes a civil microsecond key and removes one exact UTC keyless occurrence')
 
         if args.delivery_timing:
             last_success=require(observed_timing,'last SQL commit observed before target fault')
@@ -497,6 +572,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                 UPDATE sales.date_keyless SET event_date=DATE '1582-10-10' WHERE event_date=DATE '2011-12-30';
                 COMMIT;
             """)
+        if args.timestamp_values:
+            sql('source',"INSERT INTO billing.time_key VALUES('1582-10-10 05:06:07.000008','2024-03-10 03:00:00.000001-04'); "
+                         "UPDATE sales.time_keyless SET seen='2000-02-29 00:00:00.000001+00' WHERE seen='2024-11-03 05:30:00.123456+00'")
         compose('up','-d','runner')
         require(lambda:stream_ready() and task()['status']['capture_lsn']!=previous,'exact LSN restart')
         assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
@@ -504,13 +582,19 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
         assert slot.startswith('rivomesh_test_') and len(slot.splitlines())==1
         passed('SIGKILL and restart reuse the original slot and snapshot with continuing LSN')
-        if args.date_values:
-            assert slot==date_slot
+        if temporal_targets:
+            assert slot==temporal_slot
             assert mysql_snapshots==mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+        if args.date_values:
             assert date_rows()[0]==(
                 '1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31\n9999-12-31|2024-02-29',
                 '1582-10-10\n2011-12-31\n<NULL>')
             passed('DATE catch-up after SIGKILL reuses the source slot and both sets of destination snapshot IDs')
+        if args.timestamp_values:
+            keyed,keyless=timestamp_rows()[0]
+            assert '1582-10-10 05:06:07.000008|2024-03-10 07:00:00.000001' in keyed
+            assert '2000-02-29 00:00:00.000001' in keyless
+            passed('Timestamp catch-up after SIGKILL reuses the slot and both original destination snapshot sets')
         if args.tls:
             require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
                     and int(active_tls('target','rivomesh-tls-target'))>0,
@@ -568,9 +652,23 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['capture_lsn']==before_date_fault['capture_lsn']
             assert date_rows()[1:]==finished_dates[1:]
             passed('An infinite DATE stops native decoding at the original LSN without applying its transaction to either target')
+        elif args.timestamp_values:
+            before_timestamp_fault=task()['status']['capture_lsn']
+            finished=timestamp_rows()[1:]
+            sql('source',"BEGIN; INSERT INTO billing.time_key VALUES('2025-01-01 12:15:00',NULL); "
+                         "INSERT INTO sales.time_keyless VALUES('infinity'::timestamptz); COMMIT;")
+
+            def timestamp_fault():
+                value=task()['status']
+                return value if value.get('error_code')=='POSTGRESQL_TIMESTAMP_OUT_OF_RANGE' else None
+
+            refused=require(timestamp_fault,'infinite timestamp fails closed before changing target state')
+            assert refused['error_stage']=='SOURCE_DECODE' and refused['capture_lsn']==before_timestamp_fault
+            assert timestamp_rows()[1:]==finished
+            passed('An infinite timestamp refuses the complete transaction at the original LSN for both targets')
         else:
             compose('kill','-s','SIGKILL','runner')
-        if args.reject_old_primary and not args.date_values:
+        if args.reject_old_primary and not temporal_targets:
             compose('stop','standby')
             compose('up','-d','source')
             live_source='source'
@@ -586,7 +684,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['run_state']=='ERROR' and refused['capture_lsn']==durable
             assert sql('target',"SELECT label FROM copy_billing.ledger WHERE id=1")=='promoted commit'
             passed('Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint')
-        elif not args.date_values:
+        elif not temporal_targets:
             require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
             sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
             compose('up','-d','runner')

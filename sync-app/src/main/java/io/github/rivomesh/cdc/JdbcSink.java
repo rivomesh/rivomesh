@@ -3,6 +3,7 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.JdbcConnections;
 import io.github.rivomesh.OracleDate;
 import io.github.rivomesh.PostgresDate;
+import io.github.rivomesh.PostgresTimestamp;
 import io.github.rivomesh.PipelineValidationBarrier;
 import io.github.rivomesh.TargetOwnership;
 import io.github.rivomesh.recovery.UniqueRestoreOperation;
@@ -662,7 +663,8 @@ public final class JdbcSink implements SinkAdapter {
                 else p.setDate(n,java.sql.Date.valueOf(v));
                 break;
             case DATETIME:case TIMESTAMP:
-                if(settings.product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
+                if(PostgresTimestamp.isColumn(col))p.setObject(n,PostgresTimestamp.localTime(v));
+                else if(settings.product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
                 else p.setTimestamp(n,Timestamp.valueOf(v));
                 break;
             case JSON:if(mysql()||dm()||settings.product==TargetProduct.H2)p.setString(n,JsonValues.text(v));else p.setObject(n,JsonValues.text(v),Types.OTHER);break;

@@ -322,6 +322,8 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 break;
             case 114:case 3802:column.type=TableSchema.Type.JSON;break;
             case PostgresDate.OID:column.type=TableSchema.Type.DATE;break;
+            case PostgresTimestamp.CIVIL_OID:column.type=TableSchema.Type.DATETIME;break;
+            case PostgresTimestamp.INSTANT_OID:column.type=TableSchema.Type.TIMESTAMP;break;
             case 1700:
                 if(modifier<4)throw invalid("POSTGRESQL_NUMERIC_PRECISION_REQUIRED");
                 int numeric=modifier-4;
@@ -360,6 +362,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 st.execute("SET TRANSACTION SNAPSHOT '"+snapshot+"'");
                 st.execute("SET LOCAL bytea_output='hex'");
                 st.execute("SET LOCAL DateStyle TO 'ISO, YMD'");
+                st.execute("SET LOCAL TimeZone TO 'UTC'");
             }
             StringBuilder query=new StringBuilder("SELECT ");
             for(TableSchema.Column column:table.columns){
@@ -414,6 +417,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 try(Statement session=connection.createStatement()){
                     session.setQueryTimeout(15);
                     session.execute("SET DateStyle TO 'ISO, YMD'");
+                    session.execute("SET TimeZone TO 'UTC'");
                 }
                 stream=connection.unwrap(PGConnection.class).getReplicationAPI().replicationStream().logical()
                         .withSlotName(slot).withStartPosition(LogSequenceNumber.valueOf(start))

@@ -3,6 +3,7 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.MysqlDuration;
 import io.github.rivomesh.OracleDate;
 import io.github.rivomesh.PostgresDate;
+import io.github.rivomesh.PostgresTimestamp;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -86,7 +87,10 @@ final class JdbcTargetRead implements TargetRead {
                 }
                 break;
             case DATETIME:case TIMESTAMP:
-                if(product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(column)){
+                if(PostgresTimestamp.isColumn(column)){
+                    LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);
+                    value=timestamp==null?null:PostgresTimestamp.format(timestamp);
+                }else if(product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(column)){
                     LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);
                     value=timestamp==null?null:timestamp.toString().replace('T',' ');
                 }else{

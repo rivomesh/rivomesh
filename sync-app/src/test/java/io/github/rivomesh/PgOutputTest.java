@@ -70,6 +70,29 @@ class PgOutputTest {
         }
     }
 
+    @Test void civilAndInstantTimestampsPreserveMicrosecondsAndUseUtcForInstants() {
+        TableSchema.Column civil = new TableSchema.Column();
+        civil.type = TableSchema.Type.DATETIME;
+        civil.sourceType = "1114";
+        TableSchema.Column instant = new TableSchema.Column();
+        instant.type = TableSchema.Type.TIMESTAMP;
+        instant.sourceType = "1184";
+
+        assertEquals("2024-03-10 02:30:00.123456", PgOutput.value(civil, "2024-03-10 02:30:00.123456").value);
+        assertEquals("9999-12-31 23:59:59.499999", PgOutput.value(civil, "9999-12-31 23:59:59.499999").value);
+        assertEquals("2024-11-03 05:30:00.123456", PgOutput.value(instant, "2024-11-03 05:30:00.123456+00").value);
+        assertEquals("2024-11-03 06:30:00", PgOutput.value(instant, "2024-11-03 06:30:00.000000+00:00").value);
+        assertNull(PgOutput.value(instant, null).value);
+        for (String invalid : new String[]{"infinity", "0999-12-31 23:59:59", "10000-01-01 00:00:00",
+                "0001-01-01 00:00:00 BC", "2023-02-29 00:00:00", "2024-01-01 24:00:00",
+                "2024-01-01 00:00:00.1234567", "9999-12-31 23:59:59.5"}) {
+            assertEquals("POSTGRESQL_TIMESTAMP_OUT_OF_RANGE",
+                    assertThrows(IllegalStateException.class, () -> PgOutput.value(civil, invalid)).getMessage());
+        }
+        assertThrows(IllegalStateException.class, () -> PgOutput.value(instant, "2024-11-03 01:30:00-04"));
+        assertThrows(IllegalStateException.class, () -> PgOutput.value(instant, "2024-11-03 05:30:00"));
+    }
+
     @Test void pgoutputPublishesOnlyCompleteTransactionsAndChecksRelationMetadata()throws Exception{
         TableSchema table=new TableSchema();
         table.id=TableSchema.identity("database","sales","items");

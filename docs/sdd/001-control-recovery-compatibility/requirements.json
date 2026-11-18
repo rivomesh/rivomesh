@@ -1059,8 +1059,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID，以及 DATE 双目标投递和 18.7 存储型生成列。更多类型、DDL 及多目标共同校验点待验。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 logical failover slots, UUID and civil DATE (DATE uses PostgreSQL and MySQL targets), and PostgreSQL 18.7 stored generated columns. More types, DDL and common cuts remain."
+        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 和微秒时间戳双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE and microsecond timestamp recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1075,7 +1075,8 @@
         "docs/zh-CN/postgresql-source.md",
         "docs/en/postgresql-source.md",
         "tests/postgres-source-run.py",
-        "docs/verification/baseline.json"
+        "docs/verification/baseline.json",
+        "sync-app/src/main/java/io/github/rivomesh/PostgresTimestamp.java"
       ]
     },
     {

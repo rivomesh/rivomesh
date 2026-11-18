@@ -2,6 +2,7 @@ package io.github.rivomesh.cdc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.MysqlDuration;
+import io.github.rivomesh.PostgresTimestamp;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -129,6 +130,7 @@ public final class CorrectionBatch {
                             || LocalDateTime.parse(value.replace(' ','T')).getYear()<1)
                         throw invalid("CORRECTION_DATE_INVALID");
                     value=value.replace('T',' ');
+                    if(PostgresTimestamp.isColumn(column))value=PostgresTimestamp.format(PostgresTimestamp.localTime(value));
                     break;
                 case TIME: value=MysqlDuration.canonical(value);break;
                 case JSON: value=strictJson(value);break;
