@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.45",
+  "version": "0.46",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1563,8 +1563,8 @@
         "en": "Large catalogs,transactions and hardware standards"
       },
       "gap": {
-        "zh-CN": "已通过十万行内容基线，并在同一 Temurin 21 包完成两种日志 × 两种 CPU 配额 × 三轮的实测。更大目录、超大事务、独立存储和负载变化仍待验收。",
-        "en": "A 100,000-row content baseline and 12 Temurin 21 trials across both journal modes and two CPU quotas passed. Large catalogs, oversized transactions, independent storage and workload variation remain."
+        "zh-CN": "同一 Temurin 21 包已通过两种日志与两种 CPU 的 12 轮实测，以及 256 库、超过 8 MiB 的单笔事务和强杀续传。慢目标持续背压、独立存储和负载变化仍待验收。",
+        "en": "One Temurin 21 artifact passed 12 journal/CPU trials, 256 mapped databases, an over-8 MiB transaction and SIGKILL resume. Sustained slow-target backpressure, independent storage and broader workloads remain."
       },
       "acceptance": {
         "zh-CN": "限制内存/磁盘并处理大事务、海量表和慢目标；记录CPU/内存/磁盘/网络/负载与多轮结果，不线性外推，不以行数一致替代数据一致。",
@@ -1579,7 +1579,8 @@
         "tests/benchmark.py",
         "docs/en/performance.md",
         "docs/verification/baseline.json",
-        "tests/runtime-matrix.py"
+        "tests/runtime-matrix.py",
+        "tests/catalog-benchmark.py"
       ]
     },
     {

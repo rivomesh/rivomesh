@@ -3924,5 +3924,68 @@
         }
       }
     ]
+  },
+  "temurin21CatalogAndTransaction": {
+    "status": "PASSED",
+    "schemaCount": 256,
+    "payloadBytesPerRow": 8192,
+    "cpusPerContainer": 2,
+    "workerHeapMiB": 256,
+    "journalMode": "LOCAL",
+    "phases": {
+      "snapshot": {
+        "seconds": 25.8445119173266,
+        "rowCount": 512,
+        "contentSha256": "a47240f11c3bf90d04b3b23cd5f3ff165f038531ffcec82929acf1d9f9656f20"
+      },
+      "cdc": {
+        "seconds": 4.322426000144333,
+        "changes": 768,
+        "binlogBytes": 8505279,
+        "rowCount": 512,
+        "contentSha256": "18eeade0bfd006f2a0093cb9561046cc1db65c9a5f81bec520e82b21bfda5b29"
+      },
+      "restart": {
+        "seconds": 21.419094333890826,
+        "changes": 256,
+        "rowCount": 512,
+        "contentSha256": "10e0ca61428eae9eae461ee3ad6c720e1389e0665753a837e1a7ec5c20a231bc"
+      }
+    },
+    "artifactSha256": "5c94d5468757992376f8d99a0d8d043e215138c9d99c5684922aa45d7183d137",
+    "docker": {
+      "NCPU": 10,
+      "MemTotal": 16745824256,
+      "Architecture": "aarch64",
+      "Driver": "overlay2",
+      "OperatingSystem": "Docker Desktop",
+      "ServerVersion": "29.9.2"
+    },
+    "mysqlVersion": "8.4.13",
+    "postgreSQLVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "snapshotIdentifiersSha256": "e057224b4117aa8c83e5441469fe30ed8c079dbc724a6de0e4efb7e261cd99f8",
+    "containers": [
+      {
+        "service": "mysql",
+        "image": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      },
+      {
+        "service": "postgres",
+        "image": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      },
+      {
+        "service": "worker",
+        "image": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      }
+    ],
+    "workerJvm": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "cleanupExitCode": 0,
+    "harnessSha256": "00424892bc7d0649222575e00e6144ecb8762c8711f6862682e12aa9a2733bee"
   }
 }

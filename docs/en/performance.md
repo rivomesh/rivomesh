@@ -95,6 +95,26 @@ Each trial loaded 20,000 rows with a 256-byte payload, then checked 24,000 inser
 
 All 12 cases matched exact ordered source and target bytes after both phases. The visibility check includes the expected first and last IDs, because the intermediate update-only state can share the final row count and version sum. The measurements include worker startup for snapshots and source writes for CDC. They apply to this workload and the recorded host. [Trial values, image IDs and artifact SHA-256](../verification/baseline.json)
 
+## 256 mapped databases and a large transaction
+
+On the same artifact, a separate run used 256 MySQL databases in one instance and 256 explicitly mapped PostgreSQL schemas. Each held one keyed table with two rows and an 8,192-byte payload per row. Each container had two CPUs and 1 GiB RAM, the Worker heap was 256 MiB, and the journal was LOCAL.
+
+| Check | Observed |
+|---|---:|
+| Start Worker through 256 durable snapshot acknowledgments | 25.84 s |
+| One source transaction with 768 changes and 8,505,279 binlog bytes through target acknowledgment | 4.32 s |
+| Restart after SIGKILL and catch up on 256 changes committed while offline | 21.42 s |
+
+Each phase compared all 512 ordered rows from both databases with the generated fixture data. Snapshot identifiers were identical after restart. The fixture uses Python 3.11 or later and Docker Compose.
+
+```bash
+python3 tests/catalog-benchmark.py \
+  --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --output target/catalog-256 --schemas 256 --payload-bytes 8192 --cpus 2
+```
+
+[Content hashes and exact fixture resources](../verification/baseline.json)
+
 ## Building the hardware standard
 
 Keep raw reports and run at least three repetitions for every workload/resource

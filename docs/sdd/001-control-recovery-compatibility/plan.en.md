@@ -1,6 +1,6 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.45 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.46 · 2026-11-18 · IMPLEMENTING
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
