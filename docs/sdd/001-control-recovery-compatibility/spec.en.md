@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.50 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.51 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,29 DONE, 19 PARTIAL and 0 NEW, with 19 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,30 DONE, 18 PARTIAL and 0 NEW, with 18 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -84,7 +84,7 @@ Implementation:48requirements,29 DONE, 19 PARTIAL and 0 NEW, with 19 open. RC-01
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | All eight message targets have initial transports. NATS passed three-replica client TLS, election and quorum recovery. Other cluster, capacity and consumer recovery profiles remain. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
 | LG-06 | P1 / DONE | Live K8s/CSI and node-fault acceptance | Live ARM64 accepted Helm and native YAML image replacement, same-claim RWO CSI relocation and automatic CDC. Separate native cases cover physical worker loss, Secret rotation, external-journal takeover and stale Writer fencing. |
-| LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | LOCAL and EXTERNAL passed content checks for 100,000 snapshot rows and 120,000 changes per run. Incremental reads are byte-bounded and the BIGINT key scan was fixed. Repeated hardware measurements, oversized transactions and large catalogs remain. |
+| LG-07 | P1 / DONE | Large catalogs,transactions and hardware standards | The bounded Temurin 21 resource profile is accepted, with 12 hardware trials, 256 mapped databases, a transaction over 8 MiB and slow-target backpressure plus restart recovery through a separate journal. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Real Chrome passed login, reload, diagnostics, report browsing, mobile and logout. Both controllers found historical reports after Agent restart, and summary staging cleanup uses the report lock. Receipt retention and additional browser workflows remain. |
 | LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Contribution guide, CycloneDX SBOM and packaged vendor inventory are in place. Distribution review, project LICENSE/NOTICE, external identity and audit anchors remain. |

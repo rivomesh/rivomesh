@@ -155,7 +155,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06
-- [ ] T-LG-07 · Large catalogs,transactions and hardware standards · P1 · Depends on: JV-02, LG-05
+- [x] T-LG-07 · Large catalogs,transactions and hardware standards · P1 · Depends on: JV-02, LG-05
   Deliver: Bound memory/disk for large transactions/catalogs/slow sinks and publish multi-run hardware/workload results without linear extrapolation or count-only correctness.
   Acceptance: AC-LG-07
 - [ ] T-LG-08 · Historical DDL,types,indexes and state migration · P1 · Depends on: SO-01

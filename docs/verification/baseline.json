@@ -406,6 +406,20 @@
         "profile": "Temurin 21.0.13+9 Linux ARM64 nonroot manual and Dockerfile; 19 real MySQL/PG/control checks; Helm/native Kubernetes v1.31 hostpath CSI with four scenarios each; seven Chrome checks and 25 examples",
         "criteriaSha256": "608ea3fd6dc9be4975dd80a2df960b32a6055ff6962063407af7e7356febc165"
       }
+    },
+    {
+      "id": "LG-07",
+      "title": {
+        "zh-CN": "海量对象、大事务和硬件性能标准",
+        "en": "Large catalogs,transactions and hardware standards"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "5c94d5468757992376f8d99a0d8d043e215138c9d99c5684922aa45d7183d137",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21 ARM64, 12 content-checked CPU/journal runs, 256 database mappings, 8,505,279-byte binlog transaction and separate-journal slow-target cap with SIGKILL recovery",
+        "criteriaSha256": "3badf300c713497b023bfbd678ceb6eba398f8d7e420ca4d83dd787ebf1b7940"
+      }
     }
   ],
   "productProfiles": [
@@ -4308,5 +4322,105 @@
       "cleanupExitCode": 0
     },
     "offlineAdmissionPassed": 2
+  },
+  "temurin21SlowTarget": {
+    "status": "PASSED",
+    "schemaCount": 32,
+    "payloadBytesPerRow": 8192,
+    "cpusPerContainer": 2,
+    "workerHeapMiB": 256,
+    "journalMode": "EXTERNAL",
+    "phases": {
+      "snapshot": {
+        "seconds": 13.158732333220541,
+        "rowCount": 64,
+        "contentSha256": "832c3d51e655e2e84c4beb6658009d02db5c13d093d8828b248c7cfdef60ebbe"
+      },
+      "backpressure": {
+        "logicalQuotaBytes": 3538944,
+        "transactions": 24,
+        "changes": 768,
+        "maxObservedLogicalBytes": 3244602,
+        "targetContainerPaused": true,
+        "sourceWriteSeconds": 0.5377096668817103,
+        "sourceFinalCut": {
+          "file": "mysql-bin.000003",
+          "offset": 13278446
+        },
+        "binlogBytes": 12724136,
+        "pressureStartedAfterSeconds": 0.8636555420234799,
+        "durableCapture": {
+          "file": "mysql-bin.000003",
+          "offset": 2144771
+        },
+        "frozenCaptureSequence": 3,
+        "frozenAcknowledged": 0,
+        "sourceTransactionsBeyondCapture": 21,
+        "frozenPendingBytes": 3244090,
+        "frozenSnapshotBytes": 0,
+        "frozenIdentityBytes": 0,
+        "frozenSeconds": 5.337380125187337,
+        "frozenSamples": 9,
+        "journalRelationBytes": 638976,
+        "targetUnpauseExitCode": 0
+      },
+      "restart": {
+        "seconds": 18.757716708816588,
+        "changes": 768,
+        "oldEpoch": 1,
+        "newEpoch": 2,
+        "finalCapture": {
+          "file": "mysql-bin.000003",
+          "offset": 13278446
+        },
+        "finalAcknowledged": 24,
+        "snapshotIdentifiersUnchanged": true,
+        "rowCount": 64,
+        "contentSha256": "88ddf2f376766f0bdbfb6e6edbf788b098e50ce66db2d81e43135271835c8676",
+        "pendingLogicalBytesAfterCollection": 0
+      }
+    },
+    "artifactSha256": "5c94d5468757992376f8d99a0d8d043e215138c9d99c5684922aa45d7183d137",
+    "docker": {
+      "NCPU": 10,
+      "MemTotal": 16745824256,
+      "Architecture": "aarch64",
+      "Driver": "overlay2",
+      "OperatingSystem": "Docker Desktop",
+      "ServerVersion": "29.9.2"
+    },
+    "mysqlVersion": "8.4.13",
+    "postgreSQLVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "journalPostgreSQLVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "snapshotIdentifiersSha256": "feacd592c4d37d94a3a8e954492f5c4e185536410ed2fbe2d3442c5cd3c09961",
+    "containers": [
+      {
+        "service": "logstore",
+        "image": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      },
+      {
+        "service": "mysql",
+        "image": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      },
+      {
+        "service": "postgres",
+        "image": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      },
+      {
+        "service": "worker",
+        "image": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "nanoCpus": 2000000000,
+        "memoryBytes": 1073741824
+      }
+    ],
+    "workerJvm": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "cleanupExitCode": 0,
+    "harnessSha256": "da85085a49dcb1f8bbc5aab0ed543dfab38f8437bb651287c8960188197dde33"
   }
 }

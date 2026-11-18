@@ -115,6 +115,22 @@ python3 tests/catalog-benchmark.py \
 
 [Content hashes and exact fixture resources](../verification/baseline.json)
 
+## Slow destination and external journal quota
+
+The slow-target profile uses a separate PostgreSQL instance for the external journal. At the default 32 mappings and 8,192 payload bytes per row, each of 24 source transactions updates one keyed row in each schema with full row images. Each of the four services uses the requested CPU quota and 1 GiB RAM. The Worker heap is 256 MiB.
+
+```bash
+python3 tests/catalog-benchmark.py --slow-target \
+  --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --output target/catalog-slow-target --schemas 32 --payload-bytes 8192 --cpus 2
+```
+
+After all snapshots are acknowledged, the fixture pauses only the destination. It observes `JOURNAL_BACKPRESSURE` while the journal stays reachable. For at least five seconds, the durable capture offset must stay behind the final source offset, and neither the capture offset nor the destination acknowledgment may advance. Each observation checks that pending transaction, snapshot and identity bytes together fit the logical quota, calculated as `12 × schemas × (payload bytes + 1,024)`. The report retains the maximum observed logical size and separately measures total journal relation size. Relation size includes heap, indexes and TOAST, and excludes WAL and other database files.
+
+The fixture kills the Worker during the outage, unpauses the destination and starts a fresh Worker process. Recovery must reach the final source offset and target acknowledgment in the original journal generation at a newer epoch. It compares all ordered source and target row bytes and the original snapshot identifiers. The reported recovery time runs from Worker restart through the final acknowledged transaction.
+
+On the same Temurin 21 artifact with two CPUs per service, the source committed 768 changes and wrote 12,724,136 binlog bytes. Capture held at sequence 3 and target acknowledgment at 0 for 5.34 seconds over nine observations. The maximum observed logical size was 3,244,602 bytes against a 3,538,944-byte quota. Journal relations occupied 638,976 bytes at the stalled cut. After SIGKILL and restart, the Worker reached acknowledgment 24 and the final source offset in 18.76 seconds. All 64 rows matched, all 32 snapshot identifiers stayed identical, and collection reduced pending logical bytes to zero. [Exact artifact, measurements and content hashes](../verification/baseline.json)
+
 ## Building the hardware standard
 
 Keep raw reports and run at least three repetitions for every workload/resource
@@ -123,11 +139,10 @@ durability, dataset and storage. Record idle and loaded host conditions, disk
 latency/IOPS, network RTT/bandwidth, utilization and sustained backlog growth.
 Do not extrapolate linearly from CPU quotas or this small local profile.
 
-The final reference matrix still needs independent physical-host runs, remote
-targets, row-width/transaction/table-count sweeps, all targets and both journal
-modes, sustained soak, consumer backpressure, capacity exhaustion and recovery
-under backlog. An individual passing smoke run is evidence that this harness
-works for that dataset, not completion of that matrix.
+The broader reference matrix still needs independent physical-host runs, remote
+targets, row-width/transaction/table-count sweeps, additional targets, sustained
+soak and consumer backpressure. The slow-target result covers one separately
+journaled SQL target with the stated quota and workload.
 
 ## Harness validation scope
 

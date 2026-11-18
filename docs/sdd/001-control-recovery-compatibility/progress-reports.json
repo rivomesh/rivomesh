@@ -24,8 +24,7 @@
     "LG-09 report-ID lookup and refresh-safe keyboard focus passed 12 real Chrome checks. Full dual-entry business workflow is active.",
     "CP-06 MySQL 8.4 source commit timing and MySQL 5.7 unknown behavior ready for scheduled native checks.",
     "LG-04 RabbitMQ three-node quorum and consumer ACK fixture ready for native check.",
-    "LG-02 native restore-constraint review is queued. Existing compare-only preview is published.",
-    "LG-07 sustained slow-sink resource bounds and separate EXTERNAL journal workload profile remain."
+    "LG-02 native restore-constraint review is queued. Existing compare-only preview is published."
   ],
   "reportContents": [
     "Current totals",
@@ -53,8 +52,8 @@
     "a8d76a54a3759cc4c5b7c59d9aea8fe8dd02ab70"
   ],
   "currentSdd": {
-    "DONE": 29,
-    "PARTIAL": 19,
+    "DONE": 30,
+    "PARTIAL": 18,
     "NEW": 0
   },
   "nextTasks": [
@@ -68,6 +67,7 @@
     "LG-09 historical report lookup and periodic-refresh keyboard focus passed 16 native cases including seven live Chrome interactions, 12 same-artifact standalone Chrome cases, and 127 DOM tests.",
     "CP-04 published the durable managed Agent handoff assessment previously verified in 16 native cases across the two control stores. Candidate evidence and authority transfer remain open.",
     "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing.",
-    "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes."
+    "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes.",
+    "LG-07 completed. One Java 21 artifact passed the shared hardware matrix, 256 mappings and large transaction, and real separate-journal quota, backpressure and SIGKILL catch-up to zero pending bytes."
   ]
 }
