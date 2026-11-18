@@ -2,7 +2,7 @@
 
 首版尚未发布。Java/Maven命名空间为`io.github.rivomesh`。[完整SDD](../sdd/001-control-recovery-compatibility/spec.md) · [任务清单](../sdd/001-control-recovery-compatibility/tasks.md) · [English](../en/implementation-status.md)。
 
-48项需求：**15项完成、29项部分完成、4项未实现，剩余33项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
+48项需求：**16项完成、28项部分完成、4项未实现，剩余32项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
 
 ## 已验收
 
@@ -18,6 +18,7 @@
 | RC-06 | 前镜像补偿还原受影响行，跨入口审批并保持暂停。限定 SQL 档案 |
 | RC-07 | 手工录入、JSON 导入、前后值预览与跨入口审批。限定 SQL 档案 |
 | RC-09 | 补偿与修正跨入口取消、提交前后强杀恢复，并按原请求核对凭据 |
+| JV-01 | 五个 JDK 的 Controller、Agent 和 Worker 实际启动并完成 SQL 全量和增量 |
 | SO-04 | MySQL 8.2.0 在 Java 8 的 V3 单机、GTID 主从和单主组复制实库档案 |
 
 [单一验证基线](../verification/README.md)保存验收范围和可追溯摘要，不再维护开发迭代的逐次副本。清理后的最新回归与旧验收记录分开标记。

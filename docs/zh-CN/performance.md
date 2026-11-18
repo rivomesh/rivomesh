@@ -72,3 +72,13 @@ python3 tests/runtime-matrix.py --rows 1000 \
 ```
 
 矩阵在 `target/runtime-matrix/<id>/matrix.json` 保留进度、逐配置日志及原始报告引用，单项失败后继续其他独立配置。通过必须同时满足源/目标字节一致、实际日志后端已观察到、清理成功、实际 JVM 版本正确及发布包 SHA-256 一致；发布包改变会终止矩阵。它仍是小规模 SQL 运行时检查，不代表所有适配器在所有 JRE 都已验证。不要与其他集成测试或重新构建同时运行。
+
+### Controller、Agent 与 Worker 运行时验收
+
+使用同一个发布包，在每个 JDK 启动实际进程并验证 MySQL 到 PostgreSQL / MySQL 的全量和增量。结果记录各角色的真实 JVM 版本、架构及包摘要。
+
+```bash
+python3 tests/control-runtime.py --suite processes \
+    --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+    --output target/control-runtime-processes
+```

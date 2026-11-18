@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.11 · 2026-11-18 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.12 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**15 DONE、29 PARTIAL、4 NEW，33 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业及 MySQL 8.2.0 档案已验收。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**16 DONE、28 PARTIAL、4 NEW，32 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.2.0 及五 JDK 真实进程档案已验收。
 
 ## 1. 当前基线
 
@@ -22,7 +22,7 @@ RM-SDD-001 · v0.11 · 2026-11-18 · 实施中：推进事务跳过与缺口
 | 6 完整文档 | DO-01～DO-05 | 5 |
 | 既有范围合并保留 | LG-01～LG-10 | 10 |
 
-共 48 项，15 项完成，29 项部分完成，4 项未实现。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
+共 48 项，16 项完成，28 项部分完成，4 项未实现。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
 
 ## 2. 用户已明确的需求，不再当作可选项
 

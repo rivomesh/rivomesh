@@ -106,7 +106,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-SO-07
 ## Java runtime compatibility
 
-- [ ] T-JV-01 · Java8/11/17/21/25 runnable releases · P0 · Depends on: none
+- [x] T-JV-01 · Java8/11/17/21/25 runnable releases · P0 · Depends on: none
   Deliver: The candidate controller/agent/worker actually starts on all five JDKs with real JVM version,artifact hash,architecture and dependencies recorded;Java8 class/driver requirements are verified.
   Acceptance: AC-JV-01
 - [ ] T-JV-02 · Cross-JDK source/sink/recovery matrix · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07

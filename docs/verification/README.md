@@ -51,3 +51,9 @@ The Java 8 reactor passed 56 V3 tests. The frozen package passed one native asyn
 候选包 `c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3` 通过 42 项 Java 检查、108 项界面检查、4 项 PostgreSQL 原生补偿、4 项 MySQL 原生修正和 14 项真实 CDC 检查。两个控制器以原请求 ID 取消排队和运行中的作业。补偿及手工修正均在等待目标 SQL 锁时强杀 Agent，验证无部分写入，以原请求继续。目标提交后、Agent 写入本地结果前再强杀 Agent，并关闭原管理入口。重启后由仍在线的入口读取同一原生回执，目标保持暂停，日志 ACK 不动。
 
 Real CDC used MySQL 8.4 source and healthy peer, PostgreSQL 17 recovery destination and control storage, Java 8, and the original Agent with a LOCAL/H2 journal. PostgreSQL compensation and MySQL correction separately passed four native checks each. The process fault fixture is test-only.
+
+### JV-01 · 五 JDK 真实进程 / Five-JDK runtime
+
+候选包 `c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3` 在 ARM64 上实际启动两台 Controller、一台 Agent 和一台 Worker。五个 JVM 版本分别为 1.8.0_512, 11.0.33, 17.0.21, 21.0.13, 25.0.5。每个版本通过 5 项检查，包含 MySQL 8.4 源到 PostgreSQL 17 / MySQL 8.4 的全量与增量、进程版本和夹具清理。
+
+All four running processes used the expected JVM on each JDK. The candidate passes the class-file level 52 and packaged driver checks. JV-02 and JV-03 track the broader database, connector and TLS combinations.

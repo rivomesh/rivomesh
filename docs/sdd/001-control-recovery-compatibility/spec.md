@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.11 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.12 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，15项DONE、29项PARTIAL、4项NEW，余33项未闭环。RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09 和 SO-04 限定档案已验收。自动接管、阶段诊断和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，16项DONE、28项PARTIAL、4项NEW，余32项未闭环。RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-04 和 JV-01 限定档案已验收。自动接管、阶段诊断和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -59,7 +59,7 @@ RM-SDD-001 · v0.11 · 2026-11-18 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| JV-01 | P0 / PARTIAL | Java 8/11/17/21/25 可运行发布 | 主代码Java8兼容且有旧包10项SQL矩阵，当前全功能发布未覆盖。 |
+| JV-01 | P0 / DONE | Java 8/11/17/21/25 可运行发布 | 同一候选包的 Controller、Agent 与 Worker 已在五个 JDK 完成真实同步。完整连接器矩阵和混合版本升级由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | 源/目标/恢复跨JDK矩阵 | 已有十项只覆盖单主键ASCII表和PG目标，不覆盖全部连接器。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商SDK隔离和完整包检查，缺全部JDK组合验证。 |
 | JV-04 | P1 / NEW | 多JDK部署及混合版本升级 | 现有基准可选JRE，生产发布/集群升级策略未完整验收。 |

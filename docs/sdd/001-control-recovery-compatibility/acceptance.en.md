@@ -35,7 +35,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-SO-05 | SO-05 | Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance. | NOT_RUN |
 | AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | NOT_RUN |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | NOT_RUN |
-| AC-JV-01 | JV-01 | The candidate controller/agent/worker actually starts on all five JDKs with real JVM version,artifact hash,architecture and dependencies recorded;Java8 class/driver requirements are verified. | NOT_RUN |
+| AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
 | AC-JV-02 | JV-02 | Each approved source profile crosses five JDKs for snapshot,CDC,restart and equality;record separate adapter/SDK/TLS/object/cluster/recovery gates and never label unrun combinations passed. | NOT_RUN |
 | AC-JV-03 | JV-03 | Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation. | NOT_RUN |
 | AC-JV-04 | JV-04 | Provide five-JDK deployment profiles/placement constraints and verify command,event,state and rolling-upgrade compatibility;unsupported downgrade is refused with recovery guidance. | NOT_RUN |

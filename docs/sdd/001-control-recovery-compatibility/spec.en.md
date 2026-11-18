@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.11 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.12 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,15 DONE, 29 PARTIAL and 4 NEW, with 33 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-04 bounded profiles are accepted. Automatic takeover, failure diagnostics and complete matrices remain tracked.
+Implementation:48requirements,16 DONE, 28 PARTIAL and 4 NEW, with 32 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-04/JV-01 bounded profiles are accepted. Automatic takeover, failure diagnostics and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -59,7 +59,7 @@ Implementation:48requirements,15 DONE, 29 PARTIAL and 4 NEW, with 33 open. RC-02
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| JV-01 | P0 / PARTIAL | Java8/11/17/21/25 runnable releases | Java8 baseline and an older ten-profile SQL matrix exist;current full release is not covered. |
+| JV-01 | P0 / DONE | Java8/11/17/21/25 runnable releases | Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades. |
 | JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Ten profiles cover one keyed ASCII table/PG sink,not all adapters. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor isolation/artifact checks exist without all-JDK coverage. |
 | JV-04 | P1 / NEW | Multi-JDK deployment and mixed-version upgrades | Benchmarks select JREs;production/mixed-cluster upgrade policies are not accepted. |

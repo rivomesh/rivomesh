@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.11",
+  "version": "0.12",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -973,14 +973,14 @@
       "id": "JV-01",
       "epic": "JAVA",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "Java 8/11/17/21/25 可运行发布",
         "en": "Java8/11/17/21/25 runnable releases"
       },
       "gap": {
-        "zh-CN": "主代码Java8兼容且有旧包10项SQL矩阵，当前全功能发布未覆盖。",
-        "en": "Java8 baseline and an older ten-profile SQL matrix exist;current full release is not covered."
+        "zh-CN": "同一候选包的 Controller、Agent 与 Worker 已在五个 JDK 完成真实同步。完整连接器矩阵和混合版本升级由 JV-02 至 JV-04 跟踪。",
+        "en": "Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades."
       },
       "acceptance": {
         "zh-CN": "同一候选版本的控制器/Agent/Worker分别在五个JDK实际启动，报告真实JVM版本、包SHA、架构与所用依赖；Java8代码级别和驱动运行要求可核验。",
@@ -989,8 +989,17 @@
       "dependsOn": [],
       "evidence": [
         "docs/zh-CN/performance.md",
-        "docs/verification/baseline.json"
-      ]
+        "docs/verification/baseline.json",
+        "tests/control-runtime.py",
+        "tests/global-control-pipeline.py",
+        "tests/verify-artifact.py",
+        "docs/verification/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown."
+      }
     },
     {
       "id": "JV-02",

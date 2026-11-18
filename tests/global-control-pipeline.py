@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import subprocess
@@ -20,6 +21,8 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
+parser.add_argument('--runtime-jdk', type=int, choices=(8, 11, 17, 21, 25),
+                    help='Run controller, Agent and Worker snapshot/CDC with the specified Java release')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--snapshot-diagnostics', action='store_true', help='Inject initial DDL permission and snapshot CHECK faults before normal catch-up')
@@ -34,6 +37,10 @@ parser.add_argument('--test-classes', type=Path, help='Frozen application test c
 args = parser.parse_args()
 if args.control_product == 'MYSQL' and not args.separate_execution:
     parser.error('MySQL control-store business acceptance requires --separate-execution')
+if args.runtime_jdk and (not args.separate_execution or any((args.runtime_image, args.recovery_jobs,
+        args.compensation, args.correction, args.failure_diagnostics, args.snapshot_diagnostics,
+        args.managed_failure_review, args.managed_commit))):
+    parser.error('--runtime-jdk uses the separate Agent and baseline SQL process smoke profile')
 if args.runtime_image and not args.separate_execution:
     parser.error('--runtime-image requires --separate-execution')
 if args.failure_diagnostics and not args.separate_execution:
@@ -84,6 +91,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'compensation': args.compensation,
             'correction': args.correction,
             'recoveryJobs': args.recovery_jobs,
+            'runtimeJdk': args.runtime_jdk,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
 def passed(name):
     checks.append(name)
@@ -136,7 +144,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
-        services[node] = {'image': 'eclipse-temurin:8-jre', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if args.separate_execution and node == owner_node else 'serve', '/fixture/' + node + '.json'],
+        services[node] = {'image': f'eclipse-temurin:{args.runtime_jdk or 8}-jre', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if args.separate_execution and node == owner_node else 'serve', '/fixture/' + node + '.json'],
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
@@ -182,6 +190,35 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         container = compose('ps', '-q', owner_node).stdout.strip()
         lines = subprocess.check_output(['docker', 'top', container, '-eo', 'pid,args'], text=True).splitlines()
         return {line.split()[0] for line in lines if 'io.github.rivomesh.Main run ' in line}
+
+    def observe_jvms():
+        runtime = f'eclipse-temurin:{args.runtime_jdk}-jre'
+        image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', runtime], text=True))[0]
+        manifest['runtimeImageId'] = image['Id']
+        manifest['runtimeArchitecture'] = image['Architecture']
+        java = []
+        for node in members:
+            binary = compose('exec', '-T', node, 'readlink', '/proc/1/exe').stdout.strip()
+            java.append((node, 'AGENT' if node == owner_node else 'CONTROLLER', binary))
+        worker_binary = compose('exec', '-T', owner_node, 'sh', '-ec',
+            r'''for file in /proc/[0-9]*/cmdline; do
+                if tr '\000' '\n' < "$file" 2>/dev/null | grep -qx io.github.rivomesh.Main; then
+                    readlink "${file%/cmdline}/exe"
+                fi
+            done''').stdout.strip()
+        assert len(worker_pids()) == 1 and worker_binary, 'one real CDC Worker process is required'
+        java.append((owner_node, 'WORKER', worker_binary))
+        manifest['runtimeProcesses'] = []
+        for node, role, binary in java:
+            assert binary.endswith('/bin/java') and '\n' not in binary, 'expected a single JVM executable'
+            settings = compose('exec', '-T', node, binary, '-XshowSettings:properties', '-version').stderr
+            version = re.search(r'(?m)^\s*java\.version = (\S+)$', settings).group(1)
+            architecture = re.search(r'(?m)^\s*os\.arch = (\S+)$', settings).group(1)
+            major = int(version.split('.')[1] if version.startswith('1.') else re.match(r'\d+', version).group())
+            assert major == args.runtime_jdk, 'unexpected active JVM release'
+            assert architecture in ({'aarch64','arm64'} if image['Architecture']=='arm64' else {'amd64','x86_64'}), architecture
+            manifest['runtimeProcesses'].append(dict(role=role, node=node, version=version, architecture=architecture))
+        passed('Observed the real Controller, Agent and Worker JVM executables on Java ' + str(args.runtime_jdk))
 
     def http(node, path, body=None, method=None, request=None, expected=200, token=None):
         headers = {'Authorization': 'Bearer ' + (token or env['RM_GC_TOKEN'])}
@@ -545,6 +582,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.runtime_jdk:
+            observe_jvms()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_RUNTIME_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.recovery_jobs:
             run_recovery_cases()
             action('STOP')

@@ -189,6 +189,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL."
       }
+    },
+    {
+      "id": "JV-01",
+      "title": {
+        "zh-CN": "Java 8/11/17/21/25 可运行发布",
+        "en": "Java8/11/17/21/25 runnable releases"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown."
+      }
     }
   ],
   "productProfiles": [
@@ -577,5 +590,168 @@
     "groupArtifactTestsPassed": 1,
     "haArtifactSha256": "cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829",
     "runner": "tests/matrix.sh --v3 8.2.0"
+  },
+  "fiveJdkProcesses": {
+    "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+    "checksPerJdk": 5,
+    "harnessSourceSha256": "978887e68801924d27f8ba2b41d467726d5aa7ca81fb68b9585da1aec35b11e1",
+    "scope": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown.",
+    "profiles": [
+      {
+        "jdk": 8,
+        "imageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+        "architecture": "arm64",
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          }
+        ]
+      },
+      {
+        "jdk": 11,
+        "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe",
+        "architecture": "arm64",
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          }
+        ]
+      },
+      {
+        "jdk": 17,
+        "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990",
+        "architecture": "arm64",
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          }
+        ]
+      },
+      {
+        "jdk": 21,
+        "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+        "architecture": "arm64",
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          }
+        ]
+      },
+      {
+        "jdk": 25,
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3",
+        "architecture": "arm64",
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          }
+        ]
+      }
+    ]
   }
 }

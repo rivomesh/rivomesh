@@ -10,7 +10,7 @@
     "Four native correction contracts per PostgreSQL/MySQL and real CDC cross-entry import/approval/replay passed"
   ],
   "inProgress": [
-    "JV-01 actual Controller, Agent and Worker runtime tests on five JDKs."
+    "RC-01 durable stage classification and operational guidance for source and journal failures. Focused build running."
   ],
   "reportContents": [
     "Current totals",
@@ -28,17 +28,17 @@
     "8db3b27e08f83b0e4ac0eae12cc99d084854c3bb"
   ],
   "currentSdd": {
-    "DONE": 15,
-    "PARTIAL": 29,
+    "DONE": 16,
+    "PARTIAL": 28,
     "NEW": 4
   },
   "newSinceLastReport": [
     "SO-04 accepted on MySQL 8.2.0 ARM64 with 56 V3 tests, real GTID promotion, and real MGR election.",
-    "RC-09 accepted: 42 Java, 108 DOM, 8 native contracts and 14 real CDC checks."
+    "RC-09 accepted: 42 Java, 108 DOM, 8 native contracts and 14 real CDC checks.",
+    "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
   ],
   "nextTasks": [
     "RC-01 durable source, decode and journal failure phases.",
-    "JV-01 controller, Agent and Worker on five JDKs.",
     "Consolidate V2/V3 execution branches."
   ],
   "currentCandidateArtifact": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",

@@ -106,3 +106,13 @@ python3 tests/runtime-matrix.py --rows 1000 \
 ```
 
 The matrix retains progress and per-profile logs in `target/runtime-matrix/<id>/matrix.json`, links each raw benchmark report, and continues independent profiles after a failed profile. A passing profile requires source/target byte checks, observed journal backend, successful cleanup, the expected actual JVM version and the same release SHA-256. Changing the release aborts the matrix. These remain small SQL runtime checks; they do not validate every adapter on every JRE. Do not run other integration suites or rebuild concurrently.
+
+### Controller, Agent and Worker runtime verification
+
+Use one release package to start the actual processes on each JDK and verify MySQL to PostgreSQL and MySQL snapshot and CDC. The report records each role’s JVM version, architecture and package hash.
+
+```bash
+python3 tests/control-runtime.py --suite processes \
+    --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+    --output target/control-runtime-processes
+```

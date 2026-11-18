@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **15 DONE, 29 PARTIAL and 4 NEW, with 33 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **16 DONE, 28 PARTIAL and 4 NEW, with 32 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -18,6 +18,7 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-06 | Before-image compensation with cross-entry approval and explicit resume. Bounded SQL profile |
 | RC-07 | Typed entry, JSON import, before/after preview and cross-entry approval. Bounded SQL profile |
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
+| JV-01 | Actual Controller, Agent and Worker on all five JDKs with SQL snapshot and CDC verification |
 | SO-04 | MySQL 8.2.0 on Java 8 with native V3 standalone, GTID async and single-primary MGR profiles |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.

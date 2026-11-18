@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Candidate-first control/session/worker-isolation contracts on five JREs; not a CDC matrix."""
+"""Run release-first control contracts or actual management and CDC processes on five JREs."""
 import argparse
 import hashlib
 import json
@@ -13,7 +13,7 @@ parser.add_argument('--artifact', type=Path, default=ROOT / 'sync-app/target/riv
 parser.add_argument('--test-classes', type=Path, default=ROOT / 'sync-app/target/test-classes')
 parser.add_argument('--jdk', type=int, nargs='+', choices=(8,11,17,21,25), default=(8,11,17,21,25))
 parser.add_argument('--output', type=Path, default=ROOT / 'target/control-runtime')
-parser.add_argument('--suite', choices=('baseline','extended','global','routed','maintenance','execution'), default='baseline')
+parser.add_argument('--suite', choices=('baseline','extended','global','routed','maintenance','execution','processes'), default='baseline')
 parser.add_argument('--heap-mib', type=int, choices=(128,256,512), default=128)
 args = parser.parse_args()
 jar = args.artifact.resolve()
@@ -24,6 +24,29 @@ output = args.output.resolve()
 output.relative_to(ROOT)
 output.mkdir(parents=True,exist_ok=True)
 output_container = '/project/' + str(output.relative_to(ROOT))
+if args.suite == 'processes':
+    manifest = {'artifactSha256': hashlib.sha256(jar.read_bytes()).hexdigest(),
+                'scope': 'Actual separate Controller, Agent and Worker with MySQL source and PostgreSQL/MySQL targets',
+                'profiles': []}
+    for jdk in dict.fromkeys(args.jdk):
+        profile = output / f'java{jdk}'
+        profile.mkdir(exist_ok=True)
+        with (profile / 'run.log').open('w') as log:
+            result = subprocess.run(['python3', str(ROOT / 'tests/global-control-pipeline.py'),
+                                     '--artifact', str(jar), '--output', str(profile),
+                                     '--separate-execution', '--runtime-jdk', str(jdk)],
+                                    stdout=log, stderr=subprocess.STDOUT)
+        record = json.loads((profile / 'manifest.json').read_text()) if (profile / 'manifest.json').is_file() else {}
+        passed = (result.returncode == 0 and record.get('status') == 'PASS' and record.get('cleanupExitCode') == 0
+                  and record.get('artifactSha256') == manifest['artifactSha256'])
+        manifest['profiles'].append({'jdk': jdk, 'status': 'PASS' if passed else 'FAIL',
+                                     'manifest': f'java{jdk}/manifest.json', 'exitCode': result.returncode,
+                                     'processes': record.get('runtimeProcesses'), 'imageId': record.get('runtimeImageId'),
+                                     'architecture': record.get('runtimeArchitecture')})
+        (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        print(f'Java {jdk}: ' + ('PASS' if passed else 'FAIL'), flush=True)
+    raise SystemExit(0 if all(profile['status']=='PASS' for profile in manifest['profiles']) else 1)
+
 classes = ['BrowserSessionsTest', 'ControlStoreTest', 'SharedAccessTest', 'WorkerEnvironmentTest']
 if args.suite in ('extended','global','routed','maintenance','execution'):
     classes += ['ControlCipherTest','GlobalTaskStoreTest','TaskPlaneTest','LocalJournalLifecycleTest','DurableCommandsTest']
