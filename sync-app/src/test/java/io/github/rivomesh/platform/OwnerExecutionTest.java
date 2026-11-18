@@ -27,6 +27,19 @@ class OwnerExecutionTest {
         action("request_start_job","START");awaitOutcome(execution,"request_start_job","SUCCEEDED");PlatformTest.await(()->workers.active.get()==1);assertEquals(1,workers.starts.get());execution.step("request_start_job");assertEquals(1,workers.starts.get());
         action("request_stop_job","STOP");awaitOutcome(execution,"request_stop_job","SUCCEEDED");PlatformTest.await(()->workers.active.get()==0);assertEquals("STOPPED",local.view("job").get("desired"));
     }
+    @Test void handoffReceiptPlanIncludesOnlyAuthenticatedClosedLocalOutcomes()throws Exception{
+        create();OwnerExecution execution=executor();execution.cycle();
+        action("closed_stop_request","STOP");awaitOutcome(execution,"closed_stop_request","SUCCEEDED");
+        var plan=fixture.a.service((c,accounts)->commands.closedHandoffReceipts(c,fixture.a.record(c,"job")));
+        assertNull(plan.refusal());
+        assertEquals(List.of("request_create_job","closed_stop_request"),
+                plan.receipts().stream().map(SharedHandoffEvidence.ClosedReceipt::request).sorted(Comparator.reverseOrder()).toList());
+        assertTrue(plan.receipts().stream().allMatch(receipt->receipt.phase().equals("SUCCEEDED")&&receipt.signature().length()==64));
+        action("unresolved_check_request","CHECK");
+        var refused=fixture.a.service((c,accounts)->commands.closedHandoffReceipts(c,fixture.a.record(c,"job")));
+        assertEquals("HANDOFF_CLOSED_RECEIPT_UNPROVEN",refused.refusal());
+        assertTrue(refused.receipts().isEmpty());
+    }
     @Test void controllerReopenAfterLocalCommitAndLostGlobalReplyUsesTheExistingReceipt()throws Exception{
         create();DurableCommands.Dispatch dispatch=commands.claim("request_create_job",owner.a,owner.lease,fixture.directory);TaskRequest request=commands.bindLocal(dispatch,local.prepareOwnerRequest(dispatch.command.request),owner.a,owner.lease,fixture.directory);local.pinOwnerRequest(request.requestId);new LocalTaskPlane(local).invoke(request,dispatch.actor);
         assertEquals("DISPATCHED",status(request.requestId));local.close();local=null;local=new TaskService(config,backend,workers);executor().step(request.requestId);assertEquals("SUCCEEDED",status(request.requestId));assertEquals(1,((List<?>)local.list(admin()).get("tasks")).size());

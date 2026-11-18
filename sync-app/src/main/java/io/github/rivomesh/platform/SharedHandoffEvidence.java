@@ -12,21 +12,41 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.*;
 
-/** An opt-in copy of completed, locked validation reports on an operator-protected shared mount. */
+/** An opt-in copy of completed validation reports and authenticated receipts on a private shared mount. */
 final class SharedHandoffEvidence {
     private static final int MAX_REPORTS=32,MAX_CHILDREN=256,MAX_SUMMARY=1024*1024;
+    static final int MAX_RECEIPTS=64;
+    private static final int MAX_RECEIPT_BYTES=128*1024;
     private static final long MAX_BYTES=64L*1024*1024;
     record Scope(String cluster,String task,String assessment,String revision,String configuration,
                  String originalDirectory,String candidateDirectory){}
-    record Archive(String sha256,long bytes,int reports){
+    record ClosedReceipt(String request,String signature,String actor,String role,TaskRequest.Kind kind,
+                         String phase,String code){
+        ClosedReceipt{
+            if(request==null||!request.matches("[A-Za-z0-9_-]{8,128}")||signature==null||!signature.matches("[a-f0-9]{64}")
+                    ||actor==null||actor.length()>64||!Set.of("ADMIN","OPERATOR").contains(Objects.toString(role,""))
+                    ||kind==null||!Set.of(TaskRequest.Kind.CREATE,TaskRequest.Kind.CONFIG_UPDATE,TaskRequest.Kind.RESTORE,
+                    TaskRequest.Kind.ACTION).contains(kind)||!Set.of("SUCCEEDED","FAILED","CANCELLED").contains(Objects.toString(phase,""))
+                    ||code==null||!code.matches("[A-Z0-9_]{1,120}"))throw refusal("HANDOFF_CLOSED_RECEIPT_INVALID");
+        }
+    }
+    record ReceiptPlan(List<ClosedReceipt> receipts,String refusal){
+        ReceiptPlan{
+            if(receipts==null||receipts.size()>MAX_RECEIPTS||refusal!=null&&!receipts.isEmpty())
+                throw SharedHandoffEvidence.refusal("HANDOFF_CLOSED_RECEIPT_INVALID");
+            receipts=List.copyOf(receipts);
+        }
+    }
+    record Archive(String sha256,long bytes,int reports,int closedReceipts){
         Archive{
             if(sha256==null||!sha256.matches("[0-9a-f]{64}")||bytes<1||bytes>MAX_BYTES+1024*1024
-                    ||reports<1||reports>MAX_REPORTS)throw refusal("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+                    ||reports<0||reports>MAX_REPORTS||closedReceipts<0||closedReceipts>MAX_RECEIPTS
+                    ||reports+closedReceipts==0)throw refusal("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
         }
     }
     private SharedHandoffEvidence(){}
 
-    static Archive export(Path configured,Scope scope,Path reports)throws Exception{
+    static Archive export(Path configured,Scope scope,Path reports,List<ClosedReceipt> receipts)throws Exception{
         Path root=privateRoot(configured),destination=archive(root,scope);
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);
         Path lockPath=root.resolve(destination.getFileName()+".lock");
@@ -45,9 +65,9 @@ final class SharedHandoffEvidence {
                 Path stage=Files.createTempFile(root,destination.getFileName()+".",".tmp");
                 try{
                     PrivateFiles.ownerOnly(stage);
-                    int count=write(stage,scope,reports,deadline);
-                    if(count==0)throw refusal("HANDOFF_NO_SHAREABLE_REPORTS");
-                    Archive proof=new Archive(hash(stage,deadline),Files.size(stage),count);
+                    int count=write(stage,scope,reports,receipts,deadline);
+                    if(count==0&&receipts.isEmpty())throw refusal("HANDOFF_NO_SHAREABLE_REPORTS");
+                    Archive proof=new Archive(hash(stage,deadline),Files.size(stage),count,receipts.size());
                     try(FileChannel file=FileChannel.open(stage,StandardOpenOption.WRITE)){file.force(true);}
                     Files.move(stage,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
                     try(FileChannel directory=FileChannel.open(root,StandardOpenOption.READ)){directory.force(true);}
@@ -74,15 +94,25 @@ final class SharedHandoffEvidence {
                 if(bytes.length<1||bytes.length>4096)throw refusal("HANDOFF_ARCHIVE_SCOPE_CHANGED");
                 Scope observed=Model.JSON.readValue(bytes,Scope.class);
                 if(!expected.equals(observed))throw refusal("HANDOFF_ARCHIVE_SCOPE_CHANGED");
+                if(proof.closedReceipts()>0){
+                    ZipEntry records=zip.getNextEntry();
+                    if(records==null||!"closed-receipts.json".equals(records.getName()))
+                        throw refusal("HANDOFF_CLOSED_RECEIPT_INVALID");
+                    byte[] payload=zip.readNBytes(MAX_RECEIPT_BYTES+1);
+                    if(payload.length>MAX_RECEIPT_BYTES)throw refusal("HANDOFF_ARCHIVE_LIMIT_EXCEEDED");
+                    ClosedReceipt[] receipts=Model.JSON.readValue(payload,ClosedReceipt[].class);
+                    if(receipts.length!=proof.closedReceipts()
+                            ||Arrays.stream(receipts).map(ClosedReceipt::request).distinct().count()!=receipts.length)
+                        throw refusal("HANDOFF_CLOSED_RECEIPT_INVALID");
+                }
             }
         }
     }
 
-    private static int write(Path stage,Scope scope,Path reports,long deadline)throws Exception{
+    private static int write(Path stage,Scope scope,Path reports,List<ClosedReceipt> receipts,long deadline)throws Exception{
         rejectLinks(reports);
-        if(!Files.isDirectory(reports,LinkOption.NOFOLLOW_LINKS))return 0;
         List<Path> candidates=new ArrayList<>();
-        try(DirectoryStream<Path> paths=Files.newDirectoryStream(reports)){
+        if(Files.isDirectory(reports,LinkOption.NOFOLLOW_LINKS))try(DirectoryStream<Path> paths=Files.newDirectoryStream(reports)){
             int seen=0;
             for(Path path:paths){
                 checkDeadline(deadline);
@@ -98,6 +128,8 @@ final class SharedHandoffEvidence {
         try(ZipOutputStream out=new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(stage)))){
             out.setLevel(0);
             entry(out,"scope.json",new ByteArrayInputStream(Model.JSON.writeValueAsBytes(scope)),4096,deadline);
+            if(!receipts.isEmpty())entry(out,"closed-receipts.json",new ByteArrayInputStream(Model.JSON.writeValueAsBytes(receipts)),
+                    MAX_RECEIPT_BYTES,deadline);
             for(Path directory:candidates){
                 rejectLinks(directory);
                 if(!Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_REPORT_PATH_UNSAFE");

@@ -33,6 +33,7 @@ final class TaskRequest {
     public JournalWriterAssignment.ExpectedCut handoffCut;
     public SharedHandoffEvidence.Scope handoffEvidenceScope;
     public SharedHandoffEvidence.Archive handoffArchive;
+    public SharedHandoffEvidence.ReceiptPlan handoffClosedReceipts;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
     boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.ACTION;}
@@ -57,6 +58,8 @@ final class TaskRequest {
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(handoffEvidenceScope!=null&&kind!=Kind.HANDOFF_EVIDENCE_PROBE&&kind!=Kind.HANDOFF_CUSTODY_PROBE
                 ||(handoffArchive!=null)!=(kind==Kind.HANDOFF_CUSTODY_PROBE))
+            throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        if(handoffClosedReceipts!=null&&kind!=Kind.HANDOFF_EVIDENCE_PROBE)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(kind==Kind.CREATE&&(yaml==null||yaml.getBytes(StandardCharsets.UTF_8).length>1024*1024))throw new IllegalArgumentException("CONFIG_REQUIRED");
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}

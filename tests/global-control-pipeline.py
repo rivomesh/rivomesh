@@ -42,6 +42,8 @@ parser.add_argument('--handoff-probe', action='store_true',
                     help='Read-only candidate and original Agent probe under the current assessment')
 parser.add_argument('--handoff-custody', action='store_true',
                     help='Prove exact completed-report custody using separate then shared private mounts')
+parser.add_argument('--handoff-closed-receipts', action='store_true',
+                    help='Verify shared closed operation receipts and refusal when a private original receipt is missing')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
@@ -113,6 +115,8 @@ if args.handoff_probe and not args.handoff_assessment:
     parser.error('--handoff-probe requires --handoff-assessment')
 if args.handoff_custody and not args.handoff_probe:
     parser.error('--handoff-custody requires --handoff-probe')
+if args.handoff_closed_receipts and not args.handoff_custody:
+    parser.error('--handoff-closed-receipts requires --handoff-custody')
 if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
                              or not os.access(args.handoff_browser.resolve(), os.X_OK)):
     parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
@@ -228,6 +232,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
+            'handoffClosedReceipts': args.handoff_closed_receipts,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'failureDiagnostics': args.failure_diagnostics,
@@ -2018,6 +2023,36 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     assert 'rows.mv.db' not in json.dumps(good)
                     assert not good['executionAuthorized']
                     passed('Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain')
+                    if args.handoff_closed_receipts:
+                        receipts=proof['sharedReceiptCustody']
+                        assert receipts['state']=='VERIFIED' and receipts['archive']==custody['archive']
+                        with zipfile.ZipFile(archive) as files:
+                            closed=json.loads(files.read('closed-receipts.json'))
+                            assert len(closed)==receipts['archive']['closedReceipts']
+                            assert any(r['request']==validation and r['phase']=='SUCCEEDED' for r in closed)
+                            assert all(set(r)=={'request','signature','actor','role','kind','phase','code'} for r in closed)
+                        assert validation not in json.dumps(good)
+                        passed('Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records')
+                        terminate_owner()
+                        wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                        " AND node_id='"+owner_node+"' AND lifecycle='RUNNING' AND lease_until>"+clock)=='0',
+                             'original enrollment lease ended')
+                        registry=home/owner_node/'controller'/'controller.json'
+                        private=json.loads(registry.read_text())
+                        assert private['requests'].pop(validation)['taskId']=='global_cdc'
+                        registry.write_text(json.dumps(private))
+                        restart_owner()
+                        wait(lambda:task().get('ownerState')=='HEALTHY' and task().get('workerState')=='STOPPED',
+                             'original enrollment returns with the remaining closed receipts')
+                        current=http('node-a',endpoint,dict(stopped_input,expectedAssessment=good['id'],
+                                                            expectedRevision=task()['revision']))
+                        missing=http('node-b',probe_endpoint,{'expectedAssessment':current['id']})
+                        assert missing['probe']['originalEvidence']['closedReceipts']=={
+                            'state':'REFUSED','code':'HANDOFF_CLOSED_RECEIPT_UNPROVEN'}
+                        assert 'sharedReceiptCustody' not in missing['probe']
+                        assert missing['probe']['sharedReportCustody']['state']=='VERIFIED'
+                        assert task()['ownerNodeId']==owner_node and data_cut()==original_cut and not missing['executionAuthorized']
+                        passed('Missing private receipt refuses operation custody while intact report custody and writer ownership remain')
             if args.handoff_browser:
                 browser_check('handoff', owner=owner_node, candidate=candidate, revision=stopped_input['expectedRevision'],
                               previousReceiptId=stopped['id'])

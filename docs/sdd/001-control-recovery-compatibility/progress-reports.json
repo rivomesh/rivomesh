@@ -78,6 +78,7 @@
     "A clean Temurin 21 reactor from published 4e86f79 passed 526 application and two isolated transport tests with 32 optional profile skips.",
     "JV-03 PostgreSQL 17.12 source and target verified TLS 1.3, SCRAM channel binding, wrong DNS and CA refusal and original-snapshot reconnect across 11 native checks.",
     "LG-09 reviewed retention holds passed eight native cases including two Chrome and 48 integrated Java /135 DOM tests. Audit receipt and report bytes survived Agent failure, with viewer refusal.",
-    "LG-08 current Temurin 21 LOCAL H2 coordinated cold restore preserved original snapshots and replayed sequence 1→3. Mixed-time destination and corrupt raw data failed closed in a synthetic MySQL/H2 test adapter profile."
+    "LG-08 current Temurin 21 LOCAL H2 coordinated cold restore preserved original snapshots and replayed sequence 1→3. Mixed-time destination and corrupt raw data failed closed in a synthetic MySQL/H2 test adapter profile.",
+    "CP-04/LG-05 closed operation receipt custody passed 14 native checks per control store and 48 staged Java tests. A lost private receipt after original Agent restart preserves report custody and original writer authority."
   ]
 }

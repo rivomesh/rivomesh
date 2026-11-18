@@ -117,7 +117,7 @@ class ManagedHandoffTest {
                 assertEquals(fixture.directory,request.handoffEvidenceScope.originalDirectory());
                 return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
                         "shareableReports",Map.of("state","ARCHIVED","archive",
-                                new SharedHandoffEvidence.Archive("a".repeat(64),10,1)));
+                                new SharedHandoffEvidence.Archive("a".repeat(64),10,1,0)));
             });
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
             String archive=bQueries.pending(bLease,candidateDirectory,10).getFirst();

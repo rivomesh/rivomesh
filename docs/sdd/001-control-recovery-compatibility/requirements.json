@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双入口评估、候选 Agent 对原日志/源/目标的验证，以及可选共享挂载中已完成报告的字节级核验已实测。操作回执、故障/源证据和安全的归属提交待验。",
-        "en": "Candidate journal/source/target checks and exact completed-report custody on an opt-in shared mount passed across both control stores. Operation receipts, failure/source evidence and fenced placement commit remain."
+        "zh-CN": "双入口评估与双 Agent 原日志、源、目标、报告及闭合操作回执的核验已通过。候选容量预留、源/故障证据、双端 fencing 和实际归属提交待验。",
+        "en": "Both entries and both Agents verified original journal, source, target, reports and bounded closed receipts. Capacity reservations, source/failure evidence, dual fencing and actual placement commit remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -1543,8 +1543,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "支持本地与外部日志，双 Agent 共享挂载的已完成报告字节级核验已实测。仍需验证跨节点原事件、故障证据及操作回执的可达性和实际迁移。",
-        "en": "Local and external journals are available. Two Agents verified exact completed reports through a shared mount. Cross-node original event, failure evidence and operation receipt reachability and actual transfer remain."
+        "zh-CN": "本地与外部日志可选。双 Agent 已实测共享挂载的原报告和闭合操作回执逐字节核验。仍需完善原事件、故障证据的可达性与实际迁移。",
+        "en": "Local and external journals are available. Two Agents verified exact report and closed receipt custody on a shared mount. Original events, failure evidence and actual transfer remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",

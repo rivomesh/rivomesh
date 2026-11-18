@@ -116,7 +116,7 @@ final class ManagedHandoff {
         OwnerQueries.HandoffQueries calls=transport.submitHandoff(request,actor);
         Map<String,Object> candidate=transport.await(calls.candidate(),actor);
         Map<String,Object> evidence=transport.await(calls.originalEvidence(),actor);
-        Map<String,Object> custody=verifySharedReports(request,actor,transport,evidence);
+        Map<String,Object> custody=verifySharedEvidence(request,actor,transport,evidence);
         return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
             Assessment a=probeAssessment(c,task,current,request.reference);
             long now=db.now(c);
@@ -128,13 +128,15 @@ final class ManagedHandoff {
         });
     }
 
-    private Map<String,Object> verifySharedReports(TaskRequest request,AccessControl.Principal actor,
+    private Map<String,Object> verifySharedEvidence(TaskRequest request,AccessControl.Principal actor,
                                                    OwnerQueries transport,Map<String,Object> evidence)throws Exception{
-        if(!(evidence.get("shareableReports") instanceof Map<?,?> reports)||!"ARCHIVED".equals(reports.get("state")))
-            return null;
-        SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(reports.get("archive"),SharedHandoffEvidence.Archive.class);
-        if(descriptor==null)throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
-        return transport.await(transport.submitHandoffCustody(request,actor,descriptor),actor);
+        for(String category:List.of("shareableReports","closedReceipts")){
+            if(!(evidence.get(category) instanceof Map<?,?> artifact)||!"ARCHIVED".equals(artifact.get("state")))continue;
+            SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(artifact.get("archive"),SharedHandoffEvidence.Archive.class);
+            if(descriptor==null)throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+            return transport.await(transport.submitHandoffCustody(request,actor,descriptor),actor);
+        }
+        return null;
     }
 
     ProbeRoute probeRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
@@ -143,6 +145,9 @@ final class ManagedHandoff {
                 Long.parseLong(a.originalCut.journalEpoch),Long.parseLong(a.originalCut.sequence),a.originalCut.checkpointHash);
         return new ProbeRoute(a.revision,a.activeVersion,agents.owner(c,a.original.node,a.original.directory),
                 agents.owner(c,a.candidate.node,a.candidate.directory),cut);
+    }
+    SharedHandoffEvidence.ReceiptPlan closedReceipts(Connection c,GlobalTaskStore.Record task)throws Exception{
+        return commands.closedHandoffReceipts(c,task);
     }
 
     private Assessment probeAssessment(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
@@ -223,7 +228,12 @@ final class ManagedHandoff {
             if(applicable&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
             Map<String,Object> probe=new LinkedHashMap<>(Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
                     "current",applicable,"candidate",a.probe.candidate,"originalEvidence",a.probe.originalEvidence));
-            if(a.probe.sharedReportCustody!=null)probe.put("sharedReportCustody",a.probe.sharedReportCustody);
+            if(a.probe.sharedReportCustody!=null){
+                if(a.probe.originalEvidence.get("shareableReports") instanceof Map<?,?> reports&&"ARCHIVED".equals(reports.get("state")))
+                    probe.put("sharedReportCustody",a.probe.sharedReportCustody);
+                if(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> receipts&&"ARCHIVED".equals(receipts.get("state")))
+                    probe.put("sharedReceiptCustody",a.probe.sharedReportCustody);
+            }
             result.put("probe",probe);
         }
         result.put("blockers",blockers);result.put("executionAuthorized",false);

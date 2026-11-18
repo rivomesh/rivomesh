@@ -69,7 +69,9 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 要核验已完成的校验报告，请在两个 Agent 上挂载同一份受保护的存储，并分别配置 `cluster.handoffEvidenceRoot` 为已存在的绝对路径。挂载目录须使用 POSIX 仅所有者权限。原 Agent 要有写权限，候选 Agent 要有读权限，存储还要支持文件锁和同目录原子改名。既有任务和部署继续使用原报告目录。
 
-原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告和 64 MiB 报告数据，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。源证据、故障证据、本地操作回执和修复计划接续仍需原 Agent 的私有状态。核验保留原任务归属，返回 `executionAuthorized: false`。
+原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告和 64 MiB 报告数据，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。源证据、故障证据和修复计划接续仍需原 Agent 的私有状态。核验保留原任务归属，返回 `executionAuthorized: false`。
+
+同一次核验可用 `probe.sharedReceiptCustody` 查看已结束的操作回执。原 Agent 会将已认证的全局命令与本地请求签名、操作者和执行结果核对，只归档匹配的已结束回执。候选 Agent 独立核对共享归档的原字节。该流程覆盖单任务最多 64 条全局命令。回执缺失、已清理、内容不匹配或操作未结束时，保留未核验状态。接口返回数量和摘要。回执导入、源证据、故障证据和执行接管仍需单独验收。
 
 ## 接受、执行和恢复
 

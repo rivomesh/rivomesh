@@ -305,5 +305,29 @@ final class DurableCommands {
             return true;
         }
     }
+    SharedHandoffEvidence.ReceiptPlan closedHandoffReceipts(Connection c,GlobalTaskStore.Record task)throws Exception{
+        root(c,false);
+        List<SharedHandoffEvidence.ClosedReceipt> receipts=new ArrayList<>();
+        try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("command")
+                +" WHERE cluster_id=? AND task_id=? ORDER BY created_at,request_id LIMIT ?",
+                cluster,task.id,SharedHandoffEvidence.MAX_RECEIPTS+1);ResultSet rows=p.executeQuery()){
+            int commands=0;
+            while(rows.next()){
+                if(++commands>SharedHandoffEvidence.MAX_RECEIPTS)
+                    return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_LIMIT");
+                Stored command=read(c,rows.getString(1));
+                if(command==null||!task.id.equals(command.task)||!task.owner.equals(command.owner)
+                        ||!task.directory.equals(command.directory)||!terminal(command.phase))
+                    return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
+                if(command.localRequest==null||"REJECTED".equals(command.phase))continue;
+                TaskRequest local=command.localRequest.snapshot();
+                if(!command.id.equals(local.requestId)||!task.id.equals(local.taskId))
+                    return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
+                receipts.add(new SharedHandoffEvidence.ClosedReceipt(command.id,TaskService.ownerReceiptSignature(local),
+                        command.actor,command.actorRole,local.kind,command.phase,command.code));
+            }
+        }
+        return new SharedHandoffEvidence.ReceiptPlan(receipts,null);
+    }
     private static Map<String,Object> view(Stored command){Map<String,Object> view=new LinkedHashMap<>();view.put("id",command.id);view.put("taskId",command.task);view.put("ownerNodeId",command.owner);view.put("action",command.request.action==null?command.request.kind.name():command.request.action);view.put("status",command.phase);view.put("code",command.code);view.put("actorId",command.actor);view.put("revision",command.acceptedRevision);view.put("createdAt",Instant.ofEpochMilli(command.createdAt).toString());view.put("parentRequestId",command.parent);return view;}
 }

@@ -382,20 +382,25 @@ public final class TaskService implements AutoCloseable {
     }
     synchronized OwnerReceipt ownerReceipt(TaskRequest supplied,String actorId,String actorRole)throws Exception{
         ensureOpen();TaskRequest request=supplied.snapshot();Receipt receipt=registry.requests.get(request.requestId);if(receipt==null)return null;
-        String signature;
-        switch(request.kind){
-            case CREATE:signature=digest("CREATE\n"+request.yaml);break;
-            case CONFIG_UPDATE:signature=configurationSignature(request.taskId,request.revision,request.document);break;
-            case RESTORE:signature=restoreSignature(request.taskId,request.revision,request.reference);break;
-            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):request.reviewValidationRetention()
-                    ?validationRetentionSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null,request.captureExclusion);break;
-            default:throw new IllegalArgumentException("OWNER_MUTATION_REQUIRED");
-        }
+        String signature=ownerReceiptSignature(request);
         if(!Objects.equals(signature,receipt.signature)||!Objects.equals(request.taskId,receipt.taskId)||!Objects.equals(actorId,receipt.actorId)||!Objects.equals(actorRole,receipt.actorRole))throw new Conflict("OWNER_RECEIPT_MISMATCH");
         require(request.taskId);
-        if(request.kind==TaskRequest.Kind.CREATE)return new OwnerReceipt("SUCCEEDED","TASK_CREATED");
-        if(request.kind==TaskRequest.Kind.CONFIG_UPDATE||request.kind==TaskRequest.Kind.RESTORE)return new OwnerReceipt("SUCCEEDED","CONFIG_UPDATED");
-        for(Operation operation:registry.tasks.get(request.taskId).operations)if(request.requestId.equals(operation.id))return new OwnerReceipt("PENDING".equals(operation.status)?"ACCEPTED":operation.status,operation.code==null?"LOCAL_OPERATION_ACCEPTED":operation.code);
+        return ownerOutcome(request.taskId,request.requestId,request.kind);
+    }
+    static String ownerReceiptSignature(TaskRequest request)throws Exception{
+        return switch(request.kind){
+            case CREATE->digest("CREATE\n"+request.yaml);
+            case CONFIG_UPDATE->configurationSignature(request.taskId,request.revision,request.document);
+            case RESTORE->restoreSignature(request.taskId,request.revision,request.reference);
+            case ACTION->request.recoveryCancel()?recoveryCancelSignature(request):request.reviewValidationRetention()
+                    ?validationRetentionSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null,request.captureExclusion);
+            default->throw new IllegalArgumentException("OWNER_MUTATION_REQUIRED");
+        };
+    }
+    private OwnerReceipt ownerOutcome(String task,String request,TaskRequest.Kind kind){
+        if(kind==TaskRequest.Kind.CREATE)return new OwnerReceipt("SUCCEEDED","TASK_CREATED");
+        if(kind==TaskRequest.Kind.CONFIG_UPDATE||kind==TaskRequest.Kind.RESTORE)return new OwnerReceipt("SUCCEEDED","CONFIG_UPDATED");
+        for(Operation operation:registry.tasks.get(task).operations)if(request.equals(operation.id))return new OwnerReceipt("PENDING".equals(operation.status)?"ACCEPTED":operation.status,operation.code==null?"LOCAL_OPERATION_ACCEPTED":operation.code);
         return new OwnerReceipt("UNKNOWN","OWNER_OPERATION_EVIDENCE_REQUIRED");
     }
     public synchronized Map<String,Object> create(String yaml,String request) throws Exception {
@@ -883,6 +888,7 @@ public final class TaskService implements AutoCloseable {
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}
     Map<String,Object> handoffProbe(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> originalEvidence=null;
+        SharedHandoffEvidence.ReceiptPlan closedReceipts=null;
         synchronized(this){
             ensureOpen();currentActor(actor);
             if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
@@ -899,7 +905,10 @@ public final class TaskService implements AutoCloseable {
                 long receipts=registry.requests.values().stream().filter(receipt->request.taskId.equals(receipt.taskId)).count();
                 originalEvidence=new LinkedHashMap<>(Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
                         "originInventory",inventory,"retainedReceipts",receipts));
-                if(config.cluster.handoffEvidenceRoot!=null)verifyHandoffEvidenceScope(request,true);
+                if(config.cluster.handoffEvidenceRoot!=null){
+                    verifyHandoffEvidenceScope(request,true);
+                    closedReceipts=collectClosedHandoffReceipts(request.taskId,request.handoffClosedReceipts);
+                }
             }else{
                 if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
                 if(request.kind==TaskRequest.Kind.HANDOFF_CUSTODY_PROBE)verifyHandoffEvidenceScope(request,false);
@@ -907,10 +916,18 @@ public final class TaskService implements AutoCloseable {
         }
         Path archiveRoot=config.cluster.handoffEvidenceRoot==null?null:Path.of(config.cluster.handoffEvidenceRoot);
         if(originalEvidence!=null){
-            if(archiveRoot!=null)try{
-                SharedHandoffEvidence.Archive archive=SharedHandoffEvidence.export(archiveRoot,request.handoffEvidenceScope,reports(request.taskId));
-                originalEvidence.put("shareableReports",Map.of("state","ARCHIVED","archive",archive));
-            }catch(Exception failed){originalEvidence.put("shareableReports",archiveRefusal(failed));}
+            if(closedReceipts!=null){
+                if(closedReceipts.refusal()!=null)originalEvidence.put("closedReceipts",Map.of("state","REFUSED","code",closedReceipts.refusal()));
+                try{
+                    SharedHandoffEvidence.Archive archive=SharedHandoffEvidence.export(archiveRoot,request.handoffEvidenceScope,
+                            reports(request.taskId),closedReceipts.receipts());
+                    if(archive.reports()>0)originalEvidence.put("shareableReports",Map.of("state","ARCHIVED","archive",archive));
+                    if(archive.closedReceipts()>0)originalEvidence.put("closedReceipts",Map.of("state","ARCHIVED","archive",archive));
+                }catch(Exception failed){
+                    originalEvidence.put("shareableReports",archiveRefusal(failed));
+                    if(!closedReceipts.receipts().isEmpty())originalEvidence.put("closedReceipts",archiveRefusal(failed));
+                }
+            }
             return originalEvidence;
         }
         if(request.kind==TaskRequest.Kind.HANDOFF_CUSTODY_PROBE){
@@ -934,6 +951,21 @@ public final class TaskService implements AutoCloseable {
                 code="HANDOFF_CANDIDATE_ACCESS_UNVERIFIED";
             return Map.of("state","REFUSED","code",code);
         }
+    }
+    private SharedHandoffEvidence.ReceiptPlan collectClosedHandoffReceipts(String task,SharedHandoffEvidence.ReceiptPlan plan){
+        if(plan==null)return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
+        if(plan.refusal()!=null)return plan;
+        Set<String> verified=new HashSet<>();
+        for(SharedHandoffEvidence.ClosedReceipt expected:plan.receipts()){
+            Receipt local=registry.requests.get(expected.request());
+            OwnerReceipt actual=ownerOutcome(task,expected.request(),expected.kind());
+            if(local==null||!task.equals(local.taskId)||!expected.signature().equals(local.signature)
+                    ||!expected.actor().equals(local.actorId)||!expected.role().equals(local.actorRole)
+                    ||!expected.phase().equals(actual.phase)||!expected.code().equals(actual.code)||!verified.add(expected.request()))
+                return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
+        }
+        long actual=registry.requests.entrySet().stream().filter(row->task.equals(row.getValue().taskId)).count();
+        return actual==verified.size()?plan:new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
     }
     private void verifyHandoffEvidenceScope(TaskRequest request,boolean original){
         SharedHandoffEvidence.Scope scope=request.handoffEvidenceScope;

@@ -25,6 +25,7 @@ final class OwnerQueries {
     private final int maximum;
     private final long lifetime;
     private final boolean recoveryReview,recoverySkip;
+    private final boolean sharedHandoffEvidence;
     private final ManagedHandoff handoff;
 
     OwnerQueries(ClusterConfig config,GlobalTaskStore tasks,AgentDirectory agents,int maximum,long lifetime)throws Exception{
@@ -34,6 +35,7 @@ final class OwnerQueries {
         if(maximum<1||maximum>10000||lifetime<1000||lifetime>60000)throw new IllegalArgumentException("OWNER_QUERY_POLICY_INVALID");
         this.tasks=tasks;this.agents=agents;this.maximum=maximum;this.lifetime=lifetime;db=tasks.database();cipher=tasks.commandCipher();cluster=config.id;recoveryReview=config.recoveryReview;recoverySkip=config.recoverySkip;
         this.handoff=handoff;
+        sharedHandoffEvidence=config.handoffEvidenceRoot!=null;
         try(Connection c=db.connect()){
             db.bootstrapLock(c);JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("owner_query")+" (cluster_id VARCHAR(128) NOT NULL,query_id VARCHAR(36) NOT NULL,task_id VARCHAR(128) NOT NULL,owner_id VARCHAR(64) NOT NULL,node_epoch BIGINT NOT NULL,phase VARCHAR(16) NOT NULL,expires_at BIGINT NOT NULL,envelope "+(db.mysql()?"LONGTEXT":"TEXT")+" NOT NULL,PRIMARY KEY(cluster_id,query_id))"+(db.mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
             db.index(c,"owner_query","rmc_owner_query_pending","cluster_id, owner_id, node_epoch, phase, expires_at, query_id");
@@ -160,6 +162,8 @@ final class OwnerQueries {
                 }else{
                     scoped.handoffEvidenceScope=new SharedHandoffEvidence.Scope(cluster,record.id,scoped.reference,
                             route.revision(),route.activeVersion(),route.original().directory,route.candidate().directory);
+                    if(scoped.kind==TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE&&sharedHandoffEvidence)
+                        scoped.handoffClosedReceipts=handoff.closedReceipts(c,record);
                 }
                 return new Execution(scoped,actor);
             });

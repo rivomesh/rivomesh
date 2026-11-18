@@ -38,7 +38,7 @@ class SharedHandoffEvidenceTest {
     @Test void copiesOnlyCompletedReportsAndRetainsTheExactOriginalBytes()throws Exception{
         Path complete=report("COMPLETE"),incomplete=report("SOURCE_READY");
         byte[] saved=Files.readAllBytes(complete.resolve("rows.mv.db"));
-        SharedHandoffEvidence.Archive proof=SharedHandoffEvidence.export(shared,scope,reports);
+        SharedHandoffEvidence.Archive proof=SharedHandoffEvidence.export(shared,scope,reports,List.of());
         assertEquals(1,proof.reports());
         SharedHandoffEvidence.verify(shared,scope,proof);
         try(ZipFile zip=new ZipFile(archive().toFile())){
@@ -53,7 +53,7 @@ class SharedHandoffEvidenceTest {
 
     @Test void verifiesBothBindingAndBytesUnderAnIndependentRoot()throws Exception{
         report("COMPLETE");
-        SharedHandoffEvidence.Archive proof=SharedHandoffEvidence.export(shared,scope,reports);
+        SharedHandoffEvidence.Archive proof=SharedHandoffEvidence.export(shared,scope,reports,List.of());
         Path candidate=Files.createDirectory(temporary.toRealPath().resolve("candidate"),PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
         assertEquals("HANDOFF_ARCHIVE_MISSING",assertThrows(TaskService.Conflict.class,
                 ()->SharedHandoffEvidence.verify(candidate,scope,proof)).getMessage());
@@ -70,13 +70,13 @@ class SharedHandoffEvidenceTest {
 
     @Test void busyReportCannotReplaceACompletedArchiveAndStagingCleanupIsScoped()throws Exception{
         Path ready=report("COMPLETE");
-        SharedHandoffEvidence.Archive previous=SharedHandoffEvidence.export(shared,scope,reports);
+        SharedHandoffEvidence.Archive previous=SharedHandoffEvidence.export(shared,scope,reports,List.of());
         Path result=archive(), abandoned=shared.resolve(result.getFileName()+".old.tmp"),unrelated=shared.resolve("other.tmp");
         Files.writeString(abandoned,"abandoned");Files.writeString(unrelated,"other");
         try(FileChannel file=FileChannel.open(ready.resolve("validation.lock"),StandardOpenOption.WRITE);
             FileLock held=file.lock()){
             assertEquals("HANDOFF_ARCHIVE_BUSY",assertThrows(TaskService.Conflict.class,
-                    ()->SharedHandoffEvidence.export(shared,scope,reports)).getMessage());
+                    ()->SharedHandoffEvidence.export(shared,scope,reports,List.of())).getMessage());
         }
         assertFalse(Files.exists(abandoned));
         assertTrue(Files.exists(unrelated));
@@ -84,5 +84,19 @@ class SharedHandoffEvidenceTest {
         Files.setPosixFilePermissions(shared,PosixFilePermissions.fromString("rwxr-x---"));
         assertEquals("HANDOFF_ARCHIVE_MOUNT_PERMISSIONS_UNVERIFIED",assertThrows(TaskService.Conflict.class,
                 ()->SharedHandoffEvidence.verify(shared,scope,previous)).getMessage());
+    }
+
+    @Test void validatesArchivedClosureAndCountEvenWithoutAValidationReport()throws Exception{
+        SharedHandoffEvidence.ClosedReceipt receipt=new SharedHandoffEvidence.ClosedReceipt("closed_request_1","1".repeat(64),
+                "operator","OPERATOR",TaskRequest.Kind.ACTION,"SUCCEEDED","LOCAL_STOPPED");
+        SharedHandoffEvidence.Archive proof=SharedHandoffEvidence.export(shared,scope,reports,List.of(receipt));
+        assertEquals(0,proof.reports());
+        assertEquals(1,proof.closedReceipts());
+        SharedHandoffEvidence.verify(shared,scope,proof);
+        var wrongCount=new SharedHandoffEvidence.Archive(proof.sha256(),proof.bytes(),0,2);
+        assertEquals("HANDOFF_CLOSED_RECEIPT_INVALID",assertThrows(TaskService.Conflict.class,
+                ()->SharedHandoffEvidence.verify(shared,scope,wrongCount)).getMessage());
+        assertThrows(TaskService.Conflict.class,()->new SharedHandoffEvidence.ClosedReceipt("closed_request_2","2".repeat(64),
+                "operator","OPERATOR",TaskRequest.Kind.ACTION,"UNKNOWN","OWNER_RECEIPT_REQUIRED"));
     }
 }
