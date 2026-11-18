@@ -80,6 +80,21 @@ One run per journal mode used the same artifact, MySQL 8.4.13, PostgreSQL 17.12 
 
 Both runs matched source and target content hashes after snapshot and CDC. During diagnosis, a Worker with the same heap exhausted memory while loading an unbounded payload batch. The journal now limits fetched transaction prefixes to 8 MiB and processes an oversized first transaction alone. PostgreSQL also changed from a sequential scan to a primary-key index scan for the benchmark UPDATE when the BIGINT key was bound as BIGINT. Individual transaction limits and large-catalog scaling remain separate measurements. [Reports and exact artifact](../verification/baseline.json)
 
+## Repeated Temurin 21 capacity reference
+
+The Apple M1 Pro ARM64 host had 10 logical CPUs and 16 GiB RAM. Docker Desktop 29.9.2 reported 10 vCPUs and 15.6 GiB RAM. Three independent runs per combination used MySQL 8.4.13, PostgreSQL 17.12, Temurin 21.0.13+9 and the same release artifact. Each of the three containers had 1 GiB RAM and the listed CPU quota. The worker heap was 256 MiB. Both database services used persistent fixture volumes. The LOCAL journal used a host bind mount and EXTERNAL used a separate schema on the destination PostgreSQL instance.
+
+Each trial loaded 20,000 rows with a 256-byte payload, then checked 24,000 insert, update and delete changes. Figures show the median and the minimum–maximum range across all three trials.
+
+| Journal | CPUs per container | Snapshot rows/s | CDC changes/s | Catch-up after source writes |
+|---|---:|---:|---:|---:|
+| LOCAL | 1 | 1,943 (1,758–2,222) | 2,983 (2,133–3,699) | 0.27 s (0.26–0.42) |
+| LOCAL | 2 | 2,986 (2,442–3,345) | 2,962 (2,954–3,000) | 0.29 s (0.29–0.36) |
+| EXTERNAL | 1 | 2,558 (2,469–2,763) | 2,925 (2,784–3,030) | 1.00 s (0.88–1.29) |
+| EXTERNAL | 2 | 3,143 (1,554–3,382) | 3,038 (2,169–3,472) | 0.36 s (0.28–0.37) |
+
+All 12 cases matched exact ordered source and target bytes after both phases. The visibility check includes the expected first and last IDs, because the intermediate update-only state can share the final row count and version sum. The measurements include worker startup for snapshots and source writes for CDC. They apply to this workload and the recorded host. [Trial values, image IDs and artifact SHA-256](../verification/baseline.json)
+
 ## Building the hardware standard
 
 Keep raw reports and run at least three repetitions for every workload/resource
@@ -109,18 +124,19 @@ python3 tests/benchmark.py --java 21 --journal-mode EXTERNAL --rows 1000 \
 
 Selecting a runtime is not a compatibility claim. Inspect a passing raw report and actual JVM version. This SQL profile can establish only MySQL-source/PostgreSQL-target snapshot/CDC coverage on that runtime; messaging/security/failover and other drivers need separate runtime acceptance.
 
-To run every listed JRE against both journals sequentially, using one unchanged release:
+To compare CPU quotas with both journal modes on one Temurin 21 artifact, run independent trials sequentially:
 
 ```bash
-python3 tests/runtime-matrix.py --rows 1000 \
+python3 tests/runtime-matrix.py --rows 20000 --cpu-limits 1 2 --repeat 3 \
+  --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --storage-description 'Record physical storage, VM limits and shared-host contention'
 ```
 
-The matrix retains progress and per-profile logs in `target/runtime-matrix/<id>/matrix.json`, links each raw benchmark report, and continues independent profiles after a failed profile. A passing profile requires source/target byte checks, observed journal backend, successful cleanup, the expected actual JVM version and the same release SHA-256. Changing the release aborts the matrix. These remain small SQL runtime checks; they do not validate every adapter on every JRE. Do not run other integration suites or rebuild concurrently.
+The matrix retains progress, per-trial logs and links to each raw benchmark report in `target/runtime-matrix/<id>/`. Each trial uses fresh services. A passing trial requires source and target byte checks, the observed journal backend, successful cleanup, the expected JVM version, the same artifact SHA-256 and the requested CPU quota on all three containers. The matrix continues after a failed trial and reports the median and range only for combinations whose trials all pass. Changing the artifact aborts the matrix. Run it without competing workloads or a concurrent release build to make comparisons reproducible.
 
 ### Controller, Agent and Worker runtime verification
 
-Use one release package to start the actual processes on each JDK and verify MySQL to PostgreSQL and MySQL snapshot and CDC. The report records each role’s JVM version, architecture and package hash.
+Use one release package to start the actual processes on Temurin 21 and verify MySQL to PostgreSQL and MySQL snapshot and CDC. The report records each role’s JVM version, architecture and package hash.
 
 ```bash
 python3 tests/control-runtime.py --suite processes \

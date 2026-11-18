@@ -3672,5 +3672,257 @@
         "blockingFindings": []
       }
     }
+  },
+  "temurin21RepeatedCapacity": {
+    "artifactSha256": "5c94d5468757992376f8d99a0d8d043e215138c9d99c5684922aa45d7183d137",
+    "repeatedTrialsPassed": 12,
+    "cleanSourceCommit": "2257425",
+    "reactorJavaPassed": 514,
+    "reactorOptionalSkips": 32,
+    "benchmarkSha256": "c56182696f8054cc067b4e7ee9eaabfdcc308c873f2ce7c6a0c7ff2206c9562c",
+    "host": {
+      "processor": "Apple M1 Pro",
+      "physicalMemoryBytes": 17179869184,
+      "logicalCpus": 10
+    },
+    "storageDescription": "Apple M1 Pro ARM64, local Apple SSD, Docker Desktop VM, isolated sequential fixtures, LOCAL journal host bind mount; EXTERNAL journal on target database volume",
+    "docker": {
+      "ServerVersion": "29.9.2",
+      "NCPU": 10,
+      "MemTotal": 16745824256,
+      "Driver": "overlay2",
+      "OperatingSystem": "Docker Desktop",
+      "Architecture": "aarch64"
+    },
+    "databaseRuntime": {
+      "mysqlVersionFlushSyncBuffer": "8.4.13\t1\t1\t268435456",
+      "postgresVersionDurabilityBuffer": "PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit\non|on|256MB"
+    },
+    "workerRuntime": "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+    "imageIds": {
+      "worker": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+      "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de"
+    },
+    "workload": {
+      "snapshotRows": 20000,
+      "payloadBytes": 256,
+      "cdcChanges": 24000,
+      "chunkSize": 1000,
+      "containerMemoryBytes": 1073741824,
+      "workerHeapMiB": 256
+    },
+    "contentSha256": {
+      "snapshot": "d941eece893df1ac3ab063fd9607a83607cf3986cd531f6df7fc2a6e7e84f584",
+      "cdc": "93aa88e822972968ff71e99ee6a0f1189c6637930e45ef8fc844175ed55ae020"
+    },
+    "results": [
+      {
+        "java": "21",
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "1",
+        "trials": 3,
+        "snapshotRowsPerSecond": {
+          "minimum": 1758.360457233496,
+          "median": 1942.5130738653934,
+          "maximum": 2221.5105470059707
+        },
+        "cdcChangesPerSecond": {
+          "minimum": 2133.3987418554593,
+          "median": 2983.423601320251,
+          "maximum": 3698.8526220141803
+        },
+        "afterWritesCatchUpSeconds": {
+          "minimum": 0.25571920862421393,
+          "median": 0.26882604183629155,
+          "maximum": 0.42048987513408065
+        }
+      },
+      {
+        "java": "21",
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "2",
+        "trials": 3,
+        "snapshotRowsPerSecond": {
+          "minimum": 2441.9578912843335,
+          "median": 2985.51829541228,
+          "maximum": 3345.1559969985756
+        },
+        "cdcChangesPerSecond": {
+          "minimum": 2954.009199846477,
+          "median": 2962.458872480736,
+          "maximum": 2999.6082541154497
+        },
+        "afterWritesCatchUpSeconds": {
+          "minimum": 0.2864598333835602,
+          "median": 0.2917977496981621,
+          "maximum": 0.36142345890402794
+        }
+      },
+      {
+        "java": "21",
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "1",
+        "trials": 3,
+        "snapshotRowsPerSecond": {
+          "minimum": 2469.4537446090253,
+          "median": 2557.907222633219,
+          "maximum": 2763.314226421157
+        },
+        "cdcChangesPerSecond": {
+          "minimum": 2783.532572922738,
+          "median": 2924.554401803754,
+          "maximum": 3030.0227752302617
+        },
+        "afterWritesCatchUpSeconds": {
+          "minimum": 0.8814688343554735,
+          "median": 1.0016382075846195,
+          "maximum": 1.294526332989335
+        }
+      },
+      {
+        "java": "21",
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "2",
+        "trials": 3,
+        "snapshotRowsPerSecond": {
+          "minimum": 1553.7962877124694,
+          "median": 3142.818450803474,
+          "maximum": 3381.979777766218
+        },
+        "cdcChangesPerSecond": {
+          "minimum": 2168.7927575143385,
+          "median": 3038.4284766710157,
+          "maximum": 3472.2659269345672
+        },
+        "afterWritesCatchUpSeconds": {
+          "minimum": 0.2782826670445502,
+          "median": 0.35566229186952114,
+          "maximum": 0.3670336250215769
+        }
+      }
+    ],
+    "trials": [
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "1",
+        "trial": 1,
+        "measurements": {
+          "snapshotRowsPerSecond": 1942.5130738653934,
+          "cdcChangesPerSecond": 2133.3987418554593,
+          "afterWritesCatchUpSeconds": 0.42048987513408065
+        }
+      },
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "2",
+        "trial": 1,
+        "measurements": {
+          "snapshotRowsPerSecond": 2441.9578912843335,
+          "cdcChangesPerSecond": 2962.458872480736,
+          "afterWritesCatchUpSeconds": 0.2917977496981621
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "1",
+        "trial": 1,
+        "measurements": {
+          "snapshotRowsPerSecond": 2469.4537446090253,
+          "cdcChangesPerSecond": 2924.554401803754,
+          "afterWritesCatchUpSeconds": 1.294526332989335
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "2",
+        "trial": 1,
+        "measurements": {
+          "snapshotRowsPerSecond": 1553.7962877124694,
+          "cdcChangesPerSecond": 2168.7927575143385,
+          "afterWritesCatchUpSeconds": 0.35566229186952114
+        }
+      },
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "1",
+        "trial": 2,
+        "measurements": {
+          "snapshotRowsPerSecond": 1758.360457233496,
+          "cdcChangesPerSecond": 2983.423601320251,
+          "afterWritesCatchUpSeconds": 0.26882604183629155
+        }
+      },
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "2",
+        "trial": 2,
+        "measurements": {
+          "snapshotRowsPerSecond": 2985.51829541228,
+          "cdcChangesPerSecond": 2999.6082541154497,
+          "afterWritesCatchUpSeconds": 0.36142345890402794
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "1",
+        "trial": 2,
+        "measurements": {
+          "snapshotRowsPerSecond": 2557.907222633219,
+          "cdcChangesPerSecond": 2783.532572922738,
+          "afterWritesCatchUpSeconds": 1.0016382075846195
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "2",
+        "trial": 2,
+        "measurements": {
+          "snapshotRowsPerSecond": 3381.979777766218,
+          "cdcChangesPerSecond": 3038.4284766710157,
+          "afterWritesCatchUpSeconds": 0.3670336250215769
+        }
+      },
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "1",
+        "trial": 3,
+        "measurements": {
+          "snapshotRowsPerSecond": 2221.5105470059707,
+          "cdcChangesPerSecond": 3698.8526220141803,
+          "afterWritesCatchUpSeconds": 0.25571920862421393
+        }
+      },
+      {
+        "journalMode": "LOCAL",
+        "cpusPerContainer": "2",
+        "trial": 3,
+        "measurements": {
+          "snapshotRowsPerSecond": 3345.1559969985756,
+          "cdcChangesPerSecond": 2954.009199846477,
+          "afterWritesCatchUpSeconds": 0.2864598333835602
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "1",
+        "trial": 3,
+        "measurements": {
+          "snapshotRowsPerSecond": 2763.314226421157,
+          "cdcChangesPerSecond": 3030.0227752302617,
+          "afterWritesCatchUpSeconds": 0.8814688343554735
+        }
+      },
+      {
+        "journalMode": "EXTERNAL",
+        "cpusPerContainer": "2",
+        "trial": 3,
+        "measurements": {
+          "snapshotRowsPerSecond": 3142.818450803474,
+          "cdcChangesPerSecond": 3472.2659269345672,
+          "afterWritesCatchUpSeconds": 0.2782826670445502
+        }
+      }
+    ]
   }
 }

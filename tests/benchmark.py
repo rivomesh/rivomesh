@@ -137,14 +137,15 @@ def main():
             raise RuntimeError("CONTENT_MISMATCH_" + phase.upper())
         report["measurements"][phase + "ContentSha256"] = source
 
-    def await_target(rows, versions):
+    def await_target(rows, versions, first_id, last_id):
         deadline = time.monotonic() + args.timeout
+        expected = f"{rows}:{versions}:{first_id}:{last_id}"
         while time.monotonic() < deadline:
             visible = sql("postgres", "SELECT to_regclass('bench_copy.items');")
             if visible.stdout.strip():
-                result = sql("postgres", "SELECT count(*)::text||':'||coalesce(sum(version),0)::text "
+                result = sql("postgres", "SELECT concat_ws(':',count(*),coalesce(sum(version),0),min(id),max(id)) "
                              "FROM bench_copy.items;")
-                if result.stdout.strip() == str(rows) + ":" + str(versions):
+                if result.stdout.strip() == expected:
                     return time.monotonic()
             running = run(compose + ["ps", "--status", "running", "--services"])
             if "worker" not in running.stdout.splitlines():
@@ -203,7 +204,7 @@ def main():
         report["measurements"]["sourceLoadSeconds"] = time.monotonic() - load_start
         snapshot_start = time.monotonic()
         run(compose + ["up", "-d", "--no-deps", "worker"])
-        snapshot_end = await_target(args.rows, 0)
+        snapshot_end = await_target(args.rows, 0, 1, args.rows)
         seconds = snapshot_end - snapshot_start
         report["measurements"].update(snapshotVisibilitySeconds=seconds,
                                       snapshotRowsPerSecond=args.rows / seconds)
@@ -222,7 +223,8 @@ def main():
                       for i in range(start, min(start + 500, args.rows + removed + 1))]
             sql("mysql", "INSERT INTO bench.items VALUES " + ",".join(values) + ";")
         write_end = time.monotonic()
-        cdc_end = await_target(args.rows, args.rows)
+        # The update-only intermediate state has the final row count and version sum.
+        cdc_end = await_target(args.rows, args.rows, removed + 1, args.rows + removed)
         seconds = cdc_end - cdc_start
         report["measurements"].update(sourceMutationSeconds=write_end - cdc_start,
                                       cdcCatchUpSeconds=seconds,
