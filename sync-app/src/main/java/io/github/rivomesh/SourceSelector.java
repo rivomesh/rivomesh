@@ -70,6 +70,10 @@ public final class SourceSelector {
                 if(!version.find())throw new IllegalArgumentException("MYSQL_VERSION_UNRECOGNIZED");
                 major=Integer.parseInt(version.group(1));minor=Integer.parseInt(version.group(2));patch=Integer.parseInt(version.group(3));
                 if(major<5||(major==5&&minor<7))throw new IllegalArgumentException("MYSQL_57_OR_NEWER_REQUIRED");
+                String versionPrefix=major+"."+minor;
+                if(config.source.expectedVersion!=null&&!config.source.expectedVersion.equals(versionPrefix)
+                        &&!config.source.expectedVersion.equals(versionPrefix+"."+patch))
+                    throw new IllegalArgumentException("MYSQL_VERSION_PROFILE_MISMATCH");
             }
             boolean mysql8=major>=8;
             boolean replicaNames=major>8||(major==8&&(minor>0||patch>=22));

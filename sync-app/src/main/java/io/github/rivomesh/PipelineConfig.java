@@ -10,7 +10,9 @@ import java.util.*;
 /** Explicit v3 configuration; v2 task files and state retain their original path. */
 public final class PipelineConfig {
     public int formatVersion=3;
-    public String pipelineId,nodeId="rivomesh-node",sourceType="MYSQL";
+    public String pipelineId,nodeId="rivomesh-node";
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public String sourceType;
     public Config.Source source=new Config.Source();
     public List<String> databases=new ArrayList<>();
     public List<Target> targets=new ArrayList<>();
@@ -69,10 +71,17 @@ public final class PipelineConfig {
     static String driver(TargetProduct product){if(product!=null&&product.mysqlDialect())return "com.mysql.cj.jdbc.Driver";if(product==TargetProduct.POSTGRESQL)return "org.postgresql.Driver";if(product==TargetProduct.GAUSS)return "io.github.rivomesh.gaussdb.jdbc.Driver";if(product==TargetProduct.GBASE_8C)return "com.gbase8c.Driver";if(product==TargetProduct.KINGBASE)return "com.kingbase8.Driver";if(product==TargetProduct.DM)return "dm.jdbc.driver.DmDriver";throw new IllegalArgumentException("PRODUCT_NOT_ENABLED");}
     private static void id(String value){if(value==null||!value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("PIPELINE_ID_INVALID");}
     private static void url(TargetProduct product,String url){driver(product);if(url==null||!url.startsWith(product.mysqlDialect()?"jdbc:mysql://":product==TargetProduct.GBASE_8C?"jdbc:gbase8c://":product==TargetProduct.KINGBASE?"jdbc:kingbase8://":product==TargetProduct.DM?"jdbc:dm://":"jdbc:postgresql://"))throw new IllegalArgumentException("TARGET_URL_INVALID");}
+    String effectiveSourceType(){
+        String nested=source==null?null:source.type;
+        if(nested!=null&&sourceType!=null&&!nested.equals(sourceType))
+            throw new IllegalArgumentException("SOURCE_TYPE_CONFLICT");
+        return nested!=null?nested:sourceType==null?"MYSQL":sourceType;
+    }
     public void validate(){
-        if(formatVersion!=3||!"MYSQL".equals(sourceType)||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
+        if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
         Set<String> db=new TreeSet<>();for(String name:databases)if(name==null||name.isEmpty()||name.indexOf('\0')>=0||!db.add(name))throw new IllegalArgumentException("DATABASE_LIST_INVALID");
         if(chunkSize<1||chunkSize>10000||leaseMillis<3000||heartbeatMillis<100||heartbeatMillis>leaseMillis/3||pollIntervalMillis<10||retryDelayMillis<10||journal.maxBytes<1)throw new IllegalArgumentException("PIPELINE_LIMIT_INVALID");
+        PipelineSources.requireSupported(this);
         legacy().validate();Set<String> ids=new HashSet<>(),destinations=new HashSet<>(),mapped=new TreeSet<>();
         for(Target t:targets){
             if(t==null)throw new IllegalArgumentException("TARGET_REQUIRED");id(t.id);if(!ids.add(t.id))throw new IllegalArgumentException("DUPLICATE_TARGET_ID");

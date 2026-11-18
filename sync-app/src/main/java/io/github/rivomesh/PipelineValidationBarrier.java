@@ -19,7 +19,7 @@ public final class PipelineValidationBarrier {
     public static final class Session implements AutoCloseable {
         private final PipelineConfig config;
         private final JdbcJournal journal;
-        private final MysqlCdcSource source;
+        private final SourceAdapter source;
         private SourceAdapter.ConsistentRead view;
         private final List<TableSchema> tables;
         private final Certificate certificate=new Certificate();
@@ -32,7 +32,7 @@ public final class PipelineValidationBarrier {
                 if(target.product.messaging()||target.product.materialized())throw new IllegalArgumentException("VALIDATION_TARGET_PROTOCOL_UNSUPPORTED");ids.add(target.id);
             }
             if(!ids.equals(selected))throw new IllegalArgumentException("VALIDATION_TARGET_UNKNOWN");
-            journal=new JdbcJournal(config.existingJournalSettings());MysqlCdcSource opened=null;
+            journal=new JdbcJournal(config.existingJournalSettings());SourceAdapter opened=null;
             try{
                 journal.verifyIdentity(config.fingerprint(),config.subscribers());Map<String,Object> before=journal.status();
                 if(!"RUNNING".equals(before.get("run_state")))throw error("VALIDATION_REQUIRES_RUNNING_PIPELINE");
@@ -41,7 +41,7 @@ public final class PipelineValidationBarrier {
                 if(((Number)snapshots.get("table_count")).longValue()!=tables.size()||((Number)snapshots.get("completed_tables")).longValue()!=tables.size())throw error("VALIDATION_REQUIRES_COMPLETED_SNAPSHOT");
                 certificate.id=reportId==null?UUID.randomUUID().toString():reportId;certificate.createdAt=Instant.now().toString();certificate.fingerprint=config.fingerprint();certificate.generation=(String)before.get("generation");certificate.selectedTargets=ids;
                 for(TableSchema table:tables)certificate.schemas.put(table.id,Codec.sha256(Codec.encode(table)));
-                opened=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),certificate.generation);source=opened;
+                opened=PipelineSources.open(config,certificate.generation);source=opened;
                 source.validateFailover(journal.captured(),journal.dependencies());view=source.consistentRead(tables,gateMillis,readMillis);certificate.sourcePosition=view.baseline();
                 long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(gateMillis);
                 while(true){

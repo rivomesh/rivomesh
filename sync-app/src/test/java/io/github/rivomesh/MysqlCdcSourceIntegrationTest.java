@@ -9,6 +9,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @EnabledIfSystemProperty(named="sync.integration",matches="true")
 class MysqlCdcSourceIntegrationTest {
+    @Test void versionProfileIsVerifiedOnTheActualSourceBeforeSelection()throws Exception{
+        Config config=ClusterHarness.config();
+        String[] version=ClusterHarness.scalar("mysql","SELECT VERSION()").split("[.-]");
+        config.source.expectedVersion=version[0]+"."+version[1]+"."+version[2];
+        assertNotNull(new SourceSelector(config).select(null,""));
+        config.source.expectedVersion=version[0]+"."+version[1];
+        assertNotNull(new SourceSelector(config).select(null,""));
+        config.source.expectedVersion="999.999";
+        assertEquals("MYSQL_VERSION_PROFILE_MISMATCH",
+                assertThrows(IllegalArgumentException.class,()->new SourceSelector(config).select(null,"")).getMessage());
+    }
+
     @Test void multipleDatabasesKeylessDuplicatesJsonAndGeneratedColumnsUseHistoricalImages()throws Exception{
         Config config=ClusterHarness.config();String second=config.source.database+"_b";
         ClusterHarness.sql("mysql","CREATE DATABASE "+Sql.mysql(config.source.database));ClusterHarness.sql("mysql","CREATE DATABASE "+Sql.mysql(second));

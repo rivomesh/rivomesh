@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='mysql:8.4', help='MySQL source fixture image or pinned digest')
+parser.add_argument('--source-expected-version', help='Set the source type and optional version check in the fixture task')
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(8, 11, 17, 21, 25),
@@ -595,6 +596,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     'source': {'clusterId': 'global-cdc-source', 'host': 'mysql', 'username': 'root', 'password': env['RM_GC_DATA'], 'database': 'sales', 'serverId': 992201},
                     'databases': ['sales', 'billing'], 'chunkSize': 1, 'pollIntervalMillis': 100, 'retryDelayMillis': 200, 'leaseMillis': 5000, 'heartbeatMillis': 300,
                     'journal': {'mode': 'LOCAL'}, 'targets': []}
+        if args.source_expected_version:
+            document['source'].update(type='MYSQL', expectedVersion=args.source_expected_version)
         for product, target, url, username in [('POSTGRESQL', 'pg', 'jdbc:postgresql://postgres:5432/sync_test', 'sync_target'), ('MYSQL', 'my', 'jdbc:mysql://mysql-target:3306/?allowPublicKeyRetrieval=true&sslMode=DISABLED', 'root')]:
             document['targets'].append({'id': target, 'product': product, 'url': url, 'username': username, 'password': env['RM_GC_DATA'], 'metadataSchema': 'rm_' + target + '_meta', 'mappings': {'sales': 'rm_' + target + '_sales', 'billing': 'rm_' + target + '_billing'}})
         created = 'gc_create_' + uuid.uuid4().hex

@@ -24,12 +24,6 @@ public final class PipelineEngine implements AutoCloseable {
         try{capture.check();if(topology!=null)topology.check();}
         catch(Exception e){throw new SourceFailure(e);}
     }
-    private void rejectFeedback(String sourceIdentity,String driver,String url,String username,String password)throws Exception{
-        if(!"com.mysql.cj.jdbc.Driver".equals(driver))return;
-        try(Connection c=JdbcConnections.open(driver,url,username,password);Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT @@global.server_uuid")){
-            rs.next();if(sourceIdentity.equals(rs.getString(1)))throw new IllegalArgumentException("SOURCE_JOURNAL_OR_TARGET_FEEDBACK_LOOP");
-        }
-    }
     public void run()throws Exception{
         config.prepareLocalDirectory();JdbcJournal localKeeper=null;
         try{while(!stopped)try{
@@ -56,15 +50,16 @@ public final class PipelineEngine implements AutoCloseable {
         try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
             JdbcJournal.Settings storage=config.journalSettings();
             // Check physical identity before any journal DDL can enter the source binlog.
-            String identity;
-            try(MysqlCdcSource probe=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),"probe")){
-                identity=probe.physicalIdentity();
-            }catch(Exception e){throw new PipelineFailure(Phase.SOURCE_CONNECT,e);}
-            rejectFeedback(identity,storage.driver,storage.url,storage.username,storage.password);
+            SourceAdapter probe;
+            try{probe=PipelineSources.open(config,"probe");}
+            catch(Exception e){throw new PipelineFailure(Phase.SOURCE_CONNECT,e);}
+            try(SourceAdapter source=probe){
+                source.requireSeparateDatabase(storage.driver,storage.url,storage.username,storage.password);
+            }
             journal.initialize(config.fingerprint(),null,config.subscribers());Journal.Lease lease=journal.claim(config.nodeId.substring(0,Math.min(118,config.nodeId.length()))+"-"+UUID.randomUUID().toString().substring(0,8),config.leaseMillis);
             AtomicReference<Throwable> heartbeat=new AtomicReference<>();scheduler.scheduleAtFixedRate(()->{try{journal.heartbeat(lease,config.leaseMillis);}catch(Throwable e){heartbeat.compareAndSet(null,e);}},config.heartbeatMillis,config.heartbeatMillis,TimeUnit.MILLISECONDS);
             Phase phase=Phase.SOURCE_CONNECT;
-            try(MysqlCdcSource source=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),(String)journal.status().get("generation"))){
+            try(SourceAdapter source=PipelineSources.open(config,(String)journal.status().get("generation"))){
                 phase=Phase.JOURNAL_STORAGE;
                 SourcePosition captured=journal.captured();
                 List<SourcePosition> dependencies=journal.dependencies();
@@ -166,7 +161,7 @@ public final class PipelineEngine implements AutoCloseable {
         final List<Thread> threads=new ArrayList<>();
         final AtomicReference<Throwable> failure=new AtomicReference<>();
         volatile boolean closing;
-        SinkGroup(JdbcJournal journal,Journal.Lease lease,String generation,MysqlCdcSource source,
+        SinkGroup(JdbcJournal journal,Journal.Lease lease,String generation,SourceAdapter source,
                   AtomicReference<Throwable> heartbeat,SourceAdapter.Stream capture,Map<String,TableSchema> schemas,
                   Map<String,Journal.SnapshotState> snapshots,Map<String,SourcePosition> baselines){
             try{
@@ -183,7 +178,7 @@ public final class PipelineEngine implements AutoCloseable {
             Throwable problem=heartbeat.get();if(problem!=null)throw new SourceFailure(new PipelineFailure(Phase.JOURNAL_STORAGE,problem));
             try{capture.check();}catch(Exception problemAtSource){throw new SourceFailure(problemAtSource);}
         }
-        void runTarget(PipelineConfig.Target target,JdbcJournal journal,Journal.Lease lease,String generation,MysqlCdcSource source,
+        void runTarget(PipelineConfig.Target target,JdbcJournal journal,Journal.Lease lease,String generation,SourceAdapter source,
                        AtomicReference<Throwable> heartbeat,SourceAdapter.Stream capture,Map<String,TableSchema> schemas,
                        Map<String,Journal.SnapshotState> snapshots,Map<String,SourcePosition> baselines){
             SinkAdapter sink=null;FanoutDispatcher dispatcher=null;
@@ -195,7 +190,7 @@ public final class PipelineEngine implements AutoCloseable {
                     if(!"RUNNING".equals(subscription.state)){Thread.sleep(config.pollIntervalMillis);continue;}
                     SubscriberFailure preparation=new SubscriberFailure();preparation.phase=SubscriberFailure.Phase.TARGET_ACTIVATE;
                     if(dispatcher==null)try{
-                        if(sink==null){if(!target.product.messaging()&&!target.product.materialized()){JdbcSink.Settings settings=config.targetSettings(target,generation);if(target.product!=TargetProduct.OCEANBASE)rejectFeedback(source.physicalIdentity(),settings.driver,settings.url,settings.username,settings.password);}sink=PipelineSinks.open(config,target,generation,journal,lease);}
+                        if(sink==null){if(!target.product.messaging()&&!target.product.materialized()){JdbcSink.Settings settings=config.targetSettings(target,generation);if(target.product!=TargetProduct.OCEANBASE)source.requireSeparateDatabase(settings.driver,settings.url,settings.username,settings.password);}sink=PipelineSinks.open(config,target,generation,journal,lease);}
                         SnapshotDispatcher.prepare(journal,lease,sink,schemas.values(),snapshots,()->healthy(heartbeat,capture),preparation);
                         if(subscription.errorCode!=null)try{journal.retrying(lease,target.id,null);}catch(Exception storageFailure){throw new SourceFailure(storageFailure);}
                         dispatcher=new FanoutDispatcher(journal,lease,Collections.singletonList(sink),schemas,r->journal.normalize(lease,r,schemas,baselines,source::includes));
@@ -223,7 +218,7 @@ public final class PipelineEngine implements AutoCloseable {
     private static boolean hasCapacityCause(Throwable failure){for(Throwable t=failure;t!=null;t=t.getCause())if(t instanceof JdbcJournal.Capacity)return true;return false;}
     private static String sourceErrorCode(Throwable failure){String result="SOURCE_FAILED";for(Throwable t=failure;t!=null;t=t.getCause()){if(t instanceof SyncFailure)return ((SyncFailure)t).code;if(t.getMessage()!=null&&t.getMessage().matches("[A-Z][A-Z0-9_]{1,120}"))result=t.getMessage();}return result;}
     public static Map<String,Object> check(PipelineConfig config)throws Exception{
-        Map<String,Object> result=new LinkedHashMap<>();try(MysqlCdcSource source=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),"check")){List<TableSchema> tables=source.discover();result.put("sourceTables",tables.size());List<Map<String,Object>> plans=new ArrayList<>();for(PipelineConfig.Target target:config.targets)if(target.product==TargetProduct.CLICKHOUSE)for(TableSchema table:tables)if(target.mappings.containsKey(table.database)){ClickHouseIndexPlan plan=ClickHouseIndexPlan.plan(table,target.clickhouse.secondaryIndexes);Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",plan);plans.add(entry);}if(!plans.isEmpty())result.put("clickhouseIndexPlans",plans);List<Map<String,Object>> dorisPlans=new ArrayList<>();for(PipelineConfig.Target target:config.targets)if(target.product==TargetProduct.DORIS)for(TableSchema table:tables)if(target.mappings.containsKey(table.database)){Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",DorisIndexPlan.plan(table,target.doris.secondaryIndexes));dorisPlans.add(entry);}if(!dorisPlans.isEmpty())result.put("dorisIndexPlans",dorisPlans);
+        Map<String,Object> result=new LinkedHashMap<>();try(SourceAdapter source=PipelineSources.open(config,"check")){List<TableSchema> tables=source.discover();result.put("sourceTables",tables.size());List<Map<String,Object>> plans=new ArrayList<>();for(PipelineConfig.Target target:config.targets)if(target.product==TargetProduct.CLICKHOUSE)for(TableSchema table:tables)if(target.mappings.containsKey(table.database)){ClickHouseIndexPlan plan=ClickHouseIndexPlan.plan(table,target.clickhouse.secondaryIndexes);Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",plan);plans.add(entry);}if(!plans.isEmpty())result.put("clickhouseIndexPlans",plans);List<Map<String,Object>> dorisPlans=new ArrayList<>();for(PipelineConfig.Target target:config.targets)if(target.product==TargetProduct.DORIS)for(TableSchema table:tables)if(target.mappings.containsKey(table.database)){Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",DorisIndexPlan.plan(table,target.doris.secondaryIndexes));dorisPlans.add(entry);}if(!dorisPlans.isEmpty())result.put("dorisIndexPlans",dorisPlans);
             List<Map<String,Object>> dmPlans=new ArrayList<>();for(PipelineConfig.Target target:config.targets)if(target.product==TargetProduct.DM)for(TableSchema table:tables)if(target.mappings.containsKey(table.database)){Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("columns",DmStorage.plan(table,target.dm.acknowledgeTextConversions));dmPlans.add(entry);}if(!dmPlans.isEmpty())result.put("dmStoragePlans",dmPlans);
             List<Map<String,Object>> hivePlans=new ArrayList<>();
             Map<String,Set<String>> hiveNames=new HashMap<>();

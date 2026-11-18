@@ -786,5 +786,14 @@
     },
     "harnessSourceSha256": "04e30a84d03635fbfbdfe78c0eccfbd218017db0e747c3321d5b136381c1c7a5",
     "scope": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
+  },
+  "sourceConfiguration": {
+    "artifactSha256": "4722408f57a63e883147b979c3c706dd20d1ff6cf9aefcc6cba973fbb8c96ee2",
+    "focusedJavaTests": 43,
+    "domTests": 109,
+    "nativeMySQLTests": 2,
+    "realCdcChecks": 5,
+    "sourceVersion": "8.4.13",
+    "scope": "Explicit MySQL source type, optional expected version, stable identity and one adapter entry point. Newer source protocols are tracked under SO-06 and SO-07."
   }
 }

@@ -47,7 +47,7 @@ Implementation:48requirements,18 DONE, 26 PARTIAL and 4 NEW, with 30 open. RC-01
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| SO-01 | P0 / PARTIAL | Source protocol and capability configuration | Neutral events/positions exist but factories/UI remain MySQL-oriented. |
+| SO-01 | P0 / PARTIAL | Source protocol and capability configuration | Capture, preflight and reconciliation use one source adapter entry point. MySQL supports explicit type, logical identity, database scope and version constraints. PostgreSQL and Oracle connection and capture protocols remain open. |
 | SO-02 | P1 / PARTIAL | MySQL5.7 supported profile | 5.7.44 basic evidence does not cover the required current-platform object/recovery/runtime matrix. |
 | SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |

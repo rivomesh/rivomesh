@@ -26,6 +26,23 @@ class PipelineConfigTest {
         c.journal.mode="EXTERNAL";c.journal.product=TargetProduct.KINGBASE;c.journal.url=t.url;c.journal.username="system";assertThrows(IllegalArgumentException.class,c::validate);
     }
     PipelineConfig config(){PipelineConfig c=new PipelineConfig();c.pipelineId="pipeline";c.source.username="reader";c.source.clusterId="source";c.databases=Arrays.asList("orders","inventory");PipelineConfig.Target t=new PipelineConfig.Target();t.id="pg";t.product=TargetProduct.POSTGRESQL;t.url="jdbc:postgresql://target/db";t.username="writer";t.mappings.put("orders","orders");t.mappings.put("inventory","inventory");c.targets.add(t);return c;}
+    @Test void sourceProtocolAndVersionHaveExplicitValidationWithoutChangingOldMySqlLineage(){
+        PipelineConfig config=config();
+        String original=config.fingerprint();
+        config.source.type="MYSQL";
+        config.source.expectedVersion="8.2.0";
+        config.validate();
+        assertEquals("MYSQL",config.effectiveSourceType());
+        assertEquals(original,config.fingerprint());
+        config.source.expectedVersion="8";
+        assertEquals("SOURCE_VERSION_PROFILE_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        config.source.expectedVersion=null;
+        config.sourceType="POSTGRESQL";
+        assertEquals("SOURCE_TYPE_CONFLICT",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        config.sourceType=null;
+        config.source.type="ORACLE";
+        assertEquals("SOURCE_ADAPTER_UNAVAILABLE",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+    }
     @Test void passwordsAndTuningCanRotateWhileSemanticChangesRequireAMigration(){PipelineConfig c=config();c.validate();String fingerprint=c.fingerprint();c.source.password="rotated";c.targets.get(0).password="rotated-too";c.chunkSize=200;c.nodeId="another-node";c.journal.maxBytes*=2;assertEquals(fingerprint,c.fingerprint());c.targets.get(0).mappings.put("orders","renamed");assertNotEquals(fingerprint,c.fingerprint());}
     @Test void sourceMappingsCannotCollideOrDisappear(){PipelineConfig c=config();c.targets.get(0).mappings.put("inventory","orders");assertThrows(IllegalArgumentException.class,c::validate);c.targets.get(0).mappings.remove("inventory");assertThrows(IllegalArgumentException.class,c::validate);}
     @Test void embeddedSqlDriverAndUrlOptionsCannotBeImportedAsTargetsOrLocalPaths(){PipelineConfig c=config();c.journal.path="data/journal;INIT=RUNSCRIPT FROM 'remote'";assertThrows(IllegalArgumentException.class,c::validate);c=config();c.targets.get(0).product=TargetProduct.H2;assertThrows(IllegalArgumentException.class,c::validate);c=config();c.targets.get(0).url="jdbc:h2:mem:danger";assertThrows(IllegalArgumentException.class,c::validate);}

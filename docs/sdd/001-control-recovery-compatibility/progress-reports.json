@@ -10,7 +10,8 @@
     "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
   ],
   "inProgress": [
-    "SO-01 source factory and explicit MySQL type/version configuration. Source-native and full process smoke verification running."
+    "SO-05 native MySQL 8.4 binlog profile compatibility and restart checks.",
+    "SO-06 PostgreSQL source capture design and implementation."
   ],
   "reportContents": [
     "Current totals",
@@ -36,7 +37,8 @@
   },
   "newSinceLastReport": [
     "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
-    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks."
+    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks.",
+    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending."
   ],
   "nextTasks": [
     "SO-05 review supported and refused MySQL 8.4 event profiles.",

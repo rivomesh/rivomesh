@@ -805,8 +805,8 @@
         "en": "Source protocol and capability configuration"
       },
       "gap": {
-        "zh-CN": "事件/位置SPI已有，真实源工厂与向导仍以MySQL为主。",
-        "en": "Neutral events/positions exist but factories/UI remain MySQL-oriented."
+        "zh-CN": "采集、预检与校验统一使用源适配器入口。MySQL 已支持明确的源类型、逻辑身份、数据库范围和可选版本约束。PostgreSQL 与 Oracle 的真实连接和事件协议待实现。",
+        "en": "Capture, preflight and reconciliation use one source adapter entry point. MySQL supports explicit type, logical identity, database scope and version constraints. PostgreSQL and Oracle connection and capture protocols remain open."
       },
       "acceptance": {
         "zh-CN": "每任务显式source.type、逻辑源身份、命名空间和版本配置；MySQL GTID、PG LSN、Oracle SCN不能互相比较；向导/预检按实际能力启用，未支持配置明确拒绝。",
@@ -815,7 +815,10 @@
       "dependsOn": [],
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java"
+        "sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java",
+        "sync-app/src/main/java/io/github/rivomesh/PipelineSources.java",
+        "sync-app/src/main/java/io/github/rivomesh/PipelineConfig.java",
+        "docs/verification/README.md"
       ]
     },
     {

@@ -25,10 +25,18 @@ public final class MysqlCdcSource implements SourceAdapter {
     }
     @Override public String type(){return "MYSQL";}
     public String physicalIdentity(){return selected.identity();}
-    public void checkTopology(SourcePosition captured,List<SourcePosition> dependencies)throws Exception{
+    @Override public void checkTopology(SourcePosition captured,List<SourcePosition> dependencies)throws Exception{
         String required=position(captured).gtidSet;for(SourcePosition p:dependencies)required=Gtids.union(required,position(p).gtidSet);
         MysqlSource candidate=new SourceSelector(config).select(position(captured),required);
         if(!selected.identity().equals(candidate.identity()))throw new SQLTransientConnectionException("SOURCE_PRIMARY_CHANGED","08006");
+    }
+    @Override public void requireSeparateDatabase(String driver,String url,String username,String password)throws Exception{
+        if(!"com.mysql.cj.jdbc.Driver".equals(driver))return;
+        try(Connection c=JdbcConnections.open(driver,url,username,password);Statement st=c.createStatement();
+            ResultSet rs=st.executeQuery("SELECT @@global.server_uuid")){
+            rs.next();
+            if(physicalIdentity().equals(rs.getString(1)))throw new IllegalArgumentException("SOURCE_JOURNAL_OR_TARGET_FEEDBACK_LOOP");
+        }
     }
     private SourcePosition position(Model.Position p){Map<String,String> values=new TreeMap<>();values.put("gtidSet",p.gtidSet);values.put("file",p.file);values.put("offset",Long.toString(p.offset));values.put("serverUuid",p.sourceUuid);return new SourcePosition(1,"MYSQL",config.source.clusterId,values);}
     private Model.Position position(SourcePosition p){

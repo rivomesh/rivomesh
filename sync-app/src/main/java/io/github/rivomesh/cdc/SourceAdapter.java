@@ -28,6 +28,8 @@ public interface SourceAdapter extends AutoCloseable {
     Stream stream(SourcePosition captured,Receiver receiver)throws Exception;
     SourcePosition position()throws Exception;
     void validateFailover(SourcePosition captured,List<SourcePosition> snapshotDependencies)throws Exception;
+    void checkTopology(SourcePosition captured,List<SourcePosition> snapshotDependencies)throws Exception;
+    void requireSeparateDatabase(String driver,String url,String username,String password)throws Exception;
     boolean includes(SourcePosition position,String transactionId);
     default boolean covers(SourcePosition captured,SourcePosition required){throw new UnsupportedOperationException("SOURCE_POSITION_COMPARISON_UNSUPPORTED");}
     default ConsistentRead consistentRead(List<TableSchema> tables,long maximumGateMillis,long maximumReadMillis)throws Exception{

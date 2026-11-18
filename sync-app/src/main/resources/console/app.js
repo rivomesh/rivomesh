@@ -105,6 +105,20 @@ function render(){
  latest.tasks.forEach(task=>{const card=text('button','','task-card'+(task.id===selected?' selected':'')),title=text('div','','card-title');title.append(text('span',task.id),badge(status(task)));card.append(title,text('div',task.sourceDatabase+' → '+(task.targetCount?t('targetInstances')+' '+task.targetCount:task.targetSchema),'route'));if(task.ownerNodeId)card.append(text('div',t('ownerNode')+': '+task.ownerNodeId,'subtle'));card.onclick=()=>{selected=task.id;render();};list.append(card);});
  renderDetail(latest.tasks.find(x=>x.id===selected));window.RivomeshEditor?.refreshState();const invalid=$('invalid-configs');invalid.replaceChildren();invalid.classList.toggle('hidden',!latest.invalidConfigs.length);if(latest.invalidConfigs.length){invalid.append(text('h2',t('invalid')));latest.invalidConfigs.forEach(x=>invalid.append(text('p',x.file+' · '+explain(x.code),'error')));}
 }
+Object.assign(messages.zh,{
+ sourceExpectedVersion:'预期 MySQL 版本（可选）',
+ SOURCE_TYPE_CONFLICT:'源类型字段冲突，请使用一致的配置。',
+ SOURCE_ADAPTER_UNAVAILABLE:'该源类型尚未开放。',
+ SOURCE_VERSION_PROFILE_INVALID:'请输入主版本和次版本，可加补丁号。',
+ MYSQL_VERSION_PROFILE_MISMATCH:'实际 MySQL 版本与配置的预期版本不符。'
+});
+Object.assign(messages.en,{
+ sourceExpectedVersion:'Expected MySQL version (optional)',
+ SOURCE_TYPE_CONFLICT:'The configured source type fields disagree.',
+ SOURCE_ADAPTER_UNAVAILABLE:'This source type is unavailable.',
+ SOURCE_VERSION_PROFILE_INVALID:'Enter the major and minor version, with an optional patch number.',
+ MYSQL_VERSION_PROFILE_MISMATCH:'The MySQL server version differs from the configured version.'
+});
 const pipelineFaultStages=new Set(['SOURCE_CONNECT','SOURCE_DISCOVERY','SOURCE_READ','SOURCE_DECODE',
  'SOURCE_SNAPSHOT','DDL','NORMALIZE','JOURNAL_STORAGE','JOURNAL_ACK']);
 function renderPipelineFault(root,task){
@@ -151,6 +165,8 @@ async function command(task,action,subscription){try{await api('/tasks/'+encodeU
 function renderAdapters(){const root=$('adapter-list');root.replaceChildren();capabilities.forEach(a=>{const box=text('article','',a.status==='PLANNED'?'planned':'');box.append(text('strong',a.id),badge(a.status),text('p',t(a.role)+(a.note?' · '+a.note:'')));root.append(box);});}
 function openCreate(){if(!can('TASK_CREATE'))return;step=0;$('create-form').reset();$('create-owner').value=$('task-owner').value;renderOwners();$('extra-targets').replaceChildren();$('first-extra-mappings').replaceChildren();$('primary-messaging').replaceChildren();extraTargetCounter=1;$('create-error').textContent='';const id=crypto.getRandomValues(new Uint32Array(1))[0]||910001;$('create-form').elements.serverId.value=id;wizardMode();showStep();$('create-dialog').showModal();}
 function configFromForm(){const f=$('create-form').elements,source={clusterId:f.clusterId.value.trim(),host:f.sourceHost.value.trim(),port:Number(f.sourcePort.value),username:f.sourceUsername.value,password:f.sourcePassword.value,serverId:Number(f.serverId.value)};
+ const version=f.sourceExpectedVersion.value.trim();
+ if(version)source.expectedVersion=version;
  const target={type:f.targetType.value,url:f.targetUrl.value.trim(),username:f.targetUsername.value,password:f.targetPassword.value,schema:f.targetSchema.value.trim(),metadataSchema:f.metadataSchema.value.trim()};
  if(!v3()){source.database=f.sourceDatabase.value.trim();return {jobId:f.jobId.value.trim(),nodeId:'console-worker',source,target};}
  const dbs=sourceDatabases(),mappings={};if(dbs.length)mappings[dbs[0]]=target.schema;$('first-extra-mappings').querySelectorAll('input').forEach(input=>mappings[input.dataset.database]=input.value.trim());
@@ -158,7 +174,7 @@ function configFromForm(){const f=$('create-form').elements,source={clusterId:f.
  document.querySelectorAll('#extra-targets .target-settings').forEach(card=>{const value=field=>card.querySelector('[data-field="'+field+'"]').value,rows={};card.querySelectorAll('.mapping-fields input').forEach(input=>rows[input.dataset.database]=input.value.trim());targets.push({id:value('id').trim(),product:value('product'),url:value('url').trim(),username:value('username'),password:value('password'),metadataSchema:value('metadataSchema').trim(),mappings:rows,uniquePolicy:'DOWNGRADE_BUSINESS'});});
  targets.forEach((target,index)=>{if(target.product==='DM'){const root=index===0?$('primary-messaging'):document.querySelectorAll('#extra-targets .messaging-settings')[index-1];target.dm={acknowledgeTextConversions:root.querySelector('[data-field=dmAcknowledgement]').checked};}if(target.product==='HIVE'){const root=index===0?$('primary-messaging'):document.querySelectorAll('#extra-targets .messaging-settings')[index-1];target.hive={acknowledgeIndexOmission:root.querySelector('[data-field=hiveAcknowledgement]').checked,queryTimeoutSeconds:Number(root.querySelector('[data-field=hiveTimeout]').value),maxMessageBytes:Number(root.querySelector('[data-field=maxKiB]').value)*1024};}if(target.product==='CLICKHOUSE')target.clickhouse={secondaryIndexes:'DATA_SKIPPING'};if(target.product==='DORIS'){const root=index===0?$('primary-messaging'):document.querySelectorAll('#extra-targets .messaging-settings')[index-1],value=field=>root.querySelector('[data-field='+field+']').value;target.doris={loadUrl:value('dorisLoadUrl').trim(),redirectOrigins:value('dorisRedirectOrigins').split(',').map(s=>s.trim()).filter(Boolean),replicas:Number(value('dorisReplicas')),buckets:Number(value('dorisBuckets')),secondaryIndexes:value('dorisIndexes'),maxMessageBytes:Number(value('maxKiB'))*1024};}if(messagingProduct(target.product))target.messaging=messageSettings(index===0?$('primary-messaging'):document.querySelectorAll('#extra-targets .messaging-settings')[index-1],target.product);});
  const journal={mode:f.journalMode.value,maxBytes:Number(f.journalMaxMiB.value)*1024*1024};if(journal.mode==='EXTERNAL')Object.assign(journal,{product:f.journalProduct.value,url:f.journalUrl.value.trim(),username:f.journalUsername.value,password:f.journalPassword.value,namespace:f.journalNamespace.value.trim()});
- return {formatVersion:3,pipelineId:f.jobId.value.trim(),nodeId:'console-worker',sourceType:'MYSQL',source,databases:dbs,targets,journal};}
+ return {formatVersion:3,pipelineId:f.jobId.value.trim(),nodeId:'console-worker',source:{type:'MYSQL',...source},databases:dbs,targets,journal};}
 function showStep(){[0,1,2].forEach(i=>{$('step-'+i).classList.toggle('hidden',i!==step);$('step-label-'+i).classList.toggle('current',i===step);});$('previous-step').disabled=step===0;$('next-step').classList.toggle('hidden',step===2);$('save-task').classList.toggle('hidden',step!==2);if(step===1&&v3())mappingFields();if(step===2){const plan=maskPlan(configFromForm());$('plan-preview').textContent=JSON.stringify(globalTasks()?{...ownerSelection(),config:plan}:plan,null,2);}}
 $('next-step').onclick=()=>{if(!validateStep(step))return;step++;showStep();};$('previous-step').onclick=()=>{step=Math.max(0,step-1);showStep();};$('new-task').onclick=openCreate;$('close-create').onclick=()=>{$('create-dialog').close();clearDraft();};
 $('create-form').addEventListener('submit',async e=>{e.preventDefault();if(step!==2)return;for(let i=0;i<2;i++)if(!validateStep(i)){step=i;showStep();return;}const button=$('save-task');button.disabled=true;try{const task=await api('/tasks',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({config:configFromForm(),...ownerSelection()})});selected=task.id;$('create-dialog').close();clearDraft();clearTaskPages();notify(t(globalTasks()?'accepted':'created'));await refresh();}catch(error){$('create-error').textContent=error.message;}finally{button.disabled=false;}});

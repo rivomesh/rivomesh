@@ -50,6 +50,8 @@ Raw capture reserves its normalization copy, keyless row IDs and potential ident
 
 If one transaction and workspace exceed the entire quota, `TRANSACTION_EXCEEDS_JOURNAL_QUOTA` preserves the old position. Insufficient snapshot/identity workspace, or old unreserved history that cannot be normalized after upgrade, raises `JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN`. Source snapshots are currently all built before delivery; streaming reclamation across a large table, partial snapshot rebasing and oversized-transaction staging are unfinished. Expand capacity or use an explicit plan; never delete journal parts to make room. Quota is excluded from semantic identity: stop affected workers, change/reload configuration, then resume with the current global error generation. UI configuration editing remains pending.
 
+Use `source.type: MYSQL` in task configuration and the Web wizard. Identify the logical source cluster with `source.clusterId` and select its databases with `databases`. Set `source.expectedVersion: "8.2.0"` to require a patch version or `"8.2"` to accept that major and minor release. Preflight checks the candidate server version. Leaving the field empty enables detection.
+
 ## Journal choices
 
 `LOCAL` uses Java-8-compatible H2 2.2.224. `path` is a private directory, relative to the configuration file; it contains sensitive rows and receives mode 0700. Automatic server mode allows same-host CLI status/resume. It is not a cross-host database service. Preserve the whole directory/volume; do not copy a live `.mv.db` alone. Use `EXTERNAL` for cross-host takeover; shared-filesystem H2 has not been accepted as a cluster journal.

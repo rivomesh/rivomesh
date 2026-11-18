@@ -50,6 +50,8 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar run config/pipeline-v3
 
 若单个事务及其工作空间本身超过总配额，报 `TRANSACTION_EXCEEDS_JOURNAL_QUOTA` 并保留旧源断点。快照/身份构建空间不足，或升级前没有预留的旧日志无法标准化时，报 `JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN`。当前全量先构建所有源快照，单表跨配额流式释放、部分全量重基线和超大事务分片仍未实现；这些情况需要扩容或专项计划。不能删表/分片来“腾空间”。配额调整不改变任务语义指纹：停止相关 Worker，调整并重载配置，再按当前全局错误版本恢复。UI 配置编辑流程仍待实现。
 
+在配置和 Web 新建向导中使用 `source.type: MYSQL`。用 `source.clusterId` 标识逻辑源集群，`databases` 列出同步范围。需要固定版本时，可填写 `source.expectedVersion: "8.2.0"`；填写 `"8.2"` 匹配同一主次版本。连接候选源时校验服务版本，版本冲突会在预检阶段报告。留空时由服务探测版本。
+
 ## 日志部署选择
 
 `LOCAL` 使用 Java 8 兼容的 H2 2.2.224，`path` 是私有目录，相对路径以配置文件目录为基准。目录内保存敏感行数据，权限设为 0700。自动服务模式允许同机 CLI 读取状态和恢复；它不是跨机器数据库部署。保留整个目录及卷，不要只复制运行中的 `.mv.db`。跨主机自动接管使用 `EXTERNAL` 事务数据库；不要把共享文件系统上的 H2 当作已验收的集群日志。

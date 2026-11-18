@@ -23,6 +23,10 @@ public final class Config {
     public long maxRetryDelayMillis = 60000;
 
     public static final class Source {
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public String type;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public String expectedVersion;
         public String host = "127.0.0.1";
         public int port = 3306;
         public String database;
@@ -92,6 +96,9 @@ public final class Config {
     public void validate() {
         if (source == null || target == null || source.nodes == null) throw new IllegalArgumentException("源、目标和候选地址列表不能为空");
         required(jobId, "jobId"); required(source.database, "source.database");
+        if(source.type!=null&&!"MYSQL".equals(source.type))throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
+        if(source.expectedVersion!=null&&!source.expectedVersion.matches("[1-9][0-9]{0,2}\\.(0|[1-9][0-9]{0,2})(\\.(0|[1-9][0-9]{0,3}))?"))
+            throw new IllegalArgumentException("SOURCE_VERSION_PROFILE_INVALID");
         required(source.host, "source.host"); required(source.username, "source.username");
         required(target.url, "target.url"); required(target.username, "target.username");
         if(!java.util.Arrays.asList("GAUSS","POSTGRESQL").contains(target.type))throw new IllegalArgumentException("target.type 必须为 GAUSS 或 POSTGRESQL");

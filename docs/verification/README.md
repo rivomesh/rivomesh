@@ -69,3 +69,9 @@ Source connection loss is observed from both management entries and CDC resumes 
 Java 8 候选包 `f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3` 通过 5 项 V3 单机实库测试、GTID 主从提升和单主组复制选主各 1 项，以及 14 项跨入口恢复检查。恢复测试覆盖 PostgreSQL 目标与 MySQL 健康对照、全量转增量、前镜像补偿、类型化修正、取消及强杀后原请求恢复。
 
 The source was MySQL 8.0.46 with GTID, ROW and FULL enabled. Run the three topology profiles with `tests/matrix.sh --v3 8.0.46`. Pass `--source-image` to the global CDC recovery runner to select the same MySQL patch version.
+
+### SO-01 · 源配置与适配入口 / Source configuration
+
+候选包 `4722408f57a63e883147b979c3c706dd20d1ff6cf9aefcc6cba973fbb8c96ee2` 通过 Java 43 项、界面 109 项、MySQL 原生 2 项和真实 CDC 5 项检查。原生检查确认可按主次版本或精确补丁验证目标 MySQL 实例。双入口用 `source.type: MYSQL` 和 `source.expectedVersion: "8.4"` 创建任务，并完成全量与增量。
+
+Capture, preflight and common-cut validation share the source adapter entry point. PostgreSQL and Oracle source execution remain tracked in SO-06 and SO-07.

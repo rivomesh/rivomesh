@@ -136,7 +136,7 @@ test('wizard validates, masks its plan, creates a stopped task and never auto-st
     ui.d.getElementById('next-step').click();assert.equal(ui.d.getElementById('step-0').classList.contains('hidden'),false);
     const form=ui.d.getElementById('create-form');
     form.elements.formatVersion.value='2';form.elements.formatVersion.dispatchEvent(new ui.w.Event('change'));
-    for(const [name,value]of Object.entries({jobId:'sales',clusterId:'sales-source',sourceDatabase:'orders',sourceUsername:'reader',sourcePassword:'source-private'}))form.elements[name].value=value;
+    for(const [name,value]of Object.entries({jobId:'sales',clusterId:'sales-source',sourceDatabase:'orders',sourceUsername:'reader',sourcePassword:'source-private',sourceExpectedVersion:'8.2.0'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();assert.equal(ui.d.getElementById('step-1').classList.contains('hidden'),false);
     for(const [name,value]of Object.entries({targetType:'POSTGRESQL',targetSchema:'orders',targetUsername:'writer',targetPassword:'target-private'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();
@@ -162,7 +162,7 @@ test('v3 wizard maps two databases to independent targets and masks every creden
     for(const [name,value]of Object.entries({journalUrl:'jdbc:postgresql://journal/db?password=embedded-private',journalUsername:'journal',journalPassword:'journal-private'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();const preview=ui.d.getElementById('plan-preview').textContent;assert.doesNotMatch(preview,/source-private|gauss-private|pg-private|journal-private|embedded-private/);
     form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();const request=ui.calls.find(c=>c.path==='/api/tasks'&&c.method==='POST');assert.ok(request);const config=JSON.parse(request.body).config;
-    assert.equal(config.formatVersion,3);assert.deepEqual(config.databases,['sales','inventory']);assert.deepEqual(config.targets[0].mappings,{sales:'sales_copy',inventory:'inventory_copy'});assert.deepEqual(config.targets[1].mappings,{sales:'sales_other',inventory:'inventory_other'});assert.equal(config.journal.mode,'EXTERNAL');assert.equal(config.journal.password,'journal-private');assert.equal(ui.calls.filter(c=>c.path.endsWith('/actions')).length,0);
+    assert.equal(config.formatVersion,3);assert.equal(config.source.type,'MYSQL');assert.equal(config.source.expectedVersion,'8.2.0');assert.deepEqual(config.databases,['sales','inventory']);assert.deepEqual(config.targets[0].mappings,{sales:'sales_copy',inventory:'inventory_copy'});assert.deepEqual(config.targets[1].mappings,{sales:'sales_other',inventory:'inventory_other'});assert.equal(config.journal.mode,'EXTERNAL');assert.equal(config.journal.password,'journal-private');assert.equal(ui.calls.filter(c=>c.path.endsWith('/actions')).length,0);
   }finally{ui.dom.window.close();}
 });
 
