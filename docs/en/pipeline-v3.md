@@ -78,6 +78,19 @@ Set `source.topology: ASYNC` and supply the primary and replica as candidate `so
 
 The Java 21 native profile used MySQL 8.4.13 asynchronous GTID replication, an external PostgreSQL journal, two management entries and PostgreSQL and MySQL destinations. After the old primary was killed, both entries showed the capture interruption and the two target checkpoints held. External promotion returned a writable source. Rivomesh delivered the new primary's GTID to both destinations with the original configuration revision, journal generation and snapshot IDs. Reproduce with `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <release jar> --output target/mysql-async-proof`. [Verification archive](../verification/README.md)
 
+### MySQL 8.4 single-primary Group Replication recovery
+
+Set `source.topology: GROUP_REPLICATION` and list the members of one single-primary group in `source.nodes`. MySQL elects the writable member. Rivomesh checks that the candidate is online and writable and retains the required GTID history. Protect a restarted former primary with MySQL super-read-only until it rejoins. Group Replication requires a primary key or equivalent unique key on replicated tables. [Single-primary mode](https://dev.mysql.com/doc/refman/8.4/en/group-replication-single-primary-mode.html) · [Group Replication requirements](https://dev.mysql.com/doc/refman/8.4/en/group-replication-requirements.html)
+
+The Java 21 native test uses MySQL 8.4.13, an external PostgreSQL journal and a PostgreSQL 17.12 destination. It kills the primary, records a different server UUID and verifies that the same Worker delivers both subsequent transactions. The journal generation, two snapshot IDs and full destination rows agree. The former primary restarts read-only with a missing group GTID and is refused by source preflight. After it catches up as a secondary, capture continues on the elected primary.
+
+Reproduce with a Java 21 JDK, Docker Compose and local `mysql:8.4` and `postgres:17` images.
+
+```bash
+python3 tests/mysql-group-failover-native.py --artifact rivomesh.jar \
+  --java "$JAVA_HOME/bin/java" --output target/mysql-group-failover-proof
+```
+
 ### Verified TLS for MySQL capture and delivery
 
 Configure `source.sslMode: VERIFY_IDENTITY` for the binlog channel and include `sslMode=VERIFY_IDENTITY` in `source.jdbcOptions` for discovery and snapshots. Each MySQL target has its own JDBC URL and TLS options. Install the CA roots in the execution JDK trust store available to the Agent and its Worker JVMs. Use the certificate's DNS names in the source candidates and target URLs. The verified binlog modes negotiate through the JDK and can connect to a TLS 1.3-only MySQL endpoint. [Connector/J TLS properties](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)

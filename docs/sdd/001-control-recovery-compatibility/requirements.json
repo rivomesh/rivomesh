@@ -1155,8 +1155,8 @@
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "Java 21 已通过四个 MySQL 版本的独立全量增量、MySQL 8.4.13 异步 GTID 切主及双 SQL 目标续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB 核心档案。更多拓扑、目标、TLS 和恢复组合待验。",
-        "en": "Java 21 passed four single-primary MySQL releases, MySQL 8.4.13 async GTID primary failover with two SQL destinations, PostgreSQL 17/18 and single-PDB Oracle profiles. More topologies, destinations, TLS and recovery combinations remain."
+        "zh-CN": "Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。",
+        "en": "Java 21 verified four standalone MySQL versions, MySQL 8.4.13 async GTID promotion with two destinations, automatic three-node single-primary group failover, PostgreSQL 17/18 and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",
@@ -1173,7 +1173,8 @@
       ],
       "evidence": [
         "docs/zh-CN/performance.md",
-        "tests/global-control-pipeline.py"
+        "tests/global-control-pipeline.py",
+        "tests/mysql-group-failover-native.py"
       ]
     },
     {

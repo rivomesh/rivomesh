@@ -7726,5 +7726,113 @@
     },
     "scope": "Original Agent authenticates original bounded wire evidence with a private per-task key and checkpoint-bound receipt. Post-purge reuse, evidence corruption refusal and verified source exclusion remain distinct operations. The native run did not move evidence to a different Agent.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --source-diagnostics decode --source-expected-version 8.4 --header-boundary --verify-binlog-contents --managed-binlog-evidence --artifact <candidate jar> --output target/raw-capture-auth-native"
+  },
+  "mysql84SinglePrimaryGroupFailoverJava21": {
+    "artifactSha256": "b4dd675432e35dccd84cb47db6ed039d91310085625eff432c39dcbadd6f277f",
+    "fixtureSha256": "d5cc1a1695388dbbb2a39cfd68274a235d22ab0cad1bb1c7c521609d2c8f9bfc",
+    "composeFixtureSha256": {
+      "compose.yml": "ab5c7c1c63be7653b398e721a384866171b4cea3805e33035046971f08789bba",
+      "postgres-compose.yml": "07fa5d4c10f4212f3500cc0c2f5348a6a44846cb5f0df8b1af537b1046900fc7",
+      "group-compose.yml": "f7283af657afa94d6ef97ca06805bd54c55c7873f881a8795356c790c449e97d"
+    },
+    "runtime": [
+      "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+      "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+    ],
+    "mysqlVersion": "8.4.13",
+    "postgresVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "mysqlImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+    "postgresImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "sourceGroupUuid": "414bd576-3e63-4d6a-b9f8-f38465867ce4",
+    "electedMember": {
+      "name": "mysql-2",
+      "uuid": "d81c50b5-e35d-11f1-b5eb-8ec09f074214",
+      "view": [
+        [
+          "d81c50b5-e35d-11f1-b5eb-8ec09f074214",
+          "PRIMARY",
+          "ONLINE"
+        ],
+        [
+          "d87de2d8-e35d-11f1-923d-061048953f14",
+          "SECONDARY",
+          "ONLINE"
+        ]
+      ]
+    },
+    "staleMember": {
+      "physicalUuid": "d748f9f6-e35d-11f1-bd7c-ce8b5113e028",
+      "writeRefusalCode": 1290,
+      "sourceAdmission": "SOURCE_NO_PRIMARY",
+      "missingGtid": "414bd576-3e63-4d6a-b9f8-f38465867ce4:1000001"
+    },
+    "checks": [
+      "Three MySQL group members are ONLINE with one writable primary; capture lacks group administration",
+      "Original group GTID, source and target snapshots, journal ACK and native PostgreSQL rows agree",
+      "After primary SIGKILL the surviving majority elects one different writable member",
+      "Same running Worker automatically delivers the new primary GTID and preserves the original snapshots",
+      "Restarted old primary is stale, fenced by MySQL, and refused by the packaged source preflight",
+      "Old member catches up as read-only secondary and the original Worker continues on the elected primary"
+    ],
+    "cleanupExitCode": 0,
+    "positions": {
+      "before": {
+        "sequence": 1,
+        "ack": 1,
+        "targetSequence": 1,
+        "capture": {
+          "file": "mysql-bin.000001",
+          "offset": "2272",
+          "gtidSet": "414bd576-3e63-4d6a-b9f8-f38465867ce4:1-7",
+          "serverUuid": "d748f9f6-e35d-11f1-bd7c-ce8b5113e028"
+        },
+        "targetTransaction": "414bd576-3e63-4d6a-b9f8-f38465867ce4:7",
+        "targetHash": "10ef00dc576f7ed30bc01cec261fa6534eaeab0e5ddaf043ef72337f1473e7a8"
+      },
+      "afterElection": {
+        "sequence": 2,
+        "ack": 2,
+        "targetSequence": 2,
+        "capture": {
+          "file": "mysql-bin.000001",
+          "offset": "3079",
+          "gtidSet": "414bd576-3e63-4d6a-b9f8-f38465867ce4:1-7:1000001-1000001",
+          "serverUuid": "d81c50b5-e35d-11f1-b5eb-8ec09f074214"
+        },
+        "targetTransaction": "414bd576-3e63-4d6a-b9f8-f38465867ce4:1000001",
+        "targetHash": "14f1265782f751766c4703f83b7646ac205fffdd59e09f099f3874e16466fabd"
+      },
+      "afterRejoin": {
+        "sequence": 3,
+        "ack": 3,
+        "targetSequence": 3,
+        "capture": {
+          "file": "mysql-bin.000001",
+          "offset": "3544",
+          "gtidSet": "414bd576-3e63-4d6a-b9f8-f38465867ce4:1-8:1000001-1000001",
+          "serverUuid": "d81c50b5-e35d-11f1-b5eb-8ec09f074214"
+        },
+        "targetTransaction": "414bd576-3e63-4d6a-b9f8-f38465867ce4:8",
+        "targetHash": "ef4f7746ddab5295806690ef8dff102652d7a70a39f9b249786712fa0ee90f5f"
+      }
+    },
+    "journalGeneration": "4a43f260-a0c5-4895-97f8-cf988c9bc965",
+    "originalTargetAndJournalSnapshots": [
+      [
+        "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a",
+        "995de563-978a-42f5-b341-7c03f82d78bf",
+        2,
+        "COMPLETE"
+      ],
+      [
+        "a505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5",
+        "4e6393bc-0e9a-4be8-87f7-a2273ea6b687",
+        2,
+        "COMPLETE"
+      ]
+    ],
+    "reproduce": "python3 tests/mysql-group-failover-native.py --artifact <release jar> --java <Java 21 executable> --output target/mysql-group-failover-proof",
+    "scope": "MySQL three-member single-primary Group Replication, two mapped database schemas, exact original Worker, external PostgreSQL journal and PostgreSQL business destination. Native failure uses SIGKILL and native group election. A fenced former primary is read-only before and after rejoin."
   }
 }

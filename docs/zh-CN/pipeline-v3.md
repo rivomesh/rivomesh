@@ -78,6 +78,19 @@ MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿
 
 Java 21 实库档案使用 MySQL 8.4.13 异步 GTID 主备、外部 PostgreSQL 日志、两个管理入口和 PostgreSQL、MySQL 目标。强杀原主后，两入口显示采集中断，两个目标断点保持原值。外部流程完成提升后，Rivomesh 把新主的 GTID 自动投递到两个目标，并复用配置修订、日志代次和快照 ID。复现命令为 `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <发布包> --output target/mysql-async-proof`。[验收归档](../verification/README.md)
 
+### MySQL 8.4 单主组复制故障恢复
+
+设置 `source.topology: GROUP_REPLICATION`，在 `source.nodes` 中配置同一个单主组的成员。MySQL 选举可写主库。Rivomesh 核验候选节点在线、可写且保留所需的 GTID 历史。旧主重启后应保持 MySQL 超级只读，直到重新入组。组复制要求被复制的表具备主键或等效唯一键。[单主模式](https://dev.mysql.com/doc/refman/8.4/en/group-replication-single-primary-mode.html) · [组复制要求](https://dev.mysql.com/doc/refman/8.4/en/group-replication-requirements.html)
+
+Java 21 实库测试使用 MySQL 8.4.13、外部 PostgreSQL 日志和 PostgreSQL 17.12 目标。强杀主库后，MySQL 选出不同 UUID 的主库，同一个 Worker 自动投递后续两个事务。日志代次、两个快照 ID 和目标全表数据均核对一致。旧主以只读方式启动，缺少新主的组 GTID，源端预检拒绝将它作为采集源。旧主作为备库追平后，Worker 继续从已选主库采集。
+
+使用 Java 21 JDK、Docker Compose 和本地 `mysql:8.4`、`postgres:17` 镜像复现。
+
+```bash
+python3 tests/mysql-group-failover-native.py --artifact rivomesh.jar \
+  --java "$JAVA_HOME/bin/java" --output target/mysql-group-failover-proof
+```
+
 ### MySQL 采集和投递的 TLS 验证
 
 在 `source.sslMode` 设置 `VERIFY_IDENTITY` 供 binlog 采集使用，在 `source.jdbcOptions` 加入 `sslMode=VERIFY_IDENTITY` 供发现和快照读取使用。每个 MySQL 目标单独设置 JDBC URL 和 TLS 参数。把签发证书的 CA 根证书加入执行 JDK 信任库，Agent 和它启动的 Worker 都应能读取。源候选节点和目标 URL 使用与证书匹配的 DNS 名称。binlog 的证书验证模式由 JDK 协商协议，可连接仅启用 TLS 1.3 的 MySQL。[Connector/J TLS 参数](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)
