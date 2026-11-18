@@ -16,7 +16,7 @@
     "SO-01 accepted. PostgreSQL and Oracle V3 source wizards, explicit target restrictions and source-specific configuration guards. Seven Chrome checks against the live API, 115 DOM, 23 focused Java and 25 configuration examples passed; PostgreSQL and Oracle native regressions passed seven and thirteen."
   ],
   "inProgress": [
-    "RC-04 original source contents and approved isolation/exclusion.",
+    "RC-04 managed source evidence and approved isolation/exclusion.",
     "CP-04 managed Agent relocation and execution admission."
   ],
   "reportContents": [
@@ -51,11 +51,12 @@
     "Continue managed Agent relocation with durable owner/epoch guards and real external-log acceptance.",
     "Extend remaining target cluster, recovery and deployment matrix cases."
   ],
-  "currentCandidateArtifact": "ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c",
-  "currentCandidateScope": "Exact global task/owner SQL paging and per-destination backlog in native SQL recovery, full Java and browser acceptance",
+  "currentCandidateArtifact": "b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32",
+  "currentCandidateScope": "MySQL 8.4 exact wire frame CRC32 and private durable source evidence archival",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks.",
-    "CP-06 both entries passed task/owner filtering and exact per-target backlog during a real PostgreSQL constraint failure, while MySQL kept up. Same candidate passed 7 native, 7 Chrome, 503 Java (32 skipped) and 118 DOM cases."
+    "CP-06 both entries passed task/owner filtering and exact per-target backlog during a real PostgreSQL constraint failure, while MySQL kept up. Same candidate passed 7 native, 7 Chrome, 503 Java (32 skipped) and 118 DOM cases.",
+    "RC-04 retained the exact native MySQL binlog bytes in one atomic private archive tied to the original checkpoint. Eleven native checks cover independent file SHA matching, repeat idempotence and retained bytes after purging source logs."
   ]
 }

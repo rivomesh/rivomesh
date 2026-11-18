@@ -26,3 +26,13 @@ The review checks the pipeline identity, original position and snapshot dependen
 ### Native MySQL transaction headers
 
 For a supported `SOURCE_DECODE` fault, the review can show the first transaction after the durable checkpoint. It reads up to 256 native event headers from the same server and binlog file, requires continuous offsets through `Xid`, and lists the GTID, file coordinates and affected tables. The `nextTransactionHeaders` field uses `BINLOG_HEADERS_ONLY` as its scope. Retain the original binary log for row-content review and approvals. Rotation, a gap, a backend change, unfamiliar events or an incomplete boundary can leave the header evidence absent. Read permissions follow the existing MySQL replication account. [MySQL binary log event reference](https://dev.mysql.com/doc/refman/8.4/en/show-binlog-events.html) · [Native evidence](../verification/README.md#mysql-decode-header-review)
+
+Verify the complete transaction byte range once the capture lease has cleared. The supported initial profile covers one CRC32 binlog row transaction up to 4 MiB. The verification reads the retained source range over the replication connection, checks every event checksum and matches the GTID and file offsets through commit. The CLI prints the digest and metadata.
+
+```sh
+java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml --verify-contents
+java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
+  --retain-contents /var/lib/rivomesh/source-evidence
+```
+
+For retention, create the operator-owned directory with `0700` on a filesystem supporting hard links. Each `0600` archive contains the context, checkpoint hash and exact binary frames. Retrying the same retained evidence reuses its SHA-addressed file. Include the directory in your protected evidence retention and backup policy because the binary frames contain row values. Both commands preserve the original journal checkpoint. [Native evidence](../verification/README.md#retained-mysql-binlog-contents)

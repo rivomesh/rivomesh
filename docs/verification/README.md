@@ -197,3 +197,7 @@ Candidate `6d629310028898525a76a54683910b8db4fad01e919f28b46359ae444fd4c2ab` pas
 ### Global task filters and destination backlog
 
 Candidate `ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c` passed seven native two-controller checks and seven real Chrome checks, plus 503 Java checks with 32 optional skips and 118 DOM checks. The management entries ran exact task and execution-node filters in shared SQL. A native PostgreSQL constraint blocked one delivery while the MySQL destination caught up. Both entries reported the same destination-specific backlog, and generation-bound resume brought both data sets and their acknowledgment positions back into agreement. [Native fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)
+
+### Retained MySQL binlog contents
+
+Candidate `b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32` passed eleven native MySQL 8.4.13 checks. The Java 8 CLI read the affected bytes through the actual binlog protocol, verified each frame CRC32, and returned a SHA-256 matching the independently read byte range of the original on-server binlog. Two repeats produced a single private archive with the same checkpoint binding and exactly the original event bytes. After purging the synthetic log, a new proof was rejected and the previous archive remained byte-identical. [Fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)

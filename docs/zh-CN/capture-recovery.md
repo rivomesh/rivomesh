@@ -26,3 +26,13 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml
 ### MySQL 原生事务边界
 
 受支持的 `SOURCE_DECODE` 故障可查看原断点后的第一个事务。检查从同一 MySQL 实例及同一 binlog 文件读取最多 256 条事件头，要求位移连续直到 `Xid`，展示 GTID、文件范围和涉及表。`nextTransactionHeaders` 的范围为 `BINLOG_HEADERS_ONLY`，应保留原始 binlog 供行内容审阅和审批。轮换、断档、后端变化、未知事件或不完整事务边界都可能导致证据缺失。读取权限沿用 MySQL 复制账号。[MySQL 事件说明](https://dev.mysql.com/doc/refman/8.4/en/show-binlog-events.html) · [实库证据](../verification/README.md#mysql-decode-header-review)
+
+采集租约释放后，可验证完整事务字节范围。首批档案覆盖一个不超过 4 MiB 的 CRC32 binlog 行事务。命令通过复制连接读取原日志，逐事件校验 CRC32，核对 GTID、偏移和提交位置。终端输出为摘要和元数据。
+
+```sh
+java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml --verify-contents
+java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
+  --retain-contents /var/lib/rivomesh/source-evidence
+```
+
+留存前在支持硬链接的文件系统创建操作员专用的 `0700` 目录。每份 `0600` 归档保存审阅信息、断点哈希和原始二进制事件。重复保留相同证据会复用按 SHA 命名的文件。原事件包含业务行值，应按证据保留和备份策略保护该目录。两个命令均保留原采集断点。[实库验收](../verification/README.md#retained-mysql-binlog-contents)

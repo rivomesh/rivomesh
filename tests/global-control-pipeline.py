@@ -32,6 +32,7 @@ parser.add_argument('--failure-diagnostics', action='store_true', help='Check ph
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--task-views', action='store_true', help='Check global task filters and exact per-target backlog during native SQL failure')
+parser.add_argument('--verify-binlog-contents', action='store_true', help='Verify the digest of native binlog bytes against the fixture file')
 parser.add_argument('--header-boundary', action='store_true', help='Check native same-file GTID boundary after a row decode fault')
 parser.add_argument('--worker-diagnostics', action='store_true',
                     help='Check redacted Worker event pages after owner restart in a source fault profile')
@@ -47,6 +48,8 @@ parser.add_argument('--test-classes', type=Path, help='Frozen application test c
 args = parser.parse_args()
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
+if args.verify_binlog_contents and not args.header_boundary:
+    parser.error('--verify-binlog-contents requires --header-boundary')
 if args.header_boundary and args.source_diagnostics != 'decode':
     parser.error('--header-boundary requires --source-diagnostics decode')
 if args.worker_diagnostics and not args.source_diagnostics:
@@ -122,6 +125,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'mixedRuntimeUpgrade': args.mixed_runtime_upgrade,
             'workerDiagnostics': args.worker_diagnostics,
             'headerBoundary': args.header_boundary,
+            'verifyBinlogContents': args.verify_binlog_contents,
             'taskViews': args.task_views,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
@@ -598,9 +602,42 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             http('node-b',endpoint+'?limit=26',expected=400)
             passed(expected + ': bounded and redacted diagnostic pages agree across management entries after Agent restart')
 
+        if args.verify_binlog_contents:
+            wait(lambda: task().get('captureLeaseState') in ('EXPIRED','UNCLAIMED'), 'capture lease released after decode fault')
+            worker_config='/fixture/'+owner_node+'/controller/worker-configs/global_cdc.yml'
+            command=['exec','-T',owner_node,'java','-Xmx128m','-jar','/app/rivomesh.jar','review-source',worker_config,'--verify-contents']
+            inspection=json.loads(compose(*command).stdout)
+            proof=inspection['nextTransactionContents']
+            assert proof['scope']=='BINLOG_WIRE_SHA256' and proof['boundaryHash']==boundary['boundaryHash']
+            start,end=int(boundary['startOffset']),int(boundary['endOffset'])
+            assert re.fullmatch(r'mysql-bin\.\d+', boundary['logFile']) and int(proof['bytes'])==end-start
+            raw=subprocess.run(['docker','compose','-p',project,'-f',str(composition),'exec','-T','mysql','dd',
+                                'if=/var/lib/mysql/'+boundary['logFile'],'bs=1','skip='+str(start),'count='+str(end-start)],
+                               env=env,cwd=ROOT,capture_output=True,check=True,timeout=30).stdout
+            assert len(raw)==end-start and hashlib.sha256(raw).hexdigest()==proof['contentSha256']
+            assert task()['status']['capture_gtid']==checkpoint and 'incomplete image' not in json.dumps(inspection)
+            passed('CRC32-checked wire proof hashes the original file bytes through the commit without decoding rows')
+            evidence=home/'source-evidence'
+            evidence.mkdir(mode=0o700)
+            archive_command=command[:-1]+['--retain-contents','/fixture/source-evidence']
+            retained=json.loads(compose(*archive_command).stdout)
+            assert retained['nextTransactionContents']==proof
+            filename=retained['retainedEvidence']['file']
+            assert re.fullmatch(r'[a-f0-9]{64}\.json',filename)
+            saved=evidence/filename
+            content=saved.read_bytes()
+            assert hashlib.sha256(content).hexdigest()+'.json'==filename
+            assert saved.stat().st_mode&0o777==0o600
+            archive=json.loads(content)
+            assert base64.b64decode(archive['base64Frames'])==raw
+            assert archive['review']['checkpointHash']==reviews[0]['checkpointHash']
+            assert json.loads(compose(*archive_command).stdout)['retainedEvidence']==retained['retainedEvidence']
+            assert list(evidence.iterdir())==[saved]
+            passed('Retaining twice atomically reuses one private checkpoint-bound archive with exact original bytes')
         if args.header_boundary:
             sql('mysql', 'FLUSH BINARY LOGS')
-            log = sql('mysql', 'SHOW BINARY LOG STATUS').split('|')[0]
+            status_command='SHOW BINARY LOG STATUS' if manifest['sourceVersion'].startswith('8.4.') else 'SHOW MASTER STATUS'
+            log = sql('mysql', status_command).split('|')[0]
             assert re.fullmatch(r'mysql-bin\.\d+', log) and log != boundary['logFile']
             sql('mysql', "PURGE BINARY LOGS TO '" + log + "'")
             gone = [http(node, route + '/capture-recovery') for node in ('node-a','node-b')]
@@ -608,6 +645,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert gone[0]['sourceAdmission'] == 'SOURCE_LOG_GAP' and gone[0]['checkpointHash'] == reviews[0]['checkpointHash']
             assert task()['status']['capture_gtid'] == checkpoint and task()['status']['run_state'] == 'ERROR'
             passed('Purging the fixture log removes header evidence, reports the gap and retains the exact checkpoint')
+            if args.verify_binlog_contents:
+                refused=compose(*command,check=False)
+                assert refused.returncode and 'MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE' in refused.stderr
+                assert 'contentSha256' not in refused.stdout
+                assert saved.read_bytes()==content
+                passed('Content proof refuses the purged transaction and retained evidence remains byte-identical')
+
 
     def run_recovery_cases():
         if args.compensation:

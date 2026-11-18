@@ -5,6 +5,8 @@ import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.SourceAdapter;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +17,9 @@ import java.util.Objects;
 public final class CaptureRecoveryReview {
     private CaptureRecoveryReview() {}
 
-    public static Map<String,Object> inspect(PipelineConfig config)throws Exception{
+    public static Map<String,Object> inspect(PipelineConfig config)throws Exception{return inspect(config,false,null);}
+
+    static Map<String,Object> inspect(PipelineConfig config,boolean verifyContents,Path archiveDirectory)throws Exception{
         try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){
             journal.verifyIdentity(config.fingerprint(),config.subscribers());
             Map<String,Object> before=journal.status();
@@ -23,11 +27,17 @@ public final class CaptureRecoveryReview {
             if(!"ERROR".equals(before.get("run_state"))||phase==null||
                     !Arrays.asList("SOURCE_CONNECT","SOURCE_READ","SOURCE_DECODE","SOURCE_SNAPSHOT","SOURCE_DISCOVERY","DDL","NORMALIZE").contains(phase))
                 throw new IllegalStateException("SOURCE_REVIEW_REQUIRES_CAPTURE_ERROR");
+            if(verifyContents&&(!"MYSQL".equals(config.effectiveSourceType())||!"SOURCE_DECODE".equals(phase)
+                    ||"CLAIMED".equals(before.get("captureLeaseState"))))
+                throw new IllegalStateException("MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE");
             SourcePosition checkpoint=journal.captured();
             Map<String,Object> nativeEvidence=new LinkedHashMap<>();
+            ByteArrayOutputStream retained=archiveDirectory==null?null:new ByteArrayOutputStream();
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":
-                    probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence);
+                    probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence,verifyContents,retained);
 
+            if(verifyContents&&!nativeEvidence.containsKey("nextTransactionContents"))
+                throw new IllegalStateException("MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE: "+admission);
             Map<String,Object> after=journal.status();
             for(String key:Arrays.asList("generation","epoch","run_state","errorGeneration","errorCode","lastSequence")){
                 if(!Objects.equals(before.get(key),after.get(key)))
@@ -48,12 +58,14 @@ public final class CaptureRecoveryReview {
             report.put("scope","UNPROVEN_SOURCE_RANGE");
             report.put("actions",actions(admission,phase));
             report.putAll(nativeEvidence);
+            if(archiveDirectory!=null)report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray()));
             return report;
         }
     }
 
     private static String probe(PipelineConfig config,String generation,SourcePosition checkpoint,JdbcJournal journal,
-                                String phase,Map<String,Object> nativeEvidence)throws Exception{
+                                String phase,Map<String,Object> nativeEvidence,boolean verifyContents,
+                                ByteArrayOutputStream retained)throws Exception{
         // Read journal dependencies before the source probe so storage errors cannot look like source failures.
         List<SourcePosition> dependencies=journal.dependencies();
         try(SourceAdapter source=PipelineSources.open(config,generation)){
@@ -61,7 +73,10 @@ public final class CaptureRecoveryReview {
             if(source instanceof MysqlCdcSource&&"SOURCE_DECODE".equals(phase)){
                 try{
                     Map<String,Object> boundary=((MysqlCdcSource)source).inspectDecodeBoundary(checkpoint);
-                    if(boundary!=null)nativeEvidence.put("nextTransactionHeaders",boundary);
+                    if(boundary!=null){
+                        nativeEvidence.put("nextTransactionHeaders",boundary);
+                        if(verifyContents)nativeEvidence.put("nextTransactionContents",((MysqlCdcSource)source).verifyBinlogContents(checkpoint,boundary,retained));
+                    }
                 }catch(java.sql.SQLException unavailable){
                     // A missing, rotated or unreadable source file leaves only the admission result.
                 }

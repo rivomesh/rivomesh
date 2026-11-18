@@ -61,6 +61,12 @@ public final class MysqlCdcSource implements SourceAdapter {
             return MysqlDecodeBoundary.read(connection,position);
         }
     }
+    Map<String,Object> verifyBinlogContents(SourcePosition checkpoint,Map<String,Object> boundary,
+                                             java.io.ByteArrayOutputStream retained)throws Exception{
+        Map<String,Object> proof=MysqlBinlogEvidence.verify(config,selected,boundary,retained);
+        if(!boundary.equals(inspectDecodeBoundary(checkpoint)))throw new IllegalStateException("MYSQL_BINLOG_EVIDENCE_BOUNDARY_CHANGED");
+        return proof;
+    }
     @Override public boolean includes(SourcePosition baseline,String id){return Gtids.contains(position(baseline).gtidSet,id);}
     public void useSchema(TableSchema table){table.validate();schemas.put(table.database+"\u0000"+table.name,table);}
     @Override public List<TableSchema> discover()throws Exception{

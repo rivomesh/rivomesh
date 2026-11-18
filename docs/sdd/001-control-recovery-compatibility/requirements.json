@@ -566,8 +566,8 @@
         "en": "Controlled capture/decode gap recovery"
       },
       "gap": {
-        "zh-CN": "MySQL 8.4 实测同文件事务头、GTID、提交边界与表范围，已验证清理原日志后拒绝提供边界。保留原始内容、隔离和批准排除待实现。",
-        "en": "Native MySQL 8.4 passed same-file GTID, commit boundary and table scope inspection, including refusal after binlog purge. Retaining original contents, quarantine and approved exclusion remain."
+        "zh-CN": "MySQL 8.4 已实测事务边界、原始 binlog 字节校验和私有证据归档，原日志清理后归档仍完整。界面持久命令、隔离与批准排除待实现。",
+        "en": "Native MySQL 8.4 passed transaction boundaries, byte-level verification and private source evidence retention through log purge. Managed retention, quarantine and approved exclusion remain."
       },
       "acceptance": {
         "zh-CN": "单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。",
@@ -585,7 +585,9 @@
         "tests/postgres-source-run.py",
         "tests/global-control-pipeline.py",
         "docs/verification/baseline.json",
-        "sync-app/src/main/java/io/github/rivomesh/MysqlDecodeBoundary.java"
+        "sync-app/src/main/java/io/github/rivomesh/MysqlDecodeBoundary.java",
+        "sync-app/src/main/java/io/github/rivomesh/MysqlBinlogEvidence.java",
+        "sync-app/src/main/java/io/github/rivomesh/MysqlContentArchive.java"
       ]
     },
     {
