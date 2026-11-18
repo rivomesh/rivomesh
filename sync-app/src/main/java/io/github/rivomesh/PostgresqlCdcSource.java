@@ -366,6 +366,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 stream=connection.unwrap(PGConnection.class).getReplicationAPI().replicationStream().logical()
                         .withSlotName(slot).withStartPosition(LogSequenceNumber.valueOf(start))
                         .withSlotOption("proto_version",1).withSlotOption("publication_names",options.publication)
+                        .withAutomaticFlush(false)
                         .withStatusInterval(1,TimeUnit.SECONDS).start();
             }catch(Exception error){
                 try{connection.close();}catch(Exception close){error.addSuppressed(close);}

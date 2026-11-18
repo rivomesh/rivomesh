@@ -43,7 +43,7 @@ let lang=localStorage.getItem('rivomesh-language')||(navigator.language.startsWi
 let failureDialog=null,failureTicket=0;
 const $=id=>document.getElementById(id),t=key=>messages[lang][key]||key;
 const can=permission=>Boolean(session?.permissions?.includes(permission));
-function forgetSession(){closeFailureEvidence();window.RivomeshRecovery?.close();window.RivomeshValidation?.close();window.RivomeshAccounts?.close();window.RivomeshEditor?.close();window.RivomeshAudit?.close();sessionGeneration++;session=null;busy=null;clearTaskPages();clearOwners();clearNodes();clearDraft();$('create-dialog').close();capabilities=[];latest={tasks:[],invalidConfigs:[]};render();renderAdapters();}
+function forgetSession(){closeFailureEvidence();closeCaptureRecovery();window.RivomeshRecovery?.close();window.RivomeshValidation?.close();window.RivomeshAccounts?.close();window.RivomeshEditor?.close();window.RivomeshAudit?.close();sessionGeneration++;session=null;busy=null;clearTaskPages();clearOwners();clearNodes();clearDraft();$('create-dialog').close();capabilities=[];latest={tasks:[],invalidConfigs:[]};render();renderAdapters();}
 const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
 function translate(){if(failureDialog){failureDialog.querySelectorAll('[data-failure-label]').forEach(e=>e.textContent=t(e.dataset.failureLabel));const events=failureDialog.querySelector('.failure-event-list');if(events?._failureEvents)renderFailureEvents(events,events._failureEvents);}document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));$('language').textContent=lang==='zh'?'English':'中文';[0,1,2].forEach(i=>$('step-label-'+i).textContent=t('step'+i));render();renderAdapters();renderNodes();$('page-title').textContent=t(activeView);if($('create-dialog').open)wizardMode();window.RivomeshEditor?.translate();window.RivomeshAudit?.translate();window.RivomeshAccounts?.translate();window.RivomeshRecovery?.translate();}
 function explain(code){return messages[lang][code]||(code&&code.startsWith('SQL_')?t('SQL'):t('UNKNOWN'))+(code?' ['+code+']':'');}
@@ -138,6 +138,27 @@ Object.assign(messages.en,{
 messages.zh.captureLsn='已采集 LSN';messages.en.captureLsn='Captured LSN';
 const pipelineFaultStages=new Set(['SOURCE_CONNECT','SOURCE_DISCOVERY','SOURCE_READ','SOURCE_DECODE',
  'SOURCE_SNAPSHOT','DDL','NORMALIZE','JOURNAL_STORAGE','JOURNAL_ACK']);
+let captureRecoveryDialog;
+function closeCaptureRecovery(){
+ if(captureRecoveryDialog){captureRecoveryDialog.remove();captureRecoveryDialog=null;}
+}
+async function openCaptureRecovery(task){
+ closeCaptureRecovery();
+ const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
+ captureRecoveryDialog=dialog;dialog.setAttribute('aria-label',t('reviewSource'));
+ close.onclick=()=>closeCaptureRecovery();
+ dialog.addEventListener('cancel',()=>closeCaptureRecovery());
+ dialog.append(text('h2',t('reviewSource')),content,close);
+ content.append(text('p',t('pending')));document.body.append(dialog);dialog.showModal();
+ try{
+  const report=await api('/tasks/'+encodeURIComponent(task.id)+'/capture-recovery');
+  const steps=text('ul');
+  for(const action of report.actions)steps.append(text('li',t(action)));
+  content.replaceChildren(text('p',t('UNPROVEN_SOURCE_RANGE')),
+   text('p',t('sourceAdmission')+' · '+explain(report.sourceAdmission)),
+   text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')),steps);
+ }catch(error){content.replaceChildren(text('p',error.message,'callout warning'));}
+}
 function renderPipelineFault(root,task){
  if(task.formatVersion!==3)return;
  const status=task.status||{};
@@ -147,9 +168,21 @@ function renderPipelineFault(root,task){
  const card=text('section','','callout warning pipeline-failure');
  card.append(text('strong',t('fault_'+stage)),text('p',t('faultHelp_'+stage)));
  if(code)card.append(text('span',explain(code),'subtle'));
+ if(can('TASK_CONFIG')&&status.run_state==='ERROR'&&(stage.startsWith('SOURCE_')||['DDL','NORMALIZE'].includes(stage))){
+  const review=text('button',t('reviewSource'),'quiet');review.onclick=()=>openCaptureRecovery(task);card.append(review);
+ }
  root.append(card);
 }
 Object.assign(messages.zh,{
+ reviewSource:'检查采集恢复',sourceAdmission:'源位置检查',affectedSubscriptions:'可能受影响的订阅',
+ UNPROVEN_SOURCE_RANGE:'尚未证明缺口的事务边界及内容。请保留原始日志和当前断点。',
+ SOURCE_CHECKPOINT_AVAILABLE:'合格源仍能读取原断点',
+ SOURCE_POSITION_UNAVAILABLE:'尚无持久采集断点',POSTGRESQL_REQUIRED_WAL_UNAVAILABLE:'复制槽或所需 WAL 无法读取',
+ SOURCE_REVIEW_REQUIRES_CAPTURE_ERROR:'仅在采集错误暂停后检查',SOURCE_REVIEW_STALE:'检查期间任务已变更，请刷新后重新检查',
+ PRESERVE_SOURCE_LOGS:'保留原始日志和故障位置。',RETRY_ORIGINAL_CHECKPOINT:'修复后从原断点重试。',
+ REPAIR_CAPTURE_CAUSE:'先处理解码、结构或快照故障。',
+ RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE:'恢复所需日志，或切换到持有完整日志的合格源。',
+ REVIEW_NEW_BASELINE:'无法恢复日志时，审阅新基线及受影响的订阅。',
  fault_SOURCE_CONNECT:'源库连接',faultHelp_SOURCE_CONNECT:'检查源库地址、认证和可用主库。主库切换后需保留所需 GTID 历史。',
  fault_SOURCE_DISCOVERY:'源表发现',faultHelp_SOURCE_DISCOVERY:'检查数据库映射、表权限和源表结构。',
  fault_SOURCE_READ:'读取 binlog',faultHelp_SOURCE_READ:'确认源端读取连接和 binlog 保留范围。需要时恢复日志或切换到保有历史的合格源。',
@@ -161,6 +194,15 @@ Object.assign(messages.zh,{
  fault_JOURNAL_ACK:'写入同步确认',faultHelp_JOURNAL_ACK:'核对目标库的提交回执和日志中的确认位置。恢复日志写入后继续核对。'
 });
 Object.assign(messages.en,{
+ reviewSource:'Review capture recovery',sourceAdmission:'Source position check',affectedSubscriptions:'Potentially affected subscriptions',
+ UNPROVEN_SOURCE_RANGE:'The gap boundaries and transaction contents remain unverified. Retain the source logs and checkpoint.',
+ SOURCE_CHECKPOINT_AVAILABLE:'An eligible source still has the original checkpoint',
+ SOURCE_POSITION_UNAVAILABLE:'There is no durable capture checkpoint',POSTGRESQL_REQUIRED_WAL_UNAVAILABLE:'The slot or required WAL is unavailable',
+ SOURCE_REVIEW_REQUIRES_CAPTURE_ERROR:'Review requires a capture error',SOURCE_REVIEW_STALE:'The task changed during review. Refresh and try again.',
+ PRESERVE_SOURCE_LOGS:'Retain the original logs and failure position.',RETRY_ORIGINAL_CHECKPOINT:'Retry from the original checkpoint after recovery.',
+ REPAIR_CAPTURE_CAUSE:'Correct the decoding, schema or snapshot failure first.',
+ RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE:'Restore the required logs or select an eligible source with complete history.',
+ REVIEW_NEW_BASELINE:'Review a new baseline and affected subscriptions if the logs cannot be recovered.',
  fault_SOURCE_CONNECT:'Source connection',faultHelp_SOURCE_CONNECT:'Check addresses, authentication and primary availability. Preserve the required GTID history during promotion.',
  fault_SOURCE_DISCOVERY:'Source table discovery',faultHelp_SOURCE_DISCOVERY:'Check database mappings, table permissions and source schemas.',
  fault_SOURCE_READ:'Read binlog',faultHelp_SOURCE_READ:'Check the source read session and retained binlog range. Restore logs or choose an eligible source with the required history.',

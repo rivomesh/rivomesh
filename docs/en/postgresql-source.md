@@ -13,6 +13,8 @@ This experimental profile reads committed transactions from one writable Postgre
 
 PostgreSQL supplies a consistent position when creating a logical replication slot. Rivomesh imports an exported MVCC snapshot for each table and captures concurrent transactions through the original LSN stream. It reports the flushed LSN only after journaling the complete transaction. Each task uses a slot bound to its journal generation. [PostgreSQL replication protocol](https://www.postgresql.org/docs/17/protocol-replication.html) · [pgJDBC replication API](https://jdbc.postgresql.org/documentation/server-prepare/)
 
+The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disabled. Ordinary keepalives and WAL outside the publication leave the durable journal position unchanged. Monitor retained WAL during extended intervals without published transactions. [pgJDBC download](https://jdbc.postgresql.org/download/) · [Replication stream builder](https://github.com/pgjdbc/pgjdbc/blob/REL42.7.14/pgjdbc/src/main/java/org/postgresql/replication/fluent/ChainedCommonStreamBuilder.java)
+
 ## Profile and recovery
 
 - The initial type profile includes signed integers, booleans, bounded numeric values, text, JSON/JSONB and BYTEA. Keyed and keyless tables use full row identity.

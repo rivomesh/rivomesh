@@ -25,6 +25,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 多节点与持久命令 | [全局控制](docs/zh-CN/global-control.md) | [Global control](docs/en/global-control.md) |
 | 事务证据与提交确认 | [审阅](docs/zh-CN/failure-review.md)、[确认](docs/zh-CN/commit-acknowledgement.md) | [Review](docs/en/failure-review.md),[confirmation](docs/en/commit-acknowledgement.md) |
 | 完整事务跳过与缺口 | [跳过](docs/zh-CN/transaction-skip.md) | [Skipping](docs/en/transaction-skip.md) |
+| 采集端故障与日志缺失 | [采集恢复](docs/zh-CN/capture-recovery.md) | [Capture recovery](docs/en/capture-recovery.md) |
 | 共同点缺口核验 | [核验与FAQ](docs/zh-CN/gap-verification.md) | [Verification and FAQ](docs/en/gap-verification.md) |
 | 失败事务补偿 | [补偿操作](docs/zh-CN/transaction-compensation.md) | [Compensation](docs/en/transaction-compensation.md) |
 | 手工补数据 | [录入与导入](docs/zh-CN/manual-correction.md) | [Manual correction](docs/en/manual-correction.md) |

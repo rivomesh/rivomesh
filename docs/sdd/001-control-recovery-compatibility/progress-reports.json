@@ -11,7 +11,8 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "LG-06 disposable two-node Kubernetes with CSI is starting."
+    "LG-06 dual-node live Kubernetes. Helm RWO CSI remount with ongoing CDC passed; both deployment formats and rotation checks rerunning.",
+    "SO-07 Oracle Free ARM64 native probe and SCN position admission."
   ],
   "reportContents": [
     "Current totals",
@@ -33,18 +34,20 @@
   ],
   "currentSdd": {
     "DONE": 20,
-    "PARTIAL": 25,
-    "NEW": 3
+    "PARTIAL": 26,
+    "NEW": 2
   },
   "newSinceLastReport": [
     "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
-    "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check."
+    "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check.",
+    "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
+    "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback."
   ],
   "nextTasks": [
     "Verify both Kubernetes deployment formats and recovery on CSI.",
     "Continue source range recovery and Oracle source work."
   ],
-  "currentCandidateArtifact": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
-  "currentCandidateScope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",
+  "currentCandidateArtifact": "ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66",
+  "currentCandidateScope": "Java 8 PostgreSQL 17.12 source with explicit durable feedback and seven native checks. MySQL 8.4 cross-entry capture recovery review, six native checks. 42 targeted Java and 110 UI checks.",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3"
 }

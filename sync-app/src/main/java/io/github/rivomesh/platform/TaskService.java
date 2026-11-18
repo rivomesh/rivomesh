@@ -806,6 +806,28 @@ public final class TaskService implements AutoCloseable {
         row.put("operations",operations);return row;
     }
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}
+    Map<String,Object> captureRecovery(String id,AccessControl.Principal actor)throws Exception{
+        TaskDefinition definition;String revision;
+        synchronized(this){
+            ensureOpen();currentActor(actor);if(!actor.administers())throw new SecurityException("FORBIDDEN");
+            if(!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");
+            definition=require(id).config;revision=registry.tasks.get(id).revision;
+        }
+        if(definition.pipeline==null)throw new Conflict("SOURCE_REVIEW_V3_REQUIRED");
+        Map<String,Object> result;
+        try{result=CaptureRecoveryReview.inspect(definition.pipeline);}
+        catch(IllegalStateException failure){
+            String code=failure.getMessage();
+            if("SOURCE_REVIEW_REQUIRES_CAPTURE_ERROR".equals(code)||"SOURCE_REVIEW_STALE".equals(code))throw new Conflict(code);
+            throw failure;
+        }
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            if(definition!=require(id).config||!revision.equals(registry.tasks.get(id).revision))
+                throw new Conflict("SOURCE_REVIEW_STALE");
+        }
+        return result;
+    }
     private Path reports(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("validations").resolve(id);}
     private Path failureEvidenceDirectory(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("failure-evidence").resolve(id);}
     private io.github.rivomesh.recovery.FailureEvidence.Scope failureEvidenceScope(String id)throws Exception{

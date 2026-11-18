@@ -7,10 +7,10 @@ source:
   database: accounting
   topology: SINGLE
   expectedVersion: "17"
-  username: ${RIVOMESH_SOURCE_USER}
+  username: rivomesh_capture
   password: ${RIVOMESH_SOURCE_PASSWORD}
   postgresql:
-    url: ${RIVOMESH_SOURCE_JDBC_URL}
+    url: jdbc:postgresql://postgres-source:5432/accounting
     publication: rivomesh_sales
     slotPrefix: rivomesh_sales
 databases:
@@ -21,8 +21,8 @@ journal:
 targets:
   - id: warehouse
     product: POSTGRESQL
-    url: ${RIVOMESH_TARGET_JDBC_URL}
-    username: ${RIVOMESH_TARGET_USER}
+    url: jdbc:postgresql://postgres-target:5432/warehouse
+    username: rivomesh_writer
     password: ${RIVOMESH_TARGET_PASSWORD}
     metadataSchema: rivomesh_meta
     mappings:

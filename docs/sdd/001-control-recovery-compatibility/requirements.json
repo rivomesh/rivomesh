@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.17",
+  "version": "0.18",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -546,14 +546,14 @@
       "id": "RC-04",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "NEW",
+      "status": "PARTIAL",
       "title": {
         "zh-CN": "采集/解码阶段的受控缺口恢复",
         "en": "Controlled capture/decode gap recovery"
       },
       "gap": {
-        "zh-CN": "目标跳过不能修复尚未形成完整事件的源读取或解析故障。",
-        "en": "Destination skipping cannot fix failures before complete events exist."
+        "zh-CN": "只读采集恢复检查已实现并通过跨入口和 PostgreSQL 丢槽实库检查。源范围证明、隔离和审批排除待实现。",
+        "en": "Read-only capture recovery review passed across controllers and in a native PostgreSQL slot-loss scenario. Source-range proof, quarantine and approved exclusion remain."
       },
       "acceptance": {
         "zh-CN": "单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。",
@@ -566,8 +566,11 @@
         "SO-01"
       ],
       "evidence": [
-        "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
-        "docs/zh-CN/reconciliation-workflow.md"
+        "docs/en/capture-recovery.md",
+        "docs/zh-CN/capture-recovery.md",
+        "tests/postgres-source-run.py",
+        "tests/global-control-pipeline.py",
+        "docs/verification/baseline.json"
       ]
     },
     {

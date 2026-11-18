@@ -16,6 +16,7 @@ final class PipelineMain {
                 try{engine.run();}finally{try{Runtime.getRuntime().removeShutdownHook(hook);}catch(IllegalStateException ignored){/* shutdown */}}
             }
         }else if(args.length==2&&args[0].equals("check"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineEngine.check(config)));
+        else if(args.length==2&&args[0].equals("review-source"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(CaptureRecoveryReview.inspect(config)));
         else if(args.length==2&&args[0].equals("pause"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineControls.pause(config)));
         else if(args.length==2&&args[0].equals("status"))try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){journal.verifyIdentity(config.fingerprint(),config.subscribers());System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(journal.status()));}
         else if(args.length==3&&args[0].equals("resume-pipeline"))try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){journal.verifyIdentity(config.fingerprint(),config.subscribers());journal.resumePipeline(Long.parseLong(args[2]));System.out.println("PIPELINE_RESUMED_ORIGINAL_POSITION");}

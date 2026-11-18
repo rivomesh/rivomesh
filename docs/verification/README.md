@@ -84,8 +84,12 @@ Native MySQL version was 8.4.13. Reproduce the profile with `tests/mysql84-profi
 
 ## SO-06 PostgreSQL 17 source pilot
 
-Candidate `75881be872f5a0d1ef9f1b57eb888d863bba010c3233838df2eb9e9dd7fee93f` passed 31 focused Java tests, 109 console tests and five native PostgreSQL 17.12 checks. They cover two schemas, JSONB, numeric and bytea, keyless duplicates, atomic CDC, SQL-fault replay, SIGKILL restart on the original LSN and safe refusal of a missing slot. SO-06 is partial. Cross-timeline promotion, generated columns, common-cut verification and other destination combinations remain. See the [English guide](../en/postgresql-source.md) and [Chinese guide](../zh-CN/postgresql-source.md).
+Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` passed 42 Java checks, 110 console checks and seven native cases on PostgreSQL 17.12. PostgreSQL uses pgJDBC 42.7.14 with automatic flush advancement disabled. Verified snapshot and CDC across two schemas, JSONB, keyless rows, idle keepalive, SQL recovery, same-slot LSN restart and lost-slot refusal. Promotion, generated columns and common-cut verification remain open. See the [English guide](../en/postgresql-source.md) and [Chinese guide](../zh-CN/postgresql-source.md).
 
 ## SO-02 MySQL 5.7 V3
 
 Artifact `d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0` passed six standalone tests, one asynchronous GTID promotion test and one single-primary MGR test on Java 8. The asynchronous fixture reproduces replica SQL error 1032, recovers and promotes, then removes a binlog containing an uncaptured transaction. Rivomesh refuses restart with `SOURCE_LOG_GAP`, preserves the original journal position and sequence, and leaves the missing row unapplied. The container is MySQL 5.7.44 linux/amd64. Reproduce with `tests/matrix.sh --v3 5.7.44`.
+
+## RC-04 capture review
+
+Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` passed six native MySQL 8.4 checks with two controllers and an independent Agent. Both entries returned the same read-only review after a decode fault and Agent restart, with every affected subscription listed and the original error generation and GTID retained. PostgreSQL missing-slot review kept the original LSN and left the slot absent. Source-range proof and approved exclusion remain open. See the [operator guide](../en/capture-recovery.md).

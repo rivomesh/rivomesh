@@ -64,7 +64,8 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
     (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
     (home/'platform.json').write_text(json.dumps(platform))
     database=dict(image='postgres:17',environment=dict(POSTGRES_PASSWORD='${RM_PG_PASSWORD}',POSTGRES_DB='sync_test'))
-    services=dict(source=dict(database,command=['-c','wal_level=logical','-c','max_replication_slots=8']),target=database,
+    services=dict(source=dict(database,command=['-c','wal_level=logical','-c','max_replication_slots=8',
+                                                '-c','wal_sender_timeout=4000']),target=database,
                   runner=dict(image='eclipse-temurin:8-jre',entrypoint=['java','-Xmx384m','-jar','/app/rivomesh.jar'],
                               command=['serve','/fixture/platform.json'],
                               environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}'),
@@ -138,7 +139,22 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         initial=task()['status']
         snapshot_ids=sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
         assert len(snapshot_ids.splitlines())==3
+        try:
+            http(route+'/capture-recovery')
+        except urllib.error.HTTPError as healthy:
+            assert healthy.code==409
+        else:
+            raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+
+        initial_lsn=initial['capture_lsn']
+        sql('source','CREATE TABLE sales.unpublished(id INT); INSERT INTO sales.unpublished VALUES(1)')
+        assert sql('source',f"SELECT pg_current_wal_lsn() > '{initial_lsn}'::pg_lsn")=='t'
+        time.sleep(5)
+        assert sql('source',f"SELECT confirmed_flush_lsn <= '{initial_lsn}'::pg_lsn "
+                           "FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='t'
+        assert task()['status']['capture_lsn']==initial_lsn
+        passed('Idle keepalives retain the original checkpoint as unpublished WAL advances')
 
         sql('source',"""BEGIN;
             UPDATE sales.items SET active=false,payload=jsonb_set(payload,'{updated}','true') WHERE id=1;
@@ -184,6 +200,14 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         assert missing['capture_lsn']==durable
         assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
         passed('The missing slot is refused and the last durable LSN remains available')
+        recovery=http(route+'/capture-recovery')
+        assert recovery['sourceAdmission']=='POSTGRESQL_REQUIRED_WAL_UNAVAILABLE'
+        assert recovery['phase']=='SOURCE_CONNECT' and recovery['scope']=='UNPROVEN_SOURCE_RANGE'
+        assert recovery['affectedSubscriptions']==['pg'] and len(recovery['checkpointHash'])==64
+        assert recovery['actions']==['PRESERVE_SOURCE_LOGS','RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE','REVIEW_NEW_BASELINE']
+        assert task()['status']['capture_lsn']==durable
+        assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
+        passed('Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint')
         assert hashlib.sha256(artifact.read_bytes()).hexdigest()==digest
         report['status']='PASS'
     except Exception as error:

@@ -142,6 +142,9 @@ public final class ConsoleServer implements AutoCloseable {
                 if(parts.length==5&&method.equals("PUT")||parts.length==6&&parts[5].equals("validate")&&method.equals("POST")){JsonNode body=body(exchange),document=configurationDocument(body);String revision=body.path("expectedRevision").asText("");TaskRequest request=TaskRequest.of(parts.length==6?TaskRequest.Kind.CONFIG_PREVIEW:TaskRequest.Kind.CONFIG_UPDATE,id);request.document=document;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");json(exchange,!control.localOnly()&&request.mutation()?202:200,control.invoke(request,principal));return;}
             }
             if(parts.length==4&&parts[1].equals("api")&&parts[2].equals("tasks")&&method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.VIEW,parts[3],principal));return;}
+            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("capture-recovery")&&method.equals("GET")){
+                json(exchange,200,invoke(TaskRequest.Kind.CAPTURE_RECOVERY,parts[3],principal));return;
+            }
             if(parts.length>=5&&parts[1].equals("api")&&parts[2].equals("tasks")&&Arrays.asList("recovery-plans","gaps","gap-verifications").contains(parts[4])){
                 if(!principal.administers()){error(exchange,403,"FORBIDDEN");return;}
                 if(parts.length==6&&parts[4].equals("gap-verifications")&&method.equals("GET")){TaskRequest request=TaskRequest.of(TaskRequest.Kind.GAP_VERIFICATION,parts[3]);request.reference=parts[5];json(exchange,200,control.invoke(request,principal));return;}

@@ -2,7 +2,7 @@
 
 首版尚未发布。Java/Maven命名空间为`io.github.rivomesh`。[完整SDD](../sdd/001-control-recovery-compatibility/spec.md) · [任务清单](../sdd/001-control-recovery-compatibility/tasks.md) · [English](../en/implementation-status.md)。
 
-48项需求：**20项完成、25项部分完成、3项未实现，剩余28项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
+48项需求：**20项完成、26项部分完成、2项未实现，剩余28项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
 
 ## 已验收
 
@@ -33,6 +33,7 @@
 |---|---|
 | 同步链路 | MySQL多库映射、同源多目标、自动建表、分块全量转增量、持久断点；无主键/JSON/受支持生成列 |
 | PostgreSQL 源 | 17.12 单主实验档案，涵盖 pgoutput、JSONB、无主键、LSN 续传及槽缺失拒绝。见[配置与恢复](postgresql-source.md) |
+| 采集故障恢复 | 管理界面和 CLI 提供只读检查、受影响订阅及原断点复验。范围隔离待实现。见[操作说明](capture-recovery.md) |
 | 管理 | 中英文向导、配置/修订、独立Worker、跨入口持久命令、账号/权限/审计 |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
 | 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |

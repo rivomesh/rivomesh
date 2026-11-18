@@ -75,6 +75,34 @@ test('summary readers do not receive raw-detail buttons',async()=>{
  for(const role of ['VIEWER','OPERATOR']){const ui=detailFixture(role);try{await login(ui);ui.d.querySelector('[data-validation-report]').click();await flush();assert.match(ui.d.getElementById('task-detail').textContent,/db\.<img src=x>/);assert.equal(ui.d.querySelector('[data-validation-differences]'),null);assert.equal(ui.d.querySelector('[data-validation-values]'),null);}finally{ui.dom.window.close();}}
 });
 
+test('capture recovery explains a source gap without offering a target skip',async()=>{
+ const task={id:'capture',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
+  status:{run_state:'ERROR',error_stage:'SOURCE_CONNECT',error_code:'SOURCE_LOG_GAP'}};
+ for(const role of ['ADMIN','OPERATOR','VIEWER']){
+  const ui=setup([task],role),fallback=ui.w.fetch;
+  ui.w.fetch=async(path,options)=>{
+   if(path!=='/api/tasks/capture/capture-recovery')return fallback(path,options);
+   ui.calls.push({path,...options});
+   return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_LOG_GAP',
+    affectedSubscriptions:['warehouse','backup'],actions:['PRESERVE_SOURCE_LOGS','RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE','REVIEW_NEW_BASELINE']})};
+  };
+  try{
+   await login(ui);
+   const review=ui.d.querySelector('.pipeline-failure button');
+   if(role!=='ADMIN'){assert.equal(review,null);continue;}
+   review.click();await flush();
+   const dialog=ui.d.querySelector('dialog.failure-review-dialog');
+   assert.match(dialog.textContent,/尚未证明缺口/);
+   assert.match(dialog.textContent,/warehouse, backup/);
+   assert.match(dialog.textContent,/恢复所需日志/);
+   assert.equal(dialog.querySelectorAll('button').length,1);
+   assert.equal(ui.calls.find(call=>call.path.endsWith('/capture-recovery')).method,undefined);
+   ui.d.getElementById('logout').click();await flush();
+   assert.equal(ui.d.querySelector('dialog.failure-review-dialog'),null);
+  }finally{ui.dom.window.close();}
+ }
+});
+
 test('validation submits explicit SQL targets and budgets without including messaging targets',async()=>{
  const task={id:'validate',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING'},operations:[],destinations:[{id:'pg',product:'POSTGRESQL',consistency:'TRANSACTIONAL'},{id:'mq',product:'KAFKA',consistency:'AT_LEAST_ONCE_EVENTS'}]};const ui=setup([task]);try{
   await login(ui);assert.equal(ui.d.querySelectorAll('[data-validation-target]').length,1);const read=ui.d.querySelector('[data-validation-limit="read"]');read.value='7200';read.dispatchEvent(new ui.w.Event('input'));ui.d.querySelector('[data-validation-action="start"]').click();await flush();

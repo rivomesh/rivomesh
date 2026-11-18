@@ -49,7 +49,8 @@ final class GlobalTaskPlane implements TaskControlPlane {
                 if(request.kind==TaskRequest.Kind.RESTORE_PREVIEW)return preview(request.taskId,document(selected.yaml),request.revision,actor);
                 commands.update(request.taskId,selected.yaml,request,actor);return get(request.taskId,actor);
             }
-            case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case REPAIR_PLAN:case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:case GAP_VERIFICATION:case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return queries.await(queries.submit(request,actor),actor);
+            case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case REPAIR_PLAN:case CAPTURE_RECOVERY:
+            case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:case GAP_VERIFICATION:case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return queries.await(queries.submit(request,actor),actor);
             default:throw new TaskService.Conflict("GLOBAL_CONFIGURATION_WORKFLOW_PENDING");
         }
     }

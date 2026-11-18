@@ -13,6 +13,8 @@
 
 数据库会在创建逻辑复制槽时提供一致位置。Rivomesh 导入导出的 MVCC 快照读取表数据，按原 LSN 捕获快照期间及之后的事务。提交已写入 Rivomesh 日志后才确认源槽。每个任务使用与日志世代绑定的槽名。[PostgreSQL 复制协议](https://www.postgresql.org/docs/17/protocol-replication.html) · [pgJDBC 复制 API](https://jdbc.postgresql.org/documentation/server-prepare/)
 
+PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。普通保活和发布范围外的 WAL 不改变持久断点。发布表长时间无事务时，监控复制槽占用的 WAL 空间。[pgJDBC 下载](https://jdbc.postgresql.org/download/) · [复制流配置](https://github.com/pgjdbc/pgjdbc/blob/REL42.7.14/pgjdbc/src/main/java/org/postgresql/replication/fluent/ChainedCommonStreamBuilder.java)
+
 ## 支持边界与故障处理
 
 - 初始类型包括有符号整数、布尔、有明确精度的小数、文本、JSON/JSONB 和 BYTEA。表可有主键，也可使用完整行身份的无主键表。

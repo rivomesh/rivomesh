@@ -443,6 +443,16 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert restored['capture_gtid'] == checkpoint and restored['error_code'] == code
         assert restored['error_count'] == observed['error_count']
         passed(expected + ': native source failure preserves GTID and error generation across Agent restart and both management entries')
+        reviews=[http(node,route+'/capture-recovery') for node in ('node-a','node-b')]
+        assert reviews[0]==reviews[1]
+        assert reviews[0]['scope']=='UNPROVEN_SOURCE_RANGE' and reviews[0]['failureCode']==code
+        assert reviews[0]['sourceAdmission']=='SOURCE_CHECKPOINT_AVAILABLE'
+        assert set(reviews[0]['affectedSubscriptions'])=={sub['id'] for sub in observed['subscriptions']}
+        assert 'REPAIR_CAPTURE_CAUSE' in reviews[0]['actions']
+        verified=task()['status']
+        assert verified['capture_gtid']==checkpoint and verified['error_count']==observed['error_count']
+        assert verified['run_state']=='ERROR'
+        passed(expected + ': both entries route a read-only recovery review to the owner without changing the checkpoint or pause')
 
     def run_recovery_cases():
         if args.compensation:
