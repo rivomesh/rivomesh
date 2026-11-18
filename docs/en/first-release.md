@@ -37,4 +37,13 @@ python3 tests/local-state-restore.py --artifact rivomesh.jar \
   --output target/local-state-restore/manifest.json
 ```
 
+The native MySQL 8.4 to PostgreSQL 17 drill shuts down the Worker and H2, takes the cold journal and a PostgreSQL custom-format dump at one fenced checkpoint, then restores the database contents in a single transaction. The original PostgreSQL database retains its cluster identifier and database OID. The restart delivers a MySQL transaction committed during the outage from the original GTID, preserving both snapshot IDs. Restoring the dump into a separate database and changing the configured target URL fails with `JOURNAL_IDENTITY_MISMATCH`. [PostgreSQL dump](https://www.postgresql.org/docs/17/app-pgdump.html) · [PostgreSQL restore](https://www.postgresql.org/docs/17/app-pgrestore.html)
+
+Run the drill with a Java 21 JDK, Docker Compose and local `mysql:8.4` and `postgres:17` images.
+
+```bash
+python3 tests/local-state-restore-native.py --artifact rivomesh.jar \
+  --java "$JAVA_HOME/bin/java" --output target/local-state-restore-native
+```
+
 V2/V3 execution consolidation is a separate pending batch. See[current status](implementation-status.md)and[SDD](../sdd/001-control-recovery-compatibility/spec.en.md);cleanup does not close unrelated feature gaps.

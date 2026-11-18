@@ -1642,8 +1642,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "已有对象白名单和 UNIQUE/GSI 转换。当前本地日志的冷备恢复、错配目标拒绝和原事件损坏保护通过 Java 21 档案。更多动态 DDL、复杂类型及真实产品协调备份待验。",
-        "en": "Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified current local cold restore, mismatched target refusal and corrupt event protection. Broader DDL, types and product-specific coordinated backups remain."
+        "zh-CN": "对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。",
+        "en": "Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified coordinated LOCAL journal and PostgreSQL backup/restore, original MySQL 8.4.13 continuation and identity refusal. Broader DDL, types and other products remain."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1656,7 +1656,8 @@
         "docs/zh-CN/pipeline-v3.md",
         "docs/zh-CN/rename-migration.md",
         "docs/zh-CN/first-release.md",
-        "tests/local-state-restore.py"
+        "tests/local-state-restore.py",
+        "tests/local-state-restore-native.py"
       ]
     },
     {

@@ -37,4 +37,13 @@ python3 tests/local-state-restore.py --artifact rivomesh.jar \
   --output target/local-state-restore/manifest.json
 ```
 
+MySQL 8.4 到 PostgreSQL 17 的实库演练先停止 Worker 并关闭 H2，在同一个已隔离位点备份本地日志和 PostgreSQL 自定义格式归档，再以单事务恢复目标库内容。原 PostgreSQL 库保留集群标识和数据库 OID。重启后从原 GTID 续传停机期间提交的 MySQL 事务，两个快照 ID 均保持一致。将归档恢复到另一个数据库并修改目标 URL 时，服务会返回 `JOURNAL_IDENTITY_MISMATCH`。[PostgreSQL 备份](https://www.postgresql.org/docs/17/app-pgdump.html) · [PostgreSQL 恢复](https://www.postgresql.org/docs/17/app-pgrestore.html)
+
+使用 Java 21 JDK、Docker Compose 和本地的 `mysql:8.4`、`postgres:17` 镜像复现。
+
+```bash
+python3 tests/local-state-restore-native.py --artifact rivomesh.jar \
+  --java "$JAVA_HOME/bin/java" --output target/local-state-restore-native
+```
+
 V2/V3双执行链还在单独合并中。以[当前状态](implementation-status.md)与[SDD](../sdd/001-control-recovery-compatibility/spec.md)为准，不把清理标成其他未完成功能的完成。

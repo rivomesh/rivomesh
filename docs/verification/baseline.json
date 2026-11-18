@@ -6511,5 +6511,189 @@
       "focusedJavaPassed": 41,
       "nativeProfilesSkipped": 6
     }
+  },
+  "nativeMysqlPostgresqlLocalRestore": {
+    "reproduce": "python3 tests/local-state-restore-native.py --artifact <candidate jar> --java <jdk 21 java> --output <directory>",
+    "native": {
+      "status": "PASS",
+      "checks": [
+        "Closed the production engine and H2 cleanly, then took the matched LOCAL/pg_dump backup",
+        "Transactional pg_restore and cold journal copy reconstitute rows, receipts and original identity",
+        "A changed target database URL is refused with its restored business rows and target receipts intact",
+        "Exact saved MySQL GTID resumes once with original snapshot, generation and PostgreSQL identity"
+      ],
+      "artifactSha256": "f8610ff55840df7ff8bbc12ed726dfdf9fde3ba3ec51130085e573906db89ed7",
+      "fixtureSha256": "2a1cf2f67f6e064842a8fb06559788b4c0914b71faa02870deab59f14e0c1cca",
+      "workerLauncherSha256": "a79f57f5231f62c1a436f3407a94921a6cb987e185c05980f82603441015c824",
+      "runtime": [
+        "openjdk version \"21.0.13\" 2026-10-20 LTS",
+        "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+      ],
+      "journal": "LOCAL H2",
+      "sourceImage": "mysql:8.4",
+      "targetImage": "postgres:17",
+      "versions": {
+        "mysql": "8.4.13",
+        "postgres": "17.12 (Debian 17.12-1.pgdg13+1)"
+      },
+      "mysqlImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "postgresImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "backup": {
+        "localSha256": "85a44458dffc6b106638e59839d69dadefd767ba92d47aa1502306404f068532",
+        "pgDumpSha256": "fda445e76ac21126c207baadf9d5b087ca3109e227d2ed3785bd0bd19cbd76f5",
+        "journal": {
+          "generation": "f62b2559-bced-4895-b69c-8c0dc8f21e05",
+          "fingerprint": "c4de4392f6db9882b94c1c6495d2e0dbd7b0780535cbfab46fc34cc024264a09",
+          "epoch": 2,
+          "position": {
+            "formatVersion": 1,
+            "sourceType": "MYSQL",
+            "sourceId": "local-restore-source",
+            "payload": {
+              "file": "mysql-bin.000003",
+              "gtidSet": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4:1-11",
+              "offset": "2060",
+              "serverUuid": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4"
+            }
+          },
+          "sequence": 1,
+          "normalized": 1,
+          "state": "PAUSED",
+          "errorGeneration": 1,
+          "acknowledged": 1,
+          "leaseOwner": null,
+          "schemaHashes": [
+            "19c94eb9c4caeaca23ec3305e9472d351864e9d33349ff2c53b858091d9d2964",
+            "2d989af17164537d8e2c49b9d39b75de3f9050d0cdc114bc51c340307694d065"
+          ],
+          "snapshots": [
+            {
+              "tableId": "2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff",
+              "snapshotId": "0b3066e5-c827-4503-ad7d-4429f1dd3809",
+              "rows": 2,
+              "state": "COMPLETE"
+            },
+            {
+              "tableId": "a505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5",
+              "snapshotId": "36c5203d-acf9-44f6-889c-e1870919e19c",
+              "rows": 2,
+              "state": "COMPLETE"
+            }
+          ]
+        },
+        "target": {
+          "generation": "f62b2559-bced-4895-b69c-8c0dc8f21e05",
+          "epoch": 2,
+          "sequence": 1,
+          "transactionId": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4:11",
+          "transactionHash": "4dfb091884530f5950685b501d80e8cba074e195d00037e47b301d21d3ee76b0",
+          "snapshots": [
+            {
+              "rows": 2,
+              "state": "COMPLETE",
+              "tableId": "2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff",
+              "snapshotId": "0b3066e5-c827-4503-ad7d-4429f1dd3809"
+            },
+            {
+              "rows": 2,
+              "state": "COMPLETE",
+              "tableId": "a505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5",
+              "snapshotId": "36c5203d-acf9-44f6-889c-e1870919e19c"
+            }
+          ],
+          "rows": [
+            "1|snapshot|2|1\n2|second|4|2\n3|before backup|6|3",
+            "7|7|1\n8|7|1"
+          ]
+        },
+        "postgresIdentity": {
+          "systemIdentifier": "7709504308875665446",
+          "databaseOid": 16384
+        },
+        "workerExitedOrderly": true,
+        "offlineH2Shutdown": true
+      },
+      "relocatedTargetRefusal": {
+        "code": "JOURNAL_IDENTITY_MISMATCH",
+        "identity": {
+          "systemIdentifier": "7709504308875665446",
+          "databaseOid": 16459
+        }
+      },
+      "restored": {
+        "journal": {
+          "generation": "f62b2559-bced-4895-b69c-8c0dc8f21e05",
+          "fingerprint": "c4de4392f6db9882b94c1c6495d2e0dbd7b0780535cbfab46fc34cc024264a09",
+          "epoch": 4,
+          "position": {
+            "formatVersion": 1,
+            "sourceType": "MYSQL",
+            "sourceId": "local-restore-source",
+            "payload": {
+              "file": "mysql-bin.000003",
+              "gtidSet": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4:1-12",
+              "offset": "2879",
+              "serverUuid": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4"
+            }
+          },
+          "sequence": 2,
+          "normalized": 2,
+          "state": "PAUSED",
+          "errorGeneration": 2,
+          "acknowledged": 2,
+          "leaseOwner": null,
+          "schemaHashes": [
+            "19c94eb9c4caeaca23ec3305e9472d351864e9d33349ff2c53b858091d9d2964",
+            "2d989af17164537d8e2c49b9d39b75de3f9050d0cdc114bc51c340307694d065"
+          ],
+          "snapshots": [
+            {
+              "tableId": "2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff",
+              "snapshotId": "0b3066e5-c827-4503-ad7d-4429f1dd3809",
+              "rows": 2,
+              "state": "COMPLETE"
+            },
+            {
+              "tableId": "a505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5",
+              "snapshotId": "36c5203d-acf9-44f6-889c-e1870919e19c",
+              "rows": 2,
+              "state": "COMPLETE"
+            }
+          ]
+        },
+        "target": {
+          "generation": "f62b2559-bced-4895-b69c-8c0dc8f21e05",
+          "epoch": 4,
+          "sequence": 2,
+          "transactionId": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4:12",
+          "transactionHash": "1d353df71d6ea81a344aea3a535f9159f4706673058e4ee44ba9d1421110aa15",
+          "snapshots": [
+            {
+              "rows": 2,
+              "state": "COMPLETE",
+              "tableId": "2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff",
+              "snapshotId": "0b3066e5-c827-4503-ad7d-4429f1dd3809"
+            },
+            {
+              "rows": 2,
+              "state": "COMPLETE",
+              "tableId": "a505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5",
+              "snapshotId": "36c5203d-acf9-44f6-889c-e1870919e19c"
+            }
+          ],
+          "rows": [
+            "1|after restore|2|18446744073709551615\n2|second|4|2\n51|during outage|102|51",
+            "8|7|1\n9|7|1"
+          ]
+        },
+        "offlineGtid": "bdcba4f2-e354-11f1-a8bc-22b95e2352b4:12",
+        "postgresIdentity": {
+          "systemIdentifier": "7709504308875665446",
+          "databaseOid": 16384
+        }
+      },
+      "cleanupExitCode": 0
+    }
   }
 }
