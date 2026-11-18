@@ -642,14 +642,14 @@
       "id": "RC-07",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "界面手工补数据与修正",
         "en": "Guided manual corrective data entry"
       },
       "gap": {
-        "zh-CN": "已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。",
-        "en": "Report-driven repair exists without independent failed-transaction/manual patches."
+        "zh-CN": "首批 SQL 档案通过。逐行录入和 JSON 导入支持管理员审阅前后值、精确行定位、原子批次和原事务恢复。PostgreSQL 通过真实 CDC，MySQL 通过原生检查。其他目标由 RC-10 跟踪。",
+        "en": "The bounded SQL profile passed. Typed entry and JSON import support administrator review of before/after values, exact identities, atomic batches and resumption of the original transaction. PostgreSQL passes real CDC and MySQL passes native checks. RC-10 tracks other destinations."
       },
       "acceptance": {
         "zh-CN": "界面提供类型化新增/修改/删除和导入预览；校验精度、NULL、键和内部行身份，禁止无主键误批量修改；计划显示前后值、范围和行数，目标漂移拒绝；不自动修改源库，不绕过外键/触发器保护。",
@@ -662,8 +662,18 @@
       ],
       "evidence": [
         "docs/verification/README.md",
-        "sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java"
-      ]
+        "docs/zh-CN/manual-correction.md",
+        "docs/en/manual-correction.md",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/CorrectionBatch.java",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/ManualCorrectionTest.java",
+        "tests/ui/recovery-cases.mjs",
+        "tests/global-control-pipeline.py"
+      ],
+      "verification": {
+        "artifactSha256": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store."
+      }
     },
     {
       "id": "RC-08",
@@ -723,8 +733,8 @@
         "en": "Durable distributed recovery jobs"
       },
       "gap": {
-        "zh-CN": "共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。",
-        "en": "COMMON_CUT has local durable operations/receipts;distributed/new modes do not."
+        "zh-CN": "已支持跨节点计划、审批、证据与目标凭据。补偿和手工修正的跨节点取消与提交边界强杀恢复仍待验收。",
+        "en": "Cross-node planning, approval, evidence and destination receipts are available. Cancellation and process termination at compensation/correction commit boundaries remain open."
       },
       "acceptance": {
         "zh-CN": "远端目标的计划、批准、取消、凭据和原始数据位置可追踪；控制/执行节点强杀后以同一请求恢复；已提交不重复、未提交回滚；跳过后不自动宣称业务接管完成。",

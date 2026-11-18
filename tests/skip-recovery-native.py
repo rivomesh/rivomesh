@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--test-classes', type=Path, required=True)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
-parser.add_argument('--suite', choices=('skip', 'compensation'), default='skip')
+parser.add_argument('--suite', choices=('skip', 'compensation', 'correction'), default='skip')
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 artifact, classes, output = args.artifact.resolve(), args.test_classes.resolve(), args.output.resolve()
@@ -30,6 +30,7 @@ contracts = {
                  'JdbcGapVerificationTest', 'GapVerificationLedgerTest', 'SkipPlanTest',
                  'SkipJournalTest', 'SkipTargetTest', 'TransactionSkipRecoveryTest']),
     'compensation': (4, ['TransactionCompensationTest']),
+    'correction': (4, ['ManualCorrectionTest']),
 }
 expected, cases = contracts[args.suite]
 selected = ['--select-class=io.github.rivomesh.cdc.' + case for case in cases]

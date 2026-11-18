@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **12 DONE,31 PARTIAL,5 NEW;36 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **13 DONE,30 PARTIAL,5 NEW;35 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -16,6 +16,7 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-03 | Complete cross-database skip,native commit/source ACK failure,original-Agent SIGKILL/reopen and cross-entry recovery;pauses/gaps retained |
 | RC-08 | Durable gaps,reviewed verification,cross-entry approval/cancellation and honest incremental progress;bounded SQL profile |
 | RC-06 | Before-image compensation with cross-entry approval and explicit resume. Bounded SQL profile |
+| RC-07 | Typed entry, JSON import, before/after preview and cross-entry approval. Bounded SQL profile |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.
 
@@ -44,7 +45,7 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 
 ## Next work
 
-1. Typed corrective data entry and recovery protocols for other destinations.
+1. Distributed recovery jobs and recovery protocols for other destinations.
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
 3. PostgreSQL/Oracle sources,MySQL8.2 and complete5.7/8.0/8.4 profiles.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.

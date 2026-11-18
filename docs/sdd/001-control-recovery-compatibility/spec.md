@@ -2,7 +2,7 @@
 
 RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 
-实施中：48项持续追踪，12项DONE、31项PARTIAL、5项NEW，余36项未闭环。RC-02、RC-05、RC-03、RC-06 和 RC-08 限定档案已验收；自动接管、手工补数据和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，13项DONE、30项PARTIAL、5项NEW，余35项未闭环。RC-02、RC-05、RC-03、RC-06、RC-07 和 RC-08 限定档案已验收；自动接管、恢复作业和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -38,9 +38,9 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | RC-04 | P0 / NEW | 采集/解码阶段的受控缺口恢复 | 目标跳过不能修复尚未形成完整事件的源读取或解析故障。 |
 | RC-05 | P0 / DONE | 不确定提交与断点核对 | 协议6原Agent/LOCAL日志、PG/MySQL控制库限定档案已验收：全任务暂停、新证据、原生围栏、管理员跨入口确认、ACK/回执原子提交及幂等重试，保持原暂停。跳过、补偿和其他完整矩阵另行追踪。 |
 | RC-06 | P0 / DONE | 失败事务前镜像补偿 | 首批 SQL 档案通过。管理员跨入口审阅表范围及增删数量，按原事务前镜像恢复目标，随后显式恢复并重放。真实 CDC 验证 PostgreSQL 补偿，MySQL 通过原生合同。其他目标由 RC-10 追踪。 |
-| RC-07 | P0 / PARTIAL | 界面手工补数据与修正 | 已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。 |
+| RC-07 | P0 / DONE | 界面手工补数据与修正 | 首批 SQL 档案通过。逐行录入和 JSON 导入支持管理员审阅前后值、精确行定位、原子批次和原事务恢复。PostgreSQL 通过真实 CDC，MySQL 通过原生检查。其他目标由 RC-10 跟踪。 |
 | RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
-| RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。 |
+| RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 已支持跨节点计划、审批、证据与目标凭据。补偿和手工修正的跨节点取消与提交边界强杀恢复仍待验收。 |
 | RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | SQL、分析库、消息队列一致性协议不同，不能复用一个伪事务实现。 |
 
 ## 源数据库兼容
@@ -99,20 +99,20 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
 | CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。 |
-| CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
+| CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |
 | SE-03 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [ConsoleServer.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/ConsoleServer.java) |
-| SE-04 | P0 / DONE | 跨控制节点的会话连续性 | 已通过PostgreSQL/MySQL共享会话双节点、HTTPS、撤销、kill/重开及存储中断恢复验收；全局任务控制仍属CP-02/03。 |
+| SE-04 | [README.md](../../../docs/verification/README.md) / [browser-sessions.md](../../../docs/zh-CN/browser-sessions.md) |
 | SE-05 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [AccessControl.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AccessControl.java) |
 | RC-01 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) |
 | RC-02 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [managed-validation.md](../../../docs/zh-CN/managed-validation.md) |
 | RC-03 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [JdbcSink.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSink.java) |
 | RC-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
 | RC-05 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) / [README.md](../../../docs/verification/README.md) |
-| RC-06 | P0 / DONE | 失败事务前镜像补偿 | 首批 SQL 档案通过。管理员跨入口审阅表范围及增删数量，按原事务前镜像恢复目标，随后显式恢复并重放。真实 CDC 验证 PostgreSQL 补偿，MySQL 通过原生合同。其他目标由 RC-10 追踪。 |
-| RC-07 | [README.md](../../../docs/verification/README.md) / [RepairRequest.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java) |
-| RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
+| RC-06 | [transaction-compensation.md](../../../docs/zh-CN/transaction-compensation.md) / [TransactionCompensation.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/TransactionCompensation.java) |
+| RC-07 | [manual-correction.md](../../../docs/zh-CN/manual-correction.md) / [CorrectionBatch.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/CorrectionBatch.java) |
+| RC-08 | [gap-verification.md](../../../docs/zh-CN/gap-verification.md) / [README.md](../../../docs/verification/README.md) |
 | RC-09 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [README.md](../../../docs/verification/README.md) |
 | RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |

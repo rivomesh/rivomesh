@@ -299,7 +299,7 @@ public final class JdbcSink implements SinkAdapter {
                 if (result.next() || !operation.equals(receipt.get("operation"))
                         || !settings.generation.equals(receipt.get("generation"))
                         || !settings.fingerprint.equals(receipt.get("fingerprint"))
-                        || !"COMPENSATION_COMPLETED".equals(receipt.get("code")))
+                        || !Arrays.asList("COMPENSATION_COMPLETED","CORRECTION_COMPLETED").contains(receipt.get("code")))
                     throw new IllegalStateException("COMPENSATION_RECEIPT_CHANGED");
                 return receipt;
             }
@@ -319,7 +319,7 @@ public final class JdbcSink implements SinkAdapter {
             }
             try (ResultSet result = read.executeQuery()) {
                 if (!result.next()) return null;
-                TargetRead.Row actual = JdbcTargetRead.readRow(result, row.table, settings.product, 4 * 1024 * 1024, guard::verify);
+                TargetRead.Row actual = JdbcTargetRead.readRow(result, row.table, settings.product, row.edit==null?4*1024*1024:512*1024, guard::verify);
                 if (result.next() || !row.identity.equals(RowValues.identity(row.table, actual.values, actual.rowId)))
                     throw new IllegalStateException("COMPENSATION_IDENTITY_AMBIGUOUS");
                 return actual.values;
@@ -328,7 +328,7 @@ public final class JdbcSink implements SinkAdapter {
     }
 
     Map<String,Object> compensation(Collection<CompensationRows.Row> rows,
-            io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained, String approvedHash,
+            io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained, boolean correction, String approvedHash,
             String operation, String requestHash, String actor, String reason, CheckpointAction<Void> check)throws Exception {
         repairProduct();
         if (approvedHash != null) prepareCompensationStorage();
@@ -361,6 +361,10 @@ public final class JdbcSink implements SinkAdapter {
             check.run(checkpoint);
             Map<String,Map<String,Object>> tables = new TreeMap<>();
             List<List<String>> images = new ArrayList<>();
+            boolean showRows=correction && approvedHash==null;
+            List<Map<String,Object>> details=showRows?new ArrayList<>():null;
+            long detailBytes=0;
+            Map<CompensationRows.Row,List<Cell>> desiredRows=new LinkedHashMap<>();
             List<CompensationRows.Row> delete = new ArrayList<>(), insert = new ArrayList<>();
             for (CompensationRows.Row row : rows) {
                 guard.verify();
@@ -381,15 +385,31 @@ public final class JdbcSink implements SinkAdapter {
                     tables.put(table.id, summary);
                 }
                 List<Cell> actual = compensationRow(c, row, guard);
-                String current = CompensationRows.hash(table, actual), desired = CompensationRows.hash(table, row.expected);
-                images.add(Arrays.asList(table.id, Codec.sha256(row.identity), current, desired));
+                List<Cell> desiredRow=row.desired(actual);
+                desiredRows.put(row,desiredRow);
+                String current=CompensationRows.hash(table,actual), desired=CompensationRows.hash(table,desiredRow);
+                List<String> image=new ArrayList<>(Arrays.asList(table.id,Codec.sha256(row.identity),current,desired));
+                if(correction)image.add(row.edit.name());
+                images.add(image);
+                if(correction){
+                    Map<String,Object> detail=new LinkedHashMap<>();
+                    detail.put("table",table.qualifiedName());
+                    detail.put("action",row.edit.name());
+                    detail.put("rowId",row.occurrence);
+                    detail.put("before",correctionValues(table,actual));
+                    detail.put("after",correctionValues(table,desiredRow));
+                    detail.put("changed",!Objects.equals(current,desired));
+                    detailBytes+=Codec.encode(detail).getBytes(StandardCharsets.UTF_8).length;
+                    if(detailBytes>512*1024)throw new IllegalArgumentException("CORRECTION_PREVIEW_LIMIT");
+                    if(showRows)details.add(detail);
+                }
                 summary.compute("identities", (key, count) -> (int)count + 1);
                 if (Objects.equals(current, desired)) continue;
                 if (actual != null) {
                     delete.add(row);
                     summary.compute("deletes", (key, count) -> (int)count + 1);
                 }
-                if (row.expected != null) {
+                if (desiredRow != null) {
                     insert.add(row);
                     summary.compute("inserts", (key, count) -> (int)count + 1);
                 }
@@ -405,15 +425,16 @@ public final class JdbcSink implements SinkAdapter {
             result.put("sequence", Long.toString(review.sequence));
             result.put("checkpoint", Codec.decode(Codec.encode(checkpoint), Map.class));
             result.put("tables", tables);
-            String hash = Codec.sha256(Codec.encode(Arrays.asList("COMPENSATION_V1", result, images)));
+            String hash = Codec.sha256(Codec.encode(Arrays.asList(correction?"CORRECTION_V1":"COMPENSATION_V1", result, images)));
             result.put("hash", hash);
             guard.verify();
             if (approvedHash == null) {
                 c.rollback();
-                result.put("code", "COMPENSATION_PLAN_READY");
+                result.put("code", correction?"CORRECTION_PLAN_READY":"COMPENSATION_PLAN_READY");
+                if(showRows)result.put("rows",details);
                 return result;
             }
-            if (!approvedHash.equals(hash)) throw new IllegalStateException("COMPENSATION_PLAN_CHANGED");
+            if (!approvedHash.equals(hash)) throw new IllegalStateException(correction?"CORRECTION_PLAN_CHANGED":"COMPENSATION_PLAN_CHANGED");
             for (CompensationRows.Row row : delete) {
                 guard.verify();
                 Change removal = new Change();
@@ -424,13 +445,13 @@ public final class JdbcSink implements SinkAdapter {
             }
             for (CompensationRows.Row row : insert) {
                 guard.verify();
-                insert(c, row.table, row.expected, row.occurrence);
+                insert(c, row.table, desiredRows.get(row), row.occurrence);
             }
             for (CompensationRows.Row row : rows) {
-                if (!CompensationRows.equal(row.table, row.expected, compensationRow(c, row, guard)))
+                if (!CompensationRows.equal(row.table, desiredRows.get(row), compensationRow(c, row, guard)))
                     throw new IllegalStateException("COMPENSATION_POSTCHECK_FAILED");
             }
-            result.put("code", "COMPENSATION_COMPLETED");
+            result.put("code", correction?"CORRECTION_COMPLETED":"COMPENSATION_COMPLETED");
             result.put("operation", operation);
             result.put("actor", actor);
             result.put("reason", reason);
@@ -442,6 +463,12 @@ public final class JdbcSink implements SinkAdapter {
             c.commit();
             return result;
         }
+    }
+    private static Map<String,String> correctionValues(TableSchema table,List<Cell> row){
+        if(row==null)return null;
+        Map<String,String> values=new LinkedHashMap<>();
+        for(int i=0;i<row.size();i++)values.put(table.columns.get(i).name,row.get(i).value);
+        return values;
     }
     private List<String> keys(TableSchema table){return table.keyless()?Collections.singletonList(ROW_ID):table.primaryKey.isEmpty()?table.identityKey:table.primaryKey;}
     private String type(TableSchema.Column col){

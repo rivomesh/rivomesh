@@ -52,7 +52,7 @@ final class OwnerQueries {
         if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");
         if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
         return tasks.transaction(request.taskId,actor,(c,task,current)->{
-            authorize(request,current);if(request.kind==TaskRequest.Kind.CONFIG_PREVIEW&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
+            authorize(request,current);if(request.readAtRevision()&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
             if(!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");long now=db.now(c);
             db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
             try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("owner_query")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)>=maximum)throw new TaskService.Conflict("OWNER_QUERY_CAPACITY");}
@@ -76,7 +76,7 @@ final class OwnerQueries {
             agents.require(c,lease,directory);Entry e=read(c,id);
             if(!e.owner.equals(lease.nodeId)||!e.directory.equals(directory)||e.epoch!=lease.epoch||!e.incarnation.equals(lease.incarnation))throw new ControlStore.Fenced();
             if(e.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");if(!"PENDING".equals(e.phase))return null;
-            if(e.request.kind==TaskRequest.Kind.CONFIG_PREVIEW&&!Objects.equals(e.request.revision,tasks.record(c,e.task).revision)){e.phase="REJECTED";e.code="REVISION_CHANGED";write(c,e);return null;}
+            if(e.request.readAtRevision()&&!Objects.equals(e.request.revision,tasks.record(c,e.task).revision)){e.phase="REJECTED";e.code="REVISION_CHANGED";write(c,e);return null;}
             try{actor(accounts,e);}catch(SecurityException|TaskService.Conflict revoked){e.phase="REJECTED";e.code="AUTHORIZATION_CHANGED";write(c,e);return null;}
             e.phase="RUNNING";write(c,e);return e;
         });
@@ -92,7 +92,7 @@ final class OwnerQueries {
         tasks.service((c,accounts)->{
             agents.require(c,lease,directory);Entry current=read(c,id);if(!"RUNNING".equals(current.phase))throw new TaskService.Conflict("OWNER_QUERY_PHASE_CHANGED");
             if(current.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
-            if(current.request.kind==TaskRequest.Kind.CONFIG_PREVIEW&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
+            if(current.request.readAtRevision()&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
             try{actor(accounts,current);}catch(SecurityException|TaskService.Conflict revoked){current.phase="REJECTED";current.code="AUTHORIZATION_CHANGED";current.response=null;write(c,current);return null;}
             current.response=body;current.code=code;current.phase=code==null?"SUCCEEDED":"REJECTED";write(c,current);return null;
         });
@@ -101,7 +101,7 @@ final class OwnerQueries {
         String task;try(Connection c=db.connect();PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("owner_query")+" WHERE cluster_id=? AND query_id=?",cluster,id);ResultSet r=p.executeQuery()){if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");task=r.getString(1);}catch(SQLException failure){throw new ControlStore.Unavailable();}
         return tasks.transaction(task,supplied,(c,record,current)->{
             Entry entry=read(c,id);if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
-            if(entry.request.kind==TaskRequest.Kind.CONFIG_PREVIEW&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
+            if(entry.request.readAtRevision()&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
             if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
             if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
             Map<String,Object> result=new LinkedHashMap<>();result.put("status",entry.phase);result.put("code",entry.code);if("SUCCEEDED".equals(entry.phase))result.put("result",entry.response);return result;

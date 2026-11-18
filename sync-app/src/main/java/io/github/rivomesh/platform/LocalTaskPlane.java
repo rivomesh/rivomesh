@@ -8,7 +8,7 @@ final class LocalTaskPlane implements TaskControlPlane {
     LocalTaskPlane(TaskService tasks){this.tasks=tasks;}
     public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
-        if(request.kind==TaskRequest.Kind.CONFIG_PREVIEW)request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
+        if(request.readAtRevision())request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
     }
     public Map<String,Object> invoke(TaskRequest supplied,AccessControl.Principal proposed)throws Exception{
         TaskRequest r=supplied.snapshot();AccessControl.Principal actor=tasks.currentPrincipal(proposed);
@@ -37,7 +37,8 @@ final class LocalTaskPlane implements TaskControlPlane {
             case SKIP_PLANS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,false,actor);
             case GAP_VERIFICATION:return tasks.gapVerificationPlan(r.taskId,r.reference,actor);
             case GAPS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,true,actor);
-            case ACTION:return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap,r.compensation);
+            case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return tasks.correctionPreview(r,actor);
+            case ACTION:return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap,r.compensation,r.correction);
             default:throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         }
     }

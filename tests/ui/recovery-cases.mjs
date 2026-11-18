@@ -79,4 +79,73 @@ export function registerRecoveryTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ function correctionFixture(){
+  const ui=fixture(),fallback=ui.w.fetch,tableId='a'.repeat(64);
+  ui.w.fetch=async(path,options={})=>{
+   if(!path.includes('/corrections/'))return fallback(path,options);
+   ui.calls.push({path,...options});
+   const data=path.endsWith('/schema')?{tables:[
+    {id:tableId,name:'sales.items',keys:['id'],columns:[
+     {name:'id',type:'UINT64',nullable:false},{name:'amount',type:'DECIMAL',nullable:true}
+    ]},
+    {id:'b'.repeat(64),name:'sales.duplicates',keys:[],columns:[{name:'amount',type:'DECIMAL',nullable:true}]}
+   ]}:{code:'CORRECTION_PLAN_READY',evidenceId:ui.id,evidenceHash:ui.hash,subscriptionId:'pg',errorGeneration:2,hash:ui.planHash,
+    rows:[{table:'sales.items',action:'INSERT',before:null,after:{id:'9007199254740993',amount:'<img src=x>'},changed:true}]};
+   return {ok:true,status:200,json:async()=>data};
+  };
+  return {...ui,tableId};
+ }
+ test('correction form preserves exact textual IDs and NULL through preview and approved execution',async()=>{
+  const ui=correctionFixture();
+  try{
+   await openReview(ui);clickLabel(ui,'correctionOpen');await flush();
+   const panel=ui.d.querySelector('.recovery-dialog');
+   panel.querySelector('input[aria-label="id"]').value='9007199254740993';
+   const state=[...panel.querySelectorAll('select')].find(select=>select.getAttribute('aria-label')?.startsWith('amount '));
+   state.value='null';state.dispatchEvent(new ui.w.Event('change'));
+   clickLabel(ui,'correctionAdd',panel);clickLabel(ui,'correctionPreview',panel);await flush();
+   const edit={tableId:ui.tableId,action:'INSERT',key:{},values:{id:'9007199254740993',amount:null}};
+   const preview=ui.calls.find(call=>call.path.endsWith('/corrections/preview'));
+   assert.deepEqual(JSON.parse(preview.body).correction.batch.edits,[edit]);
+   assert.match(panel.textContent,/9007199254740993/);
+   assert.match(panel.textContent,/<img src=x>/);
+   assert.equal(panel.querySelector('img'),null);
+   const apply=panel.querySelector('[data-recovery-action="CORRECTION_EXECUTE"]');
+   enterReason(ui,panel);assert.ok(apply.disabled);
+   const check=panel.querySelector('input[type=checkbox]');check.checked=true;check.dispatchEvent(new ui.w.Event('change'));
+   apply.click();await flush();
+   const body=JSON.parse(ui.calls.find(call=>call.path.endsWith('/actions')).body);
+   assert.deepEqual(body.correction,{evidenceId:ui.id,evidenceHash:ui.hash,batch:{edits:[edit]},approvedHash:ui.planHash,reason:'Reviewed transaction and destination'});
+   assert.equal(body.action,'CORRECTION_EXECUTE');
+   assert.equal(body.expectedRevision,'paused-revision');
+  }finally{ui.dom.window.close();}
+ });
+ test('correction import sends the original JSON and an edited draft invalidates stale approval',async()=>{
+  const ui=correctionFixture();
+  try{
+   await openReview(ui);clickLabel(ui,'correctionOpen');await flush();
+   const panel=ui.d.querySelector('.recovery-dialog'),mode=panel.querySelector('select');
+   mode.value='import';mode.dispatchEvent(new ui.w.Event('change'));
+   const input=panel.querySelector('textarea'),raw='{"edits":[{"tableId":"'+ui.tableId+'","action":"DELETE","key":{"id":"9007199254740993"}}]}';
+   input.value=raw;input.dispatchEvent(new ui.w.Event('input'));
+   clickLabel(ui,'correctionPreview',panel);await flush();
+   assert.equal(JSON.parse(ui.calls.find(call=>call.path.endsWith('/corrections/preview')).body).correction.importJson,raw);
+   assert.ok(panel.querySelector('[data-recovery-action="CORRECTION_EXECUTE"]'));
+   input.value+=' ';input.dispatchEvent(new ui.w.Event('input'));
+   assert.equal(panel.querySelector('[data-recovery-action="CORRECTION_EXECUTE"]'),null);
+   assert.equal(ui.calls.filter(call=>call.path.endsWith('/actions')).length,0);
+  }finally{ui.dom.window.close();}
+ });
+ test('keyless form requires an occurrence and shows only update and delete',async()=>{
+  const ui=correctionFixture();
+  try{
+   await openReview(ui);clickLabel(ui,'correctionOpen');await flush();
+   const panel=ui.d.querySelector('.recovery-dialog'),[,table,action]=panel.querySelectorAll('select');
+   table.value='b'.repeat(64);table.dispatchEvent(new ui.w.Event('change'));
+   assert.deepEqual([...action.options].map(option=>option.value),['UPDATE','DELETE']);
+   clickLabel(ui,'correctionAdd',panel);
+   assert.match(panel.textContent,/64 位 ROW_ID/);
+  }finally{ui.dom.window.close();}
+ });
+
 }

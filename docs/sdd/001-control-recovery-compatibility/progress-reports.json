@@ -2,15 +2,15 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T08:34:33+08:00",
-  "nextReportAt": "2026-11-18T09:34:33+08:00",
+  "lastReportAt": "2026-11-18T08:53:03+08:00",
+  "nextReportAt": "2026-11-18T09:53:03+08:00",
   "completedSincePrevious": [
-    "RC-06 bounded SQL compensation accepted",
-    "32 focused Java and 104 DOM checks passed",
-    "4 native compensation checks per PostgreSQL/MySQL and 18 real CDC checks passed"
+    "RC-07 bounded SQL manual correction accepted",
+    "39 focused Java and 107 DOM checks passed",
+    "Four native correction contracts per PostgreSQL/MySQL and real CDC cross-entry import/approval/replay passed"
   ],
   "inProgress": [
-    "RC-07 typed manual corrective input"
+    "RC-09 durable distributed recovery jobs"
   ],
   "reportContents": [
     "Current totals",
@@ -20,25 +20,24 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 12,
-    "PARTIAL": 31,
+    "DONE": 13,
+    "PARTIAL": 30,
     "NEW": 5
   },
   "lastReportedPublishedCommits": [
-    "69c7e6cfe69ca215d3d92c1b84755f652b34939e"
+    "8db3b27e08f83b0e4ac0eae12cc99d084854c3bb"
   ],
   "currentSdd": {
-    "DONE": 12,
-    "PARTIAL": 31,
+    "DONE": 13,
+    "PARTIAL": 30,
     "NEW": 5
   },
   "newSinceLastReport": [],
   "nextTasks": [
-    "RC-07 typed manual corrective input",
-    "RC-09 durable distributed recovery job coverage",
+    "RC-09 distributed cancellation and crash recovery",
     "Consolidate V2/V3 execution branches"
   ],
-  "currentCandidateArtifact": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3",
-  "currentCandidateScope": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination.",
-  "lastAcceptedPublicWorkflowArtifact": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3"
+  "currentCandidateArtifact": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
+  "currentCandidateScope": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store.",
+  "lastAcceptedPublicWorkflowArtifact": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25"
 }

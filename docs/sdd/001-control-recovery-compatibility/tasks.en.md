@@ -68,7 +68,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-RC-06 · Failed-transaction before-image compensation · P0 · Depends on: RC-02, RC-05
   Deliver: Reconstruct initial affected identity state across repeated keys,PK moves,insert/delete chains,keyless occurrences,JSON/generated values;modify only reviewed scope;commit compensation/receipt atomically without rewriting the source transaction/GTID.
   Acceptance: AC-RC-06
-- [ ] T-RC-07 · Guided manual corrective data entry · P0 · Depends on: RC-02, RC-05, RC-06
+- [x] T-RC-07 · Guided manual corrective data entry · P0 · Depends on: RC-02, RC-05, RC-06
   Deliver: UI offers typed insert/update/delete and import preview;precision,NULL,keys and occurrence IDs are validated;review before/after scope/counts;refuse drift and unsafe keyless bulk edits;no implicit source writes or dependency bypass.
   Acceptance: AC-RC-07
 - [x] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
@@ -179,4 +179,5 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 | RC-08 | Console,authorization,late-response handling and bilingual FAQ | DONE |
 | RC-08 | Distinct safe coverage,contiguous application and broker semantics | DONE |
 | RC-06 | Before-image reconstruction, atomic target writes, cross-entry approval, and console | Java, DOM, both native target profiles and real CDC passed |
-| RC-07 | Typed corrective input | NEXT |
+| RC-07 | Typed entry, JSON import, before/after approval and atomic batches | Bounded SQL profile passed |
+| RC-09 | Distributed recovery jobs and commit-boundary tests | NEXT |

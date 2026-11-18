@@ -11,7 +11,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -24,6 +24,7 @@ final class TaskRequest {
     public SkipRequest skip;
     public GapVerificationRequest gap;
     public CompensationRequest compensation;
+    public CorrectionRequest correction;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
     boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.ACTION;}
@@ -40,6 +41,10 @@ final class TaskRequest {
             io.github.rivomesh.recovery.FailureEvidence.uuid(reference);
             if(kind==Kind.FAILURE_EVIDENCE_EVENTS&&(!Arrays.asList("RAW","NORMALIZED").contains(action)||limit<1||limit>100||cursor==null||!cursor.matches("0|[1-9][0-9]{0,6}")))throw new IllegalArgumentException("FAILURE_EVIDENCE_PAGE_INVALID");
         }
+        if(correctionAction()||correctionRead()){
+            if(correction==null||targetForCorrectionInvalid())throw new IllegalArgumentException("CORRECTION_REQUEST_INVALID");
+            correction.validate(kind==Kind.CORRECTION_SCHEMA,correctionAction());
+        }else if(correction!=null)throw new IllegalArgumentException("CORRECTION_ACTION_REQUIRED");
         if (compensationAction()) {
             if (compensation == null) throw new IllegalArgumentException("COMPENSATION_APPROVAL_INVALID");
             compensation.validate(action);
@@ -54,12 +59,16 @@ final class TaskRequest {
             if(kind==Kind.GAPS)try{if(!cursor.matches("0|[1-9][0-9]{0,18}")||Long.parseLong(cursor)<0)throw new IllegalArgumentException();}catch(RuntimeException invalid){throw new IllegalArgumentException("GAP_CURSOR_INVALID");}
         }
         if(commitRecovery()){if(commit==null)throw new IllegalArgumentException("FAILURE_ACK_REQUEST_INVALID");commit.validate();}else if(commit!=null)throw new IllegalArgumentException("FAILURE_ACK_ACTION_REQUIRED");
-        if(kind==Kind.ACTION&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(kind==Kind.ACTION&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
     boolean skipAction(){return kind==Kind.ACTION&&Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);}
+    private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
+    boolean correctionAction(){return kind==Kind.ACTION&&"CORRECTION_EXECUTE".equals(action);}
+    boolean correctionRead(){return kind==Kind.CORRECTION_SCHEMA||kind==Kind.CORRECTION_PREVIEW;}
+    boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||correctionRead();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}
-    boolean skipRecovery(){return compensationAction()||kind==Kind.ACTION&&"GAP_VERIFY_CANCEL".equals(action)||gapAction()||kind==Kind.GAP_VERIFICATION||skipAction()||kind==Kind.SKIP_PLAN||kind==Kind.SKIP_PLANS||kind==Kind.GAPS;}
+    boolean skipRecovery(){return correctionRead()||correctionAction()||compensationAction()||kind==Kind.ACTION&&"GAP_VERIFY_CANCEL".equals(action)||gapAction()||kind==Kind.GAP_VERIFICATION||skipAction()||kind==Kind.SKIP_PLAN||kind==Kind.SKIP_PLANS||kind==Kind.GAPS;}
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
     boolean failureReview(){return kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}

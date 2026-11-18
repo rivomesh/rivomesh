@@ -163,6 +163,13 @@ public final class ConsoleServer implements AutoCloseable {
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_DIFFERENCES,parts[3]);request.reportId=parts[5];request.target=input.path("target").asText(null);request.tableId=input.path("tableId").asText(null);request.after=input.path("after").asText("");request.limit=input.path("limit").asInt(50);request.identityHash=identity;json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==8&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&parts[6].equals("repairs")&&method.equals("GET")){TaskRequest request=TaskRequest.of(TaskRequest.Kind.REPAIR_PLAN,parts[3]);request.reportId=parts[5];request.planId=parts[7];json(exchange,200,control.invoke(request,principal));return;}
+            if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("corrections")
+                    &&Arrays.asList("schema","preview").contains(parts[5])&&method.equals("POST")){
+                JsonNode input=body(exchange);
+                TaskRequest request=TaskRequest.of(parts[5].equals("schema")?TaskRequest.Kind.CORRECTION_SCHEMA:TaskRequest.Kind.CORRECTION_PREVIEW,parts[3]);
+                correctionInput(request,input);
+                json(exchange,200,control.invoke(request,principal));return;
+            }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("actions")&&method.equals("POST")) {
                 JsonNode body=body(exchange);
                 String action=body.path("action").asText(""),revision=body.path("expectedRevision").asText("");
@@ -170,7 +177,7 @@ public final class ConsoleServer implements AutoCloseable {
                 long generation=body.has("errorCount")&&body.get("errorCount").isIntegralNumber()?body.get("errorCount").asLong():-1;
                 ValidationRequest validation=body.hasNonNull("validation")?Model.JSON.treeToValue(body.get("validation"),ValidationRequest.class):null;
                 if(body.hasNonNull("skip")&&(!body.get("skip").isObject()||!body.get("skip").path("acceptDataLoss").isBoolean()))throw new IllegalArgumentException("SKIP_DATA_LOSS_APPROVAL_REQUIRED");
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);request.action=action;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");request.errorCount=generation;request.subscriptionId=body.hasNonNull("subscriptionId")?body.get("subscriptionId").asText():null;request.validation=validation;request.repair=body.hasNonNull("repair")?Model.JSON.treeToValue(body.get("repair"),RepairRequest.class):null;request.commit=body.hasNonNull("commit")?Model.JSON.treeToValue(body.get("commit"),CommitRequest.class):null;request.skip=body.hasNonNull("skip")?Model.JSON.treeToValue(body.get("skip"),SkipRequest.class):null;request.gap=body.hasNonNull("gap")?Model.JSON.treeToValue(body.get("gap"),GapVerificationRequest.class):null;request.compensation=body.hasNonNull("compensation")?Model.JSON.treeToValue(body.get("compensation"),CompensationRequest.class):null;json(exchange,202,control.invoke(request,principal));return;
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);request.action=action;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");request.errorCount=generation;request.subscriptionId=body.hasNonNull("subscriptionId")?body.get("subscriptionId").asText():null;request.validation=validation;request.repair=body.hasNonNull("repair")?Model.JSON.treeToValue(body.get("repair"),RepairRequest.class):null;request.commit=body.hasNonNull("commit")?Model.JSON.treeToValue(body.get("commit"),CommitRequest.class):null;request.skip=body.hasNonNull("skip")?Model.JSON.treeToValue(body.get("skip"),SkipRequest.class):null;request.gap=body.hasNonNull("gap")?Model.JSON.treeToValue(body.get("gap"),GapVerificationRequest.class):null;request.compensation=body.hasNonNull("compensation")?Model.JSON.treeToValue(body.get("compensation"),CompensationRequest.class):null;if(body.has("correction")||request.correctionAction())correctionInput(request,body);json(exchange,202,control.invoke(request,principal));return;
             }
             error(exchange,404,"NOT_FOUND");
         }catch(ControlStore.Unavailable e){error(exchange,503,"CONTROL_STORE_UNAVAILABLE");}
@@ -178,11 +185,25 @@ public final class ConsoleServer implements AutoCloseable {
         catch(TaskService.Conflict e){error(exchange,409,e.getMessage());}
         catch(NoSuchElementException e){error(exchange,404,exchange.getRequestURI().getPath().startsWith("/api/accounts")?"ACCOUNT_NOT_FOUND":"TASK_NOT_FOUND");}
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
-        catch(IllegalArgumentException e){String message=e.getMessage();error(exchange,400,exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message!=null&&message.matches("ACCOUNT_[A-Z_]+")?message:"REQUEST_INVALID");}
+        catch(IllegalArgumentException e){
+            String message=e.getMessage();
+            boolean known=message!=null&&(message.matches("CORRECTION_[A-Z_]+")
+                    ||exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message.matches("ACCOUNT_[A-Z_]+"));
+            error(exchange,400,known?message:"REQUEST_INVALID");
+        }
         catch(com.fasterxml.jackson.core.JsonProcessingException e){error(exchange,400,"CONFIG_INVALID");}
         catch(Exception e){error(exchange,500,TaskService.safeCode(e));}
         finally{auditScope.remove();exchange.close();}
     }
+    private static void correctionInput(TaskRequest request,JsonNode input)throws Exception{
+        JsonNode error=input.path("errorCount");
+        if(!error.isIntegralNumber()||!error.canConvertToLong())throw new IllegalArgumentException("CORRECTION_ERROR_GENERATION_INVALID");
+        request.errorCount=error.longValue();
+        request.subscriptionId=input.path("subscriptionId").textValue();
+        request.revision=input.path("expectedRevision").textValue();
+        request.correction=Model.JSON.treeToValue(input.get("correction"),CorrectionRequest.class);
+    }
+
     private Map<String,Object> invoke(TaskRequest.Kind kind,String task,AccessControl.Principal actor)throws Exception{return control.invoke(TaskRequest.of(kind,task),actor);}
     private static Map<String,String> nodeQuery(String raw)throws Exception{
         Map<String,String> result=new HashMap<>();if(raw==null)return result;if(raw.length()>160)throw new IllegalArgumentException("NODE_CURSOR_INVALID");

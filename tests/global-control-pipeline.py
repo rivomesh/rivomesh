@@ -28,6 +28,7 @@ parser.add_argument('--checkpoint-inspection', action='store_true', help='Check 
 parser.add_argument('--managed-commit', action='store_true', help='Protocol6 manual confirmation of a native commit leading journal ACK')
 parser.add_argument('--managed-skip', action='store_true', help='Protocol7 complete-transaction skip and lost source-ACK recovery with durable gaps')
 parser.add_argument('--compensation', action='store_true', help='Exercise real CDC before-image compensation across two management entries')
+parser.add_argument('--correction', action='store_true', help='Check administrator typed correction and JSON import against a real failed CDC transaction')
 parser.add_argument('--test-classes', type=Path, help='Frozen test-only lost-ACK injector;required for --managed-commit')
 args = parser.parse_args()
 if args.control_product == 'MYSQL' and not args.separate_execution:
@@ -54,9 +55,9 @@ output.mkdir(parents=True, exist_ok=True)
 project = 'rivomesh-global-cdc-' + uuid.uuid4().hex[:10]
 env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secrets.token_urlsafe(24),
            RM_GC_DATA=secrets.token_urlsafe(24), RM_GC_KEY=base64.b64encode(secrets.token_bytes(32)).decode(), RM_GC_STORE_URL='jdbc:postgresql://postgres:5432/sync_test')
-if args.compensation and not args.separate_execution:
-    parser.error('--compensation requires --separate-execution')
-if args.managed_failure_review or args.compensation:
+if (args.compensation or args.correction) and not args.separate_execution:
+    parser.error('--compensation and --correction require --separate-execution')
+if args.managed_failure_review or args.compensation or args.correction:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 members = ('node-a', 'node-b', 'node-worker') if args.separate_execution else ('node-a', 'node-b')
@@ -75,6 +76,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedCommit': args.managed_commit,
             'managedSkip': args.managed_skip,
             'compensation': args.compensation,
+            'correction': args.correction,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
 def passed(name):
     checks.append(name)
@@ -115,12 +117,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               'taskKey': '${RM_GC_KEY}', 'driver': 'org.postgresql.Driver',
                               'url': 'jdbc:postgresql://postgres:5432/sync_test', 'namespace': 'global_control',
                               'username': 'postgres', 'password': '${RM_GC_CONTROL}', 'heartbeatMillis': 300, 'leaseMillis': 5000}}
-        if args.managed_failure_review or args.compensation:
+        if args.managed_failure_review or args.compensation or args.correction:
             config['cluster']['recoveryReview'] = True
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
-        if args.managed_commit or args.compensation:
+        if args.managed_commit or args.compensation or args.correction:
             config['cluster']['recoveryCommit'] = True
-        if args.managed_skip or args.compensation:
+        if args.managed_skip or args.compensation or args.correction:
             config['cluster']['recoverySkip'] = True
         if args.separate_execution:
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node == owner_node else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
@@ -131,7 +133,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
-        if args.managed_failure_review or args.compensation:
+        if args.managed_failure_review or args.compensation or args.correction:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
         if args.runtime_image:
             volumes[node + '-data'] = {}
@@ -670,6 +672,62 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             action('RESUME',errorCount=task()['status']['error_count'])
             wait(rows_match,'original cross-database transaction replays after compensation')
             passed('Cross-entry compensation restores keyed/keyless before-images and original primary key,retains pause/ACK,then normal CDC reproduces the original transaction')
+        if args.correction:
+            sql('mysql', """INSERT INTO sales.items(id,note,payload)
+                VALUES(98,'reviewed pre-image',JSON_OBJECT('n',18446744073709551615))""")
+            wait(rows_match,'baseline for manual correction')
+            occurrence=sql('postgres','SELECT _rivomesh_row_id FROM rm_pg_sales.duplicates WHERE value=7')
+            assert len(occurrence)==64
+            sql('postgres', """DELETE FROM rm_pg_sales.items WHERE id=98;
+                INSERT INTO rm_pg_sales.items(id,note,derived) VALUES(99,'private extra row',198);
+                UPDATE rm_pg_sales.duplicates SET value=96 WHERE value=7""")
+            sql('mysql', """START TRANSACTION;
+                UPDATE sales.items SET note='original replay' WHERE id=98;
+                UPDATE sales.duplicates SET value=97 WHERE value=7 LIMIT 1;
+                COMMIT""")
+
+            def manual_failure():
+                subscriber=next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
+                return subscriber if subscriber.get('state')=='PAUSED' and subscriber.get('failurePhase')=='TARGET_APPLY' else None
+
+            failed=wait(manual_failure,'the original transaction fails on a missing target row')
+            wait(lambda:sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=98')=='original replay','healthy target delivers the original transaction')
+            action('PAUSE')
+            options=dict(subscriptionId='pg',errorCount=failed['errorGeneration'])
+            reviewed,_=action('FAILURE_REVIEW',node='node-a',**options)
+            wait(lambda:operation(reviewed).get('result',{}).get('hash'),'restored evidence visible on both controllers')
+            evidence=operation(reviewed)
+            scope=dict(evidenceId=evidence['failureEvidenceId'],evidenceHash=evidence['result']['hash'])
+            request=lambda value:dict(expectedRevision=task()['revision'],correction=value,**options)
+            assert http('node-a',route+'/corrections/schema',request(scope),expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
+            schema=http('node-b',route+'/corrections/schema',request(scope))
+            ids={item['name']:item['id'] for item in schema['tables']}
+            edits=[
+                dict(tableId=ids['sales.items'],action='INSERT',values=dict(id='98',note='reviewed pre-image',payload='{"n":18446744073709551615}',derived='196')),
+                dict(tableId=ids['sales.items'],action='DELETE',key=dict(id='99')),
+                dict(tableId=ids['sales.duplicates'],action='UPDATE',rowId=occurrence,values=dict(value='7')),
+            ]
+            malformed=dict(scope,importJson='{"edits":[],"edits":[]}')
+            assert http('node-a',route+'/corrections/preview',request(malformed),expected=409)['code']=='CORRECTION_IMPORT_INVALID'
+            patch=dict(scope,importJson=json.dumps(dict(edits=edits)))
+            preview=http('node-b',route+'/corrections/preview',request(patch))
+            assert preview['code']=='CORRECTION_PLAN_READY' and len(preview['rows'])==3
+            assert any(row['before'] and row['before'].get('note')=='private extra row' for row in preview['rows'])
+            assert any(row['after'] and '18446744073709551615' in (row['after'].get('payload') or '') for row in preview['rows'])
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0'
+            approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
+            applied,accepted=action('CORRECTION_EXECUTE',node='node-a',correction=approved,**options)
+            assert 'reviewed pre-image' not in json.dumps(accepted)
+            wait(lambda:operation(applied).get('result',{}).get('code')=='CORRECTION_COMPLETED','target receipt visible through both entries')
+            assert 'reviewed pre-image' not in json.dumps(operation(applied))
+            assert task()['desired']=='PAUSED' and manual_failure()['acknowledged']==failed['acknowledged']
+            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=98')=='reviewed pre-image'
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=99')=='0'
+            assert sql('postgres',"SELECT value FROM rm_pg_sales.duplicates WHERE _rivomesh_row_id='"+occurrence+"'")=='7'
+            action('RESUME_TARGET',**options)
+            action('RESUME',errorCount=task()['status']['error_count'])
+            wait(rows_match,'full source and target equality after correction and normal CDC replay')
+            passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
         action('STOP')
         assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
         manifest['status'] = 'PASS'

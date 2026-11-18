@@ -9,6 +9,21 @@ final class CompensationRows {
         final String identity, occurrence;
         final List<Cell> key, expected;
         List<Cell> current;
+        CorrectionBatch.Action edit;
+        Map<Integer,Cell> writes;
+
+        List<Cell> desired(List<Cell> actual) {
+            if(edit==null)return expected;
+            if(edit==CorrectionBatch.Action.INSERT){
+                if(actual!=null)throw new IllegalStateException("CORRECTION_ROW_ALREADY_EXISTS");
+                return key;
+            }
+            if(actual==null)throw new IllegalStateException("CORRECTION_ROW_MISSING");
+            if(edit==CorrectionBatch.Action.DELETE)return null;
+            List<Cell> updated=new ArrayList<>(actual);
+            writes.forEach(updated::set);
+            return updated;
+        }
 
         Row(TableSchema table, String identity, String occurrence, List<Cell> key, boolean exists) {
             this.table = table;

@@ -150,6 +150,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination."
       }
+    },
+    {
+      "id": "RC-07",
+      "title": {
+        "zh-CN": "界面手工补数据与修正",
+        "en": "Guided manual corrective data entry"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store."
+      }
     }
   ],
   "productProfiles": [
@@ -308,14 +321,14 @@
   },
   "currentValidation": {
     "artifact": "target/release-evidence/current/rivomesh.jar",
-    "artifactSha256": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3",
+    "artifactSha256": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
     "testClasses": "target/release-evidence/current/test-classes",
-    "testClassesSha256": "99f5819737e4aefe4e7c3cc1b24a8819bdf6b79ea9301cfee101b0905b5945b8",
+    "testClassesSha256": "03cb68bf179406157f057b8b4bcb49fc774c9040670c4fe6765c4fd1d4c9e2a1",
     "sourceManifest": "target/release-evidence/current/sources.json",
-    "sourceManifestSha256": "d86c8d18c5f126a7b80a37d5f1411ddbee57e84a878d0029bcd46a6d95590224",
-    "status": "PASS_BOUNDED_RC06",
-    "focusedContracts": 32,
-    "domTests": 104,
+    "sourceManifestSha256": "b1e764835b413f51263c67afcf10fd7d078573a312e24fe731e8a4b89a53938a",
+    "status": "PASS_BOUNDED_RC07",
+    "focusedContracts": 39,
+    "domTests": 107,
     "nativeProducts": {
       "POSTGRESQL": {
         "tests": 4,
@@ -355,10 +368,10 @@
       "healthyPeer": "MySQL 8.4",
       "cleanupExitCode": 0
     },
-    "scope": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination.",
+    "scope": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store.",
     "sddCounts": {
-      "DONE": 12,
-      "PARTIAL": 31,
+      "DONE": 13,
+      "PARTIAL": 30,
       "NEW": 5
     }
   },
@@ -469,6 +482,59 @@
       "DONE": 11,
       "PARTIAL": 31,
       "NEW": 6
+    }
+  },
+  "compensationValidation": {
+    "artifactSha256": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3",
+    "testClassesSha256": "99f5819737e4aefe4e7c3cc1b24a8819bdf6b79ea9301cfee101b0905b5945b8",
+    "sourceManifestSha256": "d86c8d18c5f126a7b80a37d5f1411ddbee57e84a878d0029bcd46a6d95590224",
+    "status": "PASS_BOUNDED_RC06",
+    "focusedContracts": 32,
+    "domTests": 104,
+    "nativeProducts": {
+      "POSTGRESQL": {
+        "tests": 4,
+        "cleanupExitCode": 0,
+        "images": {
+          "postgres:17": {
+            "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:8-jre": {
+            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+            "architecture": "arm64"
+          }
+        }
+      },
+      "MYSQL": {
+        "tests": 4,
+        "cleanupExitCode": 0,
+        "images": {
+          "mysql:8.4": {
+            "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:8-jre": {
+            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+            "architecture": "arm64"
+          }
+        }
+      }
+    },
+    "realCdc": {
+      "checks": 18,
+      "controlStore": "PostgreSQL 17",
+      "source": "MySQL 8.4",
+      "journal": "LOCAL/H2",
+      "target": "PostgreSQL 17",
+      "healthyPeer": "MySQL 8.4",
+      "cleanupExitCode": 0
+    },
+    "scope": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination.",
+    "sddCounts": {
+      "DONE": 12,
+      "PARTIAL": 31,
+      "NEW": 5
     }
   }
 }

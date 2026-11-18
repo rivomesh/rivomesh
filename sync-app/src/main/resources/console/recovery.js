@@ -106,6 +106,184 @@ window.RivomeshRecovery=(()=>{
   };
   view.body.append(reasonLabel,confirm,button,message);
  }
+ function renderCorrection(root,task,id,hash,summary,observation,onOpen){
+  if(!active()||!paused(task)||observation?.verdict!=='CHECKPOINT_NOT_ADVANCED'
+      ||observation.targetFenceRequired||summary.failurePhase!=='TARGET_APPLY')return;
+  const sub=task.status?.subscriptions?.find(item=>item.id===observation.subscriptionId);
+  const destination=task.destinations?.find(item=>item.id===observation.subscriptionId);
+  if(!['MYSQL','POSTGRESQL'].includes(destination?.product)||task.status.epoch!==observation.journalEpoch
+      ||sub?.state!=='PAUSED'||sub.errorGeneration!==observation.errorGeneration||sub.acknowledged!==observation.acknowledged)return;
+  const button=label('button','correctionOpen');
+  button.onclick=()=>{onOpen?.();openCorrection(task,id,hash,observation);};
+  root.append(button);
+ }
+ async function openCorrection(task,id,hash,observation){
+  const view=open('correctionOpen'),scope={evidenceId:id,evidenceHash:hash};
+  const target=observation.subscriptionId,generation=observation.errorGeneration;
+  const query=(route,revision,correction)=>api(base(task)+'/corrections/'+route,{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({expectedRevision:revision,subscriptionId:target,errorCount:generation,correction})
+  });
+  view.body.textContent=t('loading');
+  let schema;
+  try {
+   schema=await query('schema',currentTask(task).revision,scope);
+   if(!view.current())return;
+  } catch(error){
+   if(view.current())view.body.textContent=error.message;
+   return;
+  }
+  const edits=[],tables=new Map((schema.tables||[]).map(table=>[table.id,table]));
+  const mode=document.createElement('select'),editor=text('div'),review=text('div'),message=text('p','','error');
+  const title=text('p',target),preview=label('button','correctionPreview');
+  let editVersion=0,loading=false,read=()=>null;
+  const invalidate=()=>{editVersion++;review.replaceChildren();message.textContent='';};
+  const option=(select,value,title)=>{
+   const item=text('option',title);item.value=value;select.append(item);
+  };
+  option(mode,'form',t('correctionForm'));option(mode,'import',t('correctionImport'));
+  mode.setAttribute('aria-label',t('correctionMode'));
+  mode.onchange=()=>{invalidate();renderMode();};
+  view.body.replaceChildren(title,label('p','correctionHelp'),mode,editor,preview,message,review);
+  function renderMode(){
+   editor.replaceChildren();
+   if(mode.value==='import'){
+    const content=document.createElement('textarea'),file=document.createElement('input'),field=text('label');
+    file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label',t('correctionImportFile'));
+    content.rows=7;content.maxLength=131072;content.oninput=()=>{importRead++;invalidate();};
+    field.append(label('span','correctionImportText'),content);
+    let importRead=0;
+    file.onchange=async()=>{
+     const request=++importRead;
+     const picked=file.files?.[0];
+     if(!picked)return;
+     content.value='';invalidate();
+     if(picked.size>131072){message.textContent=t('CORRECTION_BATCH_LIMIT');return;}
+     try{const value=await picked.text();if(view.current()&&content.isConnected&&request===importRead){content.value=value;invalidate();}}
+     catch(error){if(view.current()&&content.isConnected)message.textContent=error.message;}
+    };
+    editor.append(file,field);
+    read=()=>({importJson:content.value});
+    return;
+   }
+   const select=document.createElement('select'),action=document.createElement('select');
+   select.setAttribute('aria-label',t('gapTable'));action.setAttribute('aria-label',t('correctionAction'));
+   for(const table of tables.values())option(select,table.id,table.name);
+   const fields=text('div'),list=text('ul'),add=label('button','correctionAdd');
+   editor.append(select,action,fields,add,label('h3','correctionBatch'),list);
+   const listRows=()=>{
+    list.replaceChildren();
+    edits.forEach((edit,index)=>{
+     const row=text('li'),remove=label('button','correctionRemove');
+     row.append(text('span',tables.get(edit.tableId).name+' · '+t('correction_'+edit.action)),remove);
+     remove.onclick=()=>{edits.splice(index,1);invalidate();listRows();};
+     list.append(row);
+    });
+   };
+   const renderFields=()=>{
+    invalidate();fields.replaceChildren();add.disabled=true;
+    const table=tables.get(select.value);
+    if(!table||!action.value)return;
+    const type=action.value,keyFields=[],valueFields=[];
+    let rowId=null;
+    if(!table.keys.length){
+     rowId=document.createElement('input');rowId.maxLength=64;
+     const field=text('label');field.append(label('span','correctionRowId'),rowId);fields.append(field);
+    }
+    const addField=(column,key)=>{
+     const name=text('span',column.name+' · '+column.type+(column.generated?' · '+t('correctionGenerated'):''));
+     const row=text('label'),field=document.createElement('input'),state=document.createElement('select');
+     const optional=type==='UPDATE'&&!key;
+     if(optional)option(state,'omit',t('correctionUnchanged'));
+     option(state,'value',t('correctionValue'));
+     if(!key&&column.nullable)option(state,'null',t('correctionNull'));
+     field.type='text';
+     field.setAttribute('aria-label',column.name);
+     state.setAttribute('aria-label',column.name+' '+t('correctionValue'));
+     field.disabled=state.value!=='value';
+     state.onchange=()=>{field.disabled=state.value!=='value';};
+     row.append(name,state,field);fields.append(row);
+     (key?keyFields:valueFields).push({column,field,state});
+    };
+    if(type!=='INSERT')for(const column of table.columns)if(table.keys.includes(column.name))addField(column,true);
+    if(type!=='DELETE')for(const column of table.columns)
+     if(type==='INSERT'||!table.keys.includes(column.name))addField(column,false);
+    const values=group=>Object.fromEntries(group.filter(item=>item.state.value!=='omit').map(item=>[
+     item.column.name,item.state.value==='null'?null:item.field.value
+    ]));
+    add.disabled=false;
+    add.onclick=()=>{
+     if(edits.length>=50){message.textContent=t('CORRECTION_BATCH_LIMIT');return;}
+     const edit={tableId:table.id,action:type,key:values(keyFields),values:values(valueFields)};
+     if(rowId){
+      if(!/^[0-9a-f]{64}$/.test(rowId.value)){message.textContent=t('CORRECTION_ROW_ID_INVALID');return;}
+      edit.rowId=rowId.value;
+     }
+     if(type==='UPDATE'&&!Object.keys(edit.values).length){message.textContent=t('CORRECTION_VALUES_INVALID');return;}
+     edits.push(edit);invalidate();listRows();
+    };
+   };
+   select.onchange=()=>{
+    action.replaceChildren();
+    const table=tables.get(select.value);
+    if(table?.keys.length)option(action,'INSERT',t('correction_INSERT'));
+    for(const item of ['UPDATE','DELETE'])option(action,item,t('correction_'+item));
+    renderFields();
+   };
+   action.onchange=renderFields;
+   select.onchange();listRows();
+   read=()=>({batch:{edits:edits.slice()}});
+  }
+  renderMode();
+  preview.onclick=async()=>{
+   if(loading||!view.current())return;
+   const latest=currentTask(task);
+   if(!paused(latest)){message.textContent=t('SKIP_REQUIRES_PIPELINE_PAUSED');return;}
+   const payload=read();
+   if(!payload?.importJson&&!payload?.batch?.edits.length){message.textContent=t('CORRECTION_BATCH_REQUIRED');return;}
+   const revision=latest.revision,version=editVersion;
+   loading=preview.disabled=true;review.replaceChildren();message.textContent=t('loading');
+   try{
+    const plan=await query('preview',revision,{...scope,...payload});
+    if(!view.current()||version!==editVersion)return;
+    if(plan?.code!=='CORRECTION_PLAN_READY'||plan.evidenceId!==id||plan.evidenceHash!==hash
+        ||plan.subscriptionId!==target||plan.errorGeneration!==generation||!/^[0-9a-f]{64}$/.test(plan.hash||'')
+        ||!Array.isArray(plan.rows))throw new Error(t('CORRECTION_PLAN_CHANGED'));
+    const changed=plan.rows.filter(row=>row.changed).length;
+    message.textContent='';
+    review.append(label('h3','correctionPreview'),text('p',changed+' / '+plan.rows.length+' · '+t('correctionChangedRows')));
+    for(const row of plan.rows){
+     const card=text('article','','subscription-card');
+     card.append(text('strong',row.table+' · '+t('correction_'+row.action)));
+     if(row.rowId)card.append(text('code',row.rowId));
+     card.append(label('span','correctionBefore'),text('pre',JSON.stringify(row.before,null,2)),
+      label('span','correctionAfter'),text('pre',JSON.stringify(row.after,null,2)));
+     review.append(card);
+    }
+    const reason=document.createElement('textarea'),reasonLabel=text('label'),check=document.createElement('input');
+    reason.rows=3;reason.maxLength=1000;reasonLabel.append(label('span','recoveryReason'),reason);
+    check.type='checkbox';const confirm=text('label');confirm.append(check,label('span','correctionApproval'));
+    const apply=label('button','correctionApply'),attempt={};
+    apply.dataset.recoveryAction='CORRECTION_EXECUTE';
+    let sending=false;
+    const update=()=>{apply.disabled=sending||(!attempt.body&&(!check.checked||reason.value.trim().length<8));};
+    check.onchange=reason.oninput=update;update();
+    const current=()=>view.current()&&apply.isConnected&&version===editVersion;
+    apply.onclick=async()=>{
+     if(apply.disabled||!current())return;
+     if(!attempt.body&&currentTask(task).revision!==revision){invalidate();message.textContent=t('CORRECTION_PLAN_CHANGED');return;}
+     sending=true;update();
+     try{
+      await submitRecovery(task,'CORRECTION_EXECUTE',target,generation,
+       {...scope,...payload,approvedHash:plan.hash,reason:reason.value},current,attempt,'correction');
+     }catch(error){if(current())message.textContent=error.message;}
+     finally{if(current()){sending=false;check.disabled=reason.disabled=Boolean(attempt.body);update();}}
+    };
+    review.append(reasonLabel,confirm,apply);
+   }catch(error){if(view.current()&&version===editVersion)message.textContent=error.message;}
+   finally{if(view.current()){loading=false;preview.disabled=false;}}
+  };
+ }
  async function openVerificationPlan(task,id){
   if(!active())return;const view=open('gapVerificationTitle');view.body.textContent=t('loading');
   try{
@@ -154,5 +332,6 @@ window.RivomeshRecovery=(()=>{
  bridge.register({"gapVerificationTitle":"缺口核验计划与凭据","gapVerificationScope":"选择缺口并生成核验计划","gapVerificationHistorical":"仅核验指定历史共同点；必须重新扫描目标数据。目标仅由同步服务写入。核验不代表当前实时一致，完成后仍暂停。","gapVerificationApproval":"我已审阅缺口和表范围，并确认目标仅由同步服务写入。","gapVerifyExecute":"确认范围并重新核验","gapVerifyPlan":"生成核验计划","gapMaximumSeconds":"核验最长秒数","gapScopeLimit":"一次最多选择100条缺口。","gapVerifiedAtCut":"已在指定共同点核验","gapOpen":"未核验缺口","gapVerifiedHistory":"存在已核验的跳过历史","gapTable":"数据表","gapRows":"源行数","gapSourceRoot":"源内容摘要","gapCancel":"请求取消核验","gap_verify_plan":"准备缺口核验","gap_verify_execute":"执行缺口核验","gap_verify_cancel":"取消缺口核验","GAP_VERIFICATION_PLAN_READY":"核验计划已生成，请审阅后确认。","GAP_VERIFICATION_COMPLETED":"所选缺口已在指定共同点核验；历史记录保留，任务仍暂停。","GAP_LIVE_DATA_DIFFERENCES":"目标数据仍有差异，未写入核验成功记录。","GAP_VERIFICATION_PLAN_CHANGED":"核验计划已变化或损坏，请重新读取。","GAP_VERIFICATION_CANCEL_REQUESTED":"已请求取消，请查询计划凭据确认最终结果。","GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":"核验已中断或取消；提交可能已完成，请查询原计划凭据，不能据此断言已回滚。","GAP_ALREADY_VERIFIED":"此缺口已有核验凭据，请查看历史记录。",recoveryPrevious:'上一页记录',recoveryNext:'下一页记录',recoveryClose:'关闭恢复窗口',recoveryReason:'操作原因（至少8个字符）',recoveryLossApproval:'我已审阅完整事务，接受跳过所产生的数据缺口。',recoverySkipTitle:'按完整事务跳过',recoverySkipWarning:'此操作不会写入该事务的业务数据，会形成持久数据缺口。只影响所选目标；任务和目标保持暂停。',recoveryExecuteSkip:'接受缺口并跳过此事务',recoveryPauseFresh:'请暂停整个任务、确认目标围栏，并使用匹配当前错误版本的新证据。',recoveryPlanTitle:'跳过计划与恢复',recoveryHistorical:'这是历史记录或有时间点的观察。提交操作时会重新检查权限、事务和断点。',recoveryInspect:'检查目标提交状态（只读）',recoveryUnknown:'目前无法证明目标是否已经提交。已禁止继续或取消；请检查连接、元数据及备份。',recoveryLeavesPaused:'这些操作不会自动恢复同步。',recoveryConfirmGap:'恢复已提交的缺口确认',recoveryRetryTitle:'继续原跳过计划',recoveryRetry:'重新审批并继续跳过',recoveryCancelTitle:'取消未提交计划',recoveryCancel:'取消跳过计划',recoveryCancelledHelp:'取消不会修复原 SQL 错误，不推进 ACK；任务仍暂停，旧错误版本失效。',recoveryGapRetained:'事务已明确跳过，缺口记录继续保留，不代表数据一致。',recoveryGapsTitle:'查看数据缺口',recoveryPlansTitle:'查看跳过计划',recoveryEmpty:'没有符合条件的记录。',recoveryViewPlan:'查看/处理计划',recoverySkipped:'存在已跳过的数据',recoveryGapWarning:'当前确认进度包含跳过事务，不代表目标与源数据一致。请检查缺口及后续对账结果。',recoveryLedgerTitle:'事务恢复与数据缺口',recoveryLedgerHelp:'先查看原计划，再只读检查目标提交状态。已提交的恢复确认，未提交的可重新审批继续或取消。',recoveryState_PREPARED:'准备完成，等待执行或恢复',recoveryState_COMPLETED:'已完成，数据缺口已记录',recoveryState_CANCELLED:'计划已取消',skip_transaction:'事务跳过',skip_retry:'继续跳过计划',skip_recover:'恢复缺口确认',skip_cancel:'取消跳过计划',SKIP_DISABLED:'此集群尚未启用受控事务跳过。',SKIP_REQUIRES_PIPELINE_PAUSED:'请先暂停整个任务。',SKIP_COMPLETED:'跳过已确认，数据缺口已记录；任务仍暂停。',SKIP_RECOVERED:'缺口确认已恢复，任务仍暂停。',SKIP_CANCELLED:'计划已取消，原故障仍需处理。',SKIP_RECOVERY_PENDING:'存在尚未解决的跳过计划，请先恢复、继续或取消。',SKIP_PLAN_CHANGED:'计划摘要或引用已变化，请重新读取。',SKIP_PLAN_NOT_FOUND:'尚无该计划。原操作可能在准备计划前已被拒绝。',SKIP_PLAN_CANCELLED:'原跳过计划已取消，请保存新证据。',SKIP_ALREADY_COMMITTED:'目标已经提交跳过，不能取消；请恢复缺口确认。',SKIP_CHECKPOINT_RECONCILIATION_REQUIRED:'请先核对目标断点；已提交事务应走确认流程。',SKIP_NATIVE_COMMIT_NOT_PROVEN:'尚未证明目标已提交，不能执行恢复确认。',SKIP_NATIVE_CHECKPOINT_CHANGED:'目标断点与计划不符，未继续执行。',SKIP_DATA_LOSS_APPROVAL_REQUIRED:'需要明确接受本事务的数据缺口。'},
  {"gapVerificationTitle":"Gap verification plan and receipt","gapVerificationScope":"Select gaps and prepare verification","gapVerificationHistorical":"Verify the specified historical cut with a fresh target scan. Only the sync service may write the target. This is not current live equality;keep the task paused.","gapVerificationApproval":"I reviewed the gaps and table scope and confirm that only the sync service writes the target.","gapVerifyExecute":"Approve scope and verify again","gapVerifyPlan":"Prepare verification plan","gapMaximumSeconds":"Maximum verification seconds","gapScopeLimit":"Select at most 100 gaps per plan.","gapVerifiedAtCut":"Verified at the specified common cut","gapOpen":"Unverified gaps","gapVerifiedHistory":"Verified skip history exists","gapTable":"Table","gapRows":"Source rows","gapSourceRoot":"Source content root","gapCancel":"Request verification cancellation","gap_verify_plan":"Prepare gap verification","gap_verify_execute":"Verify gaps","gap_verify_cancel":"Cancel gap verification","GAP_VERIFICATION_PLAN_READY":"Plan prepared;review it before confirming.","GAP_VERIFICATION_COMPLETED":"Selected gaps verified at the specified cut;history retained and task paused.","GAP_LIVE_DATA_DIFFERENCES":"Live target differences remain;no successful verification was recorded.","GAP_VERIFICATION_PLAN_CHANGED":"Verification plan changed or is damaged;reload it.","GAP_VERIFICATION_CANCEL_REQUESTED":"Cancellation requested;inspect the plan receipt for the final outcome.","GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":"Verification interrupted or cancelled;commit may already have completed. Inspect the original receipt;rollback is not implied.","GAP_ALREADY_VERIFIED":"This gap already has a verification receipt;inspect its history.",recoveryPrevious:'Previous records',recoveryNext:'Next records',recoveryClose:'Close recovery',recoveryReason:'Operation reason (at least 8 characters)',recoveryLossApproval:'I reviewed the complete transaction and accept the resulting data gap.',recoverySkipTitle:'Skip a complete transaction',recoverySkipWarning:'Business changes from this transaction will not be applied. Record an explicit gap for this destination;keep task and subscriber paused.',recoveryExecuteSkip:'Accept gap and skip transaction',recoveryPauseFresh:'Pause the whole task,confirm destination fencing,and use fresh evidence matching the current failure.',recoveryPlanTitle:'Skip plan and recovery',recoveryHistorical:'Historical record or point-in-time observation. Permissions,transaction and checkpoints are rechecked when executing.',recoveryInspect:'Inspect native commit (read-only)',recoveryUnknown:'Native commit cannot currently be proven. Continue/cancel are disabled;check connectivity,metadata and backups.',recoveryLeavesPaused:'These operations never resume replication automatically.',recoveryConfirmGap:'Recover committed gap acknowledgment',recoveryRetryTitle:'Continue original skip plan',recoveryRetry:'Reapprove and continue skipping',recoveryCancelTitle:'Cancel uncommitted plan',recoveryCancel:'Cancel skip plan',recoveryCancelledHelp:'Cancellation does not repair the SQL fault or advance ACK. Keep the task paused;the previous error generation becomes invalid.',recoveryGapRetained:'Transaction explicitly skipped. Its durable gap remains;this is not data equality.',recoveryGapsTitle:'View data gaps',recoveryPlansTitle:'View skip plans',recoveryEmpty:'No matching records.',recoveryViewPlan:'View/resolve plan',recoverySkipped:'Skipped data exists',recoveryGapWarning:'Acknowledged progress includes skipped transactions and does not imply source/destination equality. Review gaps and subsequent validation.',recoveryLedgerTitle:'Transaction recovery and data gaps',recoveryLedgerHelp:'Open the original plan and inspect the native commit. Recover committed skips;reapprove or cancel uncommitted plans.',recoveryState_PREPARED:'Prepared;execution or recovery pending',recoveryState_COMPLETED:'Completed;gap retained',recoveryState_CANCELLED:'Plan cancelled',skip_transaction:'Skip transaction',skip_retry:'Continue skip plan',skip_recover:'Recover gap acknowledgment',skip_cancel:'Cancel skip plan',SKIP_DISABLED:'Controlled transaction skipping is not enabled for this cluster.',SKIP_REQUIRES_PIPELINE_PAUSED:'Pause the whole task first.',SKIP_COMPLETED:'Skip confirmed;gap retained and task remains paused.',SKIP_RECOVERED:'Gap acknowledgment recovered;task remains paused.',SKIP_CANCELLED:'Plan cancelled;the original fault still needs handling.',SKIP_RECOVERY_PENDING:'Resolve,continue or cancel the pending skip plan before resuming.',SKIP_PLAN_CHANGED:'Plan hash or reference changed;reload it.',SKIP_PLAN_NOT_FOUND:'No such plan exists;the original operation may have refused before preparation.',SKIP_PLAN_CANCELLED:'Original skip plan cancelled;retain fresh evidence.',SKIP_ALREADY_COMMITTED:'Native skip already committed;recover acknowledgment instead of cancelling.',SKIP_CHECKPOINT_RECONCILIATION_REQUIRED:'Compare native checkpoints first;proven commits need acknowledgment reconciliation.',SKIP_NATIVE_COMMIT_NOT_PROVEN:'Native commit is not proven;acknowledgment recovery refused.',SKIP_NATIVE_CHECKPOINT_CHANGED:'Native checkpoint differs from the plan;execution refused.',SKIP_DATA_LOSS_APPROVAL_REQUIRED:'Explicitly accept this transaction data gap.'});
  bridge.register({"compensationPreview": "生成事务补偿预览", "compensationReview": "审阅事务补偿计划", "compensationHelp": "补偿只还原受影响行的事务前状态。确认后任务保持暂停，请检查结果再恢复原事务。", "compensationIdentities": "受影响行标识", "compensationDeletes": "需删除", "compensationInserts": "需写入", "compensationExecute": "确认并执行补偿", "compensationApproval": "我已审阅目标和行变更范围。", "compensation_plan": "事务补偿预览", "compensation_execute": "执行事务补偿", "COMPENSATION_PLAN_READY": "补偿预览已生成。", "COMPENSATION_COMPLETED": "补偿已提交，任务保持暂停。", "COMPENSATION_PLAN_CHANGED": "目标数据或断点已变化，请重新预览。", "COMPENSATION_CHECKPOINT_RECONCILIATION_REQUIRED": "请先确认目标库是否已提交原事务。"},{"compensationPreview": "Generate compensation preview", "compensationReview": "Review compensation plan", "compensationHelp": "Compensation restores affected rows to their pre-transaction state. The task stays paused for review before replay.", "compensationIdentities": "Affected identities", "compensationDeletes": "Rows to delete", "compensationInserts": "Rows to insert", "compensationExecute": "Approve and apply compensation", "compensationApproval": "I reviewed the target and row changes.", "compensation_plan": "Compensation preview", "compensation_execute": "Apply compensation", "COMPENSATION_PLAN_READY": "Compensation preview ready.", "COMPENSATION_COMPLETED": "Compensation committed. The task remains paused.", "COMPENSATION_PLAN_CHANGED": "Target rows or checkpoints changed. Generate a new preview.", "COMPENSATION_CHECKPOINT_RECONCILIATION_REQUIRED": "Reconcile the original target commit first."});
- return{render,renderSkipApproval,renderCompensationPreview,openPlan,openVerificationPlan,openVerificationScope,renderVerificationFromReport,close,translate};
+ bridge.register({"correctionOpen": "手工补数据", "correctionHelp": "选择数据表和行操作。加入批次后预览前后值，确认后任务仍会保持暂停。", "correctionForm": "逐行录入", "correctionImport": "导入 JSON", "correctionMode": "录入方式", "correctionImportFile": "选择 JSON 文件", "correctionImportText": "批次 JSON", "correctionAction": "行操作", "correctionAdd": "加入批次", "correctionBatch": "待预览行", "correctionRemove": "移除", "correctionRowId": "无主键行 ROW_ID", "correctionGenerated": "物化的生成值", "correctionUnchanged": "保留当前值", "correctionValue": "输入值", "correctionNull": "SQL NULL", "correction_INSERT": "新增", "correction_UPDATE": "修改", "correction_DELETE": "删除", "correctionPreview": "预览手工修正", "correctionChangedRows": "行将变化", "correctionBefore": "修改前", "correctionAfter": "修改后", "correctionApproval": "我已审阅前后值和受影响行。", "correctionApply": "确认并提交手工修正", "correction_execute": "手工修正", "CORRECTION_COMPLETED": "手工修正已提交，任务保持暂停。", "CORRECTION_PLAN_CHANGED": "目标数据或任务已变化，请重新预览。", "CORRECTION_BATCH_REQUIRED": "请加入待修正行或导入 JSON。", "CORRECTION_BATCH_LIMIT": "一次最多 50 行，JSON 不超过 128 KiB。", "CORRECTION_ROW_ID_INVALID": "请输入证据中的 64 位 ROW_ID。", "CORRECTION_VALUES_INVALID": "请至少选择一个字段填写。", "CORRECTION_IMPORT_INVALID": "JSON 无法解析，请检查格式和重复字段。", "CORRECTION_TYPED_TEXT_REQUIRED": "请用字符串传值，SQL NULL 使用 JSON null。", "CORRECTION_ROW_ALREADY_EXISTS": "要新增的行已存在，请检查目标键。", "CORRECTION_ROW_MISSING": "目标行已不存在，请检查行标识。", "CORRECTION_NULL_NOT_ALLOWED": "该字段不允许 SQL NULL。", "CORRECTION_TYPED_VALUE_INVALID": "字段值不符合类型或精度要求。"},{"correctionOpen": "Correct target rows", "correctionHelp": "Choose a table and row operation. Add edits to the batch, review before and after values and confirm. The task stays paused.", "correctionForm": "Enter rows", "correctionImport": "Import JSON", "correctionMode": "Input mode", "correctionImportFile": "Choose JSON file", "correctionImportText": "Batch JSON", "correctionAction": "Row action", "correctionAdd": "Add to batch", "correctionBatch": "Rows to preview", "correctionRemove": "Remove", "correctionRowId": "Keyless row ID", "correctionGenerated": "Materialized generated value", "correctionUnchanged": "Keep current value", "correctionValue": "Value", "correctionNull": "SQL NULL", "correction_INSERT": "Insert", "correction_UPDATE": "Update", "correction_DELETE": "Delete", "correctionPreview": "Preview corrections", "correctionChangedRows": "rows will change", "correctionBefore": "Before", "correctionAfter": "After", "correctionApproval": "I reviewed the before and after values and affected rows.", "correctionApply": "Approve and apply corrections", "correction_execute": "Manual correction", "CORRECTION_COMPLETED": "Corrections committed. The task remains paused.", "CORRECTION_PLAN_CHANGED": "Target data or task state changed. Preview again.", "CORRECTION_BATCH_REQUIRED": "Add rows or import a JSON batch.", "CORRECTION_BATCH_LIMIT": "A batch can contain up to 50 rows and 128 KiB of JSON.", "CORRECTION_ROW_ID_INVALID": "Enter the 64-character ROW_ID from evidence.", "CORRECTION_VALUES_INVALID": "Select at least one field to update.", "CORRECTION_IMPORT_INVALID": "Invalid import JSON. Check the format and duplicate fields.", "CORRECTION_TYPED_TEXT_REQUIRED": "Use JSON strings for values and JSON null for SQL NULL.", "CORRECTION_ROW_ALREADY_EXISTS": "The insert identity already exists. Check its key.", "CORRECTION_ROW_MISSING": "The requested row is absent. Check its identity.", "CORRECTION_NULL_NOT_ALLOWED": "This field cannot be SQL NULL.", "CORRECTION_TYPED_VALUE_INVALID": "A value does not fit its type or precision."});
+ return{render,renderSkipApproval,renderCompensationPreview,renderCorrection,openPlan,openVerificationPlan,openVerificationScope,renderVerificationFromReport,close,translate};
 })();
