@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.30",
+  "version": "0.31",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1137,14 +1137,14 @@
       "id": "JV-04",
       "epic": "JAVA",
       "priority": "P1",
-      "status": "NEW",
+      "status": "PARTIAL",
       "title": {
         "zh-CN": "多JDK部署及混合版本升级",
         "en": "Multi-JDK deployment and mixed-version upgrades"
       },
       "gap": {
-        "zh-CN": "现有基准可选JRE，生产发布/集群升级策略未完整验收。",
-        "en": "Benchmarks select JREs;production/mixed-cluster upgrade policies are not accepted."
+        "zh-CN": "同一 JAR 在五种 JDK 混部下通过真实 SQL 命令和数据回归，验证 Controller 滚动替换和原目录 Agent 排空重启。按能力自动调度及跨版本降级待验收。",
+        "en": "One JAR passed mixed five-JDK SQL control and data. Controller rolling replacement and drained Agent restart in its original directory passed. Capability placement and application downgrades remain."
       },
       "acceptance": {
         "zh-CN": "提供五JDK部署档案和能力调度限制，验证混合节点间命令/事件/状态兼容与滚动升级；不支持回退时明确拒绝并保留恢复路径。",
@@ -1158,7 +1158,10 @@
       ],
       "evidence": [
         "docs/zh-CN/performance.md",
-        "deploy/helm/rivomesh/values.yaml"
+        "deploy/helm/rivomesh/values.yaml",
+        "tests/global-control-pipeline.py",
+        "docs/en/console-and-deployment.md",
+        "docs/zh-CN/console-and-deployment.md"
       ]
     },
     {

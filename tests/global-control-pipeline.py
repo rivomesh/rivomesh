@@ -25,6 +25,8 @@ parser.add_argument('--separate-execution', action='store_true', help='Two manag
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(8, 11, 17, 21, 25),
                     help='Run controller, Agent and Worker snapshot/CDC with the specified Java release')
+parser.add_argument('--mixed-runtime-upgrade', action='store_true',
+                    help='Replace Controller Java 8 with 25 and drained Agent Java 11 with 17 while Controller Java 21 stays online')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
@@ -49,6 +51,10 @@ if args.runtime_jdk and (not args.separate_execution or any((args.runtime_image,
         args.compensation, args.correction, args.failure_diagnostics, args.snapshot_diagnostics,
         args.managed_failure_review, args.managed_commit))):
     parser.error('--runtime-jdk uses the separate Agent and baseline SQL process smoke profile')
+if args.mixed_runtime_upgrade and (not args.separate_execution or any((args.runtime_jdk, args.runtime_image,
+        args.failure_diagnostics, args.source_diagnostics, args.snapshot_diagnostics, args.recovery_jobs,
+        args.compensation, args.correction))):
+    parser.error('--mixed-runtime-upgrade uses the separate Agent and baseline SQL process profile')
 if args.runtime_image and not args.separate_execution:
     parser.error('--runtime-image requires --separate-execution')
 if args.source_diagnostics and (not args.separate_execution or any((args.runtime_jdk, args.runtime_image,
@@ -86,6 +92,9 @@ if args.managed_failure_review or args.compensation or args.correction or args.w
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 members = ('node-a', 'node-b', 'node-worker') if args.separate_execution else ('node-a', 'node-b')
+runtime_majors = dict.fromkeys(members, args.runtime_jdk or 8)
+if args.mixed_runtime_upgrade:
+    runtime_majors.update({'node-a': 8, 'node-b': 21, owner_node: 11})
 if args.separate_execution:
     env['RM_GC_STORE_URL'] = 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if args.control_product == 'MYSQL' else 'jdbc:postgresql://store:5432/rivomesh_control'
 checks = []
@@ -104,6 +113,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'correction': args.correction,
             'recoveryJobs': args.recovery_jobs,
             'runtimeJdk': args.runtime_jdk,
+            'mixedRuntimeUpgrade': args.mixed_runtime_upgrade,
             'workerDiagnostics': args.worker_diagnostics,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
@@ -160,7 +170,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
-        services[node] = {'image': f'eclipse-temurin:{args.runtime_jdk or 8}-jre', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if args.separate_execution and node == owner_node else 'serve', '/fixture/' + node + '.json'],
+        services[node] = {'image': f'eclipse-temurin:{runtime_majors[node]}-jre', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if args.separate_execution and node == owner_node else 'serve', '/fixture/' + node + '.json'],
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
@@ -208,10 +218,6 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         return {line.split()[0] for line in lines if 'io.github.rivomesh.Main run ' in line}
 
     def observe_jvms():
-        runtime = f'eclipse-temurin:{args.runtime_jdk}-jre'
-        image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', runtime], text=True))[0]
-        manifest['runtimeImageId'] = image['Id']
-        manifest['runtimeArchitecture'] = image['Architecture']
         java = []
         for node in members:
             binary = compose('exec', '-T', node, 'readlink', '/proc/1/exe').stdout.strip()
@@ -224,17 +230,24 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             done''').stdout.strip()
         assert len(worker_pids()) == 1 and worker_binary, 'one real CDC Worker process is required'
         java.append((owner_node, 'WORKER', worker_binary))
-        manifest['runtimeProcesses'] = []
+        processes = []
         for node, role, binary in java:
+            runtime_id = compose('images', '-q', node).stdout.strip()
+            image = json.loads(subprocess.check_output(['docker', 'image', 'inspect', runtime_id], text=True))[0]
             assert binary.endswith('/bin/java') and '\n' not in binary, 'expected a single JVM executable'
             settings = compose('exec', '-T', node, binary, '-XshowSettings:properties', '-version').stderr
             version = re.search(r'(?m)^\s*java\.version = (\S+)$', settings).group(1)
             architecture = re.search(r'(?m)^\s*os\.arch = (\S+)$', settings).group(1)
             major = int(version.split('.')[1] if version.startswith('1.') else re.match(r'\d+', version).group())
-            assert major == args.runtime_jdk, 'unexpected active JVM release'
+            assert major == runtime_majors[node], 'unexpected active JVM release'
             assert architecture in ({'aarch64','arm64'} if image['Architecture']=='arm64' else {'amd64','x86_64'}), architecture
-            manifest['runtimeProcesses'].append(dict(role=role, node=node, version=version, architecture=architecture))
-        passed('Observed the real Controller, Agent and Worker JVM executables on Java ' + str(args.runtime_jdk))
+            processes.append(dict(role=role, node=node, version=version, architecture=architecture, imageId=image['Id']))
+        if args.runtime_jdk:
+            manifest['runtimeImageId'] = processes[0]['imageId']
+            manifest['runtimeArchitecture'] = image['Architecture']
+            manifest['runtimeProcesses'] = processes
+            passed('Observed the real Controller, Agent and Worker JVM executables on Java ' + str(args.runtime_jdk))
+        return processes
 
     def http(node, path, body=None, method=None, request=None, expected=200, token=None):
         headers = {'Authorization': 'Bearer ' + (token or env['RM_GC_TOKEN'])}
@@ -407,6 +420,63 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         except subprocess.CalledProcessError as failure:
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
+
+    def run_mixed_upgrade():
+        rolls = manifest['runtimeRollout'] = {}
+        rolls['initial'] = observe_jvms()
+        passed('Actual Controllers Java 8 and 21 and Agent/Worker Java 11 share the task, commands and initial CDC')
+
+        def replace_runtime(node, major):
+            runtime_majors[node] = major
+            services[node]['image'] = f'eclipse-temurin:{major}-jre'
+            composition.write_text(json.dumps({'services': services, 'volumes': volumes}))
+            compose('up', '-d', '--no-deps', '--force-recreate', node)
+            address(node)
+
+        def snapshot_set():
+            return tuple(sql(product, f'SELECT table_id,snapshot_id FROM rm_{suffix}_meta.rm3_sink_table ORDER BY table_id')
+                         for product, suffix in (('postgres', 'pg'), ('mysql-target', 'my')))
+
+        before = snapshot_set()
+        assert all(len(snapshots.splitlines()) == 3 for snapshots in before)
+        original_workers = worker_pids()
+        assert len(original_workers) == 1
+        compose('stop', '--timeout', '30', 'node-a')
+        sql('mysql', "INSERT INTO billing.ledger VALUES(93,31.4159)")
+        wait(rows_match, 'native CDC during Java Controller replacement')
+        check, _ = action('CHECK', node='node-b')
+        replace_runtime('node-a', 25)
+        wait(lambda: outcome(check, 'node-a'), 'replaced Controller reads original durable command')
+        assert before == snapshot_set() and worker_pids() == original_workers
+        rolls['controllerReplaced'] = observe_jvms()
+        passed('Replacing Controller Java 8 with 25 leaves Java 21 management and the original Worker available')
+
+        version = task('node-b')['configurationVersion']
+        stop, _ = action('STOP', node='node-b')
+        wait(lambda: not worker_pids() and task('node-b').get('workerState') == 'STOPPED', 'drained Java 11 Worker exits')
+        wait(lambda: task('node-b').get('captureLeaseState') in ('UNCLAIMED', 'EXPIRED'), 'old capture lease has stopped')
+        stopped_state = task('node-b')
+        stopped = stopped_state['status']['capture_gtid']
+        compose('stop', '--timeout', '30', owner_node)
+        sql('mysql', "UPDATE sales.items SET note='agent staged',payload=JSON_OBJECT('n',17) WHERE id=3")
+        assert sql('postgres', 'SELECT note FROM rm_pg_sales.items WHERE id=3') == 'third'
+        replace_runtime(owner_node, 17)
+        wait(lambda: http(owner_node, '/readyz')['status'] == 'UP' and task('node-b').get('ownerState') == 'HEALTHY',
+             'replacement Java 17 Agent returns from the same directory')
+        assert not worker_pids(), 'STOPPED intent must survive Agent replacement'
+        wait(lambda: outcome(stop, 'node-a') and task('node-a')['revision'] == stopped_state['revision'],
+             'replacement preserves the original STOP receipt and its task revision')
+        assert task('node-b')['status']['capture_gtid'] == stopped
+        passed('The drained Agent opens the same task directory on Java 17 with the prior GTID and STOP receipt')
+        action('START', node='node-a')
+        wait(rows_match, 'Java 17 Worker resumes both targets without resnapshot')
+        wait(lambda: task('node-b')['status']['capture_gtid'] != stopped, 'original GTID continues after restart')
+        assert snapshot_set() == before
+        left, right = task('node-a'), task('node-b')
+        assert left['configurationVersion'] == right['configurationVersion'] == version
+        assert left['revision'] == right['revision']
+        rolls['agentReplaced'] = observe_jvms()
+        passed('Java 17 Worker replays native CDC to both SQL targets from original snapshots and checkpoint')
 
     def run_source_diagnostics():
         def phase(expected):
@@ -683,8 +753,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             manifest['status'] = 'PASS'
             print('GLOBAL_CONTROL_SOURCE_DIAGNOSTICS_ACCEPTED artifact=' + digest)
             raise SystemExit(0)
-        if args.runtime_jdk:
-            observe_jvms()
+        if args.mixed_runtime_upgrade:
+            run_mixed_upgrade()
+        if args.runtime_jdk or args.mixed_runtime_upgrade:
+            if args.runtime_jdk:
+                observe_jvms()
             action('STOP')
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
             manifest['status'] = 'PASS'

@@ -181,3 +181,7 @@ On the same artifact, the disposable two-node cluster passed three additional ch
 ### NATS JetStream TLS and quorum
 
 Java 8 candidate `411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab04` passed six native [NATS fixture](../../tests/nats-cluster-run.py) checks with three separate NATS 2.11.8 instances and file-backed replicas. Rivomesh confirmed trusted traffic, rejected an absent CA and an endpoint name missing from the certificate, continued after killing the elected stream leader, and received no confirmation with one replica left. Restoring two members allowed the original event ID to succeed and be retried within the deduplication window while preserving all three message bodies. Scope is the confirmed publisher transport. [Baseline](baseline.json)
+
+### Mixed Java rollout
+
+Candidate `411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab04` passed eight native checks with MySQL 8.4.13, PostgreSQL and separate Controller/Agent processes. Controllers Java 8 and 21 ran with Agent/Worker Java 11. Replacing Java 8 with Java 25 left the original Worker delivering native CDC while the Java 21 Controller admitted a durable check. Reopening the drained Agent on Java 17 preserved the earlier STOP and GTID. Its Java 17 Worker resumed both SQL targets with all original snapshot IDs. The fixture identifies the actual running JVM executables and image IDs at each phase. [Fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)

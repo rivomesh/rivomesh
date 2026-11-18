@@ -181,3 +181,9 @@ python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
 见[复验记录](../verification/README.md#lg-06-live-kubernetes-rwo-csi)。
 
 附加节点故障档案在隔离的 Minikube 集群停止一个 worker，数据库保留在控制节点。原 worker 恢复后，任务挂载同一个卷并以更高日志租约继续增量。追加 `--worker-outage-node <测试 worker>` 可运行原生 YAML 故障档案。
+
+### 混合 Java 运行时滚动更换
+
+同一个 Java 8 构建包可运行在 Temurin 8、11、17、21 和 25。Linux 服务使用选定 JRE 的绝对 Java 路径。Docker 构建通过 `JAVA_IMAGE` 选择 JRE，并在部署中锁定镜像摘要。Helm values 或原生 Kubernetes 工作负载引用结果镜像。Agent 和受监督 Worker 使用 Agent 选定的同一运行时，并核对厂商驱动兼容性。
+
+实库混部档案启动 Java 8 和 21 两个 Controller，Agent 和 Worker 使用 Java 11。保留 Java 21 管理入口，更换另一个 Controller 为 Java 25。新 Controller 能读取原操作记录后，停止 Agent 上的任务，确认 Worker 退出及租约释放或过期，并记录 GTID 和目标快照。以同一节点身份、同一持久化目录重开 Java 17 Agent，确认原停止结果和断点可见，再由任一 Controller 启动任务。核对两个目标的实际内容及快照 ID。该流程在同一个应用包上更换 Java 运行时。应用版本回退、按 JDK 或驱动自动调度另行验收。[实库证据](../verification/README.md#mixed-java-rollout)

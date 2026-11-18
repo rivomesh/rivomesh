@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.30 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.31 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,25 DONE, 22 PARTIAL and 1 NEW, with 23 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,25 DONE, 23 PARTIAL and 0 NEW, with 23 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -62,7 +62,7 @@ Implementation:48requirements,25 DONE, 22 PARTIAL and 1 NEW, with 23 open. RC-01
 | JV-01 | P0 / DONE | Java8/11/17/21/25 runnable releases | Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades. |
 | JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Five JDKs passed MySQL 8.4 basic fan-out, seven PostgreSQL 17.12 cases and eight PostgreSQL 18.7 stored-generated cases. Other sources, targets, TLS and recovery combinations remain. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor isolation/artifact checks exist without all-JDK coverage. |
-| JV-04 | P1 / NEW | Multi-JDK deployment and mixed-version upgrades | Benchmarks select JREs;production/mixed-cluster upgrade policies are not accepted. |
+| JV-04 | P1 / PARTIAL | Multi-JDK deployment and mixed-version upgrades | One JAR passed mixed five-JDK SQL control and data. Controller rolling replacement and drained Agent restart in its original directory passed. Capability placement and application downgrades remain. |
 
 ## Complete documentation
 

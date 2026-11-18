@@ -2026,5 +2026,133 @@
     "sourceImageId": "sha256:f21abd46018664ec1d774ed0ccf028420f6687e33f812018fc3a910dc1ce6014",
     "javaVersion": "openjdk version \"1.8.0_504\"\nOpenJDK Runtime Environment (Temurin)(build 1.8.0_504-b01)\nOpenJDK 64-Bit Server VM (Temurin)(build 25.504-b01, mixed mode)",
     "cleanupExitCode": 0
+  },
+  "mixedJdkRollout": {
+    "artifactSha256": "411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab04",
+    "status": "PASS",
+    "checks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "Actual Controllers Java 8 and 21 and Agent/Worker Java 11 share the task, commands and initial CDC",
+      "Replacing Controller Java 8 with 25 leaves Java 21 management and the original Worker available",
+      "The drained Agent opens the same task directory on Java 17 with the prior GTID and STOP receipt",
+      "Java 17 Worker replays native CDC to both SQL targets from original snapshots and checkpoint"
+    ],
+    "harnessSourceSha256": "f055ca199379f34f486e4a5ef07ace8c9f4bd30c83df408a2264e3c85e645a8a",
+    "executionProfile": "SEPARATE_AGENT",
+    "controlProduct": "POSTGRESQL",
+    "failureDiagnostics": false,
+    "snapshotDiagnostics": false,
+    "managedFailureReview": false,
+    "checkpointInspection": false,
+    "managedCommit": false,
+    "managedSkip": false,
+    "compensation": false,
+    "correction": false,
+    "recoveryJobs": false,
+    "runtimeJdk": null,
+    "mixedRuntimeUpgrade": true,
+    "workerDiagnostics": false,
+    "sourceDiagnostics": null,
+    "sourceImage": "mysql:8.4",
+    "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+    "sourceVersion": "8.4.13",
+    "sourceServerProfile": "ON|ROW|FULL",
+    "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+    "runtimeRollout": {
+      "initial": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "1.8.0_512",
+          "architecture": "aarch64",
+          "imageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "11.0.33",
+          "architecture": "aarch64",
+          "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "11.0.33",
+          "architecture": "aarch64",
+          "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe"
+        }
+      ],
+      "controllerReplaced": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "25.0.5",
+          "architecture": "aarch64",
+          "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "11.0.33",
+          "architecture": "aarch64",
+          "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "11.0.33",
+          "architecture": "aarch64",
+          "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe"
+        }
+      ],
+      "agentReplaced": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "25.0.5",
+          "architecture": "aarch64",
+          "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        }
+      ]
+    },
+    "cleanupExitCode": 0
   }
 }

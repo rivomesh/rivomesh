@@ -51,8 +51,8 @@
   ],
   "currentSdd": {
     "DONE": 25,
-    "PARTIAL": 22,
-    "NEW": 1
+    "PARTIAL": 23,
+    "NEW": 0
   },
   "nextTasks": [
     "Complete the full Java regression with loopback H2 and continue node/destination filtering.",
@@ -69,6 +69,7 @@
     "SO-07 Oracle 26ai to PostgreSQL V3 passed 13 native checks, including a transaction spanning the snapshot, archive rotation, SIGKILL/resume and DDL refusal at the original SCN.",
     "DO-05 accepted. One frozen candidate passed 25 configuration examples, five real Chrome checks, seven native CDC checks and eight live Helm/native Kubernetes checks. A different Chrome candidate was rejected.",
     "CP-04 and LG-06. Two native Kubernetes Worker nodes with one PostgreSQL journal passed three checks. Freezing the owner switched epoch 1 to 2 and the resumed Worker remained fenced.",
-    "LG-04 NATS JetStream 2.11.8 three native replicas passed six checks: client TLS trust, hostname refusal, actual leader loss, no confirmed publication without quorum, and stable-ID retry after restoration."
+    "LG-04 NATS JetStream 2.11.8 three native replicas passed six checks: client TLS trust, hostname refusal, actual leader loss, no confirmed publication without quorum, and stable-ID retry after restoration.",
+    "JV-04 started and passed eight native mixed-JDK checks. Controllers 8/21 and Agent/Worker 11 ran together, Controller 25 replaced 8 with CDC live, then Agent/Worker 17 resumed from the original directory and GTID after a controlled stop."
   ]
 }
