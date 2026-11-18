@@ -23,6 +23,8 @@ parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
 parser.add_argument('--uuid', action='store_true', help='Exercise UUID keys and nullable UUID values')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
+parser.add_argument('--tls', action='store_true',
+                    help='Require CA and host verification for SQL and pgoutput and exercise rejected certificates')
 parser.add_argument('--failover', action='store_true',
                     help='Exercise a synchronized logical slot through physical standby promotion')
 parser.add_argument('--reject-old-primary', action='store_true',
@@ -31,6 +33,8 @@ parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
+if args.tls and args.failover:
+    parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
 artifact = args.artifact.resolve()
 output = args.output.resolve()
 output.relative_to(ROOT)
@@ -42,7 +46,7 @@ image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
-              uuid=args.uuid,deliveryTiming=args.delivery_timing)
+              uuid=args.uuid,deliveryTiming=args.delivery_timing,tls=args.tls)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -64,7 +68,36 @@ def passed(label):
     print('PASS '+label,flush=True)
 
 
-with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temporary:
+def certificates(directory):
+    trust=directory/'trust'
+    trust.mkdir()
+
+    def openssl(*command):
+        subprocess.run(['openssl',*command],cwd=directory,check=True,capture_output=True,timeout=30)
+
+    for name in ('accepted','untrusted'):
+        openssl('req','-new','-x509','-nodes','-newkey','rsa:2048','-sha256','-days','2',
+                '-subj',f'/CN=Rivomesh test {name} authority',
+                '-addext','basicConstraints=critical,CA:TRUE',
+                '-addext','keyUsage=critical,keyCertSign,cRLSign',
+                '-keyout',name+'.key','-out','trust/'+name+'.pem')
+    for name in ('source','target'):
+        service=directory/name
+        service.mkdir()
+        openssl('req','-new','-nodes','-newkey','rsa:2048','-sha256','-subj','/CN='+name,
+                '-keyout',name+'/server.key','-out',name+'.csr')
+        extension=directory/(name+'.cnf')
+        extension.write_text(f'basicConstraints=critical,CA:FALSE\nsubjectAltName=DNS:{name}\n'
+                             'keyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n')
+        openssl('x509','-req','-sha256','-days','2','-in',name+'.csr',
+                '-CA','trust/accepted.pem','-CAkey','accepted.key','-CAcreateserial',
+                '-extfile',extension.name,'-out',name+'/server.crt')
+        (service/'server.key').chmod(0o600)
+    return trust
+
+
+with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temporary,
+      tempfile.TemporaryDirectory(prefix='pg-source-tls-',dir=ROOT/'target') as private_tls):
     home=Path(temporary)
     tasks=home/'tasks'
     tasks.mkdir()
@@ -83,7 +116,6 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
     live_source='source'
     platform=dict(bind='0.0.0.0',port=8080,authToken='${RM_PG_TOKEN}',tasksDirectory='/fixture/tasks',
                   dataDirectory='/fixture/platform',autoStart=True,pollMillis=200,workerHeapMiB=256)
-    (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
     (home/'platform.json').write_text(json.dumps(platform))
     database=dict(image='postgres:17',environment=dict(POSTGRES_PASSWORD='${RM_PG_PASSWORD}',POSTGRES_DB='sync_test'))
     services=dict(source=dict(database,image=args.source_image,command=['-c','wal_level=logical','-c','max_replication_slots=8',
@@ -94,6 +126,31 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
     document=dict(services=services)
+    if args.tls:
+        private_certificates=Path(private_tls)
+        trust=certificates(private_certificates)
+        services['target']['image']='postgres:17.12'
+        for service in ('source','target'):
+            instance=services[service]
+            instance['command']=instance.get('command',[])+[
+                '-c','ssl=on','-c','ssl_min_protocol_version=TLSv1.3',
+                '-c','ssl_cert_file=/run/rivomesh-tls/server.crt',
+                '-c','ssl_key_file=/run/rivomesh-tls/server.key']
+            instance['entrypoint']=[
+                'bash','-ceu',
+                'install -d -o postgres -g postgres -m 0700 /run/rivomesh-tls\n'
+                'install -o postgres -g postgres -m 0600 /tls-fixture/server.key /run/rivomesh-tls/server.key\n'
+                'install -o postgres -g postgres -m 0644 /tls-fixture/server.crt /run/rivomesh-tls/server.crt\n'
+                'exec docker-entrypoint.sh "$@"','rivomesh-fixture']
+            instance['volumes']=[str(private_certificates/service)+':/tls-fixture:ro']
+        services['source']['networks']={'default':{'aliases':['source-wrong-name']}}
+        services['runner']['volumes'].append(str(trust)+':/trust:ro')
+        tls_options='&sslmode=verify-full&sslrootcert=/trust/accepted.pem&channelBinding=require'
+        pipeline['source']['postgresql']['url']+=tls_options+'&ApplicationName=rivomesh-tls-source'
+        pipeline['targets'][0]['url']+=tls_options+'&ApplicationName=rivomesh-tls-target'
+        report['tlsProfile']={'driver':'pgJDBC 42.7.14','protocol':'TLSv1.3',
+                              'sslmode':'verify-full','channelBinding':'require'}
+    (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
     if args.delivery_timing:
         services['source']['command']+=['-c','track_commit_timestamp=on']
     if args.failover:
@@ -166,11 +223,26 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         view=task()
         return view['sourceType']=='POSTGRESQL' and view['status'].get('capture_lsn') and equal()
 
+    def active_tls(service,application):
+        return sql(service,"SELECT count(*) FROM pg_stat_activity a JOIN pg_stat_ssl s USING (pid) "
+                   f"WHERE a.application_name='{application}' AND s.ssl AND s.version='TLSv1.3'")
+
+    def untrusted_endpoint(name, edit, message):
+        case=json.loads(json.dumps(pipeline))
+        edit(case)
+        (home/(name+'.yml')).write_text(json.dumps(case))
+        result=compose('run','--rm','--no-deps','runner','check','/fixture/'+name+'.yml',check=False)
+        error=result.stderr.lower()
+        assert result.returncode!=0 and any(fragment in error for fragment in message), f'{name} was not rejected as expected'
+
     try:
         compose('up','-d','source','target')
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
         report['sourceVersion']=sql('source',"SHOW server_version")
+        if args.tls:
+            report['targetVersion']=sql('target',"SHOW server_version")
+            report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
         sql('source',"""
             CREATE SCHEMA sales; CREATE SCHEMA billing;
             CREATE TABLE sales.items(id BIGINT PRIMARY KEY,amount NUMERIC(20,4),active BOOLEAN,payload JSONB,data BYTEA);
@@ -205,6 +277,18 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                     'standby streaming')
         metadata=json.loads(subprocess.check_output(['docker','image','inspect',args.source_image],text=True))[0]
         report['sourceImageId']=metadata['Id']
+        if args.tls:
+            def wrong_source_name(case):
+                options=case['source']['postgresql']
+                options['url']=options['url'].replace('://source:', '://source-wrong-name:')
+
+            def wrong_target_authority(case):
+                target=case['targets'][0]
+                target['url']=target['url'].replace('/trust/accepted.pem','/trust/untrusted.pem')
+
+            untrusted_endpoint('wrong-source-name',wrong_source_name,('hostname', 'host name'))
+            untrusted_endpoint('wrong-target-authority',wrong_target_authority,('certification path', 'pkix', 'trust'))
+            passed('The normal preflight refuses a mismatched source hostname and an untrusted target certificate')
         if args.generated:
             sql('source',"""
                 ALTER TABLE sales.items ADD COLUMN derived BIGINT GENERATED ALWAYS AS
@@ -226,6 +310,13 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         report['runtimeImageId']=metadata['Id']
         report['runtimeArchitecture']=metadata['Architecture']
         require(stream_ready,'native consistent snapshot')
+        if args.tls:
+            require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
+                    and int(active_tls('target','rivomesh-tls-target'))>0,
+                    'native TLS session observation on both endpoints')
+            assert sql('source',"SELECT count(*) FROM pg_stat_replication r JOIN pg_stat_ssl s USING (pid) "
+                       "WHERE r.application_name='rivomesh-tls-source' AND s.ssl AND s.version='TLSv1.3'")=='1'
+            passed('The native views confirm TLS 1.3 for the packaged logical replication and destination sessions')
         initial=task()['status']
         snapshot_ids=sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
         assert len(snapshot_ids.splitlines())==table_count
@@ -335,6 +426,11 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
         assert slot.startswith('rivomesh_test_') and len(slot.splitlines())==1
         passed('SIGKILL and restart reuse the original slot and snapshot with continuing LSN')
+        if args.tls:
+            require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
+                    and int(active_tls('target','rivomesh-tls-target'))>0,
+                    'TLS sessions restored with original slot and destination data')
+            passed('Process restart re-establishes verified TLS and retains the original slot, snapshots and exact rows')
 
         if args.failover:
             def synchronized_slot():

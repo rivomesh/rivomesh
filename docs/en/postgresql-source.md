@@ -30,6 +30,12 @@ Use Temurin 21 for current builds and fixtures. Earlier cross-runtime results ar
 
 PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight Temurin 21 checks. The fixture covers stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
 
+## Verified TLS connections
+
+Set the PostgreSQL source and destination JDBC URLs separately. Each can use `sslmode=verify-full&sslrootcert=/run/rivomesh/trust/ca.pem&channelBinding=require` when the server requires SCRAM with channel binding. Place the public CA certificate in the execution Agent's read-only filesystem. The DNS name in each URL must match the server certificate, including the stable writer name when using a database HA service. Run **Check** on the execution Agent after changing certificates or mounts. [pgJDBC TLS](https://jdbc.postgresql.org/documentation/ssl/) · [pgJDBC connection properties](https://jdbc.postgresql.org/documentation/use/)
+
+For the direct PostgreSQL 17.12 source and destination profile, add `--source-image postgres:17.12 --tls` to the native fixture. It generates temporary CAs and server certificates, inspects live TLS sessions and verifies that preflight refuses the wrong source hostname or target CA. [PostgreSQL TLS statistics](https://www.postgresql.org/docs/17/monitoring-stats.html#MONITORING-PG-STAT-SSL-VIEW)
+
 ## Synchronized standby promotion
 
 For a new task, keep one stable PostgreSQL writer endpoint in `source.postgresql.url` and set `source.postgresql.failoverSlot: true`. Equip the primary with a physical standby slot listed in `synchronized_standby_slots`. Configure the standby with that `primary_slot_name`, `hot_standby_feedback=on`, `sync_replication_slots=on` and a valid database name in `primary_conninfo`. Verify that the logical slot on the standby is persistent, synchronized and has received the required WAL before routing a failover. [PostgreSQL slot synchronization](https://www.postgresql.org/docs/17/logicaldecoding-explanation.html#LOGICALDECODING-REPLICATION-SLOTS-SYNCHRONIZATION) · [Failover checklist](https://www.postgresql.org/docs/17/logical-replication-failover.html)

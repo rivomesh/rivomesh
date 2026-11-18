@@ -61,7 +61,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
 | JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 passed four single-primary MySQL releases, MySQL 8.4.13 async GTID primary failover with two SQL destinations, PostgreSQL 17/18 and single-PDB Oracle profiles. More topologies, destinations, TLS and recovery combinations remain. |
-| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor SDK isolation and packaged artifact checks exist. Java 21 driver, TLS, certificate and recovery combinations remain. |
+| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified external MySQL JDBC admission and rolling restart, and PostgreSQL-to-PostgreSQL TLS 1.3 with CA/hostname refusal and verified reconnect. Additional vendors, TLS policies and recovery profiles remain. |
 | JV-04 | P1 / DONE | Java 21 deployment and rolling replacement | Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence. |
 
 ## Complete documentation

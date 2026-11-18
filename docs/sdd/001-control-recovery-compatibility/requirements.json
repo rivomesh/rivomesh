@@ -1180,8 +1180,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "已有厂商 SDK 隔离、按包清点及 Java 21 的 MySQL JDBC 外置运行、缺失提示和滚动恢复。各产品 TLS、证书、其他厂商驱动及恢复组合待验收。",
-        "en": "Vendor SDK isolation and artifact inventory exist. Temurin 21 verified out-of-package MySQL JDBC, missing-driver admission and rolling recovery. Per-product TLS, certificate, vendor-driver and recovery combinations remain."
+        "zh-CN": "Java 21 已实测外置 MySQL JDBC 的缺失检查与滚动恢复，以及 PostgreSQL 到 PostgreSQL 的 TLS 1.3、证书/主机名拒绝及安全重连。其余厂商、TLS 协议和恢复组合待验。",
+        "en": "Java 21 verified external MySQL JDBC admission and rolling restart, and PostgreSQL-to-PostgreSQL TLS 1.3 with CA/hostname refusal and verified reconnect. Additional vendors, TLS policies and recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1193,7 +1193,8 @@
       "evidence": [
         "tests/verify-artifact.py",
         "docs/zh-CN/performance.md",
-        "tests/global-control-pipeline.py"
+        "tests/global-control-pipeline.py",
+        "tests/postgres-source-run.py"
       ]
     },
     {

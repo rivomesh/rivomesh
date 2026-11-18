@@ -30,6 +30,12 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 
 PostgreSQL 18.7 到 PostgreSQL 17.12 在 Temurin 21 下通过八项实库检查，覆盖有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
 
+## 验证 TLS 连接
+
+分别设置 PostgreSQL 源端和目标端的 JDBC URL。服务器启用支持通道绑定的 SCRAM 时，可在两个 URL 中设置 `sslmode=verify-full&sslrootcert=/run/rivomesh/trust/ca.pem&channelBinding=require`。把公开 CA 证书以只读方式挂载到执行 Agent。URL 使用的 DNS 名称必须与服务端证书匹配，使用数据库高可用服务时也要覆盖稳定写入口的名称。变更证书或挂载后，在执行 Agent 上重新执行 **检查**。[pgJDBC TLS](https://jdbc.postgresql.org/documentation/ssl/) · [pgJDBC 连接参数](https://jdbc.postgresql.org/documentation/use/)
+
+验证 PostgreSQL 17.12 直连源和目标的 TLS 档案时，给实库夹具追加 `--source-image postgres:17.12 --tls`。夹具使用临时 CA 和服务端证书，查询真实 TLS 会话，并验证源域名或目标 CA 不匹配时预检会拒绝连接。[PostgreSQL TLS 统计](https://www.postgresql.org/docs/17/monitoring-stats.html#MONITORING-PG-STAT-SSL-VIEW)
+
 ## 同步槽与备库提升
 
 创建新任务时在 `source.postgresql.url` 配置稳定的 PostgreSQL 写入口，在 `source.postgresql.failoverSlot` 设置 `true`。主库的 `synchronized_standby_slots` 列出用于物理备库的槽。备库设置对应的 `primary_slot_name`、`hot_standby_feedback=on`、`sync_replication_slots=on`，并在 `primary_conninfo` 配置有效的数据库名。写入口切换前，确认备库上的逻辑槽持久化、已同步且具备所需 WAL。[PostgreSQL 复制槽同步](https://www.postgresql.org/docs/17/logicaldecoding-explanation.html#LOGICALDECODING-REPLICATION-SLOTS-SYNCHRONIZATION) · [切换检查](https://www.postgresql.org/docs/17/logical-replication-failover.html)
