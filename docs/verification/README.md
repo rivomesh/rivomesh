@@ -291,3 +291,7 @@ The exact Temurin 21 candidate `43b01b78bf4aa661119f9f49ae8a1057e92d98f9a52c5d2d
 ### MySQL direct-origin delivery timing
 
 Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` passed six MySQL 8.4.13 cases and five MySQL 5.7.44 cases. An independent reference reader checked CRC32 and positions in the native binlog transaction and verified the ordinary GTID's original commit timestamp. Two native SQL destinations emitted matching observed source times and independent confirmed sequences. The samples survived Agent restart. MySQL 5.7 retained explicit unknown timing while both destinations continued to receive live CDC. [Timing profile](../en/global-control.md) · [MySQL timestamp reference](https://dev.mysql.com/doc/refman/8.4/en/replication-delayed.html) · [Manifests](baseline.json)
+
+### PostgreSQL business UNIQUE restoration preview
+
+The same Temurin 21 candidate passed five native MySQL 8.4.13 to PostgreSQL 17.12 checks and two offline admission guards. A completed common-cut report had matching row content, while the target's case-insensitive collation exposed a conflicting group with two rows. The review retained native NULL-distinct semantics, checked only counts while the source was offline, and preserved target data, indexes and checkpoints. It refused incomplete or outdated validation evidence. [Read-only constraint review](../en/nonempty-target-preview.md) · [Manifests](baseline.json)

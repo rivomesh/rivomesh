@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.49",
+  "version": "0.50",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1423,8 +1423,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "实测只读对比 MySQL 有主键源表与已有 PostgreSQL 表，提供差异与阻断清单，并拒绝原快照会话丢失。正式基线、约束恢复、写入交接和回切仍待验收。",
-        "en": "A read-only preview compares keyed MySQL and existing PostgreSQL rows, reports blockers, and refuses a lost physical snapshot session. Verified baseline, constraints, cutover and failback remain."
+        "zh-CN": "已实测非空 PostgreSQL 差异和源会话丢失拒绝，以及绑定共同校验点的目标原生规则 UNIQUE 恢复预检。正式基线、约束执行、写入交接与回切仍待验收。",
+        "en": "Native read-only PostgreSQL difference and lost-source-session handling passed, as did common-cut UNIQUE review using target collation. Verified baseline, actual constraint creation, cutover and failback remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1437,7 +1437,8 @@
       "evidence": [
         "docs/zh-CN/platform-design.md",
         "docs/zh-CN/gaussdb-index-policy.md",
-        "tests/nonempty-target-preview.py"
+        "tests/nonempty-target-preview.py",
+        "sync-app/src/main/java/io/github/rivomesh/PipelineConstraintReview.java"
       ]
     },
     {

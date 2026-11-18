@@ -4290,5 +4290,23 @@
       }
     },
     "combinedFocusedJavaPassed": 61
+  },
+  "postgresUniqueRestorationPreview": {
+    "native": {
+      "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+      "checks": [
+        "Constraint review refuses a sealed source with an incomplete target validation report",
+        "The case-sensitive source values match all stored rows at the fenced cut",
+        "Native target collation detects a real collision with no row values disclosed, even with the source offline",
+        "Composite and single-column checks ignore NULL-containing keys and preserve business rows and checkpoints",
+        "Resuming the pipeline invalidates the old constraint review cut"
+      ],
+      "status": "PASS",
+      "profile": "CONSTRAINT_REVIEW",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "offlineAdmissionPassed": 2
   }
 }

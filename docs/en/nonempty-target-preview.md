@@ -16,12 +16,31 @@ Schedule the preview during a maintenance window. It holds the MySQL write gate 
 
 The preview covers at most 100 discovered source tables, 100,000 rows per side of each compared table, 4 MiB per decoded or canonical row and 64 MiB of accounted retained comparison data per table. Read deadlines are 120 seconds for each view. The limits apply to decoded data in the verifier, while JDBC fetches and JVM overhead require additional memory. Limit, permission and view errors terminate the command without a comparison result. The JSON result contains table names and totals, and uses a SHA-256 digest to identify the observed source position.
 
+## Review downgraded UNIQUE indexes before handover
+
+For an already managed PostgreSQL target, establish and complete a [common-cut report](reconciliation-workflow.md) for the destination, and keep the pipeline paused. Suspend business writes and DDL on the target, then run the review with the same task configuration and report ID.
+
+```sh
+java -jar rivomesh.jar review-unique config/task.yml /private/reports <reportId> postgres
+```
+
+The review verifies the report scope, durable journal cut, target ownership, completed snapshots and physical checkpoint. It acquires the journal and target checkpoint locks, queries PostgreSQL, then rolls back the lock transactions. Business rows, indexes and checkpoints keep their current values. Scans cover up to 100 mapped tables and 128 relevant indexes under a 120-second deadline. Use the synchronization account, which can lock the current checkpoint rows.
+
+For a downgraded simple business UNIQUE, the review counts conflicting key groups and rows using PostgreSQL's target column collations and default `NULLS DISTINCT` behavior. A multicolumn key with at least one NULL does not contribute to these counts. The response lists key column names and counts. Different collation rules can produce conflicts even when the original MySQL and PostgreSQL row contents compared equal. [PostgreSQL unique indexes](https://www.postgresql.org/docs/17/indexes-unique.html) · [ICU collations](https://www.postgresql.org/docs/17/collation.html)
+
+- `DUPLICATES_FOUND` identifies conflicts to reconcile before restoring the constraint.
+- `REQUIRES_RECONCILIATION` points to recorded exclusions, differences in the historical comparison or a special index that needs its own plan.
+- `NO_DUPLICATES_OBSERVED` describes this read view. Review the final cut, SQL definition and expected business semantics before approving any constraint or write handover. Resuming or moving the checkpoint invalidates this report for a new review.
+- `NO_DOWNGRADED_UNIQUE` indicates the selected scope has no relevant candidate.
+
+This profile checks mapped plain PostgreSQL tables and default B-tree key semantics. GSI uniqueness, expressions, prefix lengths, nondefault operator classes and alternate null policies need separate review. Constraint creation, write handover and failback remain operator actions under the migration plan.
+
 ### FAQ
 
 **Does equality let me start a new pipeline on the existing tables?** A new run still requires compatible empty tables. The preview neither establishes a usable replication position nor grants ownership. For a nonempty target, plan a verified baseline and write handoff, or synchronize into separate empty schemas and reconcile before switching.
 
 **Does it examine other tables in the destination schemas?** The preview examines same-named tables selected by the configured source-to-target schema mappings. Inventory any extra schemas or tables as part of the migration.
 
-**Can this repair existing data or restore a downgraded UNIQUE constraint?** The preview is read-only. [Common-cut repair](common-cut-repair.md) covers already managed targets and requires its own validation. Constraint restoration, final write handoff and failback need a product-specific plan.
+**Can this repair existing data or restore a downgraded UNIQUE constraint?** Use [common-cut repair](common-cut-repair.md) for already managed targets and its own validation. Constraint restoration, final write handoff and failback need a product-specific plan.
 
 [中文](../zh-CN/nonempty-target-preview.md)

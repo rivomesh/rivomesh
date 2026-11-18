@@ -683,6 +683,116 @@ public final class JdbcSink implements SinkAdapter {
     public void checkRepairDependencies(TableSchema table,Checkpoint expected)throws Exception{
         repairProduct();try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,600000)){c.setAutoCommit(false);Checkpoint actual=locked(c,expected.epoch);if(!Codec.encode(actual).equals(Codec.encode(expected)))throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");if(!"COMPLETE".equals(snapshotCheckpoint(c,table).state))throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");RepairDependencies.verify(c,settings.product,destination(table),table.name,table(table));validateShape(c,table);c.rollback();}
     }
+
+    public record UniqueCheck(String tableId, String schema, String table, String sourceIndex, List<String> columns,
+                              String state, Long duplicateGroups, Long conflictingRows) {}
+
+    /** The caller holds the cut's journal fence. The PostgreSQL transaction only reads and takes locks. */
+    public List<UniqueCheck> reviewUniqueConstraints(Checkpoint expected, List<TableSchema> tables,
+                                                   PausedRepairFence fence, long maximumMillis) throws Exception {
+        if (settings.product != TargetProduct.POSTGRESQL || expected == null || maximumMillis < 1000
+                || maximumMillis > 120000 || tables.isEmpty() || tables.size() > 100) {
+            throw new IllegalArgumentException("UNIQUE_REVIEW_SCOPE_INVALID");
+        }
+        Map<TableSchema,List<IndexPolicy.Decision>> plans = new LinkedHashMap<>();
+        int planned = 0;
+        for (TableSchema model : tables) {
+            List<IndexPolicy.Decision> candidates = uniqueReviewPlans(model);
+            planned += candidates.size();
+            if (planned > 128) throw new IllegalStateException("UNIQUE_REVIEW_INDEX_LIMIT");
+            if (!candidates.isEmpty()) plans.put(model, candidates);
+        }
+        List<UniqueCheck> results = new ArrayList<>();
+        fence.verify();
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, maximumMillis)) {
+            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            c.setAutoCommit(false);
+            try (Statement statement = c.createStatement()) {
+                statement.execute("SET LOCAL search_path TO pg_catalog");
+                statement.execute("SET LOCAL row_security TO off");
+                statement.execute("SET LOCAL lock_timeout TO '2s'");
+                statement.execute("SET LOCAL statement_timeout TO " + maximumMillis);
+                // Pin physical relations before the first MVCC query, including against non-MVCC-safe TRUNCATE.
+                for (TableSchema model : plans.keySet()) {
+                    guard.verify();
+                    statement.execute("LOCK TABLE ONLY " + table(model) + " IN ACCESS SHARE MODE");
+                }
+            }
+            Checkpoint actual = locked(c, expected.epoch);
+            if (!Codec.encode(actual).equals(Codec.encode(expected))) {
+                throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");
+            }
+            for (TableSchema model : tables) {
+                guard.verify();
+                fence.verify();
+                if (!"COMPLETE".equals(snapshotCheckpoint(c, model).state)) {
+                    throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");
+                }
+                List<IndexPolicy.Decision> candidates = plans.get(model);
+                if (candidates == null) continue;
+                String schema = destination(model);
+                String relation = table(model);
+                verifyUniqueReviewTable(c, model);
+                for (IndexPolicy.Decision index : candidates) {
+                    guard.verify();
+                    if ("DOWNGRADE_UNIQUE".equals(index.action)) {
+                        results.add(uniqueConflicts(c, model, index, schema, relation));
+                    } else {
+                        results.add(new UniqueCheck(model.id, schema, model.name, index.sourceName, index.columns,
+                                "SPECIAL_INDEX_REQUIRES_PLAN", null, null));
+                    }
+                }
+            }
+            guard.verify();
+            fence.verify();
+            c.rollback();
+        }
+        return results;
+    }
+
+    private List<IndexPolicy.Decision> uniqueReviewPlans(TableSchema table) {
+        Set<String> uniqueNames = new HashSet<>();
+        for (TableSchema.Index index : table.indexes) {
+            if (!index.primary && index.unique) uniqueNames.add(index.name);
+        }
+        return IndexPolicy.plan(table, settings.product, settings.uniquePolicy).stream()
+                .filter(index -> uniqueNames.contains(index.sourceName) && !"CREATE".equals(index.action)).toList();
+    }
+
+    private void verifyUniqueReviewTable(Connection c, TableSchema model) throws Exception {
+        String relationShape = """
+                SELECT r.relkind='r' AND r.relpersistence='p' AND NOT r.relrowsecurity
+                       AND NOT r.relispartition AND NOT r.relhassubclass
+                       AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_inherits i WHERE i.inhrelid=r.oid)
+                  FROM pg_catalog.pg_class r
+                  JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
+                 WHERE n.nspname=? AND r.relname=?
+                """;
+        try (PreparedStatement query = c.prepareStatement(relationShape)) {
+            query.setString(1, destination(model));
+            query.setString(2, model.name);
+            try (ResultSet r = query.executeQuery()) {
+                if (!r.next() || !r.getBoolean(1)) throw new IllegalStateException("UNIQUE_REVIEW_RELATION_REQUIRES_PLAN");
+            }
+        }
+        validateShape(c, model);
+    }
+
+    private UniqueCheck uniqueConflicts(Connection c, TableSchema model, IndexPolicy.Decision index,
+                                        String schema, String relation) throws SQLException {
+        List<String> columns = index.columns.stream().map(this::q).toList();
+        String nonNull = columns.stream().map(column -> column + " IS NOT NULL").collect(Collectors.joining(" AND "));
+        String query = "SELECT COUNT(*),COALESCE(SUM(group_rows),0) FROM (SELECT COUNT(*) AS group_rows FROM "
+                + relation + " WHERE " + nonNull + " GROUP BY " + String.join(",", columns)
+                + " HAVING COUNT(*)>1) AS duplicates";
+        try (Statement statement = c.createStatement(); ResultSet result = statement.executeQuery(query)) {
+            result.next();
+            long groups = result.getLong(1);
+            return new UniqueCheck(model.id, schema, model.name, index.sourceName, index.columns,
+                    groups == 0 ? "NO_DUPLICATES_OBSERVED" : "DUPLICATES_FOUND", groups, result.getLong(2));
+        }
+    }
+
     public static final class RepairReceipt {
         public String planId,tableId,planHash,beforeRoot,afterRoot,schemaHash,actor,requestHash,committedAt;
         public Checkpoint checkpoint;

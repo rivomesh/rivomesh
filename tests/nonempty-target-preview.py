@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--artifact', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--session-fault', action='store_true', help='Kill the original MySQL view session during pinning')
+    parser.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     args = parser.parse_args()
     artifact = args.artifact.resolve()
     output = args.output.resolve()
@@ -31,7 +32,8 @@ def main():
     password = secrets.token_hex(20)
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL'}
+    report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL',
+              'profile': 'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW'}
     with tempfile.TemporaryDirectory(prefix='adoption-preview-', dir=ROOT / 'target') as temporary:
         directory = Path(temporary)
         environment = dict(os.environ, RM_ADOPTION_PASSWORD=password)
@@ -105,14 +107,14 @@ def main():
             report['checks'].append(label)
             print('PASS ' + label, flush=True)
 
-        def wait_for(check):
-            deadline = time.monotonic() + 25
+        def wait_for(check, label='arranging the source-session fault', seconds=25):
+            deadline = time.monotonic() + seconds
             while time.monotonic() < deadline:
                 value = check()
                 if value:
                     return value
                 time.sleep(.05)
-            raise AssertionError('Timed out arranging the source-session fault')
+            raise AssertionError('Timed out ' + label)
 
         def source_session_kill():
             reconnect = dict(case, source=dict(case['source'], jdbcOptions='useSSL=false&allowPublicKeyRetrieval=true'
@@ -148,11 +150,100 @@ def main():
                     postgres("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE " + blocking_session)
                     blocked.result(timeout=60)
 
+        def constraint_review():
+            target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
+                          mappings={'unique_source': 'unique_copy'})
+            managed = dict(case, pipelineId='unique-cut', nodeId='cut-worker', databases=['unique_source'],
+                           targets=[target], chunkSize=2, leaseMillis=8000, heartbeatMillis=400,
+                           journal={'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'namespace': 'unique_journal',
+                                    'url': target['url'], 'username': 'postgres', 'password': target['password']})
+            (directory / 'unique.yml').write_text(json.dumps(managed))
+            mysql("""
+                CREATE DATABASE unique_source;
+                CREATE TABLE unique_source.accounts (
+                    id BIGINT PRIMARY KEY, tenant BIGINT,
+                    email VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+                    nickname VARCHAR(40), UNIQUE KEY uq_email(email), UNIQUE KEY uq_scope(tenant,nickname)
+                ) ENGINE=InnoDB;
+                INSERT INTO unique_source.accounts VALUES
+                    (1,1,'Sensitive-Mail@example.com','one'), (2,1,'sensitive-mail@example.com','two'),
+                    (3,1,NULL,NULL), (4,1,NULL,NULL);
+            """)
+            postgres("""
+                CREATE SCHEMA unique_copy;
+                CREATE COLLATION unique_copy.case_insensitive
+                    (provider=icu,locale='und-u-ks-level2',deterministic=false);
+                CREATE TABLE unique_copy.accounts (
+                    id BIGINT PRIMARY KEY, tenant BIGINT,
+                    email VARCHAR(80) COLLATE unique_copy.case_insensitive, nickname VARCHAR(40)
+                );
+            """)
+
+            def cli(operation, *parameters, check=True):
+                return compose('run', '--rm', '-T', 'runner', operation, '/fixture/unique.yml',
+                               *parameters, check=check)
+
+            worker = project + '-cut-worker'
+            compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/unique.yml')
+            try:
+                wait_for(lambda: postgres("SELECT count(*) FROM unique_copy.accounts") == '4',
+                         'waiting for the managed snapshot', seconds=100)
+                stage = cli('validate-stage', '/fixture/reports', 'pg').stdout
+                report_id = next(line.split()[-1] for line in stage.splitlines()
+                                 if line.startswith('VALIDATION_SOURCE_SEALED '))
+                review_args = ('/fixture/reports', report_id, 'pg')
+                denied = cli('review-unique', *review_args, check=False)
+                assert denied.returncode != 0 and 'UNIQUE_REVIEW_REQUIRES_COMPLETE_REPORT' in denied.stderr
+                passed('Constraint review refuses a sealed source with an incomplete target validation report')
+                complete = json.loads(cli('validate-compare', '/fixture/reports', report_id).stdout)
+                assert complete['state'] == 'COMPLETE' and complete['code'] == 'VALIDATION_MATCH'
+                passed('The case-sensitive source values match all stored rows at the fenced cut')
+
+                compose('stop', 'source')
+                before = postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a; "
+                                  "SELECT epoch,stream_seq FROM unique_meta.rm3_sink_job; "
+                                  "SELECT count(*) FROM pg_index WHERE indrelid='unique_copy.accounts'::regclass "
+                                  "AND indisunique AND NOT indisprimary")
+                review = cli('review-unique', *review_args).stdout
+                assert 'Sensitive-Mail@example.com' not in review and 'sensitive-mail@example.com' not in review
+                actual = json.loads(review)
+                assert actual['status'] == 'DUPLICATES_FOUND' and actual['historicalReportMatched']
+                assert actual['nullPolicy'] == 'NULLS_DISTINCT' and not actual['exclusionsRecorded']
+                checks = {index['sourceIndex']: index for index in actual['indexes']}
+                assert checks['uq_email']['state'] == 'DUPLICATES_FOUND'
+                assert checks['uq_email']['duplicateGroups'] == 1 and checks['uq_email']['conflictingRows'] == 2
+                assert checks['uq_scope']['state'] == 'NO_DUPLICATES_OBSERVED'
+                assert checks['uq_scope']['duplicateGroups'] == checks['uq_scope']['conflictingRows'] == 0
+                assert before == postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a; "
+                                          "SELECT epoch,stream_seq FROM unique_meta.rm3_sink_job; "
+                                          "SELECT count(*) FROM pg_index WHERE indrelid='unique_copy.accounts'::regclass "
+                                          "AND indisunique AND NOT indisprimary")
+                passed('Native target collation detects a real collision with no row values disclosed, even with the source offline')
+                passed('Composite and single-column checks ignore NULL-containing keys and preserve business rows and checkpoints')
+
+                status = json.loads(cli('status').stdout)
+                cli('resume-pipeline', str(status['errorGeneration']))
+                stale = cli('review-unique', *review_args, check=False)
+                assert stale.returncode != 0 and 'VALIDATION_BARRIER_MOVED' in stale.stderr
+                passed('Resuming the pipeline invalidates the old constraint review cut')
+            except Exception:
+                worker_logs = subprocess.run(['docker', 'logs', '--tail', '120', worker], capture_output=True,
+                                             text=True, timeout=15, check=False)
+                redacted = (worker_logs.stdout + worker_logs.stderr).replace(password, '[REDACTED]')
+                (output / 'worker-redacted.log').write_text(redacted)
+                raise
+            finally:
+                subprocess.run(['docker', 'stop', '-t', '5', worker], capture_output=True, timeout=30, check=False)
+
         try:
             compose('up', '-d', '--wait', '--wait-timeout', '140', 'source', 'target')
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
+            if args.only_constraints:
+                constraint_review()
+                report['status'] = 'PASS'
+                return
             mysql("""
                 CREATE DATABASE sales;
                 CREATE TABLE sales.items(id BIGINT PRIMARY KEY,name VARCHAR(80),doc JSON) ENGINE=InnoDB;

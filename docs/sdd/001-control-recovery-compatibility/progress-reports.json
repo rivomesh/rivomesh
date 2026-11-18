@@ -67,6 +67,7 @@
   "newSinceLastReport": [
     "LG-09 historical report lookup and periodic-refresh keyboard focus passed 16 native cases including seven live Chrome interactions, 12 same-artifact standalone Chrome cases, and 127 DOM tests.",
     "CP-04 published the durable managed Agent handoff assessment previously verified in 16 native cases across the two control stores. Candidate evidence and authority transfer remain open.",
-    "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing."
+    "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing.",
+    "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes."
   ]
 }

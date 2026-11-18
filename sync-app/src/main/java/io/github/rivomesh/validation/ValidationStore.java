@@ -225,7 +225,8 @@ public final class ValidationStore implements AutoCloseable {
         Map<String,Set<String>> targets=new TreeMap<>();for(Map.Entry<String,Set<String>> entry:manifest.targetTables.entrySet())targets.put(entry.getKey(),new TreeSet<>(entry.getValue()));
         return Codec.sha256(Codec.encode(Arrays.asList(certificate,manifest.schemas,manifest.sourceRoots,targets)));
     }
-    private void verifySeal()throws Exception{
+    /** Verify that the source manifest still describes the sealed report scope, without loading row values. */
+    public void verifySeal()throws Exception{
         if(!manifest.sourceComplete||!manifest.completedSourceTables.equals(sourceTables())||!Objects.equals(manifest.sourceSeal,sourceSeal()))throw fail("VALIDATION_SOURCE_SEAL_MISMATCH");
     }
     public void verifySource()throws Exception{
