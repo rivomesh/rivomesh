@@ -142,7 +142,10 @@ class PlatformTest {
             assertEquals(200,http(base,"/healthz",null,null,null).status);
             assertEquals(401,http(base,"/api/tasks",null,null,null).status);
             assertEquals("ADMIN",Model.JSON.readTree(http(base,"/api/session",TOKEN,null,null).text).path("role").asText());
-            assertTrue(http(base,"/",null,null,null).text.contains("Rivomesh"));
+            Response console=http(base,"/",null,null,null);
+            assertEquals(200,console.status);
+            assertTrue(console.text.contains("<title>RivoMesh</title>"));
+            assertTrue(console.text.contains("/brand/wordmark.svg"));
             assertTrue(http(base,"/app.js",null,null,null).text.contains("expectedRevision"));
             assertTrue(http(base,"/",null,null,null).text.contains("/recovery.js"));
             Response recovery=http(base,"/recovery.js",null,null,null);assertEquals(200,recovery.status);assertTrue(recovery.text.contains("RivomeshRecovery"));
