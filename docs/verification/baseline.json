@@ -7834,7 +7834,67 @@
     ],
     "reproduce": "python3 tests/mysql-group-failover-native.py --artifact <release jar> --java <Java 21 executable> --output target/mysql-group-failover-proof",
     "scope": "MySQL three-member single-primary Group Replication, two mapped database schemas, exact original Worker, external PostgreSQL journal and PostgreSQL business destination. Native failure uses SIGKILL and native group election. A fenced former primary is read-only before and after rejoin.",
-    "staleEndpointQualification": "The restarted former primary was reachable and read-only inside Docker. The package refused its previously configured host endpoint with SOURCE_NO_PRIMARY. The first fixture did not assert that Docker kept the same host port across restart. Confirm reachable endpoint refusal with a fixed port. Automatic delivery on the elected member and native SQL error 1290 are verified."
+    "staleEndpointQualification": "The restarted former primary was reachable and read-only inside Docker. The package refused its previously configured host endpoint with SOURCE_NO_PRIMARY. The first fixture did not assert that Docker kept the same host port across restart. Confirm reachable endpoint refusal with a fixed port. Automatic delivery on the elected member and native SQL error 1290 are verified. The fixed-port repeat below isolates the stale member refusal.",
+    "fixedEndpointRepeat": {
+      "artifactSha256": "b4dd675432e35dccd84cb47db6ed039d91310085625eff432c39dcbadd6f277f",
+      "fixtureSha256": "0cf9f4f70d624cb018a014cd42305739d28ebfc24f4badaee98145cf50c619f5",
+      "checks": [
+        "Three MySQL group members are ONLINE with one writable primary; capture lacks group administration",
+        "Original group GTID, source and target snapshots, journal ACK and native PostgreSQL rows agree",
+        "After primary SIGKILL the surviving majority elects one different writable member",
+        "Same running Worker automatically delivers the new primary GTID and preserves the original snapshots",
+        "Restarted old primary is stale, fenced by MySQL, and refused by the packaged source preflight",
+        "Old member catches up as read-only secondary and the original Worker continues on the elected primary"
+      ],
+      "nativeFormerPrimary": {
+        "physicalUuid": "f03f180e-e360-11f1-9da0-9a116ef8e678",
+        "writeRefusalCode": 1290,
+        "sourceAdmission": "SOURCE_NO_PRIMARY",
+        "missingGtid": "3936c16d-4d6c-445a-adcc-625a741fb0ba:1000001",
+        "samePublishedEndpoint": true,
+        "verifiedJdbcConnection": true
+      },
+      "electedMember": {
+        "name": "mysql-2",
+        "uuid": "f06e50e0-e360-11f1-82d3-aa08b19b8391",
+        "view": [
+          [
+            "f06e50e0-e360-11f1-82d3-aa08b19b8391",
+            "PRIMARY",
+            "ONLINE"
+          ],
+          [
+            "f08160c1-e360-11f1-91ee-8a47de2798b6",
+            "SECONDARY",
+            "ONLINE"
+          ]
+        ]
+      },
+      "beforeCapture": {
+        "file": "mysql-bin.000001",
+        "offset": "2272",
+        "gtidSet": "3936c16d-4d6c-445a-adcc-625a741fb0ba:1-7",
+        "serverUuid": "f03f180e-e360-11f1-9da0-9a116ef8e678"
+      },
+      "afterElectionCapture": {
+        "file": "mysql-bin.000001",
+        "offset": "3079",
+        "gtidSet": "3936c16d-4d6c-445a-adcc-625a741fb0ba:1-7:1000001-1000001",
+        "serverUuid": "f06e50e0-e360-11f1-82d3-aa08b19b8391"
+      },
+      "afterRejoinCapture": {
+        "file": "mysql-bin.000001",
+        "offset": "3544",
+        "gtidSet": "3936c16d-4d6c-445a-adcc-625a741fb0ba:1-8:1000001-1000001",
+        "serverUuid": "f06e50e0-e360-11f1-82d3-aa08b19b8391"
+      },
+      "preservedJournalGeneration": "de914a5b-792a-4254-bab6-8219577809e6",
+      "snapshotIds": [
+        "ffa144a7-c1ae-4845-9a39-318aee282a85",
+        "f263045d-8820-4f67-ae2e-afd89f3f96ea"
+      ],
+      "cleanupExitCode": 0
+    }
   },
   "hiveJava21NativeReceiptRecovery": {
     "native": {

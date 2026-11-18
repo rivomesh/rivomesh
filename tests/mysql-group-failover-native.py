@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import subprocess
 import tempfile
 import time
@@ -65,14 +66,17 @@ def main():
     with tempfile.TemporaryDirectory(prefix="rivomesh-group-exact-") as directory:
         root = Path(directory)
         overlay = root / "compose.json"
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            original_host_port = reservation.getsockname()[1]
         mysql_service = {
-            "ports": ["127.0.0.1::3306"],
             "environment": {"MYSQL_ROOT_PASSWORD": "${RM_GRP_ADMIN}", "RM_GRP_CAPTURE": "${RM_GRP_CAPTURE}"},
             "healthcheck": {"test": ["CMD-SHELL", 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" '
                                      'mysql -h127.0.0.1 -uroot -e "SELECT 1" >/dev/null 2>&1']},
         }
         overlay.write_text(json.dumps({"services": {
-            **{member: mysql_service for member in MEMBERS},
+            **{member: dict(mysql_service, ports=[f"127.0.0.1:{original_host_port if member == 'mysql' else ''}:3306"])
+               for member in MEMBERS},
             "postgres": {"ports": ["127.0.0.1::5432"], "environment": {"POSTGRES_PASSWORD": "${RM_GRP_TARGET}"},
                          "healthcheck": {"test": ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "sync_test", "-d", "sync_test"]}},
         }}))
@@ -314,6 +318,7 @@ def main():
             compose("start", "mysql")
             wait(lambda: my("mysql", "SELECT @@global.server_uuid") == server_ids["mysql"],
                  "bringing up the fenced old member with its original dataset")
+            assert endpoint("mysql", 3306) == source_endpoints[0]
             assert my("mysql", "SELECT @@global.read_only,@@global.super_read_only") == "1\t1"
             assert not any(state == "ONLINE" for _, _, state in group_view("mysql"))
             assert my("mysql", f"SELECT GTID_SUBSET({gtid_sql(elected_tx)},@@global.gtid_executed)") == "0"
@@ -325,10 +330,23 @@ def main():
             stale.write_text(json.dumps(stale_config))
             stale.chmod(0o600)
             probe = root / "VerifyGroupAdmission.java"
-            probe.write_text("""import io.github.rivomesh.Main;
+            probe.write_text("""import io.github.rivomesh.JdbcConnections;
+import io.github.rivomesh.Main;
+import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.SyncFailure;
+import java.nio.file.Path;
 class VerifyGroupAdmission {
     public static void main(String[] args) throws Exception {
+        var config = PipelineConfig.load(Path.of(args[0]));
+        var candidate = config.source.nodes.getFirst();
+        String jdbcUrl = "jdbc:mysql://" + candidate.host + ":" + candidate.port + "/?" + config.source.jdbcOptions;
+        try (var session = JdbcConnections.open("com.mysql.cj.jdbc.Driver", jdbcUrl,
+                 config.source.username, config.source.password);
+             var statement = session.createStatement();
+             var row = statement.executeQuery("SELECT @@global.server_uuid,@@global.read_only,@@global.super_read_only")) {
+            if (!row.next() || !args[1].equals(row.getString(1)) || !row.getBoolean(2) || !row.getBoolean(3))
+                throw new IllegalStateException("STALE_GROUP_ENDPOINT_IDENTITY_CHANGED");
+        }
         try { Main.main(new String[]{"check", args[0]}); }
         catch (SyncFailure refusal) {
             if (!"SOURCE_NO_PRIMARY".equals(refusal.code) && !"SOURCE_REPLICATION_ERROR".equals(refusal.code)) throw refusal;
@@ -339,12 +357,13 @@ class VerifyGroupAdmission {
     }
 }
 """)
-            refused = subprocess.run([java, "-cp", jar, probe, stale], cwd=root, env=environment,
+            refused = subprocess.run([java, "-cp", jar, probe, stale, server_ids["mysql"]], cwd=root, env=environment,
                                      text=True, capture_output=True, check=True, timeout=40).stdout.strip()
             assert refused in ("SOURCE_NO_PRIMARY", "SOURCE_REPLICATION_ERROR")
             assert cut(new_primary, elected_tx) == after
             manifest["staleMember"] = {"physicalUuid": server_ids["mysql"], "writeRefusalCode": 1290,
-                                       "sourceAdmission": refused, "missingGtid": elected_tx}
+                                       "sourceAdmission": refused, "missingGtid": elected_tx,
+                                       "samePublishedEndpoint": True, "verifiedJdbcConnection": True}
             passed("Restarted old primary is stale, fenced by MySQL, and refused by the packaged source preflight")
 
             configure_member("mysql", False)
