@@ -73,7 +73,7 @@ final class PipelineConstraintReview {
         }
     }
 
-    private static boolean historicalMatch(ValidationStore.Manifest manifest, String target, Set<String> tableIds) {
+    static boolean historicalMatch(ValidationStore.Manifest manifest, String target, Set<String> tableIds) {
         boolean matches = true;
         for (String id : tableIds) {
             ValidationStore.TableResult result = manifest.results.get(target + "/" + id);
@@ -86,7 +86,7 @@ final class PipelineConstraintReview {
         return matches;
     }
 
-    private static boolean exclusionsRecorded(JdbcJournal journal, String target, long sequence) throws Exception {
+    static boolean exclusionsRecorded(JdbcJournal journal, String target, long sequence) throws Exception {
         String expected = Long.toString(sequence);
         Map<String,Object> progress = journal.deliveryProgress();
         if (!expected.equals(progress.get("capturedSequence")) || !(progress.get("subscriptions") instanceof Map<?,?> subscriptions)

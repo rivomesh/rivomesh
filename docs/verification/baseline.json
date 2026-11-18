@@ -5343,5 +5343,32 @@
     },
     "brokerRecordCount": 13,
     "cleanupExitCode": 0
+  },
+  "postgresBusinessUniqueRestorationPlan": {
+    "reproduce": "python3 tests/nonempty-target-preview.py --only-restoration-plan --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "860e01d05556b9e865cef684135ed0e397ba7b8ab7405805a8d6749ce60bb678",
+      "checks": [
+        "Constraint review refuses a sealed source with an incomplete target validation report",
+        "The case-sensitive source values match all stored rows at the fenced cut",
+        "A matching paused pipeline still requires physical MySQL super-read-only isolation",
+        "A frozen native pair yields a stable digest with no row or schema changes and preserves trailing-space semantics",
+        "Rebuilding the same ordinary index invalidates an expected digest without changing rows or checkpoints",
+        "Fresh source root rejects unlogged row changes even at the exact original MySQL GTID",
+        "Fresh target root rejects external row changes even when the physical checkpoint is untouched",
+        "Restoration planning refuses an unapproved PostgreSQL key collation",
+        "A new source GTID invalidates the restoration plan even when the reviewed table content is unchanged"
+      ],
+      "status": "PASS",
+      "profile": "UNIQUE_RESTORE_PLAN",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 49,
+    "stagedIntegration": {
+      "artifactSha256": "93740e78e05df5d83d821bd4f6c3583f9a21d1ae2c85c5d62538fdc84d2ff01a",
+      "focusedJavaTests": 24
+    }
   }
 }

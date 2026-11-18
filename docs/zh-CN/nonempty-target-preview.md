@@ -35,6 +35,24 @@ java -jar rivomesh.jar review-unique config/task.yml /private/reports <reportId>
 
 检查覆盖普通 PostgreSQL 映射表和默认的 B-tree 键语义。GSI 全局唯一性、表达式、前缀长度、自定义操作符类及其他 NULL 语义需独立评估。约束创建、写入交接和回切按迁移方案执行。
 
+## 在冻结边界生成约束恢复计划
+
+恢复计划覆盖单张有主键的 InnoDB 表及一项已降级的业务 UNIQUE。源需直连单实例 MySQL 8.4，设置 `source.topology: AUTO` 且不配置候选节点。目标需为 UTF-8 编码的 PostgreSQL 17 主库。先停止两边业务写入，取得内容匹配的共同校验点并保持 Rivomesh 暂停，再由数据库运维人员将同一 MySQL 实例置为 `read_only` 和 `super_read_only`。源 UUID、GTID、binlog 文件及偏移必须与报告完全一致。MySQL 的只读模式仍允许复制线程写入，因此有入站复制通道配置或组复制成员时会拒绝生成计划。[MySQL 系统变量](https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html)
+
+使用 `review-unique` 输出的表 ID 和 MySQL 原始索引名运行命令。
+
+```sh
+java -jar rivomesh.jar plan-unique-restore config/task.yml /private/reports <reportId> postgres <tableId> <sourceIndex>
+```
+
+命令核对已封存的匹配报告及源、目标跳过记录。在已冻结的 MySQL 上取得有时限的全局短锁，核对原会话并重算源行摘要。读取目标时持有日志暂停锁、目标表锁和断点锁，重新检查行摘要、归属、唯一性及已有普通索引。范围上限为 1 万行、单条规范化行 1 MiB、私有暂存 16 MiB，锁期限为 30 秒。源账号需要共同校验点的读取、短锁及复制状态权限。目标账号还需有权执行 `pg_catalog.pg_control_system()` 以识别物理实例。[PostgreSQL 控制信息函数](https://www.postgresql.org/docs/17/functions-info.html)
+
+候选键支持映射成 PostgreSQL `bigint` 的有符号整数，或源端 `utf8mb4_0900_bin` VARCHAR 映射到显式使用 `pg_catalog."C"` 的 PostgreSQL `varchar` 或 `text`。检查已有普通 B-tree 索引的列、顺序、排序规则和默认操作符类。GSI、表达式索引及生成键列需要单独规划。此档案按原有语义识别大小写、尾随空格和 NULL。[MySQL 二进制排序规则](https://dev.mysql.com/doc/refman/8.4/en/charset-binary-collations.html) · [PostgreSQL 唯一索引](https://www.postgresql.org/docs/17/indexes-unique.html)
+
+`RESTORE_PLAN_OBSERVED` 返回稳定的计划 SHA-256 摘要，绑定报告封存值、精确位点、当前表内容和目标物理身份。将输出保存用于人工审阅。核对审阅过的摘要时，以 `--expect-sha256 <digest>` 重跑命令。它会再次核验现场状态，普通索引重建等变化会使旧摘要失效。其他库产生的新 GTID 也会拒绝该校验点。现场重算摘要同时覆盖未写入 binlog 的源端数据修改和目标端外部修改。冻结、目标状态或断点变化后需重新验证。持久审批、执行约束恢复、业务写入交接及回切需要独立验收。
+
+后续持久执行需要建立跨连接中断和源实例重启仍有效的写入隔离，并保持至运维完成业务交接。审批绑定计划摘要、目标身份和请求 ID。执行时重新核对冻结边界，在目标写入锁和断点锁内完成 PostgreSQL 约束事务。DDL 与执行回执在同一事务提交，重启后先查回执确认结果，再决定是否重试。
+
 ### 常见问题
 
 **报告相等后可以在现有表上启动新任务吗？** 新任务仍要求兼容的空表。预检不会建立可续传位点或授予表归属。非空目标需另行验证基线并规划写入交接，也可先同步到独立的空 schema，对账后再切换。

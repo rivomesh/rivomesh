@@ -75,6 +75,7 @@
     "CP-04 console handoff assessment passed 11 native checks including three real Chrome workflows, 13 standalone Chrome and 131 DOM cases.",
     "CP-03 completed. Seven native cases on each control store proved cross-entry command lifecycle, idempotent replay, pending 202, REJECTED after revocation and UNKNOWN through a new Agent generation.",
     "CP-06 completed. Exact Temurin 21 artifact passed ten distributed native checks, 28 Java, 131 DOM and 13 Chrome checks including bounded diagnostic reads and native timing semantics.",
-    "LG-04 Kafka KRaft 3.9.2 passed five real broker checks, including ISR protection despite a live metadata quorum, original durable journal replay, and exact consumer offset and bytes after restart."
+    "LG-04 Kafka KRaft 3.9.2 passed five real broker checks, including ISR protection despite a live metadata quorum, original durable journal replay, and exact consumer offset and bytes after restart.",
+    "LG-02 read-only UNIQUE restoration plan passed nine native drift and exact-cut checks plus 49 focused Java. The staged combined Java 21 package passed 24 focused checks."
   ]
 }

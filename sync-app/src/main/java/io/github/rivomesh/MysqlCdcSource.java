@@ -100,6 +100,9 @@ public final class MysqlCdcSource implements SourceAdapter {
         }if(result.isEmpty())throw new IllegalArgumentException("SOURCE_NO_VISIBLE_TABLES");return result;
     }
     TableSchema describe(Connection c,String database,String name)throws Exception{
+        return describe(c,database,name,sqlMode);
+    }
+    static TableSchema describe(Connection c,String database,String name,String sqlMode)throws Exception{
         TableSchema table=new TableSchema();table.id=TableSchema.identity(database,"",name);table.database=database;table.name=name;table.sourceEngine="InnoDB";table.properties.put("mysql.sqlMode",sqlMode);
         try(PreparedStatement p=c.prepareStatement("SELECT COLUMN_NAME,DATA_TYPE,COLUMN_TYPE,CHARACTER_SET_NAME,COLLATION_NAME,IS_NULLABLE,CHARACTER_MAXIMUM_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,EXTRA,GENERATION_EXPRESSION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION")){
             p.setString(1,database);p.setString(2,name);try(ResultSet rs=p.executeQuery()){while(rs.next()){
@@ -129,8 +132,8 @@ public final class MysqlCdcSource implements SourceAdapter {
         }
         table.indexes.addAll(indexes.values());table.validate();return table;
     }
-    private Model.Column legacy(TableSchema table,TableSchema.Column col){Model.Column c=new Model.Column();c.name=col.name;c.mysqlType=table.properties.get("mysql.type."+col.name);c.definition=col.sourceType;c.charset=col.charset;c.targetType=MysqlSource.mapType(c.mysqlType,c.definition,col.length,col.precision,col.scale);return c;}
-    Cell jdbc(TableSchema table,int column,ResultSet rs,int resultColumn)throws Exception{
+    private static Model.Column legacy(TableSchema table,TableSchema.Column col){Model.Column c=new Model.Column();c.name=col.name;c.mysqlType=table.properties.get("mysql.type."+col.name);c.definition=col.sourceType;c.charset=col.charset;c.targetType=MysqlSource.mapType(c.mysqlType,c.definition,col.length,col.precision,col.scale);return c;}
+    static Cell jdbc(TableSchema table,int column,ResultSet rs,int resultColumn)throws Exception{
         if(table.columns.get(column).type==TableSchema.Type.TIME)return Cell.value(MysqlDuration.canonical(rs.getString(resultColumn)));
         TableSchema.Column col=table.columns.get(column);if(table.properties.get("mysql.type."+col.name).equals("year")){int year=rs.getInt(resultColumn);return Cell.value(rs.wasNull()?null:Integer.toString(year));}
         return Cell.value(legacy(table,col).fromJdbc(rs,resultColumn));

@@ -22,7 +22,9 @@ def main():
     parser.add_argument('--artifact', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--session-fault', action='store_true', help='Kill the original MySQL view session during pinning')
-    parser.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
+    profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     args = parser.parse_args()
     artifact = args.artifact.resolve()
     output = args.output.resolve()
@@ -32,8 +34,9 @@ def main():
     password = secrets.token_hex(20)
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL',
-              'profile': 'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW'}
+    profile_name = ('UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
+                    'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW')
+    report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL', 'profile': profile_name}
     with tempfile.TemporaryDirectory(prefix='adoption-preview-', dir=ROOT / 'target') as temporary:
         directory = Path(temporary)
         environment = dict(os.environ, RM_ADOPTION_PASSWORD=password)
@@ -158,24 +161,28 @@ def main():
                            journal={'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'namespace': 'unique_journal',
                                     'url': target['url'], 'username': 'postgres', 'password': target['password']})
             (directory / 'unique.yml').write_text(json.dumps(managed))
-            mysql("""
+            source_collation = 'utf8mb4_0900_bin' if args.only_restoration_plan else 'utf8mb4_bin'
+            target_collation = 'pg_catalog."C"' if args.only_restoration_plan else 'unique_copy.case_insensitive'
+            mysql(f"""
                 CREATE DATABASE unique_source;
                 CREATE TABLE unique_source.accounts (
                     id BIGINT PRIMARY KEY, tenant BIGINT,
-                    email VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+                    email VARCHAR(80) CHARACTER SET utf8mb4 COLLATE {source_collation},
                     nickname VARCHAR(40), UNIQUE KEY uq_email(email), UNIQUE KEY uq_scope(tenant,nickname)
                 ) ENGINE=InnoDB;
                 INSERT INTO unique_source.accounts VALUES
                     (1,1,'Sensitive-Mail@example.com','one'), (2,1,'sensitive-mail@example.com','two'),
                     (3,1,NULL,NULL), (4,1,NULL,NULL);
             """)
-            postgres("""
+            if args.only_restoration_plan:
+                mysql("INSERT INTO unique_source.accounts VALUES (5,1,'sensitive-mail@example.com ','three')")
+            postgres(f"""
                 CREATE SCHEMA unique_copy;
                 CREATE COLLATION unique_copy.case_insensitive
                     (provider=icu,locale='und-u-ks-level2',deterministic=false);
                 CREATE TABLE unique_copy.accounts (
                     id BIGINT PRIMARY KEY, tenant BIGINT,
-                    email VARCHAR(80) COLLATE unique_copy.case_insensitive, nickname VARCHAR(40)
+                    email VARCHAR(80) COLLATE {target_collation}, nickname VARCHAR(40)
                 );
             """)
 
@@ -186,7 +193,8 @@ def main():
             worker = project + '-cut-worker'
             compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/unique.yml')
             try:
-                wait_for(lambda: postgres("SELECT count(*) FROM unique_copy.accounts") == '4',
+                expected_rows = '5' if args.only_restoration_plan else '4'
+                wait_for(lambda: postgres("SELECT count(*) FROM unique_copy.accounts") == expected_rows,
                          'waiting for the managed snapshot', seconds=100)
                 stage = cli('validate-stage', '/fixture/reports', 'pg').stdout
                 report_id = next(line.split()[-1] for line in stage.splitlines()
@@ -198,6 +206,10 @@ def main():
                 complete = json.loads(cli('validate-compare', '/fixture/reports', report_id).stdout)
                 assert complete['state'] == 'COMPLETE' and complete['code'] == 'VALIDATION_MATCH'
                 passed('The case-sensitive source values match all stored rows at the fenced cut')
+
+                if args.only_restoration_plan:
+                    verify_restoration_plan(cli, review_args)
+                    return
 
                 compose('stop', 'source')
                 before = postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a; "
@@ -235,12 +247,77 @@ def main():
             finally:
                 subprocess.run(['docker', 'stop', '-t', '5', worker], capture_output=True, timeout=30, check=False)
 
+        def verify_restoration_plan(cli, review_args):
+            review = json.loads(cli('review-unique', *review_args).stdout)
+            assert review['status'] == 'NO_DUPLICATES_OBSERVED'
+            table = next(index for index in review['indexes'] if index['sourceIndex'] == 'uq_email')['tableId']
+            plan_args = (*review_args, table, 'uq_email')
+
+            def refused(code, *flags):
+                attempt = cli('plan-unique-restore', *plan_args, *flags, check=False)
+                assert attempt.returncode != 0 and code in attempt.stderr and not attempt.stdout, code
+
+            def snapshot():
+                return postgres("SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM unique_copy.accounts a; "
+                                "SELECT epoch,stream_seq FROM unique_meta.rm3_sink_job; "
+                                "SELECT pg_get_indexdef(indexrelid) FROM pg_index "
+                                "WHERE indrelid='unique_copy.accounts'::regclass ORDER BY indexrelid")
+
+            refused('UNIQUE_RESTORE_SOURCE_NOT_FROZEN')
+            passed('A matching paused pipeline still requires physical MySQL super-read-only isolation')
+            mysql('SET GLOBAL super_read_only=ON')
+            before = snapshot()
+            first = cli('plan-unique-restore', *plan_args).stdout
+            assert 'sensitive-mail' not in first.lower()
+            body = json.loads(first)
+            evidence = body['plan']['targetEvidence']
+            assert body['status'] == 'RESTORE_PLAN_OBSERVED' and len(body['planSha256']) == 64
+            assert evidence['rows'] == 5 and evidence['columns'] == ['email'] and len(evidence['physicalHash']) == 64
+            assert evidence['ordinaryIndex'].startswith('rm_') and evidence['proposedConstraint'].startswith('rm_u_')
+            digest_args = ('--expect-sha256', body['planSha256'])
+            repeated = json.loads(cli('plan-unique-restore', *plan_args, *digest_args).stdout)
+            assert body['planSha256'] == repeated['planSha256'] and repeated['expectedDigestMatched']
+            assert before == snapshot() and mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            passed('A frozen native pair yields a stable digest with no row or schema changes and preserves trailing-space semantics')
+
+            ordinary = evidence['ordinaryIndex']
+            assert ordinary.isascii() and ordinary.replace('_', '').isalnum()
+            postgres('REINDEX INDEX unique_copy."' + ordinary + '"')
+            refused('UNIQUE_RESTORE_PLAN_CHANGED', *digest_args)
+            assert before == snapshot()
+            passed('Rebuilding the same ordinary index invalidates an expected digest without changing rows or checkpoints')
+
+            same_gtids = mysql('SELECT @@global.gtid_executed')
+            mysql("SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF; SET SESSION sql_log_bin=0; "
+                  "UPDATE unique_source.accounts SET nickname='out-of-band' WHERE id=1; SET GLOBAL super_read_only=ON")
+            assert mysql('SELECT @@global.gtid_executed') == same_gtids
+            refused('UNIQUE_RESTORE_SOURCE_CONTENT_CHANGED')
+            mysql("SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF; SET SESSION sql_log_bin=0; "
+                  "UPDATE unique_source.accounts SET nickname='one' WHERE id=1; SET GLOBAL super_read_only=ON")
+            assert mysql('SELECT @@global.gtid_executed') == same_gtids
+            passed('Fresh source root rejects unlogged row changes even at the exact original MySQL GTID')
+
+            postgres("UPDATE unique_copy.accounts SET nickname='out-of-band' WHERE id=1")
+            refused('UNIQUE_RESTORE_TARGET_CONTENT_CHANGED')
+            postgres("UPDATE unique_copy.accounts SET nickname='one' WHERE id=1")
+            passed('Fresh target root rejects external row changes even when the physical checkpoint is untouched')
+
+            postgres('ALTER TABLE unique_copy.accounts ALTER COLUMN email TYPE VARCHAR(80) COLLATE unique_copy.case_insensitive')
+            refused('UNIQUE_RESTORE_COLLATION_UNSUPPORTED')
+            passed('Restoration planning refuses an unapproved PostgreSQL key collation')
+
+            mysql("SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF; "
+                  "CREATE DATABASE after_cut; SET GLOBAL super_read_only=ON")
+            assert mysql('SELECT @@global.gtid_executed') != same_gtids
+            refused('UNIQUE_RESTORE_SOURCE_CUT_CHANGED')
+            passed('A new source GTID invalidates the restoration plan even when the reviewed table content is unchanged')
+
         try:
             compose('up', '-d', '--wait', '--wait-timeout', '140', 'source', 'target')
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_constraints:
+            if args.only_constraints or args.only_restoration_plan:
                 constraint_review()
                 report['status'] = 'PASS'
                 return

@@ -110,7 +110,7 @@ final class MysqlConsistentRead implements SourceAdapter.ConsistentRead {
         public SourcePosition baseline(){return MysqlConsistentRead.this.baseline();}
         public List<List<Cell>> next(int maximum)throws Exception{
             check();if(disposed||maximum<1||maximum>10000)throw new IllegalArgumentException("SNAPSHOT_READ_INVALID");
-            List<List<Cell>> rows=new ArrayList<>();while(rows.size()<maximum){check();if(!result.next()){finished=true;break;}List<Cell> row=new ArrayList<>();for(int i=0;i<table.columns.size();i++)row.add(source.jdbc(table,i,result,i+1));rows.add(row);}return rows;
+            List<List<Cell>> rows=new ArrayList<>();while(rows.size()<maximum){check();if(!result.next()){finished=true;break;}List<Cell> row=new ArrayList<>();for(int i=0;i<table.columns.size();i++)row.add(MysqlCdcSource.jdbc(table,i,result,i+1));rows.add(row);}return rows;
         }
         public void close()throws Exception{
             if(disposed)return;disposed=true;

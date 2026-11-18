@@ -1445,8 +1445,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "已实测非空 PostgreSQL 差异和源会话丢失拒绝，以及绑定共同校验点的目标原生规则 UNIQUE 恢复预检。正式基线、约束执行、写入交接与回切仍待验收。",
-        "en": "Native read-only PostgreSQL difference and lost-source-session handling passed, as did common-cut UNIQUE review using target collation. Verified baseline, actual constraint creation, cutover and failback remain."
+        "zh-CN": "非空 PostgreSQL 差异预检和冻结 MySQL 下的只读 UNIQUE 恢复计划已实测，计划复核拒绝索引、数据或源 GTID 漂移。正式基线、执行约束、写入交接和回切待验。",
+        "en": "Native nonempty PostgreSQL preview and frozen-MySQL read-only UNIQUE plans passed. Reviewed plans reject index, data or GTID drift. Adoption, constraint execution, writer cutover and failback remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1460,7 +1460,8 @@
         "docs/zh-CN/platform-design.md",
         "docs/zh-CN/gaussdb-index-policy.md",
         "tests/nonempty-target-preview.py",
-        "sync-app/src/main/java/io/github/rivomesh/PipelineConstraintReview.java"
+        "sync-app/src/main/java/io/github/rivomesh/PipelineConstraintReview.java",
+        "sync-app/src/main/java/io/github/rivomesh/PipelineUniqueRestoration.java"
       ]
     },
     {

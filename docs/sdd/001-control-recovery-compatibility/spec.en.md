@@ -79,7 +79,7 @@ Implementation:48requirements,33 DONE, 15 PARTIAL and 0 NEW, with 15 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | Domestic transactional database matrix | OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain. |
-| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Initial destinations must be empty;repair completion is not cutover. |
+| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Native nonempty PostgreSQL preview and frozen-MySQL read-only UNIQUE plans passed. Reviewed plans reject index, data or GTID drift. Adoption, constraint execution, writer cutover and failback remain. |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | All eight targets have first transport profiles. Native NATS TLS and quorum recovery, RabbitMQ quorum with independent SQL progress, and Kafka KRaft data election, ISR and consumer offset recovery passed. Other cluster, TLS and capacity profiles remain. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |

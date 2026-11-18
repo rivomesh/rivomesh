@@ -79,7 +79,7 @@ RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
-| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 当前首用目标要求为空，修复成功也不是业务切换完成。 |
+| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空 PostgreSQL 差异预检和冻结 MySQL 下的只读 UNIQUE 恢复计划已实测，计划复核拒绝索引、数据或源 GTID 漂移。正式基线、执行约束、写入交接和回切待验。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | 八种消息目标已有首批传输。NATS TLS 和多数派恢复、RabbitMQ 三成员及独立 SQL 目标、Kafka KRaft 数据选主、ISR 保护及消费位点恢复已实测。其余集群、TLS 和容量待验。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |

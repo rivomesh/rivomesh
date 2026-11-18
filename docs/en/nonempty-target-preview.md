@@ -35,6 +35,24 @@ For a downgraded simple business UNIQUE, the review counts conflicting key group
 
 This profile checks mapped plain PostgreSQL tables and default B-tree key semantics. GSI uniqueness, expressions, prefix lengths, nondefault operator classes and alternate null policies need separate review. Constraint creation, write handover and failback remain operator actions under the migration plan.
 
+## Observe a frozen restoration plan
+
+The bounded restoration planner covers one downgraded business UNIQUE on a keyed InnoDB table. It requires a direct standalone MySQL 8.4 endpoint with `source.topology: AUTO`, no configured candidate nodes, and a UTF-8 PostgreSQL 17 primary. Stop application writers on both sides, establish a matching common-cut report and keep Rivomesh paused. Then have the source database operator place the same MySQL instance in `read_only` and `super_read_only` mode. The source must stay on the report's exact server UUID, GTID, binlog file and offset. MySQL can still admit replication writes in read-only mode, so any configured inbound channel or Group Replication membership is rejected. [MySQL server variables](https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html)
+
+Use the table ID and original index name shown by `review-unique`.
+
+```sh
+java -jar rivomesh.jar plan-unique-restore config/task.yml /private/reports <reportId> postgres <tableId> <sourceIndex>
+```
+
+The planner verifies a sealed matching report and rejects recorded source or target exclusions. It obtains a bounded MySQL global read lock on the already frozen server, checks the original session and rehashes source rows. It holds the paused journal fence and a PostgreSQL table and checkpoint lock while reading target rows, confirming ownership, checking uniqueness and observing the original ordinary index. The supported scope is 10,000 rows, 1 MiB per canonical row, a 16 MiB private scratch budget and a 30-second fence. The source account needs the common-cut read, lock and replication status privileges. The target account also needs permission to execute `pg_catalog.pg_control_system()` for physical identity. [PostgreSQL control data functions](https://www.postgresql.org/docs/17/functions-info.html)
+
+Supported key columns are signed integers mapped to `bigint`, or ordinary MySQL `utf8mb4_0900_bin` VARCHAR mapped to PostgreSQL `varchar` or `text` with explicit `pg_catalog."C"` collation. The planner checks the existing ordinary B-tree index's columns, order, collation and default operator classes. Neither GSI nor expression or generated key columns are covered. Case variants, trailing spaces and NULL handling follow the stated profile. [MySQL binary collations](https://dev.mysql.com/doc/refman/8.4/en/charset-binary-collations.html) · [PostgreSQL unique indexes](https://www.postgresql.org/docs/17/indexes-unique.html)
+
+`RESTORE_PLAN_OBSERVED` includes a stable SHA-256 digest of the plan, including report seal, exact positions, current table content and target physical identity. Keep the output as a review artifact. To compare the reviewed digest, rerun the command with `--expect-sha256 <digest>`. It verifies the live state again and refuses a changed plan, including an index rebuild. A change in source GTID, even outside the table, rejects this cut. Fresh row hashes also detect writes excluded from the MySQL binlog and external target edits. The observation expires when the freeze, target state or cut changes. Durable approval, constraint execution, application write handover and failback require separate validation.
+
+For a durable execution workflow, establish a source write fence that survives a connection loss or source restart and stays in place through the operator's handover. Bind approval to the plan digest, the target identity and a request ID. Revalidate the frozen boundary and hold the target write and checkpoint locks through the PostgreSQL constraint transaction. Commit the DDL and a durable execution receipt together so a restart can resolve an interrupted response before allowing a retry.
+
 ### FAQ
 
 **Does equality let me start a new pipeline on the existing tables?** A new run still requires compatible empty tables. The preview neither establishes a usable replication position nor grants ownership. For a nonempty target, plan a verified baseline and write handoff, or synchronize into separate empty schemas and reconcile before switching.

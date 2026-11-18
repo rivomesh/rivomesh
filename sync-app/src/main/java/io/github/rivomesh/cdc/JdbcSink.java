@@ -687,6 +687,55 @@ public final class JdbcSink implements SinkAdapter {
     public record UniqueCheck(String tableId, String schema, String table, String sourceIndex, List<String> columns,
                               String state, Long duplicateGroups, Long conflictingRows) {}
 
+    public record UniqueRestoreObservation(String schema, String table, List<String> columns, String ordinaryIndex,
+                                           String proposedConstraint, String physicalHash, long rows, String root) {}
+
+    public UniqueRestoreObservation planUniqueRestoration(Checkpoint expected, TableSchema model, String sourceIndex,
+                                                          PausedRepairFence fence, RepairProbe probe,
+                                                          int rowBytes, long maximumMillis) throws Exception {
+        if (settings.product != TargetProduct.POSTGRESQL || expected == null) {
+            throw new IllegalArgumentException("UNIQUE_RESTORE_TARGET_PROFILE_UNSUPPORTED");
+        }
+        IndexPolicy.Decision index = uniqueReviewPlans(model).stream()
+                .filter(candidate -> candidate.sourceName.equals(sourceIndex) && "DOWNGRADE_UNIQUE".equals(candidate.action))
+                .findFirst().orElseThrow(() -> new IllegalStateException("UNIQUE_RESTORE_INDEX_UNSUPPORTED"));
+        String constraint = "rm_u_" + index.targetName.substring("rm_".length());
+        String schema = destination(model);
+        String relation = table(model);
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, maximumMillis)) {
+            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            try (JdbcTargetRead reader = new JdbcTargetRead(c, model, settings.product, validationSql(model),
+                    rowBytes, maximumMillis, connection -> {
+                        try (Statement sql = connection.createStatement()) {
+                            sql.execute("SET LOCAL search_path TO pg_catalog");
+                            sql.execute("SET LOCAL row_security TO off");
+                            sql.execute("SET LOCAL statement_timeout TO " + maximumMillis);
+                            sql.execute("SET LOCAL lock_timeout TO '2s'");
+                            sql.execute("LOCK TABLE ONLY " + relation + " IN SHARE MODE");
+                        }
+                        Checkpoint actual = locked(connection, expected.epoch);
+                        if (!Codec.encode(actual).equals(Codec.encode(expected))) {
+                            throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");
+                        }
+                        if (!"COMPLETE".equals(snapshotCheckpoint(connection, model).state)) {
+                            throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");
+                        }
+                        verifyUniqueReviewTable(connection, model);
+                    })) {
+                RepairProbe.Result rows = scanRepair(reader, probe);
+                String physicalHash = PostgresUniqueRestoreEvidence.observe(c, schema, model, index, constraint);
+                if (uniqueConflicts(c, model, index, schema, relation).duplicateGroups() != 0) {
+                    throw new IllegalStateException("UNIQUE_RESTORE_DUPLICATES_FOUND");
+                }
+                reader.verify();
+                fence.verify();
+                guard.verify();
+                return new UniqueRestoreObservation(schema, model.name, index.columns, index.targetName,
+                        constraint, physicalHash, rows.rows, rows.root);
+            }
+        }
+    }
+
     /** The caller holds the cut's journal fence. The PostgreSQL transaction only reads and takes locks. */
     public List<UniqueCheck> reviewUniqueConstraints(Checkpoint expected, List<TableSchema> tables,
                                                    PausedRepairFence fence, long maximumMillis) throws Exception {
