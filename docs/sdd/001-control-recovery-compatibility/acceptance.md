@@ -18,7 +18,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SE-03 | SE-03 | 浏览器端不保存可读的长期认证令牌；会话标识采用受保护cookie/等效方案，生产HTTPS及HttpOnly/SameSite策略可验证；cookie鉴权写操作具备CSRF/Origin检查；会话不进URL或日志。 | [通过：单控制器](../../verification/README.md) |
 | AC-SE-04 | SE-04 | 登录A后请求落到B仍合法；重启/切换控制实例按有效期恢复；集群撤销即时按规定传播，不以粘性会话掩盖状态缺失。 | DONE · [shared-access](../../verification/README.md) |
 | AC-SE-05 | SE-05 | 既有CLI/API令牌可继续使用；cookie与Authorization身份冲突有明确拒绝/优先规则；会话恢复重验权限，晚到响应不能复活退出会话，双语提示一致。 | [通过：单控制器](../../verification/README.md) |
-| AC-RC-01 | RC-01 | 分别展示源连接/读取、解码、DDL/规范化、目标应用、确认及日志存储错误；UI给出该阶段可用的重试、补偿、事务跳过或缺口恢复路径，不能把所有binlog故障当目标SQL错误。 | 待验收 |
+| AC-RC-01 | RC-01 | [PASS · MySQL source and SQL destinations](../../verification/README.md) |
 | AC-RC-02 | RC-02 | 显示源身份、完整事务ID、事件范围、表/目标、原始及规范化摘要、前后镜像可用性和当前断点；原始值仅授权角色可读并分页限额；执行前保留可恢复证据。 | 已验收限定MySQL8.4/LOCAL固定Agent、PG/MySQL控制档案；[bcaae930](../../verification/README.md) |
 | AC-RC-03 | RC-03 | 对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。 | 待验收 |
 | AC-RC-04 | RC-04 | 单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。 | 待验收 |

@@ -2,15 +2,15 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T08:53:03+08:00",
-  "nextReportAt": "2026-11-18T09:53:03+08:00",
+  "lastReportAt": "2026-11-18T09:53:41+08:00",
+  "nextReportAt": "2026-11-18T10:53:41+08:00",
   "completedSincePrevious": [
-    "RC-07 bounded SQL manual correction accepted",
-    "39 focused Java and 107 DOM checks passed",
-    "Four native correction contracts per PostgreSQL/MySQL and real CDC cross-entry import/approval/replay passed"
+    "SO-04 accepted on MySQL 8.2.0 ARM64 with 56 V3 tests, real GTID promotion, and real MGR election.",
+    "RC-09 accepted: 42 Java, 108 DOM, 8 native contracts and 14 real CDC checks.",
+    "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
   ],
   "inProgress": [
-    "RC-01 durable stage classification and operational guidance for source and journal failures. Focused build running."
+    "SO-03 MySQL 8.0.46 V3 standalone, async and MGR regression against the current candidate."
   ],
   "reportContents": [
     "Current totals",
@@ -20,28 +20,28 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 13,
-    "PARTIAL": 30,
-    "NEW": 5
-  },
-  "lastReportedPublishedCommits": [
-    "8db3b27e08f83b0e4ac0eae12cc99d084854c3bb"
-  ],
-  "currentSdd": {
     "DONE": 16,
     "PARTIAL": 28,
     "NEW": 4
   },
+  "lastReportedPublishedCommits": [
+    "5ccf8ed760d5d12368975818be140902219ff634",
+    "8af64d9fd7df2797594599c82f718c8b552a20fc",
+    "64f6eeef7f262f260ba9af5aa584803e4e682c15"
+  ],
+  "currentSdd": {
+    "DONE": 17,
+    "PARTIAL": 27,
+    "NEW": 4
+  },
   "newSinceLastReport": [
-    "SO-04 accepted on MySQL 8.2.0 ARM64 with 56 V3 tests, real GTID promotion, and real MGR election.",
-    "RC-09 accepted: 42 Java, 108 DOM, 8 native contracts and 14 real CDC checks.",
-    "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
+    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles."
   ],
   "nextTasks": [
-    "RC-01 durable source, decode and journal failure phases.",
+    "SO-03 MySQL 8.0.46 V3 source profiles and bounded recovery.",
     "Consolidate V2/V3 execution branches."
   ],
-  "currentCandidateArtifact": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
-  "currentCandidateScope": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL.",
-  "lastAcceptedPublicWorkflowArtifact": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3"
+  "currentCandidateArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+  "currentCandidateScope": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization.",
+  "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3"
 }

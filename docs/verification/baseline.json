@@ -202,6 +202,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown."
       }
+    },
+    {
+      "id": "RC-01",
+      "title": {
+        "zh-CN": "按采集阶段区分故障",
+        "en": "Phase-aware fault classification"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization."
+      }
     }
   ],
   "productProfiles": [
@@ -360,34 +373,20 @@
   },
   "currentValidation": {
     "artifact": "target/release-evidence/current/rivomesh.jar",
-    "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+    "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
     "testClasses": "target/release-evidence/current/test-classes",
-    "testClassesSha256": "4011a3f0f6967cd3ec354e27206b7da4a17fde4d6d4880aeb10857d91f6659fe",
+    "testClassesSha256": "46f9433503f66af02dc28000cc613248e88e9500965a739cb716bcc40abe2132",
     "sourceManifest": "target/release-evidence/current/sources.json",
-    "sourceManifestSha256": "052a238a0b7819c7909cc98ab967fbc8f2b8c3871f26ced1921db02ae65c249a",
-    "status": "PASS_BOUNDED_RC09",
-    "focusedContracts": 42,
-    "domTests": 108,
+    "sourceManifestSha256": "c75eb94d8a79062b61d11463611aff09c791c69c262619a5d2411f73ce48e524",
+    "status": "PASS_BOUNDED_RC01",
+    "focusedContracts": 48,
+    "domTests": 109,
     "nativeProducts": {
-      "POSTGRESQL": {
+      "MYSQL": {
         "tests": 4,
         "suite": "compensation",
         "cleanupExitCode": 0,
-        "images": {
-          "postgres:17": {
-            "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
-            "architecture": "arm64"
-          },
-          "eclipse-temurin:8-jre": {
-            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
-            "architecture": "arm64"
-          }
-        }
-      },
-      "MYSQL": {
-        "tests": 4,
-        "suite": "correction",
-        "cleanupExitCode": 0,
+        "testClassesSha256": "b97e46c79a0f225c453842b90fb2b47b7c0729f60f8ab91280a2f332814fa23e",
         "images": {
           "mysql:8.4": {
             "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
@@ -401,19 +400,25 @@
       }
     },
     "realCdc": {
-      "checks": 14,
-      "harnessSourceSha256": "a7e40900984b8e212a2ebe77b65a3a7ed263e2e76d9e18c2a4eac9d022debe17",
+      "checksPerProfile": {
+        "connection-ddl": 6,
+        "decode": 5,
+        "target-phases": 19
+      },
+      "harnessSourceSha256": "412c04cfda4ecb9ef0bcd6ff1a12ea0bcaf2f273485b8bc9f631d8f2c2efa26a",
       "controlStore": "PostgreSQL 17",
       "source": "MySQL 8.4",
       "journal": "LOCAL/H2",
-      "target": "PostgreSQL 17",
-      "healthyPeer": "MySQL 8.4",
+      "targets": [
+        "PostgreSQL 17",
+        "MySQL 8.4"
+      ],
       "cleanupExitCode": 0
     },
-    "scope": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL.",
+    "scope": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization.",
     "sddCounts": {
-      "DONE": 15,
-      "PARTIAL": 29,
+      "DONE": 17,
+      "PARTIAL": 27,
       "NEW": 4
     }
   },

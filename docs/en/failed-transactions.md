@@ -13,9 +13,21 @@ The UI supports destination phase summaries,original incremental retry,snapshot-
 
 Activation can fail before a transaction is identified,so no invented failed sequence is shown. Legacy pauses without trusted phase records remain Unknown. Corrupt diagnostics are visibly unavailable and raw inspection refuses. Equal SQLStates do not make activation and apply faults equivalent.
 
-Existing global task queries carry summaries through different management entries. Summaries contain only phase,sequence and failure epoch;no event IDs,row values,SQL or credentials. Existing task-view grants apply. Ordinary status does not gain raw-value access. Initial preparation/snapshot have dedicated diagnostics;legacy records may remain Unknown. Complete source connection/read/decode/DDL phases remain open. See [native snapshot evidence](../verification/README.md).
+Existing global task queries carry summaries through different management entries. Summaries contain only phase,sequence and failure epoch;no event IDs,row values,SQL or credentials. Existing task-view grants apply. Ordinary status does not gain raw-value access. Initial preparation/snapshot have dedicated diagnostics;legacy records may remain Unknown. Source diagnostics appear separately at task level. See [native snapshot evidence](../verification/README.md).
 
 [Accepted scope and evidence](../verification/README.md) cover internal inspection,two-entry real SQL fault/restart and five-JRE foundation contracts;they do not accept the complete manual recovery workflow.
+
+## Source pipeline failure phases
+
+A blocked capture records `error_stage`, the error generation and the latest valid GTID in task details. The Worker reports an observation when it cannot open the journal. Destination retry, compensation and skip actions depend on reviewable destination evidence.
+
+| Phase | Action |
+|---|---|
+| Source connection, discovery or binlog read | Check primary availability, permissions and required GTID history. Verify that capture resumes when the source becomes available. |
+| Source snapshot | Check read grants and snapshot locks. Verify chunk progress and the baseline position. |
+| Decode | Retain the original binlog and inspect the row images and event profile. If the transaction boundary is uncertain, restore the required logs, use an eligible source containing that history, or establish a new baseline. |
+| DDL or normalization | Compare the historical schema, field types and failing transaction before reviewing the schema plan. |
+| Journal storage or acknowledgment | Restore journal access and capacity. Verify the target receipt, journal acknowledgment and capture position. |
 
 ## Internal inspection limits
 

@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.12 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.13 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,16 DONE, 28 PARTIAL and 4 NEW, with 32 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-04/JV-01 bounded profiles are accepted. Automatic takeover, failure diagnostics and complete matrices remain tracked.
+Implementation:48requirements,17 DONE, 27 PARTIAL and 4 NEW, with 31 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-04/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -32,7 +32,7 @@ Implementation:48requirements,16 DONE, 28 PARTIAL and 4 NEW, with 32 open. RC-02
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| RC-01 | P0 / PARTIAL | Phase-aware fault classification | Initial destination preparation/snapshot and delivery phases pass dual-entry native fault/restart acceptance;complete source phases and manual-action diagnostics remain open. |
+| RC-01 | P0 / DONE | Phase-aware fault classification | Bounded MySQL source and SQL destination failure phases are accepted. RC-04 tracks source range exclusion. |
 | RC-02 | P0 / DONE | Failed-transaction inspection and evidence retention | Accepted bounded MySQL8.4,fixed original Agent/LOCAL journal,PG/MySQL control profile:ADMIN whole-transaction review,positions/historical columns/images,authorized pages and durable evidence surviving restart/journal GC. Catalog automation,other profiles,Agent migration and execution semantics remain separately tracked. |
 | RC-03 | P0 / DONE | Skip a complete destination transaction | Protocol7 bounded profile accepted:Java8,MySQL8.4 two-database source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores. Complete transaction skip,native commit/source ACK failure,Agent SIGKILL/reopen and cross-entry recovery pass. Other targets/full matrices remain RC-10/LG-01. |
 | RC-04 | P0 / NEW | Controlled capture/decode gap recovery | Destination skipping cannot fix failures before complete events exist. |

@@ -2,6 +2,7 @@ package io.github.rivomesh;
 
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.*;
+import io.github.rivomesh.cdc.PipelineFailure.Phase;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -17,7 +18,11 @@ public final class PipelineEngine implements AutoCloseable {
     private static final class SourceFailure extends Exception {SourceFailure(Exception cause){super("SOURCE_OR_JOURNAL_FAILED",cause);}}
     public PipelineEngine(PipelineConfig config){config.validate();this.config=config;}
     private void check(AtomicReference<Throwable> heartbeat,SourceAdapter.Stream capture)throws Exception{
-        if(stopped)throw new InterruptedException("PIPELINE_STOPPED");Throwable failure=heartbeat.get();if(failure!=null)throw new SourceFailure(failure instanceof Exception?(Exception)failure:new IllegalStateException(failure));try{capture.check();if(topology!=null)topology.check();}catch(Exception e){throw new SourceFailure(e);}
+        if(stopped)throw new InterruptedException("PIPELINE_STOPPED");
+        Throwable failure=heartbeat.get();
+        if(failure!=null)throw new SourceFailure(new PipelineFailure(Phase.JOURNAL_STORAGE,failure));
+        try{capture.check();if(topology!=null)topology.check();}
+        catch(Exception e){throw new SourceFailure(e);}
     }
     private void rejectFeedback(String sourceIdentity,String driver,String url,String username,String password)throws Exception{
         if(!"com.mysql.cj.jdbc.Driver".equals(driver))return;
@@ -38,7 +43,11 @@ public final class PipelineEngine implements AutoCloseable {
         catch(Exception failure){
             if(stopped)return;
             boolean leaseFailure=false;for(Throwable t=failure;t!=null;t=t.getCause())if(t instanceof JdbcJournal.Busy||t instanceof JdbcJournal.Fenced)leaseFailure=true;
-            if(!leaseFailure&&!(failure instanceof JdbcJournal.PipelinePaused)&&!Sql.retryable(failure))throw failure;
+            if(!leaseFailure&&!(failure instanceof JdbcJournal.PipelinePaused)){
+                Phase phase=PipelineFailure.phase(failure,Phase.JOURNAL_STORAGE);
+                System.err.println("PIPELINE_DIAGNOSTIC "+phase.name()+" "+sourceErrorCode(failure));
+                if(!Sql.retryable(failure))throw failure;
+            }
             System.err.println("PIPELINE_RETRY "+failure.getClass().getSimpleName());Thread.sleep(config.retryDelayMillis);
         }}finally{if(localKeeper!=null)localKeeper.close();}
     }
@@ -47,50 +56,107 @@ public final class PipelineEngine implements AutoCloseable {
         try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
             JdbcJournal.Settings storage=config.journalSettings();
             // Check physical identity before any journal DDL can enter the source binlog.
-            try(MysqlCdcSource probe=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),"probe")){rejectFeedback(probe.physicalIdentity(),storage.driver,storage.url,storage.username,storage.password);}
+            String identity;
+            try(MysqlCdcSource probe=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),"probe")){
+                identity=probe.physicalIdentity();
+            }catch(Exception e){throw new PipelineFailure(Phase.SOURCE_CONNECT,e);}
+            rejectFeedback(identity,storage.driver,storage.url,storage.username,storage.password);
             journal.initialize(config.fingerprint(),null,config.subscribers());Journal.Lease lease=journal.claim(config.nodeId.substring(0,Math.min(118,config.nodeId.length()))+"-"+UUID.randomUUID().toString().substring(0,8),config.leaseMillis);
             AtomicReference<Throwable> heartbeat=new AtomicReference<>();scheduler.scheduleAtFixedRate(()->{try{journal.heartbeat(lease,config.leaseMillis);}catch(Throwable e){heartbeat.compareAndSet(null,e);}},config.heartbeatMillis,config.heartbeatMillis,TimeUnit.MILLISECONDS);
+            Phase phase=Phase.SOURCE_CONNECT;
             try(MysqlCdcSource source=new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),(String)journal.status().get("generation"))){
-                source.validateFailover(journal.captured(),journal.dependencies());
-                long[] checked={System.nanoTime()};topology=()->{if(System.nanoTime()-checked[0]>=TimeUnit.MILLISECONDS.toNanos(config.source.healthCheckMillis)){source.checkTopology(journal.captured(),journal.dependencies());checked[0]=System.nanoTime();}};
-                if(journal.captured()==null)journal.baseline(lease,source.position());
-                List<TableSchema> discovered=source.discover();Map<String,TableSchema> schemas=new LinkedHashMap<>();for(TableSchema table:discovered)schemas.put(table.id,table);
-                List<TableSchema> existing=journal.schemas();if(!existing.isEmpty()){
-                    for(TableSchema table:existing)if(!schemas.containsKey(table.id)||!Codec.encode(table).equals(Codec.encode(schemas.get(table.id))))throw new IllegalStateException("SOURCE_SCHEMA_CHANGED_REQUIRES_PLAN");
+                phase=Phase.JOURNAL_STORAGE;
+                SourcePosition captured=journal.captured();
+                List<SourcePosition> dependencies=journal.dependencies();
+                phase=Phase.SOURCE_CONNECT;
+                source.validateFailover(captured,dependencies);
+                long[] checked={System.nanoTime()};
+                topology=()->{
+                    if(System.nanoTime()-checked[0]<TimeUnit.MILLISECONDS.toNanos(config.source.healthCheckMillis))return;
+                    SourcePosition latest;
+                    List<SourcePosition> required;
+                    try{latest=journal.captured();required=journal.dependencies();}
+                    catch(Exception e){throw new PipelineFailure(Phase.JOURNAL_STORAGE,e);}
+                    try{source.checkTopology(latest,required);}
+                    catch(Exception e){throw new PipelineFailure(Phase.SOURCE_CONNECT,e);}
+                    checked[0]=System.nanoTime();
+                };
+                if(captured==null){
+                    phase=Phase.SOURCE_READ;
+                    captured=source.position();
+                    phase=Phase.JOURNAL_STORAGE;
+                    journal.baseline(lease,captured);
                 }
+                phase=Phase.SOURCE_DISCOVERY;
+                List<TableSchema> discovered=source.discover();Map<String,TableSchema> schemas=new LinkedHashMap<>();for(TableSchema table:discovered)schemas.put(table.id,table);
+                phase=Phase.JOURNAL_STORAGE;
+                List<TableSchema> existing=journal.schemas();
+                phase=Phase.DDL;
+                for(TableSchema table:existing)if(!schemas.containsKey(table.id)||!Codec.encode(table).equals(Codec.encode(schemas.get(table.id))))throw new IllegalStateException("SOURCE_SCHEMA_CHANGED_REQUIRES_PLAN");
+                phase=Phase.JOURNAL_STORAGE;
                 for(TableSchema table:schemas.values())journal.saveSchema(lease,table);
-                try(SourceAdapter.Stream capture=source.stream(journal.captured(),new SourceAdapter.Receiver(){
+                phase=Phase.SOURCE_CONNECT;
+                try(SourceAdapter.Stream capture=source.stream(captured,new SourceAdapter.Receiver(){
                     volatile boolean cancelled;
                     public void cancelled(){cancelled=true;}
                     public void committed(SourceTransaction transaction)throws Exception{
-                        long reserve=NormalizationBudget.reserve(transaction,schemas);boolean waiting=false;
+                        long reserve;
+                        try{reserve=NormalizationBudget.reserve(transaction,schemas);}
+                        catch(Exception failure){throw new PipelineFailure(Phase.NORMALIZE,failure);}
+                        boolean waiting=false;
                         while(!cancelled&&!stopped){
                             try{journal.append(lease,transaction,reserve);if(waiting)System.err.println("JOURNAL_BACKPRESSURE_CLEARED");return;}
                             catch(JdbcJournal.Capacity full){
-                                if(Math.addExact(Codec.encode(transaction).getBytes(java.nio.charset.StandardCharsets.UTF_8).length,reserve)>config.journal.maxBytes)throw new SyncFailure("TRANSACTION_EXCEEDS_JOURNAL_QUOTA","CAPTURE",false,"One raw commit and its normalization workspace exceed the logical quota");
+                                if(Math.addExact(Codec.encode(transaction).getBytes(java.nio.charset.StandardCharsets.UTF_8).length,reserve)>config.journal.maxBytes)
+                                    throw new PipelineFailure(Phase.JOURNAL_STORAGE,new IllegalStateException("TRANSACTION_EXCEEDS_JOURNAL_QUOTA"));
                                 if(!waiting){waiting=true;System.err.println("JOURNAL_BACKPRESSURE");}Thread.sleep(Math.max(250,config.pollIntervalMillis));
                             }
+                            catch(JdbcJournal.Fenced fenced){throw fenced;}
+                            catch(Exception failure){throw new PipelineFailure(Phase.JOURNAL_STORAGE,failure);}
                         }throw new InterruptedException("CAPTURE_DELIVERY_CANCELLED");
                     }
                 })){
-                    activeStream=capture;Map<String,Journal.SnapshotState> snapshots=new LinkedHashMap<>();Map<String,SourcePosition> baselines=new LinkedHashMap<>();
+                    activeStream=capture;
+                    check(heartbeat,capture);
+                    System.err.println("PIPELINE_DIAGNOSTIC CLEAR");
+                    Map<String,Journal.SnapshotState> snapshots=new LinkedHashMap<>();Map<String,SourcePosition> baselines=new LinkedHashMap<>();
                     for(TableSchema table:schemas.values()){
-                        check(heartbeat,capture);Journal.SnapshotState snapshot=journal.snapshot("source",table.id);
-                        if(snapshot==null||!"COMPLETE".equals(snapshot.state))try(SourceAdapter.Snapshot read=source.snapshot(table)){
-                            snapshot=journal.beginSnapshot(lease,"source",table,read.baseline());
-                            while(true){check(heartbeat,capture);List<List<Cell>> rows=read.next(config.chunkSize);if(rows.isEmpty())break;journal.appendSnapshot(lease,snapshot,snapshot.nextPart,rows);}journal.finishSnapshot(lease,snapshot);
+                        phase=Phase.JOURNAL_STORAGE;
+                        check(heartbeat,capture);
+                        Journal.SnapshotState snapshot=journal.snapshot("source",table.id);
+                        if(snapshot==null||!"COMPLETE".equals(snapshot.state)){
+                            phase=Phase.SOURCE_SNAPSHOT;
+                            try(SourceAdapter.Snapshot read=source.snapshot(table)){
+                                phase=Phase.JOURNAL_STORAGE;
+                                snapshot=journal.beginSnapshot(lease,"source",table,read.baseline());
+                                while(true){
+                                    check(heartbeat,capture);
+                                    phase=Phase.SOURCE_SNAPSHOT;
+                                    List<List<Cell>> rows=read.next(config.chunkSize);
+                                    phase=Phase.JOURNAL_STORAGE;
+                                    if(rows.isEmpty())break;
+                                    journal.appendSnapshot(lease,snapshot,snapshot.nextPart,rows);
+                                }
+                                journal.finishSnapshot(lease,snapshot);
+                            }
                         }
-                        while(!journal.seedIdentities(lease,table,snapshot))check(heartbeat,capture);snapshots.put(table.id,snapshot);baselines.put(table.id,snapshot.baseline);
+                        while(!journal.seedIdentities(lease,table,snapshot))check(heartbeat,capture);
+                        snapshots.put(table.id,snapshot);baselines.put(table.id,snapshot.baseline);
                     }
+                    phase=Phase.JOURNAL_STORAGE;
                     String generation=(String)journal.status().get("generation");
                     try(SinkGroup subscribers=new SinkGroup(journal,lease,generation,source,heartbeat,capture,schemas,snapshots,baselines)){
                         while(!stopped){check(heartbeat,capture);subscribers.check();journal.collect(lease,1000);journal.collectSnapshots(lease,1000);Thread.sleep(config.pollIntervalMillis);}
                     }
                 }finally{activeStream=null;topology=null;}
             }catch(Exception failure){
-                if(!stopped&&!(failure instanceof InterruptedException)&&!(failure instanceof JdbcJournal.Fenced)&&!Sql.retryable(failure)){
-                    try{journal.failPipeline(lease,hasCapacityCause(failure)?"JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN":sourceErrorCode(failure));}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
-                }throw failure;
+                if(failure instanceof InterruptedException||failure instanceof JdbcJournal.Fenced)throw failure;
+                boolean capacity=hasCapacityCause(failure);
+                Phase failedPhase=capacity?Phase.JOURNAL_STORAGE:PipelineFailure.phase(failure,phase);
+                if(!stopped&&!Sql.retryable(failure)){
+                    try{journal.failPipeline(lease,capacity?"JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN":sourceErrorCode(failure),failedPhase);}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
+                }
+                throw new PipelineFailure(failedPhase,failure);
             }finally{scheduler.shutdown();scheduler.awaitTermination(5,TimeUnit.SECONDS);journal.release(lease);}
         }finally{scheduler.shutdown();}
     }
@@ -114,7 +180,7 @@ public final class PipelineEngine implements AutoCloseable {
         boolean active(){return !closing&&!stopped;}
         void healthy(AtomicReference<Throwable> heartbeat,SourceAdapter.Stream capture)throws Exception{
             if(!active()||Thread.currentThread().isInterrupted())throw new InterruptedException("SUBSCRIBER_STOPPED");
-            Throwable problem=heartbeat.get();if(problem!=null)throw new SourceFailure(problem instanceof Exception?(Exception)problem:new IllegalStateException(problem));
+            Throwable problem=heartbeat.get();if(problem!=null)throw new SourceFailure(new PipelineFailure(Phase.JOURNAL_STORAGE,problem));
             try{capture.check();}catch(Exception problemAtSource){throw new SourceFailure(problemAtSource);}
         }
         void runTarget(PipelineConfig.Target target,JdbcJournal journal,Journal.Lease lease,String generation,MysqlCdcSource source,

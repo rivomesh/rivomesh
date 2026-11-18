@@ -56,6 +56,7 @@ public final class JdbcJournal implements NormalizedJournal {
         try(Connection c=connect()){
             ddl(c,(dialect==Dialect.MYSQL?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(settings.namespace));
             ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
+            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
             ddl(c,"CREATE TABLE IF NOT EXISTS "+table("subscription")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,acknowledged BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128),PRIMARY KEY(pipeline_id,subscription_id))");
             ddl(c,"CREATE TABLE IF NOT EXISTS "+table("log")+" (pipeline_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512) NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,stream_seq))");
             ddl(c,"CREATE TABLE IF NOT EXISTS "+table("receipt")+" (pipeline_id VARCHAR(128) NOT NULL,transaction_id VARCHAR(512) NOT NULL,stream_seq BIGINT NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,transaction_id))");
@@ -67,8 +68,8 @@ public final class JdbcJournal implements NormalizedJournal {
             JdbcPublicationStore.initialize(this,c);
             JdbcFailureReview.initialize(this,c);
             JdbcCommitAcknowledgement.initialize(this,c);
-            if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack')")){
-                p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=16)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
+            if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack','rm3_pipeline_failure')")){
+                p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=17)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
             }
             c.setAutoCommit(false);
             try{
@@ -164,8 +165,36 @@ public final class JdbcJournal implements NormalizedJournal {
             execute(c,"UPDATE "+table("job")+" SET run_state='RUNNING',error_code=NULL WHERE pipeline_id=?",settings.pipelineId);c.commit();}
     }
     @Override public void failPipeline(Lease lease,String code)throws Exception{
+        failPipeline(lease,code,null);
+    }
+    public void failPipeline(Lease lease,String code,PipelineFailure.Phase phase)throws Exception{
         if(code==null||!code.matches("[A-Z][A-Z0-9_]{1,127}"))throw new IllegalArgumentException("ERROR_CODE_INVALID");
-        try(Connection c=connect()){c.setAutoCommit(false);fence(c,lease);execute(c,"UPDATE "+table("job")+" SET run_state='ERROR',error_generation=error_generation+1,error_code=?,epoch=epoch+1,owner=NULL,lease_until=0 WHERE pipeline_id=?",code,settings.pipelineId);c.commit();}
+        try(Connection c=connect()){
+            c.setAutoCommit(false);
+            Map<String,Object> job=fence(c,lease);
+            long generation=Math.addExact((long)job.get("errorGeneration"),1);
+            execute(c,"UPDATE "+table("job")+" SET run_state='ERROR',error_generation=?,error_code=?,epoch=epoch+1,owner=NULL,lease_until=0 WHERE pipeline_id=?",generation,code,settings.pipelineId);
+            if(phase!=null){
+                execute(c,"DELETE FROM "+table("pipeline_failure")+" WHERE pipeline_id=?",settings.pipelineId);
+                execute(c,"INSERT INTO "+table("pipeline_failure")+" (pipeline_id,error_generation,phase) VALUES (?,?,?)",
+                        settings.pipelineId,generation,phase.name());
+            }
+            c.commit();
+        }
+    }
+    private String pipelineFailurePhase(Connection c,long generation)throws SQLException{
+        try(PreparedStatement p=c.prepareStatement("SELECT phase FROM "+table("pipeline_failure")+" WHERE pipeline_id=? AND error_generation=?")){
+            p.setString(1,settings.pipelineId);p.setLong(2,generation);
+            try(ResultSet r=p.executeQuery()){
+                if(!r.next())return "UNKNOWN";
+                try{return PipelineFailure.Phase.valueOf(r.getString(1)).name();}
+                catch(IllegalArgumentException invalid){return "UNKNOWN";}
+            }
+        }catch(SQLException missing){
+            // Status may open a journal that has never been started with the diagnostic schema.
+            if(Arrays.asList("42P01","42S02","42102","42104").contains(missing.getSQLState()))return "UNKNOWN";
+            throw missing;
+        }
     }
     @Override public SourcePosition captured()throws Exception{
         try(Connection c=connect();PreparedStatement p=c.prepareStatement("SELECT captured FROM "+table("job")+" WHERE pipeline_id=?")){
@@ -412,6 +441,8 @@ public final class JdbcJournal implements NormalizedJournal {
             try(PreparedStatement p=c.prepareStatement("SELECT epoch,owner,lease_until,next_seq,pending_bytes,snapshot_bytes,generation,normalized_seq,identity_bytes,run_state,error_generation,error_code,format_version FROM "+table("job")+" WHERE pipeline_id=?")){
                 p.setString(1,settings.pipelineId);try(ResultSet rs=p.executeQuery()){if(!rs.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");result.put("epoch",rs.getLong(1));result.put("owner",rs.getString(2));result.put("leaseUntil",rs.getLong(3));result.put("lastSequence",rs.getLong(4)-1);result.put("pendingBytes",rs.getLong(5));result.put("snapshotBytes",rs.getLong(6));result.put("generation",rs.getString(7));result.put("normalizedSequence",rs.getLong(8));result.put("identityBytes",rs.getLong(9));result.put("run_state",rs.getString(10));result.put("errorGeneration",rs.getLong(11));result.put("errorCode",rs.getString(12));result.put("dataFormat",rs.getInt(13));}
             }
+            if("ERROR".equals(result.get("run_state")))
+                result.put("errorStage",pipelineFailurePhase(c,(long)result.get("errorGeneration")));
             if(((Number)result.get("dataFormat")).intValue()==4)result.putAll(JdbcSkipJournal.summary(this,c));
             result.put("subscriptions",subscriptions(c));return result;
         }

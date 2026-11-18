@@ -57,3 +57,9 @@ Real CDC used MySQL 8.4 source and healthy peer, PostgreSQL 17 recovery destinat
 候选包 `c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3` 在 ARM64 上实际启动两台 Controller、一台 Agent 和一台 Worker。五个 JVM 版本分别为 1.8.0_512, 11.0.33, 17.0.21, 21.0.13, 25.0.5。每个版本通过 5 项检查，包含 MySQL 8.4 源到 PostgreSQL 17 / MySQL 8.4 的全量与增量、进程版本和夹具清理。
 
 All four running processes used the expected JVM on each JDK. The candidate passes the class-file level 52 and packaged driver checks. JV-02 and JV-03 track the broader database, connector and TLS combinations.
+
+### RC-01 · 源与目标故障阶段 / Pipeline fault phases
+
+候选包 `f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3` 通过 48 项 Java 定向检查及 109 项界面检查。真实 CDC 的源断线与 DDL 档案 6 项、解码档案 5 项、目标准备/快照/应用档案 19 项分别通过。MySQL 原生事务档案 4 项通过，并启动了含阶段记录表的 MySQL 日志库。
+
+Source connection loss is observed from both management entries and CDC resumes after the source returns. DDL and partial row images retain the original GTID and error generation across Agent restart. Destination preparation, snapshot and apply failures keep their own phases. Focused tests distinguish normalization from a journal ACK failure after a native destination commit.

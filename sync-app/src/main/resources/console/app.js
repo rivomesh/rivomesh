@@ -105,8 +105,44 @@ function render(){
  latest.tasks.forEach(task=>{const card=text('button','','task-card'+(task.id===selected?' selected':'')),title=text('div','','card-title');title.append(text('span',task.id),badge(status(task)));card.append(title,text('div',task.sourceDatabase+' → '+(task.targetCount?t('targetInstances')+' '+task.targetCount:task.targetSchema),'route'));if(task.ownerNodeId)card.append(text('div',t('ownerNode')+': '+task.ownerNodeId,'subtle'));card.onclick=()=>{selected=task.id;render();};list.append(card);});
  renderDetail(latest.tasks.find(x=>x.id===selected));window.RivomeshEditor?.refreshState();const invalid=$('invalid-configs');invalid.replaceChildren();invalid.classList.toggle('hidden',!latest.invalidConfigs.length);if(latest.invalidConfigs.length){invalid.append(text('h2',t('invalid')));latest.invalidConfigs.forEach(x=>invalid.append(text('p',x.file+' · '+explain(x.code),'error')));}
 }
+const pipelineFaultStages=new Set(['SOURCE_CONNECT','SOURCE_DISCOVERY','SOURCE_READ','SOURCE_DECODE',
+ 'SOURCE_SNAPSHOT','DDL','NORMALIZE','JOURNAL_STORAGE','JOURNAL_ACK']);
+function renderPipelineFault(root,task){
+ if(task.formatVersion!==3)return;
+ const status=task.status||{};
+ const stage=task.workerErrorStage||status.error_stage||status.worker_error_stage;
+ if(!pipelineFaultStages.has(stage))return;
+ const code=task.workerErrorCode||status.error_code||status.worker_error_code;
+ const card=text('section','','callout warning pipeline-failure');
+ card.append(text('strong',t('fault_'+stage)),text('p',t('faultHelp_'+stage)));
+ if(code)card.append(text('span',explain(code),'subtle'));
+ root.append(card);
+}
+Object.assign(messages.zh,{
+ fault_SOURCE_CONNECT:'源库连接',faultHelp_SOURCE_CONNECT:'检查源库地址、认证和可用主库。主库切换后需保留所需 GTID 历史。',
+ fault_SOURCE_DISCOVERY:'源表发现',faultHelp_SOURCE_DISCOVERY:'检查数据库映射、表权限和源表结构。',
+ fault_SOURCE_READ:'读取 binlog',faultHelp_SOURCE_READ:'确认源端读取连接和 binlog 保留范围。需要时恢复日志或切换到保有历史的合格源。',
+ fault_SOURCE_DECODE:'解码 binlog',faultHelp_SOURCE_DECODE:'保留故障日志，检查行镜像及事件兼容性。修复后恢复原采集位置。',
+ fault_SOURCE_SNAPSHOT:'读取源快照',faultHelp_SOURCE_SNAPSHOT:'检查源表读权限、快照锁和连接，恢复后从可用分块继续。',
+ fault_DDL:'源表结构变更',faultHelp_DDL:'核对源表结构和失败位置，审阅 DDL 处理方案后再恢复。',
+ fault_NORMALIZE:'转换源事务',faultHelp_NORMALIZE:'检查历史结构、字段类型和无主键行标识，保留原事务用于复核。',
+ fault_JOURNAL_STORAGE:'日志存储',faultHelp_JOURNAL_STORAGE:'检查日志库连接、存储容量与元数据，然后核对最后的采集位置。',
+ fault_JOURNAL_ACK:'写入同步确认',faultHelp_JOURNAL_ACK:'核对目标库的提交回执和日志中的确认位置。恢复日志写入后继续核对。'
+});
+Object.assign(messages.en,{
+ fault_SOURCE_CONNECT:'Source connection',faultHelp_SOURCE_CONNECT:'Check addresses, authentication and primary availability. Preserve the required GTID history during promotion.',
+ fault_SOURCE_DISCOVERY:'Source table discovery',faultHelp_SOURCE_DISCOVERY:'Check database mappings, table permissions and source schemas.',
+ fault_SOURCE_READ:'Read binlog',faultHelp_SOURCE_READ:'Check the source read session and retained binlog range. Restore logs or choose an eligible source with the required history.',
+ fault_SOURCE_DECODE:'Decode binlog',faultHelp_SOURCE_DECODE:'Retain the failing logs and check row images and event support. Resume from the original capture position after correcting the fault.',
+ fault_SOURCE_SNAPSHOT:'Read source snapshot',faultHelp_SOURCE_SNAPSHOT:'Check source permissions, snapshot locks and connections. Continue from available chunks after recovery.',
+ fault_DDL:'Source schema change',faultHelp_DDL:'Review the source schema, the failing position and the DDL plan before resuming.',
+ fault_NORMALIZE:'Normalize source transaction',faultHelp_NORMALIZE:'Check the historical schema, column types and keyless row identities. Retain the original transaction for review.',
+ fault_JOURNAL_STORAGE:'Journal storage',faultHelp_JOURNAL_STORAGE:'Check log storage connectivity, capacity and metadata. Verify the latest captured position.',
+ fault_JOURNAL_ACK:'Persist delivery acknowledgment',faultHelp_JOURNAL_ACK:'Compare the destination commit receipt with the journal acknowledgment. Restore journal writes and resume reconciliation.'
+});
 function renderDetail(task){const root=$('task-detail');root.replaceChildren();if(!task){root.append(text('div',t('selectTask'),'empty'));return;}const body=text('div','','detail-body'),title=text('div','','detail-title'),heading=text('div');heading.append(text('span','MYSQL → '+(task.targetType||'GAUSS'),'eyebrow'),text('h3',task.id),text('p',task.sourceCluster,'subtle'));if(task.createdBy)heading.append(text('p',t('createdBy')+': '+task.createdBy+' ('+t('ROLE_'+task.createdRole)+')','subtle'));title.append(heading,badge(status(task)));body.append(title);const actions=text('div','','detail-actions'),pending=task.operations.some(x=>x.status==='PENDING');
  ['CHECK','START','STOP','PAUSE','RESUME'].forEach(action=>{const button=text('button',t(globalTasks()&&action==='STOP'?'globalStop':action.toLowerCase()),action==='START'?'primary':'');button.disabled=!can('TASK_CONTROL')||pending||(action==='RESUME'&&!['PAUSED','ERROR'].includes(task.status.run_state));button.onclick=()=>command(task,action);actions.append(button);});const configure=text('button',t('configuration'),'quiet');configure.disabled=!can('TASK_CONFIG')||!window.RivomeshEditor;configure.onclick=()=>window.RivomeshEditor.open(task);actions.append(configure);body.append(actions,text('div',t(globalTasks()?'globalScope':'scope'),'callout'));if(task.ownerNodeId)body.append(text('p',t('ownerNode')+': '+task.ownerNodeId+' · '+t(task.ownerState||'UNKNOWN'),'callout'));if(task.ownerObservedAt)body.append(text('p',t('ownerObserved')+': '+new Date(task.ownerObservedAt).toLocaleString(),'subtle'));if(task.configurationPending)body.append(text('p',t('configurationPending'),'callout warning'));if(task.configurationProjectionPending)body.append(text('p',t('CONFIG_PROJECTION_PENDING'),'callout warning'));
+ renderPipelineFault(body,task);
  if(task.problem)body.append(text('div',task.problem==='NOT_INITIALIZED'?t('uninitialized'):(task.statusAvailable?'':t('stale')+' ')+explain(task.problem),'callout warning'));
  const grid=text('div','','status-grid');[['phase',task.status.phase],['sharedState',task.status.run_state],[globalTasks()?'globalWorker':'worker',task.workerState],['pendingTransactions',task.status.pending_transactions],['observed',task.observedAt?new Date(task.observedAt).toLocaleTimeString():'—']].forEach(([key,value])=>{const item=text('div');item.append(text('span',t(key)),text('strong',value==null?'—':t(String(value))));grid.append(item);});body.append(grid);if(task.formatVersion===3&&task.status.maxBytes){const used=Number(task.status.pendingBytes||0)+Number(task.status.snapshotBytes||0)+Number(task.status.identityBytes||0),quota=Number(task.status.maxBytes),storage=text('section','','callout'+(used/quota>.8?' warning':'')),progress=document.createElement('progress');progress.max=quota;progress.value=used;progress.setAttribute('aria-label',t('journal'));storage.append(text('strong',t('journal')+': '+(used/1048576).toFixed(1)+' / '+(quota/1048576).toFixed(0)+' MiB'),progress,text('p',t('journalUsageHelp')));body.append(storage);}
  if(task.status.tables?.length){const table=text('table'),head=text('tr');['table',task.formatVersion===3?'sourceSnapshotRows':'copied','snapshot'].forEach(x=>head.append(text('th',t(x))));table.append(head);task.status.tables.forEach(row=>{const tr=text('tr');tr.append(text('td',row.table),text('td',Number(row.copiedRows).toLocaleString()),text('td',t(row.done?'complete':'pending')));table.append(tr);});if(task.formatVersion===3)body.append(text('p',t('sourceSnapshotHelp'),'subtle'));body.append(table);if(Number(task.status.table_count)>task.status.tables.length)body.append(text('p',t('tablePreview')+task.status.tables.length+' / '+task.status.table_count,'subtle'));}

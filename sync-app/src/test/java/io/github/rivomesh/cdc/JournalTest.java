@@ -155,8 +155,8 @@ class JournalTest {
             initialize(journal);Journal.Lease old=journal.claim("old",30000);journal.append(old,transaction(1));Journal.PipelineState paused=journal.pausePipeline();assertTrue(paused.epoch>old.epoch);assertEquals("PAUSED",paused.state);
             assertThrows(JdbcJournal.Fenced.class,()->journal.append(old,transaction(2)));assertThrows(JdbcJournal.PipelinePaused.class,()->journal.claim("standby",30000));
             assertThrows(IllegalStateException.class,()->journal.resumePipeline(paused.errorGeneration-1));assertEquals(paused.errorGeneration,journal.pausePipeline().errorGeneration);
-            journal.resumePipeline(paused.errorGeneration);journal.resumePipeline(paused.errorGeneration);Journal.Lease next=journal.claim("standby",30000);journal.failPipeline(next,"DDL_PLAN_REQUIRED");
-            assertEquals("ERROR",journal.status().get("run_state"));assertEquals("DDL_PLAN_REQUIRED",journal.status().get("errorCode"));assertThrows(JdbcJournal.PipelinePaused.class,()->journal.claim("another",30000));assertEquals(transaction(1).position,journal.captured());
+            journal.resumePipeline(paused.errorGeneration);journal.resumePipeline(paused.errorGeneration);Journal.Lease next=journal.claim("standby",30000);journal.failPipeline(next,"DDL_PLAN_REQUIRED",PipelineFailure.Phase.DDL);
+            assertEquals("ERROR",journal.status().get("run_state"));assertEquals("DDL_PLAN_REQUIRED",journal.status().get("errorCode"));assertEquals("DDL",journal.status().get("errorStage"));assertThrows(JdbcJournal.PipelinePaused.class,()->journal.claim("another",30000));assertEquals(transaction(1).position,journal.captured());
         }
     }
     @Test void snapshotPreviewSeparatesSourceArtifactsFromEveryTargetsDurableAcknowledgments()throws Exception{

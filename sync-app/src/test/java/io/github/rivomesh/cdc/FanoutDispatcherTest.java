@@ -1,5 +1,7 @@
 package io.github.rivomesh.cdc;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.*;
@@ -35,7 +37,33 @@ class FanoutDispatcherTest {
         try(JdbcJournal journal=new JdbcJournal(journal());JdbcSink fast=new JdbcSink(a)){
             journal.initialize(Codec.sha256("config"),"generation",Collections.singletonList("fast"));Journal.Lease lease=journal.claim("owner",30000);journal.append(lease,JdbcSinkTest.transaction(1));
             FanoutDispatcher dispatcher=new FanoutDispatcher(journal,lease,Collections.singletonList(fast),Collections.singletonMap(table.id,table),r->{throw new IllegalStateException("BEFORE_IMAGE_OCCURRENCE_MISSING");});
-            assertThrows(FanoutDispatcher.NormalizationFailure.class,()->dispatcher.drain(10));assertEquals("RUNNING",journal.subscriptions().get(0).state);assertEquals(0,fast.checkpoint().sequence);
+            FanoutDispatcher.NormalizationFailure failure=assertThrows(FanoutDispatcher.NormalizationFailure.class,()->dispatcher.drain(10));
+            assertEquals(PipelineFailure.Phase.NORMALIZE,failure.phase);
+            assertEquals("RUNNING",journal.subscriptions().get(0).state);assertEquals(0,fast.checkpoint().sequence);
+        }
+    }
+    @Test void failedJournalAcknowledgmentIsDistinctFromTheConfirmedTargetWrite()throws Exception{
+        JdbcSink.Settings settings=target("fast");
+        TableSchema table=JdbcSinkTest.schema(false);
+        try(JdbcJournal journal=new JdbcJournal(journal());JdbcSink sink=new JdbcSink(settings)){
+            journal.initialize(Codec.sha256("config"),"generation",Collections.singletonList("fast"));
+            Journal.Lease lease=journal.claim("owner",30000);
+            sink.activate(lease.epoch);
+            JdbcSinkTest.emptySnapshot(sink,lease.epoch,table);
+            journal.append(lease,JdbcSinkTest.transaction(1,JdbcSinkTest.insert(table,1,"native commit")));
+            Journal failing=(Journal)Proxy.newProxyInstance(Journal.class.getClassLoader(),new Class<?>[]{Journal.class},
+                    (proxy,method,args)->{
+                        if("acknowledge".equals(method.getName()))throw new SQLException("fixture storage failure","58030");
+                        try{return method.invoke(journal,args);}
+                        catch(InvocationTargetException failure){throw failure.getCause();}
+                    });
+            FanoutDispatcher dispatcher=new FanoutDispatcher(failing,lease,Collections.singletonList(sink),
+                    Collections.singletonMap(table.id,table),record->record.transaction);
+            FanoutDispatcher.JournalFailure failure=assertThrows(FanoutDispatcher.JournalFailure.class,()->dispatcher.drain(1));
+            assertEquals(PipelineFailure.Phase.JOURNAL_ACK,failure.phase);
+            assertEquals(1,sink.checkpoint().sequence);
+            assertEquals(0,journal.subscriptions().get(0).acknowledged);
+            assertNull(journal.subscriptions().get(0).errorCode);
         }
     }
     @Test void activationAndSecondTransactionApplyFaultsHaveDistinctDurableLocations()throws Exception{

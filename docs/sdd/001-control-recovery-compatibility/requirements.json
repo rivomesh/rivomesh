@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.12",
+  "version": "0.13",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -417,14 +417,14 @@
       "id": "RC-01",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "按采集阶段区分故障",
         "en": "Phase-aware fault classification"
       },
       "gap": {
-        "zh-CN": "首次目标准备/快照及增量投递阶段已持久化并通过双入口真实故障/重启验收；完整源连接/读取/解码/DDL阶段及人工操作诊断仍待补。",
-        "en": "Initial destination preparation/snapshot and delivery phases pass dual-entry native fault/restart acceptance;complete source phases and manual-action diagnostics remain open."
+        "zh-CN": "MySQL 源与首批 SQL 目标的阶段诊断已验收。源范围排除由 RC-04 跟踪。",
+        "en": "Bounded MySQL source and SQL destination failure phases are accepted. RC-04 tracks source range exclusion."
       },
       "acceptance": {
         "zh-CN": "分别展示源连接/读取、解码、DDL/规范化、目标应用、确认及日志存储错误；UI给出该阶段可用的重试、补偿、事务跳过或缺口恢复路径，不能把所有binlog故障当目标SQL错误。",
@@ -441,8 +441,16 @@
         "docs/en/failed-transactions.md",
         "docs/verification/README.md",
         "sync-app/src/main/java/io/github/rivomesh/cdc/SnapshotDispatcher.java",
-        "sync-app/src/test/java/io/github/rivomesh/cdc/SnapshotDispatcherTest.java"
-      ]
+        "sync-app/src/test/java/io/github/rivomesh/cdc/SnapshotDispatcherTest.java",
+        "tests/global-control-pipeline.py",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PipelineFailure.java",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/FanoutDispatcherTest.java"
+      ],
+      "verification": {
+        "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization."
+      }
     },
     {
       "id": "RC-02",

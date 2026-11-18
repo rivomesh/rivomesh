@@ -13,12 +13,25 @@ public interface TaskWorker {
     int exitCode();
     void stop() throws Exception;
     default void requestStop() {}
+    default Diagnostic diagnostic(){return null;}
+
+    final class Diagnostic {
+        final io.github.rivomesh.cdc.PipelineFailure.Phase phase;
+        final String code;
+        private Diagnostic(io.github.rivomesh.cdc.PipelineFailure.Phase phase,String code){
+            this.phase=phase;
+            this.code=code;
+        }
+    }
     interface Factory { TaskWorker start(Path config, Path log, int heapMiB) throws Exception; }
 
     final class Jvm implements TaskWorker {
         private final Process process;
         private final Thread output;
         private volatile long stopRequested;
+        private volatile Diagnostic diagnostic;
+        private static final String DIAGNOSTIC_PREFIX="PIPELINE_DIAGNOSTIC ";
+        private static final Pattern DIAGNOSTIC=Pattern.compile("([A-Z_]{1,32}) ([A-Z][A-Z0-9_]{1,127})");
         public Jvm(Path config, Path log, int heapMiB) throws Exception {this(config,log,heapMiB,Collections.emptySet());}
         Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames)throws Exception{this(config,log,heapMiB,protectedNames,System.getenv(),"io.github.rivomesh.Main");}
         Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,String> parent,String main)throws Exception{
@@ -28,7 +41,14 @@ public interface TaskWorker {
             output = new Thread(() -> {
                 try (InputStream in = process.getInputStream()) {
                     byte[] buffer = new byte[8192]; int n;
+                    StringBuilder line=new StringBuilder();
                     while ((n = in.read(buffer)) >= 0) {
+                        for(int i=0;i<n;i++){
+                            if(buffer[i]=='\n'){
+                                observeDiagnostic(line);
+                                line.setLength(0);
+                            }else if(line.length()<192)line.append((char)buffer[i]);
+                        }
                         if (Files.exists(log) && Files.size(log) + n > 8L * 1024 * 1024)
                             Files.move(log, log.resolveSibling(log.getFileName()+".1"), StandardCopyOption.REPLACE_EXISTING);
                         try (OutputStream out = Files.newOutputStream(log, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) { PrivateFiles.ownerOnly(log); out.write(buffer,0,n); }
@@ -39,6 +59,19 @@ public interface TaskWorker {
                 }
             }, "task-log-" + config.getFileName());
             output.setDaemon(true); output.start();
+        }
+        @Override public Diagnostic diagnostic(){return diagnostic;}
+
+        private void observeDiagnostic(CharSequence line){
+            if(line.length()>=192||line.length()<=DIAGNOSTIC_PREFIX.length())return;
+            String message=line.toString().trim();
+            if(!message.startsWith(DIAGNOSTIC_PREFIX))return;
+            String value=message.substring(DIAGNOSTIC_PREFIX.length());
+            if("CLEAR".equals(value)){diagnostic=null;return;}
+            Matcher match=DIAGNOSTIC.matcher(value);
+            if(match.matches())try{
+                diagnostic=new Diagnostic(io.github.rivomesh.cdc.PipelineFailure.Phase.valueOf(match.group(1)),match.group(2));
+            }catch(IllegalArgumentException invalid){/* only known phases */ }
         }
         static Map<String,String> environment(Map<String,String> parent,String yaml,Set<String> protectedNames){
             Map<String,String> result=new LinkedHashMap<>();for(String key:Arrays.asList("PATH","HOME","LANG","LC_ALL","LC_CTYPE","TZ","TMPDIR","TEMP","TMP","SystemRoot","WINDIR"))if(parent.containsKey(key)&&!protectedNames.contains(key))result.put(key,parent.get(key));

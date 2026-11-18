@@ -48,7 +48,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 
 Implementation contract: [failed transactions](design-failed-transactions.en.md). Read-only inspection is not an execution credential;native receipts,gaps and format upgrades precede skip operations.
 
-- [ ] T-RC-01 · Phase-aware fault classification · P0 · Depends on: none
+- [x] T-RC-01 · Phase-aware fault classification · P0 · Depends on: none
   Deliver: Distinguish source/read,decode,DDL/normalization,apply,ack and journal failures;UI offers only valid retry/compensation/skip/gap-recovery actions for that stage.
   Acceptance: AC-RC-01
 - [x] T-RC-02 · Failed-transaction inspection and evidence retention · P0 · Depends on: RC-01, CP-05

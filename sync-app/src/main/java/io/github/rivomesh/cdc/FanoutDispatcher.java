@@ -34,7 +34,7 @@ public final class FanoutDispatcher {
                 SinkAdapter.Checkpoint checkpoint=sink.activate(lease.epoch);
                 diagnostic.phase=SubscriberFailure.Phase.RECONCILE;
                 if(checkpoint.sequence<sub.acknowledged||checkpoint.sequence>Math.addExact(sub.acknowledged,1))throw new IllegalStateException("SINK_JOURNAL_CHECKPOINT_DIVERGED");
-                if(checkpoint.skipOperation!=null&&checkpoint.sequence==sub.acknowledged)try{journal.verifySkippedCheckpoint(sink.id(),checkpoint);}catch(Exception failure){throw new JournalFailure(failure);}
+                if(checkpoint.skipOperation!=null&&checkpoint.sequence==sub.acknowledged)try{journal.verifySkippedCheckpoint(sink.id(),checkpoint);}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}
                 diagnostic.phase=SubscriberFailure.Phase.JOURNAL_READ;
                 List<Journal.Record> records=read(sink.id(),maximumPerSink);int start=0;
                 if(checkpoint.sequence>sub.acknowledged){
@@ -72,11 +72,15 @@ public final class FanoutDispatcher {
         diagnostic.phase=SubscriberFailure.Phase.NORMALIZE;SourceTransaction normalized=transformer.normalize(record);
         diagnostic.phase=SubscriberFailure.Phase.PROJECT;return project(sink,normalized);
     }
-    public static final class NormalizationFailure extends Exception { public NormalizationFailure(Exception cause){super("SOURCE_NORMALIZATION_FAILED",cause);} }
-    public static final class JournalFailure extends Exception { public JournalFailure(Exception cause){super("JOURNAL_OPERATION_FAILED",cause);} }
-    private List<Journal.Record> read(String subscription,int limit)throws Exception{try{return journal.read(subscription,limit);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(failure);}}
-    private void acknowledge(String subscription,long sequence)throws Exception{try{journal.acknowledge(lease,subscription,sequence);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(failure);}}
-    private void retrying(String subscription,String code)throws Exception{try{journal.retrying(lease,subscription,code);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(failure);}}
+    public static final class NormalizationFailure extends PipelineFailure {
+        public NormalizationFailure(Exception cause){super(Phase.NORMALIZE,cause);}
+    }
+    public static final class JournalFailure extends PipelineFailure {
+        public JournalFailure(Phase phase,Exception cause){super(phase,cause);}
+    }
+    private List<Journal.Record> read(String subscription,int limit)throws Exception{try{return journal.read(subscription,limit);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
+    private void acknowledge(String subscription,long sequence)throws Exception{try{journal.acknowledge(lease,subscription,sequence);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_ACK,failure);}}
+    private void retrying(String subscription,String code)throws Exception{try{journal.retrying(lease,subscription,code);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
     public static Transformer sourceTransformer(Transformer transformer){return record->{try{return transformer.normalize(record);}catch(Exception failure){if(failure instanceof JdbcJournal.Fenced)throw failure;throw new NormalizationFailure(failure);}};}
     private static boolean retryable(Exception failure){return io.github.rivomesh.Sql.retryable(failure);}
     private static String errorCode(Exception failure){if(failure instanceof io.github.rivomesh.SyncFailure)return ((io.github.rivomesh.SyncFailure)failure).code;if(failure instanceof SQLException)return io.github.rivomesh.Sql.targetErrorCode((SQLException)failure);String message=failure.getMessage();return message!=null&&message.matches("[A-Z][A-Z0-9_]{1,120}")?message:"TARGET_APPLY_ERROR";}

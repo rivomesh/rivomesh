@@ -74,6 +74,7 @@ public final class TaskService implements AutoCloseable {
         final Path path,configurationFile; final TaskDefinition config;
         volatile boolean projectionPending; final AtomicBoolean busy=new AtomicBoolean();
         volatile TaskWorker worker;
+        volatile TaskWorker.Diagnostic workerDiagnostic;
         volatile Map<String,Object> database=Collections.emptyMap();
         volatile String observedAt, problem, workerState="STOPPED";
         volatile boolean statusAvailable;
@@ -714,7 +715,7 @@ public final class TaskService implements AutoCloseable {
         if(!"RUNNING".equals(desired)){stop(entry);entry.workerState="PAUSED".equals(desired)?"PAUSED":"STOPPED";}
         else if(!closed) {
             synchronized(entry){if(entry.worker!=null&&!entry.worker.alive()) {
-                entry.problem="WORKER_EXIT_"+entry.worker.exitCode();entry.worker=null;
+                entry.problem="WORKER_EXIT_"+entry.worker.exitCode();entry.workerDiagnostic=entry.worker.diagnostic();entry.worker=null;
                 if(entry.permit){slots.release();entry.permit=false;}
                 entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
             }}
@@ -731,10 +732,22 @@ public final class TaskService implements AutoCloseable {
             if(entry.worker==null){synchronized(this){entry.workerState=ownerStartBlocks.contains(id)?"OWNER_COMMAND_PENDING":entry.exits>=5?"CRASH_LOOP":System.currentTimeMillis()<entry.retryAt?"BACKOFF":"QUEUED";}}
         }
         try {
-            entry.database=publicStatus(backend.status(entry.config),entry.config);entry.observedAt=Instant.now().toString();entry.statusAvailable=true;
+            Map<String,Object> database=publicStatus(backend.status(entry.config),entry.config);
+            TaskWorker current=entry.worker;
+            if(current!=null)entry.workerDiagnostic=current.diagnostic();
+            TaskWorker.Diagnostic diagnostic=entry.workerDiagnostic;
+            if(diagnostic!=null&&"RUNNING".equals(desired)&&!database.containsKey("error_stage")){
+                database.put("worker_error_stage",diagnostic.phase.name());
+                database.put("worker_error_code",diagnostic.code);
+            }
+            entry.database=database;entry.observedAt=Instant.now().toString();entry.statusAvailable=true;
             if(entry.database.isEmpty()&&!Arrays.asList("CRASH_LOOP","BACKOFF").contains(entry.workerState))entry.problem="NOT_INITIALIZED";
             else if(!Arrays.asList("CRASH_LOOP","BACKOFF").contains(entry.workerState))entry.problem=null;
-        }catch(Exception e){entry.problem=safeCode(e);entry.statusAvailable=false;}
+        }catch(Exception e){
+            entry.problem=safeCode(e);entry.statusAvailable=false;
+            TaskWorker current=entry.worker;
+            if(current!=null)entry.workerDiagnostic=current.diagnostic();
+        }
     }
     private void stop(Entry e) throws Exception {synchronized(e){if(e.worker!=null){e.worker.stop();if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");e.worker=null;}if(e.permit){slots.release();e.permit=false;}e.workerState="STOPPED";}}
     private static Map<String,Object> publicStatus(Map<String,Object> db,TaskDefinition config) {
@@ -783,6 +796,11 @@ public final class TaskService implements AutoCloseable {
         com.fasterxml.jackson.databind.node.ArrayNode operations=Model.JSON.valueToTree(c.operations);
         for(com.fasterxml.jackson.databind.JsonNode operation:operations)
             ((com.fasterxml.jackson.databind.node.ObjectNode)operation).remove("correction");
+        TaskWorker.Diagnostic startup=e.workerDiagnostic;
+        if(startup!=null&&!e.statusAvailable&&"RUNNING".equals(c.desired)){
+            row.put("workerErrorStage",startup.phase.name());
+            row.put("workerErrorCode",startup.code);
+        }
         row.put("operations",operations);return row;
     }
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}

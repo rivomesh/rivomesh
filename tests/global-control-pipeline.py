@@ -25,6 +25,8 @@ parser.add_argument('--runtime-jdk', type=int, choices=(8, 11, 17, 21, 25),
                     help='Run controller, Agent and Worker snapshot/CDC with the specified Java release')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
+parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
+                    help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--snapshot-diagnostics', action='store_true', help='Inject initial DDL permission and snapshot CHECK faults before normal catch-up')
 parser.add_argument('--managed-failure-review', action='store_true', help='Protocol5 durable evidence creation and cross-entry authorized raw review')
 parser.add_argument('--checkpoint-inspection', action='store_true', help='Check additive read-only native checkpoint result in managed review')
@@ -43,6 +45,10 @@ if args.runtime_jdk and (not args.separate_execution or any((args.runtime_image,
     parser.error('--runtime-jdk uses the separate Agent and baseline SQL process smoke profile')
 if args.runtime_image and not args.separate_execution:
     parser.error('--runtime-image requires --separate-execution')
+if args.source_diagnostics and (not args.separate_execution or any((args.runtime_jdk, args.runtime_image,
+        args.recovery_jobs, args.compensation, args.correction, args.failure_diagnostics,
+        args.snapshot_diagnostics, args.managed_failure_review, args.managed_commit))):
+    parser.error('--source-diagnostics uses the separate Agent and baseline native source profile')
 if args.failure_diagnostics and not args.separate_execution:
     parser.error('--failure-diagnostics requires --separate-execution')
 if args.snapshot_diagnostics and not args.separate_execution:
@@ -92,6 +98,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'correction': args.correction,
             'recoveryJobs': args.recovery_jobs,
             'runtimeJdk': args.runtime_jdk,
+            'sourceDiagnostics': args.source_diagnostics,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
 def passed(name):
     checks.append(name)
@@ -392,6 +399,48 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
 
+    def run_source_diagnostics():
+        def phase(expected):
+            result = None
+            for node in ('node-a','node-b'):
+                record = task(node)
+                status = record.get('status',{})
+                stage = status.get('error_stage') or status.get('worker_error_stage') or record.get('workerErrorStage')
+                if stage != expected:
+                    return None
+                result = status
+            return result
+
+        if args.source_diagnostics == 'connection-ddl':
+            checkpoint = task()['status']['capture_gtid']
+            compose('stop','--timeout','5','mysql')
+            unavailable = wait(lambda: phase('SOURCE_CONNECT'), 'both entries classify unavailable source connection')
+            assert unavailable['capture_gtid'] == checkpoint
+            compose('start','mysql')
+            wait(lambda: sql('mysql','SELECT 1')=='1', 'source reconnects')
+            sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(101,'source connected',JSON_OBJECT('n',101))")
+            wait(rows_match, 'recovered source delivers subsequent transactions')
+            wait(lambda: not task()['status'].get('worker_error_stage'), 'healthy capture clears transient diagnostic')
+            passed('Native source loss reports a connection phase in both entries and resumes without changing checkpoints while unavailable')
+            checkpoint = task()['status']['capture_gtid']
+            sql('mysql','ALTER TABLE sales.items ADD COLUMN planned_field INT')
+            expected, code = 'DDL','DDL_PLAN_REQUIRED'
+        else:
+            checkpoint = task()['status']['capture_gtid']
+            sql('mysql',"SET SESSION binlog_row_image='MINIMAL'; UPDATE sales.items SET note='incomplete image' WHERE id=1")
+            expected, code = 'SOURCE_DECODE','BINLOG_SCHEMA_WIDTH_CHANGED'
+
+        observed = wait(lambda: phase(expected), 'both entries see original pipeline failure stage')
+        assert observed['error_code'] == code and observed['run_state'] == 'ERROR'
+        assert observed['capture_gtid'] == checkpoint
+        assert all(sub['state'] == 'RUNNING' for sub in observed['subscriptions'])
+        terminate_owner()
+        restart_owner()
+        restored = wait(lambda: phase(expected), 'persisted source fault survives Agent restart')
+        assert restored['capture_gtid'] == checkpoint and restored['error_code'] == code
+        assert restored['error_count'] == observed['error_count']
+        passed(expected + ': native source failure preserves GTID and error generation across Agent restart and both management entries')
+
     def run_recovery_cases():
         if args.compensation:
             baseline_note = sql('mysql', 'SELECT note FROM sales.items WHERE id=1')
@@ -582,6 +631,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.source_diagnostics:
+            run_source_diagnostics()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_SOURCE_DIAGNOSTICS_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.runtime_jdk:
             observe_jvms()
             action('STOP')

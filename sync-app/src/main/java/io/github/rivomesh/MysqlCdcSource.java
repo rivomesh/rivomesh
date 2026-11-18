@@ -157,9 +157,27 @@ public final class MysqlCdcSource implements SourceAdapter {
             this.receiver=receiver;Model.Position p=position(captured);committed=p.gtidSet;file=p.file;
             client=new BinaryLogClient(selected.endpoint().host,selected.endpoint().port,config.source.username,config.source.password);client.setServerId(config.source.serverId);client.setGtidSet(committed);client.setGtidSetFallbackToPurged(false);client.setUseBinlogFilenamePositionInGtidMode(false);client.setSSLMode(SSLMode.valueOf(config.source.sslMode));client.setKeepAlive(false);client.setHeartbeatInterval(1000);client.setConnectTimeout(10000);
             client.setEventDeserializer(MysqlEventDeserializer.create(tableIds));
-            client.registerEventListener(e->{if(closing||failure.get()!=null)return;lastEvent=System.nanoTime();try{if(selected.serverId()!=client.getMasterServerId())throw new IllegalStateException("SOURCE_BACKEND_CHANGED");accept(e);}catch(Throwable problem){failure.compareAndSet(null,problem);}});
-            client.registerLifecycleListener(new BinaryLogClient.AbstractLifecycleListener(){public void onCommunicationFailure(BinaryLogClient c,Exception e){if(!closing)failure.compareAndSet(null,e);}public void onEventDeserializationFailure(BinaryLogClient c,Exception e){if(!closing)failure.compareAndSet(null,e);}public void onDisconnect(BinaryLogClient c){if(!closing)failure.compareAndSet(null,new java.io.IOException("MYSQL_STREAM_DISCONNECTED"));}});
+            client.registerEventListener(e->{
+                if(closing||failure.get()!=null)return;
+                lastEvent=System.nanoTime();
+                try{
+                    if(selected.serverId()!=client.getMasterServerId())
+                        throw new PipelineFailure(PipelineFailure.Phase.SOURCE_READ,new IllegalStateException("SOURCE_BACKEND_CHANGED"));
+                    accept(e);
+                }catch(Throwable problem){recordFailure(PipelineFailure.Phase.SOURCE_DECODE,problem);}
+            });
+            client.registerLifecycleListener(new BinaryLogClient.AbstractLifecycleListener(){
+                public void onCommunicationFailure(BinaryLogClient c,Exception e){recordFailure(PipelineFailure.Phase.SOURCE_READ,e);}
+                public void onEventDeserializationFailure(BinaryLogClient c,Exception e){
+                    recordFailure(PipelineFailure.Phase.SOURCE_DECODE,
+                            new SyncFailure("BINLOG_EVENT_DECODE_FAILED","SOURCE_DECODE",false,"BINLOG_EVENT_DECODE_FAILED",e,null,0,null));
+                }
+                public void onDisconnect(BinaryLogClient c){recordFailure(PipelineFailure.Phase.SOURCE_READ,new java.io.IOException("MYSQL_STREAM_DISCONNECTED"));}
+            });
             try{client.connect(10000);}catch(Exception e){closing=true;receiver.cancelled();client.disconnect();throw e;}
+        }
+        private void recordFailure(PipelineFailure.Phase phase,Throwable problem){
+            if(!closing)failure.compareAndSet(null,problem instanceof PipelineFailure?problem:new PipelineFailure(phase,problem));
         }
         TableSchema table(long id){TableMapEventData map=tableIds.get(id);if(map==null)throw new IllegalStateException("BINLOG_TABLE_MAP_MISSING");if(!databases.contains(map.getDatabase()))return null;TableSchema table=schemas.get(map.getDatabase()+"\u0000"+map.getTable());if(table==null||table.columns.size()!=map.getColumnTypes().length)throw new IllegalStateException("BINLOG_SCHEMA_CHANGED");return table;}
         void row(TableSchema t,Change.Operation operation,Object[] before,BitSet beforeMask,Object[] after,BitSet afterMask)throws Exception{
@@ -178,9 +196,9 @@ public final class MysqlCdcSource implements SourceAdapter {
             else if(data instanceof DeleteRowsEventData){DeleteRowsEventData r=(DeleteRowsEventData)data;TableSchema t=table(r.getTableId());for(Object[] b:r.getRows())row(t,Change.Operation.DELETE,b,r.getIncludedColumns(),null,null);}
             else if(data instanceof UpdateRowsEventData){UpdateRowsEventData r=(UpdateRowsEventData)data;TableSchema t=table(r.getTableId());for(Map.Entry<java.io.Serializable[],java.io.Serializable[]> pair:r.getRows())row(t,Change.Operation.UPDATE,pair.getKey(),r.getIncludedColumnsBeforeUpdate(),pair.getValue(),r.getIncludedColumns());}
             else if(data instanceof XidEventData)commit(h);
-            else if(data instanceof QueryEventData){String query=((QueryEventData)data).getSql().trim();if(query.equalsIgnoreCase("BEGIN"))return;if(query.equalsIgnoreCase("ROLLBACK")){changes.clear();commit(h);}else if(query.equalsIgnoreCase("COMMIT"))commit(h);else throw new IllegalStateException("DDL_PLAN_REQUIRED");}
+            else if(data instanceof QueryEventData){String query=((QueryEventData)data).getSql().trim();if(query.equalsIgnoreCase("BEGIN"))return;if(query.equalsIgnoreCase("ROLLBACK")){changes.clear();commit(h);}else if(query.equalsIgnoreCase("COMMIT"))commit(h);else throw new PipelineFailure(PipelineFailure.Phase.DDL,new IllegalStateException("DDL_PLAN_REQUIRED"));}
         }
-        public void check()throws Exception{Throwable e=failure.get();if(e instanceof Exception)throw (Exception)e;if(e!=null)throw new IllegalStateException("MYSQL_CAPTURE_FAILED",e);if(!client.isConnected()||(!delivering&&System.nanoTime()-lastEvent>java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(config.source.binlogIdleTimeoutMillis)))throw new java.io.IOException("MYSQL_STREAM_IDLE_OR_DISCONNECTED");}
+        public void check()throws Exception{Throwable e=failure.get();if(e instanceof Exception)throw (Exception)e;if(e!=null)throw new IllegalStateException("MYSQL_CAPTURE_FAILED",e);if(!client.isConnected()||(!delivering&&System.nanoTime()-lastEvent>java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(config.source.binlogIdleTimeoutMillis)))throw new PipelineFailure(PipelineFailure.Phase.SOURCE_READ,new java.io.IOException("MYSQL_STREAM_IDLE_OR_DISCONNECTED"));}
         public void close()throws Exception{closing=true;receiver.cancelled();client.disconnect();}
     }
     @Override public void close()throws Exception{if(evaluator!=null){evaluator.close();evaluator=null;}}

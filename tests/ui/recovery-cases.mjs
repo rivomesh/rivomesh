@@ -55,6 +55,21 @@ export function registerRecoveryTests({setup,flush,login}){
  test('language switching updates skip approval inside an already open evidence dialog',async()=>{
   const ui=fixture();try{await openReview(ui);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/按完整事务跳过/);ui.d.getElementById('language').click();assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/Skip a complete transaction/);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/accept the resulting data gap/);}finally{ui.dom.window.close();}
  });
+ test('a source decode failure gives source guidance without destination skip controls',async()=>{
+  const ui=fixture();
+  ui.task.operations=[];
+  ui.task.status.run_state='ERROR';
+  ui.task.status.error_stage='SOURCE_DECODE';
+  ui.task.status.error_code='BINLOG_EVENT_DECODE_FAILED';
+  ui.task.status.subscriptions[0].state='RUNNING';
+  try{
+   await login(ui);
+   const diagnostic=ui.d.querySelector('.pipeline-failure');
+   assert.match(diagnostic.textContent,/解码 binlog/);
+   assert.match(diagnostic.textContent,/行镜像/);
+   assert.ok(!ui.d.querySelector('[data-recovery-action="SKIP_TRANSACTION"]'));
+  }finally{ui.dom.window.close();}
+ });
  test('cross-node cancellation binds the request and hides unavailable or completed controls',async()=>{
   for(const options of [{},{role:'OPERATOR'},{enabled:false}]){
    const ui=fixture(options);
