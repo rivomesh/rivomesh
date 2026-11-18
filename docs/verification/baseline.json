@@ -3461,5 +3461,45 @@
       "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
       "cleanupExitCode": 0
     }
+  },
+  "postgresDeliveryTimingAndUuid": {
+    "native": {
+      "artifactSha256": "c3605293a956f0b8656d9e7a0ec60a8c08d1a29da1953b62515cf1f9d9484a13",
+      "status": "PASS",
+      "checks": [
+        "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+        "Pgoutput timestamp matches native commit metadata and direct SQL confirmation persists across a process restart",
+        "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+        "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+        "UUID values preserve canonical text, NULL, primary-key changes, and deletes in VARCHAR(36)",
+        "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+        "A paused destination keeps its previous sample until the failed transaction directly commits",
+        "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+        "The missing slot is refused and the last durable LSN remains available",
+        "Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint"
+      ],
+      "jdk": 21,
+      "runtimeImage": "eclipse-temurin:21-jre-jammy",
+      "sourceImage": "postgres:17.12",
+      "failover": false,
+      "rejectOldPrimary": false,
+      "uuid": true,
+      "deliveryTiming": true,
+      "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "runtimeVersion": "21.0.13",
+      "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+      "runtimeArchitecture": "arm64",
+      "deliveryTimingSample": {
+        "state": "OBSERVED",
+        "sequence": "1",
+        "sourceCommittedAt": "2026-11-18T09:25:05.052057Z",
+        "targetCommitObservedAt": "2026-11-18T09:25:05.347271299Z",
+        "millis": "295"
+      },
+      "cleanupExitCode": 0
+    },
+    "javaFocusedPassed": 38,
+    "domPassed": 126
   }
 }

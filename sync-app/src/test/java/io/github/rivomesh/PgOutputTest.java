@@ -2,6 +2,7 @@ package io.github.rivomesh;
 
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Change;
+import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.PipelineFailure;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
@@ -9,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,6 +40,16 @@ class PgOutputTest {
         assertThrows(IllegalArgumentException.class,()->PostgresSourcePosition.history("1 0/3000\n3 0/1000","4"));
     }
 
+    @Test void uuidUsesTheCanonicalServerRepresentation(){
+        TableSchema.Column uuid=new TableSchema.Column();
+        uuid.type=TableSchema.Type.STRING;
+        uuid.sourceType="2950";
+        String value="a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+        assertEquals(value,PgOutput.value(uuid,value).value);
+        assertNull(PgOutput.value(uuid,null).value);
+        assertThrows(IllegalStateException.class,()->PgOutput.value(uuid,"a0eebc999c0b4ef8bb6d6bb9bd380a11"));
+    }
+
     @Test void pgoutputPublishesOnlyCompleteTransactionsAndChecksRelationMetadata()throws Exception{
         TableSchema table=new TableSchema();
         table.id=TableSchema.identity("database","sales","items");
@@ -57,10 +69,29 @@ class PgOutputTest {
         })));
         SourceTransaction commit=decoder.accept(frame('C',out->{out.writeByte(0);out.writeLong(16);out.writeLong(17);out.writeLong(0);}));
         assertEquals(17,positions.lsn(commit.position));
+        assertEquals(Instant.parse("2000-01-01T00:00:00Z"),commit.sourceCommittedAt);
         assertEquals(Change.Operation.INSERT,commit.changes.get(0).operation);
         assertEquals("3",commit.changes.get(0).after.get(0).value);
         PipelineFailure ddl=assertThrows(PipelineFailure.class,()->decoder.accept(relation("renamed")));
         assertEquals(PipelineFailure.Phase.DDL,ddl.phase);
+    }
+
+    @Test void commitTimingIsExactAdvisoryMetadataEvenBeforeThePostgresEpoch()throws Exception{
+        SourceTransaction beforeEpoch=timedCommit(-1,-1);
+        assertEquals(Instant.parse("1999-12-31T23:59:59.999999Z"),beforeEpoch.sourceCommittedAt);
+        SourceTransaction offset=timedCommit(1234567L,1234567L);
+        assertEquals(Instant.parse("2000-01-01T00:00:01.234567Z"),offset.sourceCommittedAt);
+        SourceTransaction inconsistent=timedCommit(4,5);
+        assertNull(inconsistent.sourceCommittedAt);
+        assertNull(timedCommit(Long.MAX_VALUE,Long.MAX_VALUE).sourceCommittedAt);
+        assertNull(timedCommit(Long.MIN_VALUE,Long.MIN_VALUE).sourceCommittedAt);
+        assertEquals(Codec.encode(inconsistent),Codec.encode(offset));
+    }
+
+    private SourceTransaction timedCommit(long beginMicros,long commitMicros)throws Exception{
+        PgOutput decoder=new PgOutput(positions,"generation",10,Collections.emptyMap(),8);
+        decoder.accept(frame('B',out->{out.writeLong(16);out.writeLong(beginMicros);out.writeInt(7);}));
+        return decoder.accept(frame('C',out->{out.writeByte(0);out.writeLong(16);out.writeLong(17);out.writeLong(commitMicros);}));
     }
 
     private static ByteBuffer relation(String table)throws Exception{

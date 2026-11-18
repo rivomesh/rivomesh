@@ -700,6 +700,33 @@ function renderFailureDiagnostic(card,sub){
  const hint=['TARGET_ACTIVATE','TARGET_PREPARE','TARGET_SNAPSHOT','TARGET_APPLY','RECONCILE','PROJECT'].includes(phase)?phase:'UNKNOWN';card.append(text('p',t('recoveryHint_'+hint),'callout'));
  if(sub.failureDiagnosticProblem)card.append(text('p',t('FAILURE_DIAGNOSTIC_UNAVAILABLE'),'error'));
 }
+Object.assign(messages.zh,{
+ deliveryTiming:'上次提交至目标确认',deliveryTimingHistorical:'历史确认样本',
+ deliveryTimingUnavailable:'暂无可核验样本',deliveryTimingClockSkew:'源库和 Worker 的时钟存在偏差，请检查时间同步',
+ deliveryTimingMilliseconds:'毫秒',deliveryTimingSequence:'事务序号'
+});
+Object.assign(messages.en,{
+ deliveryTiming:'Last commit-to-confirmation delay',deliveryTimingHistorical:'Historical confirmation sample',
+ deliveryTimingUnavailable:'No verifiable sample yet',deliveryTimingClockSkew:'Check clock synchronization between the source and Worker',
+ deliveryTimingMilliseconds:'ms',deliveryTimingSequence:'Transaction sequence'
+});
+function renderDeliveryTiming(card,task,sub){
+ const sample=sub.lastDeliveryTiming;
+ if(!sample||!task.statusAvailable)return;
+ const historical=task.workerState!=='RUNNING'||task.status.run_state!=='RUNNING'
+  ||sub.state!=='RUNNING'||sub.errorCode||sub.pendingTransactions!=='0';
+ const caption=t(historical?'deliveryTimingHistorical':'deliveryTiming');
+ let detail=t('deliveryTimingUnavailable');
+ if(sample.state==='CLOCK_SKEW')detail=t('deliveryTimingClockSkew');
+ if(sample.state==='OBSERVED'&&typeof sample.millis==='string'&&/^(0|[1-9][0-9]{0,15})$/.test(sample.millis)
+  &&typeof sample.sequence==='string'&&/^[1-9][0-9]{0,18}$/.test(sample.sequence)){
+  const observed=new Date(sample.targetCommitObservedAt);
+  if(Number.isFinite(observed.getTime()))
+   detail=sample.millis+' '+t('deliveryTimingMilliseconds')+' · '+t('deliveryTimingSequence')+' '+sample.sequence
+    +' · '+observed.toLocaleString();
+ }
+ const label=text('p',caption+' · '+detail,'subtle');label.dataset.deliveryTiming='';card.append(label);
+}
 function renderSubscriptions(root,task,pending){
  const subscriptions=task.status.subscriptions||[];
  if(!subscriptions.length)return;
@@ -714,7 +741,37 @@ function renderSubscriptions(root,task,pending){
   select.onchange=()=>{selectedDestination=select.value;renderDetail(task);$('destination-filter')?.focus();};
   list.append(label);
  }
- subscriptions.filter(sub=>!selectedDestination||sub.id===selectedDestination).forEach(sub=>{const card=text('article','','subscription-card'),title=text('div');title.append(text('strong',sub.id),badge(sub.state==='RUNNING'&&sub.errorCode?'RETRYING':sub.state));card.append(title);const destination=task.destinations?.find(output=>output.id===sub.id);if(destination){card.append(text('p',destination.product+' · '+t(destination.consistency),'subtle'));if(destination.resource)card.append(text('p',t('physicalResource')+': '+destination.resource));Object.entries(destination.mappings||{}).forEach(([source,target])=>card.append(text('p',source+' → '+target,'subtle')));}if(sub.safeCoveredSequence!=null){card.append(text('p',t('safeCoveredSequence')+': '+sub.safeCoveredSequence+' / '+(task.status.captured_sequence??'—')),text('p',t(sub.progressSemantics==='SQL_COMMITTED'?'contiguousAppliedSequence':'contiguousDeliveredSequence')+': '+sub.contiguousDeliveredSequence),text('p',t('progress_'+sub.progressSemantics),'subtle'));if(sub.firstSkippedSequence!=null)card.append(text('p',t('firstSkippedSequence')+': '+sub.firstSkippedSequence,'subtle'));if(sub.firstSourceExclusionAfterSequence!=null)card.append(text('p',t('firstSourceExclusion')+' · '+sub.firstSourceExclusionAfterSequence,'error'));}else card.append(text('p',t('acknowledged')+': '+sub.acknowledged+' / '+(task.status.lastSequence??'—')));if(task.statusAvailable&&typeof sub.pendingTransactions==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(sub.pendingTransactions))card.append(text('p',t('targetBacklog')+' · '+sub.pendingTransactions,'subtle'));if(Number(task.status.table_count)>0)card.append(text('p',t('snapshotAcknowledged')+': '+(task.status.snapshotAcknowledgments?.[sub.id]||0)+' / '+task.status.table_count));if(sub.errorCode)card.append(text('p',explain(sub.errorCode),sub.state==='PAUSED'?'error':'subtle'));if(sub.state==='PAUSED'){renderFailureDiagnostic(card,sub);renderFailureActions(card,task,sub,pending);const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);}list.append(card);});root.append(list);}
+ subscriptions.filter(sub=>!selectedDestination||sub.id===selectedDestination).forEach(sub=>{
+  const card=text('article','','subscription-card'),title=text('div');
+  title.append(text('strong',sub.id),badge(sub.state==='RUNNING'&&sub.errorCode?'RETRYING':sub.state));card.append(title);
+  const destination=task.destinations?.find(output=>output.id===sub.id);
+  if(destination){
+   card.append(text('p',destination.product+' · '+t(destination.consistency),'subtle'));
+   if(destination.resource)card.append(text('p',t('physicalResource')+': '+destination.resource));
+   Object.entries(destination.mappings||{}).forEach(([source,target])=>card.append(text('p',source+' → '+target,'subtle')));
+  }
+  if(sub.safeCoveredSequence!=null){
+   card.append(text('p',t('safeCoveredSequence')+': '+sub.safeCoveredSequence+' / '+(task.status.captured_sequence??'—')),
+    text('p',t(sub.progressSemantics==='SQL_COMMITTED'?'contiguousAppliedSequence':'contiguousDeliveredSequence')+': '+sub.contiguousDeliveredSequence),
+    text('p',t('progress_'+sub.progressSemantics),'subtle'));
+   if(sub.firstSkippedSequence!=null)card.append(text('p',t('firstSkippedSequence')+': '+sub.firstSkippedSequence,'subtle'));
+   if(sub.firstSourceExclusionAfterSequence!=null)card.append(text('p',t('firstSourceExclusion')+' · '+sub.firstSourceExclusionAfterSequence,'error'));
+  }else card.append(text('p',t('acknowledged')+': '+sub.acknowledged+' / '+(task.status.lastSequence??'—')));
+  if(task.statusAvailable&&typeof sub.pendingTransactions==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(sub.pendingTransactions))
+   card.append(text('p',t('targetBacklog')+' · '+sub.pendingTransactions,'subtle'));
+  renderDeliveryTiming(card,task,sub);
+  if(Number(task.status.table_count)>0)
+   card.append(text('p',t('snapshotAcknowledged')+': '+(task.status.snapshotAcknowledgments?.[sub.id]||0)+' / '+task.status.table_count));
+  if(sub.errorCode)card.append(text('p',explain(sub.errorCode),sub.state==='PAUSED'?'error':'subtle'));
+  if(sub.state==='PAUSED'){
+   renderFailureDiagnostic(card,sub);renderFailureActions(card,task,sub,pending);
+   const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;
+   button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);
+  }
+  list.append(card);
+ });
+ root.append(list);
+}
 $('create-form').elements.formatVersion.onchange=wizardMode;$('create-form').elements.journalMode.onchange=journalMode;$('add-target').onclick=addTarget;
 $('create-form').elements.targetType.onchange=()=>{$('create-form').elements.targetUrl.value=defaultUrl($('create-form').elements.targetType.value);targetMode();};
 $('create-form').elements.sourceType.onchange=wizardMode;

@@ -1,9 +1,11 @@
 package io.github.rivomesh.cdc;
 
+import io.github.rivomesh.api.SourcePosition;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,16 +46,21 @@ class FanoutDispatcherTest {
     }
     @Test void failedJournalAcknowledgmentIsDistinctFromTheConfirmedTargetWrite()throws Exception{
         JdbcSink.Settings settings=target("fast");
+        JdbcJournal.Settings store=journal();
+        store.deliveryTiming=true;
         TableSchema table=JdbcSinkTest.schema(false);
-        try(JdbcJournal journal=new JdbcJournal(journal());JdbcSink sink=new JdbcSink(settings)){
+        try(JdbcJournal journal=new JdbcJournal(store);JdbcSink sink=new JdbcSink(settings)){
             journal.initialize(Codec.sha256("config"),"generation",Collections.singletonList("fast"));
             Journal.Lease lease=journal.claim("owner",30000);
             sink.activate(lease.epoch);
             JdbcSinkTest.emptySnapshot(sink,lease.epoch,table);
-            journal.append(lease,JdbcSinkTest.transaction(1,JdbcSinkTest.insert(table,1,"native commit")));
+            SourceTransaction transaction=JdbcSinkTest.transaction(1,JdbcSinkTest.insert(table,1,"native commit"));
+            transaction.position=new SourcePosition(1,"POSTGRESQL","source",Map.of("lsn","0/7"));
+            transaction.sourceCommittedAt=Instant.parse("2024-01-02T03:04:05.123456Z");
+            journal.append(lease,transaction);
             Journal failing=(Journal)Proxy.newProxyInstance(Journal.class.getClassLoader(),new Class<?>[]{Journal.class},
                     (proxy,method,args)->{
-                        if("acknowledge".equals(method.getName()))throw new SQLException("fixture storage failure","58030");
+                        if("acknowledgeApplied".equals(method.getName()))throw new SQLException("fixture storage failure","58030");
                         try{return method.invoke(journal,args);}
                         catch(InvocationTargetException failure){throw failure.getCause();}
                     });
@@ -64,6 +71,12 @@ class FanoutDispatcherTest {
             assertEquals(1,sink.checkpoint().sequence);
             assertEquals(0,journal.subscriptions().get(0).acknowledged);
             assertNull(journal.subscriptions().get(0).errorCode);
+            FanoutDispatcher reconciler=new FanoutDispatcher(journal,lease,Collections.singletonList(sink),
+                    Collections.singletonMap(table.id,table),record->record.transaction);
+            assertEquals(1,reconciler.drain(1));
+            assertEquals(1,journal.subscriptions().getFirst().acknowledged);
+            Map<?,?> progress=(Map<?,?>)journal.deliveryProgress().get("subscriptions");
+            assertEquals(Map.of("state","UNKNOWN"),((Map<?,?>)progress.get("fast")).get("lastDeliveryTiming"));
         }
     }
     @Test void activationAndSecondTransactionApplyFaultsHaveDistinctDurableLocations()throws Exception{

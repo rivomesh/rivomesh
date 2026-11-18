@@ -271,6 +271,30 @@ test('switching diagnostic destination drops old responses and keeps the target 
  }finally{ui.dom.window.close();}
 });
 
+test('last delivery delay shows uncertainty and outage history without suggesting health',async()=>{
+ const observed={state:'OBSERVED',millis:'42',sequence:'7',sourceCommittedAt:'2026-11-18T04:00:00Z',
+  targetCommitObservedAt:'2026-11-18T04:00:00.042Z'};
+ const subscription=(id,lastDeliveryTiming,changes={})=>({id,state:'RUNNING',pendingTransactions:'0',
+  progressSemantics:'SQL_COMMITTED',lastDeliveryTiming,...changes});
+ const task={id:'delivery-clock',formatVersion:3,sourceType:'POSTGRESQL',workerState:'RUNNING',
+  desired:'RUNNING',operations:[],statusAvailable:true,destinations:[],status:{run_state:'RUNNING',subscriptions:[
+   subscription('active',observed),subscription('paused',observed,{state:'PAUSED',pendingTransactions:'1'}),
+   subscription('future',{state:'CLOCK_SKEW'}),subscription('missing',{state:'UNKNOWN'})
+  ]}};
+ const ui=setup([task],'VIEWER');
+ try{
+  await login(ui);
+  const labels=[...ui.d.querySelectorAll('[data-delivery-timing]')].map(node=>node.textContent);
+  assert.match(labels[0],/上次提交至目标确认 · 42 毫秒 · 事务序号 7/);
+  assert.match(labels[1],/历史确认样本 · 42 毫秒/);
+  assert.match(labels[2],/请检查时间同步/);
+  assert.match(labels[3],/暂无可核验样本/);
+  task.statusAvailable=false;
+  ui.d.querySelector('.task-card').click();await flush();
+  assert.equal(ui.d.querySelector('[data-delivery-timing]'),null);
+ }finally{ui.dom.window.close();}
+});
+
 test('validation submits explicit SQL targets and budgets without including messaging targets',async()=>{
  const task={id:'validate',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING'},operations:[],destinations:[{id:'pg',product:'POSTGRESQL',consistency:'TRANSACTIONAL'},{id:'mq',product:'KAFKA',consistency:'AT_LEAST_ONCE_EVENTS'}]};const ui=setup([task]);try{
   await login(ui);assert.equal(ui.d.querySelectorAll('[data-validation-target]').length,1);const read=ui.d.querySelector('[data-validation-limit="read"]');read.value='7200';read.dispatchEvent(new ui.w.Event('input'));ui.d.querySelector('[data-validation-action="start"]').click();await flush();

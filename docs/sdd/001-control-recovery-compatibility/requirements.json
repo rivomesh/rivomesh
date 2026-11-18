@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.42",
+  "version": "0.43",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -181,8 +181,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口实测采集租约、脱敏分页、任务/节点过滤、目标积压，以及 Agent 重启后的独立目标暂停、重试和恢复记录。仍需源提交至目标确认的时间样本和容量档案。",
-        "en": "Both entries passed lease views, redacted paging, filters, per-target backlog and independent target pause/retry/recovery through Agent restart. Source-commit-to-target timing samples and capacity remain."
+        "zh-CN": "双入口有采集租约、目标积压及独立暂停重试诊断。PostgreSQL 源到事务 SQL 目标可显示最近一笔直接确认的提交耗时，重启保留。其他源与协议的时间语义及容量档案仍待验。",
+        "en": "Both entries show capture lease, individual backlog and target pause/retry diagnostics. PostgreSQL-to-transactional-SQL records the last directly confirmed source commit sample across restart. Other source/protocol timing and capacity remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",
@@ -198,7 +198,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
         "tests/global-control-pipeline.py",
         "docs/verification/baseline.json",
-        "tests/ui/browser-smoke.mjs"
+        "tests/ui/browser-smoke.mjs",
+        "tests/postgres-source-run.py"
       ]
     },
     {
@@ -1017,8 +1018,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已复验 PostgreSQL 17.12 同步槽切主并拒绝旧时间线，18.7 已验收存储型生成列与槽丢失保护。更多类型、DDL 与多目标共同点待验收。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 synchronized-slot promotion and old-timeline refusal, and 18.7 stored generated columns and missing-slot protection. Broader types, DDL and multi-target common cuts remain."
+        "zh-CN": "Temurin 21 实测 PostgreSQL 17.12 同步槽切主、拒绝旧时间线、UUID 主键变更与无主键行，18.7 生成列和缺槽保护。更多类型、DDL 与多目标共同点待验收。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 slot promotion and old-timeline refusal, UUID primary-key changes and keyless rows, plus 18.7 generated columns and missing-slot protection. Broader types, DDL and common cuts remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",

@@ -18,6 +18,7 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 ## 支持边界与故障处理
 
 - 初始类型包括有符号整数、布尔、有明确精度的小数、文本、JSON/JSONB 和 BYTEA。表可有主键，也可使用完整行身份的无主键表。
+- PostgreSQL UUID 以小写标准格式写入目标 `VARCHAR(36)`。PostgreSQL 17.12 到 PostgreSQL 17.12 档案已验证 NULL 和 UUID 主键变更。夹具追加 `--uuid` 可复现。[PostgreSQL UUID 格式](https://www.postgresql.org/docs/17/datatype-uuid.html)
 - PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。

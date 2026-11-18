@@ -18,6 +18,7 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 ## Profile and recovery
 
 - The initial type profile includes signed integers, booleans, bounded numeric values, text, JSON/JSONB and BYTEA. Keyed and keyless tables use full row identity.
+- PostgreSQL UUID values are copied as lowercase canonical text in `VARCHAR(36)`. PostgreSQL 17.12 to PostgreSQL 17.12 verified nullable UUID values and primary-key changes through CDC. Reproduce with `--uuid` in the native fixture. [PostgreSQL UUID representation](https://www.postgresql.org/docs/17/datatype-uuid.html)
 - PostgreSQL 18 stored generated columns can be materialized as ordinary destination columns when the publication includes them. Use `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)` and retain `REPLICA IDENTITY FULL`. PostgreSQL 17 generated columns, PostgreSQL 18 virtual generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require separate profiles. Preflight or capture reports unsupported relation changes and types.
 - Restart uses the existing LSN and snapshot when the original primary, timeline, slot and journal remain available. Resume a failed target subscription after addressing its SQL error.
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.

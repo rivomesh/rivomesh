@@ -35,9 +35,13 @@ helm upgrade --install rivomesh-global-b deploy/helm/rivomesh --namespace rivome
 
 全局 maximumTasks/maximumCommands 与每节点 maxTasks/maxRunningTasks 是不同预算。当前默认全局任务上限 10000、活动命令上限 1000，配置范围见示例/Schema；这只是资源保护参数，不是硬件吞吐承诺。查询请求最多 512KiB、响应 1MiB，有效期 1–60 秒；线程池和保留容量均有界。
 
-全局任务列表支持按精确任务 ID 或执行节点 ID 筛选，也可以同时使用两项。`GET /api/tasks?ownerNodeId=agent-a&taskId=orders&limit=20` 先应用当前授权和筛选条件，再计算总数及下一页。使用 `after` 时保持原筛选条件。在任务详情中选择目标可单独查看该目标的状态、SQL 故障及待确认日志事务。积压数是观察时已采集序号与安全覆盖序号的差值，观察过期时隐藏。消费者完成时间和源提交至目标确认的实际时间延迟待接入。[验收证据](../verification/README.md#global-task-filters-and-destination-backlog)
+全局任务列表支持按精确任务 ID 或执行节点 ID 筛选，也可以同时使用两项。`GET /api/tasks?ownerNodeId=agent-a&taskId=orders&limit=20` 先应用当前授权和筛选条件，再计算总数及下一页。使用 `after` 时保持原筛选条件。在任务详情中选择目标可单独查看该目标的状态、SQL 故障及待确认日志事务。积压数是观察时已采集序号与安全覆盖序号的差值，观察过期时隐藏。消费者完成时间需单独度量。[验收证据](../verification/README.md#global-task-filters-and-destination-backlog)
 
 管理员可在 **诊断记录** 中从 **采集端** 切换到单个目标。接口为 `GET /api/tasks/orders/diagnostics?subscriptionId=warehouse&limit=20`。记录包括目标故障暂停、重试及重试结束的观察时间。采集和目标事件分开保存在执行 Agent 的私有日志目录内。同一任务的目标共用两段各 64 KiB 的滚动文件，频繁故障时早期记录可能轮换。使用 `after` 翻页时保持相同目标。记录已脱敏，只包含事件类型及元数据。重试结束表示 Worker 已观察到恢复，可用目标确认序号及待确认数量判断投递进度。
+
+PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTiming` 展示各目标最近一次可核验的提交到确认延迟。它以逻辑复制协议的源提交时间为起点，以 Worker 收到目标提交成功响应为终点，包含通信耗时。源库和 Worker 应同步时钟。终点早于起点时，接口返回 `CLOCK_SKEW`，不提供耗时。两个时间均为 UTC，毫秒数及日志序号使用十进制字符串。[PostgreSQL 逻辑复制消息格式](https://www.postgresql.org/docs/17/protocol-logicalrep-message-formats.html)
+
+每个样本对应一笔已确认事务。任务暂停、重试或有积压时，界面标记为历史样本。首次采样前，以及推进确认序号时没有直接观察到目标提交响应的情况，状态为 `UNKNOWN`。空投递、快照、屏障、跳过和提交结果核对不会产生样本。可根据运行状态、积压数和连续投递序号判断当前进度。Worker 重启或原日志记录已回收后，仍可读取最近确认序号对应的样本。
 
 ### 新任务自动分配
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Native PostgreSQL source snapshot, pgoutput, restart and missing-slot acceptance."""
 import argparse
+from datetime import datetime, timedelta
 import hashlib
 import json
 import os
@@ -20,6 +21,8 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
+parser.add_argument('--uuid', action='store_true', help='Exercise UUID keys and nullable UUID values')
+parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
 parser.add_argument('--failover', action='store_true',
                     help='Exercise a synchronized logical slot through physical standby promotion')
 parser.add_argument('--reject-old-primary', action='store_true',
@@ -38,7 +41,8 @@ project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
-              sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary)
+              sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
+              uuid=args.uuid,deliveryTiming=args.delivery_timing)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -90,6 +94,8 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
     document=dict(services=services)
+    if args.delivery_timing:
+        services['source']['command']+=['-c','track_commit_timestamp=on']
     if args.failover:
         assert not args.generated, 'Use the first physical promotion profile with PostgreSQL 17'
         services['source']['networks']={'default':{},'access':{'aliases':['source-rw']}}
@@ -100,7 +106,8 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             "gosu postgres pg_basebackup -d 'host=source user=postgres dbname=sync_test' "
             '-D /standby/data -X stream -S rivomesh_wal -R',
             'exec gosu postgres postgres -D /standby/data -c wal_level=logical '
-            '-c max_replication_slots=8 -c hot_standby_feedback=on -c sync_replication_slots=on',
+            '-c max_replication_slots=8 -c hot_standby_feedback=on -c sync_replication_slots=on'
+            + (' -c track_commit_timestamp=on' if args.delivery_timing else ''),
         ])
         services['standby']=dict(image=args.source_image,entrypoint=['bash','-ceu',standby_script],
                                  environment={'PGPASSWORD':'${RM_PG_PASSWORD}'},volumes=['standby-data:/standby'])
@@ -144,11 +151,13 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
 
     def equal():
         stored=',derived' if args.generated else ''
-        queries=[
-            "SELECT id,amount,active,payload::text,encode(data,'hex')"+stored+" FROM {schema}.items ORDER BY id",
-            "SELECT value,payload::text"+stored+" FROM {schema}.duplicates ORDER BY value,payload::text",
-            "SELECT id,label FROM {schema}.ledger ORDER BY id"]
-        for query,schema in zip(queries,('sales','sales','billing')):
+        tables=[
+            ("SELECT id,amount,active,payload::text,encode(data,'hex')"+stored+" FROM {schema}.items ORDER BY id","sales"),
+            ("SELECT value,payload::text"+stored+" FROM {schema}.duplicates ORDER BY value,payload::text","sales"),
+            ("SELECT id,label FROM {schema}.ledger ORDER BY id","billing")]
+        if args.uuid:
+            tables.append(("SELECT id,ref FROM {schema}.identities ORDER BY id","billing"))
+        for query,schema in tables:
             if sql('source',query.format(schema=schema))!=sql('target',query.format(schema='copy_'+schema)):
                 return False
         return True
@@ -176,6 +185,15 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
             WITH (publish='insert,update,delete');
         """)
+        if args.uuid:
+            sql('source',"""
+                CREATE TABLE billing.identities(id UUID PRIMARY KEY,ref UUID);
+                ALTER TABLE billing.identities REPLICA IDENTITY FULL;
+                INSERT INTO billing.identities VALUES
+                    ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',NULL),
+                    ('ffffffff-ffff-ffff-ffff-ffffffffffff','00000000-0000-0000-0000-000000000000');
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.identities;
+            """)
         if args.failover:
             compose('exec','-T','source','sh','-c',
                     'printf "\\nhost replication postgres samenet scram-sha-256\\n" >> "$PGDATA/pg_hba.conf"')
@@ -197,7 +215,8 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             assert check.returncode and 'POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED' in check.stderr
             sql('source',"ALTER PUBLICATION rivomesh_test SET (publish_generated_columns='stored')")
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        assert json.loads(preflight.stdout)['sourceTables']==3
+        table_count=4 if args.uuid else 3
+        assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
         matched=re.search(r'version "([^"]+)"',version.stderr)
@@ -209,7 +228,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         require(stream_ready,'native consistent snapshot')
         initial=task()['status']
         snapshot_ids=sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
-        assert len(snapshot_ids.splitlines())==3
+        assert len(snapshot_ids.splitlines())==table_count
         try:
             http(route+'/capture-recovery')
         except urllib.error.HTTPError as healthy:
@@ -217,6 +236,32 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+
+        if args.delivery_timing:
+            assert initial['subscriptions'][0]['lastDeliveryTiming']=={'state':'UNKNOWN'}
+            xid=sql('source',"INSERT INTO billing.ledger VALUES(15,'delivery observation') RETURNING xmin").splitlines()[0]
+            assert xid.isdecimal()
+            utc_commit=f"SELECT pg_xact_commit_timestamp('{xid}'::xid) AT TIME ZONE 'UTC'"
+            source_time=datetime.fromisoformat(sql('source',utc_commit)+"+00:00")
+
+            def observed_timing():
+                subscription=task()['status']['subscriptions'][0]
+                sample=subscription.get('lastDeliveryTiming',{})
+                return sample if sample.get('state')=='OBSERVED' and subscription['pendingTransactions']=='0' else None
+
+            timing=require(observed_timing,'target SQL commit observation reaches the journal')
+            assert sql('target','SELECT label FROM copy_billing.ledger WHERE id=15')=='delivery observation'
+            assert sql('target','SELECT stream_seq FROM copy_meta.rm3_sink_job')==timing['sequence']
+            assert datetime.fromisoformat(timing['sourceCommittedAt'])==source_time
+            confirmed=datetime.fromisoformat(timing['targetCommitObservedAt'])
+            assert int(timing['millis'])==(confirmed-source_time)//timedelta(milliseconds=1)>=0
+            report['deliveryTimingSample']=timing
+            compose('kill','-s','SIGKILL','runner')
+            compose('up','-d','runner')
+            require(stream_ready,'Worker and controller serve original checkpoints after restart')
+            assert observed_timing()==timing
+            passed('Pgoutput timestamp matches native commit metadata and direct SQL confirmation persists across a process restart')
+            initial=task()['status']
 
         initial_lsn=initial['capture_lsn']
         sql('source','CREATE TABLE sales.unpublished(id INT); INSERT INTO sales.unpublished VALUES(1)')
@@ -234,6 +279,23 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             COMMIT""")
         require(lambda:equal() and task()['status'].get('capture_lsn')!=initial['capture_lsn'],'pgoutput transaction delivered')
         passed('A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence')
+        if args.uuid:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.identities SET id='A0EEBC999C0B4EF8BB6D6BB9BD380A12',
+                    ref='ffffffff-ffff-ffff-ffff-ffffffffffff'
+                    WHERE id='a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+                DELETE FROM billing.identities WHERE id='ffffffff-ffff-ffff-ffff-ffffffffffff';
+                INSERT INTO billing.identities VALUES ('00000000-0000-0000-0000-000000000000',NULL);
+                COMMIT;
+            """)
+            require(equal,'UUID keys and nullable values delivered')
+            assert sql('target',"""
+                SELECT count(*) FROM information_schema.columns
+                 WHERE table_schema='copy_billing' AND table_name='identities'
+                   AND data_type='character varying' AND character_maximum_length=36
+            """)=='2'
+            passed('UUID values preserve canonical text, NULL, primary-key changes, and deletes in VARCHAR(36)')
         if args.generated:
             assert sql('target','SELECT derived FROM copy_sales.items WHERE id=1')=='3'
             assert sql('target','SELECT derived FROM copy_sales.duplicates ORDER BY derived')=='28\n36'
@@ -241,6 +303,8 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                         "AND column_name='derived' AND is_generated='NEVER'")=='2'
             passed('Native stored generated columns materialize keyed and keyless updates, and missing publication coverage is refused')
 
+        if args.delivery_timing:
+            last_success=require(observed_timing,'last SQL commit observed before target fault')
         sql('target','ALTER TABLE copy_sales.items ADD CONSTRAINT test_stop CHECK(id<>77)')
         sql('source',"INSERT INTO sales.items VALUES(77,3.1415,true,'{}',decode('1234','hex'))")
         def failed_target():
@@ -249,11 +313,17 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             return sub if sub.get('failurePhase')=='TARGET_APPLY' and sub.get('state')=='PAUSED' else None
         failed=require(failed_target,'SQL fault classified')
         assert sql('target','SELECT COUNT(*) FROM copy_sales.items WHERE id=77')=='0'
+        if args.delivery_timing:
+            assert int(failed['pendingTransactions'])>0 and failed['lastDeliveryTiming']==last_success
         sql('target','ALTER TABLE copy_sales.items DROP CONSTRAINT test_stop')
         http(route+'/actions',dict(action='RESUME_TARGET',expectedRevision=task()['revision'],
                                    subscriptionId='pg',errorCount=failed['errorGeneration']))
         require(equal,'same pgoutput transaction replayed')
         passed('Destination SQL failure retains the typed source transaction and replays after explicit resume')
+        if args.delivery_timing:
+            restored=require(observed_timing,'resumed target records a new direct apply observation')
+            assert int(restored['sequence'])>int(last_success['sequence'])
+            passed('A paused destination keeps its previous sample until the failed transaction directly commits')
 
         previous=task()['status']['capture_lsn']
         compose('kill','-s','SIGKILL','runner')

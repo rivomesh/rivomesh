@@ -9,17 +9,21 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** One complete transaction at a time, using pgoutput protocol 1 and text tuples. */
 final class PgOutput {
     private static final int MAX_FIELD_BYTES=16*1024*1024;
     private static final long MAX_TRANSACTION_BYTES=32L*1024*1024;
+    private static final long POSTGRES_EPOCH_SECONDS=946684800L;
+    private static final Pattern UUID_TEXT=Pattern.compile("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}");
     private final PostgresSourcePosition positions;
     private final String generation;
     private final int maxRows;
@@ -27,7 +31,7 @@ final class PgOutput {
     private final Set<Integer> announced=new HashSet<>();
     private final List<Change> changes=new ArrayList<>();
     private boolean open;
-    private long finalLsn,lastCommit,transactionBytes;
+    private long finalLsn,lastCommit,transactionBytes,beginCommitMicros;
 
     PgOutput(PostgresSourcePosition positions,String generation,int maxRows,
              Map<Integer,TableSchema> schemas,long initialLsn){
@@ -56,7 +60,7 @@ final class PgOutput {
     private void begin(ByteBuffer frame){
         if(open)throw invalid("POSTGRESQL_TRANSACTION_UNFINISHED");
         finalLsn=frame.getLong();
-        frame.getLong(); // origin commit timestamp
+        beginCommitMicros=frame.getLong();
         frame.getInt(); // xid can wrap and is not the durable transaction identifier
         transactionBytes=0;
         open=true;
@@ -65,13 +69,17 @@ final class PgOutput {
     private SourceTransaction commit(ByteBuffer frame){
         if(!open||frame.get()!=0)throw invalid("POSTGRESQL_PGOUTPUT_COMMIT_INVALID");
         long commit=frame.getLong(),end=frame.getLong();
-        frame.getLong();
+        long commitMicros=frame.getLong();
         if(finalLsn!=commit||Long.compareUnsigned(end,commit)<0||Long.compareUnsigned(end,lastCommit)<=0)
             throw invalid("POSTGRESQL_COMMIT_LSN_INVALID");
         SourceTransaction tx=new SourceTransaction();
         tx.id=PostgresSourcePosition.transaction(end);
         tx.streamGeneration=generation;
         tx.position=positions.at(end);
+        if(commitMicros==beginCommitMicros&&commitMicros!=Long.MIN_VALUE&&commitMicros!=Long.MAX_VALUE){
+            tx.sourceCommittedAt=Instant.ofEpochSecond(POSTGRES_EPOCH_SECONDS+Math.floorDiv(commitMicros,1000000L),
+                    Math.floorMod(commitMicros,1000000L)*1000L);
+        }
         for(Change change:changes){
             change.eventId=tx.id+":"+tx.changes.size();
             tx.changes.add(change);
@@ -166,7 +174,11 @@ final class PgOutput {
                     bytes[i]=(byte)((high<<4)|low);
                 }
                 return Cell.value(Base64.getEncoder().encodeToString(bytes));
-            case STRING:case JSON:return Cell.value(text);
+            case STRING:
+                if("2950".equals(column.sourceType)&&!UUID_TEXT.matcher(text).matches())
+                    throw invalid("POSTGRESQL_UUID_TEXT_INVALID");
+                return Cell.value(text);
+            case JSON:return Cell.value(text);
             default:throw invalid("POSTGRESQL_TYPE_UNSUPPORTED");
         }
     }

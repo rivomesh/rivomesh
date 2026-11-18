@@ -56,6 +56,7 @@
     "LG-10 offline audit checkpoints passed 11 Python checks and three actual host checks, including chain extension through killed service and rollback refusal against an older valid export.",
     "SO-07 added bounded Oracle text-backed JSON; 18 native Oracle 26ai cases and five focused Java tests passed, covering exact JSONB snapshot/CDC, keyless changes and SIGKILL continuation at the original snapshots.",
     "CP-04 standalone writer handoff passed five native cases and 55 focused Java tests, retaining original snapshot and target receipts across distinct writer identities and a thawed stale Worker.",
-    "LG-02 read-only MySQL to nonempty PostgreSQL preview passed nine native cases, including physical snapshot session loss, exact difference counts, unchanged destination and existing ownership refusal."
+    "LG-02 read-only MySQL to nonempty PostgreSQL preview passed nine native cases, including physical snapshot session loss, exact difference counts, unchanged destination and existing ownership refusal.",
+    "CP-06/SO-06 verified PostgreSQL commit timing against native microseconds and current SQL acknowledgments, plus UUID keys, nullable values and changes, on a 10-case live fixture and 38 focused Java tests."
   ]
 }

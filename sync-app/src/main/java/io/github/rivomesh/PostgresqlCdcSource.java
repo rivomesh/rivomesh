@@ -316,6 +316,10 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 column.type=TableSchema.Type.STRING;
                 if(oid==1043&&modifier>=4)column.length=modifier-4;
                 break;
+            case 2950:
+                column.type=TableSchema.Type.STRING;
+                column.length=36;
+                break;
             case 114:case 3802:column.type=TableSchema.Type.JSON;break;
             case 1700:
                 if(modifier<4)throw invalid("POSTGRESQL_NUMERIC_PRECISION_REQUIRED");

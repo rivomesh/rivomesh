@@ -54,6 +54,10 @@ public interface Journal extends AutoCloseable {
     long append(Lease lease,SourceTransaction transaction)throws Exception;
     List<Record> read(String subscription,int maximumTransactions)throws Exception;
     void acknowledge(Lease lease,String subscription,long sequence)throws Exception;
+    /** A normal nonempty SQL apply just returned after committing. Reconciliation uses acknowledge instead. */
+    default void acknowledgeApplied(Lease lease,String subscription,long sequence)throws Exception{
+        acknowledge(lease,subscription,sequence);
+    }
     default void verifySkippedCheckpoint(String subscription,SinkAdapter.Checkpoint checkpoint)throws Exception{if(checkpoint.skipOperation!=null)throw new UnsupportedOperationException("SINK_SKIP_RECOVERY_REQUIRED");}
     List<Subscription> subscriptions()throws Exception;
     void pause(Lease lease,String subscription,String code)throws Exception;

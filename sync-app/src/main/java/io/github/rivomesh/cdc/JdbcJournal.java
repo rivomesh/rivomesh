@@ -5,6 +5,7 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.recovery.CaptureExclusionPlan;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.Instant;
 import java.util.*;
 
 /** Version 3 durable journal: one fenced source order, independent subscriber acknowledgments. */
@@ -12,6 +13,7 @@ public final class JdbcJournal implements NormalizedJournal {
     public static final class Settings {
         public String driver,url,username="",password="",namespace="rivomesh_v3",pipelineId;
         public String writerAssignment,writerNode;
+        public boolean deliveryTiming;
         public long maxPendingBytes=1024L*1024*1024;
     }
     public static final class Busy extends IllegalStateException { public Busy(){super("JOURNAL_BUSY");} }
@@ -96,6 +98,7 @@ public final class JdbcJournal implements NormalizedJournal {
             JdbcPublicationStore.initialize(this,c);
             JdbcFailureReview.initialize(this,c);
             JdbcCommitAcknowledgement.initialize(this,c);
+            if(settings.deliveryTiming)JdbcDeliveryTiming.initialize(this,c,dialect==Dialect.MYSQL);
             if(settings.writerAssignment!=null)JournalWriterAssignment.initialize(this,c);
             if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack','rm3_pipeline_failure')")){
                 p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=17)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
@@ -269,6 +272,9 @@ public final class JdbcJournal implements NormalizedJournal {
                 captured=Codec.encode(transaction.position);
             }
             execute(c,"INSERT INTO "+table("log")+" (pipeline_id,stream_seq,transaction_id,payload,payload_hash,payload_bytes) VALUES (?,?,?,?,?,?)",settings.pipelineId,sequence,transaction.id,payload,hash,charge);
+            if(settings.deliveryTiming&&transaction.kind==SourceTransaction.Kind.DATA&&transaction.sourceCommittedAt!=null
+                    &&"POSTGRESQL".equals(transaction.position.getSourceType())&&!transaction.changes.isEmpty())
+                JdbcDeliveryTiming.capture(this,c,sequence,transaction.sourceCommittedAt);
             execute(c,"INSERT INTO "+table("receipt")+" (pipeline_id,transaction_id,stream_seq,payload_hash) VALUES (?,?,?,?)",settings.pipelineId,transaction.id,sequence,hash);
             execute(c,"UPDATE "+table("job")+" SET next_seq=?,captured=?,pending_bytes=? WHERE pipeline_id=?",Math.addExact(sequence,1),captured,Math.addExact(pending,charge),settings.pipelineId);c.commit();return sequence;
         }
@@ -330,6 +336,12 @@ public final class JdbcJournal implements NormalizedJournal {
         }
     }
     @Override public void acknowledge(Lease lease,String subscription,long sequence)throws Exception{
+        acknowledge(lease,subscription,sequence,null);
+    }
+    @Override public void acknowledgeApplied(Lease lease,String subscription,long sequence)throws Exception{
+        acknowledge(lease,subscription,sequence,settings.deliveryTiming?Instant.now():null);
+    }
+    private void acknowledge(Lease lease,String subscription,long sequence,Instant confirmedAt)throws Exception{
         try(Connection c=connect()){
             c.setAutoCommit(false);fence(c,lease);Subscription sub=subscription(c,subscription,true);
             if(sequence>=0&&sequence<=sub.acknowledged){c.commit();return;}if(!"RUNNING".equals(sub.state))throw new Paused();
@@ -337,6 +349,7 @@ public final class JdbcJournal implements NormalizedJournal {
             try(PreparedStatement p=c.prepareStatement("SELECT 1 FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq=?")){
                 p.setString(1,settings.pipelineId);p.setLong(2,sequence);try(ResultSet rs=p.executeQuery()){if(!rs.next())throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");}
             }
+            if(confirmedAt!=null)JdbcDeliveryTiming.confirm(this,c,subscription,sequence,confirmedAt);
             execute(c,"UPDATE "+table("subscription")+" SET acknowledged=? WHERE pipeline_id=? AND subscription_id=?",sequence,settings.pipelineId,subscription);c.commit();
         }
     }
@@ -388,7 +401,11 @@ public final class JdbcJournal implements NormalizedJournal {
                 execute(c,"DELETE FROM "+table("normalized")+" WHERE pipeline_id=? AND stream_seq=?",settings.pipelineId,sequence);
                 execute(c,"DELETE FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq=?",settings.pipelineId,sequence);
             }
-            if(!sequences.isEmpty())execute(c,"UPDATE "+table("job")+" SET pending_bytes=? WHERE pipeline_id=?",(long)job.get("bytes")-bytes,settings.pipelineId);c.commit();return sequences.size();
+            if(!sequences.isEmpty()){
+                if(settings.deliveryTiming)JdbcDeliveryTiming.collect(this,c,sequences.getLast());
+                execute(c,"UPDATE "+table("job")+" SET pending_bytes=? WHERE pipeline_id=?",(long)job.get("bytes")-bytes,settings.pipelineId);
+            }
+            c.commit();return sequences.size();
         }
     }
     @Override public void saveSchema(Lease lease,TableSchema schema)throws Exception{
@@ -587,7 +604,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 p.setString(1,settings.pipelineId);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");format=r.getInt(1);captured=r.getLong(2)-1;}
             }
             if(!supported(format))throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");verifyRecoveryTables(c,format);
-            Map<String,Object> progress=new TreeMap<>();
+            Map<String,Map<String,Object>> progress=new TreeMap<>();
             for(Subscription sub:subscriptions(c)){
                 long prefix=sub.acknowledged;Long first=null;
                 if(hasTargetGaps(format))try(PreparedStatement p=c.prepareStatement("SELECT g.stream_seq,g.plan_hash,p.stream_seq,p.subscription_id,p.plan_hash,p.run_state FROM "+table("gap")+" g LEFT JOIN "+table("skip_plan")+" p ON p.pipeline_id=g.pipeline_id AND p.operation_id=g.operation_id WHERE g.pipeline_id=? AND g.subscription_id=? ORDER BY g.stream_seq LIMIT 1")){
@@ -607,6 +624,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 }
                 progress.put(sub.id,row);
             }
+            if(settings.deliveryTiming)JdbcDeliveryTiming.enrich(this,c,progress);
             Map<String,Object> result=new LinkedHashMap<>();result.put("capturedSequence",Long.toString(captured));result.put("subscriptions",progress);c.rollback();return result;
         }
     }
