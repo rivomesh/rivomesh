@@ -42,7 +42,7 @@ public final class TransactionSkipRecovery {
     }
     private static JdbcSkipJournal.Stored lookup(JdbcJournal journal,String operation)throws Exception{
         if(operation==null||!operation.matches("[A-Za-z0-9_-]{8,128}"))throw new IllegalArgumentException("SKIP_REQUEST_INVALID");
-        try(Connection c=journal.connect()){c.setAutoCommit(false);Map<String,Object> job=journal.locked(c);JdbcSkipJournal.Stored result=((Number)job.get("format")).intValue()==4?JdbcSkipJournal.load(journal,c,operation):null;c.rollback();return result;}
+        try(Connection c=journal.connect()){c.setAutoCommit(false);Map<String,Object> job=journal.locked(c);JdbcSkipJournal.Stored result=JdbcJournal.hasTargetGaps((int)job.get("format"))?JdbcSkipJournal.load(journal,c,operation):null;c.rollback();return result;}
     }
     private static void original(JdbcSkipJournal.Stored stored,FailureEvidenceStore.Envelope retained,JdbcSink.Settings settings){
         SourceTransaction projected=FailureCheckpointInspection.projected(retained.value,settings);
@@ -59,7 +59,7 @@ public final class TransactionSkipRecovery {
             JdbcSkipJournal.ensureMetadata(journal,retained.value);
             try(Connection c=journal.connect();RepairConnectionGuard deadline=new RepairConnectionGuard(c,30000)){
                 c.setAutoCommit(false);Map<String,Object> job=journal.locked(c);
-                JdbcSkipJournal.Stored raced=((Number)job.get("format")).intValue()==4?JdbcSkipJournal.load(journal,c,operation):null;
+                JdbcSkipJournal.Stored raced=JdbcJournal.hasTargetGaps((int)job.get("format"))?JdbcSkipJournal.load(journal,c,operation):null;
                 if(raced!=null){if(!requestHash.equals(raced.plan.requestHash))throw new IllegalStateException("SKIP_REQUEST_CONFLICT");original(raced,retained,settings);existing=raced;c.rollback();}
                 else if(!"PAUSED".equals(job.get("state")))throw new IllegalStateException("SKIP_REQUIRES_PIPELINE_PAUSED");
                 else try(JdbcSink sink=JdbcSink.existing(settings)){

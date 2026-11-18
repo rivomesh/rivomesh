@@ -92,7 +92,7 @@ Artifact `d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0` pass
 
 ## RC-04 capture review
 
-Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` passed six native MySQL 8.4 checks with two controllers and an independent Agent. Both entries returned the same read-only review after a decode fault and Agent restart, with every affected subscription listed and the original error generation and GTID retained. PostgreSQL missing-slot review kept the original LSN and left the slot absent. Source-range proof and approved exclusion remain open. See the [operator guide](../en/capture-recovery.md).
+Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` passed six native MySQL 8.4 checks with two controllers and an independent Agent. Both entries returned the same read-only review after a decode fault and Agent restart, with every affected subscription listed and the original error generation and GTID retained. PostgreSQL missing-slot review kept the original LSN and left the slot absent. A later candidate verified bounded MySQL source-range proof and approved exclusion. See the [operator guide](../en/capture-recovery.md).
 
 The same candidate also passed the MySQL 5.7.44 PostgreSQL-only asynchronous promotion fixture. After a real uncollected binlog was purged, the review returned `SOURCE_LOG_GAP`, the affected subscription and the original captured sequence. Reproduce with `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7.44 SYNC_V3_HA_POSTGRES_ONLY=1 tests/v3-ha-run.sh`.
 
@@ -207,3 +207,8 @@ Candidate `b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32` pas
 ### Managed MySQL capture evidence
 
 Candidate `9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365` passed thirteen native MySQL 8.4.13 checks, seven Chrome checks and 119 DOM tests. Administrators retained the original event frames from either Controller. Other roles and a stale boundary were refused. A retry after source log purge and Agent SIGKILL reused the same archive and receipt without changing the capture checkpoint. A simulated abandoned staging file was removed during publication. The isolated rerun passed after an earlier concurrent run ended with a control-store 503 during review. [Operator guide](../en/capture-recovery.md#retain-from-a-management-entry) · [Manifest](baseline.json)
+
+
+### Approved exclusion of a MySQL source transaction
+
+Candidate `784468155a13763bf75e532cfb736269df34719a4a77942d8736390021356ffe` passed fourteen approval and continuation checks and fourteen log-purge checks on native MySQL 8.4.13. Administrators reviewed the original bytes and exact impact, then excluded the one GTID while both real SQL target rows and acknowledgment positions stayed unchanged. The Agent reopened the paused state and gap receipt. Later transactions reached PostgreSQL and MySQL after Resume, with the contiguous applied prefixes held at the gap. A matching retained archive alone could not authorize the source range after purge. The same artifact passed seven Chrome checks, 35 focused Java tests and 120 DOM tests. [Runbook](../en/capture-recovery.md#approve-a-source-transaction-skip) · [Manifests](baseline.json)

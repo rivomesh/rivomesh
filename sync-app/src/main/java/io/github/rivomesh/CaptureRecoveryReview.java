@@ -3,11 +3,15 @@ package io.github.rivomesh;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.JdbcJournal;
+import io.github.rivomesh.cdc.Journal;
 import io.github.rivomesh.cdc.SourceAdapter;
+import io.github.rivomesh.cdc.TableSchema;
+import io.github.rivomesh.recovery.CaptureExclusionPlan;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,57 @@ public final class CaptureRecoveryReview {
         if(errorGeneration<0||boundaryHash==null||!boundaryHash.matches("[0-9a-f]{64}")||authorize==null)
             throw new IllegalArgumentException("CAPTURE_EVIDENCE_REQUEST_INVALID");
         return inspect(config,true,archiveDirectory,new Retention(errorGeneration,boundaryHash,authorize));
+    }
+
+    public static Map<String,Object> exclude(PipelineConfig config, Path archiveDirectory,
+                long errorGeneration, String boundaryHash, String archiveSha256, String planHash,
+                String operation, String actor, String reason, Callable<Void> authorize) throws Exception {
+        String approvalHash = Codec.sha256(Codec.encode(Arrays.asList(
+                errorGeneration, boundaryHash, archiveSha256, planHash, actor, reason)));
+        authorize.call();
+        try (JdbcJournal journal = new JdbcJournal(config.existingJournalSettings())) {
+            journal.verifyIdentity(config.fingerprint(), config.subscribers());
+            Map<String,Object> receipt = journal.excludedCapture(operation, approvalHash);
+            if (receipt != null) {
+                authorize.call();
+                return receipt;
+            }
+            Map<String,Object> before = journal.status();
+            SourcePosition checkpoint = journal.captured();
+            if (checkpoint == null || !"SOURCE_DECODE".equals(before.get("errorStage"))
+                    || "CLAIMED".equals(before.get("captureLeaseState"))
+                    || !Objects.equals(errorGeneration, before.get("errorGeneration")))
+                throw new IllegalStateException("SOURCE_REVIEW_STALE");
+            String checkpointHash = Codec.sha256(Codec.encode(checkpoint));
+            Path directory = MysqlContentArchive.directory(archiveDirectory, false);
+            String reference = archiveReference(config,before,checkpointHash,errorGeneration,boundaryHash);
+            Map<String,Object> retained = MysqlContentArchive.existing(directory,reference,config.pipelineId,
+                    checkpointHash,boundaryHash,errorGeneration);
+            if (retained == null) throw new IllegalStateException("CAPTURE_EXCLUSION_ARCHIVE_REQUIRED");
+            CaptureExclusionPlan plan = plan(config,journal,before,retained);
+            if (!planHash.equals(plan.hash()) || !archiveSha256.equals(plan.archiveSha256))
+                throw new IllegalStateException("CAPTURE_EXCLUSION_APPROVAL_STALE");
+
+            Map<?,?> boundary = (Map<?,?>) retained.get("nextTransactionHeaders");
+            List<SourcePosition> dependencies = journal.dependencies();
+            SourcePosition after;
+            try (SourceAdapter opened = PipelineSources.open(config,plan.generation)) {
+                if (!(opened instanceof MysqlCdcSource))
+                    throw new IllegalStateException("CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED");
+                MysqlCdcSource source = (MysqlCdcSource) opened;
+                source.validateFailover(checkpoint, dependencies);
+                if (!Codec.encode(boundary).equals(Codec.encode(source.inspectDecodeBoundary(checkpoint))))
+                    throw new IllegalStateException("CAPTURE_EXCLUSION_BOUNDARY_UNAVAILABLE");
+                Map<String,String> payload = new LinkedHashMap<>(checkpoint.getPayload());
+                payload.put("offset", (String) boundary.get("endOffset"));
+                payload.put("gtidSet", Gtids.union(payload.get("gtidSet"), plan.transactionId));
+                after = new SourcePosition(checkpoint.getFormatVersion(),checkpoint.getSourceType(),
+                        checkpoint.getSourceId(),payload);
+                source.validateFailover(after,dependencies);
+            }
+            requireUnchanged(journal,before,checkpoint);
+            return journal.excludeCapture(plan,after,operation,approvalHash,actor,reason,authorize);
+        }
     }
 
     private static final class Retention {
@@ -61,12 +116,13 @@ public final class CaptureRecoveryReview {
                         ||((Number)before.get("errorGeneration")).longValue()!=request.errorGeneration)
                     throw new IllegalStateException("SOURCE_REVIEW_STALE");
                 archiveDirectory=MysqlContentArchive.directory(archiveDirectory,true);
-                reference=Codec.sha256(config.fingerprint()+"\n"+before.get("generation")+"\n"+checkpointHash+"\n"+request.errorGeneration+"\n"+request.boundaryHash);
+                reference=archiveReference(config,before,checkpointHash,request.errorGeneration,request.boundaryHash);
                 Map<String,Object> existing=MysqlContentArchive.existing(archiveDirectory,reference,config.pipelineId,
                         checkpointHash,request.boundaryHash,request.errorGeneration);
                 if(existing!=null){
                     requireUnchanged(journal,before,checkpoint);
                     request.authorize.call();
+                    addExclusionPlan(config,journal,before,existing);
                     return existing;
                 }
             }
@@ -96,9 +152,63 @@ public final class CaptureRecoveryReview {
             if(archiveDirectory!=null){
                 if(request!=null)request.authorize.call();
                 report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray(),reference));
+                if(request!=null)addExclusionPlan(config,journal,before,report);
             }
             return report;
         }
+    }
+
+    private static String archiveReference(PipelineConfig config, Map<String,Object> state, String checkpoint,
+                                           long errorGeneration, String boundary) {
+        return Codec.sha256(config.fingerprint()+"\n"+state.get("generation")+"\n"+checkpoint+"\n"+errorGeneration+"\n"+boundary);
+    }
+
+    private static void addExclusionPlan(PipelineConfig config, JdbcJournal journal, Map<String,Object> state,
+                                         Map<String,Object> report) throws Exception {
+        try {
+            report.put("exclusionPlan",plan(config,journal,state,report).summary());
+        } catch (IllegalStateException ineligible) {
+            if (!"CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED".equals(ineligible.getMessage())) throw ineligible;
+            report.put("exclusionBlock",ineligible.getMessage());
+        }
+    }
+
+    private static CaptureExclusionPlan plan(PipelineConfig config, JdbcJournal journal, Map<String,Object> state,
+                                             Map<String,Object> report) throws Exception {
+        Map<?,?> boundary = (Map<?,?>) report.get("nextTransactionHeaders");
+        Map<?,?> archive = (Map<?,?>) report.get("retainedEvidence");
+        CaptureExclusionPlan plan = new CaptureExclusionPlan();
+        plan.pipelineId = config.pipelineId;
+        plan.generation = (String) state.get("generation");
+        plan.epoch = ((Number) state.get("epoch")).longValue();
+        plan.errorGeneration = ((Number) state.get("errorGeneration")).longValue();
+        plan.afterSequence = ((Number) state.get("lastSequence")).longValue();
+        plan.checkpointHash = (String) report.get("checkpointHash");
+        plan.boundaryHash = (String) boundary.get("boundaryHash");
+        plan.transactionId = (String) boundary.get("transactionId");
+        plan.archiveSha256 = (String) archive.get("archiveSha256");
+        for (Object rawName : (Iterable<?>) boundary.get("tables")) {
+            String tableName = (String) rawName;
+            int separator = tableName.indexOf('.');
+            String database = tableName.substring(0,separator);
+            if (!config.databases.contains(database)) continue;
+            String tableId = TableSchema.identity(database,"",tableName.substring(separator+1));
+            TableSchema table = journal.latestSchema(tableId);
+            Journal.SnapshotState snapshot = journal.snapshot("source",tableId);
+            if (table == null || table.keyless() || !"InnoDB".equals(table.sourceEngine)
+                    || snapshot == null || !"COMPLETE".equals(snapshot.state)
+                    || snapshot.schemaVersion != table.version)
+                throw new IllegalStateException("CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED");
+            for (PipelineConfig.Target target : config.targets) {
+                if (!target.mappings.containsKey(database)) continue;
+                if (target.product.messaging() || target.product.materialized())
+                    throw new IllegalStateException("CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED");
+                plan.affectedSubscriptions.computeIfAbsent(target.id,ignored -> new ArrayList<>()).add(tableName);
+            }
+        }
+        if (plan.affectedSubscriptions.isEmpty())
+            throw new IllegalStateException("CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED");
+        return plan;
     }
 
     private static void requireUnchanged(JdbcJournal journal,Map<String,Object> before,SourcePosition checkpoint)throws Exception{

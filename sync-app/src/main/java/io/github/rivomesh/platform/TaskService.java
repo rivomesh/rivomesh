@@ -46,6 +46,8 @@ public final class TaskService implements AutoCloseable {
         public String failureActorRevision;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public String captureBoundaryHash;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public CaptureExclusionRequest captureExclusion;
         public boolean cancelRequested;
     }
     public static final class Control {
@@ -248,7 +250,8 @@ public final class TaskService implements AutoCloseable {
                 Operation old=previous==null?null:previous.operations.stream().filter(item->Objects.equals(item.id,operation.id)).findFirst().orElse(null);
                 if(old!=null&&Objects.equals(old.status,operation.status))continue;
                 AuditStore.Event event=new AuditStore.Event();event.kind="OPERATION_COMMITTED";event.taskId=task.getKey();event.action=operation.action;event.status=operation.status;event.code=operation.code;event.actorId=operation.actorId;event.actorRole=operation.actorRole;event.operationHash=AuditStore.hash(operation.id);event.clientRequestHash=event.operationHash;next.auditOutbox.add(event);
-                if(operation.validation!=null)event.subjectId=operation.validation.reportId;
+                if(operation.captureExclusion!=null){event.subjectId=operation.id;event.operationHash=operation.captureExclusion.planHash;}
+                else if(operation.validation!=null)event.subjectId=operation.validation.reportId;
                 else if(operation.repair!=null){event.subjectId=operation.repair.planId;if(operation.repair.approvedHash!=null)event.operationHash=operation.repair.approvedHash;else if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.gapPlanId!=null){event.subjectId=operation.gapPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.skipPlanId!=null){event.subjectId=operation.skipPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
@@ -333,7 +336,7 @@ public final class TaskService implements AutoCloseable {
         Receipt value=new Receipt(task,signature);if(actor!=null){value.actorId=actor.id;value.actorRole=actor.role.name();}next.requests.put(request,value);
         Iterator<String> requests=next.requests.keySet().iterator();while(next.requests.size()>500&&requests.hasNext()){String id=requests.next();if(!ownerRequests.contains(id))requests.remove();}
     }
-    private static String actionSignature(String id,String action,String revision,long errorCount,String subscription,ValidationRequest validation,RepairRequest repair,CommitRequest commit,SkipRequest skip,GapVerificationRequest gap,CompensationRequest compensation,CorrectionRequest correction,String captureBoundaryHash)throws Exception{
+    private static String actionSignature(String id,String action,String revision,long errorCount,String subscription,ValidationRequest validation,RepairRequest repair,CommitRequest commit,SkipRequest skip,GapVerificationRequest gap,CompensationRequest compensation,CorrectionRequest correction,String captureBoundaryHash,CaptureExclusionRequest captureExclusion)throws Exception{
         // Jackson may restore Set fields as HashSet; receipt inspection must match command admission's sorted sets.
         if(validation!=null){validation=Model.JSON.readValue(Model.JSON.writeValueAsBytes(validation),ValidationRequest.class);validation.validate("VALIDATE_RETRY".equals(action));}
         if(repair!=null){repair=Model.JSON.readValue(Model.JSON.writeValueAsBytes(repair),RepairRequest.class);repair.validate("REPAIR_EXECUTE".equals(action));}
@@ -342,7 +345,7 @@ public final class TaskService implements AutoCloseable {
         if(compensation!=null)compensation.validate(action);
         if(correction!=null)correction.validate(false,true);
         if(gap!=null)gap.validate("GAP_VERIFY_EXECUTE".equals(action));
-        return digest(id+"\n"+action+"\n"+revision+"\n"+errorCount+(subscription==null?"":"\n"+subscription)+(validation==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(validation))+(repair==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(repair))+(commit==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(commit))+(skip==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(skip))+(gap==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(gap))+(compensation==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(compensation))+(correction==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(correction))+(captureBoundaryHash==null?"":"\n"+captureBoundaryHash));
+        return digest(id+"\n"+action+"\n"+revision+"\n"+errorCount+(subscription==null?"":"\n"+subscription)+(validation==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(validation))+(repair==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(repair))+(commit==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(commit))+(skip==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(skip))+(gap==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(gap))+(compensation==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(compensation))+(correction==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(correction))+(captureBoundaryHash==null?"":"\n"+captureBoundaryHash)+(captureExclusion==null?"":"\n"+io.github.rivomesh.cdc.Codec.encode(captureExclusion)));
     }
     private static String configurationSignature(String id,String revision,com.fasterxml.jackson.databind.JsonNode document)throws Exception{return digest("EDIT_CONFIG\n"+id+"\n"+revision+"\n"+Model.JSON.writeValueAsString(document));}
     private static String restoreSignature(String id,String revision,String reference)throws Exception{return digest("RESTORE_CONFIG\n"+id+"\n"+revision+"\n"+reference);}
@@ -368,7 +371,7 @@ public final class TaskService implements AutoCloseable {
             case CREATE:signature=digest("CREATE\n"+request.yaml);break;
             case CONFIG_UPDATE:signature=configurationSignature(request.taskId,request.revision,request.document);break;
             case RESTORE:signature=restoreSignature(request.taskId,request.revision,request.reference);break;
-            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null);break;
+            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null,request.captureExclusion);break;
             default:throw new IllegalArgumentException("OWNER_MUTATION_REQUIRED");
         }
         if(!Objects.equals(signature,receipt.signature)||!Objects.equals(request.taskId,receipt.taskId)||!Objects.equals(actorId,receipt.actorId)||!Objects.equals(actorRole,receipt.actorRole))throw new Conflict("OWNER_RECEIPT_MISMATCH");
@@ -494,12 +497,12 @@ public final class TaskService implements AutoCloseable {
         return command(id,action,revision,request,errorCount,subscription,actor,validation,repair,commit,skip,gap,compensation,null);
     }
     synchronized Map<String,Object> command(String id,String action,String revision,String request,long errorCount,String subscription,AccessControl.Principal actor,ValidationRequest validation,RepairRequest repair,CommitRequest commit,SkipRequest skip,GapVerificationRequest gap,CompensationRequest compensation,CorrectionRequest correction) throws Exception {
-        return command(id,action,revision,request,errorCount,subscription,actor,validation,repair,commit,skip,gap,compensation,correction,null);
+        return command(id,action,revision,request,errorCount,subscription,actor,validation,repair,commit,skip,gap,compensation,correction,null,null);
     }
     synchronized Map<String,Object> command(String id,String action,String revision,String request,long errorCount,String subscription,
                                             AccessControl.Principal actor,ValidationRequest validation,RepairRequest repair,CommitRequest commit,
                                             SkipRequest skip,GapVerificationRequest gap,CompensationRequest compensation,CorrectionRequest correction,
-                                            String captureBoundaryHash) throws Exception {
+                                            String captureBoundaryHash,CaptureExclusionRequest captureExclusion) throws Exception {
         currentActor(actor);
         ensureOpen();requestId(request);
         boolean correcting="CORRECTION_EXECUTE".equals(action);
@@ -527,6 +530,13 @@ public final class TaskService implements AutoCloseable {
             if(errorCount<0||subscription!=null||captureBoundaryHash==null||!captureBoundaryHash.matches("[0-9a-f]{64}"))
                 throw new IllegalArgumentException("CAPTURE_EVIDENCE_REQUEST_INVALID");
         }
+        boolean excluding="CAPTURE_EXCLUDE".equals(action);
+        if(excluding){
+            if(actor==null||!actor.administers()||!actor.task(id))throw new SecurityException("FORBIDDEN");
+            if(errorCount<0||subscription!=null||captureExclusion==null)
+                throw new IllegalArgumentException("CAPTURE_EXCLUSION_APPROVAL_REQUIRED");
+            captureExclusion.validate();
+        }else if(captureExclusion!=null)throw new IllegalArgumentException("CAPTURE_EXCLUSION_ACTION_REQUIRED");
         boolean reviewing="FAILURE_REVIEW".equals(action);
         boolean confirming="CONFIRM_COMMIT".equals(action);
         boolean skipping=Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);
@@ -540,11 +550,11 @@ public final class TaskService implements AutoCloseable {
         if(repairing){if(repair==null)throw new IllegalArgumentException("REPAIR_OPTIONS_REQUIRED");repair=Model.JSON.readValue(Model.JSON.writeValueAsBytes(repair),RepairRequest.class);repair.validate("REPAIR_EXECUTE".equals(action));}
         else if(repair!=null)throw new IllegalArgumentException("REPAIR_ACTION_REQUIRED");
         boolean validating=Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(action);
-        if(!correcting&&!compensating&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CAPTURE_RETAIN","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(!correcting&&!compensating&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
         if("VALIDATE_CANCEL".equals(action)&&(actor==null||!actor.administers()||!actor.task(id)))throw new SecurityException("FORBIDDEN");
         if(validating){if(actor==null||!actor.administers()||!actor.task(id))throw new SecurityException("FORBIDDEN");if(validation==null)throw new IllegalArgumentException("VALIDATION_OPTIONS_REQUIRED");validation=Model.JSON.readValue(Model.JSON.writeValueAsBytes(validation),ValidationRequest.class);validation.validate("VALIDATE_RETRY".equals(action));}
         else if(validation!=null)throw new IllegalArgumentException("VALIDATION_ACTION_REQUIRED");
-        String signature=actionSignature(id,action,revision,errorCount,subscription,validation,repair,commit,skip,gap,compensation,correction,captureBoundaryHash);
+        String signature=actionSignature(id,action,revision,errorCount,subscription,validation,repair,commit,skip,gap,compensation,correction,captureBoundaryHash,captureExclusion);
         if(replay(request,signature,actor)!=null)return view(id);
         Entry e=require(id);Control current=registry.tasks.get(id);
         if(!current.revision.equals(revision))throw new Conflict("REVISION_CHANGED");
@@ -579,9 +589,9 @@ public final class TaskService implements AutoCloseable {
         if(gapping&&!"PAUSED".equals(current.desired))throw new Conflict("SKIP_REQUIRES_PIPELINE_PAUSED");
         Registry next=copy();Control state=next.tasks.get(id);state.revision=UUID.randomUUID().toString();
         Operation op=new Operation();op.id=request;op.action=action;op.errorCount=errorCount;op.subscriptionId=subscription;op.validation=validation;op.repair=repair;op.commit=commit;op.skip=skip;op.gap=gap;op.compensation=compensation;op.correction=correction;if(actor!=null){op.actorId=actor.id;op.actorRole=actor.role.name();}state.operations.add(op);
-        if(retaining){
+        if(retaining||excluding){
             if(e.config.pipeline==null||!"MYSQL".equals(e.config.pipeline.effectiveSourceType()))throw new Conflict("MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE");
-            op.captureBoundaryHash=captureBoundaryHash;op.failureActorRevision=accounts().revision;
+            op.captureBoundaryHash=captureBoundaryHash;op.captureExclusion=captureExclusion;op.failureActorRevision=accounts().revision;
         }
         if(reviewing){op.failureEvidenceId=UUID.randomUUID().toString();op.failureActorRevision=accounts().revision;op.result.put("configurationRevision",revision);}
         if(correcting){op.failureEvidenceId=correction.evidenceId;op.failureActorRevision=accounts().revision;}
@@ -601,7 +611,7 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){if(closed)return;try{flushAudit();}catch(AuditStore.Unavailable ignored){}tasks=new ArrayList<>(entries.entrySet());}
         for(Map.Entry<String,Entry> task:tasks)if(task.getValue().busy.compareAndSet(false,true)) {
             try {
-                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE").contains(o.action));}
+                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE").contains(o.action));}
                 (validation?validations:controls).execute(() -> {
                 try { reconcile(task.getKey(),task.getValue()); }
                 catch(Exception e){task.getValue().problem=safeCode(e);}
@@ -640,16 +650,18 @@ public final class TaskService implements AutoCloseable {
                     case "CAPTURE_RETAIN":
                         if(entry.config.pipeline==null||pending.actorId==null||pending.captureBoundaryHash==null)
                             throw new Conflict("CAPTURE_EVIDENCE_REQUEST_INVALID");
-                        Path evidence=Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("capture-evidence").resolve(id);
-                        result=CaptureRecoveryReview.retain(entry.config.pipeline,evidence,pending.errorCount,pending.captureBoundaryHash,()->{
-                            synchronized(this){
-                                ensureOpen();AccountDirectory.State directory=accounts();AccountDirectory.User user=directory.users.get(pending.actorId);
-                                if(!Objects.equals(directory.revision,pending.failureActorRevision)||user==null||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)
-                                    throw new SecurityException("FORBIDDEN");
-                            }
-                            return null;
-                        });
+                        result=CaptureRecoveryReview.retain(entry.config.pipeline,captureEvidenceDirectory(id),
+                                pending.errorCount,pending.captureBoundaryHash,()->authorizeCapture(pending));
                         code="CAPTURE_EVIDENCE_RETAINED";break;
+                    case "CAPTURE_EXCLUDE":
+                        if(entry.config.pipeline==null||pending.actorId==null||pending.captureExclusion==null)
+                            throw new Conflict("CAPTURE_EXCLUSION_APPROVAL_REQUIRED");
+                        stop(entry);
+                        CaptureExclusionRequest approval=pending.captureExclusion;
+                        result=CaptureRecoveryReview.exclude(entry.config.pipeline,captureEvidenceDirectory(id),
+                                pending.errorCount,approval.boundaryHash,approval.archiveSha256,approval.planHash,
+                                pending.id,pending.actorId,approval.reason,()->authorizeCapture(pending));
+                        code="CAPTURE_TRANSACTION_EXCLUDED";break;
                     case "VALIDATE":case "VALIDATE_RETRY":
                         synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("VALIDATION_CANCELLED");operationThreads.put(id,Thread.currentThread());}
                         if(pending.validation==null)throw new Conflict("VALIDATION_OPTIONS_REQUIRED");
@@ -714,7 +726,7 @@ public final class TaskService implements AutoCloseable {
             finally{if(pending.validation!=null||pending.repair!=null||pending.gap!=null){operationThreads.remove(id,Thread.currentThread());Thread.interrupted();}}
             synchronized(this) {
                 if(cancellableRecovery)recoveryCancellations.remove(id);
-                if(closed&&failure!=null&&(cancellableRecovery||"CAPTURE_RETAIN".equals(pending.action)))return;
+                if(closed&&failure!=null&&(cancellableRecovery||Arrays.asList("CAPTURE_RETAIN","CAPTURE_EXCLUDE").contains(pending.action)))return;
                 Registry next=copy();
                 Control state=next.tasks.get(id);
                 Operation op=state.operations.stream().filter(o -> o.id.equals(pending.id)).findFirst().get();
@@ -737,6 +749,7 @@ public final class TaskService implements AutoCloseable {
                     }
                 }else if(op.cancelRequested){op.status="FAILED";op.code=op.gap!=null?"GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":op.repair==null?"VALIDATION_CANCELLED":"REPAIR_CANCELLED";}
                 if(Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_EXECUTE").contains(op.action))state.desired="PAUSED";
+                if(failure==null&&"CAPTURE_EXCLUDE".equals(op.action))state.desired="PAUSED";
                 if(failure==null&&Arrays.asList("START","RESUME").contains(op.action))state.desired="RUNNING";
                 if(failure==null&&"RESUME_TARGET".equals(op.action)&&"RUNNING".equals(result.get("pipelineState"))&&!"PAUSED".equals(state.desired))state.desired="RUNNING";
                 persist(next);desired=state.desired;
@@ -782,7 +795,7 @@ public final class TaskService implements AutoCloseable {
     private void stop(Entry e) throws Exception {synchronized(e){if(e.worker!=null){e.worker.stop();if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");e.worker=null;}if(e.permit){slots.release();e.permit=false;}e.workerState="STOPPED";}}
     private static Map<String,Object> publicStatus(Map<String,Object> db,TaskDefinition config) {
         Map<String,Object> out=new LinkedHashMap<>();
-        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","capture_lsn","capture_scn","required_gtid","applied_sequence","covered_sequence","captured_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited","openGapCount","verifiedGapCount","hasOpenGaps"))
+        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","capture_lsn","capture_scn","required_gtid","applied_sequence","covered_sequence","captured_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited","openGapCount","verifiedGapCount","hasOpenGaps","hasSourceExclusions"))
             if(db.containsKey(key))out.put(key,db.get(key));
         Object captureLease=db.get("captureLeaseState");
         if(config.pipeline!=null&&Arrays.asList("CLAIMED","EXPIRED","UNCLAIMED").contains(captureLease))
@@ -872,6 +885,42 @@ public final class TaskService implements AutoCloseable {
                 throw new Conflict("SOURCE_REVIEW_STALE");
         }
         return result;
+    }
+    Map<String,Object> captureExclusions(String id,String after,int limit,AccessControl.Principal actor)throws Exception{
+        TaskDefinition definition;
+        String revision;
+        synchronized(this){
+            ensureOpen();
+            currentActor(actor);
+            if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");
+            if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
+            definition=require(id).config;
+            revision=registry.tasks.get(id).revision;
+        }
+        if(definition.pipeline==null)throw new Conflict("SOURCE_REVIEW_V3_REQUIRED");
+        Map<String,Object> page;
+        try(io.github.rivomesh.cdc.JdbcJournal journal=new io.github.rivomesh.cdc.JdbcJournal(definition.pipeline.existingJournalSettings())){
+            journal.verifyIdentity(definition.pipeline.fingerprint(),definition.pipeline.subscribers());
+            page=journal.captureExclusions(after,limit);
+        }
+        synchronized(this){
+            ensureOpen();
+            currentActor(actor);
+            if(!revision.equals(registry.tasks.get(id).revision))throw new Conflict("SOURCE_REVIEW_STALE");
+        }
+        return page;
+    }
+    private synchronized Void authorizeCapture(Operation pending) {
+        ensureOpen();
+        AccountDirectory.State directory=accounts();
+        AccountDirectory.User user=directory.users.get(pending.actorId);
+        if(!Objects.equals(directory.revision,pending.failureActorRevision)||user==null
+                ||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)
+            throw new SecurityException("FORBIDDEN");
+        return null;
+    }
+    private Path captureEvidenceDirectory(String id){
+        return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("capture-evidence").resolve(id);
     }
     private Path reports(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("validations").resolve(id);}
     private Path failureEvidenceDirectory(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("failure-evidence").resolve(id);}
@@ -968,7 +1017,7 @@ public final class TaskService implements AutoCloseable {
         if("ERROR_GENERATION_CHANGED".equals(error.getMessage()))return "ERROR_GENERATION_CHANGED";
         String message=error.getMessage();
         if(message!=null&&(error instanceof IllegalStateException||error instanceof IOException)
-                &&("SOURCE_REVIEW_STALE".equals(message)||message.matches("MYSQL_BINLOG_(?:CONTENT_REVIEW_UNAVAILABLE|EVIDENCE_[A-Z0-9_]+)")))
+                &&("SOURCE_REVIEW_STALE".equals(message)||message.matches("CAPTURE_EXCLUSION_[A-Z0-9_]+")||message.matches("MYSQL_BINLOG_(?:CONTENT_REVIEW_UNAVAILABLE|EVIDENCE_[A-Z0-9_]+)")))
             return message;
         if(Arrays.asList("CONFIG_VERSION_CORRUPT","CONFIG_VERSION_INVALID","JOURNAL_IDENTITY_MISMATCH","SUBSCRIPTION_MIGRATION_REQUIRED","DESTINATION_ALREADY_OWNED","WORKER_ENVIRONMENT_DENIED").contains(error.getMessage()))return error.getMessage();
         for(Throwable e=error;e!=null;e=e.getCause())if(e instanceof SQLException) {

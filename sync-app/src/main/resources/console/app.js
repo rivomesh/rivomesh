@@ -166,6 +166,33 @@ function closeCaptureRecovery(){
 }
 Object.assign(messages.zh,{decodeBoundary:'原生 binlog 事务边界',decodeBoundaryScope:'仅核对到提交标记及受影响表，仍需原始事件内容才能审阅跳过。',retainCapture:'留存原始事务',capture_retain:'留存源证据',CAPTURE_EVIDENCE_RETAINED:'已留存原始源事务',MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE:'原始事务内容暂时无法读取。请核对原 binlog 和采集租约。'});
 Object.assign(messages.en,{decodeBoundary:'Native binlog transaction boundary',decodeBoundaryScope:'The commit marker and affected tables are available. Reviewing a skip still requires the original event contents.',retainCapture:'Retain original transaction',capture_retain:'Retain source evidence',CAPTURE_EVIDENCE_RETAINED:'Original source transaction retained',MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE:'The original transaction is unavailable. Check the source binlog and capture lease.'});
+Object.assign(messages.zh,{
+ reviewCaptureExclusion:'审阅源事务跳过',capture_exclude:'源事务跳过',submitCaptureExclusion:'批准跳过并保持暂停',
+ captureExclusionImpact:'跳过后，这笔事务的变更不会写入以下目标。请补齐数据并核对共同点后再接管。',
+ captureExclusionAgreement:'我已核对这些表和目标，并接受这笔事务暂不投递。',
+ captureExclusionReason:'跳过原因（至少 8 字）',
+ CAPTURE_TRANSACTION_EXCLUDED:'源事务已跳过，任务仍暂停',CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED:'当前表或目标类型需要人工重建方案。',
+ CAPTURE_EXCLUSION_APPROVAL_REQUIRED:'请选择风险确认并填写跳过原因。',
+ CAPTURE_EXCLUSION_APPROVAL_STALE:'审阅内容已变更，请刷新并重新留存证据。',
+ CAPTURE_EXCLUSION_BOUNDARY_UNAVAILABLE:'源日志中无法重新验证该事务，请恢复原日志。',
+ CAPTURE_EXCLUSION_ARCHIVE_REQUIRED:'请先留存原始事务。',
+ sourceExclusionOpen:'任务存在未补核的源事务缺口。接管前请检查受影响表并补齐数据。',
+ firstSourceExclusion:'首次源事务跳过在此序号之后',viewCaptureExclusions:'查看源事务缺口',captureExclusionsNext:'下一页源事务缺口'
+});
+Object.assign(messages.en,{
+ reviewCaptureExclusion:'Review source transaction skip',capture_exclude:'Skip source transaction',submitCaptureExclusion:'Approve skip and keep paused',
+ captureExclusionImpact:'The following destinations will miss the changes in this transaction. Repair and verify the data before cutover.',
+ captureExclusionAgreement:'I reviewed these tables and destinations and accept that this transaction will be omitted.',
+ captureExclusionReason:'Reason for the skip (at least 8 characters)',
+ CAPTURE_TRANSACTION_EXCLUDED:'Source transaction skipped. The task remains paused.',
+ CAPTURE_EXCLUSION_PROFILE_UNSUPPORTED:'These table or destination types need a rebuild plan.',
+ CAPTURE_EXCLUSION_APPROVAL_REQUIRED:'Confirm the impact and enter a reason.',
+ CAPTURE_EXCLUSION_APPROVAL_STALE:'The reviewed evidence changed. Refresh and retain the evidence again.',
+ CAPTURE_EXCLUSION_BOUNDARY_UNAVAILABLE:'The transaction could not be verified in the source logs. Recover the original log.',
+ CAPTURE_EXCLUSION_ARCHIVE_REQUIRED:'Retain the original transaction first.',
+ sourceExclusionOpen:'This pipeline has an unreconciled source gap. Review and repair affected tables before cutover.',
+ firstSourceExclusion:'First source transaction skip after sequence',viewCaptureExclusions:'View source gaps',captureExclusionsNext:'Next source gaps'
+});
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -204,6 +231,67 @@ async function openCaptureRecovery(task){
   }
   content.append(steps);
  }catch(error){content.replaceChildren(text('p',error.message,'callout warning'));}
+}
+function openCaptureExclusion(task,plan){
+ closeCaptureRecovery();
+ const dialog=text('dialog','','failure-review-dialog'),impact=text('ul'),reason=document.createElement('textarea');
+ const agreement=document.createElement('input'),submit=text('button',t('submitCaptureExclusion'),'danger');
+ const close=text('button',t('closeFailureEvidence'),'quiet'),request=requestId();
+ captureRecoveryDialog=dialog;
+ dialog.setAttribute('aria-label',t('reviewCaptureExclusion'));
+ for(const [target,tables] of Object.entries(plan.affectedSubscriptions))impact.append(text('li',target+' · '+tables.join(', ')));
+ reason.maxLength=1000;
+ agreement.type='checkbox';
+ const reasonLabel=text('label',t('captureExclusionReason')),agreementLabel=text('label');
+ reasonLabel.append(reason);
+ agreementLabel.append(agreement,text('span',t('captureExclusionAgreement')));
+ const update=()=>{submit.disabled=!agreement.checked||reason.value.trim().length<8;};
+ reason.oninput=update;agreement.onchange=update;update();
+ close.onclick=()=>closeCaptureRecovery();
+ dialog.addEventListener('cancel',()=>closeCaptureRecovery());
+ submit.onclick=async()=>{
+  submit.disabled=true;
+  try{
+   await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':request},
+    body:JSON.stringify({action:'CAPTURE_EXCLUDE',expectedRevision:task.revision,errorCount:plan.errorGeneration,
+     captureExclusion:{planHash:plan.planHash,archiveSha256:plan.archiveSha256,boundaryHash:plan.boundaryHash,
+      acceptDataLoss:agreement.checked,reason:reason.value.trim()}})});
+   closeCaptureRecovery();notify(t('accepted'));await refresh();
+  }catch(error){notify(error.message);update();}
+ };
+ dialog.append(text('h2',t('reviewCaptureExclusion')),text('p',plan.transactionId),
+  text('p',t('captureExclusionImpact')),impact,reasonLabel,agreementLabel,submit,close);
+ document.body.append(dialog);dialog.showModal();
+}
+async function openCaptureExclusions(task){
+ closeCaptureRecovery();
+ const dialog=text('dialog','','failure-review-dialog'),content=text('section');
+ const close=text('button',t('closeFailureEvidence'),'quiet');
+ captureRecoveryDialog=dialog;dialog.setAttribute('aria-label',t('viewCaptureExclusions'));
+ close.onclick=()=>closeCaptureRecovery();
+ dialog.addEventListener('cancel',()=>closeCaptureRecovery());
+ dialog.append(text('h2',t('viewCaptureExclusions')),content,close);
+ document.body.append(dialog);dialog.showModal();
+ async function load(after=''){
+  content.replaceChildren(text('p',t('pending')));
+  try{
+   const page=await api('/tasks/'+encodeURIComponent(task.id)+'/capture-exclusions?limit=20'
+    +(after?'&after='+encodeURIComponent(after):''));
+   if(captureRecoveryDialog!==dialog)return;
+   content.replaceChildren();
+   for(const gap of page.exclusions){
+    const record=text('article','','callout'),impact=text('ul');
+    for(const [target,tables] of Object.entries(gap.affectedSubscriptions))impact.append(text('li',target+' · '+tables.join(', ')));
+    record.append(text('strong',gap.transactionId),text('p',gap.reason),impact);
+    content.append(record);
+   }
+   if(page.nextCursor){
+    const next=text('button',t('captureExclusionsNext'),'quiet');
+    next.onclick=()=>load(page.nextCursor);content.append(next);
+   }
+  }catch(error){if(captureRecoveryDialog===dialog)content.replaceChildren(text('p',error.message,'callout warning'));}
+ }
+ await load();
 }
 Object.assign(messages.zh,{
  workerDiagnostics:'采集诊断记录',diagnosticsEmpty:'暂无采集诊断记录',diagnosticsOlder:'查看更早记录',
@@ -310,10 +398,20 @@ function renderDetail(task){const root=$('task-detail');root.replaceChildren();i
   body.append(diagnostics);
  }
  renderPipelineFault(body,task);
+ if(task.status.hasSourceExclusions){
+  const gap=text('section','','callout warning');
+  gap.append(text('p',t('sourceExclusionOpen')));
+  if(can('TASK_CONFIG')){
+   const view=text('button',t('viewCaptureExclusions'),'quiet');
+   view.onclick=()=>openCaptureExclusions(task);
+   gap.append(view);
+  }
+  body.append(gap);
+ }
  if(task.problem)body.append(text('div',task.problem==='NOT_INITIALIZED'?t('uninitialized'):(task.statusAvailable?'':t('stale')+' ')+explain(task.problem),'callout warning'));
  const grid=text('div','','status-grid');[['phase',task.status.phase],['sharedState',task.status.run_state],[globalTasks()?'globalWorker':'worker',task.workerState],...(task.formatVersion===3?[['captureLease','lease_'+(task.captureLeaseState||'UNKNOWN')]]:[]),['pendingTransactions',task.status.pending_transactions],...(task.status.capture_lsn?[['captureLsn',task.status.capture_lsn]]:[]),...(task.status.capture_scn?[['captureScn',task.status.capture_scn]]:[]),['observed',task.observedAt?new Date(task.observedAt).toLocaleTimeString():'—']].forEach(([key,value])=>{const item=text('div');item.append(text('span',t(key)),text('strong',value==null?'—':t(String(value))));grid.append(item);});body.append(grid);if(task.formatVersion===3&&task.status.maxBytes){const used=Number(task.status.pendingBytes||0)+Number(task.status.snapshotBytes||0)+Number(task.status.identityBytes||0),quota=Number(task.status.maxBytes),storage=text('section','','callout'+(used/quota>.8?' warning':'')),progress=document.createElement('progress');progress.max=quota;progress.value=used;progress.setAttribute('aria-label',t('journal'));storage.append(text('strong',t('journal')+': '+(used/1048576).toFixed(1)+' / '+(quota/1048576).toFixed(0)+' MiB'),progress,text('p',t('journalUsageHelp')));body.append(storage);}
  if(task.status.tables?.length){const table=text('table'),head=text('tr');['table',task.formatVersion===3?'sourceSnapshotRows':'copied','snapshot'].forEach(x=>head.append(text('th',t(x))));table.append(head);task.status.tables.forEach(row=>{const tr=text('tr');tr.append(text('td',row.table),text('td',Number(row.copiedRows).toLocaleString()),text('td',t(row.done?'complete':'pending')));table.append(tr);});if(task.formatVersion===3)body.append(text('p',t('sourceSnapshotHelp'),'subtle'));body.append(table);if(Number(task.status.table_count)>task.status.tables.length)body.append(text('p',t('tablePreview')+task.status.tables.length+' / '+task.status.table_count,'subtle'));}
- renderSubscriptions(body,task,pending);const details=text('details'),summary=text('summary',t('position'));details.append(summary,text('pre',JSON.stringify(task.status,null,2)));body.append(details,text('h2',t('history')));const history=text('div','','history');task.operations.slice(-8).reverse().forEach(op=>{const row=text('div'),left=text('span',t(op.action.toLowerCase())+' · '+(op.code?explain(op.code):op.status)+(op.actorId?' · '+op.actorId+' ('+t('ROLE_'+op.actorRole)+')':''));row.append(left,badge(op.status));if(op.deliveryStatus&&op.deliveryStatus!==op.status)row.append(badge(op.deliveryStatus));if(op.result&&Object.keys(op.result).length){const details=text('details');details.append(text('summary',t('operationDetails')),text('pre',JSON.stringify(maskPlan(op.result),null,2)));row.append(details);}if(op.failureEvidenceId&&op.status==='SUCCEEDED'&&session?.recoveryReview&&can('TASK_CONFIG')){const review=text('button',t('viewFailureEvidence'),'quiet');review.onclick=()=>openFailureEvidence(task,op.failureEvidenceId);row.append(review);}history.append(row);});body.append(history);window.RivomeshValidation?.render(body,task,pending);window.RivomeshRecovery?.render(body,task);root.append(body);}
+ renderSubscriptions(body,task,pending);const details=text('details'),summary=text('summary',t('position'));details.append(summary,text('pre',JSON.stringify(task.status,null,2)));body.append(details,text('h2',t('history')));const history=text('div','','history');task.operations.slice(-8).reverse().forEach(op=>{const row=text('div'),left=text('span',t(op.action.toLowerCase())+' · '+(op.code?explain(op.code):op.status)+(op.actorId?' · '+op.actorId+' ('+t('ROLE_'+op.actorRole)+')':''));row.append(left,badge(op.status));if(op.deliveryStatus&&op.deliveryStatus!==op.status)row.append(badge(op.deliveryStatus));if(op.result&&Object.keys(op.result).length){const details=text('details');details.append(text('summary',t('operationDetails')),text('pre',JSON.stringify(maskPlan(op.result),null,2)));row.append(details);}const plan=op.result?.exclusionPlan;if(plan&&op.action==='CAPTURE_RETAIN'&&op.status==='SUCCEEDED'&&task.statusAvailable&&task.status.run_state==='ERROR'&&task.status.error_count===plan.errorGeneration&&!pending&&can('TASK_CONFIG')){const review=text('button',t('reviewCaptureExclusion'),'quiet');review.onclick=()=>openCaptureExclusion(task,plan);row.append(review);}if(op.failureEvidenceId&&op.status==='SUCCEEDED'&&session?.recoveryReview&&can('TASK_CONFIG')){const review=text('button',t('viewFailureEvidence'),'quiet');review.onclick=()=>openFailureEvidence(task,op.failureEvidenceId);row.append(review);}history.append(row);});body.append(history);window.RivomeshValidation?.render(body,task,pending);window.RivomeshRecovery?.render(body,task);root.append(body);}
 async function command(task,action,subscription){try{await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({action,expectedRevision:task.revision,errorCount:subscription?subscription.errorGeneration:(task.status.error_count??-1),...(subscription?{subscriptionId:subscription.id}:{})})});notify(t('accepted'));await refresh();}catch(e){notify(e.message);await refresh();}}
 function renderAdapters(){const root=$('adapter-list');root.replaceChildren();capabilities.forEach(a=>{const box=text('article','',a.status==='PLANNED'?'planned':'');box.append(text('strong',a.id),badge(a.status),text('p',t(a.role)+(a.note?' · '+a.note:'')));root.append(box);});}
 function openCreate(){if(!can('TASK_CREATE'))return;step=0;$('create-form').reset();$('create-owner').value=$('task-owner').value;renderOwners();$('extra-targets').replaceChildren();$('first-extra-mappings').replaceChildren();$('primary-messaging').replaceChildren();extraTargetCounter=1;$('create-error').textContent='';const id=crypto.getRandomValues(new Uint32Array(1))[0]||910001;$('create-form').elements.serverId.value=id;wizardMode();showStep();$('create-dialog').showModal();}
@@ -497,7 +595,7 @@ function renderSubscriptions(root,task,pending){
   select.onchange=()=>{selectedDestination=select.value;renderDetail(task);$('destination-filter')?.focus();};
   list.append(label);
  }
- subscriptions.filter(sub=>!selectedDestination||sub.id===selectedDestination).forEach(sub=>{const card=text('article','','subscription-card'),title=text('div');title.append(text('strong',sub.id),badge(sub.state==='RUNNING'&&sub.errorCode?'RETRYING':sub.state));card.append(title);const destination=task.destinations?.find(output=>output.id===sub.id);if(destination){card.append(text('p',destination.product+' · '+t(destination.consistency),'subtle'));if(destination.resource)card.append(text('p',t('physicalResource')+': '+destination.resource));Object.entries(destination.mappings||{}).forEach(([source,target])=>card.append(text('p',source+' → '+target,'subtle')));}if(sub.safeCoveredSequence!=null){card.append(text('p',t('safeCoveredSequence')+': '+sub.safeCoveredSequence+' / '+(task.status.captured_sequence??'—')),text('p',t(sub.progressSemantics==='SQL_COMMITTED'?'contiguousAppliedSequence':'contiguousDeliveredSequence')+': '+sub.contiguousDeliveredSequence),text('p',t('progress_'+sub.progressSemantics),'subtle'));if(sub.firstSkippedSequence!=null)card.append(text('p',t('firstSkippedSequence')+': '+sub.firstSkippedSequence,'subtle'));}else card.append(text('p',t('acknowledged')+': '+sub.acknowledged+' / '+(task.status.lastSequence??'—')));if(task.statusAvailable&&typeof sub.pendingTransactions==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(sub.pendingTransactions))card.append(text('p',t('targetBacklog')+' · '+sub.pendingTransactions,'subtle'));if(Number(task.status.table_count)>0)card.append(text('p',t('snapshotAcknowledged')+': '+(task.status.snapshotAcknowledgments?.[sub.id]||0)+' / '+task.status.table_count));if(sub.errorCode)card.append(text('p',explain(sub.errorCode),sub.state==='PAUSED'?'error':'subtle'));if(sub.state==='PAUSED'){renderFailureDiagnostic(card,sub);renderFailureActions(card,task,sub,pending);const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);}list.append(card);});root.append(list);}
+ subscriptions.filter(sub=>!selectedDestination||sub.id===selectedDestination).forEach(sub=>{const card=text('article','','subscription-card'),title=text('div');title.append(text('strong',sub.id),badge(sub.state==='RUNNING'&&sub.errorCode?'RETRYING':sub.state));card.append(title);const destination=task.destinations?.find(output=>output.id===sub.id);if(destination){card.append(text('p',destination.product+' · '+t(destination.consistency),'subtle'));if(destination.resource)card.append(text('p',t('physicalResource')+': '+destination.resource));Object.entries(destination.mappings||{}).forEach(([source,target])=>card.append(text('p',source+' → '+target,'subtle')));}if(sub.safeCoveredSequence!=null){card.append(text('p',t('safeCoveredSequence')+': '+sub.safeCoveredSequence+' / '+(task.status.captured_sequence??'—')),text('p',t(sub.progressSemantics==='SQL_COMMITTED'?'contiguousAppliedSequence':'contiguousDeliveredSequence')+': '+sub.contiguousDeliveredSequence),text('p',t('progress_'+sub.progressSemantics),'subtle'));if(sub.firstSkippedSequence!=null)card.append(text('p',t('firstSkippedSequence')+': '+sub.firstSkippedSequence,'subtle'));if(sub.firstSourceExclusionAfterSequence!=null)card.append(text('p',t('firstSourceExclusion')+' · '+sub.firstSourceExclusionAfterSequence,'error'));}else card.append(text('p',t('acknowledged')+': '+sub.acknowledged+' / '+(task.status.lastSequence??'—')));if(task.statusAvailable&&typeof sub.pendingTransactions==='string'&&/^(0|[1-9][0-9]{0,18})$/.test(sub.pendingTransactions))card.append(text('p',t('targetBacklog')+' · '+sub.pendingTransactions,'subtle'));if(Number(task.status.table_count)>0)card.append(text('p',t('snapshotAcknowledged')+': '+(task.status.snapshotAcknowledgments?.[sub.id]||0)+' / '+task.status.table_count));if(sub.errorCode)card.append(text('p',explain(sub.errorCode),sub.state==='PAUSED'?'error':'subtle'));if(sub.state==='PAUSED'){renderFailureDiagnostic(card,sub);renderFailureActions(card,task,sub,pending);const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);}list.append(card);});root.append(list);}
 $('create-form').elements.formatVersion.onchange=wizardMode;$('create-form').elements.journalMode.onchange=journalMode;$('add-target').onclick=addTarget;
 $('create-form').elements.targetType.onchange=()=>{$('create-form').elements.targetUrl.value=defaultUrl($('create-form').elements.targetType.value);targetMode();};
 $('create-form').elements.sourceType.onchange=wizardMode;

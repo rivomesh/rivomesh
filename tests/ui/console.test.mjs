@@ -115,6 +115,36 @@ test('admin explicitly retains current source bytes with a generation-bound dura
  }finally{ui.dom.window.close();}
 });
 
+test('source exclusion requires the reviewed artifact and affirmative operator approval',async()=>{
+ const plan={transactionId:'original-gtid',errorGeneration:4,boundaryHash:'a'.repeat(64),
+  archiveSha256:'b'.repeat(64),planHash:'c'.repeat(64),affectedSubscriptions:{warehouse:['sales.items']}};
+ const task={id:'exclusion',revision:'task-revision',formatVersion:3,statusAvailable:true,workerState:'STOPPED',desired:'RUNNING',
+  operations:[{id:'retention_0001',action:'CAPTURE_RETAIN',status:'SUCCEEDED',result:{exclusionPlan:plan}}],
+  status:{run_state:'ERROR',error_count:4,error_stage:'SOURCE_DECODE'}};
+ const ui=setup([task]);
+ try{
+  await login(ui);
+  [...ui.d.querySelectorAll('.history button')].find(button=>button.textContent==='审阅源事务跳过').click();
+  const dialog=ui.d.querySelector('dialog.failure-review-dialog');
+  assert.match(dialog.textContent,/original-gtid.*warehouse · sales.items/);
+  const submit=[...dialog.querySelectorAll('button')].find(button=>button.textContent==='批准跳过并保持暂停');
+  const reason=dialog.querySelector('textarea'),approval=dialog.querySelector('input[type=checkbox]');
+  assert.equal(submit.disabled,true);
+  reason.value='confirmed original transaction';
+  reason.dispatchEvent(new ui.w.Event('input'));
+  assert.equal(submit.disabled,true);
+  approval.checked=true;
+  approval.dispatchEvent(new ui.w.Event('change'));
+  assert.equal(submit.disabled,false);
+  submit.click();await flush();
+  const call=ui.calls.find(call=>call.path.endsWith('/actions'));
+  assert.ok(call.headers['X-Request-ID']);
+  assert.deepEqual(JSON.parse(call.body),{action:'CAPTURE_EXCLUDE',expectedRevision:'task-revision',errorCount:4,
+   captureExclusion:{planHash:plan.planHash,archiveSha256:plan.archiveSha256,boundaryHash:plan.boundaryHash,
+    reason:reason.value,acceptDataLoss:true}});
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery explains a source gap without offering a target skip',async()=>{
  const task={id:'capture',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_CONNECT',error_code:'SOURCE_LOG_GAP'}};

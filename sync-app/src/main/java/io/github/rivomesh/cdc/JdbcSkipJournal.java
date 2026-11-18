@@ -26,7 +26,7 @@ final class JdbcSkipJournal {
     static void ensureMetadata(JdbcJournal j,FailureEvidence evidence)throws Exception{
         try(Connection c=j.connect();RepairConnectionGuard deadline=new RepairConnectionGuard(c,30000)){
             c.setAutoCommit(false);Map<String,Object> job=j.locked(c);
-            if(((Number)job.get("format")).intValue()==4){verifyTables(j,c);c.rollback();return;}
+            if(JdbcJournal.hasTargetGaps((int)job.get("format"))){verifyTables(j,c);c.rollback();return;}
             if(!"PAUSED".equals(job.get("state")))throw new IllegalStateException("SKIP_REQUIRES_PIPELINE_PAUSED");
             FailureCheckpointInspection.verify(evidence.review,new JdbcFailureReview(j).inspect(c,evidence.review.subscription.id,evidence.review.subscription.errorGeneration,4L*1024*1024));
             c.rollback();c.setAutoCommit(true);
@@ -54,11 +54,12 @@ final class JdbcSkipJournal {
     static Stored prepare(JdbcJournal j,Connection c,SkipPlan plan,FailureEvidence evidence)throws Exception{
         plan.validate();Map<String,Object> job=j.locked(c);if(!"PAUSED".equals(job.get("state")))throw new IllegalStateException("SKIP_REQUIRES_PIPELINE_PAUSED");
         Stored existing=load(j,c,plan.id);
-        if(existing!=null){if(((Number)job.get("format")).intValue()!=4)throw new IllegalStateException("SKIP_JOURNAL_FORMAT_MISMATCH");if(!existing.plan.requestHash.equals(plan.requestHash))throw new IllegalStateException("SKIP_REQUEST_CONFLICT");return existing;}
+        if(existing!=null){if(!JdbcJournal.hasTargetGaps((int)job.get("format")))throw new IllegalStateException("SKIP_JOURNAL_FORMAT_MISMATCH");if(!existing.plan.requestHash.equals(plan.requestHash))throw new IllegalStateException("SKIP_REQUEST_CONFLICT");return existing;}
         FailureCheckpointInspection.verify(evidence.review,new JdbcFailureReview(j).inspect(c,plan.subscriptionId,plan.errorGeneration,4L*1024*1024));
         requireNoPending(j,c,plan.subscriptionId);verifyTables(j,c);
         JdbcJournal.execute(c,"INSERT INTO "+j.table("skip_plan")+" (pipeline_id,operation_id,subscription_id,stream_seq,request_hash,plan_hash,payload,run_state) VALUES (?,?,?,?,?,?,?,'PREPARED')",plan.pipelineId,plan.id,plan.subscriptionId,plan.sequence,plan.requestHash,plan.hash(),Codec.encode(plan));
-        JdbcJournal.execute(c,"UPDATE "+j.table("job")+" SET format_version=4 WHERE pipeline_id=?",plan.pipelineId);
+        int format=JdbcJournal.hasSourceExclusions((int)job.get("format"))?6:4;
+        JdbcJournal.execute(c,"UPDATE "+j.table("job")+" SET format_version=? WHERE pipeline_id=?",format,plan.pipelineId);
         Stored stored=new Stored();stored.plan=plan;stored.hash=plan.hash();stored.state="PREPARED";return stored;
     }
     static Stored complete(JdbcJournal j,Connection c,SkipPlan plan,SkipReceipt receipt,FailureEvidence evidence,SkipResolution resolution)throws Exception{
@@ -66,7 +67,7 @@ final class JdbcSkipJournal {
         if(stored==null||!stored.hash.equals(plan.hash()))throw new IllegalStateException("SKIP_PLAN_CHANGED");
         if("COMPLETED".equals(stored.state)){if(!stored.receipt.hash().equals(receipt.hash()))throw new IllegalStateException("SKIP_RECEIPT_SCOPE_CHANGED");return stored;}
         if(!"PREPARED".equals(stored.state))throw new IllegalStateException("SKIP_PLAN_CANCELLED");
-        if(!"PAUSED".equals(job.get("state"))||((Number)job.get("format")).intValue()!=4)throw new IllegalStateException("SKIP_REQUIRES_PIPELINE_PAUSED");
+        if(!"PAUSED".equals(job.get("state"))||!JdbcJournal.hasTargetGaps((int)job.get("format")))throw new IllegalStateException("SKIP_REQUIRES_PIPELINE_PAUSED");
         FailureCheckpointInspection.verify(evidence.review,new JdbcFailureReview(j).inspect(c,plan.subscriptionId,plan.errorGeneration,4L*1024*1024));
         verifyTables(j,c);
         JdbcJournal.execute(c,"INSERT INTO "+j.table("gap")+" (pipeline_id,subscription_id,stream_seq,operation_id,plan_hash,receipt_hash,payload,created_at) VALUES (?,?,?,?,?,?,?,?)",plan.pipelineId,plan.subscriptionId,plan.sequence,plan.id,plan.hash(),receipt.hash(),Codec.encode(receipt),resolution.at);
@@ -105,7 +106,7 @@ final class JdbcSkipJournal {
     }
     static void verifyCheckpoint(JdbcJournal j,Connection c,Map<String,Object> job,String subscription,SinkAdapter.Checkpoint checkpoint)throws Exception{
         Journal.Subscription sub=j.subscription(c,subscription,true);
-        if(((Number)job.get("format")).intValue()!=4||checkpoint.sequence!=sub.acknowledged)throw new IllegalStateException("SKIP_CHECKPOINT_GAP_MISMATCH");
+        if(!JdbcJournal.hasTargetGaps((int)job.get("format"))||checkpoint.sequence!=sub.acknowledged)throw new IllegalStateException("SKIP_CHECKPOINT_GAP_MISMATCH");
         Stored stored=load(j,c,checkpoint.skipOperation);
         if(stored==null||!"COMPLETED".equals(stored.state)||!stored.plan.subscriptionId.equals(subscription)||stored.plan.sequence!=checkpoint.sequence||!stored.plan.generation.equals(job.get("generation"))||!stored.plan.transactionId.equals(checkpoint.transactionId)||!stored.plan.projectedHash.equals(checkpoint.transactionHash)||!stored.receipt.hash().equals(checkpoint.skipHash))throw new IllegalStateException("SKIP_CHECKPOINT_GAP_MISMATCH");
     }

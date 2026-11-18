@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.33",
+  "version": "0.34",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -560,14 +560,14 @@
       "id": "RC-04",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "采集/解码阶段的受控缺口恢复",
         "en": "Controlled capture/decode gap recovery"
       },
       "gap": {
-        "zh-CN": "MySQL 8.4 的事务边界、原始字节校验及管理端私有证据留存已实测，Agent 重启及源日志清理后可复用归档。源事务隔离、批准排除及补核待实现。",
-        "en": "Live MySQL 8.4 passed transaction boundaries, byte checks and managed private retention with archive reuse after Agent restart and source purge. Quarantine, approved exclusion and reconciliation remain."
+        "zh-CN": "MySQL 8.4 单笔完整 binlog 行事务档案通过。已支持受影响目标确认、原始证据留存、显式批准排除、持久缺口与原位续传。无主键、其他协议和无法重验的范围需恢复原日志或审阅重建方案。",
+        "en": "Accepted for one complete MySQL 8.4 row transaction. The workflow verifies affected targets, retained bytes, explicit approval, durable gap and continuation. Keyless, other protocols and unprovable ranges require log recovery or a reviewed rebuild."
       },
       "acceptance": {
         "zh-CN": "单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。",
@@ -587,8 +587,15 @@
         "docs/verification/baseline.json",
         "sync-app/src/main/java/io/github/rivomesh/MysqlDecodeBoundary.java",
         "sync-app/src/main/java/io/github/rivomesh/MysqlBinlogEvidence.java",
-        "sync-app/src/main/java/io/github/rivomesh/MysqlContentArchive.java"
-      ]
+        "sync-app/src/main/java/io/github/rivomesh/MysqlContentArchive.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcSourceExclusion.java"
+      ],
+      "verification": {
+        "artifactSha256": "784468155a13763bf75e532cfb736269df34719a4a77942d8736390021356ffe",
+        "archive": "docs/verification/README.md",
+        "profile": "MySQL 8.4.13 same-file GTID/ROW/FULL; keyed InnoDB decode fault; two Controllers, separate Agent, LOCAL H2; PostgreSQL and MySQL SQL targets; exact retained frames, explicit approval, purge refusal, restart and per-target prefix",
+        "criteriaSha256": "db31bcf1d12393a386b2e1d9aee641323e4e2196595a1ad84f1ea05aec06c4de"
+      }
     },
     {
       "id": "RC-05",

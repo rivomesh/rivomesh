@@ -51,3 +51,13 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
   "boundaryHash": "<nextTransactionHeaders.boundaryHash>"
 }
 ```
+
+### 批准跳过源事务
+
+留存成功后，在操作回执中选择 **审阅源事务跳过**。核对单笔 GTID、受影响表和全部受影响目标，填写原因并确认影响。跳过后任务保持暂停。
+
+该档案要求同一 binlog 文件内完整提交的行事务，并已留存通过校验的原始字节。受影响的映射表须为已完成快照且具有主键的 InnoDB 表，目标须使用事务型 SQL。无主键表、其他目标协议、未完成快照或无法重新验证的边界，应恢复原源或制定重建方案。MySQL 已清理所需日志时，保留现有归档，并恢复日志或切换到持有所需历史的合格源。
+
+成功后，日志库记录排除回执并把该 GTID 添加到采集断点。各目标确认序号保持原值。执行 **修复后恢复** 可继续投递后续事务，受影响目标的连续应用序号仍止于源缺口。重启 Agent 后可用 **查看源事务缺口** 查询回执。业务接管前应补齐受影响表并核对共同点，历史排除回执仍保留。
+
+通过 API 操作时，将 `CAPTURE_EXCLUDE` 发到同一个 actions 路由，带上 `X-Request-ID`、`expectedRevision` 和计划中对应的 `errorCount`。在 `captureExclusion` 中填写 `boundaryHash`、`archiveSha256`、`planHash`、`reason` 和 `acceptDataLoss: true`。管理员可用 `GET /api/tasks/{id}/capture-exclusions?limit=20` 查询回执，下一页以 `after` 传入返回的 `nextCursor`。

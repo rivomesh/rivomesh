@@ -32,6 +32,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
             case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);
             case CAPTURE_RECOVERY:return tasks.captureRecovery(r.taskId,actor);
+            case CAPTURE_EXCLUSIONS:return tasks.captureExclusions(r.taskId,r.cursor,r.limit,actor);
             case DIAGNOSTICS:return tasks.workerDiagnostics(r.taskId,r.cursor,r.limit,actor);
             case FAILURE_EVIDENCE_SUMMARY:return tasks.failureEvidence(r.taskId,r.reference,null,0,1,actor);
             case FAILURE_EVIDENCE_EVENTS:return tasks.failureEvidence(r.taskId,r.reference,r.action,Integer.parseInt(r.cursor),r.limit,actor);
@@ -40,7 +41,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case GAP_VERIFICATION:return tasks.gapVerificationPlan(r.taskId,r.reference,actor);
             case GAPS:return tasks.recoveryPage(r.taskId,r.target,r.cursor,r.limit,true,actor);
             case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return tasks.correctionPreview(r,actor);
-            case ACTION:if(r.recoveryCancel())return tasks.cancelRecovery(r,actor);return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap,r.compensation,r.correction,r.captureRetention()?r.reference:null);
+            case ACTION:if(r.recoveryCancel())return tasks.cancelRecovery(r,actor);return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap,r.compensation,r.correction,r.captureRetention()?r.reference:null,r.captureExclusion);
             default:throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         }
     }

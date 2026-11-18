@@ -33,6 +33,7 @@ parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--task-views', action='store_true', help='Check global task filters and exact per-target backlog during native SQL failure')
 parser.add_argument('--managed-binlog-evidence', action='store_true', help='Retain and replay source evidence through both management entries')
+parser.add_argument('--approved-binlog-exclusion', action='store_true', help='Approve a verified keyed MySQL source gap and resume without fabricating destination ACKs')
 parser.add_argument('--verify-binlog-contents', action='store_true', help='Verify the digest of native binlog bytes against the fixture file')
 parser.add_argument('--header-boundary', action='store_true', help='Check native same-file GTID boundary after a row decode fault')
 parser.add_argument('--worker-diagnostics', action='store_true',
@@ -51,6 +52,8 @@ if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
 if args.managed_binlog_evidence and not args.verify_binlog_contents:
     parser.error('--managed-binlog-evidence requires --verify-binlog-contents')
+if args.approved_binlog_exclusion and not args.managed_binlog_evidence:
+    parser.error('--approved-binlog-exclusion requires --managed-binlog-evidence')
 if args.verify_binlog_contents and not args.header_boundary:
     parser.error('--verify-binlog-contents requires --header-boundary')
 if args.header_boundary and args.source_diagnostics != 'decode':
@@ -130,6 +133,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'headerBoundary': args.header_boundary,
             'verifyBinlogContents': args.verify_binlog_contents,
             'managedBinlogEvidence': args.managed_binlog_evidence,
+            'approvedBinlogExclusion': args.approved_binlog_exclusion,
             'taskViews': args.task_views,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
@@ -281,7 +285,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 response = error
             with response:
                 value = json.loads(response.read())
-                if response.status==503 and value.get('code')=='AUDIT_UNAVAILABLE' and attempt+1<attempts:
+                if (response.status==503 and value.get('code') in
+                        ('AUDIT_UNAVAILABLE','CONTROL_STORE_UNAVAILABLE') and attempt+1<attempts):
+                    # The same read or request identity is safe to retry after a transient control-store outage.
                     time.sleep(1)
                     continue
                 assert response.status in allowed, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
@@ -674,6 +680,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert base64.b64decode(json.loads(managed_bytes)['base64Frames'])==raw
             assert task()['status']['capture_gtid']==checkpoint and 'base64Frames' not in json.dumps(operation(managed_id))
             passed('Only an administrator can retain the reviewed generation and exact original binlog bytes through another management entry')
+            if args.approved_binlog_exclusion:
+                run_capture_exclusion(operation(managed_id)['result'], checkpoint, managed, managed_bytes)
+                return
         if args.header_boundary:
             sql('mysql', 'FLUSH BINARY LOGS')
             status_command='SHOW BINARY LOG STATUS' if manifest['sourceVersion'].startswith('8.4.') else 'SHOW MASTER STATUS'
@@ -703,6 +712,85 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert wait(lambda:operation(repeated).get('result',{}).get('retainedEvidence'),'persisted receipt replay')==receipt
                 assert managed.read_bytes()==managed_bytes and task()['status']['capture_gtid']==checkpoint
                 passed('After Agent restart and log purge both a durable request replay and a fresh retention request reuse the original archive')
+                plan=operation(repeated)['result']['exclusionPlan']
+                approval={key:plan[key] for key in ('boundaryHash','archiveSha256','planHash')}
+                approval.update(acceptDataLoss=True,reason='Test refusal after the native review log was purged')
+                request='gc_exclude_unavailable_'+uuid.uuid4().hex
+                http('node-b',command_path,dict(action='CAPTURE_EXCLUDE',expectedRevision=task('node-b')['revision'],
+                    errorCount=plan['errorGeneration'],captureExclusion=approval),request=request,expected=202)
+                wait(lambda:operation(request)['status']=='FAILED','approved exclusion refuses a missing native range')
+                assert operation(request)['code']=='SOURCE_LOG_GAP'
+                current=task()['status']
+                assert current['capture_gtid']==checkpoint and not current.get('hasSourceExclusions')
+                passed('A previously retained archive cannot authorize an unverifiable source range after native log purge')
+
+    def run_capture_exclusion(retention, checkpoint, archive, original_bytes):
+        plan = retention['exclusionPlan']
+        assert plan['affectedSubscriptions'] == {'pg':['sales.items'], 'my':['sales.items']}
+        assert plan['archiveSha256'] == retention['retainedEvidence']['archiveSha256']
+        before = task()['status']
+        prefix = plan['afterSequence']
+        values = {key: plan[key] for key in ('planHash','archiveSha256','boundaryHash')}
+        approval = dict(values, acceptDataLoss=True, reason='Keep the original decode failure for a controlled repair')
+        body = dict(action='CAPTURE_EXCLUDE', expectedRevision=task()['revision'],
+                    errorCount=plan['errorGeneration'], captureExclusion=approval)
+        path = route+'/actions'
+        for role in ('RM_GC_OPERATOR','RM_GC_VIEWER'):
+            http('node-b',path,body,token=env[role],expected=403)
+        http('node-a',path,dict(body,captureExclusion=dict(approval,acceptDataLoss=False)),expected=400)
+        stale = 'gc_exclude_stale_'+uuid.uuid4().hex
+        http('node-b',path,dict(body,captureExclusion=dict(approval,planHash='b'*64)),request=stale,expected=202)
+        wait(lambda:operation(stale)['status']=='FAILED', 'stale approved source plan fails')
+        assert operation(stale)['code']=='CAPTURE_EXCLUSION_APPROVAL_STALE' and task()['status']['capture_gtid']==checkpoint
+        passed('The exact archived plan requires administrator authority, current checksums and explicit data-loss approval')
+
+        request = 'gc_exclude_'+uuid.uuid4().hex
+        body['expectedRevision'] = task('node-a')['revision']
+        http('node-a',path,body,request=request,expected=202)
+        wait(lambda:outcome(request,'node-b'), 'source skip committed')
+        def gap_view():
+            views = [task(node) for node in ('node-a','node-b')]
+            if all(view['desired']=='PAUSED' and view['status'].get('hasSourceExclusions') for view in views):
+                return views[0]
+            return None
+        excluded = wait(gap_view, 'both entries show durable source gap and pause')['status']
+        assert excluded['run_state']=='PAUSED' and excluded['capture_gtid']!=checkpoint
+        assert excluded['captured_sequence']==before['captured_sequence']==prefix and excluded['hasOpenGaps']
+        gtid = plan['transactionId']
+        assert sql('mysql',"SELECT GTID_SUBSET('"+gtid+"','"+excluded['capture_gtid']+"')")=='1'
+        assert sql('mysql',"SELECT GTID_SUBTRACT('"+excluded['capture_gtid']+"','"+checkpoint+"')")==gtid
+        acknowledgments = {sub['id']:sub['acknowledged'] for sub in before['subscriptions']}
+        assert all(sub['acknowledged']==acknowledgments[sub['id']] for sub in excluded['subscriptions'])
+        assert all(sub['firstSourceExclusionAfterSequence']==prefix for sub in excluded['subscriptions'])
+        assert sql('mysql',"SELECT note FROM sales.items WHERE id=1")=='incomplete image'
+        assert sql('postgres',"SELECT note FROM rm_pg_sales.items WHERE id=1")=='updated'
+        assert sql('mysql-target',"SELECT note FROM rm_my_sales.items WHERE id=1")=='updated'
+        passed('Exclusion consumes exactly one native GTID, keeps both target ACKs and pauses without applying the missing update')
+
+        receipt = operation(request)['result']
+        terminate_owner()
+        restart_owner()
+        http('node-b',path,body,request=request,expected=202)
+        wait(lambda:outcome(request,'node-a'), 'same source exclusion remains confirmed after restart')
+        assert operation(request)['result']==receipt and archive.read_bytes()==original_bytes
+        restored = wait(gap_view,'source gap and pause restored')['status']
+        assert restored['capture_gtid']==excluded['capture_gtid']
+        exclusion_path = route+'/capture-exclusions'
+        pages = [http(node,exclusion_path+'?limit=1') for node in ('node-a','node-b')]
+        assert pages[0] == pages[1] == {'exclusions':[receipt], 'nextCursor':None}
+        assert http('node-b',exclusion_path+'?limit=1&after='+request)['exclusions']==[]
+        http('node-b',exclusion_path+'?limit=26',expected=400)
+        http('node-a',exclusion_path,token=env['RM_GC_VIEWER'],expected=403)
+        passed('The two management entries page the same durable source gap after restart and restrict it to administrators')
+        sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(131,'post-exclusion',JSON_OBJECT('n',131))")
+        action('RESUME',node='node-b',errorCount=restored['error_count'])
+        wait(lambda: sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=131')=='post-exclusion'
+             and sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=131')=='post-exclusion',
+             'following transaction reaches both SQL destinations')
+        advanced = wait(lambda: (current if current.get('hasSourceExclusions') and int(current['captured_sequence'])>int(prefix) else None)
+                        if (current:=task()['status']) else None,'visible capture progress with source gap')
+        assert all(sub['contiguousDeliveredSequence']==prefix for sub in advanced['subscriptions'])
+        passed('Agent restart and cross-entry replay preserve the gap while subsequent transactions reach both targets')
 
 
 

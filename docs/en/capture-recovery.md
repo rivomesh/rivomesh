@@ -51,3 +51,13 @@ For API clients use `POST /api/tasks/{id}/actions` with an `X-Request-ID` and th
   "boundaryHash": "<nextTransactionHeaders.boundaryHash>"
 }
 ```
+
+### Approve a source transaction skip
+
+After retention succeeds, select **Review source transaction skip** from the operation receipt. Check the single GTID, affected tables and all affected destinations. Enter a reason and confirm the impact. The task stays paused after the skip.
+
+This profile requires a same-file, committed row transaction with the original checksummed binlog bytes retained. Mapped affected tables require a completed InnoDB snapshot with a primary key. Affected destinations use transactional SQL. Keyless tables, unsupported target protocols, incomplete snapshots or a native boundary that can no longer be verified require recovery of the original source or a reviewed rebuild. If MySQL purged required logs, retain the archive and recover the logs or choose an eligible source with the required history.
+
+On success the journal records the exclusion and adds exactly that GTID to the capture position. Destination acknowledgments remain at their previous positions. After **Resume**, later transactions can be delivered, while each affected destination's contiguous applied position stops at the source gap. **View source gaps** shows the durable receipt after Agent restart. Reconcile the affected tables and verify a common cut before business takeover. The original exclusion remains in history.
+
+API clients send `CAPTURE_EXCLUDE` to the same actions endpoint with an `X-Request-ID`, `expectedRevision` and the plan's `errorCount`. Include `captureExclusion` with `boundaryHash`, `archiveSha256`, `planHash`, `reason` and `acceptDataLoss: true`. Administrators can list receipts through `GET /api/tasks/{id}/capture-exclusions?limit=20`. Pass the returned `nextCursor` as `after` to read the next page.

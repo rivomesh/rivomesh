@@ -58,7 +58,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: For a known next failed transaction,ADMIN reviews destination scope/reason;cross-table events are not split;native SKIP receipt and safe progress commit locally and crash replay never skips another transaction.
   Acceptance: AC-RC-03
   Accepted:[bounded RC-03 profile](../../verification/README.md);other products/full matrices stay open.
-- [ ] T-RC-04 · Controlled capture/decode gap recovery · P0 · Depends on: RC-01, RC-02, RC-08, SO-01
+- [x] T-RC-04 · Controlled capture/decode gap recovery · P0 · Depends on: RC-01, RC-02, RC-08, SO-01
   Deliver: Provide a separate verified transaction/source-range quarantine/exclusion plan affecting all relevant subscriptions with original logs retained;unprovable boundaries are refused with log recovery,valid source or rebaseline alternatives;never fabricate successful application.
   Acceptance: AC-RC-04
 - [x] T-RC-05 · Uncertain commit and checkpoint reconciliation · P0 · Depends on: RC-02

@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.33 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,27 DONE, 21 PARTIAL and 0 NEW, with 21 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -35,7 +35,7 @@ Implementation:48requirements,27 DONE, 21 PARTIAL and 0 NEW, with 21 open. RC-01
 | RC-01 | P0 / DONE | Phase-aware fault classification | Bounded MySQL source and SQL destination failure phases are accepted. RC-04 tracks source range exclusion. |
 | RC-02 | P0 / DONE | Failed-transaction inspection and evidence retention | Accepted bounded MySQL8.4,fixed original Agent/LOCAL journal,PG/MySQL control profile:ADMIN whole-transaction review,positions/historical columns/images,authorized pages and durable evidence surviving restart/journal GC. Catalog automation,other profiles,Agent migration and execution semantics remain separately tracked. |
 | RC-03 | P0 / DONE | Skip a complete destination transaction | Protocol7 bounded profile accepted:Java8,MySQL8.4 two-database source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores. Complete transaction skip,native commit/source ACK failure,Agent SIGKILL/reopen and cross-entry recovery pass. Other targets/full matrices remain RC-10/LG-01. |
-| RC-04 | P0 / PARTIAL | Controlled capture/decode gap recovery | Live MySQL 8.4 passed transaction boundaries, byte checks and managed private retention with archive reuse after Agent restart and source purge. Quarantine, approved exclusion and reconciliation remain. |
+| RC-04 | P0 / DONE | Controlled capture/decode gap recovery | Accepted for one complete MySQL 8.4 row transaction. The workflow verifies affected targets, retained bytes, explicit approval, durable gap and continuation. Keyless, other protocols and unprovable ranges require log recovery or a reviewed rebuild. |
 | RC-05 | P0 / DONE | Uncertain commit and checkpoint reconciliation | Protocol6 original-Agent/LOCAL-journal bounded profile accepted on PG/MySQL control stores:whole-task pause,fresh evidence,native fencing,cross-entry ADMIN confirmation,atomic ACK/receipt and idempotent retry,with both pauses retained. Skip,compensation and full additional matrices remain separate. |
 | RC-06 | P0 / DONE | Failed-transaction before-image compensation | The bounded SQL profile passed. Administrators review table scope and mutation counts across entries, restore the before-images and explicitly resume the original transaction. PostgreSQL passes real CDC and MySQL passes native contracts. RC-10 tracks other destinations. |
 | RC-07 | P0 / DONE | Guided manual corrective data entry | The bounded SQL profile passed. Typed entry and JSON import support administrator review of before/after values, exact identities, atomic batches and resumption of the original transaction. PostgreSQL passes real CDC and MySQL passes native checks. RC-10 tracks other destinations. |

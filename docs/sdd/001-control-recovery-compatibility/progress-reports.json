@@ -12,8 +12,9 @@
     "RC-04: Managed archive replay passed thirteen native checks on the preceding candidate. The final candidate needs a repeat after a transient control-store 503."
   ],
   "inProgress": [
-    "RC-04 managed archive recheck and source quarantine/exclusion.",
-    "CP-04 managed Agent relocation and execution admission."
+    "CP-04 managed Agent relocation and execution admission.",
+    "JV-01/02/04 release build and deployment narrowed to Eclipse Temurin 21 LTS.",
+    "LG-09 console theme from the Rivomesh site and cookie bootstrap/reload."
   ],
   "reportContents": [
     "Current totals",
@@ -34,19 +35,19 @@
     "a8458cbd69a5259068be979adc3c8665449281ea"
   ],
   "currentSdd": {
-    "DONE": 27,
-    "PARTIAL": 21,
+    "DONE": 28,
+    "PARTIAL": 20,
     "NEW": 0
   },
   "nextTasks": [
-    "Finish managed archive recheck and design preserved source-range approval.",
     "Continue managed Agent relocation and remaining compatibility profiles."
   ],
-  "currentCandidateArtifact": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
-  "currentCandidateScope": "MySQL 8.4 managed source evidence retained and replayed from two Controllers on the original owning Agent",
+  "currentCandidateArtifact": "784468155a13763bf75e532cfb736269df34719a4a77942d8736390021356ffe",
+  "currentCandidateScope": "Managed MySQL retained source approval, durable exclusion and subsequent CDC; two native profiles and Chrome on the same candidate",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "RC-04 final candidate passed thirteen isolated native MySQL checks, seven Chrome checks and 119 DOM tests. The stalled-capture checkpoint stayed unchanged after managed retention, aborted staging cleanup, Agent restart and a purged source log.",
-    "LG-06 accepted. Helm and native YAML each passed six live checks, including a distinct replacement JAR, unchanged CSI claim/volume handle and original snapshot, newer lease, and automatic CDC after moving to a second node."
+    "LG-06 accepted. Helm and native YAML each passed six live checks, including a distinct replacement JAR, unchanged CSI claim/volume handle and original snapshot, newer lease, and automatic CDC after moving to a second node.",
+    "RC-04 accepted a bounded MySQL 8.4 keyed source transaction. The same candidate passed 14 native approval cases and 14 native log-purge cases, seven Chrome cases, 35 focused Java tests and 120 DOM tests. Separate scope remains for keyless and target reconciliation."
   ]
 }
