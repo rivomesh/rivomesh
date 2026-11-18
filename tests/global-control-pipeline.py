@@ -11,6 +11,7 @@ import os
 import re
 from pathlib import Path
 import secrets
+import stat
 import struct
 import subprocess
 import tempfile
@@ -1448,6 +1449,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             managed_bytes=managed.read_bytes()
             assert hashlib.sha256(managed_bytes).hexdigest()==receipt['archiveSha256']
             assert base64.b64decode(json.loads(managed_bytes)['base64Frames'])==raw
+            authenticated=archive_dir/('.capture-receipt-'+receipt['file'])
+            receipt_bytes=authenticated.read_bytes()
+            envelope=json.loads(receipt_bytes)
+            assert envelope['version']==1 and re.fullmatch(r'[a-f0-9]{64}',envelope['signature'])
+            binding=envelope['binding']
+            context=binding['capture']
+            assert binding['file']==receipt['file'] and binding['bytes']==len(managed_bytes)
+            assert binding['sha256']==receipt['archiveSha256']
+            assert context['owner']=={'task':'global_cdc','node':owner_node,
+                                     'directory':(archive_dir.parent.parent/'owner-directory-id').read_text().strip()}
+            assert context['checkpointHash']==reviews[0]['checkpointHash'] and context['boundaryHash']==retain_body['boundaryHash']
+            assert stat.S_IMODE(authenticated.stat().st_mode)==stat.S_IMODE((archive_dir/'.capture-key').stat().st_mode)==0o600
             assert task()['status']['capture_gtid']==checkpoint and 'base64Frames' not in json.dumps(operation(managed_id))
             passed('Only an administrator can retain the reviewed generation and exact original binlog bytes through another management entry')
             if args.approved_binlog_exclusion:
@@ -1481,6 +1494,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 wait(lambda:outcome(repeated,'node-a'),'retention reuses the native archive after source purge')
                 assert wait(lambda:operation(repeated).get('result',{}).get('retainedEvidence'),'persisted receipt replay')==receipt
                 assert managed.read_bytes()==managed_bytes and task()['status']['capture_gtid']==checkpoint
+                assert authenticated.read_bytes()==receipt_bytes
                 passed('After Agent restart and log purge both a durable request replay and a fresh retention request reuse the original archive')
                 plan=operation(repeated)['result']['exclusionPlan']
                 approval={key:plan[key] for key in ('boundaryHash','archiveSha256','planHash')}

@@ -683,7 +683,7 @@ public final class TaskService implements AutoCloseable {
                         if(entry.config.pipeline==null||pending.actorId==null||pending.captureBoundaryHash==null)
                             throw new Conflict("CAPTURE_EVIDENCE_REQUEST_INVALID");
                         result=CaptureRecoveryReview.retain(entry.config.pipeline,captureEvidenceDirectory(id),
-                                pending.errorCount,pending.captureBoundaryHash,()->authorizeCapture(pending));
+                                pending.errorCount,pending.captureBoundaryHash,captureReceiptOwner(id),()->authorizeCapture(pending));
                         code="CAPTURE_EVIDENCE_RETAINED";break;
                     case "CAPTURE_EXCLUDE":
                         if(entry.config.pipeline==null||pending.actorId==null||pending.captureExclusion==null)
@@ -1084,6 +1084,10 @@ public final class TaskService implements AutoCloseable {
                 ||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)
             throw new SecurityException("FORBIDDEN");
         return null;
+    }
+    private CaptureArchiveReceipt.Owner captureReceiptOwner(String id)throws Exception{
+        if(config.cluster==null||!config.cluster.sharedTasks)return null;
+        return new CaptureArchiveReceipt.Owner(id,config.cluster.nodeId,ownerDirectoryIdentity());
     }
     private Path captureEvidenceDirectory(String id){
         return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("capture-evidence").resolve(id);

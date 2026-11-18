@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双入口评估、槽位预留、原切点、报告、闭合回执及历史故障证据已实测。原始源事件证据、双端写入隔离、实际归属提交及自动接管待验。",
-        "en": "Both entries verified assessment, reservations, original cuts, reports, closed receipts and historical failure custody. Raw source event custody, dual fences, actual placement and automatic takeover remain."
+        "zh-CN": "双入口评估、预留、报告、闭合回执及历史故障证据已实测。MySQL 8.4 原 Agent 已验证原始事件签名及清除后复用。候选 Agent 原事件核验、双端写入隔离和接管待验。",
+        "en": "Both entries verified assessment, reservations, reports, closed receipts and historical failure custody. The original Agent verified raw MySQL 8.4 event authentication and post-purge reuse. Candidate raw custody, dual writer fences and takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -156,7 +156,8 @@
         "tests/standalone-writer-handoff.py",
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedHandoff.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
-        "tests/ui/browser-handoff.mjs"
+        "tests/ui/browser-handoff.mjs",
+        "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java"
       ]
     },
     {
@@ -1552,8 +1553,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "本地/外部日志可选，已实测双 Agent 核验共享报告、闭合回执和历史故障证据，原签名密钥保留在原 Agent。原始源事件和实际迁移待验。",
-        "en": "Local and external journals are available. Two Agents verified shared report, closed receipt and historical failure custody with original keys retained. Original source events and actual transfer remain."
+        "zh-CN": "本地/外部日志可选，双 Agent 已核验共享报告、闭合回执和历史故障证据。MySQL 8.4 原 Agent 已验证原始日志签名和重启后复用。候选端原始证据及实际迁移待验。",
+        "en": "Local and external journals are available. Two Agents verified shared reports, closed receipts and historical failures. The original Agent authenticated raw MySQL 8.4 logs and verified reuse after restart. Candidate raw custody and actual transfer remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1565,7 +1566,8 @@
       "evidence": [
         "docs/zh-CN/pipeline-v3.md",
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
+        "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java"
       ]
     },
     {

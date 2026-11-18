@@ -30,9 +30,17 @@ public final class CaptureRecoveryReview {
 
     public static Map<String,Object> retain(PipelineConfig config,Path archiveDirectory,long errorGeneration,
                                              String boundaryHash,Callable<Void> authorize)throws Exception{
+        return retain(config,archiveDirectory,errorGeneration,boundaryHash,null,authorize);
+    }
+
+    public static Map<String,Object> retain(PipelineConfig config,Path archiveDirectory,long errorGeneration,
+                                             String boundaryHash,CaptureArchiveReceipt.Owner original,
+                                             Callable<Void> authorize)throws Exception{
+        if(original!=null&&!config.pipelineId.equals(original.task()))
+            throw new IllegalArgumentException("CAPTURE_EVIDENCE_OWNER_INVALID");
         if(errorGeneration<0||boundaryHash==null||!boundaryHash.matches("[0-9a-f]{64}")||authorize==null)
             throw new IllegalArgumentException("CAPTURE_EVIDENCE_REQUEST_INVALID");
-        return inspect(config,true,archiveDirectory,new Retention(errorGeneration,boundaryHash,authorize));
+        return inspect(config,true,archiveDirectory,new Retention(errorGeneration,boundaryHash,original,authorize));
     }
 
     public static Map<String,Object> exclude(PipelineConfig config, Path archiveDirectory,
@@ -89,9 +97,10 @@ public final class CaptureRecoveryReview {
     private static final class Retention {
         final long errorGeneration;
         final String boundaryHash;
+        final CaptureArchiveReceipt.Owner original;
         final Callable<Void> authorize;
-        Retention(long errorGeneration,String boundaryHash,Callable<Void> authorize){
-            this.errorGeneration=errorGeneration;this.boundaryHash=boundaryHash;this.authorize=authorize;
+        Retention(long errorGeneration,String boundaryHash,CaptureArchiveReceipt.Owner original,Callable<Void> authorize){
+            this.errorGeneration=errorGeneration;this.boundaryHash=boundaryHash;this.original=original;this.authorize=authorize;
         }
     }
 
@@ -110,6 +119,7 @@ public final class CaptureRecoveryReview {
             SourcePosition checkpoint=journal.captured();
             String checkpointHash=checkpoint==null?null:Codec.sha256(Codec.encode(checkpoint));
             String reference=null;
+            CaptureArchiveReceipt.Capture capture=null;
             if(request!=null){
                 request.authorize.call();
                 if(checkpointHash==null||!(before.get("errorGeneration") instanceof Number)
@@ -117,8 +127,10 @@ public final class CaptureRecoveryReview {
                     throw new IllegalStateException("SOURCE_REVIEW_STALE");
                 archiveDirectory=MysqlContentArchive.directory(archiveDirectory,true);
                 reference=archiveReference(config,before,checkpointHash,request.errorGeneration,request.boundaryHash);
+                if(request.original!=null)capture=new CaptureArchiveReceipt.Capture(request.original,config.fingerprint(),
+                        (String)before.get("generation"),checkpointHash,request.errorGeneration,request.boundaryHash);
                 Map<String,Object> existing=MysqlContentArchive.existing(archiveDirectory,reference,config.pipelineId,
-                        checkpointHash,request.boundaryHash,request.errorGeneration);
+                        checkpointHash,request.boundaryHash,request.errorGeneration,capture);
                 if(existing!=null){
                     requireUnchanged(journal,before,checkpoint);
                     request.authorize.call();
@@ -151,7 +163,7 @@ public final class CaptureRecoveryReview {
             report.putAll(nativeEvidence);
             if(archiveDirectory!=null){
                 if(request!=null)request.authorize.call();
-                report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray(),reference));
+                report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray(),reference,capture));
                 if(request!=null)addExclusionPlan(config,journal,before,report);
             }
             return report;
@@ -160,7 +172,7 @@ public final class CaptureRecoveryReview {
 
     private static String archiveReference(PipelineConfig config, Map<String,Object> state, String checkpoint,
                                            long errorGeneration, String boundary) {
-        return Codec.sha256(config.fingerprint()+"\n"+state.get("generation")+"\n"+checkpoint+"\n"+errorGeneration+"\n"+boundary);
+        return CaptureArchiveReceipt.locator(config.fingerprint(),(String)state.get("generation"),checkpoint,errorGeneration,boundary);
     }
 
     private static void addExclusionPlan(PipelineConfig config, JdbcJournal journal, Map<String,Object> state,

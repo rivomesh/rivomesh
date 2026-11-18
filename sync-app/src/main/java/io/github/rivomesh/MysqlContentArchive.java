@@ -45,9 +45,14 @@ final class MysqlContentArchive {
 
     static Map<String,Object> existing(Path location,String reference,String pipelineId,String checkpointHash,
                                        String boundaryHash,long errorGeneration)throws IOException{
+        return existing(location,reference,pipelineId,checkpointHash,boundaryHash,errorGeneration,null);
+    }
+    static Map<String,Object> existing(Path location,String reference,String pipelineId,String checkpointHash,
+                                       String boundaryHash,long errorGeneration,CaptureArchiveReceipt.Capture capture)throws IOException{
         Path path=location.resolve(reference+".json");
         if(!Files.exists(path,LinkOption.NOFOLLOW_LINKS))return null;
-        byte[] content=read(path);
+        byte[] content=read(path,MAX_FILE);
+        if(capture!=null)CaptureArchiveReceipt.verifyExpected(location,capture,path.getFileName().toString(),content);
         JsonNode archive=Codec.JSON.readTree(content),review=archive.path("review");
         JsonNode proof=review.path("nextTransactionContents");
         byte[] frames;
@@ -64,7 +69,8 @@ final class MysqlContentArchive {
         return result;
     }
 
-    static Map<String,String> retain(Path location,Map<String,Object> report,byte[] frames,String reference)throws IOException{
+    static Map<String,String> retain(Path location,Map<String,Object> report,byte[] frames,String reference,
+                                     CaptureArchiveReceipt.Capture capture)throws IOException{
         Path root=directory(location,false);
         Map<String,Object> archive=new LinkedHashMap<>();
         archive.put("formatVersion",1);
@@ -80,9 +86,14 @@ final class MysqlContentArchive {
         try(FileChannel authority=FileChannel.open(lock,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
             FileLock ignored=authority.lock()){
             if(Files.exists(destination,LinkOption.NOFOLLOW_LINKS)){
-                if(!Arrays.equals(read(destination),bytes))throw new IOException("MYSQL_BINLOG_EVIDENCE_ARCHIVE_CONFLICT");
+                if(!Arrays.equals(read(destination,MAX_FILE),bytes))throw new IOException("MYSQL_BINLOG_EVIDENCE_ARCHIVE_CONFLICT");
+                if(capture!=null)CaptureArchiveReceipt.verifyExpected(root,capture,destination.getFileName().toString(),bytes);
                 return receipt(destination,bytes);
             }
+            String locator=destination.getFileName().toString();
+            long required=bytes.length;
+            if(capture!=null&&Files.notExists(CaptureArchiveReceipt.path(root,locator),LinkOption.NOFOLLOW_LINKS))
+                required+=CaptureArchiveReceipt.MAX_BYTES+CaptureArchiveReceipt.KEY_BYTES;
             long used=0;
             try(Stream<Path> files=Files.list(root)){
                 Iterator<Path> iterator=files.iterator();
@@ -94,21 +105,28 @@ final class MysqlContentArchive {
                         continue;
                     }
                     if(Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS))used=Math.addExact(used,Files.size(file));
-                    if(used>MAX_DIRECTORY-bytes.length)throw new IOException("MYSQL_BINLOG_EVIDENCE_CAPACITY");
+                    if(used>MAX_DIRECTORY-required)throw new IOException("MYSQL_BINLOG_EVIDENCE_CAPACITY");
                 }
             }
-            Path temp=Files.createTempFile(root,".capture-",".tmp",PosixFilePermissions.asFileAttribute(FILE_MODE));
-            try{
-                try(FileChannel channel=FileChannel.open(temp,StandardOpenOption.WRITE)){
-                    ByteBuffer data=ByteBuffer.wrap(bytes);
-                    while(data.hasRemaining())channel.write(data);
-                    channel.force(true);
-                }
-                Files.createLink(destination,temp);
-                try(FileChannel channel=FileChannel.open(root,StandardOpenOption.READ)){channel.force(true);}
-                return receipt(destination,bytes);
-            }finally{Files.deleteIfExists(temp);}
+            if(capture!=null)CaptureArchiveReceipt.retain(root,capture,locator,bytes);
+            publish(destination,bytes);
+            return receipt(destination,bytes);
         }
+    }
+
+    /** Atomically installs immutable private bytes while the caller holds the directory lock. */
+    static void publish(Path destination,byte[] bytes)throws IOException{
+        Path root=destination.getParent();
+        Path temp=Files.createTempFile(root,".capture-",".tmp",PosixFilePermissions.asFileAttribute(FILE_MODE));
+        try{
+            try(FileChannel channel=FileChannel.open(temp,StandardOpenOption.WRITE)){
+                ByteBuffer data=ByteBuffer.wrap(bytes);
+                while(data.hasRemaining())channel.write(data);
+                channel.force(true);
+            }
+            Files.createLink(destination,temp);
+            try(FileChannel channel=FileChannel.open(root,StandardOpenOption.READ)){channel.force(true);}
+        }finally{Files.deleteIfExists(temp);}
     }
 
     private static Map<String,String> receipt(Path file,byte[] content){
@@ -118,13 +136,13 @@ final class MysqlContentArchive {
         return result;
     }
 
-    private static byte[] read(Path path)throws IOException{
+    static byte[] read(Path path,int limit)throws IOException{
         if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS)||!FILE_MODE.equals(Files.getPosixFilePermissions(path)))
             throw new IOException("MYSQL_BINLOG_EVIDENCE_ARCHIVE_CONFLICT");
         try(InputStream input=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS);ByteArrayOutputStream out=new ByteArrayOutputStream()){
             byte[] buffer=new byte[8192];int count;
             while((count=input.read(buffer))!=-1){
-                if(out.size()>MAX_FILE-count)throw new IOException("MYSQL_BINLOG_EVIDENCE_ARCHIVE_CONFLICT");
+                if(out.size()>limit-count)throw new IOException("MYSQL_BINLOG_EVIDENCE_ARCHIVE_CONFLICT");
                 out.write(buffer,0,count);
             }
             return out.toByteArray();

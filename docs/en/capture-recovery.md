@@ -52,6 +52,8 @@ For API clients use `POST /api/tasks/{id}/actions` with an `X-Request-ID` and th
 }
 ```
 
+New archives retained through global task control also have a private authentication receipt. The original Agent signs the exact archive filename, byte count and SHA-256, together with the owner directory, task, configuration fingerprint, journal generation, checkpoint, error generation and reviewed boundary. The Agent creates this receipt before publishing the raw file. If interrupted between the two writes, retry recovers only when the original binlog can be read again and the bytes match. Back up the receipt and its Agent-local key alongside the raw archive under the same private access controls. Archives written before this change can still be reviewed through their existing recovery paths. A verified receipt is a prerequisite for future custody checks. It grants no transfer or recovery authorization.
+
 ### Approve a source transaction skip
 
 After retention succeeds, select **Review source transaction skip** from the operation receipt. Check the single GTID, affected tables and all affected destinations. Enter a reason and confirm the impact. The task stays paused after the skip.
