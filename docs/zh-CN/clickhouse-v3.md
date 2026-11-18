@@ -73,6 +73,18 @@ HTTP 200 本身不能证明查询成功。客户端检查异常头、完整 JSON
 
 共享暂停返回 `UNCONFIRMED_IN_FLIGHT_MATERIALIZATION`：日志已隔离旧租约，但无法撤回服务端已在执行的 HTTP 写入。业务切换前需要确认在途请求结束并完成对账，不能据此宣称已获得事务目标的精确 SQL 写入隔离。
 
+### 核对失败事务之前的目标回执
+
+ClickHouse 因一笔完整增量事务的应用故障暂停后，先暂停整个任务。将该目标的错误代次传入只读核对命令。
+
+```bash
+java -jar rivomesh.jar review-clickhouse-recovery config.yml clickhouse 1
+```
+
+`PRECEDING_RECEIPT_VERIFIED` 表示当前目标回执表仍保存上一笔已确认事务的最后一个原生 `COMMIT` 回执。命令核对原回执表身份、回执摘要、ClickHouse 发布断点及日志中的失败事务摘要，返回确认序号和失败序号。目标读取结束后再次核对日志状态。返回结果只证明前一笔回执，失败事务是否已部分写入仍须另行核实。
+
+保存的投递位置指向其他批次或后续批次时，命令返回 `CLICKHOUSE_RECOVERY_PUBLICATION_UNCERTAIN`。原生回执丢失或变化时，应恢复一致的历史，或规划新基线。保留原状态，修复可恢复的故障后使用 **恢复此目标**。ClickHouse 暂不支持事务跳过和前镜像补偿。[目标恢复方式](failed-transactions.md)
+
 ## 运维 FAQ
 
 **为什么既有元数据表又有物理数据表？** 服务保存任务代次/指纹归属、对象 UUID、结构和原生批次回执，必须与数据一起保留，它们不是可随意删除的临时表。回执保留/压缩及大目录容量治理仍属于平台后续工作。

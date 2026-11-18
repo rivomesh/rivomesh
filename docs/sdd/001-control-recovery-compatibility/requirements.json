@@ -850,8 +850,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "PostgreSQL 与 MySQL 已实测开放缺口和待决跳过的原事件保留、配额背压、并发核验后回收及独立目标继续。分析库和消息队列回执、缺口通知协议待验。",
-        "en": "PostgreSQL and MySQL verified exact original-event pins for open gaps and pending skips, backpressure, verified reclamation and independent target progress. Analytical and messaging receipt and gap-notification protocols remain."
+        "zh-CN": "已实测缺口原事件保留、配额背压和回收。界面逐目标显示恢复能力，ClickHouse 可只读核对原生回执，半批或回执变动会拒绝。分析和消息目标缺口通知、补偿协议待验。",
+        "en": "Exact gap event retention, backpressure and guarded collection passed. The UI shows per-target recovery support. ClickHouse read-only native receipt review refuses partial or changed records. Analytical and broker-native gap and compensation protocols remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -865,7 +865,9 @@
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
         "docs/zh-CN/messaging-v3.md",
-        "tests/skip-recovery-native.py"
+        "tests/skip-recovery-native.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/ClickHouseRecoveryReview.java"
       ]
     },
     {

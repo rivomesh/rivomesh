@@ -171,6 +171,15 @@ try{
 
   await evaluate('document.querySelector("#language").click()');
   assert.equal(await evaluate('document.documentElement.lang'),'en');
+  await evaluate('document.querySelector("#adapters-nav").click()');
+  assert(await evaluate(`(()=>{
+    const card=id=>Array.from(document.querySelectorAll('#adapter-list article')).find(row=>row.querySelector('strong').textContent===id);
+    return card('POSTGRESQL').textContent.includes('Reviewed local transaction')
+      && card('KAFKA').textContent.includes('Skip transaction · Unavailable')
+      && card('CLICKHOUSE').textContent.includes('Plan a new baseline manually');
+  })()`));
+  await evaluate('document.querySelector("#tasks-nav").click()');
+  passed('The packaged console shows reviewed SQL recovery and makes non-SQL skip unavailable');
   await screenshot('workspace-wide');
   await viewport(390,844);
   assert(await evaluate('document.documentElement.scrollWidth<=innerWidth'));

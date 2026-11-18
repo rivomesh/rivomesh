@@ -489,6 +489,27 @@ test('login keeps the token out of persistent browser storage and renders availa
   }finally{ui.dom.window.close();}
 });
 
+test('target capabilities distinguish reviewed SQL recovery, manual rebuild and unsupported products',async()=>{
+  const capabilities=[
+    {id:'POSTGRESQL',role:'SINK',status:'AVAILABLE',transactionSkip:'REVIEWED_LOCAL_TRANSACTION',transactionCompensation:'REVIEWED_BEFORE_IMAGES',rebuildMode:'MANUAL_NEW_BASELINE'},
+    {id:'KAFKA',role:'SINK',status:'PARTIALLY_VERIFIED',transactionSkip:'UNAVAILABLE',transactionCompensation:'UNAVAILABLE',rebuildMode:'MANUAL_NEW_BASELINE'},
+    {id:'GBASE_8A',role:'SINK',status:'PLANNED',transactionSkip:'UNAVAILABLE',transactionCompensation:'UNAVAILABLE',rebuildMode:'UNAVAILABLE'},
+    {id:'MYSQL',role:'SOURCE',status:'AVAILABLE'}
+  ];
+  const ui=setup([],'ADMIN',{capabilities});
+  try{
+    await login(ui);ui.d.getElementById('adapters-nav').click();
+    const card=id=>[...ui.d.querySelectorAll('#adapter-list article')].find(row=>row.querySelector('strong').textContent===id);
+    assert.match(card('POSTGRESQL').textContent,/跳过事务 · 需审阅的本地事务.*前镜像补偿 · 使用已审阅的前镜像/);
+    assert.match(card('KAFKA').textContent,/跳过事务 · 不可用.*前镜像补偿 · 不可用.*重建 · 人工规划新基线/);
+    assert.match(card('GBASE_8A').textContent,/重建 · 不可用/);
+    assert.doesNotMatch(card('MYSQL').textContent,/跳过事务|前镜像补偿|重建/);
+    ui.d.getElementById('language').click();
+    assert.match(card('KAFKA').textContent,/Skip transaction · Unavailable.*Rebuild · Plan a new baseline manually/);
+    assert.equal(ui.d.querySelectorAll('#adapter-list button').length,0);
+  }finally{ui.dom.window.close();}
+});
+
 test('viewer and operator accounts show their role and cannot create pipelines',async()=>{
   const task={id:'restricted',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING',subscriptions:[{id:'pg',state:'PAUSED',acknowledged:0,errorGeneration:1}]},statusAvailable:true,operations:[]};
   for(const role of ['VIEWER','OPERATOR']){

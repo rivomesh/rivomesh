@@ -145,6 +145,18 @@ application journal but cannot retract an HTTP write already running on the
 server. A business cutover must establish quiescence and reconciliation first.
 Do not infer a transactional target's exact local SQL fence here.
 
+### Review a failed transaction's preceding receipt
+
+Pause the whole pipeline when ClickHouse is already paused on a complete incremental apply failure. Use its subscription error generation in the read-only review command.
+
+```bash
+java -jar rivomesh.jar review-clickhouse-recovery config.yml clickhouse 1
+```
+
+`PRECEDING_RECEIPT_VERIFIED` confirms that the current native receipt table contains the saved last COMMIT receipt of the acknowledged preceding transaction. The review checks the original table identity, receipt hash, ClickHouse publication checkpoint and retained failed-head hashes. It reports acknowledgment and failed sequence, then rechecks the journal cut after native I/O. The result covers the preceding receipt. Whether the failed transaction partially materialized remains a separate recovery question.
+
+If saved transport progress refers to a different or later batch, the command reports `CLICKHOUSE_RECOVERY_PUBLICATION_UNCERTAIN`. Missing or changed native receipts require restoring consistent history or planning a new baseline. Keep all original state and use **Resume this target** after correcting a recoverable fault. ClickHouse transaction skip and before-image compensation are unavailable. [Recovery modes](failed-transactions.md)
+
 ## Operational FAQ
 
 **Why are both metadata and physical data tables present?** The service owns

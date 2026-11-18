@@ -11,10 +11,10 @@ public final class AdapterCatalog {
         add(rows,"GAUSS_POSTGRESQL","SINK","PARTIALLY_VERIFIED","openGauss 7.0.0-RC3 verified; distributed/commercial GaussDB unverified");
         add(rows,"POSTGRESQL","SINK","AVAILABLE","PostgreSQL 17.12 snapshot / CDC / restart / JSON verified");
         add(rows,"MYSQL","SINK","AVAILABLE","V3 Web/CLI: separate MySQL 8.4 instance; PG/Gauss/MySQL fan-out and both journal recovery modes verified");
-        add(rows,"RABBITMQ","SINK","PARTIALLY_VERIFIED","4.1.4 quorum queue; confirmed at-least-once, worker/broker restart verified; cluster/TLS acceptance pending");
+        add(rows,"RABBITMQ","SINK","PARTIALLY_VERIFIED","4.1.4 three-member quorum queue: leader loss, minority refusal, replay, and consumer acknowledgement verified; TLS and capacity profiles pending");
         add(rows,"NATS_JETSTREAM","SINK","PARTIALLY_VERIFIED","2.11.8 File stream: worker/broker restart and three replicas with client TLS, leader loss, loss of majority and retry verified; client certificates, node-to-node TLS and scale remain open");
-        add(rows,"KAFKA","SINK","PARTIALLY_VERIFIED","3.9.2 dedicated single-partition topic, all-ISR/idempotent producer; worker/broker restart verified; cluster/SASL/TLS acceptance pending");
-        add(rows,"REDIS_STREAMS","SINK","PARTIALLY_VERIFIED","7.4.2 direct standalone, AOF/noeviction, same-connection WAITAOF; worker/broker restart verified; Sentinel/Cluster/TLS acceptance pending");
+        add(rows,"KAFKA","SINK","PARTIALLY_VERIFIED","3.9.2 dedicated single-partition topic: KRaft data leader election, insufficient ISR refusal and original consumer offset recovery verified; full controller-loss/security profiles pending");
+        add(rows,"REDIS_STREAMS","SINK","PARTIALLY_VERIFIED","7.4.2 direct endpoint: AOF replica promotion, WAITAOF, pending-entry and consumer acknowledgement recovery verified; Sentinel/Cluster/TLS pending");
         add(rows,"PULSAR","SINK","PARTIALLY_VERIFIED","4.0.14 persistent non-partitioned topic, isolated Java 8 SDK; transport, snapshot/CDC, worker kill and three broker stop/start rounds verified; cluster/token/TLS pending");
         add(rows,"ROCKETMQ","SINK","PARTIALLY_VERIFIED","Native Java 8 client 5.5.1 / broker 5.5.0: local SYNC_FLUSH, one queue, broker/client restart and lost-topic protection verified; snapshot/CDC, worker kill and three broker stop/start rounds verified; native receipt/content and older nonempty backup rollback refusal verified; ACL/TLS/replicated profiles pending");
         add(rows,"ACTIVEMQ_ARTEMIS","SINK","PARTIALLY_VERIFIED","2.57.0 broker / isolated Java 8 Core client 2.19.1 with Netty 4.1.130: transport, persistent non-destructive queue, consumer ACK, broker/client restart and native receipt refusal of an older same-ID nonempty backup verified; mixed pipeline/security/cluster acceptance pending");
@@ -33,6 +33,13 @@ public final class AdapterCatalog {
         return rows;
     }
     private static void add(List<Map<String,String>> rows,String id,String role,String status,String note) {
-        Map<String,String> row=new LinkedHashMap<>();row.put("id",id);row.put("role",role);row.put("status",status);row.put("note",note);rows.add(row);
+        Map<String,String> row=new LinkedHashMap<>();row.put("id",id);row.put("role",role);row.put("status",status);row.put("note",note);
+        if("SINK".equals(role)){
+            boolean reviewedSql="POSTGRESQL".equals(id)||"MYSQL".equals(id);
+            row.put("transactionSkip",reviewedSql?"REVIEWED_LOCAL_TRANSACTION":"UNAVAILABLE");
+            row.put("transactionCompensation",reviewedSql?"REVIEWED_BEFORE_IMAGES":"UNAVAILABLE");
+            row.put("rebuildMode","PLANNED".equals(status)?"UNAVAILABLE":"MANUAL_NEW_BASELINE");
+        }
+        rows.add(row);
     }
 }

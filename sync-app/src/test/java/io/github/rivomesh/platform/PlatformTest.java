@@ -120,6 +120,29 @@ class PlatformTest {
             String view=Model.JSON.writeValueAsString(service.list());assertTrue(view.contains("valid"));assertTrue(view.contains("invalid.yml"));assertFalse(view.contains("should-not-appear"));
         }
     }
+    @Test void capabilitiesDescribeRecoveryOnlyForTheActualTargetProfiles()throws Exception{
+        PlatformConfig config=config();
+        try(TaskService service=new TaskService(config,new Backend(),new Workers());ConsoleServer server=new ConsoleServer(config,service)){
+            server.start();String base="http://127.0.0.1:"+server.port();
+            Response response=http(base,"/api/capabilities",TOKEN,null,null);
+            assertEquals(200,response.status);
+            JsonNode catalog=Model.JSON.readTree(response.text);
+            Set<String> supported=new TreeSet<>();
+            for(JsonNode row:catalog){
+                if("SOURCE".equals(row.path("role").asText())){
+                    assertFalse(row.has("transactionSkip"));assertFalse(row.has("rebuildMode"));
+                    continue;
+                }
+                String product=row.path("id").asText();
+                boolean reviewedSql=Set.of("MYSQL","POSTGRESQL").contains(product);
+                assertEquals(reviewedSql?"REVIEWED_LOCAL_TRANSACTION":"UNAVAILABLE",row.path("transactionSkip").asText(),product);
+                assertEquals(reviewedSql?"REVIEWED_BEFORE_IMAGES":"UNAVAILABLE",row.path("transactionCompensation").asText(),product);
+                assertEquals("PLANNED".equals(row.path("status").asText())?"UNAVAILABLE":"MANUAL_NEW_BASELINE",row.path("rebuildMode").asText(),product);
+                if(reviewedSql)supported.add(product);
+            }
+            assertEquals(Set.of("MYSQL","POSTGRESQL"),supported);
+        }
+    }
     @Test void httpRolesProtectEveryMutationBeforeItReachesTheTaskService()throws Exception{
         PlatformConfig c=config();c.authToken=null;String admin="administrator-token-private-at-least-24",viewer="read-only-token-private-at-least-24",operator="operations-token-private-at-least-24";c.users=Arrays.asList(user("admin",PlatformConfig.Role.ADMIN,admin),user("reader",PlatformConfig.Role.VIEWER,viewer),user("operator",PlatformConfig.Role.OPERATOR,operator));Backend backend=new Backend();Workers workers=new Workers();
         try(TaskService service=new TaskService(c,backend,workers);ConsoleServer server=new ConsoleServer(c,service)){

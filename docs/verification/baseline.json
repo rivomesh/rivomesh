@@ -6897,5 +6897,120 @@
       "focusedJavaTests": 50,
       "domTests": 135
     }
+  },
+  "targetRecoveryCapabilitiesAndClickHouseReview": {
+    "integration": {
+      "status": "PASS",
+      "artifactSha256": "1d484dc78701059e93ac7b2815b65fa2100bbad3ac1395614bc894704d83dcb4",
+      "scopedPatchSha256": "b75a5aac52ca7121498f6baafbde6cede95ebbfeb9e555ff686a2b5bf71bf57c",
+      "frozenArchiveTree": "8261c605c87a80ed24ebb908500d7bfd5c8c0721",
+      "scopedTree": "0cf2a4544335d5ae6e657cc7ac376b9b376812bc",
+      "scopedAppTree": "4b34b612405f113a71f8251960d333629ac0c852",
+      "javaTestsPassed": 72,
+      "javaExternalGated": 2,
+      "domTestsPassed": 136,
+      "chrome": {
+        "artifactSha256": "1d484dc78701059e93ac7b2815b65fa2100bbad3ac1395614bc894704d83dcb4",
+        "status": "PASS",
+        "checks": [
+          "Native Tab navigation stays in the login dialog and Escape keeps login required",
+          "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+          "Packaged handoff assessment UI loads while its task action remains hidden in standalone mode",
+          "Diagnostics has an accessible dialog and destination selector, routes target reads, and works through Enter and Escape",
+          "Report lookup retains keyboard focus through polling, has an accessible dialog, validates typed input and closes with Escape",
+          "The workbench opens the real stored validation report catalog and returns to recent jobs",
+          "The packaged console shows reviewed SQL recovery and makes non-SQL skip unavailable",
+          "English workspace stays within the mobile viewport",
+          "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+          "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+          "Packaged site wordmarks, favicon and palette follow the browser color scheme",
+          "An explicit keyboard-selected appearance survives reload with the authenticated cookie session",
+          "Keyboard skip and current-page navigation work at 320 CSS pixels with no page overflow",
+          "Actual sign-out revokes the browser session"
+        ],
+        "browser": "Chrome/157.0.8103.79"
+      },
+      "nativeClickHouseCandidate": {
+        "status": "PASS",
+        "artifactSha256": "cb301b3c403e4c634656b4a9e7fbfa750827cc6116418a7a25365c22dbf6cc7c",
+        "scopedPatchSha256": "ca40a5f7c27a19ed1b6b288cf47645b7591bf6cec13eec64baa644ebea9af948",
+        "testClassesSha256": "512e9e8f5d829bce99ddfb3c7c7c43d54b347d45c40200dadac3c88f18d22acc",
+        "tests": 36,
+        "nativeCases": [
+          "mysqlSnapshotCdcIndependentOutageWorkerKillAndTargetLoss",
+          "readOnlyRecoveryVerifiesNativePredecessorAndNeverAdvancesEitherTarget"
+        ],
+        "localBuildChecks": 34,
+        "images": {
+          "clickhouse/clickhouse-server:25.8.33.6": "sha256:a1304f616cd2a6ed51a616da1cd2e897850b520c3ebfbc2bcfba8d65581998ad arm64",
+          "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64",
+          "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de arm64",
+          "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64"
+        },
+        "cleanupExitCode": 0,
+        "fixtureProject": "rivomesh-clickhouse-pipeline-54739",
+        "scope": [
+          "Native PostgreSQL sibling received the original large MySQL transaction while ClickHouse paused before publication.",
+          "Actual review CLI verified the original ClickHouse predecessor COMMIT receipt when both task and target were paused.",
+          "Review refused changed native receipt content and an ambiguous partial BEGIN without advancing either target.",
+          "The ordinary live snapshot, CDC, ClickHouse outage/restart, Worker restart and missing-view paths still passed."
+        ]
+      },
+      "separateCatalogCandidate": {
+        "artifactSha256": "6a8ae9b6276e8526f25c26e29fa4609aac06ebb2cdb42ca2f84ea9804a3aeabf",
+        "scopedPatchSha256": "4e0b70a7558bb2e7d516c161016cdcaa2374fc6c0082133faeaf58c127f3e59c",
+        "frozenBase": "a3ec6abab0dde79275dcd7e7f4174c0a71809347",
+        "scopedTree": "218dc9939bcbcc836c12a63616ddb757646dd4c6",
+        "javaAndHttpChecks": 16,
+        "domChecks": 136,
+        "chrome": {
+          "artifactSha256": "6a8ae9b6276e8526f25c26e29fa4609aac06ebb2cdb42ca2f84ea9804a3aeabf",
+          "status": "PASS",
+          "checks": [
+            "Native Tab navigation stays in the login dialog and Escape keeps login required",
+            "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+            "Packaged handoff assessment UI loads while its task action remains hidden in standalone mode",
+            "Diagnostics has an accessible dialog and destination selector, routes target reads, and works through Enter and Escape",
+            "Report lookup retains keyboard focus through polling, has an accessible dialog, validates typed input and closes with Escape",
+            "The workbench opens the real stored validation report catalog and returns to recent jobs",
+            "The packaged console shows reviewed SQL recovery and makes non-SQL skip unavailable",
+            "English workspace stays within the mobile viewport",
+            "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+            "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+            "Packaged site wordmarks, favicon and palette follow the browser color scheme",
+            "An explicit keyboard-selected appearance survives reload with the authenticated cookie session",
+            "Keyboard skip and current-page navigation work at 320 CSS pixels with no page overflow",
+            "Actual sign-out revokes the browser session"
+          ],
+          "browser": "Chrome/157.0.8103.79"
+        }
+      }
+    },
+    "nativeClickHouse": {
+      "status": "PASS",
+      "artifactSha256": "cb301b3c403e4c634656b4a9e7fbfa750827cc6116418a7a25365c22dbf6cc7c",
+      "scopedPatchSha256": "ca40a5f7c27a19ed1b6b288cf47645b7591bf6cec13eec64baa644ebea9af948",
+      "testClassesSha256": "512e9e8f5d829bce99ddfb3c7c7c43d54b347d45c40200dadac3c88f18d22acc",
+      "tests": 36,
+      "nativeCases": [
+        "mysqlSnapshotCdcIndependentOutageWorkerKillAndTargetLoss",
+        "readOnlyRecoveryVerifiesNativePredecessorAndNeverAdvancesEitherTarget"
+      ],
+      "localBuildChecks": 34,
+      "images": {
+        "clickhouse/clickhouse-server:25.8.33.6": "sha256:a1304f616cd2a6ed51a616da1cd2e897850b520c3ebfbc2bcfba8d65581998ad arm64",
+        "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64",
+        "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de arm64",
+        "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64"
+      },
+      "cleanupExitCode": 0,
+      "fixtureProject": "rivomesh-clickhouse-pipeline-54739",
+      "scope": [
+        "Native PostgreSQL sibling received the original large MySQL transaction while ClickHouse paused before publication.",
+        "Actual review CLI verified the original ClickHouse predecessor COMMIT receipt when both task and target were paused.",
+        "Review refused changed native receipt content and an ambiguous partial BEGIN without advancing either target.",
+        "The ordinary live snapshot, CDC, ClickHouse outage/restart, Worker restart and missing-view paths still passed."
+      ]
+    }
   }
 }

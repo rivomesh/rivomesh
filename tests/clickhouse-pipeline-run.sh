@@ -14,7 +14,7 @@ cleanup() {
     "${compose[@]}" down -v --remove-orphans
 }
 trap cleanup EXIT
-"${compose[@]}" run --rm -T tests bash tests/clickhouse-pipeline-in-container.sh &
+"${compose[@]}" run --rm -T -e RIVOMESH_TEST_ARTIFACT -e RIVOMESH_TEST_CLASSES tests bash tests/clickhouse-pipeline-in-container.sh &
 test_pid=$!
 while kill -0 "$test_pid" 2>/dev/null; do
     if [ -f "$marker_dir/stop.request" ] && [ ! -f "$marker_dir/stop.done" ]; then

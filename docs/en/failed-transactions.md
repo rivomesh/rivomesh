@@ -17,6 +17,18 @@ Existing global task queries carry summaries through different management entrie
 
 [Accepted scope and evidence](../verification/README.md) cover internal inspection,two-entry real SQL fault/restart and five-JRE foundation contracts;they do not accept the complete manual recovery workflow.
 
+## Recovery by target product
+
+**Adapter capabilities** shows the recovery modes supported by each destination. `GET /api/capabilities` returns `transactionSkip`, `transactionCompensation` and `rebuildMode` for target entries.
+
+| Target | Transaction skip and compensation | Rebuild |
+|---|---|---|
+| PostgreSQL, MySQL | Review the complete failure, then use the available local transaction or before-image workflow. The task must meet its pause, fence and evidence requirements. | Plan a fresh baseline and empty destination manually. |
+| Other selectable destinations | Restore the original connection, schema or broker history and retry the original event. Skip and compensation are unavailable. | Plan a fresh baseline manually when the old history cannot be recovered. |
+| Planned destinations | Unavailable | Unavailable |
+
+`MANUAL_NEW_BASELINE` describes an operator-managed project. Keep the original journal, destination receipts and evidence until the new baseline has been checked. A resume action uses the existing destination identity and checkpoint.
+
 ## Source pipeline failure phases
 
 A blocked capture records `error_stage`, the error generation and the latest valid GTID in task details. The Worker reports an observation when it cannot open the journal. Destination retry, compensation and skip actions depend on reviewable destination evidence.

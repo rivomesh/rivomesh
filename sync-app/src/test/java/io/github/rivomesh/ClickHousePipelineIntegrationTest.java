@@ -25,10 +25,14 @@ class ClickHousePipelineIntegrationTest {
     long pgCount(String where)throws Exception{PipelineConfig.Target t=config.targets.get(1);try(Connection c=JdbcConnections.open("org.postgresql.Driver",t.url,t.username,t.password);Statement s=c.createStatement();ResultSet r=s.executeQuery("SELECT count(*) FROM "+Sql.pg(t.mappings.get(config.databases.get(0)))+".items WHERE "+where)){r.next();return r.getLong(1);}}
     long last(JdbcJournal j)throws Exception{return ((Number)j.status().get("lastSequence")).longValue();}
     long ack(JdbcJournal j,String id)throws Exception{return j.subscriptions().stream().filter(s->s.id.equals(id)).findFirst().get().acknowledged;}
-    @Test void mysqlSnapshotCdcIndependentOutageWorkerKillAndTargetLoss()throws Exception{
+    private String configureTargets()throws Exception{
         Config base=ClusterHarness.config();String db=base.source.database;config=new PipelineConfig();config.pipelineId=db;config.source=base.source;config.databases=Collections.singletonList(db);config.journal.path=directory.resolve("journal").toString();config.chunkSize=1;config.leaseMillis=5000;config.heartbeatMillis=300;config.pollIntervalMillis=100;config.retryDelayMillis=300;
         PipelineConfig.Target ch=new PipelineConfig.Target();ch.id="clickhouse";ch.product=TargetProduct.CLICKHOUSE;ch.url="http://clickhouse:8123";ch.username="rivomesh";ch.password="ClickHouse@Test123";ch.metadataSchema=db+"_meta";ch.mappings.put(db,db+"_ch");ch.clickhouse=new PipelineConfig.ClickHouse();ch.clickhouse.secondaryIndexes=ClickHouseIndexPlan.Mode.DATA_SKIPPING;ch.clickhouse.requestTimeoutMillis=3000;config.targets.add(ch);
         PipelineConfig.Target pg=new PipelineConfig.Target();pg.id="postgres";pg.product=TargetProduct.POSTGRESQL;pg.url="jdbc:postgresql://postgres:5432/sync_test?connectTimeout=3&socketTimeout=10";pg.username="sync_test";pg.password=ClusterHarness.PASSWORD;pg.metadataSchema=db+"_pg_meta";pg.mappings.put(db,db+"_pg");config.targets.add(pg);config.validate();
+        return db;
+    }
+    @Test void mysqlSnapshotCdcIndependentOutageWorkerKillAndTargetLoss()throws Exception{
+        String db=configureTargets();PipelineConfig.Target ch=config.targets.get(0);
         String items=Sql.mysql(db)+".items",duplicates=Sql.mysql(db)+".duplicates";ClusterHarness.sql("mysql","CREATE DATABASE "+Sql.mysql(db));
         try{
             ClusterHarness.sql("mysql","CREATE TABLE "+items+" (id INT PRIMARY KEY,document JSON,twice INT GENERATED ALWAYS AS(id*2) STORED,u BIGINT UNSIGNED,amount DECIMAL(65,30),payload BLOB,moment DATETIME(6),UNIQUE KEY uq_u(u),KEY ix_twice(twice)) ENGINE=InnoDB");
@@ -46,6 +50,79 @@ class ClickHousePipelineIntegrationTest {
                 try(ClickHouseHttpClient c=client()){c.execute("ALTER TABLE "+ClickHouseMaterializer.q(ch.metadataSchema)+"."+ClickHouseMaterializer.q(physical)+" ADD INDEX "+ClickHouseMaterializer.q(indexName)+" u TYPE minmax GRANULARITY 1");}journal.resume("clickhouse",error);await(()->count("items","id=5")==1&&ack(journal,"clickhouse")==last(journal));
                 try(ClickHouseHttpClient client=client()){client.execute("DROP VIEW "+ClickHouseMaterializer.q(ch.mappings.get(db))+".items SYNC");}ClusterHarness.sql("mysql","INSERT INTO "+items+" (id,document) VALUES (6,'{}')");await(()->journal.subscriptions().stream().anyMatch(s->s.id.equals("clickhouse")&&s.state.equals("PAUSED")));await(()->pgCount("id=6")==1&&ack(journal,"postgres")==last(journal));assertTrue(ack(journal,"clickhouse")<last(journal));
                 Map<String,Object> paused=PipelineControls.pause(config);@SuppressWarnings("unchecked")Map<String,String> fences=(Map<String,String>)paused.get("targetFences");assertEquals("UNCONFIRMED_IN_FLIGHT_MATERIALIZATION",fences.get("clickhouse"));assertEquals("FENCED",fences.get("postgres"));
+                long latestError=journal.subscriptions().stream().filter(sub->sub.id.equals("clickhouse")).findFirst().orElseThrow().errorGeneration;
+                long lastConfirmed=ack(journal,"clickhouse");
+                ReviewResult partial=review(latestError);
+                assertNotEquals(0,partial.code());assertTrue(partial.output().contains("CLICKHOUSE_RECOVERY_PUBLICATION_UNCERTAIN"),partial.output());
+                assertEquals(lastConfirmed,ack(journal,"clickhouse"));assertEquals(last(journal),ack(journal,"postgres"));
+            }
+        }finally{kill();ClusterHarness.sql("mysql","DROP DATABASE IF EXISTS "+Sql.mysql(db));}
+    }
+
+    private record ReviewResult(int code,String output){}
+    private ReviewResult review(long errorGeneration)throws Exception{
+        Path output=directory.resolve("review-"+UUID.randomUUID()+".log");
+        Path diagnostics=directory.resolve("review-errors-"+UUID.randomUUID()+".log");
+        Process process=new ProcessBuilder(System.getProperty("java.home")+"/bin/java","-Xmx128m","-jar",System.getProperty("sync.test.jar"),
+                "review-clickhouse-recovery",directory.resolve("task.yml").toString(),"clickhouse",Long.toString(errorGeneration))
+                .redirectError(diagnostics.toFile()).redirectOutput(output.toFile()).start();
+        try{
+            assertTrue(process.waitFor(40,TimeUnit.SECONDS));
+            int code=process.exitValue();
+            return new ReviewResult(code,code==0?Files.readString(output):Files.readString(diagnostics));
+        }finally{if(process.isAlive())process.destroyForcibly();}
+    }
+    @Test void readOnlyRecoveryVerifiesNativePredecessorAndNeverAdvancesEitherTarget()throws Exception{
+        String db=configureTargets();PipelineConfig.Target ch=config.targets.get(0);
+        ch.clickhouse.maxMessageBytes=8192;config.validate();
+        String items=Sql.mysql(db)+".items";
+        ClusterHarness.sql("mysql","CREATE DATABASE "+Sql.mysql(db));
+        try{
+            ClusterHarness.sql("mysql","CREATE TABLE "+items+" (id INT PRIMARY KEY,payload BLOB) ENGINE=InnoDB");
+            ClusterHarness.sql("mysql","INSERT INTO "+items+" VALUES (1,'snapshot')");config.prepareLocalDirectory();
+            try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
+                start();await(()->count("items","id=1")==1&&pgCount("id=1")==1);
+                ClusterHarness.sql("mysql","INSERT INTO "+items+" VALUES (2,'confirmed')");
+                await(()->ack(journal,"clickhouse")>0&&ack(journal,"clickhouse")==last(journal)&&ack(journal,"postgres")==last(journal));
+                long previous=ack(journal,"clickhouse");
+                ClusterHarness.sql("mysql","INSERT INTO "+items+" VALUES (3,REPEAT('x',16000))");
+                await(()->journal.subscriptions().stream().anyMatch(sub->sub.id.equals("clickhouse")&&sub.state.equals("PAUSED")
+                        &&"MESSAGE_TOO_LARGE".equals(sub.errorCode)));
+                await(()->pgCount("id=3")==1&&ack(journal,"postgres")==last(journal));
+                long error=journal.subscriptions().stream().filter(sub->sub.id.equals("clickhouse")).findFirst().orElseThrow().errorGeneration;
+                assertEquals("CLICKHOUSE_RECOVERY_REQUIRES_PIPELINE_PAUSED",assertThrows(IllegalStateException.class,
+                        ()->ClickHouseRecoveryReview.inspect(config,"clickhouse",error)).getMessage());
+                PipelineControls.pause(config);
+
+                String root=ClickHouseMaterializer.q(ch.metadataSchema)+"."+ClickHouseMaterializer.q("rm3_ch_"+Codec.sha256(config.pipelineId+":"+ch.id));
+                JdbcPublicationStore publication=new JdbcPublicationStore(journal,ch.id,null);
+                String progress=publication.progress();
+                long receiptRows;
+                try(ClickHouseHttpClient client=client()){
+                    receiptRows=client.query("SELECT count() FROM "+root).path("data").get(0).get(0).asLong();
+                }
+                ReviewResult observed=review(error);
+                assertEquals(0,observed.code(),observed.output());
+                var proof=Codec.JSON.readTree(observed.output());
+                assertEquals("PRECEDING_RECEIPT_VERIFIED",proof.path("status").asText());
+                assertEquals(Long.toString(previous),proof.path("acknowledgedSequence").asText());
+                assertEquals(Long.toString(previous+1),proof.path("failedSequence").asText());
+                assertEquals(Codec.sha256(progress),proof.path("nativeReceiptSha256").asText());
+                assertEquals(progress,publication.progress());assertEquals(previous,publication.checkpoint().sequence);
+                assertEquals(previous,ack(journal,"clickhouse"));assertEquals(previous+1,ack(journal,"postgres"));
+                assertEquals(0,count("items","id=3"));
+
+                String receiptId=new String(Base64.getUrlDecoder().decode(progress.split(":",-1)[1]),StandardCharsets.UTF_8);
+                assertTrue(receiptId.matches("[A-Za-z0-9_./-]+"));
+                try(ClickHouseHttpClient client=client()){
+                    assertEquals(receiptRows,client.query("SELECT count() FROM "+root).path("data").get(0).get(0).asLong());
+                    client.execute("ALTER TABLE "+root+" UPDATE hash=toFixedString(repeat('0',64),64) WHERE kind='RECEIPT' AND id='"
+                            +receiptId+"' SETTINGS mutations_sync=2");
+                }
+                ReviewResult corrupt=review(error);
+                assertNotEquals(0,corrupt.code());assertTrue(corrupt.output().contains("CLICKHOUSE_CONFIRMED_HISTORY_CHANGED_REBUILD_REQUIRED"),corrupt.output());
+                assertEquals(progress,publication.progress());assertEquals(previous,ack(journal,"clickhouse"));
+                assertEquals(previous+1,ack(journal,"postgres"));assertEquals(1,pgCount("id=3"));
             }
         }finally{kill();ClusterHarness.sql("mysql","DROP DATABASE IF EXISTS "+Sql.mysql(db));}
     }

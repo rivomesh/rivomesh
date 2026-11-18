@@ -84,6 +84,15 @@ public final class ClickHouseMaterializer implements ConfirmedPublisher {
     }
     @Override public String confirmedProgress(){return receiptId==null?null:"CLICKHOUSE_RECEIPT_V1:"+Base64.getUrlEncoder().withoutPadding().encodeToString(receiptId.getBytes(StandardCharsets.UTF_8))+":"+receiptHash;}
     @Override public String identity(){return rootUuid==null?null:"CLICKHOUSE_TABLE_V1:"+rootUuid;}
+    /** Evidence for the saved predecessor only. Does not activate or materialize any resource. */
+    void verifyPrecedingCommit(String progress,String expectedIdentityHash,String expectedEventId)throws Exception{
+        resumeProgress(progress);
+        if(!expectedEventId.equals(receiptId))throw new IllegalStateException("CLICKHOUSE_RECOVERY_PUBLICATION_UNCERTAIN");
+        root(false);
+        if(!Codec.sha256(identity()).equals(expectedIdentityHash))throw new IllegalStateException("CLICKHOUSE_RESOURCE_ID_CHANGED");
+        verifyReceipt();
+        root(false);
+    }
     @Override public void prepare(Set<String> destinations)throws Exception{root(settings.autoCreate);verifyReceipt();for(String channel:destinations)if(!control(channel)){SchemaRecord record=schema(channel,false);if(record!=null)verify(record);}}
     @Override public void require(Set<String> destinations)throws Exception{root(false);verifyReceipt();for(String channel:destinations)if(!control(channel))verify(schema(channel,true));}
     private static boolean control(String channel){return channel.endsWith(".__schema")||channel.endsWith(".__transactions");}
