@@ -2,68 +2,9 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T17:57:58+08:00",
-  "nextReportAt": "2026-11-18T18:57:58+08:00",
+  "lastReportAt": "2026-11-18T18:58:16+08:00",
+  "nextReportAt": "2026-11-18T19:58:16+08:00",
   "completedSincePrevious": [
-    "CP-06 per-target diagnostics passed 10 native cases across two controllers and one Agent, with PostgreSQL target pause, MySQL outage/rejoin, stale-cursor refusal and retained events after Agent restart.",
-    "Official-site console theme and assets passed 11 real Chrome cases on the exact Maven package, including keyboard navigation at 320 CSS pixels and cookie-backed reload after theme switching.",
-    "LG-09 passed 15 combined native/browser cases, including six real Chrome checks for cookie-backed dual entry, retained report and 27-row paging, reviewed repair and restart, and typed manual correction with exact retained receipts.",
-    "LG-10 offline audit checkpoints passed 11 Python checks and three actual host checks, including chain extension through killed service and rollback refusal against an older valid export.",
-    "SO-07 added bounded Oracle text-backed JSON; 18 native Oracle 26ai cases and five focused Java tests passed, covering exact JSONB snapshot/CDC, keyless changes and SIGKILL continuation at the original snapshots.",
-    "CP-04 standalone writer handoff passed five native cases and 55 focused Java tests, retaining original snapshot and target receipts across distinct writer identities and a thawed stale Worker.",
-    "LG-02 read-only MySQL to nonempty PostgreSQL preview passed nine native cases, including physical snapshot session loss, exact difference counts, unchanged destination and existing ownership refusal.",
-    "CP-06/SO-06 verified PostgreSQL commit timing against native microseconds and current SQL acknowledgments, plus UUID keys, nullable values and changes, on a 10-case live fixture and 38 focused Java tests.",
-    "LG-10/JV-03 built a separate external MySQL JDBC package without changing the ordinary JAR. It passed eight native rolling cases, three driver-admission checks and exact archive/notice inventory.",
-    "LG-07: all 12 native Temurin 21 hardware trials passed on the clean 2257425 reactor artifact (514 Java passed, 32 optional skips). Measured matching 20,000 snapshot rows and 24,000 changes across both journals and 1/2 CPU per service.",
-    "LG-07 completed 256 database mappings and one 8,505,279-byte binlog transaction under a 256 MiB Worker heap. All 512 business rows matched in snapshot, CDC and original-snapshot SIGKILL recovery.",
-    "A separate managed Agent readiness assessment passed eight cases each on PostgreSQL and MySQL control stores. Verified candidate 43b01b78 was ready for publishing after this report.",
-    "Removed obsolete runtime and benchmark JAR copies totaling approximately 4.9 GiB while retaining accepted artifacts and manifests."
-  ],
-  "inProgress": [
-    "CP-04 prepare managed-handoff assessment publication and proceed to candidate evidence access and global transfer.",
-    "LG-09 report-ID lookup and refresh-safe keyboard focus passed 12 real Chrome checks. Full dual-entry business workflow is active.",
-    "CP-06 MySQL 8.4 source commit timing and MySQL 5.7 unknown behavior ready for scheduled native checks.",
-    "LG-04 RabbitMQ three-node quorum and consumer ACK fixture ready for native check.",
-    "LG-02 native restore-constraint review is queued. Existing compare-only preview is published."
-  ],
-  "reportContents": [
-    "Current totals",
-    "New completions since previous report",
-    "In-progress tasks and evidence",
-    "Remaining work and blockers",
-    "Published commits and test results"
-  ],
-  "lastReportedSdd": {
-    "DONE": 29,
-    "PARTIAL": 19,
-    "NEW": 0
-  },
-  "lastReportedPublishedCommits": [
-    "fb4e313f2cb27ccc495dfe9c36de629995fac077",
-    "a1e3e3f9be5ca6d20ea744734df2ba78ed419a51",
-    "99fb37430b0c9689fd6018ffdcf1886582dab8fd",
-    "2257425a8bdf59551e2a85f2e35c61a8ed44e9f1",
-    "3a78108c8a7ec5e47f86f48cbd08bac1e3fb0226",
-    "c822cd976ba18bf023a991d822144bcc7d433f25",
-    "d8fd7f27083a3cc2b2d63cbf0437de0f91984f56",
-    "97344a4a179614016b35e3393319e745557640c4",
-    "a0946400dbcf300493f6954e0f53dc3864126b73",
-    "d5e8d5cb7985c7de9c6b0bbc6d94507497921c67",
-    "a8d76a54a3759cc4c5b7c59d9aea8fe8dd02ab70"
-  ],
-  "currentSdd": {
-    "DONE": 33,
-    "PARTIAL": 15,
-    "NEW": 0
-  },
-  "nextTasks": [
-    "Complete the serial native browser, MySQL timing, RabbitMQ quorum and constraint review verification queues.",
-    "Advance global Agent transfer and capture evidence reachability, then measure sustained slow-target backpressure."
-  ],
-  "currentCandidateArtifact": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
-  "currentCandidateScope": "Temurin 21 staged normal package for bounded diagnostics, 28 Java, 131 DOM, 13 Chrome, and ten distributed native checks",
-  "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
-  "newSinceLastReport": [
     "LG-09 historical report lookup and periodic-refresh keyboard focus passed 16 native cases including seven live Chrome interactions, 12 same-artifact standalone Chrome cases, and 127 DOM tests.",
     "CP-04 published the durable managed Agent handoff assessment previously verified in 16 native cases across the two control stores. Candidate evidence and authority transfer remain open.",
     "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing.",
@@ -76,6 +17,57 @@
     "CP-03 completed. Seven native cases on each control store proved cross-entry command lifecycle, idempotent replay, pending 202, REJECTED after revocation and UNKNOWN through a new Agent generation.",
     "CP-06 completed. Exact Temurin 21 artifact passed ten distributed native checks, 28 Java, 131 DOM and 13 Chrome checks including bounded diagnostic reads and native timing semantics.",
     "LG-04 Kafka KRaft 3.9.2 passed five real broker checks, including ISR protection despite a live metadata quorum, original durable journal replay, and exact consumer offset and bytes after restart.",
-    "LG-02 read-only UNIQUE restoration plan passed nine native drift and exact-cut checks plus 49 focused Java. The staged combined Java 21 package passed 24 focused checks."
-  ]
+    "LG-02 read-only UNIQUE restoration plan passed nine native drift and exact-cut checks plus 49 focused Java. The staged combined Java 21 package passed 24 focused checks.",
+    "CP-04/LG-05 shared protected report custody: 12 native checks per control store and 30 focused Java passed. Exact scope integration is packaging before publication.",
+    "LG-09 historical repair/correction request lookup and storage inventory passed 29 exact Java and 134 DOM tests. Dual-entry native Chrome is scheduled.",
+    "Removed 756,151,042 bytes of expired or duplicate local JARs. Accepted artifacts, manifests and the user TODO remain available."
+  ],
+  "inProgress": [
+    "LG-09 historical repair/correction request lookup in the native dual-entry Chrome fixture. Separate report retention review and locking are being implemented.",
+    "CP-04/LG-05 publish the shared report custody proof, then prove operation-receipt custody and binding/fence prerequisites for managed transfer.",
+    "CP-05 exact frozen package and native audit/allowlist/Agent authorization profile.",
+    "JV-02 MySQL 8.4 native asynchronous GTID failover to two live SQL targets using the current Temurin 21 build.",
+    "LG-02 execution admission for a frozen MySQL source and PostgreSQL journal/destination on one database; the read-only plan and drift checks have passed.",
+    "LG-04 Redis Streams with an AOF-fsynced promoted replica and preserved consumer state, plus RC-10 journal payload retention for open recovery gaps."
+  ],
+  "reportContents": [
+    "Current totals",
+    "New completions since previous report",
+    "In-progress tasks and evidence",
+    "Remaining work and blockers",
+    "Published commits and test results"
+  ],
+  "lastReportedSdd": {
+    "DONE": 33,
+    "PARTIAL": 15,
+    "NEW": 0
+  },
+  "lastReportedPublishedCommits": [
+    "3db413c158c0ae98137b8104dca177e9ab031c8f",
+    "91b99377f19f1cd37fd73b560ba1e0fb7940e01b",
+    "ad7684c3a9006d3391cee7a9bee0568722f654b4",
+    "48488893cf93aac630fd9d6ea78665c3384eb69e",
+    "31edf155998bb49a0e2a4079ebec2dea53fdf09b",
+    "793f574d7e575c606a678737c05e1e4c60fab276",
+    "a49741d7a96645f9537044748e24b6ace183fc8c",
+    "3c4c96d214854a19df8ca6513c2497e71b229afb",
+    "30beed5577ff7e39ac89d620a8ada9474371b493",
+    "563f4ecf91be2b5f91e6d1d6a87901682ee4ef48",
+    "5621af3f93eef88de9502d101cf45cd4bcfd4c20",
+    "6e3d7405aab5c5dda4f09ffbcb96a3159df46a9a"
+  ],
+  "currentSdd": {
+    "DONE": 33,
+    "PARTIAL": 15,
+    "NEW": 0
+  },
+  "nextTasks": [
+    "Finish scoped package verification and publish protected report custody.",
+    "Run historical receipt lookup, least-secret audit, MySQL 8.4 failover and Redis native fixtures as prepared.",
+    "Advance bounded report retention and managed Agent custody/assignment fences."
+  ],
+  "currentCandidateArtifact": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+  "currentCandidateScope": "Temurin 21 staged normal package for bounded diagnostics, 28 Java, 131 DOM, 13 Chrome, and ten distributed native checks",
+  "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+  "newSinceLastReport": []
 }
