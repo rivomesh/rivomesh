@@ -1435,8 +1435,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。",
-        "en": "Initial transports exist for all confirmed queues;complete cluster/TLS/capacity coverage is open."
+        "zh-CN": "八种消息目标已有首批传输。NATS 三副本 TLS、选主与多数派恢复通过；其他产品和完整容量、消费恢复仍待验收。",
+        "en": "All eight message targets have initial transports. NATS passed three-replica client TLS, election and quorum recovery. Other cluster, capacity and consumer recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",
@@ -1447,7 +1447,8 @@
       ],
       "evidence": [
         "docs/zh-CN/messaging-v3.md",
-        "docs/zh-CN/classic-v3.md"
+        "docs/zh-CN/classic-v3.md",
+        "tests/nats-cluster-run.py"
       ]
     },
     {

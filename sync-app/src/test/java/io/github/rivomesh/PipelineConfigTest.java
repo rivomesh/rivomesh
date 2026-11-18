@@ -53,6 +53,15 @@ class PipelineConfigTest {
         t.mappings.put("orders","orders");t.product=TargetProduct.RABBITMQ;t.url="amqp://broker:5672/";t.messaging.endpoints.clear();assertThrows(IllegalArgumentException.class,c::validate);t.username="publisher";c.validate();
     }
 
+    @Test void jetStreamFailoverRequiresMatchingTransportSecurity(){
+        PipelineConfig c=config();PipelineConfig.Target target=c.targets.get(0);
+        target.product=TargetProduct.NATS_JETSTREAM;target.url="tls://primary:4222";
+        target.messaging=new PipelineConfig.Messaging();target.messaging.stream="ORDERS";
+        target.messaging.endpoints.add("nats://alternate:4222");
+        assertEquals("JETSTREAM_ENDPOINT_TLS_MISMATCH",assertThrows(IllegalArgumentException.class,c::validate).getMessage());
+        target.messaging.endpoints.set(0,"tls://alternate:4222");c.validate();
+    }
+
     @Test void kafkaTopicAndSecurityProfilesRequireExplicitValidPlans(){
         PipelineConfig c=config();PipelineConfig.Target t=c.targets.get(0);t.product=TargetProduct.KAFKA;t.url="kafka://broker:9092";t.messaging=new PipelineConfig.Messaging();assertThrows(IllegalArgumentException.class,c::validate);t.messaging.topic="sales.events";c.validate();String fingerprint=c.fingerprint();t.messaging.securityProtocol="SASL_SSL";t.messaging.saslMechanism="SCRAM-SHA-512";assertThrows(IllegalArgumentException.class,c::validate);t.password="rotated-secret";c.validate();assertEquals(fingerprint,c.fingerprint());t.messaging.topic="other.events";assertNotEquals(fingerprint,c.fingerprint());
         t.messaging.saslMechanism="arbitrary-login-class";assertThrows(IllegalArgumentException.class,c::validate);

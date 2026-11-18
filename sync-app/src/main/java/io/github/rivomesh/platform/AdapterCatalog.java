@@ -12,7 +12,7 @@ public final class AdapterCatalog {
         add(rows,"POSTGRESQL","SINK","AVAILABLE","PostgreSQL 17.12 snapshot / CDC / restart / JSON verified");
         add(rows,"MYSQL","SINK","AVAILABLE","V3 Web/CLI: separate MySQL 8.4 instance; PG/Gauss/MySQL fan-out and both journal recovery modes verified");
         add(rows,"RABBITMQ","SINK","PARTIALLY_VERIFIED","4.1.4 quorum queue; confirmed at-least-once, worker/broker restart verified; cluster/TLS acceptance pending");
-        add(rows,"NATS_JETSTREAM","SINK","PARTIALLY_VERIFIED","2.11.8 File stream; confirmed at-least-once, worker/broker restart verified; cluster/TLS acceptance pending");
+        add(rows,"NATS_JETSTREAM","SINK","PARTIALLY_VERIFIED","2.11.8 File stream: worker/broker restart and three replicas with client TLS, leader loss, loss of majority and retry verified; client certificates, node-to-node TLS and scale remain open");
         add(rows,"KAFKA","SINK","PARTIALLY_VERIFIED","3.9.2 dedicated single-partition topic, all-ISR/idempotent producer; worker/broker restart verified; cluster/SASL/TLS acceptance pending");
         add(rows,"REDIS_STREAMS","SINK","PARTIALLY_VERIFIED","7.4.2 direct standalone, AOF/noeviction, same-connection WAITAOF; worker/broker restart verified; Sentinel/Cluster/TLS acceptance pending");
         add(rows,"PULSAR","SINK","PARTIALLY_VERIFIED","4.0.14 persistent non-partitioned topic, isolated Java 8 SDK; transport, snapshot/CDC, worker kill and three broker stop/start rounds verified; cluster/token/TLS pending");

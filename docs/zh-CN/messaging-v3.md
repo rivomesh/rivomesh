@@ -4,13 +4,13 @@ English: [Messaging targets](../en/messaging-v3.md)。配置示例：[messaging-
 
 ## 实现范围
 
-V3 已实现 Kafka、RabbitMQ AMQP 0-9-1、NATS JetStream 和 Redis Streams 发布客户端；Pulsar 传输与链路已接通，混合恢复验收已通过。每个消息目标拥有独立线程、投递断点、快照断点和故障版本，可以和 MySQL、PostgreSQL、Gauss 事务目标同时配置。一个目标阻塞或失败不会占用其他目标的投递线程；所有订阅共同决定源日志回收。RocketMQ 原生 TCP 首批配置及全量/增量/三轮混合重启已通过；Artemis Core 传输及链路接入已实现，七种消息目标的定点联合恢复已通过，见文末最新证据；ActiveMQ Classic 仍待实现。
+V3 的消息目标目前覆盖 Kafka、Pulsar、RabbitMQ、RocketMQ、ActiveMQ Classic、Artemis、Redis Streams 和 NATS JetStream。每个目标有独立投递线程、投递和快照断点、故障版本，可与多个 SQL 目标并行运行。一个目标阻塞时，其他目标继续投递。日志回收由全部订阅共同决定。
 
 消息目标使用 **Broker 确认后的至少一次投递**。Broker 与日志数据库之间没有共同事务：消息已接收、确认丢失，或者确认后服务还没写下回执就崩溃，均可能重复。事件 ID 和内容在重放时保持稳定；消费者必须持久去重。目标断点表示 Broker 已确认，不表示业务消费者已经完成处理。不要以此断点直接判断业务接管已就绪。
 
 ## 配置与界面
 
-新建 V3 任务时选择 Kafka、RabbitMQ、NATS JetStream 或 Redis Streams，逐个源 database 填写消息命名空间；可添加其他消息或数据库目标。界面提供 Topic、Stream、Kafka 认证协议/SASL 机制、令牌、副本数和消息上限，预览遮蔽密码/令牌，保存后仍需检查和启动。多地址、高级部署通过 YAML 导入。命名空间只能使用字母开头的字母、数字和下划线，最多 63 个字符。
+新建 V3 任务时选择对应消息产品，逐个源 database 填写消息命名空间；可添加其他消息或数据库目标。界面提供 Topic、Stream、Kafka 认证协议/SASL 机制、令牌、副本数和消息上限，预览遮蔽密码/令牌，保存后仍需检查和启动。多地址、高级部署通过 YAML 导入。命名空间只能使用字母开头的字母、数字和下划线，最多 63 个字符。
 
 `url` 和 `messaging.endpoints` 不允许内嵌用户信息或查询参数。用户名/密码使用独立字段；NATS 可以选择 `messaging.token`。密码/令牌可引用 `${ENV_NAME}`，不放入事件或状态响应。检查只建立连接/查询能力，不创建队列、Stream 或复制连接。
 
@@ -37,6 +37,8 @@ Kafka 所有 Broker 必须关闭 `auto.create.topics.enable`；服务可用 Admi
 Rabbit 每个通道对应一个 durable、非独占、非自动删除队列，通过默认交换机直接路由。消息为 persistent，开启 publisher confirms 和 mandatory/return；无路由或 nack 不会推进回执。默认 quorum，可显式选 classic。创建时设置 overflow 为 reject-publish；部署策略不能静默改为丢弃旧消息、过期或将超投递消息丢到无法处理的死信。生产 quorum 应部署多个节点并设置副本数；单节点测试不证明集群多数丢失或机房断电的持久性。
 
 NATS 使用 JetStream 发布确认和 `Nats-Msg-Id`。不使用易失 Core NATS。Stream 要求 File 存储、Limits 保留、Discard New、无消息年龄过期、精确的 `namespace.*` subjects，以及配置的副本数。Stream description 绑定 pipeline/subscription/generation，发现不符不会改写既有资源。有限容量满时拒绝新发布；需要恢复容量后重试，不静默覆盖未消费历史。服务不会自动清理消费者历史，请制定容量、归档和消费进度策略。Broker fsync、复制和底层磁盘决定掉电保证。
+
+NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`，配置 `messaging.replicas: 3`，在 JVM 信任库中加入 Broker CA。客户端根据证书核验地址名，并按显式配置连接。实测覆盖 Leader 停止、失去多数派时拒绝确认、恢复后使用原事件 ID 重试。Broker 节点间路由加密和双向 TLS 另行验收。[JetStream 集群](https://docs.nats.io/learn/topologies/jetstream-in-a-cluster) · [验收记录](../verification/README.md#nats-jetstream-tls-and-quorum)
 
 已有 Stream 可用 `autoCreate: false`，但仍须匹配上述属性和绑定。绑定值为 `rivomesh:` 加 `SHA-256(pipelineId + ':' + subscriptionId + ':' + generation)`；generation 从已初始化的只读状态获取。未初始化任务推荐由服务首次创建，不要猜测 generation。
 

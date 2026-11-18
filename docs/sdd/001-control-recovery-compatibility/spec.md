@@ -81,7 +81,7 @@ RM-SDD-001 · v0.30 · 2026-11-18 · IMPLEMENTING
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
 | LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 当前首用目标要求为空，修复成功也不是业务切换完成。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
-| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。 |
+| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | 八种消息目标已有首批传输。NATS 三副本 TLS、选主与多数派恢复通过；其他产品和完整容量、消费恢复仍待验收。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
 | LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 双节点实测两种部署、轮换、原卷重挂及外部日志接管与旧 Worker 隔离。跨节点 CSI 卷迁移待验收。 |
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。 |

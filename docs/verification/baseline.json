@@ -2009,5 +2009,22 @@
         "takeoverEpoch": 2
       }
     }
+  },
+  "natsJetStreamClientTlsQuorum": {
+    "status": "PASS",
+    "artifactSha256": "411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab04",
+    "sourceImage": "nats:2.11.8-alpine",
+    "javaImage": "maven:3.9-eclipse-temurin-8",
+    "checks": [
+      "Three file-backed replicas confirm and retain the original content over trusted client TLS",
+      "The same endpoints refuse a JVM without the fixture trust anchor",
+      "The same certificate is rejected if its DNS names omit the configured entrance",
+      "Killing the stream leader elects a new leader and retains earlier message bytes",
+      "The surviving replica does not confirm a new write without a majority",
+      "Restoring quorum confirms the original event ID once and preserves message sequence"
+    ],
+    "sourceImageId": "sha256:f21abd46018664ec1d774ed0ccf028420f6687e33f812018fc3a910dc1ce6014",
+    "javaVersion": "openjdk version \"1.8.0_504\"\nOpenJDK Runtime Environment (Temurin)(build 1.8.0_504-b01)\nOpenJDK 64-Bit Server VM (Temurin)(build 25.504-b01, mixed mode)",
+    "cleanupExitCode": 0
   }
 }

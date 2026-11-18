@@ -70,12 +70,32 @@ public final class MessagePublishers {
         final io.nats.client.Connection connection;final io.nats.client.JetStream stream;final JetStreamManagement management;final PipelineConfig.Target target;final String binding;
         private boolean verified;
         JetStream(PipelineConfig.Target target,String binding)throws Exception{
-            this.target=target;this.binding=binding;PipelineConfig.Messaging m=target.messaging;List<String> servers=new ArrayList<>();servers.add(target.url);servers.addAll(m.endpoints);Options.Builder options=new Options.Builder().servers(servers.toArray(new String[0])).connectionTimeout(Duration.ofMillis(m.connectTimeoutMillis)).maxReconnects(0);
-            if(m.token!=null&&!m.token.isEmpty())options.token(m.token.toCharArray());else if(target.username!=null&&!target.username.isEmpty())options.userInfo(target.username,target.password==null?"":target.password);
-            connection=Nats.connect(options.build());
+            this.target=target;
+            this.binding=binding;
+            PipelineConfig.Messaging m=target.messaging;
+            connection=connect(target,m);
             try{JetStreamOptions js=JetStreamOptions.builder().requestTimeout(Duration.ofMillis(m.requestTimeoutMillis)).build();stream=connection.jetStream(js);management=connection.jetStreamManagement(js);}
             catch(Exception e){connection.close();throw e;}
         }
+        private static io.nats.client.Connection connect(PipelineConfig.Target target,PipelineConfig.Messaging settings)throws Exception{
+            List<String> servers=new ArrayList<>();
+            servers.add(target.url);
+            servers.addAll(settings.endpoints);
+            // Keep the configured list authoritative, including during a failed TLS handshake.
+            Options.Builder options=new Options.Builder().servers(servers.toArray(new String[0]))
+                    .ignoreDiscoveredServers().noRandomize()
+                    .connectionTimeout(Duration.ofMillis(settings.connectTimeoutMillis)).maxReconnects(0);
+            if(target.url.startsWith("tls:")){
+                // Resolve for the TCP dial without replacing the TLS peer name with its address.
+                options.hostnameResolveMode(Options.HostnameResolveMode.HappyEyeballs)
+                        .dataPortType(VerifiedNatsTlsPort.class.getName());
+            }
+            if(settings.token!=null&&!settings.token.isEmpty())options.token(settings.token.toCharArray());
+            else if(target.username!=null&&!target.username.isEmpty())
+                options.userInfo(target.username,target.password==null?"":target.password);
+            return Nats.connect(options.build());
+        }
+
         public void prepare(Set<String> destinations)throws Exception{prepare(destinations,target.messaging.autoCreate);}
         public void require(Set<String> destinations)throws Exception{prepare(destinations,false);}
         private void prepare(Set<String> destinations,boolean allowCreate)throws Exception{
