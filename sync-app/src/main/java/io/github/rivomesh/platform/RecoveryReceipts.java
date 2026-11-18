@@ -13,7 +13,7 @@ final class RecoveryReceipts {
             "FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL",
             "GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL","COMPENSATION_PLAN","COMPENSATION_EXECUTE",
             "CORRECTION_EXECUTE","RECOVERY_CANCEL","CAPTURE_RETAIN","CAPTURE_EXCLUDE",ValidationRetention.ACTION,
-            ValidationArchive.COPY,ValidationArchive.RESTORE);
+            ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM);
 
     private RecoveryReceipts(){}
 

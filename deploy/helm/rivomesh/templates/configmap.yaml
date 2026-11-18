@@ -66,6 +66,9 @@ data:
     {{- if .Values.platform.validationArchiveDirectory }}
     validationArchiveDirectory: {{ .Values.platform.validationArchiveDirectory | quote }}
     {{- end }}
+    {{- if .Values.platform.validationArchiveReclaim }}
+    validationArchiveReclaim: true
+    {{- end }}
     sessions:
       enabled: {{ .Values.sessions.enabled }}
       secureCookie: {{ .Values.sessions.secureCookie }}

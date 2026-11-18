@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.56",
+  "version": "0.57",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1669,14 +1669,14 @@
       "id": "LG-09",
       "epic": "CARRYOVER",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "报告目录、保留清理与真实浏览器验收",
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "双入口历史报告/回执、保留审批、原字节归档、缺文件时隔离与按审批恢复已实测。最终原报告的可审计安全回收待验。",
-        "en": "Historical report/receipt lookup, reviewed retention, sealed copies, missing-file fencing and approved byte-exact restoration passed across entries. Safe audited reclamation of final hot reports remains."
+        "zh-CN": "双入口历史报告/回执、审批、键盘分页、归档和恢复已实测。限定档案回收经停止、保留期、摘要和报告锁检查后只移除已安全归档的重复行文件。",
+        "en": "Dual-entry report/receipt discovery, approvals, keyboard pagination, archival and exact restore passed. The bounded reclaim profile removes only an archived duplicate row file after stop, retention, digest and active-lock checks."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",
@@ -1698,7 +1698,13 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/RecoveryReceipts.java",
         "sync-app/src/main/java/io/github/rivomesh/validation/ValidationRetention.java",
         "sync-app/src/main/java/io/github/rivomesh/validation/ValidationArchive.java"
-      ]
+      ],
+      "verification": {
+        "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, PostgreSQL shared control, MySQL 8.4.13, 18 native checks with eight real Chrome, 47 Java, 136 DOM, plus earlier history and paging archive",
+        "criteriaSha256": "092a53ef037bc983d90841309a0dc9e4b54d3bd42e0843844989d66b91fdb8ed"
+      }
     },
     {
       "id": "LG-10",

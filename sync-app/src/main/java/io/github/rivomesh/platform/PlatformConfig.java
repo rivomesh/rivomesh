@@ -28,6 +28,7 @@ public final class PlatformConfig {
     public int auditMaxEvents = 1000000;
     public int validationRetentionMinimumDays;
     public String validationArchiveDirectory;
+    public boolean validationArchiveReclaim;
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
     public Map<String,List<String>> workerSecretReferences;
@@ -73,6 +74,8 @@ public final class PlatformConfig {
             throw new IllegalArgumentException("VALIDATION_RETENTION_POLICY_INVALID");
         if(validationArchiveDirectory!=null&&(validationArchiveDirectory.isBlank()
                 ||validationArchiveDirectory.chars().anyMatch(character->character<32)))
+            throw new IllegalArgumentException("VALIDATION_ARCHIVE_PATH_INVALID");
+        if(validationArchiveReclaim&&validationArchiveDirectory==null)
             throw new IllegalArgumentException("VALIDATION_ARCHIVE_PATH_INVALID");
         WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");

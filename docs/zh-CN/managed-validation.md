@@ -98,7 +98,7 @@ API 可调用 `GET /api/tasks/{id}/validations?limit=20` 读取元数据，使�
 
 打开报告的 **查看存储**，为已完成的报告填写最低保留天数，勾选确认并提交。服务端核对当前任务版本、上次审阅 ID 和原报告锁。已有最低期限只能延长。报告使用中或尚未完成会明确拒绝。提交后可在任务操作记录跟踪，重新打开 **查看存储** 可查看已生效的日期和审阅人。
 
-也可调用 `POST /api/tasks/{taskId}/validations/{reportId}/retention`，沿用请求 ID 和会话保护。正文传入 `expectedRevision`、`minimumDays` 和 `approved: true`。已有审阅时再传其 `expectedReviewId`。用相同请求 ID 和正文重试可取得原操作结果。审阅附件随原报告存储，审计记录报告 ID、发起人和操作状态，备份时请一并保留。达到最低日期后，报告和恢复证据仍保留在原卷。规划磁盘时继续计入报告的全部占用。
+也可调用 `POST /api/tasks/{taskId}/validations/{reportId}/retention`，沿用请求 ID 和会话保护。正文传入 `expectedRevision`、`minimumDays` 和 `approved: true`。已有审阅时再传其 `expectedReviewId`。用相同请求 ID 和正文重试可取得原操作结果。审阅附件随原报告存储，审计记录报告 ID、发起人和操作状态，备份时请一并保留。达到最低日期后，文件仍留在原位，符合条件并经批准后才可回收。
 
 ### 从已封存的副本恢复报告
 
@@ -109,6 +109,14 @@ API 可调用 `GET /api/tasks/{id}/validations?limit=20` 读取元数据，使�
 原报告数据库缺失时，历史目录仍可定位报告，读取详情返回 `VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED`。打开 **查看存储** 并确认 **恢复报告**。Agent 再次校验范围和完整性，持有原锁补齐缺失文件，并保留内容不同的现有文件。中断的恢复在完成前保持读取隔离，并暂停该报告的交接保管核验。正常情况下原报告和副本分别占用存储。
 
 API 使用 `POST /api/tasks/{taskId}/validations/{reportId}/archive`。复制传 `operation: "COPY"` 和 `expectedReviewId`，恢复传 `operation: "RESTORE"` 和 `expectedArchiveId`。两者均需当前 `expectedRevision`、`approved: true` 和带身份的请求 ID。
+
+### 回收已有完整副本的原位报告数据库
+
+在报告所属 Agent 或独立服务器配置 `validationArchiveReclaim: true` 开启人工回收。Helm 对应 `platform.validationArchiveReclaim`。停止任务并等待 Worker 退出，打开 **查看存储**，复核恢复副本的 SHA-256，再批准 **回收原位报告空间**。API 沿用归档地址，传 `operation: "RECLAIM"`、`expectedArchiveId`、`expectedArchiveSha256`、`expectedReviewId` 以及当前任务版本、请求 ID 和确认项。
+
+仅保留期限已届满、私有副本字节校验通过、每个已校验目标至少有一张表存在差异的已完成报告可以回收。这样可保留适用于缺口核验或重建 UNIQUE 的报告。存在修复或恢复计划，或存在恢复暂存目录时也会拒绝。请按操作结果排查拒绝原因。
+
+Agent 先记入审批审计和持久读取隔离标记，再回收重复的 `rows.mv.db` 文件。摘要、修复计划、操作回执、副本和业务数据库仍在原处。报告可继续查询，查看行级证据前需先恢复。保留 Agent 归属身份和原报告目录。回收中断时，原请求可继续处理，也可显式恢复报告并完成状态核对。
 
 ### 查找恢复操作回执
 

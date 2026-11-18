@@ -173,6 +173,9 @@
         "validationArchiveDirectory": {
           "type": "string",
           "maxLength": 4096
+        },
+        "validationArchiveReclaim": {
+          "type": "boolean"
         }
       }
     },

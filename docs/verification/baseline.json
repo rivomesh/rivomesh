@@ -476,6 +476,20 @@
         "profile": "Temurin 21 on separate Controllers and Agent, 13 native checks per PostgreSQL/MySQL control store with real Chrome on both entries; per-task secret allowlist and audit correlation",
         "criteriaSha256": "882f0a2e936a006112db41ac6445af8a081b70172ffa4db75f0d3dcd174bdf70"
       }
+    },
+    {
+      "id": "LG-09",
+      "title": {
+        "zh-CN": "报告目录、保留清理与真实浏览器验收",
+        "en": "Report retention and real-browser acceptance"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, PostgreSQL shared control, MySQL 8.4.13, 18 native checks with eight real Chrome, 47 Java, 136 DOM, plus earlier history and paging archive",
+        "criteriaSha256": "092a53ef037bc983d90841309a0dc9e4b54d3bd42e0843844989d66b91fdb8ed"
+      }
     }
   ],
   "productProfiles": [
@@ -7012,5 +7026,135 @@
         "The ordinary live snapshot, CDC, ClickHouse outage/restart, Worker restart and missing-view paths still passed."
       ]
     }
+  },
+  "auditedValidationReclaim": {
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --retention-review --report-archive --report-reclaim --browser <Chrome binary> --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Chrome requires explicit report retention approval and sees the durable hold on the other Controller",
+        "Original validation bytes are unchanged and a viewer cannot extend the persisted retention review",
+        "The control receipt survives Agent loss and the original review remains visible after its restart",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Chrome creates a sealed recovery copy after explicit report archive approval",
+        "A protected report copy retains the exact sealed report bytes in both original and archive storage",
+        "Active task, unexpired hold and mismatched descriptor each refuse reclamation with original report bytes present",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Chrome binds explicit reclamation approval to the exact archive descriptor SHA",
+        "A scoped audited approval reclaims only the live row database and keeps the summary, archive and explicit restore fence",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Chrome restores the fenced report from its sealed archive only after approval",
+        "Reclamation survives Agent restart, byte-verified restore and duplicate command replay without removing restored bytes"
+      ],
+      "harnessSourceSha256": "6a3b17c32408bae59e9994eda1c858284c1a4b4fea237fed7054dcb19aa6a3e5",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "mysqlAsyncFailover": false,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "handoffCustody": false,
+      "handoffClosedReceipts": false,
+      "receiptLookup": false,
+      "retentionReview": true,
+      "reportArchive": true,
+      "reportReclaim": true,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "secretAudit": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "browserRecovery": {
+        "retention": {
+          "status": "PASS",
+          "scenario": "retention",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Chrome requires explicit report retention approval and sees the durable hold on the other Controller"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "292a3dee0868fd41fd14aa99f443574927d90c8f3af5dc14ec6d87b16d4529da",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "archive-copy": {
+          "status": "PASS",
+          "scenario": "archive-copy",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Chrome creates a sealed recovery copy after explicit report archive approval"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "292a3dee0868fd41fd14aa99f443574927d90c8f3af5dc14ec6d87b16d4529da",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "archive-reclaim": {
+          "status": "PASS",
+          "scenario": "archive-reclaim",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Chrome binds explicit reclamation approval to the exact archive descriptor SHA"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "292a3dee0868fd41fd14aa99f443574927d90c8f3af5dc14ec6d87b16d4529da",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "archive-restore": {
+          "status": "PASS",
+          "scenario": "archive-restore",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Chrome restores the fenced report from its sealed archive only after approval"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "292a3dee0868fd41fd14aa99f443574927d90c8f3af5dc14ec6d87b16d4529da",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "focusedJavaTests": 47,
+    "domTests": 136,
+    "stagedAppTree": "4afe14ffad435217e521428df4da60f5f0c4567f",
+    "supportingProfiles": [
+      "historicalRecoveryReceiptLookup",
+      "lockedReportRetentionReview",
+      "sealedValidationArchiveRestore"
+    ]
   }
 }

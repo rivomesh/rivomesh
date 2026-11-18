@@ -77,6 +77,7 @@ parser.add_argument('--browser', type=Path, help='Use a real Chrome executable t
 parser.add_argument('--receipt-lookup', action='store_true', help='Find older recovery receipts with the Agent offline after browser repair and correction')
 parser.add_argument('--retention-review', action='store_true', help='Record a reviewed minimum retention hold through the real Chrome report storage dialog')
 parser.add_argument('--report-archive', action='store_true', help='Prove a sealed report copy and restore across real protected report storage loss')
+parser.add_argument('--report-reclaim', action='store_true', help='Reclaim only a verified duplicate report database after reviewed expiry')
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
@@ -100,6 +101,8 @@ if args.retention_review and (not args.browser or any((args.correction,args.rece
     parser.error('--retention-review uses the focused --browser profile')
 if args.report_archive and not args.retention_review:
     parser.error('--report-archive requires --retention-review')
+if args.report_reclaim and not args.report_archive:
+    parser.error('--report-reclaim requires --report-archive')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_authority and (not args.separate_execution or any((args.automatic_placement, args.runtime_image,
@@ -239,6 +242,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'reportArchive': args.report_archive,
+            'reportReclaim': args.report_reclaim,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -334,6 +338,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['validationRetentionMinimumDays']=30
         if args.report_archive and node==owner_node:
             config['validationArchiveDirectory']='/fixture/report-archive'
+        if args.report_reclaim and node==owner_node:
+            config['validationArchiveReclaim']=True
         if args.handoff_custody and node in execution_agents:
             config['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared' if node==owner_node else '/fixture/handoff-disjoint'
         if args.secret_audit and node==owner_node:
@@ -1725,11 +1731,15 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
 
     def run_retention_review():
+        if args.report_reclaim:
+            sql('postgres',"UPDATE rm_pg_sales.items SET note='reclaim-history' WHERE id=1")
+            sql('mysql-target',"UPDATE rm_my_sales.items SET note='reclaim-history' WHERE id=1")
         validation,_=action('VALIDATE',validation={'targets':['pg','my'],'gateMillis':15000,
                                                    'sourceMillis':60000,'targetMillis':30000})
         report_id=operation(validation)['validation']['reportId']
         report_path=route+'/validations/'+report_id
-        assert http('node-b',report_path)['code']=='VALIDATION_MATCH'
+        expected_code='VALIDATION_DIFFERENCES' if args.report_reclaim else 'VALIDATION_MATCH'
+        assert http('node-b',report_path)['code']==expected_code
         directory=home/owner_node/'controller'/'validations'/'global_cdc'/report_id
         files={name:(directory/name).read_bytes() for name in ('rows.mv.db','summary.json')}
         browser_check('retention',reportId=report_id)
@@ -1779,6 +1789,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sealed,=list((home/'report-archive').glob('report-*'))
         assert all((sealed/name).read_bytes()==(directory/name).read_bytes()==original for name,original in files.items())
         passed('A protected report copy retains the exact sealed report bytes in both original and archive storage')
+        if args.report_reclaim:
+            run_report_reclaim(report_id,report_path,directory,sealed,files)
+            return
         terminate_owner()
         assert http('node-b',receipt)==outcome
         (directory/'rows.mv.db').rename(home/'disposable-hot-loss')
@@ -1791,6 +1804,64 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert all((directory/name).read_bytes()==(sealed/name).read_bytes()==original for name,original in files.items())
         assert http('node-a',report_path)['code']=='VALIDATION_MATCH'
         passed('Both management entries can verify the original report again after reviewed restoration')
+
+    def run_report_reclaim(report_id,report_path,directory,sealed,files):
+        from datetime import datetime, timedelta, timezone
+        storage=http('node-a',report_path+'/storage')
+        archive=storage['archive']
+        retained=storage['retention']
+        base=dict(operation='RECLAIM',approved=True,expectedReviewId=retained['requestId'],
+                  expectedArchiveId=archive['id'],expectedArchiveSha256=archive['sha256'])
+        def refused(code,**changes):
+            request='gc_reclaim_reject_'+uuid.uuid4().hex
+            body=dict(base,expectedRevision=task()['revision'],**changes)
+            http('node-a',report_path+'/archive',body,request=request,expected=202)
+            def rejected():
+                candidate=http('node-b',route+'/recovery-receipts/'+request)
+                return candidate if candidate['status'] in ('REJECTED','FAILED','SUCCEEDED') else None
+            assert wait(rejected,code)['code']==code
+            assert (directory/'rows.mv.db').read_bytes()==files['rows.mv.db']
+            assert not (directory/'archive-reclaim.json').exists()
+        refused('VALIDATION_ARCHIVE_RECLAIM_REQUIRES_STOPPED')
+        action('STOP')
+        refused('VALIDATION_RETENTION_HOLD_ACTIVE')
+        # Only this disposable fixture supplies an already elapsed hold, without changing server time.
+        reviewed=datetime(2020,1,1,tzinfo=timezone.utc)
+        retained.update(reviewedAt=reviewed.isoformat(),minimumRetainUntil=(reviewed+timedelta(days=retained['minimumDays'])).isoformat())
+        (directory/'retention.json').write_text(json.dumps(retained))
+        refused('VALIDATION_ARCHIVE_CHANGED',expectedArchiveSha256='f'*64)
+        passed('Active task, unexpired hold and mismatched descriptor each refuse reclamation with original report bytes present')
+        request_body=dict(base,expectedRevision=task()['revision'])
+        browser_check('archive-reclaim',reportId=report_id,archiveSha256=archive['sha256'])
+        request=next(row['id'] for row in task()['operations'] if row['action']=='VALIDATION_ARCHIVE_RECLAIM' and row['status']=='SUCCEEDED')
+        receipt_path=route+'/recovery-receipts/'+request
+        outcome=http('node-a',receipt_path)
+        assert outcome==http('node-b',receipt_path) and outcome['code']=='VALIDATION_ARCHIVE_RECLAIMED'
+        assert outcome['references']=={'reportId':report_id,'archiveId':archive['id']}
+        assert not (directory/'rows.mv.db').exists()
+        assert (directory/'summary.json').read_bytes()==files['summary.json']
+        assert all((sealed/name).read_bytes()==original for name,original in files.items())
+        assert json.loads((directory/'archive-reclaim.json').read_text())['state']=='ARCHIVED'
+        assert http('node-b',report_path,expected=409)['code']=='VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED'
+        assert http('node-a',report_path+'/storage')['restoreRequired']
+        assert (directory/'retention.json').exists()
+        def approved():
+            return next((event for event in http('node-b','/api/audit/export?limit=1000')['events']
+                         if event['kind']=='VALIDATION_ARCHIVE_RECLAIM_APPROVED'
+                         and event['operationHash']==archive['sha256'] and event['subjectId']==report_id
+                         and event['clientRequestHash']==hashlib.sha256(request.encode()).hexdigest()),None)
+        assert wait(approved,'recorded archive reclamation authorization')['actorId']==outcome['actorId']
+        passed('A scoped audited approval reclaims only the live row database and keeps the summary, archive and explicit restore fence')
+        terminate_owner()
+        assert http('node-b',receipt_path)==outcome
+        restart_owner()
+        assert http('node-b',report_path,expected=409)['code']=='VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED'
+        browser_check('archive-restore',reportId=report_id)
+        assert all((directory/name).read_bytes()==original for name,original in files.items())
+        http('node-b',report_path+'/archive',request_body,request=request,expected=202)
+        assert http('node-a',receipt_path)==outcome and (directory/'rows.mv.db').read_bytes()==files['rows.mv.db']
+        assert http('node-a',report_path)['code']=='VALIDATION_DIFFERENCES'
+        passed('Reclamation survives Agent restart, byte-verified restore and duplicate command replay without removing restored bytes')
 
     def run_receipt_lookup():
         for _ in range(21):

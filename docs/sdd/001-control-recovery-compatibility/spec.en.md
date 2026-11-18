@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -86,7 +86,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 | LG-06 | P1 / DONE | Live K8s/CSI and node-fault acceptance | Live ARM64 accepted Helm and native YAML image replacement, same-claim RWO CSI relocation and automatic CDC. Separate native cases cover physical worker loss, Secret rotation, external-journal takeover and stale Writer fencing. |
 | LG-07 | P1 / DONE | Large catalogs,transactions and hardware standards | The bounded Temurin 21 resource profile is accepted, with 12 hardware trials, 256 mapped databases, a transaction over 8 MiB and slow-target backpressure plus restart recovery through a separate journal. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified coordinated LOCAL journal and PostgreSQL backup/restore, original MySQL 8.4.13 continuation and identity refusal. Broader DDL, types and other products remain. |
-| LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Historical report/receipt lookup, reviewed retention, sealed copies, missing-file fencing and approved byte-exact restoration passed across entries. Safe audited reclamation of final hot reports remains. |
+| LG-09 | P1 / DONE | Report retention and real-browser acceptance | Dual-entry report/receipt discovery, approvals, keyboard pagination, archival and exact restore passed. The bounded reclaim profile removes only an archived duplicate row file after stop, retention, digest and active-lock checks. |
 | LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Contribution guide, CycloneDX SBOM and packaged vendor inventory are in place. Distribution review, project LICENSE/NOTICE, external identity and audit anchors remain. |
 
 ## Baseline evidence index

@@ -153,6 +153,22 @@ public final class ValidationStore implements AutoCloseable {
     }
     static void releaseLocalWriter(Path directory){LOCAL_WRITERS.remove(directory);}
 
+    /** Reserve the report before opening its file lock from another in-process reader. */
+    public static ReportReservation reserveReportDirectory(Path directory)throws Exception{
+        Path canonical=directory.toRealPath();
+        claimLocalWriter(canonical);
+        return new ReportReservation(canonical);
+    }
+    public static final class ReportReservation implements AutoCloseable{
+        private Path directory;
+        private ReportReservation(Path directory){this.directory=directory;}
+        @Override public void close(){
+            if(directory==null)return;
+            releaseLocalWriter(directory);
+            directory=null;
+        }
+    }
+
     private ValidationStore(Path path,Manifest initial)throws Exception{
         if(!Files.isDirectory(path)||Files.isSymbolicLink(path))throw new IOException("VALIDATION_REPORT_MISSING");directory=path.toRealPath();path=directory;
         if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(c->c<32))throw new IOException("VALIDATION_PATH_INVALID");
@@ -191,7 +207,26 @@ public final class ValidationStore implements AutoCloseable {
         }catch(Exception failure){if(db!=null)try{db.close();}catch(Exception close){failure.addSuppressed(close);}try{lock.release();}catch(Exception close){failure.addSuppressed(close);}try{lockChannel.close();}catch(Exception close){failure.addSuppressed(close);}LOCAL_WRITERS.remove(directory);throw failure;}
     }
     private static SyncFailure fail(String code){return new SyncFailure(code,"VALIDATE",false,"The validation workspace cannot complete this operation. Inspect its state before retrying.");}
-    private void load()throws Exception{try(PreparedStatement p=db.prepareStatement("SELECT payload,content_hash FROM rmv_meta WHERE item_key='manifest'");ResultSet rows=p.executeQuery()){if(!rows.next())throw fail("VALIDATION_MANIFEST_MISSING");String payload=rows.getString(1);if(!Codec.sha256(payload).equals(rows.getString(2)))throw fail("VALIDATION_MANIFEST_CORRUPT");manifest=Codec.decode(payload,Manifest.class);if(manifest.version!=1)throw fail("VALIDATION_FORMAT_UNSUPPORTED");}}
+    private void load()throws Exception{manifest=readManifest(db);}
+    private static Manifest readManifest(Connection db)throws Exception{
+        try(PreparedStatement statement=db.prepareStatement("SELECT payload,content_hash FROM rmv_meta WHERE item_key='manifest'");
+            ResultSet rows=statement.executeQuery()){
+            if(!rows.next())throw fail("VALIDATION_MANIFEST_MISSING");
+            String payload=rows.getString(1);
+            if(!Codec.sha256(payload).equals(rows.getString(2)))throw fail("VALIDATION_MANIFEST_CORRUPT");
+            Manifest stored=Codec.decode(payload,Manifest.class);
+            if(stored.version!=1)throw fail("VALIDATION_FORMAT_UNSUPPORTED");
+            return stored;
+        }
+    }
+    static Manifest archivedManifest(Path directory)throws Exception{
+        if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(ch->ch<32))
+            throw fail("VALIDATION_PATH_INVALID");
+        String url="jdbc:h2:file:"+directory.resolve("rows")+";IFEXISTS=TRUE;ACCESS_MODE_DATA=r;DB_CLOSE_ON_EXIT=FALSE;TRACE_LEVEL_FILE=0";
+        try(Connection database=JdbcConnections.open("org.h2.Driver",url,"","")){
+            return readManifest(database);
+        }
+    }
     private void save()throws Exception{
         String payload=Codec.encode(manifest);try(PreparedStatement p=db.prepareStatement("MERGE INTO rmv_meta(item_key,payload,content_hash) KEY(item_key) VALUES ('manifest',?,?)")){p.setString(1,payload);p.setString(2,Codec.sha256(payload));p.executeUpdate();}db.commit();pending=0;protect();project();
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.validation.ValidationArchive;
+import io.github.rivomesh.validation.ValidationStore;
 import java.io.*;
 import java.nio.channels.*;
 import java.nio.file.*;
@@ -134,7 +135,8 @@ final class SharedHandoffEvidence {
             for(Path directory:candidates){
                 rejectLinks(directory);
                 if(!Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_REPORT_PATH_UNSAFE");
-                try(FileChannel channel=FileChannel.open(directory.resolve("validation.lock"),StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
+                try(ValidationStore.ReportReservation reservation=reserveReport(directory);
+                    FileChannel channel=FileChannel.open(directory.resolve("validation.lock"),StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
                     FileLock lock=tryLock(channel)){
                     String id=directory.getFileName().toString();
                     if(ValidationArchive.restoringRequired(directory,id))throw refusal("HANDOFF_REPORT_ARCHIVE_RESTORE_REQUIRED");
@@ -212,6 +214,10 @@ final class SharedHandoffEvidence {
             if(lock!=null)return lock;
         }catch(OverlappingFileLockException ignored){/* In-process writer holds the same lock. */}
         throw refusal("HANDOFF_ARCHIVE_BUSY");
+    }
+    private static ValidationStore.ReportReservation reserveReport(Path directory)throws Exception{
+        try{return ValidationStore.reserveReportDirectory(directory);}
+        catch(io.github.rivomesh.SyncFailure busy){throw refusal("HANDOFF_ARCHIVE_BUSY");}
     }
     private static void checkDeadline(long deadline){
         if(Thread.currentThread().isInterrupted()||System.nanoTime()-deadline>=0)

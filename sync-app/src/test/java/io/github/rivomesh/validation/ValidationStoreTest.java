@@ -199,6 +199,85 @@ class ValidationStoreTest {
         }
         assertEquals(archive,ValidationArchive.execute(cold,reportRoot,scope,restore,ValidationArchive.RESTORE,"restore_request","admin"));
     }
+    @Test void reclaimFencesBeforeRemovingOnlyTheArchivedCopyAndReplaysAfterInterruption()throws Exception{
+        Path reports=root.resolve("reports"),cold=Files.createDirectory(root.resolve("archive"));
+        ValidationStore.owner(cold,true);
+        TableSchema table=table(false);
+        var certificate=certificate(table);
+        Path live=reports.resolve(certificate.id),rows=live.resolve("rows.mv.db"),marker=live.resolve("archive-reclaim.json");
+        try(ValidationStore store=ValidationStore.create(reports,certificate.id,certificate,List.of(table),
+                Map.of("target",Set.of(table.id)),new ValidationStore.Limits())){
+            store.source(table.id,row(1,"source",null));store.finishSourceTable(table.id);store.completeSource();
+            store.finishTarget("target",table.id);store.complete();
+        }
+        var scope=new ValidationArchive.Scope("task",UUID.randomUUID().toString(),certificate.id);
+        var hold=ValidationRetention.review(reports,new ValidationRetention.Request(certificate.id,null,1,true),
+                "review_request","admin",1);
+        var archive=ValidationArchive.execute(cold,reports,scope,new ValidationArchive.Request(certificate.id,hold.requestId(),null,true),
+                ValidationArchive.COPY,"archive_request","admin");
+        var reclaim=new ValidationArchive.Request(certificate.id,hold.requestId(),archive.archiveId(),true,ValidationArchive.digest(archive));
+        byte[] original=Files.readAllBytes(rows),summary=Files.readAllBytes(live.resolve("summary.json"));
+        assertEquals("VALIDATION_RETENTION_HOLD_ACTIVE",assertThrows(SyncFailure.class,()->ValidationArchive.execute(cold,reports,
+                scope,reclaim,ValidationArchive.RECLAIM,"reclaim_request","admin",()->fail("Premature audit"))).code);
+        Files.write(live.resolve("retention.json"),Model.JSON.writeValueAsBytes(new ValidationRetention.Review(1,certificate.id,
+                hold.requestId(),hold.actorId(),null,1,"2020-01-01T00:00:00Z","2020-01-02T00:00:00Z")));
+        Path repair=Files.createDirectory(live.resolve("repair-plans"));
+        assertEquals("VALIDATION_ARCHIVE_RECOVERY_DEPENDENCY",assertThrows(SyncFailure.class,()->ValidationArchive.execute(cold,reports,
+                scope,reclaim,ValidationArchive.RECLAIM,"reclaim_request","admin",()->fail("Unsafe audit"))).code);
+        assertTrue(Files.exists(rows));assertFalse(Files.exists(marker));
+        Files.delete(repair);
+        assertThrows(IllegalStateException.class,()->ValidationArchive.execute(cold,reports,scope,reclaim,
+                ValidationArchive.RECLAIM,"reclaim_request","admin",()->{throw new IllegalStateException("fixture audit unavailable");}));
+        assertTrue(Files.exists(rows));assertFalse(Files.exists(marker));
+
+        // Simulate a vanished process after its durable fence, then after unlink and before its terminal receipt.
+        var staged=new ValidationArchive.Reclamation(1,archive.archiveId(),"reclaim_request","admin",hold.requestId(),
+                reclaim.expectedArchiveSha256(),"FENCED");
+        Files.write(marker,Model.JSON.writeValueAsBytes(staged));
+        assertEquals("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED",
+                assertThrows(SyncFailure.class,()->ValidationStore.open(reports,certificate.id)).code);
+        Files.delete(rows);
+        assertEquals(archive,ValidationArchive.execute(cold,reports,scope,reclaim,ValidationArchive.RECLAIM,
+                "reclaim_request","admin",()->assertTrue(ValidationArchive.restoringRequired(live,certificate.id))));
+        assertEquals("ARCHIVED",ValidationArchive.reclamation(live,archive).state());
+        assertFalse(Files.exists(rows));assertArrayEquals(summary,Files.readAllBytes(live.resolve("summary.json")));
+        var restore=new ValidationArchive.Request(certificate.id,null,archive.archiveId(),true);
+        ValidationArchive.execute(cold,reports,scope,restore,ValidationArchive.RESTORE,"restore_request","admin");
+        assertEquals("RESTORED",ValidationArchive.reclamation(live,archive).state());
+        assertFalse(ValidationArchive.restoringRequired(live,certificate.id));
+        assertArrayEquals(original,Files.readAllBytes(rows));
+        ValidationArchive.execute(cold,reports,scope,reclaim,ValidationArchive.RECLAIM,"reclaim_request","admin",
+                ()->fail("Replay must not reclaim restored data"));
+        assertArrayEquals(original,Files.readAllBytes(rows));
+    }
+    @Test void aMixedReportStillProtectsItsMatchingTargetsFromReclaim()throws Exception{
+        Path reports=root.resolve("reports"),cold=Files.createDirectory(root.resolve("archive"));
+        ValidationStore.owner(cold,true);
+        TableSchema table=table(false);
+        var certificate=certificate(table);
+        certificate.selectedTargets.add("matched");
+        var input=row(1,"source",null);
+        try(ValidationStore store=ValidationStore.create(reports,certificate.id,certificate,List.of(table),
+                Map.of("target",Set.of(table.id),"matched",Set.of(table.id)),new ValidationStore.Limits())){
+            store.source(table.id,input);store.finishSourceTable(table.id);store.completeSource();
+            store.finishTarget("target",table.id);store.target("matched",table.id,null,input);
+            store.finishTarget("matched",table.id);store.complete();
+            assertEquals("VALIDATION_DIFFERENCES",store.manifest().code);
+        }
+        Path live=reports.resolve(certificate.id);
+        var hold=ValidationRetention.review(reports,new ValidationRetention.Request(certificate.id,null,1,true),
+                "review_request","admin",1);
+        Files.write(live.resolve("retention.json"),Model.JSON.writeValueAsBytes(new ValidationRetention.Review(1,certificate.id,
+                hold.requestId(),hold.actorId(),null,1,"2020-01-01T00:00:00Z","2020-01-02T00:00:00Z")));
+        var scope=new ValidationArchive.Scope("task",UUID.randomUUID().toString(),certificate.id);
+        var archive=ValidationArchive.execute(cold,reports,scope,new ValidationArchive.Request(certificate.id,hold.requestId(),null,true),
+                ValidationArchive.COPY,"archive_request","admin");
+        var reclaim=new ValidationArchive.Request(certificate.id,hold.requestId(),archive.archiveId(),true,ValidationArchive.digest(archive));
+        assertEquals("VALIDATION_ARCHIVE_RECOVERY_DEPENDENCY",assertThrows(SyncFailure.class,()->ValidationArchive.execute(cold,reports,
+                scope,reclaim,ValidationArchive.RECLAIM,"reclaim_request","admin",()->fail("Unsafe audit"))).code);
+        assertTrue(Files.isRegularFile(live.resolve("rows.mv.db")));
+        assertFalse(Files.exists(live.resolve("archive-reclaim.json")));
+    }
     @Test void retainedReportCatalogPagesWithoutOpeningTheReportDatabases()throws Exception{
         TableSchema table=table(false);
         PipelineValidationBarrier.Certificate first=certificate(table),second=certificate(table);

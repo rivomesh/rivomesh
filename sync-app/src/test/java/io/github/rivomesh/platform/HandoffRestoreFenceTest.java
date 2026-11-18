@@ -2,6 +2,7 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
 import io.github.rivomesh.validation.ValidationArchive;
+import io.github.rivomesh.validation.ValidationStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -39,6 +40,10 @@ class HandoffRestoreFenceTest {
                 ()->SharedHandoffEvidence.export(shared,scope,reports,List.of())).getMessage());
         Files.write(report.resolve("archive-restore.json"),Model.JSON.writeValueAsBytes(new ValidationArchive.Restoration(
                 1,"sealed_copy","restore_job","admin",true)));
+        try(ValidationStore.ReportReservation reserved=ValidationStore.reserveReportDirectory(report)){
+            assertEquals("HANDOFF_ARCHIVE_BUSY",assertThrows(TaskService.Conflict.class,
+                    ()->SharedHandoffEvidence.export(shared,scope,reports,List.of())).getMessage());
+        }
         assertEquals(1,SharedHandoffEvidence.export(shared,scope,reports,List.of()).reports());
     }
 }

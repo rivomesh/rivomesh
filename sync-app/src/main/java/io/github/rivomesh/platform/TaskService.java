@@ -643,7 +643,7 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){if(closed)return;try{flushAudit();}catch(AuditStore.Unavailable ignored){}tasks=new ArrayList<>(entries.entrySet());}
         for(Map.Entry<String,Entry> task:tasks)if(task.getValue().busy.compareAndSet(false,true)) {
             try {
-                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE",ValidationArchive.COPY,ValidationArchive.RESTORE).contains(o.action));}
+                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE",ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM).contains(o.action));}
                 (validation?validations:controls).execute(() -> {
                 try { reconcile(task.getKey(),task.getValue()); }
                 catch(Exception e){task.getValue().problem=safeCode(e);}
@@ -701,16 +701,21 @@ public final class TaskService implements AutoCloseable {
                                     config.validationRetentionMinimumDays);
                         }
                         code="VALIDATION_RETENTION_REVIEWED";break;
-                    case ValidationArchive.COPY:case ValidationArchive.RESTORE:
+                    case ValidationArchive.COPY:case ValidationArchive.RESTORE:case ValidationArchive.RECLAIM:
                         ValidationArchive.Scope scope;
                         synchronized(this){
                             authorizeValidationMaintenance(pending);
-                            scope=validationArchiveScope(id,pending.validationArchive.reportId(),ValidationArchive.RESTORE.equals(pending.action));
+                            scope=validationArchiveScope(id,pending.validationArchive.reportId(),!ValidationArchive.COPY.equals(pending.action));
+                            if(ValidationArchive.RECLAIM.equals(pending.action))requireArchiveReclaim(id,pending.id);
                         }
                         ValidationArchive.Seal archived=ValidationArchive.execute(validationArchiveRoot(),reports(id),scope,pending.validationArchive,
-                                pending.action,pending.id,pending.actorId);
-                        result=Map.of("archiveId",archived.archiveId(),"hash",digest(Model.JSON.writeValueAsString(archived)));
-                        code=ValidationArchive.COPY.equals(pending.action)?"VALIDATION_ARCHIVE_SEALED":"VALIDATION_ARCHIVE_RESTORED";
+                                pending.action,pending.id,pending.actorId,()->auditArchiveReclaim(id,pending));
+                        result=Map.of("archiveId",archived.archiveId(),"hash",ValidationArchive.digest(archived));
+                        code=switch(pending.action){
+                            case ValidationArchive.COPY->"VALIDATION_ARCHIVE_SEALED";
+                            case ValidationArchive.RESTORE->"VALIDATION_ARCHIVE_RESTORED";
+                            default->"VALIDATION_ARCHIVE_RECLAIMED";
+                        };
                         break;
                     case "VALIDATE":case "VALIDATE_RETRY":
                         synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("VALIDATION_CANCELLED");operationThreads.put(id,Thread.currentThread());}
@@ -777,7 +782,7 @@ public final class TaskService implements AutoCloseable {
             synchronized(this) {
                 if(cancellableRecovery)recoveryCancellations.remove(id);
                 if(closed&&failure!=null&&(cancellableRecovery||Arrays.asList("CAPTURE_RETAIN","CAPTURE_EXCLUDE",
-                        ValidationRetention.ACTION,ValidationArchive.COPY,ValidationArchive.RESTORE).contains(pending.action)))return;
+                        ValidationRetention.ACTION,ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM).contains(pending.action)))return;
                 Registry next=copy();
                 Control state=next.tasks.get(id);
                 Operation op=state.operations.stream().filter(o -> o.id.equals(pending.id)).findFirst().get();
@@ -1186,12 +1191,14 @@ public final class TaskService implements AutoCloseable {
             if(config.validationRetentionMinimumDays>0||retained!=null)result.put("retentionMinimumDays",config.validationRetentionMinimumDays);
             if(retained!=null)result.put("retention",retained);
             if(validationArchiveRoot()!=null)result.put("archiveEnabled",true);
+            if(config.validationArchiveReclaim)result.put("reclaimEnabled",true);
             ValidationArchive.Seal archive=ValidationArchive.observe(reports(id).resolve(reportId),reportId);
             if(archive!=null){
                 ValidationArchive.Scope scope=validationArchiveScope(id,reportId,true);
                 if(!scope.equals(archive.scope()))throw new Conflict("VALIDATION_ARCHIVE_SCOPE_INVALID");
                 result.put("archive",Map.of("id",archive.archiveId(),"archivedAt",archive.archivedAt(),
-                        "actorId",archive.actorId(),"bytes",archive.files().values().stream().mapToLong(ValidationArchive.FileSeal::bytes).sum()));
+                        "actorId",archive.actorId(),"sha256",ValidationArchive.digest(archive),
+                        "bytes",archive.files().values().stream().mapToLong(ValidationArchive.FileSeal::bytes).sum()));
             }
         }
         catch(io.github.rivomesh.SyncFailure unavailable){throw new Conflict(unavailable.code);}
@@ -1211,6 +1218,26 @@ public final class TaskService implements AutoCloseable {
         if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled
                 ||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new Conflict("FORBIDDEN");
     }
+    private void requireArchiveReclaim(String taskId,String currentRequest){
+        if(!config.validationArchiveReclaim)throw new Conflict("VALIDATION_ARCHIVE_RECLAIM_DISABLED");
+        Entry entry=require(taskId);
+        Control task=registry.tasks.get(taskId);
+        TaskWorker worker=entry.worker;
+        if(!"STOPPED".equals(task.desired)||(worker!=null&&worker.alive()))
+            throw new Conflict("VALIDATION_ARCHIVE_RECLAIM_REQUIRES_STOPPED");
+        if(task.operations.stream().anyMatch(op->"PENDING".equals(op.status)&&!op.id.equals(currentRequest)))
+            throw new Conflict("OPERATION_PENDING");
+    }
+    private synchronized void auditArchiveReclaim(String taskId,Operation pending)throws Exception{
+        ensureOpen();
+        authorizeValidationMaintenance(pending);
+        requireArchiveReclaim(taskId,pending.id);
+        AuditStore.Event event=new AuditStore.Event();event.kind="VALIDATION_ARCHIVE_RECLAIM_APPROVED";
+        event.taskId=taskId;event.subjectId=pending.validationArchive.reportId();event.action=pending.action;
+        event.actorId=pending.actorId;event.actorRole=pending.actorRole;event.status="APPROVED";
+        event.clientRequestHash=AuditStore.hash(pending.id);event.operationHash=pending.validationArchive.expectedArchiveSha256();
+        appendAudit(event);
+    }
     private static String validationMaintenanceSignature(TaskRequest request)throws Exception{
         return digest(request.action+"\n"+request.taskId+"\n"+request.revision+"\n"
                 +Model.JSON.writeValueAsString(request.reviewValidationRetention()?request.validationRetention:request.validationArchive));
@@ -1226,6 +1253,7 @@ public final class TaskService implements AutoCloseable {
             if(request.validationRetention.minimumDays()<config.validationRetentionMinimumDays)
                 throw new Conflict("VALIDATION_RETENTION_MINIMUM_NOT_MET");
         }else if(validationArchiveRoot()==null)throw new Conflict("VALIDATION_ARCHIVE_DISABLED");
+        if(ValidationArchive.RECLAIM.equals(request.action))requireArchiveReclaim(request.taskId,request.requestId);
         if(require(request.taskId).config.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
         Control current=registry.tasks.get(request.taskId);
         if(!Objects.equals(current.revision,request.revision))throw new Conflict("REVISION_CHANGED");

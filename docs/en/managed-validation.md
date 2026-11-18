@@ -96,7 +96,7 @@ Set `validationRetentionMinimumDays` on the Agent that owns the report, or on th
 
 In **View storage**, enter the minimum number of days to retain the completed report and confirm the review. The server checks the current task revision, the last review ID and the original report lock. Reviews can extend the existing minimum date. Active or incomplete reports return an explicit refusal. Once accepted, watch the request in the task's operation history and reopen **View storage** to see the committed date and reviewer.
 
-The equivalent request is `POST /api/tasks/{taskId}/validations/{reportId}/retention` with the usual request ID and session protection. Pass `expectedRevision`, `minimumDays`, and `approved: true`. Include `expectedReviewId` from the previous review when one exists. A retry with the same request ID and body keeps the original result. The Agent stores the review alongside the report and links its outcome to the report ID and actor in the audit trail. Back up the attachment with the original report. The report and its recovery evidence remain on their current volume after the minimum date. Count the full report bytes when planning disk capacity.
+The equivalent request is `POST /api/tasks/{taskId}/validations/{reportId}/retention` with the usual request ID and session protection. Pass `expectedRevision`, `minimumDays`, and `approved: true`. Include `expectedReviewId` from the previous review when one exists. A retry with the same request ID and body keeps the original result. The Agent stores the review alongside the report and links its outcome to the report ID and actor in the audit trail. Back up the attachment with the original report. Reaching the minimum date keeps the files in place until an eligible reclamation is approved.
 
 ### Recover a report from a sealed copy
 
@@ -107,6 +107,14 @@ For a completed report with a submitted retention review, select **View storage*
 If the live report database is missing, the report remains in the directory and live reads return `VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED`. Select **View storage** and confirm **Restore report**. The Agent verifies the copy and scope again, preserves every existing file with differing content, and restores missing files under the original lock. An interrupted restore blocks live readers and handoff custody until recovery completes. During normal operation the archive and original files both occupy storage.
 
 For API clients, `POST /api/tasks/{taskId}/validations/{reportId}/archive` accepts `operation: "COPY"` and `expectedReviewId`, or `operation: "RESTORE"` and `expectedArchiveId`. Both require the current `expectedRevision`, confirmation with `approved: true`, and an authenticated request ID.
+
+### Reclaim a verified duplicate of the live report database
+
+Set `validationArchiveReclaim: true` on the report's Agent or standalone server to enable reviewed reclamation. Helm exposes `platform.validationArchiveReclaim`. Stop the task, wait until its Worker has exited, open **View storage**, and review the recovery copy SHA-256 before approving **Reclaim live report storage**. The API uses the same archive endpoint with `operation: "RECLAIM"`, `expectedArchiveId`, `expectedArchiveSha256` and `expectedReviewId`, along with the current revision, request ID and confirmation.
+
+The Agent requires an elapsed retention hold, an exact private archive, and a completed differences report with at least one mismatched table at every compared destination. This preserves reports eligible for gap checks or UNIQUE restoration. The presence of repair or recovery plans or scratch space also prevents reclamation. If any check fails, preserve the report and review the displayed outcome.
+
+The Agent audits the exact approval and commits a durable reader fence before reclaiming the duplicate `rows.mv.db`. Report summaries, repair plans, operation receipts, archive files and business databases stay in place. The report remains searchable. Restore the report from the copy before using its row-level evidence. Keep both the owner identity and the original report directory. An interrupted request retains its fence and can resume under the original command. A later explicit restore can also reconcile an interrupted reclamation.
 
 ### Find a recovery operation receipt
 

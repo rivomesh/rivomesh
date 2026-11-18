@@ -271,17 +271,20 @@ public final class ConsoleServer implements AutoCloseable {
                 String action=switch(input.path("operation").asText("")){
                     case "COPY"->io.github.rivomesh.validation.ValidationArchive.COPY;
                     case "RESTORE"->io.github.rivomesh.validation.ValidationArchive.RESTORE;
+                    case "RECLAIM"->io.github.rivomesh.validation.ValidationArchive.RECLAIM;
                     default->throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
                 };
                 if(input.hasNonNull("expectedReviewId")&&!input.path("expectedReviewId").isTextual()
-                        ||input.hasNonNull("expectedArchiveId")&&!input.path("expectedArchiveId").isTextual())
+                        ||input.hasNonNull("expectedArchiveId")&&!input.path("expectedArchiveId").isTextual()
+                        ||input.hasNonNull("expectedArchiveSha256")&&!input.path("expectedArchiveSha256").isTextual())
                     throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);
                 request.action=action;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
                 request.revision=input.path("expectedRevision").textValue();
                 request.validationArchive=new io.github.rivomesh.validation.ValidationArchive.Request(parts[5],
                         input.path("expectedReviewId").textValue(),input.path("expectedArchiveId").textValue(),
-                        input.path("approved").isBoolean()&&input.path("approved").booleanValue());
+                        input.path("approved").isBoolean()&&input.path("approved").booleanValue(),
+                        input.path("expectedArchiveSha256").textValue());
                 json(exchange,202,control.invoke(request,principal));return;
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&Arrays.asList("differences","values").contains(parts[6])&&method.equals("POST")){

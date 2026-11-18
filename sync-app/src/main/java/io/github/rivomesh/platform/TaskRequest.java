@@ -118,7 +118,8 @@ final class TaskRequest {
         if(kind==Kind.ACTION&&!validationMaintenance()&&!captureRetention()&&!excludesCapture()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
     boolean reviewValidationRetention(){return kind==Kind.ACTION&&ValidationRetention.ACTION.equals(action);}
-    boolean archivesValidation(){return kind==Kind.ACTION&&(ValidationArchive.COPY.equals(action)||ValidationArchive.RESTORE.equals(action));}
+    boolean archivesValidation(){return kind==Kind.ACTION&&(ValidationArchive.COPY.equals(action)
+            ||ValidationArchive.RESTORE.equals(action)||ValidationArchive.RECLAIM.equals(action));}
     boolean validationMaintenance(){return reviewValidationRetention()||archivesValidation();}
     boolean skipAction(){return kind==Kind.ACTION&&Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);}
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}

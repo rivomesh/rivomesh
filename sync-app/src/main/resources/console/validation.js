@@ -32,7 +32,9 @@ window.RivomeshValidation=(()=>{
       archive:'报告恢复副本',archived:'归档时间',archiveCopy:'创建恢复副本',archiveRestore:'恢复报告',
       archiveCopyHelp:'把已审阅的报告数据库和摘要复制到 Agent 的受保护归档目录。原报告继续保留在原位置。',
       archiveRestoreHelp:'从核对过的恢复副本补齐缺失文件。已有不同内容的文件会被保留。',
-      archiveApproval:'确认此次报告归档操作'},
+      archiveApproval:'确认此次报告归档操作',archiveReclaim:'回收原位报告空间',
+      archiveReclaimHelp:'复核此副本的 SHA-256。审批后只回收原位报告数据库，摘要和恢复副本继续保留。查看行明细前需要先恢复。',
+      archiveReclaimApproval:'批准回收原位报告数据库',archiveSha256:'副本描述的 SHA-256'},
   en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports',
       search:'Open by report ID',id:'Report ID',close:'Cancel',invalid:'Enter a valid report ID.',
       mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory',
@@ -46,7 +48,9 @@ window.RivomeshValidation=(()=>{
       archiveCopy:'Create recovery copy',archiveRestore:'Restore report',
       archiveCopyHelp:'Copy the reviewed report database and summary to the protected Agent archive. The live report remains at its original location.',
       archiveRestoreHelp:'Restore missing files from the verified recovery copy. Existing files with different content are preserved.',
-      archiveApproval:'Confirm report archive operation'}
+      archiveApproval:'Confirm report archive operation',archiveReclaim:'Reclaim live report storage',
+      archiveReclaimHelp:'Review the recovery copy SHA-256. Approval reclaims the live report database and keeps its summary and recovery copy. Restore it before accessing row details.',
+      archiveReclaimApproval:'Approve reclaiming the live report database',archiveSha256:'Recovery copy descriptor SHA-256'}
  };
  const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
  const fetchReport=(task,id)=>api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));
@@ -131,7 +135,11 @@ window.RivomeshValidation=(()=>{
    if(storage.restoreRequired)body.append(text('p',explain('VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED'),'callout'));
    if(revision&&storage.archiveEnabled&&storage.activity==='ACTIVITY_UNKNOWN'&&
       (storage.restoreRequired&&archive||!archive&&retention))
-    dialog.append(archiveReview(path,revision,retention,archive,current));
+    dialog.append(archiveReview(path,revision,retention,archive,current,archive?'RESTORE':'COPY'));
+   if(revision&&storage.reclaimEnabled&&storage.activity==='ACTIVITY_UNKNOWN'&&!storage.restoreRequired
+      &&bridge.task(task.id)?.desired==='STOPPED'&&/^[0-9a-f]{64}$/.test(archive?.sha256||'')
+      &&retention&&Date.parse(retention.minimumRetainUntil)<=Date.now())
+    dialog.append(archiveReview(path,revision,retention,archive,current,'RECLAIM'));
   }catch(error){
    if(current())body.replaceChildren(text('p',error.message,'error'));
   }
@@ -153,16 +161,21 @@ window.RivomeshValidation=(()=>{
   }));
   return form;
  }
- function archiveReview(path,revision,retention,archive,current){
+ function archiveReview(path,revision,retention,archive,current,operation){
+  const reclaim=operation==='RECLAIM',labelKey=reclaim?'archiveReclaim':operation==='RESTORE'?'archiveRestore':'archiveCopy';
   const form=text('form'),approval=text('input'),approvalLabel=text('label','','check'),
-   button=text('button',catalogLabel(archive?'archiveRestore':'archiveCopy'),'primary'),feedback=text('p','','error');
+   button=text('button',catalogLabel(labelKey),'primary'),feedback=text('p','','error');
   approval.type='checkbox';approval.name='archiveApproved';approval.required=true;
   button.type='submit';feedback.setAttribute('role','status');form.dataset.validationArchiveForm='';
-  approvalLabel.append(approval,text('span',catalogLabel('archiveApproval')));
-  form.append(text('h3',catalogLabel('archive')),text('p',catalogLabel(archive?'archiveRestoreHelp':'archiveCopyHelp')),approvalLabel,button,feedback);
+  approvalLabel.append(approval,text('span',catalogLabel(reclaim?'archiveReclaimApproval':'archiveApproval')));
+  form.append(text('h3',catalogLabel(labelKey)),text('p',catalogLabel(labelKey+'Help')));
+  if(reclaim)form.append(text('p',catalogLabel('archiveSha256')),text('code',archive.sha256));
+  form.append(approvalLabel,button,feedback);
   wireReview(form,button,[approval],approval,feedback,current,path+'/archive',()=>({
-   operation:archive?'RESTORE':'COPY',expectedRevision:revision,approved:true,
-   ...(archive?{expectedArchiveId:archive.id}:{expectedReviewId:retention.requestId})
+   operation,expectedRevision:revision,approved:true,
+   ...(archive?{expectedArchiveId:archive.id}:{}),
+   ...(reclaim||!archive?{expectedReviewId:retention.requestId}:{}),
+   ...(reclaim?{expectedArchiveSha256:archive.sha256}:{})
   }));
   return form;
  }
@@ -243,6 +256,10 @@ window.RivomeshValidation=(()=>{
  bridge.register(translationZh,translationEn);
  bridge.register({
   validation_archive_copy:'创建报告恢复副本',validation_archive_restore:'恢复报告',
+  validation_archive_reclaim:'回收原位报告空间',VALIDATION_ARCHIVE_RECLAIMED:'原位报告数据库占用的空间已回收。',
+  VALIDATION_ARCHIVE_RECOVERY_DEPENDENCY:'报告仍需用于恢复核对，或存在已有的恢复计划。',
+  VALIDATION_ARCHIVE_RECLAIM_REQUIRES_STOPPED:'请先停止同步任务。',
+  VALIDATION_RETENTION_HOLD_ACTIVE:'报告尚未达到最低保留期限。',
   VALIDATION_ARCHIVE_SEALED:'报告恢复副本已核对并保存。',VALIDATION_ARCHIVE_RESTORED:'已从核对的副本恢复报告。',
   VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED:'报告需要恢复。请在“查看存储”中查看恢复副本。',
   VALIDATION_ARCHIVE_HOT_FILE_CHANGED:'现有报告文件与恢复副本不同。请保留两份证据并核对。',
@@ -255,6 +272,10 @@ window.RivomeshValidation=(()=>{
   VALIDATION_RETENTION_REPORT_INCOMPLETE:'校验报告完成后才能审阅保留期限。'
  },{
   validation_archive_copy:'Create report recovery copy',validation_archive_restore:'Restore report',
+  validation_archive_reclaim:'Reclaim live report storage',VALIDATION_ARCHIVE_RECLAIMED:'Live report database storage was reclaimed.',
+  VALIDATION_ARCHIVE_RECOVERY_DEPENDENCY:'The report may be needed for recovery, or already has an existing recovery plan.',
+  VALIDATION_ARCHIVE_RECLAIM_REQUIRES_STOPPED:'Stop the synchronization task first.',
+  VALIDATION_RETENTION_HOLD_ACTIVE:'The minimum report retention period is still active.',
   VALIDATION_ARCHIVE_SEALED:'The report recovery copy was verified and saved.',VALIDATION_ARCHIVE_RESTORED:'The report was restored from its verified copy.',
   VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED:'This report requires restoration. Open View storage to find its recovery copy.',
   VALIDATION_ARCHIVE_HOT_FILE_CHANGED:'An existing report file differs from the recovery copy. Preserve both and inspect them.',

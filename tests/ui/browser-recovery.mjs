@@ -6,7 +6,7 @@ import {launchChrome,waitFor} from './chromium.mjs';
 
 // The disposable native fixture supplies its loopback endpoints and token via stdin.
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['repair','correction','receipt','retention','archive-copy','archive-restore'].includes(scenario));
+assert(binary&&['repair','correction','receipt','retention','archive-copy','archive-restore','archive-reclaim'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const fixture=JSON.parse(Buffer.concat(chunks));
@@ -146,22 +146,25 @@ try{
     await poll(query(dialog)+'?.textContent.includes("至少保留至")','reviewed hold and operator are visible');
     await key('Escape',27);
     checks.push('Chrome requires explicit report retention approval and sees the durable hold on the other Controller');
-  }else if(scenario==='archive-copy'||scenario==='archive-restore'){
+  }else if(['archive-copy','archive-restore','archive-reclaim'].includes(scenario)){
     const restoring=scenario==='archive-restore';
+    const reclaiming=scenario==='archive-reclaim';
     const storage='[data-validation-storage="'+fixture.reportId+'"]',dialog='.validation-storage-dialog[open]',
       form=dialog+' [data-validation-archive-form]',approval=form+' input[name="archiveApproved"]';
-    const action=restoring?'VALIDATION_ARCHIVE_RESTORE':'VALIDATION_ARCHIVE_COPY';
+    const action=restoring?'VALIDATION_ARCHIVE_RESTORE':reclaiming?'VALIDATION_ARCHIVE_RECLAIM':'VALIDATION_ARCHIVE_COPY';
     await activate(storage,'view protected archive choices');
     await poll(`Boolean(${query(form)})`,'archive review form');
     assert.equal(await evaluate(query(dialog)+'.textContent.includes("报告需要恢复")'),restoring);
-    await clickNamed(form+' button',restoring?'恢复报告':'创建恢复副本');
+    if(reclaiming)assert.equal(await evaluate(query(form+' code')+'.textContent'),fixture.archiveSha256);
+    await clickNamed(form+' button',restoring?'恢复报告':reclaiming?'回收原位报告空间':'创建恢复副本');
     assert(!await evaluate(query(dialog)+'.textContent.includes("请求 ID")'));
     await evaluate(query(approval)+'.click()');
     await activate(form+' button[type="submit"]','approve the exact report archive operation');
     const confirmed=await poll(operations(action),'durable archive outcome');
-    assert.equal(confirmed.code,restoring?'VALIDATION_ARCHIVE_RESTORED':'VALIDATION_ARCHIVE_SEALED');
+    assert.equal(confirmed.code,restoring?'VALIDATION_ARCHIVE_RESTORED':reclaiming?'VALIDATION_ARCHIVE_RECLAIMED':'VALIDATION_ARCHIVE_SEALED');
     checks.push(restoring
       ?'Chrome restores the fenced report from its sealed archive only after approval'
+      :reclaiming?'Chrome binds explicit reclamation approval to the exact archive descriptor SHA'
       :'Chrome creates a sealed recovery copy after explicit report archive approval');
   }else if(scenario==='correction'){
     await clickNamed('.history button','查看事务证据');
