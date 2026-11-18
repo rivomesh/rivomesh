@@ -55,4 +55,28 @@ export function registerRecoveryTests({setup,flush,login}){
  test('language switching updates skip approval inside an already open evidence dialog',async()=>{
   const ui=fixture();try{await openReview(ui);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/按完整事务跳过/);ui.d.getElementById('language').click();assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/Skip a complete transaction/);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/accept the resulting data gap/);}finally{ui.dom.window.close();}
  });
+ test('compensation preview and approval bind failure evidence and current task revision',async()=>{
+  const ui=fixture();try{
+   await openReview(ui);
+   const button=ui.d.querySelector('[data-recovery-action="COMPENSATION_PLAN"]');
+   assert.ok(button);button.click();await flush();
+   const first=ui.calls.find(call=>call.path.endsWith('/actions'));
+   assert.deepEqual(JSON.parse(first.body).compensation,{evidenceId:ui.id,evidenceHash:ui.hash});
+   ui.task.operations.push({action:'COMPENSATION_PLAN',status:'SUCCEEDED',result:{code:'COMPENSATION_PLAN_READY',hash:ui.planHash,evidenceId:ui.id,evidenceHash:ui.hash,subscriptionId:'pg',errorGeneration:2,sequence:'9007199254740993',tables:{one:{database:'sales',table:'<img src=x>',identities:1,deletes:1,inserts:0}}}});
+   await ui.w.RivomeshConfiguration.refresh();
+   clickLabel(ui,'compensationReview');
+   const dialog=ui.d.querySelector('.recovery-dialog');
+   assert.equal(dialog.querySelector('img'),null);assert.match(dialog.textContent,/9007199254740993/);
+   const apply=dialog.querySelector('[data-recovery-action="COMPENSATION_EXECUTE"]');
+   enterReason(ui,dialog);assert.equal(apply.disabled,true);
+   const check=dialog.querySelector('input[type=checkbox]');
+   check.checked=true;check.dispatchEvent(new ui.w.Event('change'));
+   ui.task.revision='reviewed-new-revision';
+   apply.click();await flush();
+   const requests=ui.calls.filter(call=>call.path.endsWith('/actions')).map(call=>JSON.parse(call.body));
+   assert.equal(requests.length,2);
+   assert.deepEqual(requests[1],{action:'COMPENSATION_EXECUTE',expectedRevision:'reviewed-new-revision',subscriptionId:'pg',errorCount:2,compensation:{evidenceId:ui.id,evidenceHash:ui.hash,approvedHash:ui.planHash,reason:'Reviewed transaction and destination'}});
+  }finally{ui.dom.window.close();}
+ });
+
 }

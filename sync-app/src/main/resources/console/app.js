@@ -319,7 +319,7 @@ function renderFailureCheckpoint(root,task,id,hash,summary){
  const operation=(task.operations||[]).find(op=>op.failureEvidenceId===id&&op.status==='SUCCEEDED'),result=operation?.result,observation=result?.checkpointObservation,section=text('section','','failure-checkpoint');section.append(failureLabel('h3','failureCheckpointTitle'),failureLabel('p','failureCheckpointHistorical'));
  if(observation){
   if(observation.evidenceId!==id||observation.evidenceHash!==hash||!['CHECKPOINT_NOT_ADVANCED','COMMITTED_UNACKNOWLEDGED'].includes(observation.verdict)){section.append(failureLabel('p','FAILURE_EVIDENCE_CONTENT_CHANGED'));}
-  else{section.append(failureLabel('p','checkpoint_'+observation.verdict),text('pre',JSON.stringify(observation,null,2)));if(observation.targetFenceRequired)section.append(failureLabel('p','failureCheckpointNeedsFence'));renderCommitConfirmation(section,task,observation);window.RivomeshRecovery?.renderSkipApproval(section,task,id,hash,summary,observation,closeFailureEvidence);}
+  else{section.append(failureLabel('p','checkpoint_'+observation.verdict),text('pre',JSON.stringify(observation,null,2)));if(observation.targetFenceRequired)section.append(failureLabel('p','failureCheckpointNeedsFence'));renderCommitConfirmation(section,task,observation);window.RivomeshRecovery?.renderSkipApproval(section,task,id,hash,summary,observation,closeFailureEvidence);window.RivomeshRecovery?.renderCompensationPreview(section,task,id,hash,summary,observation,closeFailureEvidence);}
  }else{section.append(failureLabel('p','failureCheckpointUnavailable'));if(result?.checkpointProblem)section.append(text('code',String(result.checkpointProblem)));}
  root.append(section);
 }

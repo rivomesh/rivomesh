@@ -45,6 +45,22 @@ public interface TaskBackend {
         io.github.rivomesh.cdc.JdbcCommitAcknowledgement.Receipt receipt=io.github.rivomesh.cdc.JdbcCommitAcknowledgement.confirm(task.pipeline,store,request.evidenceId,request.evidenceHash,operation,actor,request.reason);
         Map<String,Object> result=new LinkedHashMap<>();result.put("code","FAILURE_ACK_CONFIRMED");result.put("receipt",receipt);result.put("hash",io.github.rivomesh.cdc.Codec.sha256(io.github.rivomesh.cdc.Codec.encode(receipt)));return result;
     }
+    default Map<String,Object> compensate(TaskDefinition task,java.nio.file.Path directory,
+            io.github.rivomesh.recovery.FailureEvidence.Scope scope,String action,CompensationRequest request,
+            String operation,String actor,String subscription,long generation)throws Exception {
+        request.validate(action);
+        if (task.pipeline==null) throw new IllegalArgumentException("COMPENSATION_V3_REQUIRED");
+        if (!java.nio.file.Files.exists(directory.resolve("authority.json"),java.nio.file.LinkOption.NOFOLLOW_LINKS))
+            throw new IllegalStateException("FAILURE_EVIDENCE_NOT_FOUND");
+        io.github.rivomesh.recovery.FailureEvidenceStore store=new io.github.rivomesh.recovery.FailureEvidenceStore(
+                directory,scope,new io.github.rivomesh.recovery.FailureEvidenceStore.Limits());
+        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=store.load(request.evidenceId);
+        if (!retained.hash.equals(request.evidenceHash)) throw new IllegalStateException("FAILURE_EVIDENCE_CONTENT_CHANGED");
+        if (!Objects.equals(subscription,retained.value.review.subscription.id)
+                ||generation!=retained.value.review.subscription.errorGeneration)
+            throw new IllegalStateException("COMPENSATION_EVIDENCE_SCOPE_CHANGED");
+        return io.github.rivomesh.cdc.TransactionCompensation.run(task.pipeline,retained,request.approvedHash,operation,actor,request.reason);
+    }
     default Map<String,Object> skip(TaskDefinition task,java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,String action,SkipRequest request,String operation,String actor,String subscription,long generation)throws Exception{
         request.validate(action);if(task.pipeline==null)throw new IllegalArgumentException("SKIP_V3_REQUIRED");
         if(!java.nio.file.Files.isDirectory(directory,java.nio.file.LinkOption.NOFOLLOW_LINKS)||!java.nio.file.Files.exists(directory.resolve("authority.json"),java.nio.file.LinkOption.NOFOLLOW_LINKS))throw new IllegalStateException("FAILURE_EVIDENCE_NOT_FOUND");

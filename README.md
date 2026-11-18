@@ -25,6 +25,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 事务证据与提交确认 | [审阅](docs/zh-CN/failure-review.md)、[确认](docs/zh-CN/commit-acknowledgement.md) | [Review](docs/en/failure-review.md),[confirmation](docs/en/commit-acknowledgement.md) |
 | 完整事务跳过与缺口 | [跳过](docs/zh-CN/transaction-skip.md) | [Skipping](docs/en/transaction-skip.md) |
 | 共同点缺口核验 | [核验与FAQ](docs/zh-CN/gap-verification.md) | [Verification and FAQ](docs/en/gap-verification.md) |
+| 失败事务补偿 | [补偿操作](docs/zh-CN/transaction-compensation.md) | [Compensation](docs/en/transaction-compensation.md) |
 | 对账与管理员修复 | [校验](docs/zh-CN/managed-validation.md)、[修复](docs/zh-CN/managed-repair.md) | [Validation](docs/en/managed-validation.md),[repair](docs/en/managed-repair.md) |
 | 目标产品与能力边界 | [平台方案](docs/zh-CN/platform-design.md) | [Platform design](docs/en/platform-design.md) |
 | 当前验证范围 | [单一验证基线](docs/verification/README.md) | [Verification baseline](docs/verification/README.md) |

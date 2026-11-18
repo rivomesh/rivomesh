@@ -605,14 +605,14 @@
       "id": "RC-06",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "NEW",
+      "status": "DONE",
       "title": {
         "zh-CN": "失败事务前镜像补偿",
         "en": "Failed-transaction before-image compensation"
       },
       "gap": {
-        "zh-CN": "已有共同校验点修复，尚不能让落后的失败目标回到原事务可重放状态。",
-        "en": "COMMON_CUT repair exists but does not reconstruct the failed transaction pre-state."
+        "zh-CN": "首批 SQL 档案通过。管理员跨入口审阅表范围及增删数量，按原事务前镜像恢复目标，随后显式恢复并重放。真实 CDC 验证 PostgreSQL 补偿，MySQL 通过原生合同。其他目标由 RC-10 追踪。",
+        "en": "The bounded SQL profile passed. Administrators review table scope and mutation counts across entries, restore the before-images and explicitly resume the original transaction. PostgreSQL passes real CDC and MySQL passes native contracts. RC-10 tracks other destinations."
       },
       "acceptance": {
         "zh-CN": "重建首个受影响身份的事务前状态，正确处理同键多次变更、主键移动、插入后删除、无主键重复行/ROW_ID、JSON与生成值；只修补审阅范围；数据与补偿凭据原子提交，原事务和GTID不改写。",
@@ -624,8 +624,19 @@
       ],
       "evidence": [
         "docs/verification/README.md",
-        "docs/zh-CN/common-cut-repair.md"
-      ]
+        "docs/zh-CN/common-cut-repair.md",
+        "docs/zh-CN/transaction-compensation.md",
+        "docs/en/transaction-compensation.md",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/TransactionCompensation.java",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/TransactionCompensationTest.java",
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedCompensationTest.java",
+        "tests/global-control-pipeline.py"
+      ],
+      "verification": {
+        "artifactSha256": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination."
+      }
     },
     {
       "id": "RC-07",

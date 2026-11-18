@@ -1,5 +1,7 @@
 # Complete-transaction skipping and gap recovery
 
+For apply failures caused by target drift, see [transaction compensation](transaction-compensation.md).
+
 Status:RC-03 bounded profile accepted;RC-08 verified gap closure remains open. [Evidence](../verification/README.md). Java8,MySQL8.4 source,original Agent/LOCAL journal,PostgreSQL business target and PG/MySQL control stores are accepted. Native MySQL target contracts pass;its full public skip matrix and other destinations remain open. Shared-task clusters default to disabled;standalone administrator controls still require complete evidence/explicit approval. [中文](../zh-CN/transaction-skip.md).
 
 Gap verification API/UI are integrated,with54 native contracts passing on each of PostgreSQL/MySQL;27 real-CDC checks pass with each PG/MySQL control store. See the [operator guide](gap-verification.md) for approval,cancellation and status semantics.

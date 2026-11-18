@@ -249,6 +249,200 @@ public final class JdbcSink implements SinkAdapter {
         if(table.keyless())columns.add(q(ROW_ID));
         return "SELECT "+String.join(",",columns)+" FROM "+table(table);
     }
+    private boolean compensationStorageExists(Connection c)throws SQLException {
+        try (ResultSet tables = c.getMetaData().getTables(mysql() ? settings.metadataSchema : c.getCatalog(),
+                mysql() ? null : settings.metadataSchema, "rm3_sink_compensation", new String[]{"TABLE"})) {
+            while (tables.next()) if ("rm3_sink_compensation".equals(tables.getString("TABLE_NAME"))) return true;
+            return false;
+        }
+    }
+
+    private void prepareCompensationStorage()throws Exception {
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000)) {
+            if (!compensationStorageExists(c)) {
+                ddl(c, "CREATE TABLE IF NOT EXISTS " + metadata("compensation")
+                        + " (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,"
+                        + "operation_id VARCHAR(128) NOT NULL,request_hash VARCHAR(64) NOT NULL,payload_hash VARCHAR(64) NOT NULL,"
+                        + "payload " + (mysql() ? "LONGTEXT" : settings.product == TargetProduct.H2 ? "CLOB" : "TEXT")
+                        + " NOT NULL,PRIMARY KEY(pipeline_id,subscription_id,operation_id))"
+                        + (mysql() ? " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" : ""));
+            }
+            guard.verify();
+        }
+    }
+
+    Map<String,Object> compensationReceipt(String operation, String requestHash)throws Exception {
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000)) {
+            if (!compensationStorageExists(c)) return null;
+            c.setAutoCommit(false);
+            locked(c, null);
+            Map<String,Object> receipt = compensationReceipt(c, operation, requestHash);
+            guard.verify();
+            c.rollback();
+            return receipt;
+        }
+    }
+
+    private Map<String,Object> compensationReceipt(Connection c, String operation, String requestHash)throws Exception {
+        String query = "SELECT request_hash,payload_hash,payload FROM " + metadata("compensation")
+                + " WHERE pipeline_id=? AND subscription_id=? AND operation_id=?";
+        try (PreparedStatement read = c.prepareStatement(query)) {
+            read.setString(1, settings.pipelineId);
+            read.setString(2, settings.id);
+            read.setString(3, operation);
+            try (ResultSet result = read.executeQuery()) {
+                if (!result.next()) return null;
+                String payload = JdbcGapVerificationLedger.bounded(result.getCharacterStream(3), 512 * 1024);
+                if (!requestHash.equals(result.getString(1))) throw new IllegalStateException("COMPENSATION_REQUEST_CONFLICT");
+                if (!Codec.sha256(payload).equals(result.getString(2))) throw new IllegalStateException("COMPENSATION_RECEIPT_CHANGED");
+                @SuppressWarnings("unchecked") Map<String,Object> receipt = Codec.decode(payload, Map.class);
+                if (result.next() || !operation.equals(receipt.get("operation"))
+                        || !settings.generation.equals(receipt.get("generation"))
+                        || !settings.fingerprint.equals(receipt.get("fingerprint"))
+                        || !"COMPENSATION_COMPLETED".equals(receipt.get("code")))
+                    throw new IllegalStateException("COMPENSATION_RECEIPT_CHANGED");
+                return receipt;
+            }
+        }
+    }
+
+    private List<Cell> compensationRow(Connection c, CompensationRows.Row row, RepairConnectionGuard guard)throws Exception {
+        String predicate = keys(row.table).stream().map(key -> q(key) + "=?").collect(Collectors.joining(" AND "));
+        try (PreparedStatement read = c.prepareStatement(validationSql(row.table) + " WHERE " + predicate + " FOR UPDATE")) {
+            if (row.table.keyless()) read.setString(1, row.occurrence);
+            else {
+                int parameter = 1;
+                for (String name : keys(row.table)) {
+                    int column = row.table.column(name);
+                    bind(read, parameter++, row.table.columns.get(column), row.key.get(column));
+                }
+            }
+            try (ResultSet result = read.executeQuery()) {
+                if (!result.next()) return null;
+                TargetRead.Row actual = JdbcTargetRead.readRow(result, row.table, settings.product, 4 * 1024 * 1024, guard::verify);
+                if (result.next() || !row.identity.equals(RowValues.identity(row.table, actual.values, actual.rowId)))
+                    throw new IllegalStateException("COMPENSATION_IDENTITY_AMBIGUOUS");
+                return actual.values;
+            }
+        }
+    }
+
+    Map<String,Object> compensation(Collection<CompensationRows.Row> rows,
+            io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained, String approvedHash,
+            String operation, String requestHash, String actor, String reason, CheckpointAction<Void> check)throws Exception {
+        repairProduct();
+        if (approvedHash != null) prepareCompensationStorage();
+        Journal.FailureReview review = retained.value.review;
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000)) {
+            if (mysql()) c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            c.setAutoCommit(false);
+            Checkpoint checkpoint = locked(c, null);
+            if (approvedHash != null) {
+                Map<String,Object> prior = compensationReceipt(c, operation, requestHash);
+                if (prior != null) return prior;
+                RepairDependencies.verify(c, settings.product, settings.metadataSchema, "rm3_sink_compensation", metadata("compensation"));
+                if (mysql()) {
+                    try (PreparedStatement p = c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='rm3_sink_compensation'")) {
+                        p.setString(1, settings.metadataSchema);
+                        try (ResultSet r = p.executeQuery()) {
+                            if (!r.next() || !"InnoDB".equalsIgnoreCase(r.getString(1)))
+                                throw new IllegalStateException("COMPENSATION_RECEIPT_ENGINE_INVALID");
+                        }
+                    }
+                }
+            }
+            if (checkpoint.epoch != review.epoch) throw new IllegalStateException("COMPENSATION_TARGET_FENCE_REQUIRED");
+            if (checkpoint.sequence != review.subscription.acknowledged)
+                throw new IllegalStateException("COMPENSATION_CHECKPOINT_RECONCILIATION_REQUIRED");
+            if (checkpoint.sequence == 0 ? checkpoint.transactionId != null || checkpoint.transactionHash != null || checkpoint.skipOperation != null
+                    : checkpoint.transactionId == null || checkpoint.transactionId.isEmpty()
+                      || !io.github.rivomesh.recovery.FailureEvidence.hash(checkpoint.transactionHash))
+                throw new IllegalStateException("FAILURE_CHECKPOINT_CONTENT_MISMATCH");
+            check.run(checkpoint);
+            Map<String,Map<String,Object>> tables = new TreeMap<>();
+            List<List<String>> images = new ArrayList<>();
+            List<CompensationRows.Row> delete = new ArrayList<>(), insert = new ArrayList<>();
+            for (CompensationRows.Row row : rows) {
+                guard.verify();
+                TableSchema table = row.table;
+                Map<String,Object> summary = tables.get(table.id);
+                if (summary == null) {
+                    if (!"COMPLETE".equals(snapshotCheckpoint(c, table).state))
+                        throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");
+                    validateShape(c, table);
+                    RepairDependencies.verify(c, settings.product, destination(table), table.name, table(table));
+                    summary = new LinkedHashMap<>();
+                    summary.put("database", table.database);
+                    summary.put("table", table.name);
+                    summary.put("schemaVersion", table.version);
+                    summary.put("identities", 0);
+                    summary.put("deletes", 0);
+                    summary.put("inserts", 0);
+                    tables.put(table.id, summary);
+                }
+                List<Cell> actual = compensationRow(c, row, guard);
+                String current = CompensationRows.hash(table, actual), desired = CompensationRows.hash(table, row.expected);
+                images.add(Arrays.asList(table.id, Codec.sha256(row.identity), current, desired));
+                summary.compute("identities", (key, count) -> (int)count + 1);
+                if (Objects.equals(current, desired)) continue;
+                if (actual != null) {
+                    delete.add(row);
+                    summary.compute("deletes", (key, count) -> (int)count + 1);
+                }
+                if (row.expected != null) {
+                    insert.add(row);
+                    summary.compute("inserts", (key, count) -> (int)count + 1);
+                }
+            }
+            Map<String,Object> result = new LinkedHashMap<>();
+            result.put("evidenceId", retained.value.id);
+            result.put("evidenceHash", retained.hash);
+            result.put("pipelineId", settings.pipelineId);
+            result.put("subscriptionId", settings.id);
+            result.put("generation", settings.generation);
+            result.put("fingerprint", settings.fingerprint);
+            result.put("errorGeneration", review.subscription.errorGeneration);
+            result.put("sequence", Long.toString(review.sequence));
+            result.put("checkpoint", Codec.decode(Codec.encode(checkpoint), Map.class));
+            result.put("tables", tables);
+            String hash = Codec.sha256(Codec.encode(Arrays.asList("COMPENSATION_V1", result, images)));
+            result.put("hash", hash);
+            guard.verify();
+            if (approvedHash == null) {
+                c.rollback();
+                result.put("code", "COMPENSATION_PLAN_READY");
+                return result;
+            }
+            if (!approvedHash.equals(hash)) throw new IllegalStateException("COMPENSATION_PLAN_CHANGED");
+            for (CompensationRows.Row row : delete) {
+                guard.verify();
+                Change removal = new Change();
+                removal.operation = Change.Operation.DELETE;
+                removal.before = row.key;
+                removal.rowId = row.occurrence;
+                change(c, row.table, removal);
+            }
+            for (CompensationRows.Row row : insert) {
+                guard.verify();
+                insert(c, row.table, row.expected, row.occurrence);
+            }
+            for (CompensationRows.Row row : rows) {
+                if (!CompensationRows.equal(row.table, row.expected, compensationRow(c, row, guard)))
+                    throw new IllegalStateException("COMPENSATION_POSTCHECK_FAILED");
+            }
+            result.put("code", "COMPENSATION_COMPLETED");
+            result.put("operation", operation);
+            result.put("actor", actor);
+            result.put("reason", reason);
+            result.put("completedAt", java.time.Instant.now().toString());
+            String payload = Codec.encode(result);
+            sql(c, "INSERT INTO " + metadata("compensation") + " VALUES (?,?,?,?,?,?)",
+                    settings.pipelineId, settings.id, operation, requestHash, Codec.sha256(payload), payload);
+            guard.verify();
+            c.commit();
+            return result;
+        }
+    }
     private List<String> keys(TableSchema table){return table.keyless()?Collections.singletonList(ROW_ID):table.primaryKey.isEmpty()?table.identityKey:table.primaryKey;}
     private String type(TableSchema.Column col){
         if(dm())return DmStorage.type(col);

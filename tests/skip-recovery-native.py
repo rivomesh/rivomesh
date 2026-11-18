@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--test-classes', type=Path, required=True)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
+parser.add_argument('--suite', choices=('skip', 'compensation'), default='skip')
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 artifact, classes, output = args.artifact.resolve(), args.test_classes.resolve(), args.output.resolve()
@@ -24,7 +25,16 @@ for path in (artifact, classes, output):
 assert artifact.is_file() and classes.is_dir()
 output.mkdir(parents=True, exist_ok=True)
 mysql = args.product == 'MYSQL'
-project = 'rivomesh-skip-' + uuid.uuid4().hex[:10]
+contracts = {
+    'skip': (58, ['DeliveryProgressTest', 'GapVerificationServiceTest', 'GapVerificationPlanTest',
+                 'JdbcGapVerificationTest', 'GapVerificationLedgerTest', 'SkipPlanTest',
+                 'SkipJournalTest', 'SkipTargetTest', 'TransactionSkipRecoveryTest']),
+    'compensation': (4, ['TransactionCompensationTest']),
+}
+expected, cases = contracts[args.suite]
+selected = ['--select-class=io.github.rivomesh.cdc.' + case for case in cases]
+
+project = 'rivomesh-' + args.suite + '-' + uuid.uuid4().hex[:10]
 environment = dict(os.environ, RIVOMESH_FAILURE_DB_PASSWORD=secrets.token_urlsafe(28),
                    RIVOMESH_FAILURE_DB_USER='root' if mysql else 'failure_test',
                    RIVOMESH_FAILURE_DB_DRIVER='com.mysql.cj.jdbc.Driver' if mysql else 'org.postgresql.Driver',
@@ -36,7 +46,7 @@ for entry in sorted(classes.rglob('*')):
         test_hash.update(str(entry.relative_to(classes)).encode() + b'\0' + entry.read_bytes())
 manifest = dict(status='RUNNING', product=args.product, artifactSha256=digest,
                 testClassesSha256=test_hash.hexdigest(), harnessSourceSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                scope='58 current skip and gap-verification model/journal/native/coordinator contracts;complete connector matrix remains open')
+                scope=f'{expected} {args.suite} contracts against native {args.product}')
 log = output / 'native.log'
 with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') as temporary:
     home = Path(temporary)
@@ -49,7 +59,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
               'environment': {**{key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},},
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',
-                          '--select-class=io.github.rivomesh.cdc.DeliveryProgressTest', '--select-class=io.github.rivomesh.cdc.GapVerificationServiceTest', '--select-class=io.github.rivomesh.cdc.GapVerificationPlanTest', '--select-class=io.github.rivomesh.cdc.JdbcGapVerificationTest', '--select-class=io.github.rivomesh.cdc.GapVerificationLedgerTest', '--select-class=io.github.rivomesh.cdc.SkipPlanTest', '--select-class=io.github.rivomesh.cdc.SkipJournalTest', '--select-class=io.github.rivomesh.cdc.SkipTargetTest', '--select-class=io.github.rivomesh.cdc.TransactionSkipRecoveryTest', '--reports-dir=' + container_path(output) + '/junit']}
+                          *selected, '--reports-dir=' + container_path(output) + '/junit']}
     compose_file = home / 'compose.json'
     compose_file.write_text(json.dumps({'services': {'database': db, 'runner': runner}}))
     compose = ['docker', 'compose', '-p', project, '-f', str(compose_file)]
@@ -68,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
                 for key in totals:
                     totals[key] += int(suite.attrib.get(key, 0))
             manifest['results'] = totals
-            assert totals == {'tests': 58, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
+            assert totals == {'tests': expected, 'failures': 0, 'errors': 0, 'skipped': 0}, totals
             manifest['status'] = 'PASS'
         except Exception:
             manifest['status'] = 'FAIL'

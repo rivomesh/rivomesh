@@ -55,23 +55,23 @@ final class JdbcTargetRead implements TargetRead {
         if(closed)throw new IllegalStateException("VALIDATION_TARGET_READ_CLOSED");
         if(Thread.currentThread().isInterrupted())throw new IllegalStateException("VALIDATION_TARGET_READ_INTERRUPTED");
     }
-    private String text(int index,int maximum)throws Exception{
+    private static String text(ResultSet result,int index,int maximum,Runnable verify)throws Exception{
         try(Reader reader=result.getCharacterStream(index)){
             if(reader==null)return null;StringBuilder value=new StringBuilder();char[] chunk=new char[2048];
-            for(int n;(n=reader.read(chunk))!=-1;){verify();if((long)value.length()+n>maximum)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");value.append(chunk,0,n);}return value.toString();
+            for(int n;(n=reader.read(chunk))!=-1;){verify.run();if((long)value.length()+n>maximum)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");value.append(chunk,0,n);}return value.toString();
         }
     }
-    private String binary(int index,int maximum)throws Exception{
+    private static String binary(ResultSet result,int index,int maximum,Runnable verify)throws Exception{
         try(InputStream stream=result.getBinaryStream(index)){
             if(stream==null)return null;ByteArrayOutputStream value=new ByteArrayOutputStream();byte[] chunk=new byte[2048];
-            for(int n;(n=stream.read(chunk))!=-1;){verify();if((long)value.size()+n>(long)maximum*3/4)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");value.write(chunk,0,n);}return Base64.getEncoder().encodeToString(value.toByteArray());
+            for(int n;(n=stream.read(chunk))!=-1;){verify.run();if((long)value.size()+n>(long)maximum*3/4)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");value.write(chunk,0,n);}return Base64.getEncoder().encodeToString(value.toByteArray());
         }
     }
-    private Cell cell(int index,TableSchema.Column column,int maximum)throws Exception{
+    private static Cell cell(ResultSet result,TargetProduct product,int index,TableSchema.Column column,int maximum,Runnable verify)throws Exception{
         String value;
         switch(column.type){
-            case BYTES:case GEOMETRY:value=binary(index,maximum);break;
-            case STRING:case JSON:value=text(index,maximum);break;
+            case BYTES:case GEOMETRY:value=binary(result,index,maximum,verify);break;
+            case STRING:case JSON:value=text(result,index,maximum,verify);break;
             case DATE:java.sql.Date date=result.getDate(index);value=date==null?null:date.toString();break;
             case DATETIME:case TIMESTAMP:Timestamp timestamp=result.getTimestamp(index);value=timestamp==null?null:timestamp.toString();break;
             case TIME:
@@ -81,15 +81,15 @@ final class JdbcTargetRead implements TargetRead {
                 int jdbc=result.getMetaData().getColumnType(index);
                 if(!product.mysqlDialect()&&(jdbc==Types.BOOLEAN||jdbc==Types.BIT)){boolean flag=result.getBoolean(index);value=result.wasNull()?null:Boolean.toString(flag);}
                 else{value=result.getString(index);if(value!=null)value=value.toLowerCase(Locale.ROOT);}break;
-            case DECIMAL:case UINT64:value=product==TargetProduct.DM&&DmStorage.textDecimal(column)?text(index,maximum):result.getString(index);break;
+            case DECIMAL:case UINT64:value=product==TargetProduct.DM&&DmStorage.textDecimal(column)?text(result,index,maximum,verify):result.getString(index);break;
             default:value=result.getString(index);
         }
         return Cell.value(value);
     }
-    private Row row()throws Exception{
+    static Row readRow(ResultSet result,TableSchema table,TargetProduct product,int rowBytes,Runnable verify)throws Exception{
         Row row=new Row();row.values=new ArrayList<>();long bytes=64L*table.columns.size();
         for(int i=0;i<table.columns.size();i++){
-            verify();if(bytes>rowBytes)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");Cell cell=cell(i+1,table.columns.get(i),(int)(rowBytes-bytes));row.values.add(cell);
+            verify.run();if(bytes>rowBytes)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");Cell cell=cell(result,product,i+1,table.columns.get(i),(int)(rowBytes-bytes),verify);row.values.add(cell);
             if(cell.value!=null)bytes+=cell.value.getBytes(StandardCharsets.UTF_8).length;
         }
         if(bytes>rowBytes)throw new IllegalStateException("VALIDATION_ROW_TOO_LARGE");
@@ -100,7 +100,7 @@ final class JdbcTargetRead implements TargetRead {
         verify();if(maximum<1||maximum>1000)throw new IllegalArgumentException("VALIDATION_TARGET_PAGE_INVALID");List<Row> rows=new ArrayList<>();long bytes=0;
         try{
             while(rows.size()<maximum){
-                verify();Row next=buffered;buffered=null;if(next==null){if(finished)break;if(!result.next()){finished=true;break;}next=row();}
+                verify();Row next=buffered;buffered=null;if(next==null){if(finished)break;if(!result.next()){finished=true;break;}next=readRow(result,table,product,rowBytes,this::verify);}
                 long size=Codec.encode(next).getBytes(StandardCharsets.UTF_8).length;
                 if(!rows.isEmpty()&&bytes+size>rowBytes){buffered=next;break;}rows.add(next);bytes+=size;
             }

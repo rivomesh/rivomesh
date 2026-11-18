@@ -4,7 +4,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING: transaction skip and gap recov
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **11 DONE,31 PARTIAL,6 NEW;37 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;verified gap closure and compensation are next.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **12 DONE,31 PARTIAL,5 NEW;36 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Typed corrective input is next.
 
 ## Current baseline
 
@@ -16,13 +16,13 @@ Maintain the current first-release specification and [verification baseline](../
 |---|---|---|
 | 1 Unified cluster control | CP-01–CP-07 | 5 |
 | 2 Persistent login | SE-01–SE-05 | 0 |
-| 3 Skip and corrective data | RC-01–RC-10 | 7 |
+| 3 Skip and corrective data | RC-01–RC-10 | 6 |
 | 4 Source versions/PG/Oracle | SO-01–SO-07 | 7 |
 | 5 Five Java versions | JV-01–JV-04 | 4 |
 | 6 Complete docs | DO-01–DO-05 | 5 |
 | Preserved previous scope | LG-01–LG-10 | 10 |
 
-Currentv0.9:48items total,11DONE,6NEW and31PARTIAL;37remain open. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
+Currentv0.9:48items total,12DONE,5NEW and31PARTIAL;36remain open. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
 
 ## Confirmed scope
 

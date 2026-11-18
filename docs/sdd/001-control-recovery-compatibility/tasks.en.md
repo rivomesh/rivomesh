@@ -65,7 +65,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: If commit leads ACK,verify content and recover acknowledgment instead of compensating or declaring an unapplied skip;identity,generation,epoch,error/config/hash/checkpoint mismatches refuse action.
   Acceptance: AC-RC-05
   Accepted:protocol6 cross-entry ADMIN confirmation,native comparison,whole-task pause/fencing,atomic ACK/receipt,and retry under the [bounded profile](../../verification/README.md). Skip,compensation and gaps remain separate requirements.
-- [ ] T-RC-06 · Failed-transaction before-image compensation · P0 · Depends on: RC-02, RC-05
+- [x] T-RC-06 · Failed-transaction before-image compensation · P0 · Depends on: RC-02, RC-05
   Deliver: Reconstruct initial affected identity state across repeated keys,PK moves,insert/delete chains,keyless occurrences,JSON/generated values;modify only reviewed scope;commit compensation/receipt atomically without rewriting the source transaction/GTID.
   Acceptance: AC-RC-06
 - [ ] T-RC-07 · Guided manual corrective data entry · P0 · Depends on: RC-02, RC-05, RC-06
@@ -178,5 +178,5 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 | RC-08 | Atomic receipts/gap links and idempotent recovery | DONE |
 | RC-08 | Console,authorization,late-response handling and bilingual FAQ | DONE |
 | RC-08 | Distinct safe coverage,contiguous application and broker semantics | DONE |
-| RC-06 | Failed-transaction before-image compensation | NEXT |
-| RC-07 | Typed corrective input | DEPENDS_ON_RC06 |
+| RC-06 | Before-image reconstruction, atomic target writes, cross-entry approval, and console | Java, DOM, both native target profiles and real CDC passed |
+| RC-07 | Typed corrective input | NEXT |

@@ -1,5 +1,7 @@
 # 完整事务跳过与缺口恢复
 
+目标数据偏离导致应用故障时，可以先审阅[事务补偿](transaction-compensation.md)。
+
 状态：RC-03首批限定档案已验收，RC-08验证关闭缺口仍未完成。[证据](../verification/README.md)。已验收Java8、MySQL8.4源、原Agent/LOCAL日志、PostgreSQL业务目标及PG/MySQL控制库；MySQL目标原生合同已通过，其完整公开跳过矩阵及其他产品仍待补验。共享任务集群默认关闭；独立控制器提供管理员入口，仍要求完整证据与显式审批。English: [Transaction skipping](../en/transaction-skip.md)。
 
 缺口核验API和界面已接入；原生PG/MySQL各54项合同通过，PG/MySQL控制库各27项真实同步链路检查通过。操作步骤、审批、取消和状态含义见[缺口核验手册](gap-verification.md)。
