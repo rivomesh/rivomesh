@@ -395,17 +395,34 @@ public final class JdbcJournal implements NormalizedJournal {
         if(maximumTransactions<1||maximumTransactions>10000)throw new IllegalArgumentException("COLLECTION_LIMIT_INVALID");
         try(Connection c=connect()){c.setAutoCommit(false);Map<String,Object> job=fence(c,lease);long minimum=Long.MAX_VALUE;
             for(Subscription sub:subscriptions(c))minimum=Math.min(minimum,sub.acknowledged);
-            List<Long> sequences=new ArrayList<>();long bytes=0;
-            try(PreparedStatement p=c.prepareStatement("SELECT stream_seq,payload_bytes FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq<=? ORDER BY stream_seq LIMIT ?")){
-                p.setString(1,settings.pipelineId);p.setLong(2,minimum);p.setInt(3,maximumTransactions);try(ResultSet rs=p.executeQuery()){while(rs.next()){sequences.add(rs.getLong(1));bytes+=rs.getLong(2);}}
+            boolean recovery=hasTargetGaps((int)job.get("format"));
+            List<Long> sequences=new ArrayList<>(),verifiedGaps=new ArrayList<>();long bytes=0;
+            String gapMatch="SELECT 1 FROM "+table("gap")+" g WHERE g.pipeline_id=l.pipeline_id AND g.stream_seq=l.stream_seq";
+            String columns=recovery?",CASE WHEN EXISTS ("+gapMatch+") THEN 1 ELSE 0 END":"";
+            String unpinned=recovery?" AND NOT EXISTS ("+gapMatch+" AND (g.verification_id IS NULL OR g.verification_hash IS NULL))"
+                    +" AND NOT EXISTS (SELECT 1 FROM "+table("skip_plan")+" p WHERE p.pipeline_id=l.pipeline_id"
+                    +" AND p.stream_seq=l.stream_seq AND p.run_state='PREPARED')":"";
+            try(PreparedStatement p=c.prepareStatement("SELECT l.stream_seq,l.payload_bytes"+columns+" FROM "+table("log")
+                    +" l WHERE l.pipeline_id=? AND l.stream_seq<=?"+unpinned+" ORDER BY l.stream_seq LIMIT ?")){
+                p.setString(1,settings.pipelineId);p.setLong(2,minimum);p.setInt(3,maximumTransactions);
+                try(ResultSet rs=p.executeQuery()){
+                    while(rs.next()){
+                        long sequence=rs.getLong(1);
+                        sequences.add(sequence);bytes+=rs.getLong(2);
+                        if(recovery&&rs.getInt(3)==1)verifiedGaps.add(sequence);
+                    }
+                }
             }
+            for(long sequence:verifiedGaps)JdbcGapVerificationLedger.verifyRelease(this,c,sequence,
+                    (String)job.get("generation"),(String)job.get("fingerprint"));
             for(long sequence:sequences){
                 try(PreparedStatement p=c.prepareStatement("SELECT payload_bytes FROM "+table("normalized")+" WHERE pipeline_id=? AND stream_seq=?")){p.setString(1,settings.pipelineId);p.setLong(2,sequence);try(ResultSet rs=p.executeQuery()){if(rs.next())bytes+=rs.getLong(1);}}
                 execute(c,"DELETE FROM "+table("normalized")+" WHERE pipeline_id=? AND stream_seq=?",settings.pipelineId,sequence);
                 execute(c,"DELETE FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq=?",settings.pipelineId,sequence);
+                if(recovery&&settings.deliveryTiming)JdbcDeliveryTiming.collectOne(this,c,sequence);
             }
             if(!sequences.isEmpty()){
-                if(settings.deliveryTiming)JdbcDeliveryTiming.collect(this,c,sequences.getLast());
+                if(!recovery&&settings.deliveryTiming)JdbcDeliveryTiming.collect(this,c,sequences.getLast());
                 execute(c,"UPDATE "+table("job")+" SET pending_bytes=? WHERE pipeline_id=?",(long)job.get("bytes")-bytes,settings.pipelineId);
             }
             c.commit();return sequences.size();

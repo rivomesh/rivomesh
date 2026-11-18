@@ -69,6 +69,11 @@ final class JdbcDeliveryTiming {
                 +" WHERE pipeline_id=? AND stream_seq<=?",journal.settings.pipelineId,lastCollected);
     }
 
+    static void collectOne(JdbcJournal journal,Connection connection,long sequence)throws SQLException{
+        JdbcJournal.execute(connection,"DELETE FROM "+journal.table("source_commit_time")
+                +" WHERE pipeline_id=? AND stream_seq=?",journal.settings.pipelineId,sequence);
+    }
+
     /** The current ACK must match the sample's sequence. A missing or differently acknowledged sample stays unknown. */
     static void enrich(JdbcJournal journal,Connection connection,Map<String,Map<String,Object>> progress)throws SQLException{
         for(Map<String,Object> subscription:progress.values())subscription.put("lastDeliveryTiming",UNKNOWN);

@@ -43,6 +43,22 @@ class GapVerificationServiceTest {
         GapVerificationPlan plan=plan();setup.restoreLiveRows();String hash=execute(plan).hash();Files.move(directory.resolve("reports"),directory.resolve("removed-report"));setup.fixture.journal.resumePipeline(plan.errorGeneration);
         assertEquals(hash,execute(plan).hash());assertEquals("GAP_VERIFICATION_APPROVAL_CONFLICT",assertThrows(IllegalStateException.class,()->GapVerification.execute(config,directory.resolve("reports"),plan.id,plan.hash(),"target",plan.errorGeneration,"another_execute_1234","another-admin","Changed approval is a new operation and cannot rewrite a committed receipt")).getMessage());
     }
+    @Test void gapPageShowsPayloadRetentionAndKeepsTheReceiptAfterCollection()throws Exception{
+        List<?> entries=(List<?>)RecoveryLedger.gaps(config,"target","0",20).get("items");
+        assertEquals(1,entries.size());
+        Map<?,?> open=(Map<?,?>)entries.getFirst();
+        assertEquals("OPEN",open.get("state"));assertEquals(true,open.get("journalPayloadRetained"));
+        assertFalse(Codec.encode(open).contains("private-cp-value"));
+
+        GapVerificationPlan plan=plan();setup.restoreLiveRows();GapVerificationReceipt receipt=execute(plan);
+        JdbcJournal journal=setup.fixture.journal;journal.resumePipeline(plan.errorGeneration);
+        assertEquals(1,journal.collect(journal.claim("collect-owner",30000),1));
+        List<?> retained=(List<?>)RecoveryLedger.gaps(config,"target","0",20).get("items");
+        assertEquals(1,retained.size());
+        Map<?,?> verified=(Map<?,?>)retained.getFirst();
+        assertEquals("VERIFIED_AT_COMMON_CUT",verified.get("state"));assertEquals(false,verified.get("journalPayloadRetained"));
+        assertEquals(open.get("receiptHash"),verified.get("receiptHash"));assertEquals(receipt.hash(),verified.get("verificationHash"));
+    }
     @Test void staleApprovalHashOrFailureGenerationCannotWriteAReceipt()throws Exception{
         GapVerificationPlan plan=plan();setup.restoreLiveRows();assertEquals("GAP_VERIFICATION_APPROVAL_SCOPE_CHANGED",assertThrows(IllegalStateException.class,()->GapVerification.execute(config,directory.resolve("reports"),plan.id,Codec.sha256("wrong-scope"),"target",plan.errorGeneration,"execute_stale_1234","approver","Approved this different scope hash")).getMessage());
         assertEquals("GAP_VERIFICATION_APPROVAL_SCOPE_CHANGED",assertThrows(IllegalStateException.class,()->GapVerification.execute(config,directory.resolve("reports"),plan.id,plan.hash(),"target",plan.errorGeneration+1,"execute_stale_5678","approver","Approved a mismatched failure generation")).getMessage());assertEquals("PREPARED",GapVerification.read(config,id).get("state"));

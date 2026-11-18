@@ -32,6 +32,25 @@ final class JdbcGapVerificationLedger {
             }
         }
     }
+    /** The caller holds the pipeline job lock also used to commit gap closure. */
+    static void verifyRelease(JdbcJournal j,Connection c,long sequence,String generation,String fingerprint)throws Exception{
+        try(PreparedStatement p=c.prepareStatement("SELECT subscription_id,operation_id,plan_hash,receipt_hash,verification_id,verification_hash"
+                +" FROM "+j.table("gap")+" WHERE pipeline_id=? AND stream_seq=?")){
+            p.setString(1,j.settings.pipelineId);p.setLong(2,sequence);
+            try(ResultSet r=p.executeQuery()){
+                while(r.next()){
+                    String verificationId=r.getString(5);
+                    GapVerificationReceipt verification=verificationId==null?null:load(j,c,verificationId);
+                    GapVerificationPlan.Gap gap=verification==null?null:verification.plan.gaps.get(r.getString(2));
+                    if(gap==null||gap.sequence!=sequence||!gap.planHash.equals(r.getString(3))
+                            ||!gap.receiptHash.equals(r.getString(4))||!verification.hash().equals(r.getString(6))
+                            ||!verification.plan.subscriptionId.equals(r.getString(1))
+                            ||!verification.plan.generation.equals(generation)||!verification.plan.fingerprint.equals(fingerprint))
+                        throw new IllegalStateException("GAP_VERIFICATION_RECORD_CHANGED");
+                }
+            }
+        }
+    }
     static void requireOpen(JdbcJournal j,Connection c,String operation)throws Exception{
         try(PreparedStatement p=c.prepareStatement("SELECT verification_id,verification_hash FROM "+j.table("gap")+" WHERE pipeline_id=? AND operation_id=?")){
             p.setString(1,j.settings.pipelineId);p.setString(2,operation);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("SKIP_GAP_MISSING");if(r.getString(1)!=null||r.getString(2)!=null)throw new IllegalStateException("GAP_ALREADY_VERIFIED");}

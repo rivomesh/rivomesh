@@ -19,11 +19,25 @@ public final class RecoveryLedger {
         List<Map<String,Object>> items=new ArrayList<>();Map<String,Object> result=new LinkedHashMap<>();result.put("target",target);result.put("items",items);result.put("next",null);
         try(JdbcJournal j=new JdbcJournal(config.existingJournalSettings());Connection c=j.connect();RepairConnectionGuard deadline=new RepairConnectionGuard(c,30000)){
             j.verifyIdentity(config.fingerprint(),config.subscribers());
-            try(PreparedStatement p=c.prepareStatement("SELECT format_version FROM "+j.table("job")+" WHERE pipeline_id=?")){p.setString(1,config.pipelineId);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");if(r.getInt(1)==3)return result;}}
-            String sql=gaps?"SELECT operation_id,plan_hash,stream_seq,receipt_hash,created_at,verification_id,verification_hash FROM "+j.table("gap")+" WHERE pipeline_id=? AND subscription_id=? AND stream_seq>? ORDER BY stream_seq LIMIT ?":"SELECT operation_id,plan_hash,stream_seq,run_state FROM "+j.table("skip_plan")+" WHERE pipeline_id=? AND subscription_id=? AND operation_id>? ORDER BY operation_id LIMIT ?";
+            try(PreparedStatement p=c.prepareStatement("SELECT format_version FROM "+j.table("job")+" WHERE pipeline_id=?")){p.setString(1,config.pipelineId);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");if(!JdbcJournal.hasTargetGaps(r.getInt(1)))return result;}}
+            String sql=gaps?"SELECT g.operation_id,g.plan_hash,g.stream_seq,g.receipt_hash,g.created_at,g.verification_id,g.verification_hash,"
+                    +"CASE WHEN l.stream_seq IS NOT NULL AND n.stream_seq IS NOT NULL THEN 1 ELSE 0 END FROM "+j.table("gap")+" g"
+                    +" LEFT JOIN "+j.table("log")+" l ON l.pipeline_id=g.pipeline_id AND l.stream_seq=g.stream_seq"
+                    +" LEFT JOIN "+j.table("normalized")+" n ON n.pipeline_id=g.pipeline_id AND n.stream_seq=g.stream_seq"
+                    +" WHERE g.pipeline_id=? AND g.subscription_id=? AND g.stream_seq>? ORDER BY g.stream_seq LIMIT ?"
+                    :"SELECT operation_id,plan_hash,stream_seq,run_state FROM "+j.table("skip_plan")+" WHERE pipeline_id=? AND subscription_id=? AND operation_id>? ORDER BY operation_id LIMIT ?";
             try(PreparedStatement p=c.prepareStatement(sql)){
                 p.setString(1,config.pipelineId);p.setString(2,target);if(gaps)p.setLong(3,sequence);else p.setString(3,after);p.setInt(4,limit+1);
-                try(ResultSet r=p.executeQuery()){while(r.next()){Map<String,Object> row=new LinkedHashMap<>();row.put("planId",r.getString(1));row.put("planHash",r.getString(2));row.put("sequence",Long.toString(r.getLong(3)));if(gaps){row.put("receiptHash",r.getString(4));row.put("createdAt",r.getString(5));row.put("outcome","SKIPPED");String verified=r.getString(6),hash=r.getString(7);if(verified==null&&hash==null)row.put("state","OPEN");else{if(verified==null||!FailureEvidence.hash(hash))throw new IllegalStateException("GAP_VERIFICATION_RECORD_CHANGED");row.put("state","VERIFIED_AT_COMMON_CUT");row.put("verificationId",verified);row.put("verificationHash",hash);}}else row.put("state",r.getString(4));items.add(row);}}
+                try(ResultSet r=p.executeQuery()){while(r.next()){
+                    Map<String,Object> row=new LinkedHashMap<>();row.put("planId",r.getString(1));row.put("planHash",r.getString(2));row.put("sequence",Long.toString(r.getLong(3)));
+                    if(gaps){
+                        row.put("receiptHash",r.getString(4));row.put("createdAt",r.getString(5));row.put("outcome","SKIPPED");
+                        row.put("journalPayloadRetained",r.getInt(8)==1);
+                        String verified=r.getString(6),hash=r.getString(7);
+                        if(verified==null&&hash==null)row.put("state","OPEN");
+                        else{if(verified==null||!FailureEvidence.hash(hash))throw new IllegalStateException("GAP_VERIFICATION_RECORD_CHANGED");row.put("state","VERIFIED_AT_COMMON_CUT");row.put("verificationId",verified);row.put("verificationHash",hash);}
+                    }else row.put("state",r.getString(4));items.add(row);
+                }}
             }
             if(items.size()>limit){items.remove(items.size()-1);result.put("next",items.get(items.size()-1).get(gaps?"sequence":"planId"));}deadline.verify();return result;
         }

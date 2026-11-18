@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--test-classes', type=Path, required=True)
 parser.add_argument('--product', choices=('POSTGRESQL', 'MYSQL'), required=True)
-parser.add_argument('--suite', choices=('skip', 'compensation', 'correction'), default='skip')
+parser.add_argument('--suite', choices=('skip', 'retention', 'compensation', 'correction'), default='skip')
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 artifact, classes, output = args.artifact.resolve(), args.test_classes.resolve(), args.output.resolve()
@@ -26,9 +26,10 @@ assert artifact.is_file() and classes.is_dir()
 output.mkdir(parents=True, exist_ok=True)
 mysql = args.product == 'MYSQL'
 contracts = {
-    'skip': (58, ['DeliveryProgressTest', 'GapVerificationServiceTest', 'GapVerificationPlanTest',
+    'skip': (61, ['DeliveryProgressTest', 'GapVerificationServiceTest', 'GapVerificationPlanTest',
                  'JdbcGapVerificationTest', 'GapVerificationLedgerTest', 'SkipPlanTest',
                  'SkipJournalTest', 'SkipTargetTest', 'TransactionSkipRecoveryTest']),
+    'retention': (22, ['SkipJournalTest', 'GapVerificationLedgerTest', 'GapVerificationServiceTest']),
     'compensation': (4, ['TransactionCompensationTest']),
     'correction': (4, ['ManualCorrectionTest']),
 }

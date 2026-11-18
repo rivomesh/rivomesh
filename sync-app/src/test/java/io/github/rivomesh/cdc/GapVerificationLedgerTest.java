@@ -3,6 +3,13 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.recovery.*;
 import java.nio.file.Path;
 import java.sql.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,6 +45,40 @@ class GapVerificationLedgerTest {
     }
     @Test void changedReceiptOrMissingGapLinkNeverReturnsHistoricalSuccess()throws Exception{
         execute();FailureReviewTest.sql(journal(),"UPDATE "+journal().table("gap_verification")+" SET payload='{}'");assertEquals("GAP_VERIFICATION_RECORD_CHANGED",assertThrows(IllegalStateException.class,this::execute).getMessage());
+        JdbcJournal j=journal();j.resumePipeline(setup.plan.errorGeneration);Journal.Lease owner=j.claim("collect-owner",30000);
+        String raw=SkipJournalTest.payload(j,"log",1),normalized=SkipJournalTest.payload(j,"normalized",1);
+        assertNotNull(raw);assertNotNull(normalized);
+        assertEquals("GAP_VERIFICATION_RECORD_CHANGED",assertThrows(IllegalStateException.class,()->j.collect(owner,10)).getMessage());
+        assertEquals(raw,SkipJournalTest.payload(j,"log",1));assertEquals(normalized,SkipJournalTest.payload(j,"normalized",1));
+    }
+    @Test void collectorWaitsForClosureAndReleasesOnlyThePayloadAfterReopen()throws Exception{
+        ExecutorService pool=Executors.newSingleThreadExecutor();
+        CountDownLatch entered=new CountDownLatch(1);
+        AtomicReference<Future<Long>> pending=new AtomicReference<>();
+        JdbcJournal j=journal();JdbcJournal.Settings settings=j.settings;
+        settings.maxPendingBytes=(long)j.status().get("pendingBytes");
+        try(JdbcJournal collector=new JdbcJournal(settings)){
+            GapVerificationReceipt verified=JdbcGapVerification.verifyAndRecord(j,setup.fixture.target,setup.report,setup.plan,directory.resolve("scratch"),10000,(c,observation)->{
+                GapVerificationReceipt saved=JdbcGapVerificationLedger.record(j,c,setup.plan,observation,"approval_request_1234","approver","Approved reviewed metadata and a fresh fenced scan");
+                pending.set(pool.submit(()->{
+                    entered.countDown();collector.resumePipeline(setup.plan.errorGeneration);
+                    Journal.Lease owner=collector.claim("collect-owner",30000);
+                    return collector.collect(owner,1);
+                }));
+                assertTrue(entered.await(2,TimeUnit.SECONDS));
+                assertThrows(TimeoutException.class,()->pending.get().get(150,TimeUnit.MILLISECONDS));
+                assertNotNull(SkipJournalTest.payload(j,"log",1));assertNotNull(SkipJournalTest.payload(j,"normalized",1));
+                return saved;
+            });
+            assertEquals(1L,pending.get().get(10,TimeUnit.SECONDS));
+            j.close();setup.fixture.journal=new JdbcJournal(settings);
+            assertNull(SkipJournalTest.payload(journal(),"log",1));assertNull(SkipJournalTest.payload(journal(),"normalized",1));
+            assertEquals(0L,journal().status().get("pendingBytes"));
+            assertEquals(verified.hash(),execute().hash());
+            try(Connection c=journal().connect()){
+                assertEquals(setup.receipt.hash(),JdbcSkipJournal.load(journal(),c,setup.original.id).receipt.hash());
+            }
+        }finally{pool.shutdownNow();pool.awaitTermination(5,TimeUnit.SECONDS);}
     }
     @Test void changedGapLinkAndLostVerificationTableAreRefused()throws Exception{
         execute();FailureReviewTest.sql(journal(),"UPDATE "+journal().table("gap")+" SET verification_hash='"+String.join("",java.util.Collections.nCopies(64,"0"))+"'");assertEquals("GAP_VERIFICATION_RECORD_CHANGED",assertThrows(IllegalStateException.class,this::execute).getMessage());

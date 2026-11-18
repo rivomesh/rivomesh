@@ -41,7 +41,7 @@ Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01
 | RC-07 | P0 / DONE | Guided manual corrective data entry | The bounded SQL profile passed. Typed entry and JSON import support administrator review of before/after values, exact identities, atomic batches and resumption of the original transaction. PostgreSQL passes real CDC and MySQL passes native checks. RC-10 tracks other destinations. |
 | RC-08 | P0 / DONE | Consistency-gap ledger and honest watermarks | First SQL profile accepted:durable gaps,reviewed plans,cross-entry approval/cancellation,fresh full-table scans,atomic receipts and distinct safe coverage/contiguous application. Verification preserves SKIP and the original applied prefix without resuming. Other target protocols remain RC-10/LG-03/LG-04. |
 | RC-09 | P0 / DONE | Durable distributed recovery jobs | The bounded SQL profile passes cross-entry planning, approval, cancellation and original-request recovery. Native commit-boundary tests use PostgreSQL 17 as the recovery destination. |
-| RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | SQL,analytical and queue consistency protocols differ. |
+| RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | PostgreSQL and MySQL verified exact original-event pins for open gaps and pending skips, backpressure, verified reclamation and independent target progress. Analytical and messaging receipt and gap-notification protocols remain. |
 
 ## Source compatibility
 

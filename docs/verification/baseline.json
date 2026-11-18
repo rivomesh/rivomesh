@@ -6334,5 +6334,182 @@
       "tree": "31eb94bbdeb95b142f46c1547c20901f9b675a07",
       "focusedJavaTests": 48
     }
+  },
+  "journalRetentionAcrossOpenGaps": {
+    "reproduce": "python3 tests/skip-recovery-native.py --suite retention --product <POSTGRESQL|MYSQL> --artifact <rivomesh.jar> --test-classes <test classes> --output <directory>",
+    "native": {
+      "POSTGRESQL_17": {
+        "status": "PASS",
+        "product": "POSTGRESQL",
+        "artifactSha256": "97b3d326989e8e4845829b70adf3739efa41b0ce16c4cbe07ebfc005fa999c7f",
+        "testClassesSha256": "61bdc9c486366d0a589ec4ea6abae25d51e357085123713af99e3b8acc9067c9",
+        "harnessSourceSha256": "37929f1ec760f37c13c36cba0d77fec662e9e0c75cf7f4051910747f6580aa74",
+        "scope": "22 retention contracts against native POSTGRESQL",
+        "images": {
+          "postgres:17": {
+            "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:21-jre-jammy": {
+            "id": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+            "architecture": "arm64"
+          }
+        },
+        "results": {
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "cleanupExitCode": 0
+      },
+      "MYSQL_84": {
+        "status": "PASS",
+        "product": "MYSQL",
+        "artifactSha256": "97b3d326989e8e4845829b70adf3739efa41b0ce16c4cbe07ebfc005fa999c7f",
+        "testClassesSha256": "61bdc9c486366d0a589ec4ea6abae25d51e357085123713af99e3b8acc9067c9",
+        "harnessSourceSha256": "37929f1ec760f37c13c36cba0d77fec662e9e0c75cf7f4051910747f6580aa74",
+        "scope": "22 retention contracts against native MYSQL",
+        "images": {
+          "mysql:8.4": {
+            "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+            "architecture": "arm64"
+          },
+          "eclipse-temurin:21-jre-jammy": {
+            "id": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+            "architecture": "arm64"
+          }
+        },
+        "results": {
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "cleanupExitCode": 0
+      },
+      "MYSQL_80": {
+        "status": "PASS",
+        "product": "MYSQL",
+        "profile": "MySQL 8.0 Homebrew ARM64 loopback-only temporary datadir and packaged Temurin 21 runtime",
+        "artifactSha256": "97b3d326989e8e4845829b70adf3739efa41b0ce16c4cbe07ebfc005fa999c7f",
+        "testHarnessSha256": "7b5fb8d55d83e7fb060767740f78e178ba484da87d6e0f78627b94dfd1a721a7",
+        "testClassesSha256": "61bdc9c486366d0a589ec4ea6abae25d51e357085123713af99e3b8acc9067c9",
+        "serverVersion": "8.0.42",
+        "explain": {
+          "syntheticGapRows": 4096,
+          "syntheticSkipPlanRows": 4096,
+          "plans": {
+            "candidate": [
+              {
+                "table_name": "l",
+                "key": "PRIMARY",
+                "possible_keys": [
+                  "PRIMARY"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "stream_seq"
+                ],
+                "rows_examined_per_scan": 397
+              },
+              {
+                "table_name": "<subquery4>",
+                "key": "<auto_distinct_key>",
+                "rows_examined_per_scan": 1
+              },
+              {
+                "table_name": "p",
+                "key": "rm3_skip_plan_state_sequence",
+                "possible_keys": [
+                  "PRIMARY",
+                  "rm3_skip_plan_state_sequence"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "run_state"
+                ],
+                "rows_examined_per_scan": 1
+              },
+              {
+                "table_name": "g",
+                "key": "rm3_gap_sequence",
+                "possible_keys": [
+                  "PRIMARY",
+                  "rm3_gap_sequence"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "stream_seq"
+                ],
+                "rows_examined_per_scan": 1
+              },
+              {
+                "table_name": "g",
+                "key": "rm3_gap_sequence",
+                "possible_keys": [
+                  "PRIMARY",
+                  "rm3_gap_sequence"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "stream_seq"
+                ],
+                "rows_examined_per_scan": 1
+              }
+            ],
+            "release": [
+              {
+                "table_name": "rm3_gap",
+                "key": "rm3_gap_sequence",
+                "possible_keys": [
+                  "PRIMARY",
+                  "rm3_gap_sequence"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "stream_seq"
+                ],
+                "rows_examined_per_scan": 1
+              }
+            ],
+            "pending": [
+              {
+                "table_name": "rm3_skip_plan",
+                "key": "rm3_skip_plan_state_sequence",
+                "possible_keys": [
+                  "PRIMARY",
+                  "rm3_skip_plan_state_sequence"
+                ],
+                "used_key_parts": [
+                  "pipeline_id",
+                  "run_state",
+                  "stream_seq"
+                ],
+                "rows_examined_per_scan": 1
+              }
+            ]
+          }
+        },
+        "results": {
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "serverExitCode": 0,
+        "cleanupExitCode": 0
+      }
+    },
+    "nativeCandidateFocusedJava": {
+      "testsPassed": 45,
+      "nativeGated": 6
+    },
+    "h2PeerInitializationAndReopenRepeated": 5,
+    "stagedIntegration": {
+      "artifactSha256": "27b6d9be244c34bcdd954b24afb6955ecf0480101bcad9a2884be677a9c694cb",
+      "focusedJavaPassed": 41,
+      "nativeProfilesSkipped": 6
+    }
   }
 }
