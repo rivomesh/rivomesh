@@ -3,12 +3,14 @@
 import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
 import re
 from pathlib import Path
 import secrets
+import struct
 import subprocess
 import tempfile
 import time
@@ -16,6 +18,7 @@ import urllib.error
 import urllib.request
 import uuid
 from zipfile import ZipFile
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -40,6 +43,7 @@ parser.add_argument('--failure-diagnostics', action='store_true', help='Check ph
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--task-views', action='store_true', help='Check task filters, target backlog and diagnostics with native SQL faults')
+parser.add_argument('--mysql-delivery-timing', action='store_true', help='Compare MySQL 8.4 samples to native binlog bytes or confirm MySQL 5.7 unknown timing')
 parser.add_argument('--managed-binlog-evidence', action='store_true', help='Retain and replay source evidence through both management entries')
 parser.add_argument('--approved-binlog-exclusion', action='store_true', help='Approve a verified keyed MySQL source gap and resume without fabricating destination ACKs')
 parser.add_argument('--verify-binlog-contents', action='store_true', help='Verify the digest of native binlog bytes against the fixture file')
@@ -68,6 +72,11 @@ if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
+if args.mysql_delivery_timing and (not args.separate_execution
+        or not re.fullmatch(r'(8\.4|5\.7)(?:\.[0-9]{1,3})?',args.source_expected_version or '')
+        or any((args.task_views,args.browser,args.automatic_placement,args.rolling_restart,
+                args.runtime_jdk,args.source_diagnostics,args.failure_diagnostics,args.snapshot_diagnostics))):
+    parser.error('--mysql-delivery-timing requires the separate Agent baseline with a pinned 8.4 or 5.7 source')
 if args.managed_binlog_evidence and not args.verify_binlog_contents:
     parser.error('--managed-binlog-evidence requires --verify-binlog-contents')
 if args.approved_binlog_exclusion and not args.managed_binlog_evidence:
@@ -167,6 +176,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedBinlogEvidence': args.managed_binlog_evidence,
             'approvedBinlogExclusion': args.approved_binlog_exclusion,
             'taskViews': args.task_views,
+            'mysqlDeliveryTiming': args.mysql_delivery_timing,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
@@ -510,6 +520,91 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         except subprocess.CalledProcessError as failure:
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
+
+    def run_mysql_delivery_timing():
+        def original_timestamp():
+            assert sql('mysql','SELECT @@global.binlog_checksum')=='CRC32'
+            end_file,end_position,*_=sql('mysql','SHOW BINARY LOG STATUS').split('|')
+            assert start_file==end_file and re.fullmatch(r'mysql-bin\.\d+',start_file)
+            start,end=int(start_position),int(end_position)
+            assert 4<=start<end and end-start<=1024*1024
+            raw=subprocess.run(['docker','compose','-p',project,'-f',str(composition),'exec','-T','mysql','dd',
+                                'if=/var/lib/mysql/'+start_file,'bs=1','skip='+str(start),'count='+str(end-start)],
+                               cwd=ROOT,env=env,capture_output=True,check=True,timeout=30).stdout
+            assert len(raw)==end-start
+            header=struct.Struct('<IBIIIH')
+            source_id=int(sql('mysql','SELECT @@global.server_id'))
+            cursor,event_count,last_type,source_micros=0,0,None,None
+            while cursor<len(raw):
+                assert cursor+header.size+4<=len(raw)
+                _,event_type,server_id,size,next_position,_=header.unpack_from(raw,cursor)
+                assert header.size+4<=size<=len(raw)-cursor and next_position==start+cursor+size
+                assert server_id==source_id
+                event=raw[cursor:cursor+size]
+                assert zlib.crc32(event[:-4])==int.from_bytes(event[-4:],'little')
+                if event_count==0:
+                    # Standard GTID layout from Oracle: flags, SID, GNO, logical clock, commit times.
+                    body=event[header.size:-4]
+                    assert event_type==33 and len(body)>=49 and body[25]==2
+                    assert str(uuid.UUID(bytes=body[1:17]))==sql('mysql','SELECT @@global.server_uuid')
+                    source_micros=int.from_bytes(body[42:49],'little')
+                    assert 0<source_micros<1<<55, 'direct source GTID must have a shared original and immediate timestamp'
+                else:
+                    assert event_type!=33, 'native fixture range contains exactly one GTID'
+                last_type=event_type
+                event_count+=1
+                cursor+=size
+            assert event_count>=3 and last_type==16, 'native row transaction ends at its XID event'
+            manifest['nativeTimingBinlogSha256']=hashlib.sha256(raw).hexdigest()
+            return datetime(1970,1,1,tzinfo=timezone.utc)+timedelta(microseconds=source_micros)
+
+        def samples(node, expected_state):
+            view=task(node)
+            state=view.get('status',{})
+            if not view.get('statusAvailable') or state.get('phase')!='STREAMING':
+                return None
+            found={}
+            for sub in state['subscriptions']:
+                sample=sub.get('lastDeliveryTiming',{})
+                if sub['pendingTransactions']!='0' or sample.get('state')!=expected_state:
+                    return None
+                found[sub['id']]=sample
+            return found if set(found)=={'pg','my'} else None
+
+        unknown={'pg':{'state':'UNKNOWN'},'my':{'state':'UNKNOWN'}}
+        assert wait(lambda:samples('node-a','UNKNOWN'),'initial snapshot has no commit sample')==unknown
+        assert wait(lambda:samples('node-b','UNKNOWN'),'second entry sees the same initial state')==unknown
+        passed('Snapshot completion does not fabricate source commit timings')
+
+        legacy=args.source_expected_version.startswith('5.7')
+        if not legacy:
+            start_file,start_position,*_=sql('mysql','SHOW BINARY LOG STATUS').split('|')
+        sql('mysql',"UPDATE sales.items SET note='measured commit',payload=JSON_OBJECT('n',110) WHERE id=1")
+        wait(rows_match,'both transactional targets apply the source update')
+        if legacy:
+            assert wait(lambda:samples('node-a','UNKNOWN'),'acked legacy GTID remains unknown')==unknown
+            assert wait(lambda:samples('node-b','UNKNOWN'),'second entry sees the legacy GTID as unknown')==unknown
+            passed('MySQL 5.7 row CDC reaches both targets and its GTID produces no invented commit time')
+            return
+
+        source=original_timestamp()
+        expected=wait(lambda:samples('node-a','OBSERVED'),'two SQL targets report direct commit samples')
+        assert expected==wait(lambda:samples('node-b','OBSERVED'),'second Controller reports the same samples')
+        for product,target in [('postgres','pg'),('mysql-target','my')]:
+            sample=expected[target]
+            parsed=lambda value:datetime.fromisoformat(value.replace('Z','+00:00'))
+            assert parsed(sample['sourceCommittedAt'])==source
+            elapsed=(parsed(sample['targetCommitObservedAt'])-source)//timedelta(milliseconds=1)
+            assert int(sample['millis'])==elapsed>=0
+            assert sql(product,f'SELECT stream_seq FROM rm_{target}_meta.rm3_sink_job')==sample['sequence']
+        manifest['deliveryTimingSamples']=expected
+        passed('Both SQL destinations match the CRC32-verified native GTID timestamp and independently confirm the committed sequence')
+
+        terminate_owner()
+        restart_owner()
+        for node in ('node-a','node-b'):
+            assert wait(lambda:samples(node,'OBSERVED'),'same directly observed samples after Agent restart')==expected
+        passed('Both management entries recover the same durable MySQL source commit samples after Agent restart')
 
     def run_task_views():
         for node in ('node-a','node-b'):
@@ -1151,6 +1246,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         passed('Two source databases to two targets; snapshot keyed/keyless/JSON/generated values')
         wait(lambda: all(task(n).get('captureLeaseState')=='CLAIMED' for n in ('node-a','node-b')),
              'both entries observe the live capture lease')
+        if args.mysql_delivery_timing:
+            run_mysql_delivery_timing()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            manifest['status']='PASS'
+            print('GLOBAL_CONTROL_MYSQL_DELIVERY_TIMING_ACCEPTED artifact='+digest)
+            raise SystemExit(0)
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')

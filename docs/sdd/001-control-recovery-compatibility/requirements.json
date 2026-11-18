@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.48",
+  "version": "0.49",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -182,8 +182,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口有采集租约、目标积压及独立暂停重试诊断。PostgreSQL 源到事务 SQL 目标可显示最近一笔直接确认的提交耗时，重启保留。其他源与协议的时间语义及容量档案仍待验。",
-        "en": "Both entries show capture lease, individual backlog and target pause/retry diagnostics. PostgreSQL-to-transactional-SQL records the last directly confirmed source commit sample across restart. Other source/protocol timing and capacity remain."
+        "zh-CN": "双入口有采集租约、积压和独立目标诊断。已实测 PostgreSQL 和 MySQL 8.4 直接写入的目标提交样本，以及 5.7 未知状态。其他源与协议的时间语义和容量档案仍待验。",
+        "en": "Both entries show capture lease, per-target backlog and fault history. PostgreSQL and MySQL 8.4 direct-origin commit samples passed, including safe MySQL 5.7 unknown timing. Other source and protocol timing and capacity remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",

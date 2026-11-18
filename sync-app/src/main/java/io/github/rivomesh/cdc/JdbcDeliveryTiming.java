@@ -11,7 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** Optional PostgreSQL commit times and one direct confirmation sample per SQL destination. */
+/** Optional native source commit times and one direct confirmation sample per SQL destination. */
 final class JdbcDeliveryTiming {
     private static final Set<String> MISSING_TABLE=Set.of("42P01","42S02","42102","42104");
     private static final Map<String,Object> UNKNOWN=Map.of("state","UNKNOWN");

@@ -4185,5 +4185,110 @@
       }
     },
     "javaFocusedPassed": 41
+  },
+  "mysqlDirectOriginTiming": {
+    "native": {
+      "8.4.13": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Snapshot completion does not fabricate source commit timings",
+          "Both SQL destinations match the CRC32-verified native GTID timestamp and independently confirm the committed sequence",
+          "Both management entries recover the same durable MySQL source commit samples after Agent restart"
+        ],
+        "harnessSourceSha256": "63102f17cef693db3d259709313f05aea380eae709f4036ab1e3e0b31e6734cb",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "POSTGRESQL",
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "mysqlDeliveryTiming": true,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:8.4",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "sourceVersion": "8.4.13",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "nativeTimingBinlogSha256": "00fbd0540d59f30f70024f9409965300f85a91e6ecee69389399be743368119f",
+        "deliveryTimingSamples": {
+          "my": {
+            "state": "OBSERVED",
+            "sequence": "1",
+            "sourceCommittedAt": "2026-11-18T10:03:06.576421Z",
+            "targetCommitObservedAt": "2026-11-18T10:03:06.745635050Z",
+            "millis": "169"
+          },
+          "pg": {
+            "state": "OBSERVED",
+            "sequence": "1",
+            "sourceCommittedAt": "2026-11-18T10:03:06.576421Z",
+            "targetCommitObservedAt": "2026-11-18T10:03:06.745973175Z",
+            "millis": "169"
+          }
+        },
+        "cleanupExitCode": 0
+      },
+      "5.7.44": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Snapshot completion does not fabricate source commit timings",
+          "MySQL 5.7 row CDC reaches both targets and its GTID produces no invented commit time"
+        ],
+        "harnessSourceSha256": "63102f17cef693db3d259709313f05aea380eae709f4036ab1e3e0b31e6734cb",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "POSTGRESQL",
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "mysqlDeliveryTiming": true,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:5.7",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "sourceVersion": "5.7.44-log",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:5107333e08a87b836d48ff7528b1e84b9c86781cc9f1748bbc1b8c42a870d933",
+        "cleanupExitCode": 0
+      }
+    },
+    "combinedFocusedJavaPassed": 61
   }
 }

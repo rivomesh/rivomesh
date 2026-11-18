@@ -79,6 +79,9 @@ public final class PipelineConfig {
             throw new IllegalArgumentException("SOURCE_TYPE_CONFLICT");
         return nested!=null?nested:sourceType==null?"MYSQL":sourceType;
     }
+    public JournalWriterAssignment.CutProof verifyHandoffCut(JournalWriterAssignment.ExpectedCut expected)throws Exception{
+        return JournalWriterAssignment.verifyExistingCut(this,expected,generation->PipelineSources.open(this,generation));
+    }
     public void validate(){
         if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
         Set<String> db=new TreeSet<>();for(String name:databases)if(name==null||name.isEmpty()||name.indexOf('\0')>=0||!db.add(name))throw new IllegalArgumentException("DATABASE_LIST_INVALID");
@@ -150,7 +153,9 @@ public final class PipelineConfig {
     private Path localPath(){if(journal.path==null||journal.path.trim().isEmpty())throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_REQUIRED");return base.resolve(journal.path).normalize().toAbsolutePath();}
     public JdbcJournal.Settings journalSettings(){JdbcJournal.Settings s=new JdbcJournal.Settings();s.pipelineId=pipelineId;s.namespace=journal.namespace;s.maxPendingBytes=journal.maxBytes;
         s.writerAssignment=journal.writerAssignment;s.writerNode=nodeId;
-        s.deliveryTiming="POSTGRESQL".equals(effectiveSourceType());
+        String type=effectiveSourceType();
+        s.deliveryTiming="POSTGRESQL".equals(type)||"MYSQL".equals(type)&&journal.writerAssignment==null
+                &&MysqlCdcSource.originalTimingProfile(source);
         if("LOCAL".equals(journal.mode)){s.driver="org.h2.Driver";s.url="jdbc:h2:file:"+localPath().resolve("rivomesh")+";AUTO_SERVER=TRUE;CACHE_SIZE=4096;WRITE_DELAY=0;LOCK_TIMEOUT=10000";}
         else{s.driver=driver(journal.product);s.url=journal.url;s.username=journal.username;s.password=journal.password;}return s;
     }

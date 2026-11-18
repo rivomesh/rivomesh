@@ -21,6 +21,7 @@ final class PipelineBackend {
             @SuppressWarnings("unchecked")Map<String,Map<String,Object>> progress=(Map<String,Map<String,Object>>)frame.get("subscriptions");long captured=Long.parseLong((String)frame.get("capturedSequence")),minimum=captured;
             for(Map<String,Object> sub:subscriptions){
                 Map<String,Object> point=progress.get(sub.get("id"));if(point==null)throw new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED");sub.putAll(point);
+                if("MYSQL".equals(c.effectiveSourceType()))sub.putIfAbsent("lastDeliveryTiming",Map.of("state","UNKNOWN"));
                 long covered=Long.parseLong((String)point.get("safeCoveredSequence"));
                 minimum=Math.min(minimum,covered);
                 sub.put("pendingTransactions",Long.toString(captured-covered));

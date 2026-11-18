@@ -273,8 +273,11 @@ public final class JdbcJournal implements NormalizedJournal {
             }
             execute(c,"INSERT INTO "+table("log")+" (pipeline_id,stream_seq,transaction_id,payload,payload_hash,payload_bytes) VALUES (?,?,?,?,?,?)",settings.pipelineId,sequence,transaction.id,payload,hash,charge);
             if(settings.deliveryTiming&&transaction.kind==SourceTransaction.Kind.DATA&&transaction.sourceCommittedAt!=null
-                    &&"POSTGRESQL".equals(transaction.position.getSourceType())&&!transaction.changes.isEmpty())
-                JdbcDeliveryTiming.capture(this,c,sequence,transaction.sourceCommittedAt);
+                    &&!transaction.changes.isEmpty()){
+                String type=transaction.position.getSourceType();
+                if("POSTGRESQL".equals(type)||"MYSQL".equals(type))
+                    JdbcDeliveryTiming.capture(this,c,sequence,transaction.sourceCommittedAt);
+            }
             execute(c,"INSERT INTO "+table("receipt")+" (pipeline_id,transaction_id,stream_seq,payload_hash) VALUES (?,?,?,?)",settings.pipelineId,transaction.id,sequence,hash);
             execute(c,"UPDATE "+table("job")+" SET next_seq=?,captured=?,pending_bytes=? WHERE pipeline_id=?",Math.addExact(sequence,1),captured,Math.addExact(pending,charge),settings.pipelineId);c.commit();return sequence;
         }

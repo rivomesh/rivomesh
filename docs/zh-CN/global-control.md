@@ -43,6 +43,8 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 每个样本对应一笔已确认事务。任务暂停、重试或有积压时，界面标记为历史样本。首次采样前，以及推进确认序号时没有直接观察到目标提交响应的情况，状态为 `UNKNOWN`。空投递、快照、屏障、跳过和提交结果核对不会产生样本。可根据运行状态、积压数和连续投递序号判断当前进度。Worker 重启或原日志记录已回收后，仍可读取最近确认序号对应的样本。
 
+将 `source.expectedVersion` 固定为 `"8.4"` 或具体的 8.4 补丁版本时，MySQL 8.4 主库的直接写入也会采样。使用未启用写入者分配的本地或外部日志，以及事务型 SQL 目标。起点取自标准 GTID 事件中的微秒字段 `original_commit_timestamp`，并核对源库身份和版本。只有事务由当前主库发起且原始与即时提交时间相同时才采样。中继事务、旧版本 binlog、时间元数据缺失、Group Replication 和启用写入者分配的日志返回 `UNKNOWN`。Group Replication 在事务进入认证阶段前生成原始时间。[MySQL 复制延迟时间戳](https://dev.mysql.com/doc/refman/8.4/en/replication-delayed.html) · [GTID 事件格式](https://dev.mysql.com/doc/dev/mysql-server/8.4.13/classmysql_1_1binlog_1_1event_1_1Gtid__event.html)
+
 ### 新任务自动分配
 
 创建向导或导入 YAML 时，可选择 **自动分配执行 Agent**。共享控制库在授权范围内选择在线且有任务容量的 Agent，按已分配任务占 `maxTasks` 的比例排序，并在保存任务的同一事务中预留一个槽。API 可向 `POST /api/tasks` 提供配置、`placement: "AUTO"` 和 `X-Request-ID`。指定 Agent 时填写 `ownerNodeId`。

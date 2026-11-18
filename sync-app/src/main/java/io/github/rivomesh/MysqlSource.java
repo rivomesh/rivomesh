@@ -14,6 +14,7 @@ public final class MysqlSource {
     Config.Endpoint endpoint() { return endpoint; }
     String identity() { return expected == null ? null : expected.uuid; }
     long serverId() { return expected == null ? 0 : expected.serverId; }
+    boolean isKnownNonGroupWriter() { return expected != null && !expected.groupMember; }
 
     public Connection connect() throws SQLException {
         Config.Source s = config.source;

@@ -287,3 +287,7 @@ Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` pas
 ### Managed Agent handoff assessment
 
 The exact Temurin 21 candidate `43b01b78bf4aa661119f9f49ae8a1057e92d98f9a52c5d2dbf0d1eb1c2d72597` passed 41 focused Java tests and eight native cases on each of PostgreSQL and MySQL control stores. Two real Controllers read and replayed the same assessment for two real Agents and a caught-up external PostgreSQL journal. The original Worker remained assigned. One of two simultaneous refreshes replaced the expected assessment and the persisted result survived SIGKILL of a Controller. The response exposes the checkpoint hash and reports the required evidence checks before actual transfer. [Global control API](../en/global-control.md#assess-transfer-to-another-agent) · [Manifests](baseline.json)
+
+### MySQL direct-origin delivery timing
+
+Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` passed six MySQL 8.4.13 cases and five MySQL 5.7.44 cases. An independent reference reader checked CRC32 and positions in the native binlog transaction and verified the ordinary GTID's original commit timestamp. Two native SQL destinations emitted matching observed source times and independent confirmed sequences. The samples survived Agent restart. MySQL 5.7 retained explicit unknown timing while both destinations continued to receive live CDC. [Timing profile](../en/global-control.md) · [MySQL timestamp reference](https://dev.mysql.com/doc/refman/8.4/en/replication-delayed.html) · [Manifests](baseline.json)

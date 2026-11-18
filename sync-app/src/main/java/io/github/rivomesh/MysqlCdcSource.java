@@ -6,12 +6,14 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.*;
 import com.github.shyiko.mysql.binlog.network.SSLMode;
 import java.sql.*;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /** MySQL GTID adapter for explicit databases. Uses complete commit boundaries and MVCC snapshot artifacts. */
 public final class MysqlCdcSource implements SourceAdapter {
+    private static final long UNDEFINED_COMMIT_MICROS=1L<<55;
     private final Config config;
     private final Set<String> databases;
     private final String generation;
@@ -19,6 +21,23 @@ public final class MysqlCdcSource implements SourceAdapter {
     private MysqlSource selected;
     private Connection evaluator;
     private String sqlMode;
+
+    static boolean originalTimingProfile(Config.Source source){
+        return source.expectedVersion!=null&&source.expectedVersion.matches("8\\.4(?:\\.[0-9]{1,3})?")
+                &&!"GROUP_REPLICATION".equals(source.topology);
+    }
+
+    static Instant directCommitTime(GtidEventData event,String writerUuid){
+        long original=event.getOriginalCommitTimestamp();
+        int version=event.getOriginalServerVersion();
+        // The pinned decoder returns zero for omitted fields. A different original writer or
+        // immediate timestamp indicates relayed data, whose provenance is outside this profile.
+        if(original<=0||original>=UNDEFINED_COMMIT_MICROS||original!=event.getImmediateCommitTimestamp()
+                ||version<80400||version>=80500||event.getImmediateServerVersion()!=version
+                ||event.getMySqlGtid()==null||!event.getMySqlGtid().getServerId().toString().equalsIgnoreCase(writerUuid))
+            return null;
+        return Instant.ofEpochSecond(original/1_000_000L,(original%1_000_000L)*1_000L);
+    }
     public MysqlCdcSource(Config config,Set<String> databases,String generation)throws Exception{
         if(databases==null||databases.isEmpty()||generation==null||generation.isEmpty())throw new IllegalArgumentException("MYSQL_SOURCE_CONFIG_INVALID");
         this.config=config;this.databases=new TreeSet<>(databases);this.generation=generation;validateFailover(null,Collections.emptyList());
@@ -173,9 +192,12 @@ public final class MysqlCdcSource implements SourceAdapter {
     @Override public Stream stream(SourcePosition captured,Receiver receiver)throws Exception{return new Capture(captured,receiver);}
     private final class Capture implements Stream {
         final BinaryLogClient client;final Receiver receiver;final Map<Long,TableMapEventData> tableIds=new HashMap<>();final List<Change> changes=new ArrayList<>();final AtomicReference<Throwable> failure=new AtomicReference<>();
+        final boolean observeCommitTime;
         volatile boolean closing,delivering;volatile long lastEvent=System.nanoTime();String gtid,committed,file;
+        Instant gtidCommittedAt;
         Capture(SourcePosition captured,Receiver receiver)throws Exception{
             this.receiver=receiver;Model.Position p=position(captured);committed=p.gtidSet;file=p.file;
+            observeCommitTime=selected.isKnownNonGroupWriter()&&originalTimingProfile(config.source);
             client=new BinaryLogClient(selected.endpoint().host,selected.endpoint().port,config.source.username,config.source.password);client.setServerId(config.source.serverId);client.setGtidSet(committed);client.setGtidSetFallbackToPurged(false);client.setUseBinlogFilenamePositionInGtidMode(false);client.setSSLMode(SSLMode.valueOf(config.source.sslMode));client.setKeepAlive(false);client.setHeartbeatInterval(1000);client.setConnectTimeout(10000);
             client.setEventDeserializer(MysqlEventDeserializer.create(tableIds));
             client.registerEventListener(e->{
@@ -205,13 +227,26 @@ public final class MysqlCdcSource implements SourceAdapter {
             if(t==null)return;if(gtid==null)throw new IllegalStateException("BINLOG_GTID_MISSING");if(changes.size()>=config.maxTransactionRows)throw new IllegalStateException("TRANSACTION_ROW_LIMIT");Change ch=new Change();ch.tableId=t.id;ch.schemaVersion=t.version;ch.operation=operation;ch.eventId=gtid+":"+changes.size();if(before!=null)ch.before=image(t,before,beforeMask);if(after!=null)ch.after=image(t,after,afterMask);changes.add(ch);
         }
         void commit(EventHeaderV4 header)throws Exception{
-            if(gtid==null)throw new IllegalStateException("BINLOG_GTID_MISSING");String next=Gtids.union(committed,gtid);Model.Position p=new Model.Position(file,header.getNextPosition());p.gtidSet=next;p.sourceUuid=selected.identity();SourceTransaction tx=new SourceTransaction();tx.id=gtid;tx.streamGeneration=generation;tx.position=position(p);tx.changes.addAll(changes);tx.validate();delivering=true;try{receiver.committed(tx);}finally{lastEvent=System.nanoTime();delivering=false;}committed=next;changes.clear();gtid=null;
+            if(gtid==null)throw new IllegalStateException("BINLOG_GTID_MISSING");
+            String next=Gtids.union(committed,gtid);
+            Model.Position p=new Model.Position(file,header.getNextPosition());
+            p.gtidSet=next;p.sourceUuid=selected.identity();
+            SourceTransaction tx=new SourceTransaction();
+            tx.id=gtid;tx.streamGeneration=generation;tx.position=position(p);tx.sourceCommittedAt=gtidCommittedAt;
+            tx.changes.addAll(changes);tx.validate();delivering=true;
+            try{receiver.committed(tx);}finally{lastEvent=System.nanoTime();delivering=false;}
+            committed=next;changes.clear();gtid=null;gtidCommittedAt=null;
         }
         void accept(Event e)throws Exception{
             EventData data=e.getData();EventHeaderV4 h=e.getHeader();
             MysqlEventDeserializer.requireSupported(h.getEventType());
             if(data instanceof RotateEventData){if(gtid!=null||!changes.isEmpty())throw new IllegalStateException("BINLOG_ROTATE_INSIDE_TRANSACTION");file=((RotateEventData)data).getBinlogFilename();tableIds.clear();}
-            else if(data instanceof GtidEventData){if(gtid!=null)throw new IllegalStateException("BINLOG_TRANSACTION_UNFINISHED");gtid=((GtidEventData)data).getGtid();Gtids.parse(gtid);}
+            else if(data instanceof GtidEventData event){
+                if(gtid!=null)throw new IllegalStateException("BINLOG_TRANSACTION_UNFINISHED");
+                gtid=event.getGtid();Gtids.parse(gtid);
+                if(observeCommitTime&&h.getEventType()==EventType.GTID&&h.getServerId()==selected.serverId())
+                    gtidCommittedAt=directCommitTime(event,selected.identity());
+            }
             else if(data instanceof TableMapEventData){TableMapEventData map=(TableMapEventData)data;tableIds.put(map.getTableId(),map);table(map.getTableId());}
             else if(data instanceof WriteRowsEventData){WriteRowsEventData r=(WriteRowsEventData)data;TableSchema t=table(r.getTableId());for(Object[] a:r.getRows())row(t,Change.Operation.INSERT,null,null,a,r.getIncludedColumns());}
             else if(data instanceof DeleteRowsEventData){DeleteRowsEventData r=(DeleteRowsEventData)data;TableSchema t=table(r.getTableId());for(Object[] b:r.getRows())row(t,Change.Operation.DELETE,b,r.getIncludedColumns(),null,null);}
