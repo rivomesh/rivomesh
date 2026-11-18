@@ -69,6 +69,10 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 要核验已完成的校验报告，请在两个 Agent 上挂载同一份受保护的存储，并分别配置 `cluster.handoffEvidenceRoot` 为已存在的绝对路径。挂载目录须使用 POSIX 仅所有者权限。原 Agent 要有写权限，候选 Agent 要有读权限，存储还要支持文件锁和同目录原子改名。既有任务和部署继续使用原报告目录。
 
+使用 Helm 时，为两个 Agent 发行版的 `cluster.handoffEvidenceClaim` 填写同一个已存在的 ReadWriteMany PVC。每个 Agent 的 `persistence.existingClaim` 填各自已初始化的私有状态 PVC。Chart 把共享卷挂载到 `/app/handoff-evidence` 并配置 Rivomesh。两个卷均须事先为 UID/GID `10001` 准备权限，共享卷根目录使用 `0700`。此档案省略 Pod 的 `fsGroup`，由存储端保留文件权限。[Kubernetes 卷权限](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#configure-volume-permission-and-ownership-change-policy-for-pods)
+
+使用原生 Kubernetes YAML 时，在两个 Agent Deployment 中挂载同一份已有 PVC 到 `/app/handoff-evidence`，各自的状态 PVC 继续挂载到 `/app/data`。此档案省略 `spec.template.spec.securityContext.fsGroup`，在两个 Agent ConfigMap 配置 `cluster.handoffEvidenceRoot: /app/handoff-evidence`。存储权限准备完成后滚动更新 Agent。
+
 原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告，报告与历史故障证据共用 64 MiB 数据上限，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。MySQL binlog 原始证据与修复计划由原 Agent 的私有目录保管。核验保留原任务归属，返回 `executionAuthorized: false`。
 
 同一次核验可用 `probe.sharedReceiptCustody` 查看已结束的操作回执。原 Agent 会将已认证的全局命令与本地请求签名、操作者和执行结果核对，只归档匹配的已结束回执。候选 Agent 独立核对共享归档的原字节。该流程覆盖单任务最多 64 条全局命令。回执缺失、已清理、内容不匹配或操作未结束时，保留未核验状态。接口返回数量和摘要。回执导入与执行接管需单独核验。

@@ -304,6 +304,11 @@
         "advertiseUrl": {
           "type": "string"
         },
+        "handoffEvidenceClaim": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+        },
         "heartbeatMillis": {
           "type": "integer",
           "minimum": 100,

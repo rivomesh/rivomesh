@@ -110,6 +110,23 @@ def manifests():
         assert subprocess.run(['helm','template','rivomesh',chart,'--set',invalid],cwd=ROOT,capture_output=True).returncode!=0,invalid
     for invalid in ('cluster.sharedTasks=false','cluster.separateExecution=false','cluster.sharedAccess=false'):
         assert subprocess.run(['helm','template','rivomesh',chart,'-f',chart+'/values-agent.yaml','--set',invalid],cwd=ROOT,capture_output=True).returncode!=0,invalid
+    for node in ('a', 'b'):
+        custody = command('helm', 'template', 'rivomesh-agent-' + node, chart, '-f', chart + '/values-agent.yaml',
+                          '--set', 'cluster.handoffEvidenceClaim=handoff-shared',
+                          '--set', 'persistence.existingClaim=agent-' + node + '-private')
+        assert 'handoffEvidenceRoot: "/app/handoff-evidence"' in custody
+        assert 'mountPath: /app/handoff-evidence' in custody and 'claimName: "handoff-shared"' in custody
+        assert 'claimName: agent-' + node + '-private' in custody and 'runAsUser: 10001' in custody
+        assert 'fsGroup:' not in custody and 'kind: PersistentVolumeClaim' not in custody
+    for role, overrides in (
+        ('controller', 'cluster.handoffEvidenceClaim=handoff-shared,persistence.existingClaim=controller-private'),
+        ('agent', 'cluster.handoffEvidenceClaim=handoff-shared'),
+        ('agent', 'cluster.handoffEvidenceClaim=handoff-shared,persistence.existingClaim=handoff-shared'),
+        ('agent', 'cluster.handoffEvidenceClaim=/invalid/path,persistence.existingClaim=agent-private'),
+    ):
+        arguments = ['helm', 'template', 'rivomesh', chart, '-f', chart+'/values-'+role+'.yaml', '--set', overrides]
+        assert subprocess.run(arguments, cwd=ROOT, capture_output=True).returncode != 0, overrides
+    print('PASS optional shared custody claim on both Agents with independent private state and owner-only volume permissions')
     reviewed=command('helm','template','rivomesh-review',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-review.yaml')
     assert 'recoveryReview: true' in reviewed and 'sharedTasks: true' in reviewed
     committed=command('helm','template','rivomesh-commit',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-commit.yaml')

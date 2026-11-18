@@ -2,6 +2,11 @@
 {{- if and .Values.cluster.recoverySkip (not .Values.cluster.recoveryCommit) }}{{ fail "cluster.recoverySkip requires recoveryCommit" }}{{ end }}
 {{- if and .Values.cluster.sharedTasks (or (not .Values.cluster.enabled) (not .Values.cluster.sharedAccess)) }}{{ fail "cluster.sharedTasks requires enabled sharedAccess" }}{{ end }}
 {{- if and .Values.cluster.recoveryReview (or (not .Values.cluster.enabled) (not .Values.cluster.sharedTasks)) }}{{ fail "cluster.recoveryReview requires enabled sharedTasks" }}{{ end }}
+{{- if .Values.cluster.handoffEvidenceClaim }}
+{{- if not (and .Values.cluster.enabled .Values.cluster.sharedTasks .Values.cluster.separateExecution (eq .Values.cluster.role "AGENT")) }}{{ fail "cluster.handoffEvidenceClaim requires a separate shared-task Agent" }}{{ end }}
+{{- if not .Values.persistence.existingClaim }}{{ fail "cluster.handoffEvidenceClaim requires a preprovisioned private persistence.existingClaim" }}{{ end }}
+{{- if eq .Values.cluster.handoffEvidenceClaim .Values.persistence.existingClaim }}{{ fail "cluster.handoffEvidenceClaim must differ from persistence.existingClaim" }}{{ end }}
+{{- end }}
 {{- if .Values.cluster.enabled }}
 {{- if lt (int .Values.cluster.leaseMillis) (mul (int .Values.cluster.heartbeatMillis) 3) }}{{ fail "cluster.leaseMillis must be at least three heartbeat intervals" }}{{ end }}
 {{- if not .Values.cluster.url }}{{ fail "cluster.url is required" }}{{ end }}
@@ -108,6 +113,9 @@ data:
       namespace: {{ .Values.cluster.namespace | quote }}
       username: ${RIVOMESH_CONTROL_USERNAME}
       password: ${RIVOMESH_CONTROL_PASSWORD}
+      {{- if .Values.cluster.handoffEvidenceClaim }}
+      handoffEvidenceRoot: "/app/handoff-evidence"
+      {{- end }}
       advertiseUrl: {{ default (printf "http://%s.%s.svc:%v" .Release.Name .Release.Namespace .Values.service.port) .Values.cluster.advertiseUrl | quote }}
       heartbeatMillis: {{ .Values.cluster.heartbeatMillis | int }}
       leaseMillis: {{ .Values.cluster.leaseMillis | int }}

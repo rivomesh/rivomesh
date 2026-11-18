@@ -22,7 +22,9 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        {{- if not .Values.cluster.handoffEvidenceClaim }}
         fsGroup: 10001
+        {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -94,6 +96,9 @@ spec:
             - {name: config, mountPath: /app/config, readOnly: true}
             - {name: data, mountPath: /app/data}
             - {name: tmp, mountPath: /tmp}
+            {{- if .Values.cluster.handoffEvidenceClaim }}
+            - {name: handoff-evidence, mountPath: /app/handoff-evidence}
+            {{- end }}
       volumes:
         - name: config
           configMap:
@@ -101,6 +106,11 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ default (printf "%s-data" .Release.Name) .Values.persistence.existingClaim }}
+        {{- if .Values.cluster.handoffEvidenceClaim }}
+        - name: handoff-evidence
+          persistentVolumeClaim:
+            claimName: {{ .Values.cluster.handoffEvidenceClaim | quote }}
+        {{- end }}
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
