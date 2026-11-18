@@ -71,6 +71,7 @@ public final class ValidationStore implements AutoCloseable {
         if(!Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS))throw fail("VALIDATION_REPORT_NOT_CREATED");
         Path observedDirectory=directory.toRealPath();
         if(!observedDirectory.equals(directory.getParent().toRealPath().resolve(id)))throw fail("VALIDATION_PATH_INVALID");
+        boolean restoreRequired=ValidationArchive.restoringRequired(observedDirectory,id);
         Map<String,Long> sizes=new LinkedHashMap<>();
         for(String name:List.of("rows.mv.db","rows.trace.db","summary.json")){
             try{
@@ -78,7 +79,7 @@ public final class ValidationStore implements AutoCloseable {
                 if(!attributes.isRegularFile())throw fail("VALIDATION_PATH_INVALID");
                 sizes.put(name,attributes.size());
             }catch(NoSuchFileException absent){
-                if("rows.mv.db".equals(name))throw fail("VALIDATION_REPORT_NOT_CREATED");
+                if("rows.mv.db".equals(name)&&!restoreRequired)throw fail("VALIDATION_REPORT_NOT_CREATED");
             }
         }
         Map<String,Object> result=new LinkedHashMap<>();
@@ -86,6 +87,7 @@ public final class ValidationStore implements AutoCloseable {
         result.put("files",sizes);
         result.put("observedAt",Instant.now().toString());
         result.put("activity",LOCAL_WRITERS.contains(observedDirectory)?"PROTECTED_ACTIVE":"ACTIVITY_UNKNOWN");
+        if(restoreRequired)result.put("restoreRequired",true);
         return result;
     }
 
@@ -115,9 +117,10 @@ public final class ValidationStore implements AutoCloseable {
             try(DirectoryStream<Path> children=Files.newDirectoryStream(directory)){
                 for(Path entry:children){
                     String id=entry.getFileName().toString();
-                    if(!reportId(id)||!Files.isDirectory(entry,LinkOption.NOFOLLOW_LINKS)
-                            ||!Files.isRegularFile(entry.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS)
-                            ||!Files.isRegularFile(entry.resolve("summary.json"),LinkOption.NOFOLLOW_LINKS))continue;
+                    if(!reportId(id)||!Files.isDirectory(entry,LinkOption.NOFOLLOW_LINKS))continue;
+                    boolean live=Files.isRegularFile(entry.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS)
+                            &&Files.isRegularFile(entry.resolve("summary.json"),LinkOption.NOFOLLOW_LINKS);
+                    if(!live&&!ValidationArchive.hasDescriptor(entry))continue;
                     BasicFileAttributes attributes;
                     try{attributes=Files.readAttributes(entry,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);}
                     catch(NoSuchFileException removed){continue;}
@@ -162,6 +165,8 @@ public final class ValidationStore implements AutoCloseable {
         }catch(Exception failure){if(channel!=null)try{channel.close();}catch(Exception close){failure.addSuppressed(close);}LOCAL_WRITERS.remove(directory);throw failure;}
         lockChannel=channel;lock=acquired;
         try{
+            if(initial==null&&ValidationArchive.restoringRequired(directory,directory.getFileName().toString()))
+                throw fail("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED");
             try(DirectoryStream<Path> staging=Files.newDirectoryStream(directory,"summary-*.tmp")){
                 for(Path file:staging)
                     if(file.getFileName().toString().matches("summary-[0-9]+\\.tmp")

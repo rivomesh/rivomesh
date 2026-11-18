@@ -147,6 +147,58 @@ class ValidationStoreTest {
         assertArrayEquals(summary,Files.readAllBytes(directory.resolve("summary.json")));
         assertEquals("repair plan evidence",Files.readString(plan));
     }
+    @Test void sealedArchiveFencesLostReportsAndRestoresExactBytesWithoutReplacingCollisions()throws Exception{
+        Path reportRoot=root.resolve("reports"),cold=Files.createDirectory(root.resolve("cold"));
+        ValidationStore.owner(cold,true);
+        TableSchema table=table(false);
+        var certificate=certificate(table);
+        Path live=reportRoot.resolve(certificate.id);
+        var scope=new ValidationArchive.Scope("task",UUID.randomUUID().toString(),certificate.id);
+        var create=new ValidationArchive.Request(certificate.id,"retention_review",null,true);
+        try(ValidationStore store=ValidationStore.create(reportRoot,certificate.id,certificate,List.of(table),
+                Map.of("target",Set.of(table.id)),new ValidationStore.Limits())){
+            store.source(table.id,row(1,"historical",null));store.finishSourceTable(table.id);store.completeSource();
+            store.finishTarget("target",table.id);store.complete();
+            assertEquals("VALIDATION_REPORT_BUSY",assertThrows(SyncFailure.class,
+                    ()->ValidationArchive.execute(cold,reportRoot,scope,create,ValidationArchive.COPY,"archive_request","admin")).code);
+        }
+        ValidationRetention.review(reportRoot,new ValidationRetention.Request(certificate.id,null,30,true),
+                "retention_review","admin",1);
+        byte[] rows=Files.readAllBytes(live.resolve("rows.mv.db")),summary=Files.readAllBytes(live.resolve("summary.json"));
+        var archive=ValidationArchive.execute(cold,reportRoot,scope,create,ValidationArchive.COPY,"archive_request","admin");
+        assertEquals(archive,ValidationArchive.execute(cold,reportRoot,scope,create,ValidationArchive.COPY,"archive_request","admin"));
+        Path saved;
+        try(var children=Files.list(cold)){saved=children.findFirst().orElseThrow();}
+        assertArrayEquals(rows,Files.readAllBytes(saved.resolve("rows.mv.db")));
+        assertArrayEquals(rows,Files.readAllBytes(live.resolve("rows.mv.db")));
+        assertArrayEquals(summary,Files.readAllBytes(live.resolve("summary.json")));
+        Files.delete(live.resolve("rows.mv.db"));
+        assertEquals(true,ValidationStore.storage(reportRoot,certificate.id).get("restoreRequired"));
+        assertEquals(certificate.id,Model.JSON.valueToTree(ValidationStore.catalog(reportRoot,"",20)).path("reports").get(0).path("id").textValue());
+        assertEquals("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED",
+                assertThrows(SyncFailure.class,()->ValidationStore.open(reportRoot,certificate.id)).code);
+        var restore=new ValidationArchive.Request(certificate.id,null,archive.archiveId(),true);
+        Files.writeString(saved.resolve("rows.mv.db"),"changed archive");
+        assertEquals("VALIDATION_ARCHIVE_BYTES_CHANGED",assertThrows(SyncFailure.class,
+                ()->ValidationArchive.execute(cold,reportRoot,scope,restore,ValidationArchive.RESTORE,"restore_request","admin")).code);
+        assertFalse(Files.exists(live.resolve("rows.mv.db")));
+        Files.write(saved.resolve("rows.mv.db"),rows);
+        Files.writeString(live.resolve("rows.mv.db"),"different live evidence");
+        assertEquals("VALIDATION_ARCHIVE_HOT_FILE_CHANGED",assertThrows(SyncFailure.class,
+                ()->ValidationArchive.execute(cold,reportRoot,scope,restore,ValidationArchive.RESTORE,"restore_request","admin")).code);
+        assertEquals("different live evidence",Files.readString(live.resolve("rows.mv.db")));
+        Files.write(live.resolve("rows.mv.db"),rows);
+        Files.write(live.resolve("archive-restore.json"),Model.JSON.writeValueAsBytes(
+                new ValidationArchive.Restoration(1,archive.archiveId(),"restore_request","admin",false)));
+        assertEquals("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED",
+                assertThrows(SyncFailure.class,()->ValidationStore.open(reportRoot,certificate.id)).code);
+        assertEquals(archive,ValidationArchive.execute(cold,reportRoot,scope,restore,ValidationArchive.RESTORE,"restore_request","admin"));
+        assertArrayEquals(rows,Files.readAllBytes(live.resolve("rows.mv.db")));
+        try(ValidationStore reopened=ValidationStore.open(reportRoot,certificate.id)){
+            assertEquals("VALIDATION_DIFFERENCES",reopened.manifest().code);
+        }
+        assertEquals(archive,ValidationArchive.execute(cold,reportRoot,scope,restore,ValidationArchive.RESTORE,"restore_request","admin"));
+    }
     @Test void retainedReportCatalogPagesWithoutOpeningTheReportDatabases()throws Exception{
         TableSchema table=table(false);
         PipelineValidationBarrier.Certificate first=certificate(table),second=certificate(table);

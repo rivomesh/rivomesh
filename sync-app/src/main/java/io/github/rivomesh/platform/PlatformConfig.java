@@ -27,6 +27,7 @@ public final class PlatformConfig {
     public boolean autoStart = false;
     public int auditMaxEvents = 1000000;
     public int validationRetentionMinimumDays;
+    public String validationArchiveDirectory;
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
     public Map<String,List<String>> workerSecretReferences;
@@ -62,13 +63,18 @@ public final class PlatformConfig {
         Path parent = path.toAbsolutePath().normalize().getParent();
         c.tasksDirectory = parent.resolve(c.tasksDirectory).normalize().toString();
         c.dataDirectory = parent.resolve(c.dataDirectory).normalize().toString();
+        if(c.validationArchiveDirectory!=null&&!c.validationArchiveDirectory.isBlank())
+            c.validationArchiveDirectory=parent.resolve(c.validationArchiveDirectory).normalize().toString();
         c.validate(); return c;
     }
     public void validate() throws Exception {
         validateAccess();
-        WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
         if(validationRetentionMinimumDays<0||validationRetentionMinimumDays>io.github.rivomesh.validation.ValidationRetention.MAXIMUM_DAYS)
             throw new IllegalArgumentException("VALIDATION_RETENTION_POLICY_INVALID");
+        if(validationArchiveDirectory!=null&&(validationArchiveDirectory.isBlank()
+                ||validationArchiveDirectory.chars().anyMatch(character->character<32)))
+            throw new IllegalArgumentException("VALIDATION_ARCHIVE_PATH_INVALID");
+        WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");
         sessions.validate();
         if(cluster!=null)cluster.validate();

@@ -100,6 +100,16 @@ API 可调用 `GET /api/tasks/{id}/validations?limit=20` 读取元数据，使�
 
 也可调用 `POST /api/tasks/{taskId}/validations/{reportId}/retention`，沿用请求 ID 和会话保护。正文传入 `expectedRevision`、`minimumDays` 和 `approved: true`。已有审阅时再传其 `expectedReviewId`。用相同请求 ID 和正文重试可取得原操作结果。审阅附件随原报告存储，审计记录报告 ID、发起人和操作状态，备份时请一并保留。达到最低日期后，报告和恢复证据仍保留在原卷。规划磁盘时继续计入报告的全部占用。
 
+### 从已封存的副本恢复报告
+
+在持有报告的 Agent 或独立服务器设置 `validationArchiveDirectory`，指向报告树之外的私有持久目录，仅给服务账号访问权限。Linux、Docker 和原生 Kubernetes 需设置平台配置并挂载目录。Helm 使用 `platform.validationArchiveDirectory` 指定已挂载的路径。要求原报告卷丢失后仍保有副本时，请使用独立存储。
+
+报告已经完成且提交保留审阅后，打开 **查看存储**，确认 **创建恢复副本**。Agent 持有原报告锁，复制报告数据库和摘要并核对字节长度和 SHA-256，再封存描述记录。每份报告可封存一个副本，数据库上限 128 MiB，摘要上限 1 MiB。副本包含同样的敏感业务数据。协调备份时保留原报告目录、归档描述记录、Agent 归属身份、保留审阅和修复记录。
+
+原报告数据库缺失时，历史目录仍可定位报告，读取详情返回 `VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED`。打开 **查看存储** 并确认 **恢复报告**。Agent 再次校验范围和完整性，持有原锁补齐缺失文件，并保留内容不同的现有文件。中断的恢复在完成前保持读取隔离，并暂停该报告的交接保管核验。正常情况下原报告和副本分别占用存储。
+
+API 使用 `POST /api/tasks/{taskId}/validations/{reportId}/archive`。复制传 `operation: "COPY"` 和 `expectedReviewId`，恢复传 `operation: "RESTORE"` 和 `expectedArchiveId`。两者均需当前 `expectedRevision`、`approved: true` 和带身份的请求 ID。
+
 ### 查找恢复操作回执
 
 在全局任务控制中，管理员可在任务详情选择 **按请求 ID 查询回执**，近期恢复操作也有 **查看回执** 入口。使用 `GET /api/tasks/{taskId}/recovery-receipts/{requestId}` 查询控制面持久保存的结果。请求移出近期列表或所属 Agent 暂时离线时，仍可通过任一管理入口查询。

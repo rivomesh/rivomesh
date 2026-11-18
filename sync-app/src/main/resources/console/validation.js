@@ -28,7 +28,11 @@ window.RivomeshValidation=(()=>{
       protected:'该 Agent 正在使用此报告，报告受保护。',unknown:'报告在其他进程中的活动状态未知。',
       fileHelp:'以下为已知文件的观测字节长度。',database:'报告数据库',trace:'数据库诊断',summary:'报告摘要',bytes:'字节',
       retention:'保留审阅',retainUntil:'至少保留至',reviewer:'审阅人',retentionHelp:'审批会记录最低保留期限。到期后，报告和恢复证据继续保留。',
-      retentionDays:'审核后至少保留天数',retentionApproval:'确认保留期限',retentionSubmit:'提交保留审阅',request:'请求 ID'},
+      retentionDays:'审核后至少保留天数',retentionApproval:'确认保留期限',retentionSubmit:'提交保留审阅',request:'请求 ID',
+      archive:'报告恢复副本',archived:'归档时间',archiveCopy:'创建恢复副本',archiveRestore:'恢复报告',
+      archiveCopyHelp:'把已审阅的报告数据库和摘要复制到 Agent 的受保护归档目录。原报告继续保留在原位置。',
+      archiveRestoreHelp:'从核对过的恢复副本补齐缺失文件。已有不同内容的文件会被保留。',
+      archiveApproval:'确认此次报告归档操作'},
   en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports',
       search:'Open by report ID',id:'Report ID',close:'Cancel',invalid:'Enter a valid report ID.',
       mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory',
@@ -38,7 +42,11 @@ window.RivomeshValidation=(()=>{
       summary:'Report summary',bytes:'bytes',retention:'Retention review',retainUntil:'Retain until at least',reviewer:'Reviewed by',
       retentionHelp:'Approval records a minimum retention period. Reports and recovery evidence remain retained after this date.',
       retentionDays:'Minimum days to retain after review',retentionApproval:'Confirm minimum retention',
-      retentionSubmit:'Submit retention review',request:'Request ID'}
+      retentionSubmit:'Submit retention review',request:'Request ID',archive:'Report recovery copy',archived:'Archived at',
+      archiveCopy:'Create recovery copy',archiveRestore:'Restore report',
+      archiveCopyHelp:'Copy the reviewed report database and summary to the protected Agent archive. The live report remains at its original location.',
+      archiveRestoreHelp:'Restore missing files from the verified recovery copy. Existing files with different content are preserved.',
+      archiveApproval:'Confirm report archive operation'}
  };
  const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
  const fetchReport=(task,id)=>api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));
@@ -114,8 +122,16 @@ window.RivomeshValidation=(()=>{
    if(retention)facts.append(text('dt',catalogLabel('retainUntil')),text('dd',new Date(retention.minimumRetainUntil).toLocaleString()),
     text('dt',catalogLabel('reviewer')),text('dd',retention.actorId));
    const minimum=storage.retentionMinimumDays,revision=bridge.task(task.id)?.revision;
-   if(revision&&storage.activity==='ACTIVITY_UNKNOWN'&&Number.isInteger(minimum)&&minimum>0&&minimum<=3650)
+   if(revision&&storage.activity==='ACTIVITY_UNKNOWN'&&!storage.restoreRequired&&Number.isInteger(minimum)&&minimum>0&&minimum<=3650)
     dialog.append(retentionReview(path,revision,minimum,retention,current));
+   const archive=storage.archive;
+   if(archive&&(!/^[A-Za-z0-9_-]{8,128}$/.test(archive.id||'')
+      ||!Number.isFinite(Date.parse(archive.archivedAt))))throw new Error(catalogLabel('mismatch'));
+   if(archive)facts.append(text('dt',catalogLabel('archived')),text('dd',new Date(archive.archivedAt).toLocaleString()));
+   if(storage.restoreRequired)body.append(text('p',explain('VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED'),'callout'));
+   if(revision&&storage.archiveEnabled&&storage.activity==='ACTIVITY_UNKNOWN'&&
+      (storage.restoreRequired&&archive||!archive&&retention))
+    dialog.append(archiveReview(path,revision,retention,archive,current));
   }catch(error){
    if(current())body.replaceChildren(text('p',error.message,'error'));
   }
@@ -132,18 +148,33 @@ window.RivomeshValidation=(()=>{
   dateLabel.append(text('span',catalogLabel('retentionDays')),days);
   approvalLabel.append(approval,text('span',catalogLabel('retentionApproval')));
   form.append(text('h3',catalogLabel('retention')),text('p',catalogLabel('retentionHelp')),dateLabel,approvalLabel,button,feedback);
+  wireReview(form,button,[days,approval],approval,feedback,current,path+'/retention',()=>({
+   minimumDays:days.valueAsNumber,approved:true,expectedRevision:revision,...(previous?{expectedReviewId:previous.requestId}:{})
+  }));
+  return form;
+ }
+ function archiveReview(path,revision,retention,archive,current){
+  const form=text('form'),approval=text('input'),approvalLabel=text('label','','check'),
+   button=text('button',catalogLabel(archive?'archiveRestore':'archiveCopy'),'primary'),feedback=text('p','','error');
+  approval.type='checkbox';approval.name='archiveApproved';approval.required=true;
+  button.type='submit';feedback.setAttribute('role','status');form.dataset.validationArchiveForm='';
+  approvalLabel.append(approval,text('span',catalogLabel('archiveApproval')));
+  form.append(text('h3',catalogLabel('archive')),text('p',catalogLabel(archive?'archiveRestoreHelp':'archiveCopyHelp')),approvalLabel,button,feedback);
+  wireReview(form,button,[approval],approval,feedback,current,path+'/archive',()=>({
+   operation:archive?'RESTORE':'COPY',expectedRevision:revision,approved:true,
+   ...(archive?{expectedArchiveId:archive.id}:{expectedReviewId:retention.requestId})
+  }));
+  return form;
+ }
+ function wireReview(form,button,inputs,approval,feedback,current,path,body){
   let delivery=null;
   form.onsubmit=async event=>{
    event.preventDefault();
    if(!current()||button.disabled||!approval.checked||!form.checkValidity())return;
-   if(!delivery){
-    const input={minimumDays:days.valueAsNumber,approved:true,expectedRevision:revision};
-    if(previous)input.expectedReviewId=previous.requestId;
-    delivery={id:requestId(),body:JSON.stringify(input)};
-   }
-   button.disabled=true;days.disabled=true;approval.disabled=true;feedback.textContent='';
+   if(!delivery)delivery={id:requestId(),body:JSON.stringify(body())};
+   button.disabled=true;inputs.forEach(input=>input.disabled=true);feedback.textContent='';
    try{
-    await api(path+'/retention',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':delivery.id},body:delivery.body});
+    await api(path,{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':delivery.id},body:delivery.body});
     if(!current())return;
     feedback.className='';feedback.textContent=t('accepted')+' · '+catalogLabel('request')+' '+delivery.id;
     await refresh();
@@ -151,7 +182,6 @@ window.RivomeshValidation=(()=>{
     if(current()){feedback.textContent=error.message;button.disabled=false;}
    }
   };
-  return form;
  }
 
  async function loadCatalog(task,after='',previous=[]){
@@ -212,6 +242,11 @@ window.RivomeshValidation=(()=>{
  const translationEn={validate:'Validate data',validate_retry:'Retry target comparison',validate_cancel:'Cancel validation',VALIDATION_MATCH:'Validation matched',VALIDATION_DIFFERENCES:'Validation found differences',VALIDATION_CANCELLED:'Validation cancelled; inspect the task pause state',VALIDATION_CANCEL_REQUESTED:'Validation cancellation requested',VALIDATION_REPORT_BUSY:'Validation is using this report; retry later.',VALIDATION_REPORT_NOT_CREATED:'No report was created yet. Inspect the operation failure.',VALIDATION_WORKER_REQUIRED:'Start this worker, complete snapshots and enter CDC before validation.',VALIDATION_NEW_SOURCE_VIEW_REQUIRED:'Incomplete source view was lost. Inspect/resume the task, then start a new validation.',VALIDATION_BARRIER_MOVED:'Task state or checkpoints changed; establish a new validation.',VALIDATION_V3_REQUIRED:'Data validation requires a V3 pipeline.',VALIDATION_DETAIL_TOO_LARGE:'Raw rows exceed the console display budget (1MiB). Retain the private report and use controlled offline tooling.',VALIDATION_DIFFERENCE_NOT_FOUND:'No difference exists for this identity.',VALIDATION_DIFF_CORRUPT:'Difference integrity check failed; raw values were withheld.'};
  bridge.register(translationZh,translationEn);
  bridge.register({
+  validation_archive_copy:'创建报告恢复副本',validation_archive_restore:'恢复报告',
+  VALIDATION_ARCHIVE_SEALED:'报告恢复副本已核对并保存。',VALIDATION_ARCHIVE_RESTORED:'已从核对的副本恢复报告。',
+  VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED:'报告需要恢复。请在“查看存储”中查看恢复副本。',
+  VALIDATION_ARCHIVE_HOT_FILE_CHANGED:'现有报告文件与恢复副本不同。请保留两份证据并核对。',
+  VALIDATION_ARCHIVE_BYTES_CHANGED:'恢复副本字节校验失败，请核对归档卷和备份。',
   validation_retention_review:'审阅报告保留期限',VALIDATION_RETENTION_REVIEWED:'已记录最低保留期限。',
   VALIDATION_RETENTION_REVIEW_DISABLED:'该 Agent 未启用保留审阅。',
   VALIDATION_RETENTION_REVIEW_CHANGED:'已有新的保留审阅。请关闭并重新打开存储检查。',
@@ -219,6 +254,11 @@ window.RivomeshValidation=(()=>{
   VALIDATION_RETENTION_MINIMUM_NOT_MET:'请选择符合 Agent 策略的保留天数。',
   VALIDATION_RETENTION_REPORT_INCOMPLETE:'校验报告完成后才能审阅保留期限。'
  },{
+  validation_archive_copy:'Create report recovery copy',validation_archive_restore:'Restore report',
+  VALIDATION_ARCHIVE_SEALED:'The report recovery copy was verified and saved.',VALIDATION_ARCHIVE_RESTORED:'The report was restored from its verified copy.',
+  VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED:'This report requires restoration. Open View storage to find its recovery copy.',
+  VALIDATION_ARCHIVE_HOT_FILE_CHANGED:'An existing report file differs from the recovery copy. Preserve both and inspect them.',
+  VALIDATION_ARCHIVE_BYTES_CHANGED:'The recovery copy failed its integrity check. Inspect the archive volume and backup.',
   validation_retention_review:'Review report retention',VALIDATION_RETENTION_REVIEWED:'Minimum retention recorded.',
   VALIDATION_RETENTION_REVIEW_DISABLED:'This Agent has retention reviews disabled.',
   VALIDATION_RETENTION_REVIEW_CHANGED:'A newer retention review exists. Close and reopen storage inspection.',

@@ -3,6 +3,7 @@ package io.github.rivomesh.platform;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.validation.ValidationArchive;
 import java.io.*;
 import java.nio.channels.*;
 import java.nio.file.*;
@@ -136,6 +137,7 @@ final class SharedHandoffEvidence {
                 try(FileChannel channel=FileChannel.open(directory.resolve("validation.lock"),StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
                     FileLock lock=tryLock(channel)){
                     String id=directory.getFileName().toString();
+                    if(ValidationArchive.restoringRequired(directory,id))throw refusal("HANDOFF_REPORT_ARCHIVE_RESTORE_REQUIRED");
                     Path summary=directory.resolve("summary.json"),rows=directory.resolve("rows.mv.db");
                     byte[] bytes=summary(summary);
                     JsonNode report=Model.JSON.readTree(bytes);

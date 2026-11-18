@@ -25,6 +25,7 @@ platform:
   autoStart: false
   auditMaxEvents: 1000000
   validationRetentionMinimumDays: 0
+  validationArchiveDirectory: ""
 sessions:
   enabled: true
   secureCookie: true

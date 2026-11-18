@@ -82,6 +82,8 @@ public final class ValidationRetention {
     }
 
     private static void requireCompleted(Path directory,String reportId)throws Exception{
+        if(ValidationArchive.restoringRequired(directory,reportId))
+            throw failure("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED");
         if(!Files.isRegularFile(directory.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS))
             throw failure("VALIDATION_REPORT_NOT_CREATED");
         byte[] bytes=bounded(directory.resolve("summary.json"),1024*1024);

@@ -98,6 +98,16 @@ In **View storage**, enter the minimum number of days to retain the completed re
 
 The equivalent request is `POST /api/tasks/{taskId}/validations/{reportId}/retention` with the usual request ID and session protection. Pass `expectedRevision`, `minimumDays`, and `approved: true`. Include `expectedReviewId` from the previous review when one exists. A retry with the same request ID and body keeps the original result. The Agent stores the review alongside the report and links its outcome to the report ID and actor in the audit trail. Back up the attachment with the original report. The report and its recovery evidence remain on their current volume after the minimum date. Count the full report bytes when planning disk capacity.
 
+### Recover a report from a sealed copy
+
+Set `validationArchiveDirectory` on the report's owning Agent or standalone server to a private persistent directory. Keep that directory outside the validation report tree and restrict access to the server account. For Linux, Docker and native Kubernetes, configure and mount the directory in the server's platform configuration. Helm exposes `platform.validationArchiveDirectory`; provision the mount independently. Use separate storage if the copy must survive loss of the live report volume.
+
+For a completed report with a submitted retention review, select **View storage** and confirm **Create recovery copy**. The Agent holds the original report lock, copies the report database and summary, and verifies byte lengths and SHA-256 before sealing the descriptor. One copy may be sealed per report. The database limit is 128 MiB and the summary limit is 1 MiB. This copy contains the same sensitive data as the report. Preserve the original report directory, its archive descriptor, the Agent owner identity, retention and repair records in coordinated backups.
+
+If the live report database is missing, the report remains in the directory and live reads return `VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED`. Select **View storage** and confirm **Restore report**. The Agent verifies the copy and scope again, preserves every existing file with differing content, and restores missing files under the original lock. An interrupted restore blocks live readers and handoff custody until recovery completes. During normal operation the archive and original files both occupy storage.
+
+For API clients, `POST /api/tasks/{taskId}/validations/{reportId}/archive` accepts `operation: "COPY"` and `expectedReviewId`, or `operation: "RESTORE"` and `expectedArchiveId`. Both require the current `expectedRevision`, confirmation with `approved: true`, and an authenticated request ID.
+
 ### Find a recovery operation receipt
 
 In global task control, an administrator can choose **Find receipt by request ID** in the task details. A current recovery operation also has a **View receipt** shortcut. The exact lookup `GET /api/tasks/{taskId}/recovery-receipts/{requestId}` reads the persisted control-plane result after the request has left recent history, including while its Agent is unavailable.

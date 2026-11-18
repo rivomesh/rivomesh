@@ -264,6 +264,26 @@ public final class ConsoleServer implements AutoCloseable {
                         expected.textValue(),days.intValue(),input.path("approved").isBoolean()&&input.path("approved").booleanValue());
                 json(exchange,202,control.invoke(request,principal));return;
             }
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")
+                    &&parts[6].equals("archive")&&method.equals("POST")){
+                if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                JsonNode input=body(exchange);
+                String action=switch(input.path("operation").asText("")){
+                    case "COPY"->io.github.rivomesh.validation.ValidationArchive.COPY;
+                    case "RESTORE"->io.github.rivomesh.validation.ValidationArchive.RESTORE;
+                    default->throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
+                };
+                if(input.hasNonNull("expectedReviewId")&&!input.path("expectedReviewId").isTextual()
+                        ||input.hasNonNull("expectedArchiveId")&&!input.path("expectedArchiveId").isTextual())
+                    throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);
+                request.action=action;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                request.revision=input.path("expectedRevision").textValue();
+                request.validationArchive=new io.github.rivomesh.validation.ValidationArchive.Request(parts[5],
+                        input.path("expectedReviewId").textValue(),input.path("expectedArchiveId").textValue(),
+                        input.path("approved").isBoolean()&&input.path("approved").booleanValue());
+                json(exchange,202,control.invoke(request,principal));return;
+            }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&Arrays.asList("differences","values").contains(parts[6])&&method.equals("POST")){
                 if(!principal.administers()){error(exchange,403,"FORBIDDEN");return;}JsonNode input=body(exchange);boolean values=parts[6].equals("values");String identity=values?input.path("identityHash").asText(null):null;if(values&&(identity==null||!identity.matches("[0-9a-f]{64}")))throw new IllegalArgumentException("VALIDATION_IDENTITY_INVALID");
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_DIFFERENCES,parts[3]);request.reportId=parts[5];request.target=input.path("target").asText(null);request.tableId=input.path("tableId").asText(null);request.after=input.path("after").asText("");request.limit=input.path("limit").asInt(50);request.identityHash=identity;json(exchange,200,control.invoke(request,principal));return;

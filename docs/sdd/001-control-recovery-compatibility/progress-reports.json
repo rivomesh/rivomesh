@@ -68,7 +68,8 @@
     "LG-08 native MySQL 8.4.13 → PostgreSQL 17.12 matched LOCAL journal and pg_dump/pg_restore passed four Java 21 checks. Same database OID and snapshots, exact new GTID replay once, separate target URL refused.",
     "SO-07 Oracle civil DATE and strict JSON passed 22 native cases on Oracle Free 23.26.4, with exact archived updates/undo, SIGKILL original snapshots, and BCE refusal.",
     "LG-02 PostgreSQL native UNIQUE execution passed 11 cases, including atomic rollback after source session loss and same-request reconciliation after actual lost commit acknowledgement.",
-    "JV-03 fixed the old TLS 1.2-only binlog factory for verified modes; exact MySQL 8.4.13 TLS 1.3 snapshot/binlog/destination native tests all four passed after reconnect."
+    "JV-03 fixed the old TLS 1.2-only binlog factory for verified modes; exact MySQL 8.4.13 TLS 1.3 snapshot/binlog/destination native tests all four passed after reconnect.",
+    "LG-09 sealed report copy and approved exact restore published. Fifteen native cases including six real Chrome, plus 50 integrated Java and 135 DOM passed; offline receipts, digest audit and both readers verified."
   ],
   "lastScheduledReportAt": "2026-11-18T19:58:16+08:00",
   "lastReportDelay": "Host clock advanced from about 19:28 to 20:18 Asia/Taipei during active fixtures; sent after resumption."

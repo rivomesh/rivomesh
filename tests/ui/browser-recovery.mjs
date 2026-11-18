@@ -6,7 +6,7 @@ import {launchChrome,waitFor} from './chromium.mjs';
 
 // The disposable native fixture supplies its loopback endpoints and token via stdin.
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['repair','correction','receipt','retention'].includes(scenario));
+assert(binary&&['repair','correction','receipt','retention','archive-copy','archive-restore'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const fixture=JSON.parse(Buffer.concat(chunks));
@@ -146,6 +146,23 @@ try{
     await poll(query(dialog)+'?.textContent.includes("至少保留至")','reviewed hold and operator are visible');
     await key('Escape',27);
     checks.push('Chrome requires explicit report retention approval and sees the durable hold on the other Controller');
+  }else if(scenario==='archive-copy'||scenario==='archive-restore'){
+    const restoring=scenario==='archive-restore';
+    const storage='[data-validation-storage="'+fixture.reportId+'"]',dialog='.validation-storage-dialog[open]',
+      form=dialog+' [data-validation-archive-form]',approval=form+' input[name="archiveApproved"]';
+    const action=restoring?'VALIDATION_ARCHIVE_RESTORE':'VALIDATION_ARCHIVE_COPY';
+    await activate(storage,'view protected archive choices');
+    await poll(`Boolean(${query(form)})`,'archive review form');
+    assert.equal(await evaluate(query(dialog)+'.textContent.includes("报告需要恢复")'),restoring);
+    await clickNamed(form+' button',restoring?'恢复报告':'创建恢复副本');
+    assert(!await evaluate(query(dialog)+'.textContent.includes("请求 ID")'));
+    await evaluate(query(approval)+'.click()');
+    await activate(form+' button[type="submit"]','approve the exact report archive operation');
+    const confirmed=await poll(operations(action),'durable archive outcome');
+    assert.equal(confirmed.code,restoring?'VALIDATION_ARCHIVE_RESTORED':'VALIDATION_ARCHIVE_SEALED');
+    checks.push(restoring
+      ?'Chrome restores the fenced report from its sealed archive only after approval'
+      :'Chrome creates a sealed recovery copy after explicit report archive approval');
   }else if(scenario==='correction'){
     await clickNamed('.history button','查看事务证据');
     await activate('button[data-recovery-label="correctionOpen"]','typed correction for the retained failure');

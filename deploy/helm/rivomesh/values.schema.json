@@ -169,6 +169,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 3650
+        },
+        "validationArchiveDirectory": {
+          "type": "string",
+          "maxLength": 4096
         }
       }
     },

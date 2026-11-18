@@ -48,7 +48,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return tasks.correctionPreview(r,actor);
             case ACTION:
                 if(r.recoveryCancel())return tasks.cancelRecovery(r,actor);
-                if(r.reviewValidationRetention())return tasks.reviewValidationRetention(r,actor);
+                if(r.validationMaintenance())return tasks.validationMaintenance(r,actor);
                 return tasks.command(r.taskId,r.action,r.revision,r.requestId,r.errorCount,r.subscriptionId,actor,r.validation,r.repair,r.commit,r.skip,r.gap,r.compensation,r.correction,r.captureRetention()?r.reference:null,r.captureExclusion);
             default:throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         }

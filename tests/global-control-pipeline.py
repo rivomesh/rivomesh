@@ -76,6 +76,7 @@ parser.add_argument('--correction', action='store_true', help='Check administrat
 parser.add_argument('--browser', type=Path, help='Use a real Chrome executable to approve the validation repair and typed correction')
 parser.add_argument('--receipt-lookup', action='store_true', help='Find older recovery receipts with the Agent offline after browser repair and correction')
 parser.add_argument('--retention-review', action='store_true', help='Record a reviewed minimum retention hold through the real Chrome report storage dialog')
+parser.add_argument('--report-archive', action='store_true', help='Prove a sealed report copy and restore across real protected report storage loss')
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
@@ -97,6 +98,8 @@ if args.receipt_lookup and (not args.browser or not args.correction):
 if args.retention_review and (not args.browser or any((args.correction,args.receipt_lookup,args.runtime_image,
         args.runtime_jdk,args.task_authority,args.command_routing,args.rolling_restart,args.mysql_delivery_timing))):
     parser.error('--retention-review uses the focused --browser profile')
+if args.report_archive and not args.retention_review:
+    parser.error('--report-archive requires --retention-review')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_authority and (not args.separate_execution or any((args.automatic_placement, args.runtime_image,
@@ -235,6 +238,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
+            'reportArchive': args.report_archive,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -279,6 +283,8 @@ def wait(check, label, seconds=120):
 
 with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as temporary:
     home = Path(temporary)
+    if args.report_archive:
+        (home/'report-archive').mkdir(mode=0o700)
     if args.handoff_custody:
         for directory in ('handoff-shared','handoff-disjoint'):
             (home / directory).mkdir(mode=0o700)
@@ -326,6 +332,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node in execution_agents else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
         if args.retention_review and node==owner_node:
             config['validationRetentionMinimumDays']=30
+        if args.report_archive and node==owner_node:
+            config['validationArchiveDirectory']='/fixture/report-archive'
         if args.handoff_custody and node in execution_agents:
             config['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared' if node==owner_node else '/fixture/handoff-disjoint'
         if args.secret_audit and node==owner_node:
@@ -1746,6 +1754,43 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         restart_owner()
         assert http('node-b',report_path+'/storage')['retention']==review
         passed('The control receipt survives Agent loss and the original review remains visible after its restart')
+        if args.report_archive:
+            run_report_archive(report_id,report_path,directory)
+
+    def run_report_archive(report_id,report_path,directory):
+        files={name:(directory/name).read_bytes() for name in ('rows.mv.db','summary.json')}
+        retained=http('node-a',report_path+'/storage')['retention']
+        http('node-b',report_path+'/archive',{'operation':'COPY','approved':True,
+             'expectedRevision':task()['revision'],'expectedReviewId':retained['requestId']},
+             request='refused_'+uuid.uuid4().hex,expected=403,token=env['RM_GC_VIEWER'])
+        browser_check('archive-copy',reportId=report_id)
+        archive=http('node-a',report_path+'/storage')['archive']
+        receipt=route+'/recovery-receipts/'+archive['id']
+        outcome=http('node-a',receipt)
+        assert outcome['code']=='VALIDATION_ARCHIVE_SEALED' and outcome['references']=={'reportId':report_id,'archiveId':archive['id']}
+        archive_hash=wait(lambda:operation(archive['id']).get('result',{}).get('hash'),'archive descriptor digest')
+        request_hash=hashlib.sha256(archive['id'].encode()).hexdigest()
+        def audited():
+            return next((event for event in http('node-b','/api/audit/export?limit=1000')['events']
+                         if event.get('kind')=='OPERATION_COMMITTED' and event.get('subjectId')==report_id
+                         and event.get('clientRequestHash')==request_hash and event.get('operationHash')==archive_hash
+                         and event.get('status')=='SUCCEEDED'),None)
+        assert wait(audited,'remote archive audit records the scoped descriptor digest')['actorId']==archive['actorId']
+        sealed,=list((home/'report-archive').glob('report-*'))
+        assert all((sealed/name).read_bytes()==(directory/name).read_bytes()==original for name,original in files.items())
+        passed('A protected report copy retains the exact sealed report bytes in both original and archive storage')
+        terminate_owner()
+        assert http('node-b',receipt)==outcome
+        (directory/'rows.mv.db').rename(home/'disposable-hot-loss')
+        restart_owner()
+        assert http('node-b',report_path,expected=409)['code']=='VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED'
+        assert any(report['id']==report_id for report in http('node-a',route+'/validations')['reports'])
+        assert http('node-b',report_path+'/storage')['restoreRequired']
+        passed('Scoped historical report remains indexed after fixture data-file loss and all live report reads refuse to open it')
+        browser_check('archive-restore',reportId=report_id)
+        assert all((directory/name).read_bytes()==(sealed/name).read_bytes()==original for name,original in files.items())
+        assert http('node-a',report_path)['code']=='VALIDATION_MATCH'
+        passed('Both management entries can verify the original report again after reviewed restoration')
 
     def run_receipt_lookup():
         for _ in range(21):

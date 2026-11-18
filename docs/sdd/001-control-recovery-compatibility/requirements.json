@@ -1673,8 +1673,8 @@
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "跨入口历史报告、回执、分页、修复及补数据已实测。可配置保留时长、跨入口审批与原报告字节保护实测通过；最终报告可恢复归档和回收仍待验。",
-        "en": "Historical report/receipt lookup, paging, correction and repair passed across entries. Configured minimum retention, reviewed holds and exact file preservation passed. Reversible final-report archival and reclamation remain."
+        "zh-CN": "双入口历史报告/回执、保留审批、原字节归档、缺文件时隔离与按审批恢复已实测。最终原报告的可审计安全回收待验。",
+        "en": "Historical report/receipt lookup, reviewed retention, sealed copies, missing-file fencing and approved byte-exact restoration passed across entries. Safe audited reclamation of final hot reports remains."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",
@@ -1694,7 +1694,8 @@
         "tests/global-control-pipeline.py",
         "tests/ui/browser-recovery.mjs",
         "sync-app/src/main/java/io/github/rivomesh/platform/RecoveryReceipts.java",
-        "sync-app/src/main/java/io/github/rivomesh/validation/ValidationRetention.java"
+        "sync-app/src/main/java/io/github/rivomesh/validation/ValidationRetention.java",
+        "sync-app/src/main/java/io/github/rivomesh/validation/ValidationArchive.java"
       ]
     },
     {

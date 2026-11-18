@@ -29,12 +29,13 @@ window.RivomeshRecovery=(()=>{
   'VALIDATE','VALIDATE_RETRY','VALIDATE_CANCEL','REPAIR_PLAN','REPAIR_EXECUTE','REPAIR_CANCEL',
   'FAILURE_REVIEW','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
   'GAP_VERIFY_PLAN','GAP_VERIFY_EXECUTE','GAP_VERIFY_CANCEL','COMPENSATION_PLAN','COMPENSATION_EXECUTE',
-  'CORRECTION_EXECUTE','RECOVERY_CANCEL','CAPTURE_RETAIN','CAPTURE_EXCLUDE','VALIDATION_RETENTION_REVIEW'
+  'CORRECTION_EXECUTE','RECOVERY_CANCEL','CAPTURE_RETAIN','CAPTURE_EXCLUDE','VALIDATION_RETENTION_REVIEW',
+  'VALIDATION_ARCHIVE_COPY','VALIDATION_ARCHIVE_RESTORE'
  ]);
  const receiptAllowed=task=>!!task&&(task.formatVersion===3||task.formatVersion==null&&!!task.ownerNodeId)
   &&bridge.session()?.taskControlScope==='GLOBAL'&&can('TASK_CONFIG');
  const receiptFields={reportId:'receiptReport',repairPlanId:'receiptRepairPlan',failureEvidenceId:'receiptEvidence',
-  skipPlanId:'receiptSkipPlan',gapPlanId:'receiptGapPlan'};
+  skipPlanId:'receiptSkipPlan',gapPlanId:'receiptGapPlan',archiveId:'receiptArchive'};
  function receiptAction(task,operation){
   if(!receiptAllowed(task)||!receiptActions.has(operation.action)||!receiptId.test(operation.id||''))return null;
   const button=label('button','receiptView');button.className='quiet';
@@ -451,14 +452,14 @@ window.RivomeshRecovery=(()=>{
   receiptHelp:'回执展示控制面记录的操作状态。可查询已离开近期列表的请求。',
   receiptId:'管理请求 ID',receiptAction:'操作',receiptActor:'发起人',receiptTarget:'目标',receiptTime:'提交时间',receiptParent:'关联请求',
   receiptReport:'校验报告',receiptRepairPlan:'修复计划',receiptEvidence:'事务证据',receiptSkipPlan:'跳过计划',
-  receiptGapPlan:'缺口核验计划',receiptInvalid:'请输入有效的管理请求 ID。',receiptMismatch:'返回的回执与当前请求不符。',
+  receiptGapPlan:'缺口核验计划',receiptArchive:'报告归档',receiptInvalid:'请输入有效的管理请求 ID。',receiptMismatch:'返回的回执与当前请求不符。',
   RECOVERY_RECEIPT_NOT_FOUND:'当前任务下没有对应的恢复操作回执。'
  },{
   receiptTitle:'Recovery operation receipt',receiptFind:'Find receipt by request ID',receiptView:'View receipt',
   receiptHelp:'A receipt shows the operation state recorded by the control plane. Earlier requests can be found after they leave recent history.',
   receiptId:'Management request ID',receiptAction:'Operation',receiptActor:'Requested by',receiptTarget:'Destination',receiptTime:'Submitted at',
   receiptParent:'Related request',receiptReport:'Validation report',receiptRepairPlan:'Repair plan',receiptEvidence:'Transaction evidence',
-  receiptSkipPlan:'Skip plan',receiptGapPlan:'Gap verification plan',receiptInvalid:'Enter a valid management request ID.',
+  receiptSkipPlan:'Skip plan',receiptGapPlan:'Gap verification plan',receiptArchive:'Report archive',receiptInvalid:'Enter a valid management request ID.',
   receiptMismatch:'The returned receipt does not match the current request.',
   RECOVERY_RECEIPT_NOT_FOUND:'No corresponding recovery operation receipt exists for this task.'
  });

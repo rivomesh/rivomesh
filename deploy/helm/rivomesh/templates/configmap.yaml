@@ -63,6 +63,9 @@ data:
     {{- if gt (int .Values.platform.validationRetentionMinimumDays) 0 }}
     validationRetentionMinimumDays: {{ .Values.platform.validationRetentionMinimumDays | int }}
     {{- end }}
+    {{- if .Values.platform.validationArchiveDirectory }}
+    validationArchiveDirectory: {{ .Values.platform.validationArchiveDirectory | quote }}
+    {{- end }}
     sessions:
       enabled: {{ .Values.sessions.enabled }}
       secureCookie: {{ .Values.sessions.secureCookie }}
