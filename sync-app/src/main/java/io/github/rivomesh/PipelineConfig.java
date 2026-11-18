@@ -79,9 +79,6 @@ public final class PipelineConfig {
             throw new IllegalArgumentException("SOURCE_TYPE_CONFLICT");
         return nested!=null?nested:sourceType==null?"MYSQL":sourceType;
     }
-    public JournalWriterAssignment.CutProof verifyHandoffCut(JournalWriterAssignment.ExpectedCut expected)throws Exception{
-        return JournalWriterAssignment.verifyExistingCut(this,expected,generation->PipelineSources.open(this,generation));
-    }
     public void validate(){
         if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
         Set<String> db=new TreeSet<>();for(String name:databases)if(name==null||name.isEmpty()||name.indexOf('\0')>=0||!db.add(name))throw new IllegalArgumentException("DATABASE_LIST_INVALID");
