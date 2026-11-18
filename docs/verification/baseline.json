@@ -1029,7 +1029,11 @@
     "scope": "Read-only administrator report on owning Agent plus standalone CLI and HTTP. Original source checkpoint, journaling and pause are retained.",
     "crossEntryChecks": 6,
     "crossEntryCheck": "SOURCE_DECODE: both entries route a read-only recovery review to the owner without changing the checkpoint or pause",
-    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --source-diagnostics decode --source-expected-version 8.4 --artifact <candidate jar> --output target/source-review-proof"
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --source-diagnostics decode --source-expected-version 8.4 --artifact <candidate jar> --output target/source-review-proof",
+    "mysql57Native": {
+      "scope": "Java 8 native MySQL 5.7.44 GTID async promotion, purged uncaptured binlog and read-only review; PostgreSQL journal and business target.",
+      "checks": 1
+    }
   },
   "kubernetesCsiPilot": {
     "artifactSha256": "16efe0b21bad57fda1418195484595ac20b8e5579f4763f4a109e474beef44a9",

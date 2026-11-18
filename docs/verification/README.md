@@ -97,3 +97,5 @@ Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` pas
 ## LG-06 live Kubernetes RWO CSI
 
 The image built from JAR `16efe0b21bad57fda1418195484595ac20b8e5579f4763f4a109e474beef44a9` passed four live checks each on Helm and native YAML in a two-node Kubernetes v1.31.0 ARM64 cluster. The checks exercised browser refresh, real PostgreSQL snapshot/CDC, RWO CSI remount across scale 0/1, configuration rollout and Secret rotation. Node-local CSI and single controller are the tested profile. See the [deployment guide](../en/console-and-deployment.md#two-node-live-verification).
+
+The same candidate also passed the MySQL 5.7.44 PostgreSQL-only asynchronous promotion fixture. After a real uncollected binlog was purged, the review returned `SOURCE_LOG_GAP`, the affected subscription and the original captured sequence. Reproduce with `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7.44 SYNC_V3_HA_POSTGRES_ONLY=1 tests/v3-ha-run.sh`.

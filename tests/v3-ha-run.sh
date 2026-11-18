@@ -10,6 +10,13 @@ cleanup() {
     "${compose[@]}" down -v --remove-orphans
 }
 trap cleanup EXIT
-"${compose[@]}" run --rm tests mvn -B -s build/settings.xml -Dsync.v3.ha=true -DtestSuite=v3-ha \
+run_flags=(--rm)
+profile_flags=()
+if [ "${SYNC_V3_HA_POSTGRES_ONLY:-0}" = 1 ]; then
+    "${compose[@]}" up --wait --wait-timeout 240 mysql mysql-replica postgres
+    run_flags+=(--no-deps)
+    profile_flags+=(-Dsync.v3.ha.postgresOnly=true)
+fi
+"${compose[@]}" run "${run_flags[@]}" tests mvn -B -s build/settings.xml -Dsync.v3.ha=true "${profile_flags[@]}" -DtestSuite=v3-ha \
     '-Dtarget.url=jdbc:postgresql://postgres:5432/sync_test?connectTimeout=3&socketTimeout=10' \
     -Dtest=PipelineClusterIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false verify
