@@ -2,29 +2,27 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T21:23:34+08:00",
-  "nextReportAt": "2026-11-18T21:58:16+08:00",
+  "lastReportAt": "2026-11-18T21:59:04+08:00",
+  "nextReportAt": "2026-11-18T22:58:16+08:00",
   "completedSincePrevious": [
-    "CP-04/LG-05 published shared validation report custody. Both control stores passed 12 native cases and the integrated artifact passed 30 Java tests. Candidate isolated-mount refusal and exact original bytes verified.",
-    "JV-02 MySQL 8.4.13 live async GTID failover passed eight checks on exact Java 21. Both PostgreSQL and MySQL moved from receipt sequence 1 to 2 after external promotion, with exact data and original snapshots.",
-    "LG-09 historical repair/correction request lookup published with 21 native checks including ten real Chrome cases. Both older receipts stayed available after 21 subsequent controls and Agent loss.",
-    "LG-04 Redis Streams 7.4.2 passed six native checks for original-AOF promotion, one required replica fsync, stable event replay, durable consumer takeover and cold restart.",
-    "CP-05 completed. Both control stores passed 13 native cases with real Chrome, cross-entry authorization revocation and exact audit correlation. Agent-level task grants limit each Worker to its used credential references.",
-    "A clean Temurin 21 reactor from published 4e86f79 passed 526 application and two isolated transport tests with 32 optional profile skips.",
-    "JV-03 PostgreSQL 17.12 source and target verified TLS 1.3, SCRAM channel binding, wrong DNS and CA refusal and original-snapshot reconnect across 11 native checks.",
-    "LG-09 reviewed retention holds passed eight native cases including two Chrome and 48 integrated Java /135 DOM tests. Audit receipt and report bytes survived Agent failure, with viewer refusal.",
-    "LG-08 current Temurin 21 LOCAL H2 coordinated cold restore preserved original snapshots and replayed sequence 1→3. Mixed-time destination and corrupt raw data failed closed in a synthetic MySQL/H2 test adapter profile.",
-    "CP-04/LG-05 closed operation receipt custody passed 14 native checks per control store and 48 staged Java tests. A lost private receipt after original Agent restart preserves report custody and original writer authority.",
-    "RC-10 exact indexed retention candidate passed 22 tests each on PostgreSQL 17.12, MySQL 8.4.13 and MySQL 8.0.42, plus five native peer reopens. Scoped publication is being integrated."
+    "RC-10 journal event pinning published with 22 real checks per PostgreSQL 17.12, MySQL 8.4.13 and MySQL 8.0.42, plus exact collector index and five H2 peer-reopen checks.",
+    "LG-08 native MySQL 8.4.13 → PostgreSQL 17.12 matched LOCAL journal and pg_dump/pg_restore passed four Java 21 checks. Same database OID and snapshots, exact new GTID replay once, separate target URL refused.",
+    "SO-07 Oracle civil DATE and strict JSON passed 22 native cases on Oracle Free 23.26.4, with exact archived updates/undo, SIGKILL original snapshots, and BCE refusal.",
+    "LG-02 PostgreSQL native UNIQUE execution passed 11 cases, including atomic rollback after source session loss and same-request reconciliation after actual lost commit acknowledgement.",
+    "JV-03 fixed the old TLS 1.2-only binlog factory for verified modes; exact MySQL 8.4.13 TLS 1.3 snapshot/binlog/destination native tests all four passed after reconnect.",
+    "LG-09 sealed report copy and approved exact restore published. Fifteen native cases including six real Chrome, plus 50 integrated Java and 135 DOM passed; offline receipts, digest audit and both readers verified.",
+    "RC-10 per-target capability UI and ClickHouse read-only native receipt review passed 36 live-suite checks, 72 integrated Java, 136 DOM and 14 Chrome. Later partial batch and changed receipt refused with both ACKs retained.",
+    "Clean published 7e0c763 Temurin 21 reactor verification passed 541 app plus two isolated transport tests, with 33 optional external profile skips.",
+    "CP-04 planned Agent preparation passed 16 native PostgreSQL-control cases including reserve/release and capacity fencing. MySQL and native browser are pending.",
+    "Current bilingual status pages now link to the canonical SDD totals instead of retaining an obsolete duplicated number."
   ],
   "inProgress": [
-    "CP-04 durable handoff plan and candidate capacity reservation, before dual-authority transfer and source/failure evidence checks.",
-    "LG-09 reviewed archive and exact-byte restore using the original report lock and durable evidence dependency protections.",
-    "LG-02 actual PostgreSQL UNIQUE restoration, original-cut and native receipt checks after interrupted/unknown commit. Retest only fixture timing on same candidate.",
-    "JV-03 PostgreSQL TLS published. MySQL 8.4 JDBC and binlog TLS fixture prepared for native verification.",
-    "RC-10 publish bounded journal retention and surface exact per-target recovery capabilities.",
-    "LG-08 true MySQL/PostgreSQL backup and restore fixture prepared.",
-    "SO-07 exact Oracle DATE package passed focused Java. Oracle health timeout after host clock movement prevented native data checks; clean and retry."
+    "CP-04 reserved transfer preparation and capacity: PostgreSQL passed 16 native checks, MySQL and real Chrome pending. Actual transfer still requires write authority fences.",
+    "CP-04/LG-05 authenticated original failure evidence custody: PostgreSQL passed 15, MySQL retry in progress.",
+    "LG-09 final hot report reclamation: reviewed exact archive SHA, dead/old eligible reports, read lock, durable tombstone, scoped H2 tests and 136 DOM passed. Native Chrome pending.",
+    "LG-02 read-only adoption plans tied exact native cut, catalog and ownership to a review digest. Native MySQL/PostgreSQL pass pending.",
+    "SO-06 PostgreSQL DATE to PostgreSQL and MySQL, verified offline package and native slot queued.",
+    "LG-10/JV-03 external vendor JDBC package passed exact classpath admission/no-bundled-driver checks. SBOM and distribution record review ongoing."
   ],
   "reportContents": [
     "Current totals",
@@ -39,16 +37,12 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "ef96763abca04bf45a357f28363633e92f9210a5",
-    "22635079c3a7a4b6228ed5e25828f0d2dec98271",
-    "9e55f8c4e3c20989145b52c0230c5d9af480c231",
-    "2d9a5db0d6c5f1277d32c1132afa4e5d778fa9b4",
-    "8e30595bc3b547e813354cf76b5a972d8a1c1a1e",
-    "c9bef594a7c1cdf9073e1bd0429831793f49b473",
-    "48267ec6a20659ff9bf912aa8057b2d3a74af815",
-    "45079e892c4810a0560cc45118a360a60a66fdbc",
-    "4e86f79b1cf93306d485171dc1acf4911010c281",
-    "1a16710c2e4e8ef0a83e387c526f34de7c36772b"
+    "dd1956792bf03f03a1af160957ee21032e0b485e",
+    "3cb12efd25be1e62046bdd6b5b1d12096fb1ae56",
+    "7e0c76367d8322ec5ddb88418c693be534a97e89",
+    "47b40b53973e79faa20121dd2358aaf433b3f43b",
+    "7d1b59ac4e5c50307f7201df32c2ad78108d40f1",
+    "a3ec6abab0dde79275dcd7e7f4174c0a71809347"
   ],
   "currentSdd": {
     "DONE": 34,
@@ -56,22 +50,19 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Publish RC-10 exact scoped retention, then verify MySQL TLS and live coordinated state restore profiles.",
-    "Continue bounded handoff reservations and reversible report archive lifecycle.",
-    "Complete LG-02 native restoration and retry Oracle DATE when host resources are stable."
+    "Finish shared preparation and original failure custody native checks, then verify the end-to-end console.",
+    "Verify approved final report reclamation and restore, and finish the nonempty adoption plan.",
+    "Continue PostgreSQL DATE, JDBC release packaging and sender/target authority fencing."
   ],
   "currentCandidateArtifact": "c28a871f409b5f46936f063093a245b9b802003d414885d0d63117f1afc371df",
   "currentCandidateScope": "Merged Oracle civil DATE, PostgreSQL reviewed UNIQUE restore and verified MySQL TLS; exact native MySQL TLS and 41 Java checks",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
-  "newSinceLastReport": [
-    "RC-10 journal event pinning published with 22 real checks per PostgreSQL 17.12, MySQL 8.4.13 and MySQL 8.0.42, plus exact collector index and five H2 peer-reopen checks.",
-    "LG-08 native MySQL 8.4.13 → PostgreSQL 17.12 matched LOCAL journal and pg_dump/pg_restore passed four Java 21 checks. Same database OID and snapshots, exact new GTID replay once, separate target URL refused.",
-    "SO-07 Oracle civil DATE and strict JSON passed 22 native cases on Oracle Free 23.26.4, with exact archived updates/undo, SIGKILL original snapshots, and BCE refusal.",
-    "LG-02 PostgreSQL native UNIQUE execution passed 11 cases, including atomic rollback after source session loss and same-request reconciliation after actual lost commit acknowledgement.",
-    "JV-03 fixed the old TLS 1.2-only binlog factory for verified modes; exact MySQL 8.4.13 TLS 1.3 snapshot/binlog/destination native tests all four passed after reconnect.",
-    "LG-09 sealed report copy and approved exact restore published. Fifteen native cases including six real Chrome, plus 50 integrated Java and 135 DOM passed; offline receipts, digest audit and both readers verified.",
-    "RC-10 per-target capability UI and ClickHouse read-only native receipt review passed 36 live-suite checks, 72 integrated Java, 136 DOM and 14 Chrome. Later partial batch and changed receipt refused with both ACKs retained."
-  ],
-  "lastScheduledReportAt": "2026-11-18T19:58:16+08:00",
-  "lastReportDelay": "Host clock advanced from about 19:28 to 20:18 Asia/Taipei during active fixtures; sent after resumption."
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-18T21:58:16+08:00",
+  "lastVerifiedReactor": {
+    "commit": "7e0c763",
+    "artifactSha256": "ae816db9fde2c322ecea5a3629a3d6651aedd79b971a66aa788309a3a9cb3ee7",
+    "javaTestsPassed": 543,
+    "optionalSkips": 33
+  }
 }
