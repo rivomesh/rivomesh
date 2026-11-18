@@ -121,7 +121,17 @@ public final class ConsoleServer implements AutoCloseable {
             if(!method.equals("GET")&&!principal.administers()){
                 if(!principal.operates()||!method.equals("POST")||!path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")){error(exchange,403,"FORBIDDEN");return;}
             }
-            if(path.equals("/api/tasks")&&method.equals("GET")){TaskRequest request=TaskRequest.of(TaskRequest.Kind.LIST,null);if(!control.localOnly()){Map<String,String> query=nodeQuery(exchange.getRequestURI().getRawQuery());request.cursor=query.getOrDefault("after","");request.limit=Integer.parseInt(query.getOrDefault("limit","20"));}json(exchange,200,control.invoke(request,principal));return;}
+            if(path.equals("/api/tasks")&&method.equals("GET")){
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.LIST,null);
+                if(!control.localOnly()){
+                    Map<String,String> query=pageQuery(exchange.getRequestURI().getRawQuery(),true);
+                    request.cursor=query.getOrDefault("after","");
+                    request.limit=Integer.parseInt(query.getOrDefault("limit","20"));
+                    request.ownerNodeId=query.get("ownerNodeId");
+                    request.taskId=query.get("taskId");
+                }
+                json(exchange,200,control.invoke(request,principal));return;
+            }
             if(path.equals("/api/capabilities")&&method.equals("GET")){json(exchange,200,AdapterCatalog.entries());return;}
             if(path.equals("/api/tasks")&&method.equals("POST")) {
                 JsonNode body=body(exchange);String yaml;
@@ -215,9 +225,19 @@ public final class ConsoleServer implements AutoCloseable {
     }
 
     private Map<String,Object> invoke(TaskRequest.Kind kind,String task,AccessControl.Principal actor)throws Exception{return control.invoke(TaskRequest.of(kind,task),actor);}
-    private static Map<String,String> nodeQuery(String raw)throws Exception{
-        Map<String,String> result=new HashMap<>();if(raw==null)return result;if(raw.length()>160)throw new IllegalArgumentException("NODE_CURSOR_INVALID");
-        for(String field:raw.split("&",-1)){String[] pair=field.split("=",-1);if(pair.length!=2||!Arrays.asList("after","limit").contains(pair[0])||result.put(pair[0],URLDecoder.decode(pair[1],"UTF-8"))!=null)throw new IllegalArgumentException("NODE_CURSOR_INVALID");}return result;
+    private static Map<String,String> nodeQuery(String raw)throws Exception{return pageQuery(raw,false);}
+    private static Map<String,String> pageQuery(String raw,boolean tasks)throws Exception{
+        Map<String,String> result=new HashMap<>();
+        if(raw==null)return result;
+        String invalid=tasks?"TASK_CURSOR_INVALID":"NODE_CURSOR_INVALID";
+        List<String> fields=tasks?Arrays.asList("after","limit","ownerNodeId","taskId"):Arrays.asList("after","limit");
+        if(raw.length()>(tasks?1024:160))throw new IllegalArgumentException(invalid);
+        for(String field:raw.split("&",-1)){
+            String[] pair=field.split("=",-1);
+            if(pair.length!=2||!fields.contains(pair[0])||result.put(pair[0],URLDecoder.decode(pair[1],"UTF-8"))!=null)
+                throw new IllegalArgumentException(invalid);
+        }
+        return result;
     }
     private static String singleHeader(HttpExchange exchange,String name){
         List<String> values=exchange.getRequestHeaders().get(name);if(values==null)return null;

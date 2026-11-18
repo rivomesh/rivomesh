@@ -756,6 +756,49 @@ test('global task pagination shows authorized total, owner and page metrics',asy
   ui.d.getElementById('tasks-next').click();await flush();assert.match(ui.d.getElementById('task-list').textContent,/b-task/);assert.ok(ui.calls.some(call=>call.path.includes('after=a-task')));assert.equal(ui.d.getElementById('tasks-previous').disabled,false);ui.d.getElementById('tasks-previous').click();await flush();assert.match(ui.d.getElementById('task-list').textContent,/a-task/);assert.equal(ui.d.getElementById('tasks-first').disabled,true);
  }finally{ui.dom.window.close();}
 });
+test('global task filters send exact task and owner, reset pagination and clear on sign-out',async()=>{
+ const ui=globalFixture({},'VIEWER');
+ const fallback=ui.w.fetch;
+ ui.w.fetch=async(path,options={})=>{
+  if(path.startsWith('/api/tasks?')&&path.includes('ownerNodeId=')){
+   ui.calls.push({path,...options});
+   return {ok:true,status:200,json:async()=>({tasks:[],total:0,next:null})};
+  }
+  return fallback(path,options);
+ };
+ try{
+  await login(ui);ui.d.getElementById('tasks-next').click();await flush();
+  const form=ui.d.getElementById('task-filter');
+  form.elements.taskId.value='missing';form.elements.ownerNodeId.value='node-b';
+  form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+  const page=ui.calls.find(call=>call.path.includes('ownerNodeId=node-b'));
+  assert.ok(page.path.includes('taskId=missing'));assert.ok(!page.path.includes('after='));
+  assert.match(ui.d.getElementById('task-list').textContent,/未找到匹配/);assert.equal(ui.d.getElementById('tasks-previous').disabled,true);
+  ui.d.getElementById('clear-task-filter').click();await flush();assert.match(ui.d.getElementById('task-list').textContent,/a-task/);
+  form.elements.taskId.value='old-scope';ui.d.getElementById('logout').click();
+  assert.equal(form.elements.taskId.value,'');assert.equal(form.classList.contains('hidden'),true);
+ }finally{ui.dom.window.close();}
+});
+
+test('destination filter isolates status and displays only fresh exact backlog counts',async()=>{
+ const task={id:'filter-targets',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',sourceCluster:'source',sourceDatabase:'sales',targetSchema:'copy',
+  status:{run_state:'RUNNING',subscriptions:[{id:'warehouse',state:'PAUSED',pendingTransactions:'9007199254740993'},
+   {id:'events',state:'RUNNING',pendingTransactions:'0'}]},statusAvailable:true,operations:[]};
+ const ui=setup([task]);
+ try{
+  await login(ui);let select=ui.d.getElementById('destination-filter');
+  assert.equal(ui.d.querySelectorAll('.subscription-card').length,2);
+  select.value='warehouse';select.dispatchEvent(new ui.w.Event('change'));
+  assert.equal(ui.d.querySelectorAll('.subscription-card').length,1);
+  assert.match(ui.d.querySelector('.subscription-card').textContent,/待目标确认的日志事务 · 9007199254740993/);
+  assert.doesNotMatch(ui.d.querySelector('.subscription-card').textContent,/events/);
+  task.statusAvailable=false;ui.d.querySelector('.task-card').click();
+  assert.doesNotMatch(ui.d.querySelector('.subscription-card').textContent,/待目标确认的日志事务/);
+  select=ui.d.getElementById('destination-filter');select.value='';select.dispatchEvent(new ui.w.Event('change'));
+  assert.equal(ui.d.querySelectorAll('.subscription-card').length,2);
+ }finally{ui.dom.window.close();}
+});
+
 test('global wizard loads additional owner choices and submits the selected owner',async()=>{
  const ui=globalFixture();try{
   await login(ui);assert.equal(ui.d.getElementById('task-owner-control').classList.contains('hidden'),false);ui.d.getElementById('owners-more').click();await flush();assert.equal(ui.d.querySelectorAll('#owner-options option').length,2);ui.d.getElementById('new-task').click();const f=ui.d.getElementById('create-form').elements;f.formatVersion.value='2';f.formatVersion.dispatchEvent(new ui.w.Event('change'));

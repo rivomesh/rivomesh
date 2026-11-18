@@ -17,7 +17,7 @@
   ],
   "inProgress": [
     "RC-04 original source contents and approved isolation/exclusion.",
-    "CP-06 global owner and destination status filtering."
+    "CP-04 managed Agent relocation and execution admission."
   ],
   "reportContents": [
     "Current totals",
@@ -51,10 +51,11 @@
     "Continue managed Agent relocation with durable owner/epoch guards and real external-log acceptance.",
     "Extend remaining target cluster, recovery and deployment matrix cases."
   ],
-  "currentCandidateArtifact": "6d629310028898525a76a54683910b8db4fad01e919f28b46359ae444fd4c2ab",
-  "currentCandidateScope": "Java 8 native MySQL 8.4 read-only transaction header boundary and purge refusal",
+  "currentCandidateArtifact": "ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c",
+  "currentCandidateScope": "Exact global task/owner SQL paging and per-destination backlog in native SQL recovery, full Java and browser acceptance",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
-    "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks."
+    "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks.",
+    "CP-06 both entries passed task/owner filtering and exact per-target backlog during a real PostgreSQL constraint failure, while MySQL kept up. Same candidate passed 7 native, 7 Chrome, 503 Java (32 skipped) and 118 DOM cases."
   ]
 }

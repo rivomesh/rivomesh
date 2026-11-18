@@ -42,6 +42,9 @@ class GlobalControlHttpTest {
         try(TaskService first=new TaskService(a,ba,wa);TaskService second=new TaskService(b,bb,wb);ConsoleServer one=new ConsoleServer(a,first);ConsoleServer two=new ConsoleServer(b,second)){
             one.start();two.start();String api=base(one),owner=base(two);create(api,"job","b");PlatformTest.await(()->completed(api,"job","global_create_job"));assertThrows(NoSuchElementException.class,()->first.view("job"));assertEquals("job",second.view("job").get("id"));assertEquals("b",get(api,"/api/tasks/job",PlatformTest.TOKEN).path("ownerNodeId").asText());assertEquals(1,get(owner,"/api/tasks",PlatformTest.TOKEN).path("total").asInt());
             assertEquals("GLOBAL",get(api,"/api/session",PlatformTest.TOKEN).path("taskControlScope").asText());assertEquals("GLOBAL",get(owner,"/api/nodes",PlatformTest.TOKEN).path("taskControlScope").asText());bb.initialize("job");action(api,"job","START","global_start_job",PlatformTest.TOKEN);PlatformTest.await(()->wb.active.get()==1&&completed(api,"job","global_start_job"));assertEquals(0,wa.starts.get());assertEquals(1,wb.starts.get());action(owner,"job","STOP","global_stop_job",PlatformTest.TOKEN);PlatformTest.await(()->wb.active.get()==0&&completed(api,"job","global_stop_job"));
+            assertEquals("job",get(api,"/api/tasks?ownerNodeId=b&taskId=job",PlatformTest.TOKEN).path("tasks").path(0).path("id").asText());
+            assertEquals(0,get(owner,"/api/tasks?ownerNodeId=a&taskId=job",PlatformTest.TOKEN).path("total").asInt());
+            assertEquals(400,PlatformTest.http(api,"/api/tasks?ownerNodeId=a&ownerNodeId=b",PlatformTest.TOKEN,null,null).status);
             assertFalse(get(api,"/api/tasks/job",PlatformTest.TOKEN).toString().contains("source-secret"));assertEquals(400,PlatformTest.http(api,"/api/tasks?limit=51",PlatformTest.TOKEN,null,null).status);
         }
     }
@@ -50,6 +53,9 @@ class GlobalControlHttpTest {
         try(TaskService first=new TaskService(a,new PlatformTest.Backend(),new PlatformTest.Workers());TaskService second=new TaskService(b,backend,workers);ConsoleServer one=new ConsoleServer(a,first);ConsoleServer two=new ConsoleServer(b,second)){
             one.start();two.start();String api=base(one);create(api,"job","b");PlatformTest.await(()->completed(api,"job","global_create_job"));ObjectNode account=Model.JSON.createObjectNode();account.put("expectedRevision",get(api,"/api/accounts",PlatformTest.TOKEN).path("revision").asText());account.put("id","operator");account.put("role","OPERATOR");account.put("enabled",true);account.put("token","global-http-operator-at-least-32-bytes");account.putArray("taskIds").add("job");account.putArray("nodeIds").add("b");assertEquals(201,PlatformTest.http(api,"/api/accounts",PlatformTest.TOKEN,account.toString(),"global_add_operator").status);
             String token="global-http-operator-at-least-32-bytes";assertEquals("b",get(api,"/api/tasks/job",token).path("ownerNodeId").asText());assertEquals(403,PlatformTest.http(api,"/api/nodes",token,null,null).status);backend.initialize("job");action(api,"job","START","operator_start_job",token);PlatformTest.await(()->workers.active.get()==1&&completed(api,"job","operator_start_job"));
+            assertEquals(1,get(api,"/api/tasks?ownerNodeId=b&taskId=job",token).path("total").asInt());
+            assertEquals(0,get(api,"/api/tasks?ownerNodeId=a&taskId=job",token).path("total").asInt());
+
         }
     }
     @Test void persistedGlobalBindingRefusesDisableChangedNodeMissingDirectoryAndWrongKey()throws Exception{

@@ -15,7 +15,7 @@ Implementation:48requirements,26 DONE, 22 PARTIAL and 0 NEW, with 22 open. RC-01
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | P0 / PARTIAL | Failover,fencing and placement | Two nodes with an external journal passed Worker takeover and stale-writer fencing. Agent placement, remote lifecycle, capacity and upgrades remain open. |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain. |
+| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
 
 ## Persistent login
@@ -98,7 +98,7 @@ Implementation:48requirements,26 DONE, 22 PARTIAL and 0 NEW, with 22 open. RC-01
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain. |
+| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain. |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

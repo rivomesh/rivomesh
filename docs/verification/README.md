@@ -193,3 +193,7 @@ Candidate `0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b` pas
 ### MySQL decode header review
 
 Candidate `6d629310028898525a76a54683910b8db4fad01e919f28b46359ae444fd4c2ab` passed nine native MySQL 8.4.13 cases, 21 focused Java checks and 116 DOM checks. Both management entries read the same GTID, native commit boundary and table after an Agent restart. The target and capture checkpoint stayed paused at the original position. Purging the synthetic source log removed the header evidence, reported the source gap and preserved the checkpoint. The report contains header metadata and still requires separately retained row contents for a future skip review. [Fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)
+
+### Global task filters and destination backlog
+
+Candidate `ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c` passed seven native two-controller checks and seven real Chrome checks, plus 503 Java checks with 32 optional skips and 118 DOM checks. The management entries ran exact task and execution-node filters in shared SQL. A native PostgreSQL constraint blocked one delivery while the MySQL destination caught up. Both entries reported the same destination-specific backlog, and generation-bound resume brought both data sets and their acknowledgment positions back into agreement. [Native fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)

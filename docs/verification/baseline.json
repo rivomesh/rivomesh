@@ -2242,5 +2242,61 @@
     "sourceServerProfile": "ON|ROW|FULL",
     "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
     "cleanupExitCode": 0
+  },
+  "globalTaskDestinationViews": {
+    "native": {
+      "artifactSha256": "ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Both management entries filter exact task and owner inside the shared pagination query",
+        "Only the SQL-blocked destination has a pending transaction and both management entries agree",
+        "Generation-bound resume clears only the repaired destination backlog and all native rows agree"
+      ],
+      "harnessSourceSha256": "ccf6e9f0e05ef1fe8253b06589288df5724e7cc542c6169d4589d6383973a0e9",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "mixedRuntimeUpgrade": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "taskViews": true,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "cleanupExitCode": 0
+    },
+    "browser": {
+      "artifactSha256": "ec6ef04ed53a54e479df1e6f9ad60fa76bb01d6eba3f3c4619b319aa3dd61b0c",
+      "status": "PASS",
+      "checks": [
+        "Native Tab navigation stays in the login dialog and Escape keeps login required",
+        "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+        "Capture diagnostics has an accessible dialog name and works through Enter and Escape",
+        "English workspace stays within the mobile viewport",
+        "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+        "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+        "Actual sign-out revokes the browser session"
+      ],
+      "browser": "Chrome/157.0.8103.79"
+    },
+    "javaPassed": 503,
+    "optionalJavaSkipped": 32,
+    "domPassed": 118
   }
 }

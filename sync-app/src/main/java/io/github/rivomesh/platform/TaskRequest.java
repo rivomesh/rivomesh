@@ -33,7 +33,9 @@ final class TaskRequest {
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
         if(kind==null)throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         if(ownerNodeId!=null&&!ownerNodeId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))throw new IllegalArgumentException("TASK_OWNER_INVALID");
-        if(kind!=Kind.LIST&&kind!=Kind.CREATE&&(taskId==null||!taskId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")))throw new IllegalArgumentException("TASK_REQUEST_ID_INVALID");
+        if(taskId==null&&kind!=Kind.LIST&&kind!=Kind.CREATE
+                ||taskId!=null&&!taskId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
+            throw new IllegalArgumentException("TASK_REQUEST_ID_INVALID");
         if(mutation()&&(requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")))throw new IllegalArgumentException("REQUEST_ID_REQUIRED");
         if(kind==Kind.CREATE&&(yaml==null||yaml.getBytes(StandardCharsets.UTF_8).length>1024*1024))throw new IllegalArgumentException("CONFIG_REQUIRED");
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}

@@ -176,8 +176,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口实测独立采集租约和脱敏诊断分页，Agent 重启后保留事件。全局节点及目标过滤、积压和容量验收待完成。",
-        "en": "Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain."
+        "zh-CN": "双入口已验证采集租约、重启后的脱敏分页、按任务/节点过滤及独立目标积压。界面支持目标选择。真实时间延迟、按目标日志及容量档案待验收。",
+        "en": "Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",

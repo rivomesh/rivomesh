@@ -23,7 +23,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
         if(request.admin()&&!actor.administers()||request.kind==TaskRequest.Kind.ACTION&&!actor.operates())throw new SecurityException("FORBIDDEN");
         commands.requireRecovery(request);
         switch(request.kind){
-            case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
+            case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
             case CREATE:{
                 ObjectMapper yaml=new ObjectMapper(new YAMLFactory()).enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);JsonNode document=yaml.readTree(request.yaml);ConfigurationDocuments.validate(document);

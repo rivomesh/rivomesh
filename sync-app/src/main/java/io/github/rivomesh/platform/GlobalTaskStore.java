@@ -183,13 +183,15 @@ final class GlobalTaskStore {
             c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);AccessControl.Principal actor=access.authorize(c,supplied,false);root(c,false);Record record=read(c,id);scope(actor,id,record.owner,false);if(actor.administers())configuration(c,record);c.commit();return record;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
-    Map<String,Object> page(String after,int limit,AccessControl.Principal supplied)throws Exception{return page(after,limit,supplied,null);}
-    Map<String,Object> page(String after,int limit,AccessControl.Principal supplied,RowView view)throws Exception{
+    Map<String,Object> page(String after,int limit,AccessControl.Principal supplied)throws Exception{return page(after,limit,null,null,supplied,null);}
+    Map<String,Object> page(String after,int limit,String owner,String task,AccessControl.Principal supplied,RowView view)throws Exception{
         if(after==null||!after.isEmpty()&&!after.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||limit<1||limit>50)throw new IllegalArgumentException("TASK_CURSOR_INVALID");
         try(Connection c=db.connect()){
             c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);AccessControl.Principal actor=access.authorize(c,supplied,false);root(c,false);
             StringBuilder filter=new StringBuilder("cluster_id=?");List<Object> parameters=new ArrayList<>();parameters.add(cluster);
             grants(filter,parameters,"task_id",actor.taskIds);grants(filter,parameters,"owner_id",actor.nodeIds);
+            if(owner!=null){filter.append(" AND owner_id=?");parameters.add(owner);}
+            if(task!=null){filter.append(" AND task_id=?");parameters.add(task);}
             long total;try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("task_authority")+" WHERE "+filter,parameters.toArray());ResultSet r=p.executeQuery()){r.next();total=r.getLong(1);}
             List<Object> selection=new ArrayList<>(parameters);selection.add(after);selection.add(limit+1);List<Map<String,Object>> rows=new ArrayList<>();
             try(PreparedStatement p=db.prepare(c,"SELECT * FROM "+db.table("task_authority")+" WHERE "+filter+" AND task_id>? ORDER BY task_id LIMIT ?",selection.toArray());ResultSet r=p.executeQuery()){

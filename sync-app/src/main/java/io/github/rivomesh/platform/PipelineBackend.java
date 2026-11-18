@@ -20,7 +20,10 @@ final class PipelineBackend {
             List<Map<String,Object>> subscriptions=journal.subscriptionDiagnostics();Map<String,Object> frame=journal.deliveryProgress();
             @SuppressWarnings("unchecked")Map<String,Map<String,Object>> progress=(Map<String,Map<String,Object>>)frame.get("subscriptions");long captured=Long.parseLong((String)frame.get("capturedSequence")),minimum=captured;
             for(Map<String,Object> sub:subscriptions){
-                Map<String,Object> point=progress.get(sub.get("id"));if(point==null)throw new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED");sub.putAll(point);minimum=Math.min(minimum,Long.parseLong((String)point.get("safeCoveredSequence")));
+                Map<String,Object> point=progress.get(sub.get("id"));if(point==null)throw new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED");sub.putAll(point);
+                long covered=Long.parseLong((String)point.get("safeCoveredSequence"));
+                minimum=Math.min(minimum,covered);
+                sub.put("pendingTransactions",Long.toString(captured-covered));
                 PipelineConfig.Target target=c.targets.stream().filter(t->t.id.equals(sub.get("id"))).findFirst().orElseThrow(()->new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED"));sub.put("progressSemantics",target.product.messaging()?"BROKER_ACCEPTED":target.product.materialized()?"MATERIALIZER_ACKNOWLEDGED":"SQL_COMMITTED");
             }
             status.put("captured_sequence",Long.toString(captured));status.put("covered_sequence",Long.toString(minimum));status.put("pending_transactions",captured-minimum);status.put("node_id",status.get("owner"));status.put("error_code",status.get("errorCode"));status.put("error_count",status.get("errorGeneration"));

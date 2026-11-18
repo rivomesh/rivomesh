@@ -31,6 +31,7 @@ parser.add_argument('--runtime-image', help='Locally built nonroot runtime image
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
+parser.add_argument('--task-views', action='store_true', help='Check global task filters and exact per-target backlog during native SQL failure')
 parser.add_argument('--header-boundary', action='store_true', help='Check native same-file GTID boundary after a row decode fault')
 parser.add_argument('--worker-diagnostics', action='store_true',
                     help='Check redacted Worker event pages after owner restart in a source fault profile')
@@ -44,6 +45,8 @@ parser.add_argument('--correction', action='store_true', help='Check administrat
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.task_views and not args.separate_execution:
+    parser.error('--task-views requires --separate-execution')
 if args.header_boundary and args.source_diagnostics != 'decode':
     parser.error('--header-boundary requires --source-diagnostics decode')
 if args.worker_diagnostics and not args.source_diagnostics:
@@ -119,6 +122,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'mixedRuntimeUpgrade': args.mixed_runtime_upgrade,
             'workerDiagnostics': args.worker_diagnostics,
             'headerBoundary': args.header_boundary,
+            'taskViews': args.task_views,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
@@ -424,6 +428,40 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         except subprocess.CalledProcessError as failure:
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
+
+    def run_task_views():
+        for node in ('node-a','node-b'):
+            exact = http(node, '/api/tasks?limit=1&ownerNodeId='+owner_node+'&taskId=global_cdc')
+            assert exact['total']==1 and [row['id'] for row in exact['tasks']]==['global_cdc'] and not exact['next']
+            assert http(node, '/api/tasks?ownerNodeId=node-a&taskId=global_cdc')['total']==0
+            assert http(node, '/api/tasks?ownerNodeId='+owner_node+'&taskId=unavailable')['total']==0
+        passed('Both management entries filter exact task and owner inside the shared pagination query')
+
+        sql('postgres', 'ALTER TABLE rm_pg_sales.items ADD CONSTRAINT view_backlog CHECK(id<>99)')
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(99,'backlog',JSON_OBJECT('n',99))")
+
+        def backlog(node):
+            observed = task(node)
+            state = observed['status']
+            if not observed.get('statusAvailable') or not state.get('subscriptions'):return None
+            targets = {value['id']:value for value in state['subscriptions']}
+            pg, my = targets['pg'], targets['my']
+            if pg['state']!='PAUSED' or my['pendingTransactions']!='0':return None
+            remaining = int(state['captured_sequence'])-int(pg['safeCoveredSequence'])
+            if remaining<=0 or pg['pendingTransactions']!=str(remaining):return None
+            return pg
+
+        pg = wait(lambda:backlog('node-a') and backlog('node-b'), 'exact per-target backlog through both entries')
+        assert pg['errorCode']=='SQL_23514'
+        assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=99')=='0'
+        assert sql('mysql-target','SELECT COUNT(*) FROM rm_my_sales.items WHERE id=99')=='1'
+        passed('Only the SQL-blocked destination has a pending transaction and both management entries agree')
+        sql('postgres', 'ALTER TABLE rm_pg_sales.items DROP CONSTRAINT view_backlog')
+        action('RESUME_TARGET', node='node-b', subscriptionId='pg', errorCount=pg['errorGeneration'])
+        wait(rows_match, 'all actual SQL rows match after repair')
+        wait(lambda: all(all(sub.get('pendingTransactions')=='0' for sub in task(node)['status']['subscriptions'])
+                         for node in ('node-a','node-b')), 'both destinations caught up')
+        passed('Generation-bound resume clears only the repaired destination backlog and all native rows agree')
 
     def run_mixed_upgrade():
         rolls = manifest['runtimeRollout'] = {}
@@ -769,6 +807,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.task_views:
+            run_task_views()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_TASK_VIEWS_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.source_diagnostics:
             run_source_diagnostics()
             action('STOP')

@@ -35,6 +35,8 @@ Create/edit/restore/actions return 202 for durable admission only. Configuration
 
 Global maximumTasks/maximumCommands differ from per-node maxTasks/maxRunningTasks. Defaults are 10000 global tasks and 1000 active commands; configuration ranges are resource guards, not hardware throughput promises. Queries are limited to 512KiB requests, 1MiB responses, 1–60 second lifetime, bounded readers and retained capacity.
 
+Filter the shared task list by exact task ID or execution node ID. Both filters also work together. `GET /api/tasks?ownerNodeId=agent-a&taskId=orders&limit=20` applies account grants and the requested filters before computing the total or next page. Keep the same filters when using `after`. Within a task select a destination to isolate its state, SQL error and pending journal transactions. The count is the difference between captured and safely covered sequence at the observation time. Stale observations hide this count. Consumer completion and wall-clock lag need their own measurements. [Evidence](../verification/README.md#global-task-filters-and-destination-backlog)
+
 ## Admission and recovery
 
 PENDING is durable queueing. DISPATCHED saves the exact original local request/revision before invocation. ACCEPTED is local durable admission. SUCCEEDED/FAILED come from actual operation receipts. UNKNOWN requires reconciliation, not a success claim or reissue under a new revision. Startup restores receipt protection and validates local configuration against shared authority before scheduling.
