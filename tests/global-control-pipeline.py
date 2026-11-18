@@ -49,6 +49,8 @@ parser.add_argument('--handoff-closed-receipts', action='store_true',
                     help='Verify shared closed operation receipts and refusal when a private original receipt is missing')
 parser.add_argument('--handoff-preparation', action='store_true',
                     help='Reserve the candidate and verify durable review release without changing data authority')
+parser.add_argument('--handoff-managed-writer', action='store_true',
+                    help='Enroll an Agent writer and verify the same PostgreSQL connection can lock the original cut')
 parser.add_argument('--handoff-preparation-browser', type=Path,
                     help='Exercise preparation and release through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
@@ -134,6 +136,8 @@ if args.handoff_closed_receipts and not args.handoff_custody:
     parser.error('--handoff-closed-receipts requires --handoff-custody')
 if args.handoff_preparation and not args.handoff_closed_receipts:
     parser.error('--handoff-preparation requires --handoff-closed-receipts')
+if args.handoff_managed_writer and (not args.handoff_preparation or args.control_product!='POSTGRESQL' or args.runtime_image):
+    parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
 if args.handoff_preparation_browser and (not args.handoff_closed_receipts or args.handoff_preparation
         or not os.access(args.handoff_preparation_browser.resolve(), os.X_OK)):
     parser.error('--handoff-preparation-browser requires --handoff-closed-receipts and cannot share --handoff-preparation')
@@ -255,6 +259,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffFailureCustody': args.handoff_failure_custody,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
+            'handoffManagedWriter': args.handoff_managed_writer,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
@@ -1974,8 +1979,21 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.secret_audit:
             for credentials in (document['source'],*document['targets']):
                 credentials['password']='${RM_GC_OWN_TASK}'
+        if args.handoff_managed_writer:
+            sql('store',"CREATE ROLE sync_journal LOGIN PASSWORD '"+env['RM_GC_DATA']
+                +"'; GRANT CREATE ON DATABASE rivomesh_control TO sync_journal")
+            assignment=str(uuid.uuid4())
+            document['nodeId']=owner_node
+            document['journal'].update(managedWriter=True,writerAssignment=assignment,url=env['RM_GC_STORE_URL'],username='sync_journal')
+            (home/'managed-writer.json').write_text(json.dumps(document))
+            enrolled=json.loads(compose('exec','-T',owner_node,'java',*launch,'init-writer','/fixture/managed-writer.json').stdout)
+            assert enrolled['assignment']==assignment and enrolled['node']==owner_node and enrolled['epoch']==0
+            http('node-a','/api/tasks',{'config':document,'placement':'AUTO'},expected=409)
+            wrong=http('node-b','/api/tasks',{'config':document,'ownerNodeId':'node-worker-alt'},expected=409)
+            assert wrong['code']=='MANAGED_WRITER_OWNER_REQUIRED'
+            passed('Only the original Agent can admit the explicitly initialized managed writer')
         created = 'gc_create_' + uuid.uuid4().hex
-        body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement else {'ownerNodeId':owner_node})}
+        body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement and not args.handoff_managed_writer else {'ownerNodeId':owner_node})}
         http('node-a','/api/tasks',body,request=created,expected=202)
         wait(lambda: outcome(created), 'remote create')
         assert task()['ownerNodeId'] == owner_node
@@ -2138,12 +2156,26 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Controller restart retains the assessed placement, original owner and masked cut proof')
             if args.handoff_probe:
                 def data_cut():
-                    return [sql('postgres','SELECT epoch,next_seq,normalized_seq,captured FROM transfer_journal.rm3_job'),
+                    return [sql('store' if args.handoff_managed_writer else 'postgres',
+                                'SELECT epoch,next_seq,normalized_seq,captured FROM transfer_journal.rm3_job'),
                             sql('postgres','SELECT epoch,stream_seq,transaction_hash FROM rm_pg_meta.rm3_sink_job'),
                             sql('mysql-target','SELECT epoch,stream_seq,transaction_hash FROM rm_my_meta.rm3_sink_job')]
                 original_cut=data_cut()
                 probe_endpoint=endpoint+'/probe'
-                bad=http('node-b',probe_endpoint,{'expectedAssessment':stopped['id']})
+                def current_probe(plan):
+                    for _ in range(4 if args.handoff_managed_writer else 1):
+                        result=http('node-b',probe_endpoint,{'expectedAssessment':plan['id']},
+                                    expected=(200,409) if args.handoff_managed_writer else 200)
+                        if result.get('code')!='HANDOFF_ASSESSMENT_CHANGED':
+                            return plan,result
+                        fresh=wait(lambda: state if (state:=task()).get('workerState')=='STOPPED'
+                                   and state.get('statusAvailable') and state.get('status',{}).get('phase')=='STREAMING'
+                                   else None,'original stopped streaming cut refreshed')
+                        plan=http('node-a',endpoint,dict(stopped_input,expectedAssessment=plan['id'],
+                                                        expectedRevision=fresh['revision']))
+                        assert plan['state']=='EVIDENCE_REQUIRED',plan['blockers']
+                    raise AssertionError('native management observation did not stay stable across the bounded probe')
+                stopped,bad=current_probe(stopped)
                 assert bad['probe']['candidate']['state']=='REFUSED', bad['probe']['candidate'].get('code')
                 assert bad['probe']['originalEvidence']['code']=='ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN'
                 assert bad['probe']['originalEvidence']['retainedReceipts']>0
@@ -2174,11 +2206,23 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                      'corrected candidate enrolled')
                 assert http('node-a',probe_endpoint,{'expectedAssessment':stopped['id']},expected=409)['code']=='HANDOFF_ASSESSMENT_CHANGED'
                 good_plan=http('node-a',endpoint,dict(stopped_input,expectedAssessment=stopped['id']))
-                good=http('node-b',probe_endpoint,{'expectedAssessment':good_plan['id']})
+                good_plan,good=current_probe(good_plan)
                 proof=good['probe']
                 assert proof['current'] and proof['candidate']['state']=='VERIFIED', proof['candidate'].get('code')
                 cut=proof['candidate']['cut']
-                assert cut['destinations']==['my','pg'] and not cut['writerPlacementEnrolled']
+                assert cut['destinations']==['my','pg'] and cut['writerPlacementEnrolled']==args.handoff_managed_writer
+                if args.handoff_managed_writer:
+                    managed=cut['managedWriter']
+                    assert managed['originalNode']==owner_node
+                    assert managed['originalAssignmentSha256']==hashlib.sha256(assignment.encode()).hexdigest()
+                    disguised=json.loads(json.dumps(document));disguised['nodeId']=candidate
+                    disguised['journal'].update(managedWriter=False,writerAssignment=str(uuid.uuid4()))
+                    (home/'disguised-writer.json').write_text(json.dumps(disguised))
+                    attempt=compose('exec','-T',candidate,'java',*launch,'transfer-writer','/fixture/disguised-writer.json',
+                                    assignment,enrolled['generation'],str(managed['epoch']),check=False)
+                    assert attempt.returncode and 'WRITER_ASSIGNMENT_MANAGED_REQUIRED' in attempt.stderr+attempt.stdout
+                    assert sql('store','SELECT format_version FROM transfer_journal.rm3_job')=='11' and data_cut()==original_cut
+                    passed('Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification')
                 assert len(cut['journalGenerationSha256'])==len(cut['nativeEvidenceSha256'])==64
                 assert good['blockers']==['ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED'] and not good['executionAuthorized']
                 assert http('node-a',endpoint)==good and task()['ownerNodeId']==owner_node and data_cut()==original_cut
@@ -2229,6 +2273,20 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             http('node-a',preparation,expected=404)
                             prepared_input={'expectedAssessment':good['id'],'expectedRevision':task()['revision'],
                                             'expectedEvidenceSha256':good['preparationEvidenceSha256']}
+                            if args.handoff_managed_writer:
+                                assert assignment not in json.dumps(task())
+                                seen=int(sql('store','SELECT activated_epoch FROM transfer_journal.rm3_writer_assignment_history'))
+                                wrong_epoch=managed['epoch']+1
+                                sql('store',f'UPDATE transfer_journal.rm3_writer_assignment_history SET activated_epoch={wrong_epoch}')
+                                try:
+                                    refused=http('node-b',preparation,prepared_input,expected=409)
+                                    assert refused['code']=='HANDOFF_MANAGED_CONTROL_CUT_CHANGED'
+                                finally:
+                                    sql('store',f'UPDATE transfer_journal.rm3_writer_assignment_history SET activated_epoch={seen}')
+                                http('node-a',preparation,expected=404)
+                                refreshed=http('node-b',probe_endpoint,{'expectedAssessment':good['id']})
+                                prepared_input['expectedEvidenceSha256']=refreshed['preparationEvidenceSha256']
+                                passed('A changed activation epoch after the candidate proof rolls back preparation on the shared control database')
                             preparation_id='gc_prepare_'+uuid.uuid4().hex
                             http('node-b',preparation,prepared_input,request=preparation_id,expected=403,
                                  token=env['RM_GC_VIEWER'])
@@ -2238,6 +2296,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 saved=[attempt.result() for attempt in attempts]
                             assert saved[0]==saved[1] and saved[0]['state']=='PREPARED'
                             assert saved[0]['reservedTaskSlots']==saved[0]['reservedWorkerSlots']==1
+                            if args.handoff_managed_writer:
+                                activation=saved[0]['writerActivation']
+                                assert activation['checkedInControlTransaction']
+                                assert activation['originalAssignmentSha256']==managed['originalAssignmentSha256']
+                                assert len(activation['activationSha256'])==64 and assignment not in json.dumps(saved[0])
+                                passed('One PostgreSQL control transaction verifies the managed writer cut and binds the successor receipt to preparation')
                             assert not saved[0]['executionAuthorized'] and data_cut()==original_cut
                             assert task()['ownerNodeId']==owner_node and task()['revision']==prepared_input['expectedRevision']
                             assert http('node-a',preparation,dict(prepared_input,expectedEvidenceSha256='0'*64),
@@ -2245,6 +2309,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert http('node-b',route+'/actions',{'action':'STOP','expectedRevision':task()['revision']},
                                         expected=409)['code']=='HANDOFF_PREPARATION_ACTIVE'
                             other=json.loads(json.dumps(document));other['pipelineId']='handoff_reserved_candidate'
+                            if args.handoff_managed_writer:
+                                other['journal'].pop('managedWriter')
+                                other['journal'].pop('writerAssignment')
                             assert http('node-a','/api/tasks',{'config':other,'ownerNodeId':candidate},expected=409)['code']=='AGENT_HANDOFF_CAPACITY_RESERVED'
                             assert http('node-b','/api/tasks',{'config':other,'placement':'AUTO'},expected=409)['code']=='AGENT_PLACEMENT_UNAVAILABLE'
                             passed('A replay-safe stopped-cut reservation blocks new commands and competing explicit or automatic Agent assignment')

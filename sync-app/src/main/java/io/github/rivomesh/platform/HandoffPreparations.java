@@ -12,8 +12,12 @@ final class HandoffPreparations {
     record Evidence(String assessment,String revision,String configuration,Binding original,Binding candidate,
                     JournalCut cut,String proof,String custody){}
     record JournalCut(String epoch,String sequence,String checkpointSha256){}
+    record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
+                            String nativeEvidenceSha256,boolean checkedInControlTransaction){}
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
-                long created,long expires,String releaseId,String releasedBy,long closedAt){}
+                long created,long expires,String releaseId,String releasedBy,long closedAt,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                WriterActivation activation){}
 
     private final JdbcControlStore db;
     private final ControlCipher cipher;
@@ -63,7 +67,7 @@ final class HandoffPreparations {
     }
     private Plan close(Connection c,Plan p,String phase,String release,String actor,long now)throws Exception{
         Plan closed=new Plan(p.id,p.task,p.sequence,phase,p.actor,p.actorRevision,p.evidence,p.created,p.expires,
-                release,actor,now);
+                release,actor,now,p.activation);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,release_id=?,envelope=?"
                         +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",phase,release,seal(closed),cluster,p.id)!=1)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
@@ -98,11 +102,12 @@ final class HandoffPreparations {
         for(Plan p:open)if("PREPARED".equals(expire(c,p,now).phase))counts.merge(p.evidence.candidate.node,1L,Long::sum);
         return counts;
     }
-    Plan prepare(Connection c,GlobalTaskStore.Record task,String request,AccessControl.Principal actor,Evidence evidence,long now)throws Exception{
+    Plan prepare(Connection c,GlobalTaskStore.Record task,String request,AccessControl.Principal actor,Evidence evidence,
+                 WriterActivation activation,long now)throws Exception{
         Plan latest=latest(c,task.id,now);
         if(latest!=null&&"PREPARED".equals(latest.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
         int next=latest==null?1:Math.addExact(latest.sequence,1);
-        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0);
+        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation);
         db.update(c,"INSERT INTO "+db.table("task_handoff_plan")
                         +" (cluster_id,request_id,task_id,candidate_id,ordinal,phase,envelope) VALUES (?,?,?,?,?,?,?)",
                 cluster,p.id,p.task,p.evidence.candidate.node,p.sequence,p.phase,seal(p));
@@ -124,6 +129,12 @@ final class HandoffPreparations {
         view.put("executionAuthorized",false);view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
         view.put("reservedWorkerSlots","PREPARED".equals(p.phase)?1:0);
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
+        if(p.activation!=null)view.put("writerActivation",Map.of(
+                "checkedInControlTransaction",p.activation.checkedInControlTransaction,
+                "activationSha256",AuditStore.hash(p.id+"\n"+e.proof+"\n"+p.activation.nextAssignment),
+                "originalAssignmentSha256",p.activation.originalAssignmentSha256,
+                "journalGenerationSha256",p.activation.journalGenerationSha256,
+                "nativeEvidenceSha256",p.activation.nativeEvidenceSha256));
         return view;
     }
 }

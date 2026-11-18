@@ -239,12 +239,16 @@ public final class TaskService implements AutoCloseable {
         return parseTask(yaml,Paths.get(config.tasksDirectory));
     }
     private TaskDefinition parseTask(String yaml,Path directory)throws Exception{
+        String expected=config.cluster!=null&&config.cluster.sharedTasks&&config.cluster.executes()?config.cluster.nodeId:null;
+        return parseTask(yaml,directory,expected);
+    }
+    private TaskDefinition parseTask(String yaml,Path directory,String expectedOwner)throws Exception{
         try{TaskWorker.Jvm.environment(System.getenv(),yaml,config.protectedEnvironment,config.workerSecretReferences);}
         catch(IllegalArgumentException denied){
             String code=denied.getMessage();
             throw new Conflict(code!=null&&code.matches("WORKER_SECRET_[A-Z_]{1,50}")?code:"WORKER_ENVIRONMENT_DENIED");
         }
-        return TaskDefinition.parse(yaml,directory,Paths.get(config.dataDirectory));
+        return TaskDefinition.parse(yaml,directory,Paths.get(config.dataDirectory),expectedOwner);
     }
     private void validateTask(TaskDefinition task,String replacing) throws Exception {
         task.validate();
@@ -436,7 +440,7 @@ public final class TaskService implements AutoCloseable {
     private TaskDefinition candidate(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision)throws Exception{
         Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");com.fasterxml.jackson.databind.JsonNode restored=documents.restore(supplied,document(entry.config),id,revision);String yaml=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).writeValueAsString(restored);TaskDefinition candidate=parseTask(yaml);if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return candidate;
     }
-    private Map<String,Object> comparison(Entry entry,TaskDefinition next)throws Exception{Map<String,Object> result=new LinkedHashMap<>();boolean identity=!entry.config.fingerprint().equals(next.fingerprint()),storage=!entry.config.stateIdentity().equals(next.stateIdentity());result.put("migrationRequired",identity||storage);result.put("stateStoreChanged",storage);result.put("changedPaths",ConfigurationDocuments.changes(document(entry.config),document(next)));return result;}
+    private Map<String,Object> comparison(Entry entry,TaskDefinition next)throws Exception{ManagedWriterDeclaration.requireUnchanged(entry.config.workerYaml,next.workerYaml);Map<String,Object> result=new LinkedHashMap<>();boolean identity=!entry.config.fingerprint().equals(next.fingerprint()),storage=!entry.config.stateIdentity().equals(next.stateIdentity());result.put("migrationRequired",identity||storage);result.put("stateStoreChanged",storage);result.put("changedPaths",ConfigurationDocuments.changes(document(entry.config),document(next)));return result;}
     synchronized Map<String,Object> previewConfiguration(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision)throws Exception{ensureOpen();TaskDefinition next=candidate(id,supplied,revision);return comparison(require(id),next);}
     synchronized Map<String,Object> updateConfiguration(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision,String request,AccessControl.Principal actor)throws Exception{
         currentActor(actor);
@@ -970,7 +974,7 @@ public final class TaskService implements AutoCloseable {
         if(request.kind!=TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE||request.yaml==null||request.handoffCut==null)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         try{
-            TaskDefinition definition=parseTask(request.yaml);
+            TaskDefinition definition=parseTask(request.yaml,Paths.get(config.tasksDirectory),request.ownerNodeId);
             if(!request.taskId.equals(definition.jobId)||definition.pipeline==null)
                 throw new Conflict("HANDOFF_CONFIGURATION_CHANGED");
             return Map.of("state","VERIFIED","cut",definition.pipeline.verifyHandoffCut(request.handoffCut));

@@ -71,10 +71,13 @@ class ManagedHandoffTest {
     }
 
     private void publish(String worker,String lease,String checkpoint)throws Exception{
+        publish("orders",worker,lease,checkpoint);
+    }
+    private void publish(String task,String worker,String lease,String checkpoint)throws Exception{
         Map<String,Object> status=Map.of("phase","STREAMING","run_state","RUNNING","hasOpenGaps",false,
                 "table_count",1,"epoch",9,"captured_sequence","2","normalized_sequence","2",
                 "sourcePosition",Map.of("gtidSet",checkpoint));
-        views.publish(aLease,fixture.directory,List.of(Map.of("id","orders","desired",worker,"workerState",worker,
+        views.publish(aLease,fixture.directory,List.of(Map.of("id",task,"desired",worker,"workerState",worker,
                 "statusAvailable",true,"captureLeaseState",lease,"observedAt",Instant.now().toString(),"status",status)));
     }
 
@@ -209,15 +212,29 @@ class ManagedHandoffTest {
                 List.of("CANDIDATE_TASK_CAPACITY_UNAVAILABLE","TASK_COMMANDS_UNRESOLVED")));
         assertThrows(SecurityException.class,()->latest(b,scoped));
     }
+
     private Map<String,Object> verifiedAssessment(String id,AccessControl.Principal actor)throws Exception{
-        a.invoke(assess(id,null),actor);
+        return verifiedAssessment(assess(id,null),actor,null);
+    }
+
+    private Map<String,Object> verifiedAssessment(TaskRequest assessment,AccessControl.Principal actor,String writerAssignment)throws Exception{
+        Map<String,Object> before=a.invoke(assessment,actor);
+        TaskRequest probe=TaskRequest.of(TaskRequest.Kind.HANDOFF_PROBE,assessment.taskId);
+        probe.reference=assessment.requestId;
         SharedHandoffEvidence.Archive archive=new SharedHandoffEvidence.Archive("b".repeat(64),20,1,2);
         try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
-            Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe(id),actor));
+            Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe,actor));
             PlatformTest.await(()->!aQueries.pending(aLease,fixture.directory,10).isEmpty()
                     &&!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,
-                    (request,principal)->Map.of("state","VERIFIED"));
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,(request,principal)->{
+                if(writerAssignment==null)return Map.of("state","VERIFIED");
+                assertEquals("a",request.ownerNodeId);
+                assertEquals(9,request.handoffCut.epoch());
+                String checkpoint=Model.JSON.valueToTree(before.get("originalCut")).path("checkpointHash").asText();
+                return Map.of("state","VERIFIED","cut",new io.github.rivomesh.cdc.JournalWriterAssignment.CutProof(
+                        "c".repeat(64),"d".repeat(64),List.of("pg"),true,
+                        new io.github.rivomesh.cdc.JournalWriterAssignment.ManagedCut("a",AuditStore.hash(writerAssignment),9,2,checkpoint)));
+            });
             aQueries.serve(aQueries.pending(aLease,fixture.directory,10).getFirst(),aLease,fixture.directory,
                     (request,principal)->Map.of("state","REFUSED","originInventory",Map.of("validationReports","PRESENT"),
                             "closedReceipts",Map.of("state","ARCHIVED","archive",archive),
@@ -358,6 +375,33 @@ class ManagedHandoffTest {
         assertEquals("EXPIRED",entryB().invoke(prepare,fixture.admin).get("state"));
         conflict("HANDOFF_PREPARATION_CHANGED",()->b.invoke(release("prepare_expired_release",prepare.requestId),fixture.admin));
         assertEquals("PENDING",commands.enqueue(stop("prepare_expired_stop"),fixture.admin).get("status"));
+    }
+
+    @Test void exactManagedAssignmentBindsActivationToTheReservationWithoutMovingTheOwner()throws Exception{
+        String assignment=UUID.randomUUID().toString();
+        String managed=YAML.replace("pipelineId: orders","pipelineId: managed-orders\nnodeId: a")
+                .replace("  product: POSTGRESQL", "  product: POSTGRESQL\n  url: jdbc:postgresql://journal/shared\n  managedWriter: true\n  writerAssignment: "+assignment);
+        GlobalTaskStore.Record task=fixture.a.create("managed-orders","a",fixture.directory,managed,"create_managed_orders_mode",fixture.admin);
+        fixture.a.service((c,actors)->{fixture.a.applied(c,task,task.configurationVersion);return null;});
+        publish("managed-orders","STOPPED","UNCLAIMED","GTID-history");
+        TaskRequest assessment=assess("managed_writer_assessment",null);assessment.taskId=task.id;assessment.revision=task.revision;
+        Map<String,Object> evidence=verifiedAssessment(assessment,fixture.admin,UUID.randomUUID().toString());
+        TaskRequest preparation=prepare("managed_writer_preparation",evidence);
+        preparation.taskId=task.id;preparation.revision=task.revision;
+        conflict("HANDOFF_MANAGED_WRITER_PROOF_REQUIRED",()->a.invoke(preparation,fixture.admin));
+        assessment.reference=assessment.requestId;assessment.requestId="managed_writer_assessment_retry";
+        evidence=verifiedAssessment(assessment,fixture.admin,assignment);
+        preparation.reference=assessment.requestId;preparation.identityHash=(String)evidence.get("preparationEvidenceSha256");
+        Map<String,Object> plan=a.invoke(preparation,fixture.admin);
+        Map<?,?> activation=(Map<?,?>)plan.get("writerActivation");
+        assertEquals(AuditStore.hash(assignment),activation.get("originalAssignmentSha256"));
+        assertEquals(false,activation.get("checkedInControlTransaction"));
+        assertEquals(false,plan.get("executionAuthorized"));
+        assertEquals(plan,entryB().invoke(preparation,fixture.admin));
+        assertFalse(Model.JSON.writeValueAsString(plan).contains(assignment));
+        TaskRequest release=release("managed_writer_release",preparation.requestId);release.taskId=task.id;
+        assertEquals(activation,b.invoke(release,fixture.admin).get("writerActivation"));
+        assertEquals("a",fixture.b.get(task.id,fixture.admin).owner);
     }
 
 }

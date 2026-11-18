@@ -17,6 +17,7 @@ final class PipelineBackend {
                 if("EXTERNAL".equals(c.journal.mode)&&c.journal.product==TargetProduct.MYSQL&&missing.getErrorCode()==1049&&"42000".equals(missing.getSQLState()))return Collections.emptyMap();throw missing;
             }
             Map<String,Object> status=journal.status(),preview=journal.snapshotSummary(100);status.putAll(preview);
+            if(c.journal.managedWriter)status.remove("writerPlacement");
             List<Map<String,Object>> subscriptions=journal.subscriptionDiagnostics();Map<String,Object> frame=journal.deliveryProgress();
             @SuppressWarnings("unchecked")Map<String,Map<String,Object>> progress=(Map<String,Map<String,Object>>)frame.get("subscriptions");long captured=Long.parseLong((String)frame.get("capturedSequence")),minimum=captured;
             for(Map<String,Object> sub:subscriptions){

@@ -24,6 +24,8 @@ public final class PipelineConfig {
         public String mode="LOCAL",path="data/journal",namespace="rivomesh_v3",url,username,password;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public String writerAssignment;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+        public boolean managedWriter;
         public TargetProduct product=TargetProduct.POSTGRESQL;
         public long maxBytes=1024L*1024*1024;
     }
@@ -106,6 +108,7 @@ public final class PipelineConfig {
         if("EXTERNAL".equals(journal.mode)){if(!Arrays.asList(TargetProduct.MYSQL,TargetProduct.POSTGRESQL,TargetProduct.GAUSS).contains(journal.product))throw new IllegalArgumentException("JOURNAL_PRODUCT_NOT_ENABLED");url(journal.product,journal.url);Sql.pg(journal.namespace);if(journal.username==null||journal.username.isEmpty())throw new IllegalArgumentException("JOURNAL_USERNAME_REQUIRED");}
         else if("LOCAL".equals(journal.mode)){Path path=localPath();if(path.toString().indexOf(';')>=0||path.toString().chars().anyMatch(ch->ch<32))throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_INVALID");}
         else throw new IllegalArgumentException("JOURNAL_MODE_INVALID");
+        if(journal.managedWriter&&journal.writerAssignment==null)throw new IllegalArgumentException("WRITER_ASSIGNMENT_REQUIRED");
         if(journal.writerAssignment!=null&&(!JournalWriterAssignment.validId(journal.writerAssignment)
                 ||!"EXTERNAL".equals(journal.mode)||journal.product!=TargetProduct.POSTGRESQL
                 ||!"MYSQL".equals(effectiveSourceType())||targets.size()>8
@@ -152,7 +155,7 @@ public final class PipelineConfig {
     public Config legacy(){Config c=new Config();c.jobId=pipelineId;c.nodeId=nodeId;c.source=Codec.decode(Codec.encode(source),Config.Source.class);c.source.database=databases.isEmpty()?null:databases.get(0);c.chunkSize=chunkSize;c.maxTransactionRows=maxTransactionRows;c.leaseMillis=leaseMillis;c.heartbeatMillis=heartbeatMillis;c.pollIntervalMillis=pollIntervalMillis;c.retryDelayMillis=retryDelayMillis;c.maxRetryDelayMillis=Math.max(60000,retryDelayMillis);c.target.type="POSTGRESQL";c.target.url="jdbc:postgresql://unused/unused";c.target.username="unused";c.target.schema="unused";return c;}
     private Path localPath(){if(journal.path==null||journal.path.trim().isEmpty())throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_REQUIRED");return base.resolve(journal.path).normalize().toAbsolutePath();}
     public JdbcJournal.Settings journalSettings(){JdbcJournal.Settings s=new JdbcJournal.Settings();s.pipelineId=pipelineId;s.namespace=journal.namespace;s.maxPendingBytes=journal.maxBytes;
-        s.writerAssignment=journal.writerAssignment;s.writerNode=nodeId;
+        s.writerAssignment=journal.writerAssignment;s.writerNode=nodeId;s.managedWriter=journal.managedWriter;
         String type=effectiveSourceType();
         s.deliveryTiming="POSTGRESQL".equals(type)||"MYSQL".equals(type)&&journal.writerAssignment==null
                 &&MysqlCdcSource.originalTimingProfile(source);

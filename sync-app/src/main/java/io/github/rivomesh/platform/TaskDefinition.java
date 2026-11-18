@@ -24,10 +24,14 @@ public final class TaskDefinition {
         if(pipeline!=null){PipelineConfig.Target first=pipeline.targets.get(0);target.url=first.url;target.type=pipeline.targets.size()>1?"MULTIPLE":first.product.name();target.schema=pipeline.targets.size()>1?pipeline.targets.size()+" targets":String.join(",",first.mappings.values());target.metadataSchema=first.metadataSchema;}
     }
     static TaskDefinition parse(String value,Path directory,Path platformData)throws Exception{
+        return parse(value,directory,platformData,null);
+    }
+    static TaskDefinition parse(String value,Path directory,Path platformData,String expectedOwner)throws Exception{
         ObjectMapper mapper=new ObjectMapper(new YAMLFactory());JsonNode tree=mapper.readTree(value);
         if(tree!=null&&tree.path("formatVersion").asInt()==3){
             PipelineConfig pipeline=PipelineConfig.parse(value,directory);
-            if(pipeline.journal.writerAssignment!=null)throw new TaskService.Conflict("WRITER_ASSIGNMENT_STANDALONE_REQUIRED");
+            ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(value);
+            if(declaration!=null)declaration.requireOwner(expectedOwner);
             if("LOCAL".equals(pipeline.journal.mode)){
                 Path managed=platformData.toAbsolutePath().normalize().resolve("journals").resolve(pipeline.pipelineId);
                 if(tree.path("journal").has("path")&&!managed.equals(pipeline.localDirectory()))throw new TaskService.Conflict("LOCAL_JOURNAL_MIGRATION_REQUIRED");

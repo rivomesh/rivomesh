@@ -13,6 +13,7 @@ public final class JdbcJournal implements NormalizedJournal {
     public static final class Settings {
         public String driver,url,username="",password="",namespace="rivomesh_v3",pipelineId;
         public String writerAssignment,writerNode;
+        public boolean managedWriter;
         public boolean deliveryTiming;
         public long maxPendingBytes=1024L*1024*1024;
     }
@@ -31,6 +32,7 @@ public final class JdbcJournal implements NormalizedJournal {
         if(settings==null||settings.url==null||settings.driver==null||settings.pipelineId==null
                 ||!settings.pipelineId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
                 ||settings.namespace==null||!settings.namespace.matches("[A-Za-z_][A-Za-z0-9_]{0,62}")||settings.maxPendingBytes<1
+                ||settings.managedWriter&&settings.writerAssignment==null
                 ||settings.writerAssignment!=null&&(!JournalWriterAssignment.validId(settings.writerAssignment)
                 ||settings.writerNode==null||!settings.writerNode.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")))
             throw new IllegalArgumentException("JOURNAL_CONFIG_INVALID");
@@ -55,13 +57,15 @@ public final class JdbcJournal implements NormalizedJournal {
         try(Statement s=c.createStatement()){s.execute(sql);}
         catch(SQLException e){if(!Arrays.asList("42P06","42P07","42710","23505").contains(e.getSQLState()))throw e;}
     }
-    static boolean assignedWriter(int format){return format>=7&&format<=10;}
-    private static int baseFormat(int format){return assignedWriter(format)?format-4:format;}
+    static boolean assignedWriter(int format){return format>=7&&format<=14;}
+    static boolean managedWriter(int format){return format>=11&&format<=14;}
+    private static int assignmentFamily(int format){return managedWriter(format)?8:assignedWriter(format)?4:0;}
+    private static int baseFormat(int format){return format-assignmentFamily(format);}
     static boolean hasTargetGaps(int format){return baseFormat(format)==4||baseFormat(format)==6;}
     static boolean hasSourceExclusions(int format){return baseFormat(format)==5||baseFormat(format)==6;}
-    static int withTargetGaps(int format){return (hasSourceExclusions(format)?6:4)+(assignedWriter(format)?4:0);}
-    static int withSourceExclusions(int format){return (hasTargetGaps(format)?6:5)+(assignedWriter(format)?4:0);}
-    private static boolean supported(int format){return format>=3&&format<=10;}
+    static int withTargetGaps(int format){return (hasSourceExclusions(format)?6:4)+assignmentFamily(format);}
+    static int withSourceExclusions(int format){return (hasTargetGaps(format)?6:5)+assignmentFamily(format);}
+    private static boolean supported(int format){return format>=3&&format<=14;}
     private void verifyRecoveryTables(Connection c,int format)throws Exception{
         if(hasTargetGaps(format))JdbcSkipJournal.verifyTables(this,c);
         if(hasSourceExclusions(format))JdbcSourceExclusion.verify(this,c);
@@ -88,7 +92,7 @@ public final class JdbcJournal implements NormalizedJournal {
             c.setAutoCommit(false);
             try{
                 String stream=generation==null?UUID.randomUUID().toString():generation;
-                execute(c,"INSERT INTO "+table("job")+" (pipeline_id,format_version,fingerprint,generation,epoch,owner,lease_until,next_seq,captured,pending_bytes,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation) VALUES (?,?,?,?,0,NULL,0,1,NULL,0,0,0,0,'RUNNING',0)",settings.pipelineId,settings.writerAssignment==null?3:7,fingerprint,stream);
+                execute(c,"INSERT INTO "+table("job")+" (pipeline_id,format_version,fingerprint,generation,epoch,owner,lease_until,next_seq,captured,pending_bytes,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation) VALUES (?,?,?,?,0,NULL,0,1,NULL,0,0,0,0,'RUNNING',0)",settings.pipelineId,settings.managedWriter?11:settings.writerAssignment==null?3:7,fingerprint,stream);
                 for(String id:ids)execute(c,"INSERT INTO "+table("subscription")+" (pipeline_id,subscription_id,acknowledged,run_state,error_generation) VALUES (?,?,0,'RUNNING',0)",settings.pipelineId,id);
                 if(settings.writerAssignment!=null)JournalWriterAssignment.initial(this,c,stream);
                 c.commit();

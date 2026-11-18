@@ -94,4 +94,33 @@ class GlobalTaskStoreTest {
         try(Connection c=connection();Statement s=c.createStatement()){s.executeUpdate("DELETE FROM rivomesh_control.rmc_task_authority");}
         assertEquals("GLOBAL_TASK_CATALOG_INCOMPLETE",assertThrows(TaskService.Conflict.class,()->b.create("replacement","a",directory,"other","request_create_02",admin)).getMessage());
     }
+    @Test void journalPlacementBindsToExplicitOwnerAndCannotChangeThroughConfiguration()throws Exception{
+        String assignment=UUID.randomUUID().toString();
+        String yaml="""
+                formatVersion: 3
+                pipelineId: orders
+                nodeId: a
+                journal:
+                  mode: EXTERNAL
+                  url: jdbc:postgresql://journal/shared
+                  managedWriter: true
+                  writerAssignment: %s
+                """.formatted(assignment);
+        assertEquals("MANAGED_WRITER_OWNER_REQUIRED",assertThrows(TaskService.Conflict.class,()->
+                a.create("orders","b",directory,yaml,"managed_wrong_owner",admin)).getMessage());
+        assertEquals("WRITER_ASSIGNMENT_STANDALONE_REQUIRED",assertThrows(TaskService.Conflict.class,()->
+                a.create("orders","a",directory,yaml.replace("managedWriter: true","managedWriter: false"),"managed_wrong_mode",admin)).getMessage());
+        verifyManagedConfiguration(a.create("orders","a",directory,yaml,"managed_fixed_owner",admin),yaml,assignment);
+    }
+    private void verifyManagedConfiguration(GlobalTaskStore.Record original,String yaml,String assignment)throws Exception{
+        for(String changed:List.of(yaml.replace(assignment,UUID.randomUUID().toString()),
+                yaml.replace("journal/shared","journal/other"),yaml.replace("nodeId: a","nodeId: b"),
+                "formatVersion: 3\npipelineId: orders\n")){
+            assertEquals("MANAGED_WRITER_PLACEMENT_IMMUTABLE",assertThrows(TaskService.Conflict.class,()->
+                    b.update("orders",original.revision,changed,"managed_modified_placement",admin)).getMessage());
+            assertEquals(original.revision,b.get("orders",admin).revision);
+        }
+        assertNotEquals(original.revision,b.update("orders",original.revision,yaml+"pollIntervalMillis: 110\n","managed_other_config",admin).revision);
+    }
+
 }

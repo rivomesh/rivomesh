@@ -121,6 +121,8 @@ final class GlobalTaskStore {
             valid(owner,"[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
             valid(directory,"[a-f0-9-]{36}");
         }
+        ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(yaml);
+        if(declaration!=null)declaration.requireOwner(owner);
         String signature=automatic?"CREATE_AUTO\n"+id+"\n"+yaml
                 :"CREATE\n"+id+"\n"+owner+"\n"+directory+"\n"+yaml;
         try(Connection c=db.connect()){
@@ -170,7 +172,10 @@ final class GlobalTaskStore {
         try(Connection c=db.connect()){
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);root(c);Record record=read(c,id);scope(actor,id,record.owner,true);
             if(replay(c,request,signature,id,actor)){configuration(c,record);c.commit();return record;}
-            if(!record.revision.equals(revision))throw new TaskService.Conflict("REVISION_CHANGED");preparations.requireUnreserved(c,id);record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
+            if(!record.revision.equals(revision))throw new TaskService.Conflict("REVISION_CHANGED");
+            preparations.requireUnreserved(c,id);
+            ManagedWriterDeclaration.requireUnchanged(version(c,id,record.configurationVersion).yaml,yaml);
+            record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
             db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,configuration_version=?,configuration_index=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,record.configurationVersion,record.configurationIndex,recordSignature(record),cluster,id);
             db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_CONFIG_COMMITTED"));c.commit();return record;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}

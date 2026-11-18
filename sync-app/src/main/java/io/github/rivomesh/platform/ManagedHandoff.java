@@ -191,7 +191,8 @@ final class ManagedHandoff {
             if(!evidence.proof().equals(request.identityHash))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
             if(!agents.handoffCapacity(c,selected.candidate.node).roomForPreparation())
                 throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
-            HandoffPreparations.Plan plan=plans.prepare(c,task,request.requestId,actor,evidence,now);
+            HandoffPreparations.WriterActivation activation=writerActivation(c,task,selected);
+            HandoffPreparations.Plan plan=plans.prepare(c,task,request.requestId,actor,evidence,activation,now);
             auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARED");
             return HandoffPreparations.summary(plan);
         });
@@ -227,6 +228,28 @@ final class ManagedHandoff {
             auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARATION_RELEASED");
             return HandoffPreparations.summary(plan);
         });
+    }
+
+    private HandoffPreparations.WriterActivation writerActivation(Connection c,GlobalTaskStore.Record task,Assessment assessment)throws Exception{
+        ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(tasks.activeYaml(c,task));
+        if(declaration==null)return null;
+        declaration.requireOwner(task.owner);
+        JournalWriterAssignment.CutProof proof=Model.JSON.convertValue(assessment.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
+        JournalWriterAssignment.ManagedCut cut=proof==null?null:proof.managedWriter();
+        if(cut==null||!proof.writerPlacementEnrolled()||!task.owner.equals(cut.originalNode())
+                ||!Objects.toString(proof.journalGenerationSha256(),"").matches("[a-f0-9]{64}")
+                ||!Objects.toString(proof.nativeEvidenceSha256(),"").matches("[a-f0-9]{64}")
+                ||!AuditStore.hash(declaration.assignment()).equals(cut.originalAssignmentSha256())
+                ||!assessment.originalCut.journalEpoch.equals(Long.toString(cut.epoch()))
+                ||!assessment.originalCut.sequence.equals(Long.toString(cut.sequence()))
+                ||!assessment.originalCut.checkpointHash.equals(cut.checkpointSha256()))
+            throw new TaskService.Conflict("HANDOFF_MANAGED_WRITER_PROOF_REQUIRED");
+        boolean shared=db.sharesPostgresUrl(declaration.journalUrl());
+        if(shared)try{
+            JournalWriterAssignment.verifyManagedControlCut(c,declaration.namespace(),task.id,declaration.assignment(),proof);
+        }catch(IllegalStateException invalid){throw new TaskService.Conflict(invalid.getMessage());}
+        return new HandoffPreparations.WriterActivation(cut.originalAssignmentSha256(),UUID.randomUUID().toString(),
+                proof.journalGenerationSha256(),proof.nativeEvidenceSha256(),shared);
     }
 
     private void auditPreparation(Connection c,HandoffPreparations.Plan plan,AccessControl.Principal actor,String request,String kind)throws Exception{

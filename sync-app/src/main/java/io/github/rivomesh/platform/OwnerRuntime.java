@@ -46,7 +46,7 @@ final class OwnerRuntime implements AutoCloseable {
             for(Map.Entry<String,String> entry:documents.entrySet()){
                 GlobalTaskStore.Record record;try{record=authority.record(c,entry.getKey());}catch(NoSuchElementException missing){throw new TaskService.Conflict("OWNER_TASK_NOT_REGISTERED");}
                 if(!lease.nodeId.equals(record.owner)||!directory.equals(record.directory))throw new TaskService.Conflict("COMMAND_OWNER_CHANGED");
-                TaskDefinition expected=TaskDefinition.parse(authority.activeYaml(c,record),Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));
+                TaskDefinition expected=TaskDefinition.parse(authority.activeYaml(c,record),Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory),lease.nodeId);
                 if(!yaml.readTree(expected.workerYaml).equals(yaml.readTree(entry.getValue())))throw new TaskService.Conflict("OWNER_CONFIGURATION_PROJECTION_CHANGED");
                 durable.reserveExisting(c,record,expected);
             }agents.require(c,lease,directory);return null;

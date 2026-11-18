@@ -40,6 +40,7 @@ final class JdbcControlStore implements ControlStore {
         }
     }
     boolean mysql(){return mysql;}
+    boolean sharesPostgresUrl(String journalUrl){return "org.postgresql.Driver".equals(config.driver)&&config.url.equals(journalUrl);}
     void index(Connection c,String table,String name,String columns)throws SQLException{
         if(!table.matches("[a-z_]+")||!name.matches("rmc_[a-z_]+")||!columns.matches("[a-z_, ]+"))throw new IllegalArgumentException("CONTROL_INDEX_INVALID");
         if(mysql){try(PreparedStatement p=prepare(c,"SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND INDEX_NAME=?",config.namespace,"rmc_"+table,name);ResultSet r=p.executeQuery()){r.next();if(r.getInt(1)>0)return;}}

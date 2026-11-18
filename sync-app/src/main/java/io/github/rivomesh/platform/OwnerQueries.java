@@ -159,6 +159,7 @@ final class OwnerQueries {
                 if(scoped.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE){
                     scoped.yaml=tasks.activeYaml(c,record);
                     scoped.handoffCut=route.cut();
+                    scoped.ownerNodeId=route.original().node;
                 }else{
                     scoped.handoffEvidenceScope=new SharedHandoffEvidence.Scope(cluster,record.id,scoped.reference,
                             route.revision(),route.activeVersion(),route.original().directory,route.candidate().directory);

@@ -83,6 +83,27 @@ class JournalTest {
             assertEquals(transaction(1).position,origin.captured());
         }
     }
+    @Test void managedWriterModeFencesTheSameAssignmentInStandaloneModeAndPreservesRecoveryFormats()throws Exception{
+        JdbcJournal.Settings managed=settings(),standalone=settings(),unassigned=settings();
+        managed.writerAssignment=standalone.writerAssignment=UUID.randomUUID().toString();
+        managed.writerNode=standalone.writerNode="origin";managed.managedWriter=true;
+        try(JdbcJournal authority=new JdbcJournal(managed);JdbcJournal sameAssignment=new JdbcJournal(standalone);
+            JdbcJournal legacy=new JdbcJournal(unassigned)){
+            authority.initializeStorage(Codec.sha256("config"),"generation",List.of("fast","slow"));
+            initialize(authority);
+            assertEquals(11,authority.status().get("dataFormat"));
+            assertThrows(JdbcJournal.Fenced.class,()->sameAssignment.claim("standalone",30000));
+            assertThrows(JdbcJournal.Fenced.class,()->legacy.claim("legacy",30000));
+            assertThrows(JdbcJournal.Fenced.class,()->sameAssignment.initializeStorage(Codec.sha256("config"),"generation",List.of("fast","slow")));
+            assertEquals(12,JdbcJournal.withTargetGaps(11));
+            assertEquals(13,JdbcJournal.withSourceExclusions(11));
+            assertEquals(14,JdbcJournal.withSourceExclusions(12));
+            assertTrue(JdbcJournal.hasTargetGaps(14));assertTrue(JdbcJournal.hasSourceExclusions(14));
+            Journal.Lease granted=authority.claim("origin-worker",30000);
+            authority.append(granted,transaction(1));
+            assertEquals(transaction(1).position,authority.captured());
+        }
+    }
     @Test void byteBudgetLimitsBatchButKeepsAnOversizedHeadTransaction()throws Exception{
         try(JdbcJournal journal=new JdbcJournal(settings())){
             initialize(journal);
