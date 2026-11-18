@@ -28,6 +28,32 @@ public final class DorisPipelineAcceptance {
     long pgCount(String table)throws Exception{try(Connection connection=postgres();Statement sql=connection.createStatement();ResultSet rows=sql.executeQuery("SELECT count(*) FROM "+Sql.pg(id+"_pg")+"."+Sql.pg(table))){rows.next();return rows.getLong(1);}}
     long dorisCount(String table)throws Exception{PipelineConfig.Target target=config.targets.get(0);try(DorisSqlClient sql=new DorisSqlClient(target.url,target.username,target.password,10000)){return Long.parseLong(sql.query("SELECT count(*) AS n FROM "+DorisRows.q(id+"_copy")+"."+DorisRows.q(table)).get(0).get("n"));}}
     Journal.Subscription subscription(JdbcJournal journal,String id)throws Exception{return journal.subscriptions().stream().filter(item->item.id.equals(id)).findFirst().get();}
+
+    String nativeReceipt(JdbcPublicationStore store)throws Exception{
+        String progress=store.progress();
+        require(progress!=null&&progress.matches("DORIS_RECEIPT_V1:[a-f0-9]{64}:[a-f0-9]{64}"),
+                "Original Doris progress has no receipt identity");
+        return progress;
+    }
+
+    String verifyNativeReceipt(String progress)throws Exception{
+        String[] receipt=progress.split(":");
+        PipelineConfig.Target target=config.targets.get(0);
+        String root=DorisRows.q(target.metadataSchema)+"."+DorisRows.q("rm3_doris_"+Codec.sha256(id+":doris").substring(0,48));
+        try(DorisSqlClient sql=new DorisSqlClient(target.url,target.username,target.password,10000)){
+            List<Map<String,String>> rows=sql.query("SELECT hash FROM "+root+" WHERE kind=? AND id=?","RECEIPT",receipt[1]);
+            require(rows.size()==1&&receipt[2].equals(rows.get(0).get("hash")),"Exact native Doris receipt is missing or changed");
+            Set<String> tablets=new TreeSet<>();
+            for(Map<String,String> row:sql.query("SHOW TABLETS FROM "+root)){
+                String tablet=row.get("TabletId");
+                require(tablet!=null&&tablet.matches("[0-9]+"),"Doris metadata tablet identity is missing");
+                tablets.add(tablet);
+            }
+            require(!tablets.isEmpty(),"Doris metadata has no tablets");
+            return Codec.sha256(String.join(",",tablets));
+        }
+    }
+
     void phase(String phase)throws Exception{Files.write(directory.resolve(phase+".request"),new byte[]{1});await(()->Files.exists(directory.resolve(phase+".done")));}
     void start()throws Exception{worker=new ProcessBuilder("java","-Xmx256m","-jar",JAR,"run",configuration.toString()).redirectErrorStream(true).redirectOutput(directory.resolve("worker-"+(++starts)+".log").toFile()).start();}
     void kill()throws Exception{if(worker!=null){worker.destroyForcibly();require(worker.waitFor(20,TimeUnit.SECONDS),"Worker SIGKILL was not confirmed");worker=null;}}
@@ -49,11 +75,43 @@ public final class DorisPipelineAcceptance {
         try{
             source("CREATE TABLE "+items+" (id BIGINT PRIMARY KEY,u BIGINT UNSIGNED,amount DECIMAL(65,30),payload JSON,bytes VARBINARY(100),base_value INT,calc INT GENERATED ALWAYS AS (base_value*2) STORED,UNIQUE KEY uq_base(base_value)) ENGINE=InnoDB");source("CREATE TABLE "+duplicates+" (value INT,payload JSON) ENGINE=InnoDB");source("INSERT INTO "+items+"(id,u,amount,payload,bytes,base_value) VALUES(1,18446744073709551615,12345678901234567890123456789012345.123456789012345678901234567890,JSON_OBJECT('n',CAST(18446744073709551615 AS UNSIGNED)),0x00ff80,7)");source("INSERT INTO "+duplicates+" VALUES(7,JSON_OBJECT('same',true)),(7,JSON_OBJECT('same',true))");command("check",configuration.toString());
             try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
+                JdbcPublicationStore publication=new JdbcPublicationStore(journal,"doris",null);
                 start();await(()->pgCount("items")==1&&dorisCount("items")==1&&dorisCount("duplicates")==2);verifyTypes();String generation=(String)journal.status().get("generation"),snapshot=journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId;
                 source("UPDATE "+items+" SET id=3,base_value=9 WHERE id=1");source("DELETE FROM "+duplicates+" LIMIT 1");await(()->pgCount("duplicates")==1&&dorisCount("duplicates")==1);await(()->subscription(journal,"doris").acknowledged==((Number)journal.status().get("lastSequence")).longValue());
-                phase("stop");insert(4);await(()->pgCount("items")==2&&subscription(journal,"postgres").acknowledged>subscription(journal,"doris").acknowledged);phase("start");await(()->dorisCount("items")==2&&subscription(journal,"doris").acknowledged==subscription(journal,"postgres").acknowledged);
-                kill();insert(5);start();await(()->pgCount("items")==3&&dorisCount("items")==3);require(generation.equals(journal.status().get("generation"))&&snapshot.equals(journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId),"Worker restart repeated/reset snapshot identity");
-                pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items ADD CONSTRAINT block_next CHECK(id<6)");insert(6);await(()->"PAUSED".equals(subscription(journal,"postgres").state)&&dorisCount("items")==4);require(pgCount("items")==3,"Failed SQL transaction was committed");long error=subscription(journal,"postgres").errorGeneration;pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items DROP CONSTRAINT block_next");command("resume",configuration.toString(),"postgres",Long.toString(error));await(()->pgCount("items")==4&&subscription(journal,"postgres").acknowledged==subscription(journal,"doris").acknowledged);
+                String original=nativeReceipt(publication),physical=verifyNativeReceipt(original);
+                long originalSequence=subscription(journal,"doris").acknowledged;
+                phase("stop");insert(4);await(()->pgCount("items")==2&&subscription(journal,"postgres").acknowledged>subscription(journal,"doris").acknowledged);
+                require(originalSequence==subscription(journal,"doris").acknowledged&&original.equals(nativeReceipt(publication)),
+                        "Doris advanced its receipt during the outage");
+                phase("start");await(()->dorisCount("items")==2&&subscription(journal,"doris").acknowledged==subscription(journal,"postgres").acknowledged);
+                String caughtUp=nativeReceipt(publication);
+                require(!original.equals(caughtUp)&&physical.equals(verifyNativeReceipt(original))
+                        &&physical.equals(verifyNativeReceipt(caughtUp)),"Doris catch-up replaced its original physical history");
+                kill();insert(5);start();await(()->pgCount("items")==3&&dorisCount("items")==3
+                        &&subscription(journal,"doris").acknowledged==subscription(journal,"postgres").acknowledged
+                        &&!caughtUp.equals(nativeReceipt(publication)));
+                require(generation.equals(journal.status().get("generation"))&&snapshot.equals(journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId),"Worker restart repeated/reset snapshot identity");
+                String restarted=nativeReceipt(publication);
+                require(physical.equals(verifyNativeReceipt(original))&&physical.equals(verifyNativeReceipt(caughtUp))
+                        &&physical.equals(verifyNativeReceipt(restarted)),"Worker restart replaced native Doris receipts");
+                pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items ADD CONSTRAINT block_next CHECK(id<6)");insert(6);
+                await(()->"PAUSED".equals(subscription(journal,"postgres").state)&&dorisCount("items")==4
+                        &&subscription(journal,"doris").acknowledged>subscription(journal,"postgres").acknowledged);
+                require(pgCount("items")==3,"Failed SQL transaction was committed");
+                String siblingPaused=nativeReceipt(publication);
+                require(!restarted.equals(siblingPaused)&&physical.equals(verifyNativeReceipt(siblingPaused)),
+                        "Doris did not retain its receipt while the SQL sibling was paused");
+                long error=subscription(journal,"postgres").errorGeneration;pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items DROP CONSTRAINT block_next");command("resume",configuration.toString(),"postgres",Long.toString(error));await(()->pgCount("items")==4&&subscription(journal,"postgres").acknowledged==subscription(journal,"doris").acknowledged);
+                require(siblingPaused.equals(nativeReceipt(publication))&&physical.equals(verifyNativeReceipt(siblingPaused)),
+                        "SQL sibling retry changed Doris publication progress");
+                Map<String,String> receipts=new LinkedHashMap<>();
+                receipts.put("physicalTabletSha256",physical);
+                receipts.put("original",original);
+                receipts.put("afterTargetRestart",caughtUp);
+                receipts.put("afterWorkerRestart",restarted);
+                receipts.put("duringSqlSiblingPause",siblingPaused);
+                new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("receipts.json").toFile(),receipts);
+                System.out.println("DORIS_RECEIPTS_ACCEPTED: exact original and successor receipts remain on the same Doris metadata tablets across target and Worker restart, and SQL sibling replay leaves the last receipt unchanged");
                 PipelineConfig.Target target=config.targets.get(0);try(DorisSqlClient sql=new DorisSqlClient(target.url,target.username,target.password,10000)){sql.execute("DROP VIEW "+DorisRows.q(id+"_copy")+".items");}insert(7);await(()->pgCount("items")==5&&"PAUSED".equals(subscription(journal,"doris").state));require("DORIS_TABLE_MISSING_REBUILD_REQUIRED".equals(subscription(journal,"doris").errorCode),"Missing view did not isolate its target");Map<String,Object> paused=PipelineControls.pause(config);Map<?,?> fences=(Map<?,?>)paused.get("targetFences");require("FENCED".equals(fences.get("postgres"))&&String.valueOf(fences.get("doris")).startsWith("UNCONFIRMED"),"Pause overstated the materialized fence");
             }
             System.out.println("DORIS_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Doris4.1.3, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, Doris outage with independent SQL progress/catchup, worker SIGKILL resume, SQL error repair/retry while Doris continues, missing-view isolation and honest pause fences");

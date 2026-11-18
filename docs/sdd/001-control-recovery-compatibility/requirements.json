@@ -1495,8 +1495,8 @@
         "en": "ClickHouse/Doris/Hive production profiles"
       },
       "gap": {
-        "zh-CN": "首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。",
-        "en": "Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification."
+        "zh-CN": "ClickHouse、Doris、Hive 已有初步档案。Java 21 实测 Doris 4.1.3 单 FE/BE 的停机追平、原回执和独立 PostgreSQL 故障重放。其他生产集群、TLS 和容量待验。",
+        "en": "ClickHouse, Doris and Hive have initial profiles. Java 21 verified native Doris 4.1.3 single FE/BE outage catch-up, original receipts and independent PostgreSQL recovery. Other clustered, TLS and capacity profiles remain."
       },
       "acceptance": {
         "zh-CN": "各产品按真实可见水位、去重/批次回执验证重启、旧备份、集群故障和缺口；不能承诺普通SQL跨表事务语义。",

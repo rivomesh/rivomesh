@@ -7438,5 +7438,40 @@
       "artifactSha256": "d8c7bcb2e39f492505522b512584e1a6e0e1c6902b2f7480f7f02b1ea246bfec",
       "focusedJavaTests": 43
     }
+  },
+  "dorisLiveReceiptsJava21": {
+    "status": "PASS",
+    "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+    "sourceBuildTree": "42e2a7401f0675e2c98c3acf868ae0d51c6f0c8d",
+    "fixtureSha256": "b72a59f0c989651272af30518c2ba252900ecddc85dc1f4f02cd42330dc27c8b",
+    "composeSha256": "f07b3c399ce89db378001baeefdf9703c37331e07e0d3256c5e9919ef931fd98",
+    "nativeLogSha256": "37befccd943c5e33f2e8bfa12569b09b2acd22dea7a13e45bdf75215df47dafd",
+    "nativeReceiptEvidenceSha256": "d5c38750c23fc4e5683081a39bf2a7a51dd94c3c3bea425435b441513c70142b",
+    "fixtureProject": "rivomesh-doris-pipeline-81307",
+    "runtimeVersion": "Temurin 21.0.12.1+1",
+    "architecture": "arm64",
+    "sourceVersion": "MySQL 8.4.13",
+    "sqlTargetVersion": "PostgreSQL 17.12",
+    "analyticTargetVersion": "Doris 4.1.3 single FE and BE",
+    "imageIds": {
+      "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4",
+      "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "apache/doris:all-in-one-4.1.3": "sha256:92531e5ff117f2af98302d4f4fd60b271c1b35086028b6912b7585aa296d6210"
+    },
+    "receiptStages": [
+      "original",
+      "afterTargetRestart",
+      "afterWorkerRestart",
+      "duringSqlSiblingPause"
+    ],
+    "checks": [
+      "DORIS_RECEIPTS_ACCEPTED: exact original and successor receipts remain on the same Doris metadata tablets across target and Worker restart, and SQL sibling replay leaves the last receipt unchanged",
+      "DORIS_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Doris4.1.3, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, Doris outage with independent SQL progress/catchup, worker SIGKILL resume, SQL error repair/retry while Doris continues, missing-view isolation and honest pause fences"
+    ],
+    "cleanupExitCode": 0,
+    "remainingFixtureContainers": 0,
+    "remainingFixtureNetworks": 0,
+    "remainingFixtureVolumes": 0
   }
 }
