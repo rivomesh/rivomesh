@@ -857,9 +857,11 @@ public final class TaskService implements AutoCloseable {
     }
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}
     Map<String,Object> handoffProbe(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        Map<String,Object> originalEvidence=null;
         synchronized(this){
             ensureOpen();currentActor(actor);
             if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+            if(config.cluster==null||!config.cluster.sharedTasks)throw new Conflict("GLOBAL_HANDOFF_REQUIRED");
             if(request.kind==TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE){
                 Entry entry=require(request.taskId);Control task=registry.tasks.get(request.taskId);
                 if(!"STOPPED".equals(task.desired)||!"STOPPED".equals(entry.workerState)
@@ -870,10 +872,27 @@ public final class TaskService implements AutoCloseable {
                         "failureEvidence",privateDirectoryState(failureEvidenceDirectory(request.taskId)),
                         "sourceEvidence",privateDirectoryState(captureEvidenceDirectory(request.taskId)));
                 long receipts=registry.requests.values().stream().filter(receipt->request.taskId.equals(receipt.taskId)).count();
-                return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
-                        "originInventory",inventory,"retainedReceipts",receipts);
+                originalEvidence=new LinkedHashMap<>(Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
+                        "originInventory",inventory,"retainedReceipts",receipts));
+                if(config.cluster.handoffEvidenceRoot!=null)verifyHandoffEvidenceScope(request,true);
+            }else{
+                if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+                if(request.kind==TaskRequest.Kind.HANDOFF_CUSTODY_PROBE)verifyHandoffEvidenceScope(request,false);
             }
-            if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+        }
+        Path archiveRoot=config.cluster.handoffEvidenceRoot==null?null:Path.of(config.cluster.handoffEvidenceRoot);
+        if(originalEvidence!=null){
+            if(archiveRoot!=null)try{
+                SharedHandoffEvidence.Archive archive=SharedHandoffEvidence.export(archiveRoot,request.handoffEvidenceScope,reports(request.taskId));
+                originalEvidence.put("shareableReports",Map.of("state","ARCHIVED","archive",archive));
+            }catch(Exception failed){originalEvidence.put("shareableReports",archiveRefusal(failed));}
+            return originalEvidence;
+        }
+        if(request.kind==TaskRequest.Kind.HANDOFF_CUSTODY_PROBE){
+            try{
+                SharedHandoffEvidence.verify(archiveRoot,request.handoffEvidenceScope,request.handoffArchive);
+                return Map.of("state","VERIFIED","archive",request.handoffArchive);
+            }catch(Exception failed){return archiveRefusal(failed);}
         }
         if(request.kind!=TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE||request.yaml==null||request.handoffCut==null)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
@@ -890,6 +909,18 @@ public final class TaskService implements AutoCloseable {
                 code="HANDOFF_CANDIDATE_ACCESS_UNVERIFIED";
             return Map.of("state","REFUSED","code",code);
         }
+    }
+    private void verifyHandoffEvidenceScope(TaskRequest request,boolean original){
+        SharedHandoffEvidence.Scope scope=request.handoffEvidenceScope;
+        if(scope==null||!config.cluster.id.equals(scope.cluster())||!request.taskId.equals(scope.task())
+                ||!request.reference.equals(scope.assessment())||!request.revision.equals(scope.revision())
+                ||!Objects.equals(registry.ownerDirectoryIdentity,original?scope.originalDirectory():scope.candidateDirectory()))
+            throw new Conflict("HANDOFF_ARCHIVE_SCOPE_CHANGED");
+    }
+    private static Map<String,Object> archiveRefusal(Exception failure){
+        String code=safeCode(failure);
+        if(code==null||!code.matches("HANDOFF_[A-Z0-9_]{1,90}"))code="HANDOFF_ARCHIVE_UNAVAILABLE";
+        return Map.of("state","REFUSED","code",code);
     }
     private static String privateDirectoryState(Path directory){
         for(Path path=directory;path!=null;path=path.getParent())if(Files.isSymbolicLink(path))return "UNSAFE";

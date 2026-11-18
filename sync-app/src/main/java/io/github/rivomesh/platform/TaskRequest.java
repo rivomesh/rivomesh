@@ -12,7 +12,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -29,6 +29,8 @@ final class TaskRequest {
     public CorrectionRequest correction;
     public CaptureExclusionRequest captureExclusion;
     public JournalWriterAssignment.ExpectedCut handoffCut;
+    public SharedHandoffEvidence.Scope handoffEvidenceScope;
+    public SharedHandoffEvidence.Archive handoffArchive;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
     boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.ACTION;}
@@ -50,6 +52,9 @@ final class TaskRequest {
                 ||handoffRpc()&&(revision==null||!revision.matches("[0-9a-f-]{36}"))))
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(handoffCut!=null&&kind!=Kind.HANDOFF_CANDIDATE_PROBE)
+            throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        if(handoffEvidenceScope!=null&&kind!=Kind.HANDOFF_EVIDENCE_PROBE&&kind!=Kind.HANDOFF_CUSTODY_PROBE
+                ||(handoffArchive!=null)!=(kind==Kind.HANDOFF_CUSTODY_PROBE))
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(kind==Kind.CREATE&&(yaml==null||yaml.getBytes(StandardCharsets.UTF_8).length>1024*1024))throw new IllegalArgumentException("CONFIG_REQUIRED");
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}
@@ -95,7 +100,7 @@ final class TaskRequest {
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
     boolean correctionAction(){return kind==Kind.ACTION&&"CORRECTION_EXECUTE".equals(action);}
     boolean correctionRead(){return kind==Kind.CORRECTION_SCHEMA||kind==Kind.CORRECTION_PREVIEW;}
-    boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE;}
+    boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE||kind==Kind.HANDOFF_CUSTODY_PROBE;}
     boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||correctionRead()||handoffRpc();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}

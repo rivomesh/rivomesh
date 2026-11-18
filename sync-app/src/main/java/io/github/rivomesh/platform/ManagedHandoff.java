@@ -18,7 +18,8 @@ final class ManagedHandoff {
                 &&incarnation.equals(b.incarnation)&&epoch==b.epoch&&state.equals(b.state);}
     }
     private record OriginalCut(String leaseState,String journalEpoch,String sequence,String checkpointHash){}
-    private record ProbeResult(long checkedAt,Map<String,Object> candidate,Map<String,Object> originalEvidence){}
+    private record ProbeResult(long checkedAt,Map<String,Object> candidate,Map<String,Object> originalEvidence,
+                               Map<String,Object> sharedReportCustody){}
     record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
                       JournalWriterAssignment.ExpectedCut cut){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
@@ -115,15 +116,25 @@ final class ManagedHandoff {
         OwnerQueries.HandoffQueries calls=transport.submitHandoff(request,actor);
         Map<String,Object> candidate=transport.await(calls.candidate(),actor);
         Map<String,Object> evidence=transport.await(calls.originalEvidence(),actor);
+        Map<String,Object> custody=verifySharedReports(request,actor,transport,evidence);
         return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
             Assessment a=probeAssessment(c,task,current,request.reference);
             long now=db.now(c);
-            ProbeResult result=new ProbeResult(now,candidate,evidence);
+            ProbeResult result=new ProbeResult(now,candidate,evidence,custody);
             Assessment proved=new Assessment(a.version,a.task,a.request,a.replaces,a.revision,a.activeVersion,a.original,
                     a.candidate,a.taskSlots,a.workerSlots,a.assigned,a.actor,a.actorRevision,a.assessedAt,a.originalCut,a.blockers,result);
             save(c,proved,false,current,"MANAGED_HANDOFF_PROBED");
             return summary(proved,false,now);
         });
+    }
+
+    private Map<String,Object> verifySharedReports(TaskRequest request,AccessControl.Principal actor,
+                                                   OwnerQueries transport,Map<String,Object> evidence)throws Exception{
+        if(!(evidence.get("shareableReports") instanceof Map<?,?> reports)||!"ARCHIVED".equals(reports.get("state")))
+            return null;
+        SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(reports.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(descriptor==null)throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+        return transport.await(transport.submitHandoffCustody(request,actor,descriptor),actor);
     }
 
     ProbeRoute probeRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
@@ -210,8 +221,10 @@ final class ManagedHandoff {
         if(a.probe!=null){
             boolean applicable=!stale&&a.probe.checkedAt>=now-freshness&&a.probe.checkedAt<=now;
             if(applicable&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
-            result.put("probe",Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
+            Map<String,Object> probe=new LinkedHashMap<>(Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
                     "current",applicable,"candidate",a.probe.candidate,"originalEvidence",a.probe.originalEvidence));
+            if(a.probe.sharedReportCustody!=null)probe.put("sharedReportCustody",a.probe.sharedReportCustody);
+            result.put("probe",probe);
         }
         result.put("blockers",blockers);result.put("executionAuthorized",false);
         return result;

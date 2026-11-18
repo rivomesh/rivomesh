@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.Arrays;
 
 /** Optional shared control namespace; omission keeps the local controller behavior. */
@@ -18,6 +19,8 @@ public final class ClusterConfig {
     public boolean separateExecution=false;
     public Role role=Role.COMBINED;
     public String taskKey;
+    /** Existing private shared mount on an execution Agent, used only during a handoff evidence probe. */
+    public String handoffEvidenceRoot;
     public int maximumTasks=10000,maximumCommands=1000;
     public String driver="org.postgresql.Driver", namespace="rivomesh_control", advertiseUrl;
     public long heartbeatMillis=2000, leaseMillis=15000;
@@ -27,6 +30,9 @@ public final class ClusterConfig {
         if(recoveryCommit&&!recoveryReview)throw new IllegalArgumentException("RECOVERY_COMMIT_POLICY_INVALID");
         if(recoverySkip&&!recoveryCommit)throw new IllegalArgumentException("RECOVERY_SKIP_POLICY_INVALID");
         if(role==null||separateExecution&&!sharedTasks||role!=Role.COMBINED&&!separateExecution)throw new IllegalArgumentException("EXECUTION_ROLE_POLICY_INVALID");
+        if(handoffEvidenceRoot!=null&&(!sharedTasks||!separateExecution||!executes()
+                ||!Path.of(handoffEvidenceRoot).isAbsolute()||!Path.of(handoffEvidenceRoot).normalize().toString().equals(handoffEvidenceRoot)))
+            throw new IllegalArgumentException("HANDOFF_ARCHIVE_MOUNT_INVALID");
         if(id==null||!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||nodeId==null||!nodeId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))throw new IllegalArgumentException("CLUSTER_ID_INVALID");
         if(namespace==null||!namespace.matches("[a-z][a-z0-9_]{0,62}")||url==null||username==null||password==null||username.contains("${")||password.contains("${"))throw new IllegalArgumentException("CONTROL_STORE_CONFIG_INVALID");
         if(!Arrays.asList("org.postgresql.Driver","com.mysql.cj.jdbc.Driver","org.h2.Driver").contains(driver)

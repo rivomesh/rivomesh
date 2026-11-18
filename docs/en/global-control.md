@@ -67,6 +67,10 @@ Send `POST /api/tasks/{id}/handoff/probe` with `expectedAssessment` to ask the c
 
 The original Agent reports presence of its private validation, source and failure evidence directories and its retained operation receipt count. This inventory leaves private custody with the original Agent and reports `ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN`. Successful candidate verification clears the connectivity blocker while fresh. The result still carries `executionAuthorized: false`.
 
+To verify custody of completed validation reports, mount the same private storage on both Agents and set `cluster.handoffEvidenceRoot` to the existing absolute path on each Agent. Use owner-only POSIX permissions and an execution identity that can access the mount. The original Agent needs write access and the candidate needs read access. The mount must support file locks and atomic same-directory rename. Earlier tasks and installations continue to use their original report directories.
+
+During a probe, the original Agent locks each completed report and exports the exact `rows.mv.db` and `summary.json` bytes. Each attempt handles up to 32 reports and 64 MiB of report data. The scoped archive replaces the previous export for that original task only after a complete write. The candidate verifies the archive digest, assessment, task revision and both Agent directory identities. `probe.sharedReportCustody` reports the result, file size and digest. The protected mount holds the report data. Source and failure archives, local operation receipts and repair-plan adoption are outside this custody check. Keep the original protected Agent state available. The probe preserves task ownership and returns `executionAuthorized: false`.
+
 ## Admission and recovery
 
 PENDING is durable queueing. DISPATCHED saves the exact original local request/revision before invocation. ACCEPTED is local durable admission. SUCCEEDED/FAILED come from actual operation receipts. UNKNOWN requires reconciliation, not a success claim or reissue under a new revision. Startup restores receipt protection and validates local configuration against shared authority before scheduling.

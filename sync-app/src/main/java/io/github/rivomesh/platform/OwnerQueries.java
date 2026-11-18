@@ -82,6 +82,18 @@ final class OwnerQueries {
                     insert(c,evidence,current,route.original(),now,route.activeVersion()));
         });
     }
+    String submitHandoffCustody(TaskRequest supplied,AccessControl.Principal actor,
+                               SharedHandoffEvidence.Archive archive)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_PROBE)
+            throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+        return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
+            ManagedHandoff.ProbeRoute route=handoff.probeRoute(c,task,current,request.reference);
+            TaskRequest verify=TaskRequest.of(TaskRequest.Kind.HANDOFF_CUSTODY_PROBE,task.id);
+            verify.reference=request.reference;verify.revision=route.revision();verify.handoffArchive=archive;
+            return insert(c,verify,current,route.candidate(),reserve(c,1),route.activeVersion());
+        });
+    }
     private long reserve(Connection c,int slots)throws SQLException{
         long now=db.now(c);
         db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
@@ -108,7 +120,7 @@ final class OwnerQueries {
         ManagedHandoff.ProbeRoute route=handoff.probeRoute(c,record,actor,entry.request.reference);
         if(!route.activeVersion().equals(entry.handoffConfiguration)||!route.revision().equals(entry.request.revision))
             throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
-        AgentDirectory.Binding target=entry.request.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE?route.candidate():route.original();
+        AgentDirectory.Binding target=entry.request.kind==TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE?route.original():route.candidate();
         if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
                 ||!entry.incarnation.equals(target.incarnation)||!"HEALTHY".equals(target.state))
             throw new TaskService.Conflict("HANDOFF_AGENT_CHANGED");
@@ -145,6 +157,9 @@ final class OwnerQueries {
                 if(scoped.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE){
                     scoped.yaml=tasks.activeYaml(c,record);
                     scoped.handoffCut=route.cut();
+                }else{
+                    scoped.handoffEvidenceScope=new SharedHandoffEvidence.Scope(cluster,record.id,scoped.reference,
+                            route.revision(),route.activeVersion(),route.original().directory,route.candidate().directory);
                 }
                 return new Execution(scoped,actor);
             });

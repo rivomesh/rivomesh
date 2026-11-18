@@ -67,6 +67,10 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 原 Agent 返回私有校验报告、源证据和故障证据目录是否存在，以及保留的操作回执数量。清单保留原 Agent 的资料归属，并返回 `ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN`。候选核验有效期内，连接阻塞项会清除。结果继续返回 `executionAuthorized: false`。
 
+要核验已完成的校验报告，请在两个 Agent 上挂载同一份受保护的存储，并分别配置 `cluster.handoffEvidenceRoot` 为已存在的绝对路径。挂载目录须使用 POSIX 仅所有者权限。原 Agent 要有写权限，候选 Agent 要有读权限，存储还要支持文件锁和同目录原子改名。既有任务和部署继续使用原报告目录。
+
+原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告和 64 MiB 报告数据，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。源证据、故障证据、本地操作回执和修复计划接续仍需原 Agent 的私有状态。核验保留原任务归属，返回 `executionAuthorized: false`。
+
 ## 接受、执行和恢复
 
 PENDING 表示持久排队；DISPATCHED 表示交给固定 owner，调用前保存原本机请求与原修订；ACCEPTED 表示本机已持久接受；SUCCEEDED/FAILED 来自实际操作回执。UNKNOWN 表示证据不足，不能伪装成功，也不能换新修订重新执行。重启先恢复原回执保护及配置权威校验，再允许本机调度。

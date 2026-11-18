@@ -38,6 +38,8 @@ parser.add_argument('--handoff-assessment', action='store_true',
                     help='Persist and refresh a managed handoff assessment through two Controllers and two Agents')
 parser.add_argument('--handoff-probe', action='store_true',
                     help='Read-only candidate and original Agent probe under the current assessment')
+parser.add_argument('--handoff-custody', action='store_true',
+                    help='Prove exact completed-report custody using separate then shared private mounts')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
@@ -90,6 +92,8 @@ if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.handoff_probe and not args.handoff_assessment:
     parser.error('--handoff-probe requires --handoff-assessment')
+if args.handoff_custody and not args.handoff_probe:
+    parser.error('--handoff-custody requires --handoff-probe')
 if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
                              or not os.access(args.handoff_browser.resolve(), os.X_OK)):
     parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
@@ -185,6 +189,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'automaticPlacement': args.automatic_placement,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
+            'handoffCustody': args.handoff_custody,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -228,6 +233,9 @@ def wait(check, label, seconds=120):
 
 with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as temporary:
     home = Path(temporary)
+    if args.handoff_custody:
+        for directory in ('handoff-shared','handoff-disjoint'):
+            (home / directory).mkdir(mode=0o700)
     home.chmod(0o755 if args.runtime_image else 0o700)  # Optional bind holds ENV references only; actual private state stays in named volumes.
     volumes = {}
     replica_updates = '--log-slave-updates=ON' if (args.source_expected_version or '').startswith('5.7') else '--log-replica-updates=ON'
@@ -266,6 +274,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['cluster']['recoverySkip'] = True
         if args.separate_execution:
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node in execution_agents else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
+        if args.handoff_custody and node in execution_agents:
+            config['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared' if node==owner_node else '/fixture/handoff-disjoint'
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
@@ -1515,6 +1525,17 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             candidate='node-worker-alt'
             wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING' for n in ('node-a','node-b')),
                  'both entries see the original drained data stream')
+            if args.handoff_custody:
+                validation,_=action('VALIDATE',validation={'targets':['pg','my'],'gateMillis':15000,
+                                                           'sourceMillis':60000,'targetMillis':30000})
+                report_id=operation(validation)['validation']['reportId']
+                assert http('node-b',route+'/validations/'+report_id)['code']=='VALIDATION_MATCH'
+                local_report=home/owner_node/'controller'/'validations'/'global_cdc'/report_id
+                saved_bytes={name:(local_report/name).read_bytes() for name in ('rows.mv.db','summary.json')}
+                action('RESUME',errorCount=task()['status']['error_count'])
+                wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING'
+                                 and task(n).get('captureLeaseState')=='CLAIMED' for n in ('node-a','node-b')),
+                     'resume after the native completed report')
             request='gc_handoff_'+uuid.uuid4().hex
             live_input={'candidateNodeId':candidate,'expectedRevision':task()['revision']}
             http('node-b',endpoint,expected=403,token=env['RM_GC_VIEWER'])
@@ -1574,11 +1595,20 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert bad['probe']['originalEvidence']['retainedReceipts']>0
                 assert not bad['executionAuthorized'] and data_cut()==original_cut
                 passed('Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected')
+                if args.handoff_custody:
+                    assert bad['probe']['originalEvidence']['shareableReports']['state']=='ARCHIVED'
+                    assert bad['probe']['sharedReportCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
+                    passed('Candidate with a disjoint private mount cannot claim custody of the original completed report')
                 compose('stop','--timeout','8',candidate)
                 wait(lambda: sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                  " AND node_id='node-worker-alt' AND lifecycle='RUNNING' AND lease_until>"+clock)=='0',
                      'old candidate enrollment ended')
                 services[candidate]['environment']['RM_GC_HANDOFF_PG']='${RM_GC_DATA}'
+                if args.handoff_custody:
+                    candidate_file=home/(candidate+'.json')
+                    updated=json.loads(candidate_file.read_text())
+                    updated['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared'
+                    candidate_file.write_text(json.dumps(updated))
                 composition.write_text(json.dumps({'services':services,'volumes':volumes}))
                 compose('up','-d','--force-recreate',candidate)
                 address(candidate)
@@ -1595,6 +1625,19 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert good['blockers']==['ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED'] and not good['executionAuthorized']
                 assert http('node-a',endpoint)==good and task()['ownerNodeId']==owner_node and data_cut()==original_cut
                 passed('Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data')
+                if args.handoff_custody:
+                    import zipfile
+                    custody=proof['sharedReportCustody']
+                    assert custody['state']=='VERIFIED' and custody['archive']['reports']==1
+                    archive,=list((home/'handoff-shared').glob('handoff-*.zip'))
+                    assert archive.stat().st_size==custody['archive']['bytes']
+                    assert hashlib.sha256(archive.read_bytes()).hexdigest()==custody['archive']['sha256']
+                    with zipfile.ZipFile(archive) as files:
+                        assert all(files.read(report_id+'/'+name)==expected for name,expected in saved_bytes.items())
+                    assert all((local_report/name).read_bytes()==expected for name,expected in saved_bytes.items())
+                    assert 'rows.mv.db' not in json.dumps(good)
+                    assert not good['executionAuthorized']
+                    passed('Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain')
             if args.handoff_browser:
                 browser_check('handoff', owner=owner_node, candidate=candidate, revision=stopped_input['expectedRevision'],
                               previousReceiptId=stopped['id'])
