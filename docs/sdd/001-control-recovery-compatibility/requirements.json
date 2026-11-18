@@ -1082,8 +1082,8 @@
         "en": "Cross-JDK source/sink/recovery matrix"
       },
       "gap": {
-        "zh-CN": "五 JDK 的 MySQL 8.4 基础 SQL 档案和 PostgreSQL 17.12 七项原生源档案已通过。其余源版本、目标产品、TLS 和恢复组合仍待补齐。",
-        "en": "Five JDKs passed the MySQL 8.4 baseline SQL profile and seven native PostgreSQL 17.12 source cases. Remaining source versions, targets, TLS and recovery combinations are open."
+        "zh-CN": "五种 JDK 已验证 MySQL 8.4 基础双目标、PostgreSQL 17.12 七项和 18.7 存储型生成列八项实库档案。其他源、目标、TLS 和恢复组合待验收。",
+        "en": "Five JDKs passed MySQL 8.4 basic fan-out, seven PostgreSQL 17.12 cases and eight PostgreSQL 18.7 stored-generated cases. Other sources, targets, TLS and recovery combinations remain."
       },
       "acceptance": {
         "zh-CN": "每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。",
@@ -1284,7 +1284,7 @@
         "tests/sdd-check.py"
       ],
       "verification": {
-        "artifactSha256": "2dbfee089f6a7ef59296d38a6398b3a2393ef1cf045695aebec88216550e6068",
+        "artifactSha256": "00f118ef3c6e37194925adf6e39e4e4fcdcbe9fcd77b7d40457c7b2b6b73dfc3",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",

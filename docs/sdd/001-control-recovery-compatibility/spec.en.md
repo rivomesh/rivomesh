@@ -60,7 +60,7 @@ Implementation:48requirements,23 DONE, 24 PARTIAL and 1 NEW, with 25 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Java8/11/17/21/25 runnable releases | Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades. |
-| JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Five JDKs passed the MySQL 8.4 baseline SQL profile and seven native PostgreSQL 17.12 source cases. Remaining source versions, targets, TLS and recovery combinations are open. |
+| JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Five JDKs passed MySQL 8.4 basic fan-out, seven PostgreSQL 17.12 cases and eight PostgreSQL 18.7 stored-generated cases. Other sources, targets, TLS and recovery combinations remain. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor isolation/artifact checks exist without all-JDK coverage. |
 | JV-04 | P1 / NEW | Multi-JDK deployment and mixed-version upgrades | Benchmarks select JREs;production/mixed-cluster upgrade policies are not accepted. |
 

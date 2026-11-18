@@ -27,4 +27,4 @@ Reproduce the native checks with `python3 tests/postgres-source-run.py --artifac
 
 Seven native checks passed on each of Java 8, 11, 17, 21 and 25. Use `--jdk` to select the runtime. See the [verification record](../verification/README.md#postgresql-source-runtime-matrix).
 
-PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight Java 8 checks. The added fixture checks stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight checks on each of Java 8, 11, 17, 21 and 25. The added fixture checks stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)

@@ -27,4 +27,4 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 
 已在 Java 8、11、17、21、25 上各运行七项实库检查。测试可用 `--jdk` 选择运行时。见[验收记录](../verification/README.md#postgresql-source-runtime-matrix)。
 
-PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8 通过八项实库检查，包含有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8、11、17、21、25 各通过八项实库检查，包含有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
