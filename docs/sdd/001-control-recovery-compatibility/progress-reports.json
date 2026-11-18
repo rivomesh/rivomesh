@@ -76,6 +76,7 @@
     "LG-04 Redis Streams 7.4.2 passed six native checks for original-AOF promotion, one required replica fsync, stable event replay, durable consumer takeover and cold restart.",
     "CP-05 completed. Both control stores passed 13 native cases with real Chrome, cross-entry authorization revocation and exact audit correlation. Agent-level task grants limit each Worker to its used credential references.",
     "A clean Temurin 21 reactor from published 4e86f79 passed 526 application and two isolated transport tests with 32 optional profile skips.",
-    "JV-03 PostgreSQL 17.12 source and target verified TLS 1.3, SCRAM channel binding, wrong DNS and CA refusal and original-snapshot reconnect across 11 native checks."
+    "JV-03 PostgreSQL 17.12 source and target verified TLS 1.3, SCRAM channel binding, wrong DNS and CA refusal and original-snapshot reconnect across 11 native checks.",
+    "LG-09 reviewed retention holds passed eight native cases including two Chrome and 48 integrated Java /135 DOM tests. Audit receipt and report bytes survived Agent failure, with viewer refusal."
   ]
 }

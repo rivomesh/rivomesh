@@ -90,6 +90,14 @@ There is no automatic expiration of report or recovery evidence. Budget for the 
 
 An administrator can select **View storage** on a report card, or use `GET /api/tasks/{taskId}/validations/{reportId}/storage`. The response contains observed byte lengths for the report database and the known summary and diagnostic files. **Protected** means the owning Agent observed the report in use in its process. **Activity unknown** covers other processes. Use the observations for storage and backup planning. File lengths can change during an active operation.
 
+### Review a report's minimum retention
+
+Set `validationRetentionMinimumDays` on the Agent that owns the report, or on the standalone server. The default `0` disables new reviews. Values from 1 to 3650 enable the workflow and set its minimum duration. Apply the setting to the platform configuration for Linux, Docker or native Kubernetes. With Helm, set `platform.validationRetentionMinimumDays` for the Agent release.
+
+In **View storage**, enter the minimum number of days to retain the completed report and confirm the review. The server checks the current task revision, the last review ID and the original report lock. Reviews can extend the existing minimum date. Active or incomplete reports return an explicit refusal. Once accepted, watch the request in the task's operation history and reopen **View storage** to see the committed date and reviewer.
+
+The equivalent request is `POST /api/tasks/{taskId}/validations/{reportId}/retention` with the usual request ID and session protection. Pass `expectedRevision`, `minimumDays`, and `approved: true`. Include `expectedReviewId` from the previous review when one exists. A retry with the same request ID and body keeps the original result. The Agent stores the review alongside the report and links its outcome to the report ID and actor in the audit trail. Back up the attachment with the original report. The report and its recovery evidence remain on their current volume after the minimum date. Count the full report bytes when planning disk capacity.
+
 ### Find a recovery operation receipt
 
 In global task control, an administrator can choose **Find receipt by request ID** in the task details. A current recovery operation also has a **View receipt** shortcut. The exact lookup `GET /api/tasks/{taskId}/recovery-receipts/{requestId}` reads the persisted control-plane result after the request has left recent history, including while its Agent is unavailable.

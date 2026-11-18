@@ -221,6 +221,39 @@ test('recovery receipt lookup reads earlier requests for the active task and wit
  }finally{ui.dom.window.close();}
 });
 
+test('retention review shows the existing hold, requires approval, and retries the identical request',async()=>{
+ const reportId='a4500000-1223-4abc-8abc-0123456789ab';
+ const task={id:'retention-review',revision:'task-revision',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],
+  operations:[{id:'validation_report_request',action:'VALIDATE',status:'SUCCEEDED',validation:{reportId}}]};
+ const ui=setup([task]),fallback=ui.w.fetch,calls=[],base='/api/tasks/'+task.id+'/validations/'+reportId;
+ ui.w.fetch=async(path,options)=>{
+  if(path===base+'/storage')return{ok:true,status:200,json:async()=>({id:reportId,activity:'ACTIVITY_UNKNOWN',observedAt:'2026-11-18T09:00:00Z',
+   retentionMinimumDays:30,retention:{reportId,requestId:'previous_review',minimumDays:60,actorId:'admin-a',
+    minimumRetainUntil:'2027-01-17T09:00:00Z'},files:{'rows.mv.db':8192}})};
+  if(path!==base+'/retention')return fallback(path,options);
+  calls.push(options);
+  if(calls.length===1)throw new Error('Temporary network error');
+  return{ok:true,status:202,json:async()=>task};
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('[data-validation-storage]').click();await flush();
+  const dialog=ui.d.querySelector('.validation-storage-dialog'),form=dialog.querySelector('form'),
+   approval=form.querySelector('[name=approved]'),days=form.querySelector('[name=minimumDays]');
+  assert.match(dialog.textContent,/admin-a/);assert.equal(days.min,'30');assert.equal(days.value,'60');
+  const submit=()=>form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));
+  submit();await flush();assert.equal(calls.length,0);
+  days.value='90';approval.checked=true;submit();await flush();
+  assert.equal(calls.length,1);
+  assert.deepEqual(JSON.parse(calls[0].body),{minimumDays:90,approved:true,expectedRevision:'task-revision',expectedReviewId:'previous_review'});
+  assert.equal(calls[0].headers['X-CSRF-Token'],'test-csrf');
+  submit();await flush();assert.equal(calls.length,2);
+  assert.equal(calls[1].body,calls[0].body);
+  assert.equal(calls[1].headers['X-Request-ID'],calls[0].headers['X-Request-ID']);
+  assert.ok(dialog.textContent.includes(calls[0].headers['X-Request-ID']));
+ }finally{ui.dom.window.close();}
+});
+
 test('a Global viewer cannot open recovery or report-storage lookup controls',async()=>{
  const reportId='a4500000-1223-4abc-8abc-0123456789ab';
  const task={id:'restricted-receipt',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],

@@ -6117,5 +6117,80 @@
       "runtimeArchitecture": "arm64",
       "cleanupExitCode": 0
     }
+  },
+  "lockedReportRetentionReview": {
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --retention-review --browser <Chrome binary> --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "4716ce9a2012053d536d2f97574094a8a454898a26b52fd103fff0fb6571a4a3",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Chrome requires explicit report retention approval and sees the durable hold on the other Controller",
+        "Original validation bytes are unchanged and a viewer cannot extend the persisted retention review",
+        "The control receipt survives Agent loss and the original review remains visible after its restart"
+      ],
+      "harnessSourceSha256": "8685af6040366a26a8353dc6bd2afff8784d2e8b3a91ae6a08c4ed9a71045b7f",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "handoffCustody": false,
+      "receiptLookup": false,
+      "retentionReview": true,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "browserRecovery": {
+        "retention": {
+          "status": "PASS",
+          "scenario": "retention",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Chrome requires explicit report retention approval and sees the durable hold on the other Controller"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "fb00f54ae9c7cc9b7b3d3f0331814fb0153536db46cee95cc712e236db5b2aef",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 39,
+    "nativeCandidateDomTests": 135,
+    "stagedIntegration": {
+      "artifactSha256": "f8610ff55840df7ff8bbc12ed726dfdf9fde3ba3ec51130085e573906db89ed7",
+      "focusedJavaTests": 48,
+      "domTests": 135
+    }
   }
 }

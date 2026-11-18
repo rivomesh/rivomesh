@@ -6,7 +6,7 @@ import {launchChrome,waitFor} from './chromium.mjs';
 
 // The disposable native fixture supplies its loopback endpoints and token via stdin.
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['repair','correction','receipt'].includes(scenario));
+assert(binary&&['repair','correction','receipt','retention'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const fixture=JSON.parse(Buffer.concat(chunks));
@@ -125,6 +125,27 @@ try{
     await poll('[...document.querySelectorAll(".repair-panel h3")].some(heading=>heading.textContent==="目标提交凭据")',
       'visible receipts after browser reload');
     checks.push('The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload');
+  }else if(scenario==='retention'){
+    const storage='[data-validation-storage="'+fixture.reportId+'"]',dialog='.validation-storage-dialog[open]';
+    await activate(storage,'retention review from the completed report');
+    const days=dialog+' input[name="minimumDays"]',approval=dialog+' input[name="approved"]';
+    await poll(`Boolean(${query(days)})`,'opt-in retention form');
+    assert(await evaluate(query(days)+'.min==="30"'));
+    const accessibility=await cdp('Accessibility.getFullAXTree');
+    assert(accessibility.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='报告存储检查'));
+    await clickNamed(dialog+' button','提交保留审阅');
+    assert(!await evaluate(query(dialog)+'.textContent.includes("请求 ID")'));
+    await evaluate(query(days)+'.value="60"');
+    await evaluate(query(approval)+'.click()');
+    await activate(dialog+' button[type="submit"]','approved retention extension');
+    const retained=await poll(operations('VALIDATION_RETENTION_REVIEW'),'durable review outcome');
+    assert.equal(retained.code,'VALIDATION_RETENTION_REVIEWED');
+    await key('Escape',27);
+    await navigate(first,'node-a');
+    await activate(storage,'review metadata at other Controller');
+    await poll(query(dialog)+'?.textContent.includes("至少保留至")','reviewed hold and operator are visible');
+    await key('Escape',27);
+    checks.push('Chrome requires explicit report retention approval and sees the durable hold on the other Controller');
   }else if(scenario==='correction'){
     await clickNamed('.history button','查看事务证据');
     await activate('button[data-recovery-label="correctionOpen"]','typed correction for the retained failure');

@@ -92,6 +92,14 @@ API 可调用 `GET /api/tasks/{id}/validations?limit=20` 读取元数据，使�
 
 管理员可在报告卡片选择 **查看存储**，也可调用 `GET /api/tasks/{taskId}/validations/{reportId}/storage`。返回报告数据库及已知摘要、诊断文件的观测字节长度。**报告受保护** 表示所属 Agent 观测到本进程正在使用该报告。**活动状态未知** 涵盖其他进程。可用这些观测值规划存储和备份。作业运行期间文件长度可能变化。
 
+### 审阅报告最低保留期限
+
+在持有报告的 Agent 或独立服务器配置 `validationRetentionMinimumDays`。默认值 `0` 关闭新审阅。设置为 1 至 3650 可开启审阅并指定最低天数。Linux、Docker 和原生 Kubernetes 修改平台配置。Helm 部署在所属 Agent 的 release 设置 `platform.validationRetentionMinimumDays`。
+
+打开报告的 **查看存储**，为已完成的报告填写最低保留天数，勾选确认并提交。服务端核对当前任务版本、上次审阅 ID 和原报告锁。已有最低期限只能延长。报告使用中或尚未完成会明确拒绝。提交后可在任务操作记录跟踪，重新打开 **查看存储** 可查看已生效的日期和审阅人。
+
+也可调用 `POST /api/tasks/{taskId}/validations/{reportId}/retention`，沿用请求 ID 和会话保护。正文传入 `expectedRevision`、`minimumDays` 和 `approved: true`。已有审阅时再传其 `expectedReviewId`。用相同请求 ID 和正文重试可取得原操作结果。审阅附件随原报告存储，审计记录报告 ID、发起人和操作状态，备份时请一并保留。达到最低日期后，报告和恢复证据仍保留在原卷。规划磁盘时继续计入报告的全部占用。
+
 ### 查找恢复操作回执
 
 在全局任务控制中，管理员可在任务详情选择 **按请求 ID 查询回执**，近期恢复操作也有 **查看回执** 入口。使用 `GET /api/tasks/{taskId}/recovery-receipts/{requestId}` 查询控制面持久保存的结果。请求移出近期列表或所属 Agent 暂时离线时，仍可通过任一管理入口查询。

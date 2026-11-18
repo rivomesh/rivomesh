@@ -136,19 +136,24 @@ public final class ValidationStore implements AutoCloseable {
         return page;
     }
 
-    private static boolean reportId(String id){
+    static boolean reportId(String id){
         if(!id.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"))return false;
         return UUID.fromString(id).toString().equals(id);
     }
-    private static Path reportPath(Path root,String id)throws Exception{
+    static Path reportPath(Path root,String id)throws Exception{
         if(id==null||!UUID.fromString(id).toString().equals(id))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Path base=root.toAbsolutePath().normalize();
         if(base.toString().indexOf(';')>=0||base.toString().chars().anyMatch(c->c<32)||Files.isSymbolicLink(base))throw new IOException("VALIDATION_PATH_INVALID");return base.resolve(id);
     }
-    private static void owner(Path path,boolean dir)throws IOException{if(Files.isSymbolicLink(path))throw new IOException("VALIDATION_SYMLINK");try{Files.setPosixFilePermissions(path,PosixFilePermissions.fromString(dir?"rwx------":"rw-------"));}catch(UnsupportedOperationException ignored){}}
+    static void owner(Path path,boolean dir)throws IOException{if(Files.isSymbolicLink(path))throw new IOException("VALIDATION_SYMLINK");try{Files.setPosixFilePermissions(path,PosixFilePermissions.fromString(dir?"rwx------":"rw-------"));}catch(UnsupportedOperationException ignored){}}
+    static void claimLocalWriter(Path directory)throws SyncFailure{
+        if(!LOCAL_WRITERS.add(directory))throw fail("VALIDATION_REPORT_BUSY");
+    }
+    static void releaseLocalWriter(Path directory){LOCAL_WRITERS.remove(directory);}
+
     private ValidationStore(Path path,Manifest initial)throws Exception{
         if(!Files.isDirectory(path)||Files.isSymbolicLink(path))throw new IOException("VALIDATION_REPORT_MISSING");directory=path.toRealPath();path=directory;
         if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(c->c<32))throw new IOException("VALIDATION_PATH_INVALID");
-        if(!LOCAL_WRITERS.add(directory))throw fail("VALIDATION_REPORT_BUSY");
+        claimLocalWriter(directory);
         FileChannel channel=null;FileLock acquired=null;
         try{
             Path file=path.resolve("validation.lock");if(Files.isSymbolicLink(file))throw new IOException("VALIDATION_SYMLINK");channel=FileChannel.open(file,StandardOpenOption.CREATE,StandardOpenOption.WRITE);owner(file,false);

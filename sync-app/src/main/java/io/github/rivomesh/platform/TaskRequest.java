@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.JournalWriterAssignment;
+import io.github.rivomesh.validation.ValidationRetention;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -28,6 +29,7 @@ final class TaskRequest {
     public CompensationRequest compensation;
     public CorrectionRequest correction;
     public CaptureExclusionRequest captureExclusion;
+    public ValidationRetention.Request validationRetention;
     public JournalWriterAssignment.ExpectedCut handoffCut;
     public SharedHandoffEvidence.Scope handoffEvidenceScope;
     public SharedHandoffEvidence.Archive handoffArchive;
@@ -62,6 +64,11 @@ final class TaskRequest {
                 ||limit<1||limit>25))throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
         if(kind==Kind.VALIDATION_STORAGE&&(reportId==null||!reportId.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")))
             throw new IllegalArgumentException("VALIDATION_ID_INVALID");
+        if(reviewValidationRetention()){
+            if(validationRetention==null||revision==null||revision.isEmpty()||revision.length()>128)
+                throw new IllegalArgumentException("VALIDATION_RETENTION_REVIEW_INVALID");
+            validationRetention.validate();
+        }else if(validationRetention!=null)throw new IllegalArgumentException("VALIDATION_RETENTION_REVIEW_INVALID");
         if(kind==Kind.RECOVERY_RECEIPT&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")))
             throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
         if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit,subscriptionId);
@@ -98,8 +105,9 @@ final class TaskRequest {
         if(commitRecovery()){if(commit==null)throw new IllegalArgumentException("FAILURE_ACK_REQUEST_INVALID");commit.validate();}else if(commit!=null)throw new IllegalArgumentException("FAILURE_ACK_ACTION_REQUIRED");
         if(recoveryCancel()&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)))
             throw new IllegalArgumentException("RECOVERY_CANCEL_REQUEST_INVALID");
-        if(kind==Kind.ACTION&&!captureRetention()&&!excludesCapture()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(kind==Kind.ACTION&&!reviewValidationRetention()&&!captureRetention()&&!excludesCapture()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
+    boolean reviewValidationRetention(){return kind==Kind.ACTION&&ValidationRetention.ACTION.equals(action);}
     boolean skipAction(){return kind==Kind.ACTION&&Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);}
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
     boolean correctionAction(){return kind==Kind.ACTION&&"CORRECTION_EXECUTE".equals(action);}

@@ -107,6 +107,46 @@ class ValidationStoreTest {
         assertEquals("ACTIVITY_UNKNOWN",ValidationStore.storage(root,certificate.id).get("activity"));
         assertTrue(Files.exists(abandoned));
     }
+    @Test void retentionReviewPreservesActiveAndRecoveryLinkedReportBytesAndRequiresTheLastReview()throws Exception{
+        TableSchema t=table(false);
+        var certificate=certificate(t);
+        var first=new ValidationRetention.Request(certificate.id,null,90,true);
+        try(ValidationStore store=create(t,certificate,new ValidationStore.Limits())){
+            assertEquals("VALIDATION_REPORT_BUSY",assertThrows(SyncFailure.class,
+                    ()->ValidationRetention.review(root,first,"first_review","operator-a",30)).code);
+        }
+        assertEquals("VALIDATION_RETENTION_REPORT_INCOMPLETE",assertThrows(SyncFailure.class,
+                ()->ValidationRetention.review(root,first,"first_review","operator-a",30)).code);
+        var finished=certificate(t);
+        Path directory=root.resolve(finished.id);
+        var approved=new ValidationRetention.Request(finished.id,null,90,true);
+        try(ValidationStore store=create(t,finished,new ValidationStore.Limits())){
+            store.source(t.id,row(1,"evidence",null));store.finishSourceTable(t.id);store.completeSource();
+            store.finishTarget("target",t.id);store.complete();
+        }
+        Files.createDirectory(directory.resolve("repair-plans"));
+        Path plan=Files.writeString(directory.resolve("repair-plans/existing.json"),"repair plan evidence");
+        byte[] database=Files.readAllBytes(directory.resolve("rows.mv.db")),summary=Files.readAllBytes(directory.resolve("summary.json"));
+        assertNull(ValidationRetention.observe(root,finished.id));
+        assertEquals("VALIDATION_RETENTION_REVIEW_DISABLED",assertThrows(SyncFailure.class,
+                ()->ValidationRetention.review(root,approved,"first_review","operator-a",0)).code);
+        var saved=ValidationRetention.review(root,approved,"first_review","operator-a",30);
+        assertEquals(saved,ValidationRetention.observe(root,finished.id));
+        assertEquals(saved,ValidationRetention.review(root,approved,"first_review","operator-a",0));
+        assertEquals("VALIDATION_RETENTION_REVIEW_CHANGED",assertThrows(SyncFailure.class,
+                ()->ValidationRetention.review(root,approved,"stale_review","operator-b",30)).code);
+        var shortReview=new ValidationRetention.Request(finished.id,saved.requestId(),45,true);
+        assertEquals("VALIDATION_RETENTION_CANNOT_SHORTEN",assertThrows(SyncFailure.class,
+                ()->ValidationRetention.review(root,shortReview,"short_review","operator-b",30)).code);
+        var renewal=new ValidationRetention.Request(finished.id,saved.requestId(),120,true);
+        var newer=ValidationRetention.review(root,renewal,"second_review","operator-b",30);
+        assertEquals("operator-b",newer.actorId());
+        assertEquals(saved.requestId(),newer.previousReviewId());
+        assertEquals(newer,ValidationRetention.observe(root,finished.id));
+        assertArrayEquals(database,Files.readAllBytes(directory.resolve("rows.mv.db")));
+        assertArrayEquals(summary,Files.readAllBytes(directory.resolve("summary.json")));
+        assertEquals("repair plan evidence",Files.readString(plan));
+    }
     @Test void retainedReportCatalogPagesWithoutOpeningTheReportDatabases()throws Exception{
         TableSchema table=table(false);
         PipelineValidationBarrier.Certificate first=certificate(table),second=certificate(table);

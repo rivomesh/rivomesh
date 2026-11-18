@@ -60,6 +60,9 @@ data:
     pollMillis: {{ .Values.platform.pollMillis }}
     autoStart: {{ .Values.platform.autoStart }}
     auditMaxEvents: {{ .Values.platform.auditMaxEvents | int }}
+    {{- if gt (int .Values.platform.validationRetentionMinimumDays) 0 }}
+    validationRetentionMinimumDays: {{ .Values.platform.validationRetentionMinimumDays | int }}
+    {{- end }}
     sessions:
       enabled: {{ .Values.sessions.enabled }}
       secureCookie: {{ .Values.sessions.secureCookie }}

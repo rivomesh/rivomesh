@@ -1,5 +1,6 @@
 package io.github.rivomesh.platform;
 
+import io.github.rivomesh.validation.ValidationRetention;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -10,7 +11,7 @@ final class RecoveryReceipts {
             "VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL",
             "FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL",
             "GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL","COMPENSATION_PLAN","COMPENSATION_EXECUTE",
-            "CORRECTION_EXECUTE","RECOVERY_CANCEL","CAPTURE_RETAIN","CAPTURE_EXCLUDE");
+            "CORRECTION_EXECUTE","RECOVERY_CANCEL","CAPTURE_RETAIN","CAPTURE_EXCLUDE",ValidationRetention.ACTION);
 
     private RecoveryReceipts(){}
 
@@ -21,6 +22,7 @@ final class RecoveryReceipts {
     static Map<String,String> references(TaskRequest request){
         Map<String,String> references=new LinkedHashMap<>();
         if(request.validation!=null)add(references,"reportId",request.validation.reportId);
+        if(request.validationRetention!=null)add(references,"reportId",request.validationRetention.reportId());
         if(request.repair!=null){
             add(references,"reportId",request.repair.reportId);
             add(references,"repairPlanId",request.repair.planId);

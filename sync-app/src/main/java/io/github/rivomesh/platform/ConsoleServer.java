@@ -250,6 +250,20 @@ public final class ConsoleServer implements AutoCloseable {
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_STORAGE,parts[3]);request.reportId=parts[5];
                 json(exchange,200,control.invoke(request,principal));return;
             }
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")
+                    &&parts[6].equals("retention")&&method.equals("POST")){
+                if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                JsonNode input=body(exchange),days=input.path("minimumDays"),expected=input.path("expectedReviewId");
+                if(!days.isIntegralNumber()||!days.canConvertToInt()||input.hasNonNull("expectedReviewId")&&!expected.isTextual())
+                    throw new IllegalArgumentException("VALIDATION_RETENTION_REVIEW_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,parts[3]);
+                request.action=io.github.rivomesh.validation.ValidationRetention.ACTION;
+                request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                request.revision=input.path("expectedRevision").textValue();
+                request.validationRetention=new io.github.rivomesh.validation.ValidationRetention.Request(parts[5],
+                        expected.textValue(),days.intValue(),input.path("approved").isBoolean()&&input.path("approved").booleanValue());
+                json(exchange,202,control.invoke(request,principal));return;
+            }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&Arrays.asList("differences","values").contains(parts[6])&&method.equals("POST")){
                 if(!principal.administers()){error(exchange,403,"FORBIDDEN");return;}JsonNode input=body(exchange);boolean values=parts[6].equals("values");String identity=values?input.path("identityHash").asText(null):null;if(values&&(identity==null||!identity.matches("[0-9a-f]{64}")))throw new IllegalArgumentException("VALIDATION_IDENTITY_INVALID");
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_DIFFERENCES,parts[3]);request.reportId=parts[5];request.target=input.path("target").asText(null);request.tableId=input.path("tableId").asText(null);request.after=input.path("after").asText("");request.limit=input.path("limit").asInt(50);request.identityHash=identity;json(exchange,200,control.invoke(request,principal));return;

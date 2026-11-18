@@ -26,14 +26,19 @@ window.RivomeshValidation=(()=>{
       mismatch:'返回的报告 ID 与输入不符。',directory:'返回历史目录',
       storage:'查看存储',closeStorage:'关闭',storageTitle:'报告存储检查',observed:'观测时间',
       protected:'该 Agent 正在使用此报告，报告受保护。',unknown:'报告在其他进程中的活动状态未知。',
-      fileHelp:'以下为已知文件的观测字节长度。',database:'报告数据库',trace:'数据库诊断',summary:'报告摘要',bytes:'字节'},
+      fileHelp:'以下为已知文件的观测字节长度。',database:'报告数据库',trace:'数据库诊断',summary:'报告摘要',bytes:'字节',
+      retention:'保留审阅',retainUntil:'至少保留至',reviewer:'审阅人',retentionHelp:'审批会记录最低保留期限。到期后，报告和恢复证据继续保留。',
+      retentionDays:'审核后至少保留天数',retentionApproval:'确认保留期限',retentionSubmit:'提交保留审阅',request:'请求 ID'},
   en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports',
       search:'Open by report ID',id:'Report ID',close:'Cancel',invalid:'Enter a valid report ID.',
       mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory',
       storage:'View storage',closeStorage:'Close',storageTitle:'Report storage inspection',observed:'Observed at',
       protected:'The Agent is using this report and protecting it.',unknown:'Activity in other processes is unknown.',
       fileHelp:'Observed byte lengths for known files.',database:'Report database',trace:'Database diagnostics',
-      summary:'Report summary',bytes:'bytes'}
+      summary:'Report summary',bytes:'bytes',retention:'Retention review',retainUntil:'Retain until at least',reviewer:'Reviewed by',
+      retentionHelp:'Approval records a minimum retention period. Reports and recovery evidence remain retained after this date.',
+      retentionDays:'Minimum days to retain after review',retentionApproval:'Confirm minimum retention',
+      retentionSubmit:'Submit retention review',request:'Request ID'}
  };
  const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
  const fetchReport=(task,id)=>api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));
@@ -90,7 +95,8 @@ window.RivomeshValidation=(()=>{
   dialog.append(heading,close,body);document.body.append(dialog);dialog.showModal();
   const current=()=>reportDialog===dialog&&can('TASK_CONFIG')&&!!bridge.task(task.id);
   try{
-   const storage=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id)+'/storage');
+   const path='/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id);
+   const storage=await api(path+'/storage');
    if(!current())return;
    if(storage?.id!==id||!['PROTECTED_ACTIVE','ACTIVITY_UNKNOWN'].includes(storage.activity)
       ||!Number.isFinite(Date.parse(storage.observedAt)))throw new Error(catalogLabel('mismatch'));
@@ -102,9 +108,50 @@ window.RivomeshValidation=(()=>{
    }
    body.replaceChildren(text('p',catalogLabel(storage.activity==='PROTECTED_ACTIVE'?'protected':'unknown'),'callout'),
     text('p',catalogLabel('observed')+' '+new Date(storage.observedAt).toLocaleString()),text('p',catalogLabel('fileHelp')),facts);
+   const retention=storage.retention;
+   if(retention&&(retention.reportId!==id||!/^[A-Za-z0-9_-]{8,128}$/.test(retention.requestId||'')
+      ||!Number.isFinite(Date.parse(retention.minimumRetainUntil))))throw new Error(catalogLabel('mismatch'));
+   if(retention)facts.append(text('dt',catalogLabel('retainUntil')),text('dd',new Date(retention.minimumRetainUntil).toLocaleString()),
+    text('dt',catalogLabel('reviewer')),text('dd',retention.actorId));
+   const minimum=storage.retentionMinimumDays,revision=bridge.task(task.id)?.revision;
+   if(revision&&storage.activity==='ACTIVITY_UNKNOWN'&&Number.isInteger(minimum)&&minimum>0&&minimum<=3650)
+    dialog.append(retentionReview(path,revision,minimum,retention,current));
   }catch(error){
    if(current())body.replaceChildren(text('p',error.message,'error'));
   }
+ }
+
+ function retentionReview(path,revision,minimum,previous,current){
+  const form=text('form'),days=text('input'),dateLabel=text('label'),approval=text('input'),
+   approvalLabel=text('label','','check'),button=text('button',catalogLabel('retentionSubmit'),'primary'),
+   feedback=text('p','','error');
+  days.type='number';days.name='minimumDays';days.min=String(minimum);days.max='3650';
+  days.required=true;days.value=String(Math.max(minimum,previous?.minimumDays||0));
+  approval.type='checkbox';approval.name='approved';approval.required=true;
+  button.type='submit';feedback.setAttribute('role','status');
+  dateLabel.append(text('span',catalogLabel('retentionDays')),days);
+  approvalLabel.append(approval,text('span',catalogLabel('retentionApproval')));
+  form.append(text('h3',catalogLabel('retention')),text('p',catalogLabel('retentionHelp')),dateLabel,approvalLabel,button,feedback);
+  let delivery=null;
+  form.onsubmit=async event=>{
+   event.preventDefault();
+   if(!current()||button.disabled||!approval.checked||!form.checkValidity())return;
+   if(!delivery){
+    const input={minimumDays:days.valueAsNumber,approved:true,expectedRevision:revision};
+    if(previous)input.expectedReviewId=previous.requestId;
+    delivery={id:requestId(),body:JSON.stringify(input)};
+   }
+   button.disabled=true;days.disabled=true;approval.disabled=true;feedback.textContent='';
+   try{
+    await api(path+'/retention',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':delivery.id},body:delivery.body});
+    if(!current())return;
+    feedback.className='';feedback.textContent=t('accepted')+' · '+catalogLabel('request')+' '+delivery.id;
+    await refresh();
+   }catch(error){
+    if(current()){feedback.textContent=error.message;button.disabled=false;}
+   }
+  };
+  return form;
  }
 
  async function loadCatalog(task,after='',previous=[]){
@@ -164,6 +211,21 @@ window.RivomeshValidation=(()=>{
  const translationZh={validate:'数据校验',validate_retry:'继续目标比对',validate_cancel:'取消校验',VALIDATION_MATCH:'校验数据匹配',VALIDATION_DIFFERENCES:'校验发现差异',VALIDATION_CANCELLED:'校验已取消，请检查任务暂停状态',VALIDATION_CANCEL_REQUESTED:'已请求取消校验',VALIDATION_REPORT_BUSY:'校验正在使用报告，请稍后查看。',VALIDATION_REPORT_NOT_CREATED:'尚未建立报告。请查看操作记录中的失败原因。',VALIDATION_WORKER_REQUIRED:'请先启动当前 Worker，完成全量并进入增量后再校验。',VALIDATION_NEW_SOURCE_VIEW_REQUIRED:'源扫描未完成且原视图已丢失。检查并恢复任务后，重新开始校验。',VALIDATION_BARRIER_MOVED:'任务状态或断点已变化，需要新的校验。',VALIDATION_V3_REQUIRED:'数据校验仅支持 V3 任务。',VALIDATION_DETAIL_TOO_LARGE:'原始行超过界面显示预算（1MiB），请保留私有报告并使用受控离线工具处理。',VALIDATION_DIFFERENCE_NOT_FOUND:'该身份没有对应的差异记录。',VALIDATION_DIFF_CORRUPT:'差异内容校验失败，未返回原始值。'};
  const translationEn={validate:'Validate data',validate_retry:'Retry target comparison',validate_cancel:'Cancel validation',VALIDATION_MATCH:'Validation matched',VALIDATION_DIFFERENCES:'Validation found differences',VALIDATION_CANCELLED:'Validation cancelled; inspect the task pause state',VALIDATION_CANCEL_REQUESTED:'Validation cancellation requested',VALIDATION_REPORT_BUSY:'Validation is using this report; retry later.',VALIDATION_REPORT_NOT_CREATED:'No report was created yet. Inspect the operation failure.',VALIDATION_WORKER_REQUIRED:'Start this worker, complete snapshots and enter CDC before validation.',VALIDATION_NEW_SOURCE_VIEW_REQUIRED:'Incomplete source view was lost. Inspect/resume the task, then start a new validation.',VALIDATION_BARRIER_MOVED:'Task state or checkpoints changed; establish a new validation.',VALIDATION_V3_REQUIRED:'Data validation requires a V3 pipeline.',VALIDATION_DETAIL_TOO_LARGE:'Raw rows exceed the console display budget (1MiB). Retain the private report and use controlled offline tooling.',VALIDATION_DIFFERENCE_NOT_FOUND:'No difference exists for this identity.',VALIDATION_DIFF_CORRUPT:'Difference integrity check failed; raw values were withheld.'};
  bridge.register(translationZh,translationEn);
+ bridge.register({
+  validation_retention_review:'审阅报告保留期限',VALIDATION_RETENTION_REVIEWED:'已记录最低保留期限。',
+  VALIDATION_RETENTION_REVIEW_DISABLED:'该 Agent 未启用保留审阅。',
+  VALIDATION_RETENTION_REVIEW_CHANGED:'已有新的保留审阅。请关闭并重新打开存储检查。',
+  VALIDATION_RETENTION_CANNOT_SHORTEN:'最低保留期限只能延长。',
+  VALIDATION_RETENTION_MINIMUM_NOT_MET:'请选择符合 Agent 策略的保留天数。',
+  VALIDATION_RETENTION_REPORT_INCOMPLETE:'校验报告完成后才能审阅保留期限。'
+ },{
+  validation_retention_review:'Review report retention',VALIDATION_RETENTION_REVIEWED:'Minimum retention recorded.',
+  VALIDATION_RETENTION_REVIEW_DISABLED:'This Agent has retention reviews disabled.',
+  VALIDATION_RETENTION_REVIEW_CHANGED:'A newer retention review exists. Close and reopen storage inspection.',
+  VALIDATION_RETENTION_CANNOT_SHORTEN:'The existing minimum retention can only be extended.',
+  VALIDATION_RETENTION_MINIMUM_NOT_MET:'Choose a duration that meets the Agent policy.',
+  VALIDATION_RETENTION_REPORT_INCOMPLETE:'The report must finish before its retention can be reviewed.'
+ });
  async function submit(task,action,validation,repair){
   try{await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({action,expectedRevision:task.revision,...(validation?{validation}:{}),...(repair?{repair}:{})})});notify(t('accepted'));await refresh();}
   catch(error){notify(error.message);await refresh();}

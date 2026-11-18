@@ -26,6 +26,7 @@ public final class PlatformConfig {
     public long pollMillis = 3000;
     public boolean autoStart = false;
     public int auditMaxEvents = 1000000;
+    public int validationRetentionMinimumDays;
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
     public Map<String,List<String>> workerSecretReferences;
@@ -66,6 +67,8 @@ public final class PlatformConfig {
     public void validate() throws Exception {
         validateAccess();
         WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
+        if(validationRetentionMinimumDays<0||validationRetentionMinimumDays>io.github.rivomesh.validation.ValidationRetention.MAXIMUM_DAYS)
+            throw new IllegalArgumentException("VALIDATION_RETENTION_POLICY_INVALID");
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");
         sessions.validate();
         if(cluster!=null)cluster.validate();

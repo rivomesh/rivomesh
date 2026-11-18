@@ -73,24 +73,28 @@ parser.add_argument('--compensation', action='store_true', help='Exercise real C
 parser.add_argument('--correction', action='store_true', help='Check administrator typed correction and JSON import against a real failed CDC transaction')
 parser.add_argument('--browser', type=Path, help='Use a real Chrome executable to approve the validation repair and typed correction')
 parser.add_argument('--receipt-lookup', action='store_true', help='Find older recovery receipts with the Agent offline after browser repair and correction')
+parser.add_argument('--retention-review', action='store_true', help='Record a reviewed minimum retention hold through the real Chrome report storage dialog')
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
 if args.mysql_async_failover and (not args.separate_execution or any((
         args.task_authority, args.command_routing, args.automatic_placement, args.runtime_image, args.runtime_jdk,
         args.rolling_restart, args.task_views, args.mysql_delivery_timing, args.source_diagnostics,
-        args.failure_diagnostics, args.snapshot_diagnostics, args.compensation, args.correction,
+        args.failure_diagnostics, args.snapshot_diagnostics, args.compensation, args.correction, args.retention_review,
         args.handoff_assessment, args.managed_failure_review, args.managed_commit, args.managed_binlog_evidence,
         args.recovery_jobs))
         or (args.source_expected_version and not re.fullmatch(r'8\.4(?:\.\d+)?', args.source_expected_version))):
     parser.error('--mysql-async-failover requires the separate Agent profile and a MySQL 8.4 source')
-if args.browser and (not args.correction or not args.separate_execution
+if args.browser and (not (args.correction or args.retention_review) or not args.separate_execution
                      or not os.access(args.browser.resolve(), os.X_OK)
                      or any((args.recovery_jobs, args.automatic_placement, args.task_views, args.compensation,
                              args.failure_diagnostics, args.snapshot_diagnostics, args.source_diagnostics))):
-    parser.error('--browser requires an executable Chrome path and the focused --separate-execution --correction profile')
-if args.receipt_lookup and not args.browser:
-    parser.error('--receipt-lookup requires --browser and its recovery profile')
+    parser.error('--browser requires an executable Chrome path and a separate-execution correction or retention-review profile')
+if args.receipt_lookup and (not args.browser or not args.correction):
+    parser.error('--receipt-lookup requires --browser and --correction')
+if args.retention_review and (not args.browser or any((args.correction,args.receipt_lookup,args.runtime_image,
+        args.runtime_jdk,args.task_authority,args.command_routing,args.rolling_restart,args.mysql_delivery_timing))):
+    parser.error('--retention-review uses the focused --browser profile')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_authority and (not args.separate_execution or any((args.automatic_placement, args.runtime_image,
@@ -198,7 +202,7 @@ if args.mysql_async_failover:
     env.update({key:secrets.token_urlsafe(24) for key in ('RM_GC_HA_ADMIN','RM_GC_HA_CAPTURE','RM_GC_HA_REPLICATION')})
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
-review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
+review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.retention_review, args.worker_diagnostics,
                        args.managed_binlog_evidence, args.task_views, args.handoff_assessment, args.command_routing,
                        args.secret_audit))
 if review_accounts:
@@ -225,6 +229,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
             'receiptLookup': args.receipt_lookup,
+            'retentionReview': args.retention_review,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -314,6 +319,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['cluster']['recoverySkip'] = True
         if args.separate_execution:
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node in execution_agents else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
+        if args.retention_review and node==owner_node:
+            config['validationRetentionMinimumDays']=30
         if args.handoff_custody and node in execution_agents:
             config['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared' if node==owner_node else '/fixture/handoff-disjoint'
         if args.secret_audit and node==owner_node:
@@ -1704,6 +1711,37 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             wait(rows_match,'full source and target equality after correction and normal CDC replay')
             passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
 
+    def run_retention_review():
+        validation,_=action('VALIDATE',validation={'targets':['pg','my'],'gateMillis':15000,
+                                                   'sourceMillis':60000,'targetMillis':30000})
+        report_id=operation(validation)['validation']['reportId']
+        report_path=route+'/validations/'+report_id
+        assert http('node-b',report_path)['code']=='VALIDATION_MATCH'
+        directory=home/owner_node/'controller'/'validations'/'global_cdc'/report_id
+        files={name:(directory/name).read_bytes() for name in ('rows.mv.db','summary.json')}
+        browser_check('retention',reportId=report_id)
+        storage=http('node-a',report_path+'/storage')
+        assert storage['retentionMinimumDays']==30
+        review=storage['retention']
+        assert review['reportId']==report_id and review['minimumDays']==60
+        assert http('node-b',report_path+'/storage')['retention']==review
+        assert all((directory/name).read_bytes()==before for name,before in files.items())
+        request_id=review['requestId']
+        receipt=route+'/recovery-receipts/'+request_id
+        observed=http('node-b',receipt)
+        assert observed['action']=='VALIDATION_RETENTION_REVIEW' and observed['references']=={'reportId':report_id}
+        assert observed['code']=='VALIDATION_RETENTION_REVIEWED'
+        post={'expectedRevision':task()['revision'],'minimumDays':90,'approved':True,
+              'expectedReviewId':request_id}
+        http('node-a',report_path+'/retention',post,request='denied_'+uuid.uuid4().hex,
+             expected=403,token=env['RM_GC_VIEWER'])
+        passed('Original validation bytes are unchanged and a viewer cannot extend the persisted retention review')
+        terminate_owner()
+        assert http('node-a',receipt)==observed
+        restart_owner()
+        assert http('node-b',report_path+'/storage')['retention']==review
+        passed('The control receipt survives Agent loss and the original review remains visible after its restart')
+
     def run_receipt_lookup():
         for _ in range(21):
             action('STOP')
@@ -1843,6 +1881,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
             manifest['status']='PASS'
             print('GLOBAL_CONTROL_SECRET_AUDIT_ACCEPTED artifact='+digest)
+            raise SystemExit(0)
+        if args.retention_review:
+            run_retention_review()
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            manifest['status']='PASS'
+            print('GLOBAL_CONTROL_RETENTION_REVIEW_ACCEPTED artifact='+digest)
             raise SystemExit(0)
         if args.task_authority:
             run_task_authority(document)

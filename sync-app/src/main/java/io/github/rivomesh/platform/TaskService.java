@@ -2,6 +2,7 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
 import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.validation.ValidationRetention;
 import java.io.*;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
@@ -48,6 +49,8 @@ public final class TaskService implements AutoCloseable {
         public String captureBoundaryHash;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public CaptureExclusionRequest captureExclusion;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public ValidationRetention.Request validationRetention;
         public boolean cancelRequested;
     }
     public static final class Control {
@@ -265,6 +268,7 @@ public final class TaskService implements AutoCloseable {
                 AuditStore.Event event=new AuditStore.Event();event.kind="OPERATION_COMMITTED";event.taskId=task.getKey();event.action=operation.action;event.status=operation.status;event.code=operation.code;event.actorId=operation.actorId;event.actorRole=operation.actorRole;event.operationHash=AuditStore.hash(operation.id);event.clientRequestHash=event.operationHash;next.auditOutbox.add(event);
                 if(operation.captureExclusion!=null){event.subjectId=operation.id;event.operationHash=operation.captureExclusion.planHash;}
                 else if(operation.validation!=null)event.subjectId=operation.validation.reportId;
+                else if(operation.validationRetention!=null)event.subjectId=operation.validationRetention.reportId();
                 else if(operation.repair!=null){event.subjectId=operation.repair.planId;if(operation.repair.approvedHash!=null)event.operationHash=operation.repair.approvedHash;else if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.gapPlanId!=null){event.subjectId=operation.gapPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.skipPlanId!=null){event.subjectId=operation.skipPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
@@ -383,7 +387,8 @@ public final class TaskService implements AutoCloseable {
             case CREATE:signature=digest("CREATE\n"+request.yaml);break;
             case CONFIG_UPDATE:signature=configurationSignature(request.taskId,request.revision,request.document);break;
             case RESTORE:signature=restoreSignature(request.taskId,request.revision,request.reference);break;
-            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null,request.captureExclusion);break;
+            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):request.reviewValidationRetention()
+                    ?validationRetentionSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction,request.captureRetention()?request.reference:null,request.captureExclusion);break;
             default:throw new IllegalArgumentException("OWNER_MUTATION_REQUIRED");
         }
         if(!Objects.equals(signature,receipt.signature)||!Objects.equals(request.taskId,receipt.taskId)||!Objects.equals(actorId,receipt.actorId)||!Objects.equals(actorRole,receipt.actorRole))throw new Conflict("OWNER_RECEIPT_MISMATCH");
@@ -674,6 +679,15 @@ public final class TaskService implements AutoCloseable {
                                 pending.errorCount,approval.boundaryHash,approval.archiveSha256,approval.planHash,
                                 pending.id,pending.actorId,approval.reason,()->authorizeCapture(pending));
                         code="CAPTURE_TRANSACTION_EXCLUDED";break;
+                    case ValidationRetention.ACTION:
+                        synchronized(this){
+                            AccountDirectory.State access=accounts();AccountDirectory.User user=access.users.get(pending.actorId);
+                            if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled
+                                    ||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new Conflict("FORBIDDEN");
+                            ValidationRetention.review(reports(id),pending.validationRetention,pending.id,pending.actorId,
+                                    config.validationRetentionMinimumDays);
+                        }
+                        code="VALIDATION_RETENTION_REVIEWED";break;
                     case "VALIDATE":case "VALIDATE_RETRY":
                         synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("VALIDATION_CANCELLED");operationThreads.put(id,Thread.currentThread());}
                         if(pending.validation==null)throw new Conflict("VALIDATION_OPTIONS_REQUIRED");
@@ -738,7 +752,7 @@ public final class TaskService implements AutoCloseable {
             finally{if(pending.validation!=null||pending.repair!=null||pending.gap!=null){operationThreads.remove(id,Thread.currentThread());Thread.interrupted();}}
             synchronized(this) {
                 if(cancellableRecovery)recoveryCancellations.remove(id);
-                if(closed&&failure!=null&&(cancellableRecovery||Arrays.asList("CAPTURE_RETAIN","CAPTURE_EXCLUDE").contains(pending.action)))return;
+                if(closed&&failure!=null&&(cancellableRecovery||Arrays.asList("CAPTURE_RETAIN","CAPTURE_EXCLUDE",ValidationRetention.ACTION).contains(pending.action)))return;
                 Registry next=copy();
                 Control state=next.tasks.get(id);
                 Operation op=state.operations.stream().filter(o -> o.id.equals(pending.id)).findFirst().get();
@@ -858,7 +872,7 @@ public final class TaskService implements AutoCloseable {
         // Copy operation views: serialization must never race a later request mutating controller state.
         com.fasterxml.jackson.databind.node.ArrayNode operations=Model.JSON.valueToTree(c.operations);
         for(com.fasterxml.jackson.databind.JsonNode operation:operations)
-            ((com.fasterxml.jackson.databind.node.ObjectNode)operation).remove("correction");
+            ((com.fasterxml.jackson.databind.node.ObjectNode)operation).remove(List.of("correction","validationRetention"));
         TaskWorker.Diagnostic startup=e.workerDiagnostic;
         if(startup!=null&&!e.statusAvailable&&"RUNNING".equals(c.desired)){
             row.put("workerErrorStage",startup.phase.name());
@@ -1114,12 +1128,44 @@ public final class TaskService implements AutoCloseable {
         if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
         if(require(id).config.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
         Map<String,Object> result;
-        try{result=io.github.rivomesh.validation.ValidationStore.storage(reports(id),reportId);}
+        try{
+            result=io.github.rivomesh.validation.ValidationStore.storage(reports(id),reportId);
+            ValidationRetention.Review retained=ValidationRetention.observe(reports(id),reportId);
+            if(config.validationRetentionMinimumDays>0||retained!=null)result.put("retentionMinimumDays",config.validationRetentionMinimumDays);
+            if(retained!=null)result.put("retention",retained);
+        }
         catch(io.github.rivomesh.SyncFailure unavailable){throw new Conflict(unavailable.code);}
         AuditStore.Event event=new AuditStore.Event();
         event.kind="VALIDATION_STORAGE_READ";event.action="READ_VALIDATION_STORAGE";event.taskId=id;event.subjectId=reportId;
         event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);
         return result;
+    }
+    private static String validationRetentionSignature(TaskRequest request)throws Exception{
+        return digest(ValidationRetention.ACTION+"\n"+request.taskId+"\n"+request.revision+"\n"
+                +Model.JSON.writeValueAsString(request.validationRetention));
+    }
+    synchronized Map<String,Object> reviewValidationRetention(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        ensureOpen();currentActor(actor);
+        if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");
+        if(!actor.task(request.taskId))throw new NoSuchElementException("TASK_NOT_FOUND");
+        String signature=validationRetentionSignature(request);
+        if(replay(request.requestId,signature,actor)!=null)return view(request.taskId);
+        if(config.validationRetentionMinimumDays==0)throw new Conflict("VALIDATION_RETENTION_REVIEW_DISABLED");
+        if(request.validationRetention.minimumDays()<config.validationRetentionMinimumDays)
+            throw new Conflict("VALIDATION_RETENTION_MINIMUM_NOT_MET");
+        if(require(request.taskId).config.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
+        Control current=registry.tasks.get(request.taskId);
+        if(!Objects.equals(current.revision,request.revision))throw new Conflict("REVISION_CHANGED");
+        if(current.operations.stream().anyMatch(operation->"PENDING".equals(operation.status)))throw new Conflict("OPERATION_PENDING");
+        Registry next=copy();Control state=next.tasks.get(request.taskId);
+        Operation operation=new Operation();operation.id=request.requestId;operation.action=request.action;
+        operation.actorId=actor.id;operation.actorRole=actor.role.name();operation.failureActorRevision=accounts().revision;
+        operation.validationRetention=request.validationRetention;state.operations.add(operation);
+        while(state.operations.size()>40)state.operations.remove(0);
+        state.revision=UUID.randomUUID().toString();
+        receipt(next,request.requestId,request.taskId,signature,actor);
+        persist(next);
+        return view(request.taskId);
     }
     synchronized Map<String,Object> validationDifferences(String id,String reportId,String target,String table,String after,int limit,String identity,AccessControl.Principal actor)throws Exception{
         currentActor(actor);if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");if(!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");Entry entry=require(id);
