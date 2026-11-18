@@ -7,6 +7,8 @@ public final class Main {
     private Main() {}
     public static void main(String[] args) throws Exception {
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        if(System.getProperty("h2.bindAddress")==null)
+            System.setProperty("h2.bindAddress","127.0.0.1");
         if(args.length==2&&args[0].equals("probe-oracle")){
             System.out.println(Model.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(OracleSourceProbe.inspect(Paths.get(args[1]))));
             return;

@@ -54,7 +54,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar run config/pipeline-v3
 
 ## 日志部署选择
 
-`LOCAL` 使用 Java 8 兼容的 H2 2.2.224，`path` 是私有目录，相对路径以配置文件目录为基准。目录内保存敏感行数据，权限设为 0700。自动服务模式允许同机 CLI 读取状态和恢复；它不是跨机器数据库部署。保留整个目录及卷，不要只复制运行中的 `.mv.db`。跨主机自动接管使用 `EXTERNAL` 事务数据库；不要把共享文件系统上的 H2 当作已验收的集群日志。
+`LOCAL` 使用 Java 8 兼容的 H2 2.2.224，`path` 是私有目录，相对路径以配置文件目录为基准。目录内保存敏感行数据，权限设为 0700。自动服务默认绑定回环地址，Worker 与同机 CLI 共享日志，无需外部主机名解析；它不是跨机器数据库部署。保留整个目录及卷，不要只复制运行中的 `.mv.db`。跨主机自动接管使用 `EXTERNAL` 事务数据库；不要把共享文件系统上的 H2 当作已验收的集群日志。
 
 `EXTERNAL` 可用 PostgreSQL、openGauss 或独立 MySQL。所有 Worker 使用相同日志实例/namespace/pipelineId 和目标配置，不同 nodeId；数据库时钟租约与 epoch 管理所有权。MySQL 日志需 InnoDB，服务重启不可丢失已确认提交。源与目标数据库的提升/隔离由外部高可用系统负责，Rivomesh 不提升数据库主库。V3 已通过 Worker 强制终止恢复、8.4 普通主从提升及 MGR 全量中途选主测试；其他版本/长稳矩阵仍需补验，不能直接套用 v2 的测试结论。
 

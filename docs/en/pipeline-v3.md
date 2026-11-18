@@ -54,7 +54,7 @@ Use `source.type: MYSQL` in task configuration and the Web wizard. Identify the 
 
 ## Journal choices
 
-`LOCAL` uses Java-8-compatible H2 2.2.224. `path` is a private directory, relative to the configuration file; it contains sensitive rows and receives mode 0700. Automatic server mode allows same-host CLI status/resume. It is not a cross-host database service. Preserve the whole directory/volume; do not copy a live `.mv.db` alone. Use `EXTERNAL` for cross-host takeover; shared-filesystem H2 has not been accepted as a cluster journal.
+`LOCAL` uses Java-8-compatible H2 2.2.224. `path` is a private directory, relative to the configuration file; it contains sensitive rows and receives mode 0700. Automatic server mode binds to loopback by default so the Worker and CLI can share the same local journal without depending on the host’s external name resolution. It is not a cross-host database service. Preserve the whole directory/volume; do not copy a live `.mv.db` alone. Use `EXTERNAL` for cross-host takeover; shared-filesystem H2 has not been accepted as a cluster journal.
 
 `EXTERNAL` supports PostgreSQL, openGauss or a separate MySQL instance. Workers share journal instance/namespace/pipelineId and target configuration, with distinct nodeIds. Database-clock leases and epochs fence ownership. MySQL storage must use InnoDB and retain acknowledged commits across restart. External HA systems promote/fence database nodes; Rivomesh does not promote them. V3 worker-crash recovery, MySQL 8.4 async promotion and MGR election during snapshot passed; other versions/soak matrices still need acceptance. V2 results do not prove all V3 variants.
 
