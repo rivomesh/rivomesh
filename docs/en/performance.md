@@ -63,11 +63,22 @@ The final target contains updated rows, the expected deletes and newly inserted
 rows. Polling and Docker CLI overhead are included in observation times.
 
 This profile is one MySQL 8.4 source, one PostgreSQL 17.12 target, one primary-key
-table, fixed-width ASCII payload and a LOCAL journal. Source loading warms caches;
+table, fixed-width ASCII payload and either journal mode. Source loading warms caches;
 it is not a cold-storage experiment. It measures neither peak sink throughput
 nor p95/p99 event latency, durable snapshot-END acknowledgement, failover RTO or
 steady-state saturation. It does not establish JSON/keyless/large-catalog,
-multi-target, external-journal, commercial database or cluster performance.
+multi-target, remote-journal, commercial database or cluster performance.
+
+## Measured 100,000-row reference
+
+One run per journal mode used the same artifact, MySQL 8.4.13, PostgreSQL 17.12 and Temurin 8u512. The Apple M1 Pro ARM64 host had 10 logical CPUs, 16 GiB RAM and Docker Desktop on SSD. Each service was capped at 1 CPU and 1 GiB. The Worker heap and database buffers were 256 MiB each. The workload used 1,024 payload bytes per row, 1,000-row snapshot parts and at most 500 changes per source transaction.
+
+| Journal | Snapshot visibility | Snapshot rows/s | 120,000 changes visible | Changes/s | Catch-up after writes |
+|---|---:|---:|---:|---:|---:|
+| LOCAL, host bind mount | 24.83 s | 4,027 | 53.55 s | 2,241 | 23.13 s |
+| EXTERNAL, schema on target PostgreSQL | 21.61 s | 4,628 | 46.25 s | 2,595 | 14.04 s |
+
+Both runs matched source and target content hashes after snapshot and CDC. During diagnosis, a Worker with the same heap exhausted memory while loading an unbounded payload batch. The journal now limits fetched transaction prefixes to 8 MiB and processes an oversized first transaction alone. PostgreSQL also changed from a sequential scan to a primary-key index scan for the benchmark UPDATE when the BIGINT key was bound as BIGINT. Individual transaction limits and large-catalog scaling remain separate measurements. [Reports and exact artifact](../verification/baseline.json)
 
 ## Building the hardware standard
 

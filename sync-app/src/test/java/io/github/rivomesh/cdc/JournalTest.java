@@ -50,13 +50,46 @@ class JournalTest {
     @Test void ownerEpochsFenceOldAppendAndAcknowledgmentAfterTakeover()throws Exception{
         JdbcJournal.Settings settings=settings();
         try(JdbcJournal a=new JdbcJournal(settings);JdbcJournal b=new JdbcJournal(settings)){
-            initialize(a);initialize(b);Journal.Lease old=a.claim("old",30000);
+            initialize(a);initialize(b);assertEquals("UNCLAIMED",a.status().get("captureLeaseState"));
+            Journal.Lease old=a.claim("old",30000);
+            assertEquals("CLAIMED",b.status().get("captureLeaseState"));
             assertThrows(JdbcJournal.Busy.class,()->b.claim("new",30000));a.append(old,transaction(1));
             try(Connection c=JdbcConnections.open(settings.driver,settings.url,"","");Statement s=c.createStatement()){s.executeUpdate("UPDATE \"rivomesh_v3\".\"rm3_job\" SET lease_until=0");}
+            assertEquals("EXPIRED",a.status().get("captureLeaseState"));
             Journal.Lease next=b.claim("new",30000);assertTrue(next.epoch>old.epoch);
             assertThrows(JdbcJournal.Fenced.class,()->a.append(old,transaction(2)));
             assertThrows(JdbcJournal.Fenced.class,()->a.acknowledge(old,"fast",1));
             a.release(old);b.heartbeat(next,30000);assertEquals(1,b.read("fast",10).size());
+            assertEquals("CLAIMED",a.status().get("captureLeaseState"));
+        }
+    }
+    @Test void byteBudgetLimitsBatchButKeepsAnOversizedHeadTransaction()throws Exception{
+        try(JdbcJournal journal=new JdbcJournal(settings())){
+            initialize(journal);
+            Journal.Lease lease=journal.claim("owner",30000);
+            char[] characters=new char[3*1024*1024];
+            Arrays.fill(characters,'x');
+            String payload=new String(characters);
+            for(int sequence=1;sequence<=3;sequence++){
+                SourceTransaction transaction=transaction(sequence);
+                transaction.changes.get(0).after.set(0,Cell.value(payload));
+                journal.append(lease,transaction);
+            }
+            assertEquals(2,journal.read("fast",100).size());
+            journal.acknowledge(lease,"fast",1);
+            journal.acknowledge(lease,"fast",2);
+            assertEquals(3,journal.read("fast",100).get(0).sequence);
+            journal.acknowledge(lease,"fast",3);
+            SourceTransaction large=transaction(4);
+            large.changes.get(0).after.set(0,Cell.value(payload+payload+payload));
+            journal.append(lease,large);
+            journal.append(lease,transaction(5));
+            List<Journal.Record> head=journal.read("fast",100);
+            assertEquals(1,head.size());
+            assertEquals(4,head.get(0).sequence);
+            assertEquals(large.changes.get(0).after.get(0).value,head.get(0).transaction.changes.get(0).after.get(0).value);
+            journal.acknowledge(lease,"fast",4);
+            assertEquals(5,journal.read("fast",100).get(0).sequence);
         }
     }
     @Test void capacityFailureNeverAdvancesTheCapturedPosition()throws Exception{

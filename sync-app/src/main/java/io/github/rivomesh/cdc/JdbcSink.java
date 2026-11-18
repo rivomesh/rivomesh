@@ -612,7 +612,8 @@ public final class JdbcSink implements SinkAdapter {
         String v=value.value;
         if(dm()&&DmStorage.textDecimal(col)){p.setString(n,new BigDecimal(v).setScale(col.scale,java.math.RoundingMode.UNNECESSARY).toPlainString());return;}
         switch(col.type){
-            case INT64:case UINT64:case DECIMAL:p.setBigDecimal(n,new BigDecimal(v));break;
+            case INT64:p.setLong(n,new BigDecimal(v).longValueExact());break;
+            case UINT64:case DECIMAL:p.setBigDecimal(n,new BigDecimal(v));break;
             case FLOAT32:p.setFloat(n,Float.parseFloat(v));break;
             case FLOAT64:p.setDouble(n,Double.parseDouble(v));break;
             case BOOLEAN:if(!Arrays.asList("true","false","1","0").contains(v))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");p.setBoolean(n,v.equals("true")||v.equals("1"));break;

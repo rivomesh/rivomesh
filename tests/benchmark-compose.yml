@@ -30,6 +30,6 @@ services:
     cpus: ${RIVOMESH_BENCH_CPUS:-1}
     mem_limit: ${RIVOMESH_BENCH_WORKER_MEMORY:-1g}
     working_dir: /bench
-    command: ["java", "-Xms128m", "-Xmx256m", "-jar", "app.jar", "run", "pipeline.json"]
+    command: ["java", "-Xms128m", "-Xmx${RIVOMESH_BENCH_WORKER_HEAP_MIB:-256}m", "-jar", "app.jar", "run", "pipeline.json"]
     volumes:
       - ${RIVOMESH_BENCH_DIR:?benchmark directory required}:/bench

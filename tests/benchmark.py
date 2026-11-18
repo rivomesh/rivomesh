@@ -25,20 +25,25 @@ def main():
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--java", choices=("8", "11", "17", "21", "25"), default="8")
     parser.add_argument("--journal-mode", choices=("LOCAL", "EXTERNAL"), default="LOCAL")
+    parser.add_argument("--artifact", type=Path, default=ROOT / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar")
+    parser.add_argument("--worker-heap-mib", type=int, default=256)
     parser.add_argument("--storage-description", required=True,
                         help="Physical disk/storage, VM and contention notes; do not include secrets")
     args = parser.parse_args()
     if not (10 <= args.rows <= 1000000 and 32 <= args.payload_bytes <= 8192
             and 1 <= args.chunk_size <= 10000 and 30 <= args.timeout <= 86400):
         parser.error("rows 10..1000000, payload 32..8192, chunk 1..10000, timeout 30..86400 required")
+    if not 128 <= args.worker_heap_mib <= 16384:
+        parser.error("--worker-heap-mib must be between 128 and 16384")
     run_id = "rivomesh-bench-" + uuid.uuid4().hex[:12]
     directory = ROOT / "target" / "benchmarks" / run_id
     directory.mkdir(parents=True, mode=0o700)
-    artifact = ROOT / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+    artifact = args.artifact.resolve()
     if not artifact.is_file():
         parser.error("Build the release JAR first: mvn -s build/settings.xml -DskipTests package")
     shutil.copyfile(artifact, directory / "app.jar")
     env = dict(os.environ, RIVOMESH_BENCH_DIR=str(directory),
+               RIVOMESH_BENCH_WORKER_HEAP_MIB=str(args.worker_heap_mib),
                RIVOMESH_BENCH_WORKER_IMAGE="eclipse-temurin:" + args.java + "-jre")
     compose = ["docker", "compose", "-p", run_id, "-f", str(ROOT / "tests/benchmark-compose.yml")]
     report = {"formatVersion": 1, "runId": run_id, "status": "RUNNING",
@@ -47,11 +52,11 @@ def main():
                        "machine": platform.machine(), "logicalCpus": os.cpu_count(),
                        "processor": platform.processor()},
               "storageDescription": args.storage_description,
-              "workload": vars(args), "measurements": {},
+              "workload": {key: value for key, value in vars(args).items() if key != "artifact"}, "measurements": {},
               "limits": {"cpusPerContainer": env.get("RIVOMESH_BENCH_CPUS", "1"),
                          "databaseMemory": env.get("RIVOMESH_BENCH_DB_MEMORY", "1g"),
                          "workerMemory": env.get("RIVOMESH_BENCH_WORKER_MEMORY", "1g"),
-                         "workerHeapMiB": 256},
+                         "workerHeapMiB": args.worker_heap_mib},
               "scope": "One source, one target, one keyed table, " + args.journal_mode + " journal, ASCII payload; "
                        "startup-inclusive snapshot visibility and write-inclusive CDC catch-up. "
                        "Not peak throughput, p99 latency, crash recovery, a hardware standard or an SLO."}

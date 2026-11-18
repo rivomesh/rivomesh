@@ -1476,8 +1476,8 @@
         "en": "Large catalogs,transactions and hardware standards"
       },
       "gap": {
-        "zh-CN": "有小规模基准工具，超大事务分片、目录分页、有界缓存与容量标准未完整完成。",
-        "en": "Small benchmark tools exist;large-transaction/catalog/cache/capacity standards remain incomplete."
+        "zh-CN": "LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。",
+        "en": "LOCAL and EXTERNAL passed content checks for 100,000 snapshot rows and 120,000 changes per run. Incremental reads are byte-bounded and the BIGINT key scan was fixed. Repeated hardware measurements, oversized transactions and large catalogs remain."
       },
       "acceptance": {
         "zh-CN": "限制内存/磁盘并处理大事务、海量表和慢目标；记录CPU/内存/磁盘/网络/负载与多轮结果，不线性外推，不以行数一致替代数据一致。",
@@ -1489,7 +1489,9 @@
       ],
       "evidence": [
         "docs/zh-CN/performance.md",
-        "tests/benchmark.py"
+        "tests/benchmark.py",
+        "docs/en/performance.md",
+        "docs/verification/baseline.json"
       ]
     },
     {

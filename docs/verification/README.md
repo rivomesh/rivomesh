@@ -135,3 +135,7 @@ Oracle Free 23.26.4.0.0 ARM64 on Java 8 passed eight native checks on artifact `
 ## Capture lease through two controllers
 
 Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` passed 18 native PostgreSQL control-store and MySQL 8.4.13 source checks with two controllers and a distinct Agent/Worker. Both entries displayed the same journal lease independently of Worker process liveness. The disconnected owner produced unknown lease state. A durable STOP accepted while the owner was offline prevented Worker restoration and left the lease inactive. The console passed 111 DOM checks. [Native manifest](baseline.json)
+
+## Large-payload journal performance
+
+Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` passed 43 focused Java tests. On an ARM64 Apple M1 Pro Docker Desktop host, both LOCAL and EXTERNAL reached source/target hash equality on 100,000 snapshot rows and 120,000 changes. Each fixture used one CPU per container and a 256 MiB Worker heap, and both cleaned up successfully. During diagnosis, native PostgreSQL EXPLAIN showed a sequential scan for a NUMERIC parameter against the BIGINT key. Binding the same key as BIGINT used the primary-key index. [Timing and environment](../en/performance.md) · [Raw reports](baseline.json)

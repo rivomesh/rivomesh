@@ -17,8 +17,7 @@
     "Native Oracle 26ai archive LogMiner returns retained redo/undo, one commit SCN/XID and excludes rolled-back DML."
   ],
   "inProgress": [
-    "Oracle redo normalization, retained archive admission and CDC checkpoints.",
-    "LG-07 two 100,000-row performance runs for LOCAL and EXTERNAL journals."
+    "Oracle redo normalization, retained archive admission and CDC checkpoints."
   ],
   "reportContents": [
     "Current totals",
@@ -54,7 +53,8 @@
     "LG-10 contribution guide and actual CycloneDX/JAR inventory published. The run found 175 Maven components, 109 embedded coordinates and two vendored binary markers.",
     "SO-07 Oracle archive coverage passed seven native checks. Catalog range validation rejects an unarchived SCN suffix.",
     "SO-07 Oracle 26ai Java 8 passed eight native checks on a frozen artifact, including repeatable typed decoding of committed archive changes.",
-    "CP-06 native cross-controller profile passed 18 checks, including independent Worker and capture lease status. The console passed 111 DOM checks."
+    "CP-06 native cross-controller profile passed 18 checks, including independent Worker and capture lease status. The console passed 111 DOM checks.",
+    "LG-07 LOCAL and EXTERNAL passed identical 100,000-row snapshots and 120,000 changes with a 256 MiB Worker heap and matching ordered content hashes."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

@@ -84,7 +84,7 @@ RM-SDD-001 · v0.27 · 2026-11-18 · IMPLEMENTING
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
 | LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。 |
-| LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | 有小规模基准工具，超大事务分片、目录分页、有界缓存与容量标准未完整完成。 |
+| LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
 | LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。 |
 | LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 贡献指南、CycloneDX SBOM 与厂商二进制审查已建立。依赖分发结论、项目 LICENSE/NOTICE、外部身份和审计锚点仍待完成。 |

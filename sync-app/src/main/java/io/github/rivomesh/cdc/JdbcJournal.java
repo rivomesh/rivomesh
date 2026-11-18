@@ -18,6 +18,7 @@ public final class JdbcJournal implements NormalizedJournal {
     public static final class Paused extends IllegalStateException { public Paused(){super("SUBSCRIPTION_PAUSED");} }
     public static final class PipelinePaused extends IllegalStateException { public PipelinePaused(){super("PIPELINE_PAUSED");} }
     private enum Dialect { H2,POSTGRES,MYSQL }
+    private static final long INCREMENTAL_BATCH_BYTES=8L*1024*1024;
     final Settings settings;
     private final Dialect dialect;
     private Connection anchor;
@@ -256,13 +257,38 @@ public final class JdbcJournal implements NormalizedJournal {
             try(PreparedStatement p=c.prepareStatement("SELECT next_seq FROM "+table("job")+" WHERE pipeline_id=?")){
                 p.setString(1,settings.pipelineId);try(ResultSet rs=p.executeQuery()){if(!rs.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");last=rs.getLong(1)-1;}
             }
-            Subscription sub=subscription(c,subscription,false);if(!"RUNNING".equals(sub.state))return Collections.emptyList();
+            Subscription sub=subscription(c,subscription,false);
+            if(!"RUNNING".equals(sub.state)||sub.acknowledged>=last)return Collections.emptyList();
+            int batch=maximumTransactions==1?1:incrementalBatch(c,sub.acknowledged,maximumTransactions);
+            if(batch==0)throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");
             try(PreparedStatement p=c.prepareStatement("SELECT stream_seq,payload,payload_hash FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq>? ORDER BY stream_seq LIMIT ?")){
-                p.setString(1,settings.pipelineId);p.setLong(2,sub.acknowledged);p.setInt(3,maximumTransactions);
+                p.setString(1,settings.pipelineId);p.setLong(2,sub.acknowledged);p.setInt(3,batch);
                 try(ResultSet rs=p.executeQuery()){List<Record> result=new ArrayList<>();long expected=sub.acknowledged+1;while(rs.next()){
                     Record record=new Record();record.sequence=rs.getLong(1);if(record.sequence!=expected++)throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");String payload=rs.getString(2);if(!Codec.sha256(payload).equals(rs.getString(3)))throw new IllegalStateException("JOURNAL_CHECKSUM_MISMATCH");
                     record.transaction=Codec.decode(payload,SourceTransaction.class);record.transaction.validate();result.add(record);
                 }if(result.isEmpty()&&sub.acknowledged<last)throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");return result;}
+            }
+        }
+    }
+    private int incrementalBatch(Connection c,long acknowledged,int maximum)throws SQLException{
+        // Select a short prefix using sizes before fetching large payloads from the JDBC driver.
+        try(PreparedStatement query=c.prepareStatement("SELECT stream_seq,payload_bytes FROM "+table("log")
+                +" WHERE pipeline_id=? AND stream_seq>? ORDER BY stream_seq LIMIT ?")){
+            query.setString(1,settings.pipelineId);query.setLong(2,acknowledged);query.setInt(3,maximum);
+            try(ResultSet rows=query.executeQuery()){
+                long bytes=0,sequence=acknowledged;
+                int count=0;
+                while(rows.next()){
+                    long size=rows.getLong(2);
+                    if(rows.getLong(1)!=Math.addExact(sequence,1))throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");
+                    if(size<1)throw new IllegalStateException("JOURNAL_PAYLOAD_SIZE_INVALID");
+                    // Preserve the head transaction even when it alone exceeds the batch byte budget.
+                    if(count>0&&size>INCREMENTAL_BATCH_BYTES-bytes)break;
+                    bytes=Math.addExact(bytes,size);
+                    sequence++;
+                    count++;
+                }
+                return count;
             }
         }
     }
