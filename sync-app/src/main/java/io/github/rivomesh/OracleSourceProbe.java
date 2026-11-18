@@ -183,8 +183,9 @@ final class OracleSourceProbe {
         schema.name=names[1];
         schema.id=TableSchema.identity(pdbName,names[0],names[1]);
         schema.sourceEngine="ORACLE";
+        Set<String> textJson=OracleTextJson.columns(pdb,names[0],names[1],QUERY_SECONDS);
         try(PreparedStatement query=pdb.prepareStatement("SELECT column_name,data_type,data_precision,data_scale,char_length,nullable,"
-                +"virtual_column FROM all_tab_cols WHERE owner=? AND table_name=? AND hidden_column='NO' ORDER BY column_id")){
+                +"virtual_column,data_length FROM all_tab_cols WHERE owner=? AND table_name=? AND hidden_column='NO' ORDER BY column_id")){
             query.setQueryTimeout(QUERY_SECONDS);
             query.setString(1,names[0]);query.setString(2,names[1]);
             try(ResultSet rows=query.executeQuery()){
@@ -203,7 +204,9 @@ final class OracleSourceProbe {
                             column.type=column.scale==0&&column.precision<=18?TableSchema.Type.INT64:TableSchema.Type.DECIMAL;
                             break;
                         case "VARCHAR2":
-                            column.type=TableSchema.Type.STRING;
+                            column.type=textJson.contains(column.name)?TableSchema.Type.JSON:TableSchema.Type.STRING;
+                            if(column.type==TableSchema.Type.JSON&&rows.getInt(8)>4000)
+                                throw new IllegalStateException("ORACLE_TEXT_JSON_STORAGE_UNSUPPORTED");
                             column.length=rows.getLong(5);
                             break;
                         default:throw new IllegalStateException("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
@@ -223,6 +226,9 @@ final class OracleSourceProbe {
             }
         }
         schema.validate();
+        for(String key:schema.primaryKey)
+            if(schema.columns.get(schema.column(key)).type==TableSchema.Type.JSON)
+                throw new IllegalStateException("ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED");
         return schema;
     }
 

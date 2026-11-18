@@ -236,6 +236,7 @@ final class OracleCdcSource implements SourceAdapter {
                         for(int i=0;i<table.columns.size();i++){
                             TableSchema.Column column=table.columns.get(i);
                             if(column.type==TableSchema.Type.STRING)row.add(Cell.value(rows.getString(i+1)));
+                            else if(column.type==TableSchema.Type.JSON)row.add(Cell.value(OracleTextJson.value(rows.getString(i+1))));
                             else{
                                 BigDecimal number=rows.getBigDecimal(i+1);
                                 row.add(Cell.value(number==null?null:number.toPlainString()));

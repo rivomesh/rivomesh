@@ -2,7 +2,7 @@
 
 [中文](../zh-CN/oracle-source.md)
 
-The first Oracle 26ai profile verifies one writable CDB/PDB, archive mode, force/minimal supplemental logging, source identity and Flashback read access. The native test used Oracle Free 23.26.4.0.0 on ARM64 with Java 8 and Oracle JDBC 23.26.4.0.0. The archived-capture profile below adds durable SCN recovery to PostgreSQL. SO-07 tracks the remaining versions, types, RAC and failover.
+The Oracle 26ai profile verifies one writable CDB/PDB, archive mode, force and minimal supplemental logging, source identity and Flashback read access. Archived capture and durable SCN recovery to PostgreSQL were revalidated on ARM64 with Oracle Free 23.26.4.0.0, Temurin 21 and Oracle JDBC 23.26.4.0.0. SO-07 tracks the remaining versions, types, RAC and failover.
 
 1. Provide an Oracle JDBC JAR compatible with your Java runtime alongside the Rivomesh JAR. [Oracle JDBC compatibility](https://docs.oracle.com/en/database/oracle/oracle-database/26/jjdbc/JDBC-getting-started.html)
 2. Give the CDB-root account read access to `V_$DATABASE`, `V_$INSTANCE` and the selected PDB in `V_$PDBS`. Configure its `CONTAINER_DATA` visibility for that PDB. Give the PDB account read access to its `V_$PDBS` identity and `SELECT` and `FLASHBACK` on the declared tables. [Oracle container data privileges](https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/managing-commonly-and-locally-granted-privileges.html)
@@ -37,6 +37,25 @@ For the UI, launch the runtime that owns the Worker (`serve` in combined mode or
 
 Capture polls closed archive segments. The durable coordinate binds CDB DBID and resetlogs, PDB GUID, UID and incarnation, captured SCN and the retained archive floor. A transaction already open at the snapshot can hold that floor back. When its commit lands in a closed archive, the complete transaction enters the journal. The floor advances only after coverage passes the SCN of a later active-transaction sample. Retain archives starting from the reported floor. Verify archive rotation and retention under the real workload.
 
-A missing archive, unsupported record, ambiguous ordering or unreviewed DDL stops capture with the previous durable position. Use the capture review and preserve the source and journal. Source promotion, RAC, online-redo capture, LOB/JSON, generated columns, partial rollback and further target profiles require separate acceptance. [Oracle active transactions](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB incarnation](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+A missing archive, unsupported record, ambiguous ordering or unreviewed DDL stops capture with the previous durable position. Use the capture review and preserve the source and journal. Source promotion, RAC, online-redo capture, native binary JSON, LOBs, generated columns, partial rollback and further target profiles require separate acceptance. LogMiner omits `SQL_UNDO` for SecureFiles LOBs, so preflight refuses LOB columns in this full before-and-after image profile. [Oracle LogMiner data types and SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle active transactions](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB incarnation](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
 
-Run `tests/oracle-source-probe.py --logminer --pipeline` with the frozen JAR and Oracle JDBC arguments to reproduce the temporary real databases and actual SIGKILL/restart. [Evidence](../verification/README.md#oracle-archived-cdc-and-restart)
+### Textual JSON columns
+
+An Oracle `VARCHAR2` column declared with up to 4,000 bytes maps to PostgreSQL `jsonb` when an enabled, validated, nondeferrable `CHECK` tests that single column for strict JSON and unique object keys. The check can be declared at column or table level. Other `VARCHAR2` columns retain their string mapping. [Oracle SQL/JSON constraints](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/is-json-condition.html)
+
+```sql
+CREATE TABLE RIVO_APP.DOCUMENTS (
+    ID NUMBER(12) PRIMARY KEY,
+    PAYLOAD VARCHAR2(1000 BYTE)
+        CHECK (PAYLOAD IS JSON (STRICT WITH UNIQUE KEYS))
+);
+ALTER TABLE RIVO_APP.DOCUMENTS ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+```
+
+Keep both modifiers inside the same parentheses. Oracle Free 23.26.4 returns `ORA-02252` for the split form `IS JSON (STRICT) WITH UNIQUE KEYS` in a `CHECK`.
+
+Both Flashback and archived capture verify strict syntax, one complete JSON value and unique object keys. SQL `NULL` remains distinct from JSON `null`. PostgreSQL `jsonb` preserves the value and may change whitespace, member order and numeric formatting. Preflight returns `ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED` for a textual JSON primary key because distinct source strings can become equivalent target keys. Values outside either database's JSON representation use its usual error and recovery flow. [PostgreSQL JSON types](https://www.postgresql.org/docs/17/datatype-json.html)
+
+Adding or removing this constraint on a synchronized column changes its target type mapping. Review the destination schema and existing data before resuming capture through the DDL recovery workflow. Oracle returns `ORA-40664` if the column already has an `IS JSON` constraint. Replace the existing constraint during the reviewed schema migration. [Oracle ORA-40664](https://docs.oracle.com/en/error-help/db/ora-40664/)
+
+Run `tests/oracle-source-probe.py --logminer --pipeline` with the frozen JAR and Oracle JDBC arguments to reproduce the temporary real databases and actual SIGKILL/restart. Add `--text-json` to cover textual JSON snapshots, archived updates, keyless rows and recovery. [Evidence](../verification/README.md#oracle-archived-cdc-and-restart)

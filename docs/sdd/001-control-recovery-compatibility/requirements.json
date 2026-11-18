@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.40",
+  "version": "0.41",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1045,8 +1045,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已复验 Oracle 26ai 单 PDB 归档 LogMiner 到 PostgreSQL，包含长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。",
-        "en": "Temurin 21 verified Oracle 26ai archived LogMiner to PostgreSQL with single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain."
+        "zh-CN": "Temurin 21 实测 Oracle 26ai 单 PDB 长事务、原 SCN 恢复与严格文本 JSON 到 PostgreSQL JSONB。原生二进制 JSON、LOB、生成列、RAC 和切主待验收。",
+        "en": "Temurin 21 verified Oracle 26ai single-PDB long transactions, original-SCN recovery, and strict textual JSON to PostgreSQL JSONB. Binary JSON, LOBs, generated columns, RAC and promotion remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",

@@ -2,7 +2,7 @@
 
 [English](../en/oracle-source.md)
 
-首批 Oracle 26ai 档案检查单一可写 CDB/PDB、归档模式、强制日志和最小补充日志、源身份及 Flashback 读取权限。ARM64 上已实测 Oracle Free 23.26.4.0.0、Java 8 和 Oracle JDBC 23.26.4.0.0。下面的归档采集档案已经支持投递到 PostgreSQL 和持久 SCN 恢复。更多版本、类型、RAC 和切主继续由 SO-07 跟踪。
+Oracle 26ai 档案检查单一可写 CDB/PDB、归档模式、强制日志和最小补充日志、源身份及 Flashback 读取权限。归档采集到 PostgreSQL 和持久 SCN 恢复已在 ARM64 上使用 Oracle Free 23.26.4.0.0、Temurin 21 和 Oracle JDBC 23.26.4.0.0 复验。更多版本、类型、RAC 和切主继续由 SO-07 跟踪。
 
 1. 在 Rivomesh JAR 旁提供与运行时匹配的 Oracle JDBC JAR。[Oracle JDBC 兼容矩阵](https://docs.oracle.com/en/database/oracle/oracle-database/26/jjdbc/JDBC-getting-started.html)
 2. 为 CDB 根账号授予 `V_$DATABASE`、`V_$INSTANCE`、`V_$PDBS` 的读取权限，按所选 PDB 配置 `CONTAINER_DATA`。PDB 账号需要读取 `V_$PDBS` 中的自身身份，以及所选表的 `SELECT`、`FLASHBACK` 权限。[Oracle 容器数据权限](https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/managing-commonly-and-locally-granted-privileges.html)
@@ -37,6 +37,25 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
-归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、LOB/JSON、生成列、部分回滚及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、生成列、部分回滚及更多目标档案另行验收。SecureFiles LOB 的 LogMiner 记录缺少 `SQL_UNDO`，当前完整前后镜像采集在预检时拒绝 LOB 列。[Oracle LogMiner 数据类型与 SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
 
-用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)
+### 文本 JSON 列
+
+Oracle `VARCHAR2` 列的声明长度上限为 4000 字节时，可通过一条启用、已验证且不可延迟的列级或表级 `CHECK` 将该列映射到 PostgreSQL `jsonb`。约束直接检查单列并要求严格语法及对象键唯一。其他 `VARCHAR2` 列沿用字符串映射。[Oracle SQL/JSON 约束](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/is-json-condition.html)
+
+```sql
+CREATE TABLE RIVO_APP.DOCUMENTS (
+    ID NUMBER(12) PRIMARY KEY,
+    PAYLOAD VARCHAR2(1000 BYTE)
+        CHECK (PAYLOAD IS JSON (STRICT WITH UNIQUE KEYS))
+);
+ALTER TABLE RIVO_APP.DOCUMENTS ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+```
+
+两个修饰词写在同一对括号内。Oracle Free 23.26.4 的 `CHECK` 会以 `ORA-02252` 拒绝拆开的 `IS JSON (STRICT) WITH UNIQUE KEYS`。
+
+Flashback 和归档采集都验证 JSON 语法、完整单个值及重复对象键。SQL `NULL` 和 JSON `null` 分别保留。PostgreSQL `jsonb` 保存值语义，输出可能改变空白、成员顺序和数值表示。若源将文本 JSON 用作主键，预检返回 `ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED`，防止源上文本不同但目标 JSON 值等价的键冲突。Oracle 或 PostgreSQL 无法表示的值通过各自的错误和恢复流程处理。[PostgreSQL JSON 类型](https://www.postgresql.org/docs/17/datatype-json.html)
+
+为已同步的列添加或删除这类约束会改变目标列的类型映射。先审核目标结构及已有数据，再按 DDL 恢复流程恢复采集。已有 `IS JSON` 约束时，Oracle 对同一列新增第二条会返回 `ORA-40664`。审核后可在同一次结构迁移中替换原约束。[Oracle ORA-40664](https://docs.oracle.com/en/error-help/db/ora-40664/)
+
+用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。添加 `--text-json` 可覆盖文本 JSON 快照、归档更新、无主键记录和续传。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)

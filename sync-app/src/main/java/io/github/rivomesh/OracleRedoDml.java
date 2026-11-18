@@ -91,6 +91,7 @@ final class OracleRedoDml {
             if(value==null&&!column.nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
             if(value!=null)switch(column.type){
                 case STRING:break;
+                case JSON:value=OracleTextJson.value(value);break;
                 case INT64:case DECIMAL:value=number(column,value);break;
                 default:throw invalid("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
             }

@@ -84,6 +84,42 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def rotate():
         sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
 
+    source_tables = ['RIVO_APP.RIVO_ORDERS', 'RIVO_APP.RIVO_KEYLESS']
+    if options.text_json:
+        sql(r"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            CREATE TABLE rivo_app.rivo_json_rows (
+                id NUMBER(12) PRIMARY KEY,
+                payload VARCHAR2(1000 BYTE) CHECK (payload IS JSON (STRICT WITH UNIQUE KEYS)),
+                plain VARCHAR2(100 BYTE),
+                CHECK (plain IS JSON (STRICT WITH UNIQUE KEYS)) DISABLE NOVALIDATE);
+            CREATE TABLE rivo_app.rivo_json_keyless (
+                "payload" VARCHAR2(100 BYTE) CHECK ("payload" IS JSON (STRICT WITH UNIQUE KEYS)));
+            CREATE TABLE rivo_app.rivo_native_json (
+                id NUMBER(12) PRIMARY KEY, payload JSON);
+            CREATE TABLE rivo_app.rivo_json_key (
+                payload VARCHAR2(100 BYTE) PRIMARY KEY
+                    CHECK (payload IS JSON (STRICT WITH UNIQUE KEYS)));
+            INSERT INTO rivo_app.rivo_json_rows VALUES
+                (1,'{"name":"O''Brien","number":123456789012345678901,"where":"\u53f0\u5317"}','{value:12}');
+            INSERT INTO rivo_app.rivo_json_rows VALUES (2,NULL,NULL);
+            INSERT INTO rivo_app.rivo_json_rows VALUES (3,'null',NULL);
+            INSERT INTO rivo_app.rivo_json_keyless VALUES ('{"value":7}');
+            INSERT INTO rivo_app.rivo_json_keyless VALUES ('{"value":7}');
+            COMMIT;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_json_rows TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_json_keyless TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_native_json TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_json_key TO C##RIVO_PROBE;
+            ALTER TABLE rivo_app.rivo_json_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            ALTER TABLE rivo_app.rivo_json_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
+        for invalid in ('{unquoted:1}', '{"same":1,"same":2}'):
+            duplicate=sql("ALTER SESSION SET CONTAINER=FREEPDB1;\n"
+                          f"INSERT INTO rivo_app.rivo_json_rows VALUES (99,'{invalid}',NULL);",checked=False)
+            assert duplicate.returncode and 'ORA-02290' in duplicate.stdout
+        observed('The active Oracle text constraint rejects lax syntax and duplicate object keys')
+        rotate()
+        source_tables += ['RIVO_APP.RIVO_JSON_ROWS', 'RIVO_APP.RIVO_JSON_KEYLESS']
+
     started=False
     try:
         execute('docker','run','--rm','-d','--name',target,
@@ -107,7 +143,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 'source':{'type':'ORACLE','clusterId':'oracle-native','database':'FREEPDB1',
                           'expectedVersion':'23.26','topology':'SINGLE',
                           'oracle':{'root':endpoint(root_service),'pdb':endpoint(pdb_service),
-                                    'tables':['RIVO_APP.RIVO_ORDERS','RIVO_APP.RIVO_KEYLESS'],
+                                    'tables':source_tables,
                                     'archivePollMillis':500}},
                 'targets':[{'id':'pg','product':'POSTGRESQL',
                             'url':f'jdbc:postgresql://127.0.0.1:{target_port}/sync_test?connectTimeout=3',
@@ -118,7 +154,20 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             task_file=tasks/'oracle_native.yml'
             task_file.write_text(json.dumps(pipeline))
             checked=execute(*program,'check',str(task_file),env=env)
-            assert json.loads(checked.stdout)['sourceTables']==2
+            assert json.loads(checked.stdout)['sourceTables']==len(source_tables)
+            if options.text_json:
+                invalid_profile=folder/'unsupported.yml'
+                source_oracle=pipeline['source']['oracle']
+                for table,error in [
+                    ('RIVO_NATIVE_JSON','ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED'),
+                    ('RIVO_JSON_KEY','ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED'),
+                ]:
+                    source_oracle['tables']=['RIVO_APP.'+table]
+                    invalid_profile.write_text(json.dumps(pipeline))
+                    denied=execute(*program,'check',str(invalid_profile),env=env,checked=False)
+                    assert denied.returncode and error in denied.stderr
+                source_oracle['tables']=source_tables
+                observed('Preflight refuses native binary JSON and textual JSON source keys')
 
             # Keep DML started before the snapshot open through the first archive rotation.
             long_transaction=subprocess.Popen(('docker','exec','-i',oracle,'sqlplus','-L','-s','/','as','sysdba'),
@@ -144,8 +193,23 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             try:
                 start_platform(config,'worker-platform.log')
                 required(lambda:row_note()=='after' and progress().get('capture_scn'),'native Oracle snapshot',90)
+                if options.text_json:
+                    before_json='SELECT "PAYLOAD"::text FROM copy_app."RIVO_JSON_ROWS" WHERE "ID"=1'
+                    snapshot_json=required(lambda:target_sql(before_json,checked=False),'Oracle JSON snapshot',90)
+                    assert json.loads(snapshot_json)=={
+                        'name': "O'Brien", 'number': 123456789012345678901, 'where': '\u53f0\u5317',
+                    }
+                    assert target_sql('SELECT pg_typeof("PAYLOAD")::text||\'|\'||pg_typeof("PLAIN")::text||\'|\'||"PLAIN" '
+                                      'FROM copy_app."RIVO_JSON_ROWS" WHERE "ID"=1')=='jsonb|character varying|{value:12}'
+                    required(lambda:target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_ROWS" '
+                                               'WHERE ("ID"=2 AND "PAYLOAD" IS NULL) OR '
+                                               '("ID"=3 AND "PAYLOAD"=\'null\'::jsonb)')=='2',
+                             'SQL NULL versus JSON null',90)
+                    required(lambda:target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"',checked=False)=='2',
+                             'keyless JSON snapshot',90)
+                    observed('Flashback materializes strict JSONB, preserves NULL versus JSON null and retains plain VARCHAR2')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
-                assert len(snapshots.splitlines())==2
+                assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
                 checkpoint=progress()['sourcePosition']['payload']
                 assert int(checkpoint['archiveStartScn'])<=int(before)<int(checkpoint['scn'])
@@ -159,15 +223,30 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 out,_=long_transaction.communicate("COMMIT;\nEXIT\n",timeout=30)
                 assert long_transaction.returncode==0,out
                 long_transaction=None
+                if options.text_json:
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        UPDATE rivo_app.rivo_json_rows SET payload='[true,{"version":2}]' WHERE id=1;
+                        DELETE FROM rivo_app.rivo_json_keyless WHERE ROWNUM=1;
+                        COMMIT;""")
                 rotate()
                 required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
                 observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
+                if options.text_json:
+                    required(lambda:json.loads(target_sql(before_json))==[True,{'version':2}]
+                             and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
+                             'Oracle archived JSON update and keyless removal',60)
+                    observed('Archived JSON updates and a keyless JSON delete preserve typed values and one occurrence')
 
                 stop_platform(force=True)
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
                     DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
                     COMMIT;""")
+                if options.text_json:
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        INSERT INTO rivo_app.rivo_json_rows VALUES (4,'{"after":"restart"}',NULL);
+                        UPDATE rivo_app.rivo_json_keyless SET "payload"='{"value":8}';
+                        COMMIT;""")
                 rotate()
                 required_sql='SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=4'
                 start_platform(config,'worker-restart.log')
@@ -176,6 +255,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                          'Oracle archive catch-up after SIGKILL',75)
                 assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 observed('Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots')
+                if options.text_json:
+                    required(lambda:target_sql('SELECT "PAYLOAD"->>\'after\' FROM copy_app."RIVO_JSON_ROWS" '
+                                               'WHERE "ID"=4')=='restart'
+                             and target_sql('SELECT "payload"->>\'value\' FROM copy_app."RIVO_JSON_KEYLESS"')=='8',
+                             'Oracle archived JSON restart',60)
+                    assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+                    observed('JSON CDC resumes after SIGKILL with the original Flashback snapshot IDs')
 
                 durable=progress()['capture_scn']
                 sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
@@ -207,10 +293,13 @@ def main():
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
     parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
+    parser.add_argument('--text-json', action='store_true', help='Also verify constrained VARCHAR2 to PostgreSQL JSONB')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     if options.pipeline and not options.logminer:
         parser.error('--pipeline requires --logminer')
+    if options.text_json and not options.pipeline:
+        parser.error('--text-json requires --pipeline')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -218,7 +307,8 @@ def main():
                        RIVOMESH_ORACLE_PROBE_PASSWORD=password)
     report = {'artifactSha256': hashlib.sha256(options.artifact.read_bytes()).hexdigest(),
               'driverSha256': hashlib.sha256(options.jdbc_driver.read_bytes()).hexdigest(),
-              'image': options.image, 'checks': [], 'status': 'FAIL'}
+              'image': options.image, 'runtimeVersion': execute(options.java,'-version').stderr.splitlines()[0],
+              'textJson': options.text_json, 'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
         script = ('SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 32767 VERIFY OFF\n'

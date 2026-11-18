@@ -56,4 +56,31 @@ class OracleRedoDmlTest {
         assertEquals("ORACLE_REDO_TRAILING_SQL",
                 assertThrows(IllegalStateException.class,()->OracleRedoDml.decode(table(),"UPDATE",redo+"DELETE FROM OTHER",undo)).getMessage());
     }
+
+    @Test void recognizesOnlySingleStrictUniqueConstraint(){
+        assertEquals("PAYLOAD",OracleTextJson.constraintColumn("payload IS JSON ( STRICT WITH UNIQUE KEYS )"));
+        assertEquals("payload",OracleTextJson.constraintColumn("\"payload\" is json strict with unique keys"));
+        assertNull(OracleTextJson.constraintColumn("payload IS JSON"));
+        assertNull(OracleTextJson.constraintColumn("payload IS JSON (STRICT) WITH UNIQUE KEYS"));
+        assertNull(OracleTextJson.constraintColumn("payload IS JSON (STRICT WITHOUT UNIQUE KEYS)"));
+        assertNull(OracleTextJson.constraintColumn("payload IS JSON (STRICT WITH UNIQUE KEYS) OR other='allow'"));
+        assertNull(OracleTextJson.constraintColumn("trim(payload) IS JSON (STRICT WITH UNIQUE KEYS)"));
+    }
+
+    @Test void readsStrictJsonRedoWithoutCollapsingNumbersStringsOrNulls()throws Exception{
+        TableSchema table=table();
+        table.columns.get(1).type=TableSchema.Type.JSON;
+        String document="{\"name\":\"O''Brien\",\"number\":123456789012345678901}";
+        String redo="update "+ORDERS+" set \"NOTE\" = '"+document+"' where \"ID\" = '1' and \"NOTE\" IS NULL;";
+        String undo="update "+ORDERS+" set \"NOTE\" = NULL where \"ID\" = '1' and \"NOTE\" = '"+document+"';";
+        Change event=OracleRedoDml.decode(table,"UPDATE",redo,undo);
+        assertNull(event.before.get(1).value);
+        assertEquals(document.replace("''","'"),event.after.get(1).value);
+        assertEquals("{}",OracleTextJson.value("{}"));
+        assertEquals("null",OracleTextJson.value("null"));
+        for(String invalid:new String[]{"{\"nested\":{\"a\":1,\"a\":2}}","{unquoted:1}","", "[] null"}){
+            assertEquals("ORACLE_TEXT_JSON_VALUE_INVALID",
+                    assertThrows(IllegalStateException.class,()->OracleTextJson.value(invalid)).getMessage());
+        }
+    }
 }

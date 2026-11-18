@@ -255,3 +255,7 @@ Candidate `186cddb562acb16d913670dee1564d0d4f2942ba7978b0ccd531ed7056fc622c` pas
 ### Offline audit checkpoints
 
 The verified export tool writes only the audit store identity, sequence and chain hash to a new private checkpoint file. Verification against an independently retained checkpoint rejected a genuinely earlier valid export and accepted a same-store continuation through SIGKILL using Temurin 21 and embedded H2. The offline suite passed 11 tests including chain rewrite, store mismatch, missing overlap and protection against overwriting a checkpoint. External custody and storage policy remain operational requirements. [Audit export](../en/security-audit.md) · [Manifests](baseline.json)
+
+### Oracle strict textual JSON
+
+Candidate `886a29b36957c8a964029eef5848d34bd3b8f598dc41e8578f6ae3cdfbc5ea05` passed 18 native Oracle Free 23.26.4.0.0 to PostgreSQL 17.12 cases on Temurin 21, with five focused Oracle Java tests. A validated, enabled, nondeferrable `VARCHAR2` constraint using `IS JSON (STRICT WITH UNIQUE KEYS)` authorizes JSONB materialization. Flashback and archived LogMiner preserved large integers, Unicode, embedded quotes, SQL NULL versus JSON null, and keyless multiplicity. Native binary JSON and JSON keys were refused. The pipeline retained its original snapshots after SIGKILL and continued archived JSON delivery. [Oracle source](../en/oracle-source.md) · [Manifests](baseline.json)

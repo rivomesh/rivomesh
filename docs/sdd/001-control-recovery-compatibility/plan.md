@@ -1,6 +1,6 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.40 · 2026-11-18 · 实施中
+RM-SDD-001 · v0.41 · 2026-11-18 · 实施中
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
