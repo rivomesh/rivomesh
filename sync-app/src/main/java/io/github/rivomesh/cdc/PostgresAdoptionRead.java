@@ -22,16 +22,23 @@ public final class PostgresAdoptionRead implements AutoCloseable {
     private final Connection connection;
     private final RepairConnectionGuard timeout;
     private final long maximumMillis;
+    private final boolean exclusive;
     private final Set<String> pinAttempts = new HashSet<>();
     private final Set<String> pinned = new HashSet<>();
     private boolean snapshot;
 
     PostgresAdoptionRead(JdbcSink sink, JdbcSink.Settings settings, Connection connection,
                          long maximumMillis) throws Exception {
+        this(sink, settings, connection, maximumMillis, false);
+    }
+
+    PostgresAdoptionRead(JdbcSink sink, JdbcSink.Settings settings, Connection connection,
+                         long maximumMillis, boolean exclusive) throws Exception {
         this.sink = sink;
         this.settings = settings;
         this.connection = connection;
         this.maximumMillis = maximumMillis;
+        this.exclusive = exclusive;
         timeout = new RepairConnectionGuard(connection, maximumMillis);
         try {
             if (!"PostgreSQL".equals(connection.getMetaData().getDatabaseProductName())) {
@@ -39,7 +46,8 @@ public final class PostgresAdoptionRead implements AutoCloseable {
             }
             connection.setAutoCommit(false);
             try (Statement sql = connection.createStatement()) {
-                sql.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+                sql.execute(exclusive ? "SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE"
+                        : "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
                 sql.execute("SET LOCAL search_path TO pg_catalog");
                 sql.execute("SET LOCAL row_security TO off");
                 sql.execute("SET LOCAL statement_timeout TO " + maximumMillis);
@@ -69,8 +77,8 @@ public final class PostgresAdoptionRead implements AutoCloseable {
             try (ResultSet row = sql.executeQuery("SELECT pg_catalog.pg_is_in_recovery(),"
                     + " pg_catalog.current_setting('transaction_read_only'),"
                     + " pg_catalog.current_setting('transaction_isolation')")) {
-                if (!row.next() || row.getBoolean(1) || !"on".equals(row.getString(2))
-                        || !"repeatable read".equals(row.getString(3))) {
+                if (!row.next() || row.getBoolean(1) || !(exclusive ? "off" : "on").equals(row.getString(2))
+                        || !(exclusive ? "read committed" : "repeatable read").equals(row.getString(3))) {
                     throw new IllegalStateException("ADOPTION_TARGET_VIEW_UNAVAILABLE");
                 }
             }
@@ -99,6 +107,10 @@ public final class PostgresAdoptionRead implements AutoCloseable {
     }
 
     public String blocker(TableSchema table) throws Exception {
+        return blocker(table, false);
+    }
+
+    private String blocker(TableSchema table, boolean adopted) throws Exception {
         if (!snapshot) throw new IllegalStateException("ADOPTION_VIEW_NOT_PINNED");
         verify();
         if (table.primaryKey.isEmpty()) return "ADOPTION_SOURCE_PRIMARY_KEY_REQUIRED";
@@ -132,7 +144,7 @@ public final class PostgresAdoptionRead implements AutoCloseable {
                 oid = row.getLong(1);
             }
         }
-        if (metadataTableExists(schema, TargetOwnership.TABLE)
+        if (!adopted && metadataTableExists(schema, TargetOwnership.TABLE)
                 && exists("SELECT 1 FROM " + qualified(schema, TargetOwnership.TABLE) + " WHERE table_name=?", table.name)) {
             return "ADOPTION_TARGET_ALREADY_OWNED";
         }
@@ -197,10 +209,14 @@ public final class PostgresAdoptionRead implements AutoCloseable {
 
     /** Exact native schema and unclaimed namespace evidence from the pinned target view. */
     public String planEvidence(TableSchema table, String journalNamespace) throws Exception {
-        String blocker = blocker(table);
+        return planEvidence(table, journalNamespace, false);
+    }
+
+    String planEvidence(TableSchema table, String journalNamespace, boolean adopted) throws Exception {
+        String blocker = blocker(table, adopted);
         if (blocker != null) throw new IllegalStateException(blocker);
         String evidence = PostgresAdoptionCatalog.inspect(connection, destination(table), table,
-                settings.metadataSchema, journalNamespace);
+                settings.metadataSchema, journalNamespace, adopted);
         verify();
         return evidence;
     }

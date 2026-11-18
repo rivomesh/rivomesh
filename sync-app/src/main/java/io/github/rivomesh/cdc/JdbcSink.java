@@ -40,6 +40,11 @@ public final class JdbcSink implements SinkAdapter {
         JdbcSink sink=new JdbcSink(s,OpenMode.ADOPTION_PREVIEW);
         return new PostgresAdoptionRead(sink,s,sink.connect(),maximumMillis);
     }
+    public static PostgresExistingAdoption adoptionBootstrap(Settings s, JdbcJournal journal, long maximumMillis)throws Exception{
+        if(s.product!=TargetProduct.POSTGRESQL)throw new IllegalArgumentException("ADOPTION_TARGET_PRODUCT_UNSUPPORTED");
+        JdbcSink sink=new JdbcSink(s,OpenMode.ADOPTION_PREVIEW);
+        return new PostgresExistingAdoption(sink,s,sink.connect(),journal,maximumMillis);
+    }
     private JdbcSink(Settings s,OpenMode mode)throws Exception{
         if(s==null||s.product==null||s.uniquePolicy==null||s.fingerprint==null||s.fingerprint.length()!=64||s.generation==null||s.generation.isEmpty()
                 ||s.generation.length()>128||s.driver==null||s.url==null||s.databases==null||s.databases.isEmpty())throw new IllegalArgumentException("SINK_CONFIG_INVALID");
@@ -78,15 +83,18 @@ public final class JdbcSink implements SinkAdapter {
     private void createNamespace(Connection c,String name)throws SQLException{if(dm()){if(!DmProfile.schemaExists(c,name))ddl(c,"CREATE SCHEMA "+q(name));return;}if(settings.product==TargetProduct.OCEANBASE&&OceanBaseProfile.databaseExists(c,name))return;ddl(c,(mysql()?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(name));}
     private void initialize()throws Exception{
         try(Connection c=connect()){
-            createNamespace(c,settings.metadataSchema);
-            if(shouldCreate(c,settings.metadataSchema,"rm3_sink_job"))ddl(c,"CREATE TABLE IF NOT EXISTS "+metadata("job")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512),transaction_hash VARCHAR(64),PRIMARY KEY(pipeline_id,subscription_id))"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
-            if(shouldCreate(c,settings.metadataSchema,"rm3_sink_table"))ddl(c,"CREATE TABLE IF NOT EXISTS "+metadata("table")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,schema_version INTEGER NOT NULL,schema_hash VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36),snapshot_state VARCHAR(16),next_part INTEGER NOT NULL,row_count BIGINT NOT NULL,last_part_hash VARCHAR(64),PRIMARY KEY(pipeline_id,subscription_id,table_id))"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
-            validateMetadata(c);
+            createMetadata(c);
             c.setAutoCommit(false);
             try{sql(c,"INSERT INTO "+metadata("job")+" (pipeline_id,subscription_id,fingerprint,generation,epoch,stream_seq) VALUES (?,?,?,?,0,0)",settings.pipelineId,settings.id,settings.fingerprint,settings.generation);c.commit();}
             catch(SQLException e){c.rollback();if(!"23505".equals(e.getSQLState())&&e.getErrorCode()!=1062&&!(dm()&&DmProfile.unique(e)))throw e;}
             locked(c,null);c.rollback();
         }
+    }
+    void createMetadata(Connection c)throws Exception{
+        createNamespace(c,settings.metadataSchema);
+        if(shouldCreate(c,settings.metadataSchema,"rm3_sink_job"))ddl(c,"CREATE TABLE IF NOT EXISTS "+metadata("job")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512),transaction_hash VARCHAR(64),PRIMARY KEY(pipeline_id,subscription_id))"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
+        if(shouldCreate(c,settings.metadataSchema,"rm3_sink_table"))ddl(c,"CREATE TABLE IF NOT EXISTS "+metadata("table")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,schema_version INTEGER NOT NULL,schema_hash VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36),snapshot_state VARCHAR(16),next_part INTEGER NOT NULL,row_count BIGINT NOT NULL,last_part_hash VARCHAR(64),PRIMARY KEY(pipeline_id,subscription_id,table_id))"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
+        validateMetadata(c);
     }
     private void validateMetadata(Connection c)throws SQLException{
             if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_sink_job','rm3_sink_table')")){

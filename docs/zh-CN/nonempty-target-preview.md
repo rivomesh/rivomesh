@@ -29,7 +29,21 @@ java -jar rivomesh.jar plan-adoption config/task.yml postgres
 java -jar rivomesh.jar plan-adoption config/task.yml postgres --expect-sha256 <reviewed-digest>
 ```
 
-`ADOPTION_PLAN_OBSERVED` 返回计划 SHA-256 摘要，绑定源端精确位点、匹配行数及摘要、配置和目标原生身份。在相同状态下重跑会得到同一个摘要。上限为 1 万行、单行 1 MiB、保留的比较数据 16 MiB，各读视图期限为 30 秒。JDBC 取数和 JVM 开销需要额外内存。使用私有运维记录保存结果。目标证据来自 PostgreSQL 只读快照。从该基线启动需要另一个操作，在同一目标事务中重新核验计划、获取目标归属、建立日志及快照断点。
+`ADOPTION_PLAN_OBSERVED` 返回计划 SHA-256 摘要，绑定源端精确位点、匹配行数及摘要、配置和目标原生身份。在相同状态下重跑会得到同一个摘要。上限为 1 万行、单行 1 MiB、保留的比较数据 16 MiB，各读视图期限为 30 秒。JDBC 取数和 JVM 开销需要额外内存。使用私有运维记录保存结果。目标证据来自 PostgreSQL 只读快照，执行接管时会在目标业务表独占锁下重新核验计划。
+
+## 执行已批准的 PostgreSQL 基线接管
+
+保持 MySQL 冻结，停止应用写入和所有 Rivomesh 进程。日志库和目标库配置使用同一个 PostgreSQL 账号。此账号需要锁定目标业务表及事件触发器目录，并创建两个独立元数据 schema 和归属表。使用计划中的源表名、精确摘要、保持不变的请求 UUID 和运维人员的审计标识。
+
+```sh
+java -jar rivomesh.jar adopt-existing config/task.yml postgres <sourceTable> <reviewed-digest> <requestUUID> <actor> --acknowledge-exclusive-freeze
+```
+
+命令在持有两侧冻结边界时重算源端位点、表结构、目标原生目录及匹配行。PostgreSQL 在一个事务中登记目标归属、已完成的快照及其确认、MySQL 捕获位点、空增量断点和审批回执。接管后的任务为 `PAUSED`。常规同步进程可基于现有目标数据，从已批准的 binlog 位点接续采集。
+
+收到 `ADOPTION_COMMIT_UNKNOWN` 时，保持冻结，使用完全相同的审批参数重试以确认原生回执。重放会核验暂停的基线、目标物理表、数据行、归属及两端断点。请求变化、元数据不完整或现场漂移时会拒绝。使用私有运维记录保留原计划和回执。任务已经恢复后，使用常规状态和恢复命令。
+
+确认回执后，运维人员可以解除源库写入冻结，使用 `resumeErrorGeneration` 执行 `resume-pipeline`，再启动常规同步进程。同步期间继续停止目标端应用写入。保留覆盖批准位点的源端 binlog，直到进程追平。应用写入交接和回切仍需独立执行。
 
 ## 写入交接前检查降级的 UNIQUE 索引
 

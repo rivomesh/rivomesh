@@ -112,16 +112,20 @@ final class PostgresUniqueRestoreEvidence {
     }
 
     static void requireSafeDdlSession(Connection c) throws Exception {
+        requireSafeDdlSession(c, "UNIQUE_RESTORE");
+    }
+
+    static void requireSafeDdlSession(Connection c, String operation) throws Exception {
         try (Statement sql = c.createStatement()) {
             sql.execute("SET LOCAL synchronous_commit TO on");
             try (ResultSet rows = sql.executeQuery("SELECT current_setting('fsync')")) {
                 if (!rows.next() || !"on".equals(rows.getString(1))) {
-                    throw new IllegalStateException("UNIQUE_RESTORE_TARGET_DURABILITY_UNSAFE");
+                    throw new IllegalStateException(operation + "_TARGET_DURABILITY_UNSAFE");
                 }
             }
             sql.execute("LOCK TABLE pg_catalog.pg_event_trigger IN SHARE MODE");
             try (ResultSet rows = sql.executeQuery("SELECT 1 FROM pg_catalog.pg_event_trigger WHERE evtenabled<>'D' LIMIT 1")) {
-                if (rows.next()) throw new IllegalStateException("UNIQUE_RESTORE_TARGET_EVENT_TRIGGER_PRESENT");
+                if (rows.next()) throw new IllegalStateException(operation + "_TARGET_EVENT_TRIGGER_PRESENT");
             }
         }
     }

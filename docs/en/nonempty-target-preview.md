@@ -29,7 +29,21 @@ java -jar rivomesh.jar plan-adoption config/task.yml postgres
 java -jar rivomesh.jar plan-adoption config/task.yml postgres --expect-sha256 <reviewed-digest>
 ```
 
-`ADOPTION_PLAN_OBSERVED` binds the exact source position, matching row count and digest, configuration and native target identities to the plan SHA-256 digest. The digest stays stable while those inputs match. Limits are 10,000 rows, 1 MiB per row, 16 MiB of retained comparison data and 30 seconds per read guard. JDBC and JVM overhead require additional memory. Keep the result in the operator's private records. PostgreSQL uses a read-only snapshot, so this result is evidence from that snapshot. Starting from that baseline requires a separate operation that rechecks the plan while acquiring target ownership and creating the journal and snapshot checkpoints in a single transaction.
+`ADOPTION_PLAN_OBSERVED` binds the exact source position, matching row count and digest, configuration and native target identities to the plan SHA-256 digest. The digest stays stable while those inputs match. Limits are 10,000 rows, 1 MiB per row, 16 MiB of retained comparison data and 30 seconds per read guard. JDBC and JVM overhead require additional memory. Keep the result in the operator's private records. PostgreSQL uses a read-only snapshot, so the approval step rechecks the plan while the target has an exclusive table lock.
+
+## Adopt the approved PostgreSQL baseline
+
+Keep the MySQL freeze active and keep application writes and every Rivomesh worker stopped. Use the same configured PostgreSQL user for the journal and the target. The role must be able to lock the target table and the event trigger catalog, and create both private metadata schemas plus the ownership table. Use the source table name from the plan, its exact digest and a stable request UUID with the local operator's audit identifier.
+
+```sh
+java -jar rivomesh.jar adopt-existing config/task.yml postgres <sourceTable> <reviewed-digest> <requestUUID> <actor> --acknowledge-exclusive-freeze
+```
+
+The command recomputes the source cut, schema, target native catalog and matching rows under the held freezes. PostgreSQL creates ownership, an already-complete snapshot and its acknowledgement, the captured MySQL position, the empty delivery checkpoint and the approval receipt in one transaction. The adopted job starts `PAUSED`. Business data remains where it was copied, so the normal worker can begin streaming from the approved binlog position.
+
+If the command returns `ADOPTION_COMMIT_UNKNOWN`, keep the freeze and use the identical approval to confirm the durable receipt before resuming. A confirmed replay verifies the paused baseline, native table, rows, target ownership and both checkpoints. A changed request, incomplete metadata or drift fails closed. Keep the original review and receipt in the operator's private records. If the job has already resumed, use its normal status and recovery commands.
+
+After a confirmed receipt, the maintenance operator can remove the source write fence and run `resume-pipeline` with `resumeErrorGeneration`, then start the ordinary worker. Keep target application writers stopped during sync. Retain the source binlog covering the approved cut until the worker catches up. Application write handover and failback remain separate operations.
 
 ## Review downgraded UNIQUE indexes before handover
 

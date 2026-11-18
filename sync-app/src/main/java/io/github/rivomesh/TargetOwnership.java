@@ -6,6 +6,7 @@ import java.util.*;
 /** Physical-schema ownership protects table writers even when different URLs alias one destination. */
 public final class TargetOwnership {
     public static final String TABLE="_rivomesh_owner_v3";
+    private static final String COLUMNS=" (table_name VARCHAR(128) PRIMARY KEY,pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,generation VARCHAR(128) NOT NULL)";
     private TargetOwnership(){}
     private static boolean mysql(Connection c)throws SQLException{return c.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("mysql");}
     private static String q(Connection c,String name)throws SQLException{return mysql(c)?Sql.mysql(name):Sql.pg(name);}
@@ -14,11 +15,15 @@ public final class TargetOwnership {
     public static void initialize(Connection c,String schema,boolean avoidRedundantDdl)throws SQLException{
         boolean dm=io.github.rivomesh.cdc.DmProfile.product(c);
         // OceanBase can serialize even no-op DDL behind recovery. Keep ownership/engine checks below.
-        if(dm?!io.github.rivomesh.cdc.DmProfile.tableExists(c,schema,TABLE):!avoidRedundantDdl||!io.github.rivomesh.cdc.OceanBaseProfile.tableExists(c,schema,TABLE))try(Statement st=c.createStatement()){st.execute((dm?"CREATE TABLE ":"CREATE TABLE IF NOT EXISTS ")+table(c,schema)+" (table_name VARCHAR(128) PRIMARY KEY,pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,generation VARCHAR(128) NOT NULL)"+(mysql(c)?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));}
+        if(dm?!io.github.rivomesh.cdc.DmProfile.tableExists(c,schema,TABLE):!avoidRedundantDdl||!io.github.rivomesh.cdc.OceanBaseProfile.tableExists(c,schema,TABLE))try(Statement st=c.createStatement()){st.execute((dm?"CREATE TABLE ":"CREATE TABLE IF NOT EXISTS ")+table(c,schema)+COLUMNS+(mysql(c)?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));}
         catch(SQLException e){if(dm&&e.getErrorCode()==-2124||Arrays.asList("42P07","42710","23505").contains(e.getSQLState()))throw new SQLTransactionRollbackException("TARGET_OWNERSHIP_CATALOG_RETRY","40001",e);throw e;}
         if(mysql(c))try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?")){
             p.setString(1,schema);p.setString(2,TABLE);try(ResultSet rs=p.executeQuery()){if(!rs.next()||!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("TARGET_OWNERSHIP_ENGINE_NOT_TRANSACTIONAL");}
         }
+    }
+    public static void createUnclaimedPostgres(Connection c,String schema)throws SQLException{
+        if(c.getAutoCommit()||!"PostgreSQL".equals(c.getMetaData().getDatabaseProductName()))throw new IllegalStateException("ADOPTION_TARGET_PROFILE_UNSUPPORTED");
+        try(Statement sql=c.createStatement()){sql.execute("CREATE TABLE "+table(c,schema)+COLUMNS);}
     }
     private static boolean matches(Connection c,String schema,String name,String pipeline,String subscription,String generation,boolean lock)throws SQLException{
         try(PreparedStatement p=c.prepareStatement("SELECT pipeline_id,subscription_id,generation FROM "+table(c,schema)+" WHERE table_name=?"+(lock?" FOR UPDATE":""))){

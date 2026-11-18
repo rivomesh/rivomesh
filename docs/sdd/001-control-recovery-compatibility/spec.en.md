@@ -79,7 +79,7 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | Domestic transactional database matrix | OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain. |
-| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Native existing-target adoption plans bind a frozen MySQL cut, content, schema and physical ownership to a reproducible digest. Bounded UNIQUE execution passed. Transactional adoption, multiple targets, cutover and failback remain. |
+| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Native bounded single-table PostgreSQL adoption, frozen-cut continuation and actual UNIQUE restore passed. Broader products and scopes, business writer cutover and failback remain. |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | ClickHouse, Doris and Hive have initial profiles. Java 21 verified native Doris 4.1.3 single FE/BE outage catch-up, original receipts and independent PostgreSQL recovery. Other clustered, TLS and capacity profiles remain. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local and external journals are available. Two Agents verified shared report, closed receipt and historical failure custody with original keys retained. Original source events and actual transfer remain. |

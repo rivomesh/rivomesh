@@ -79,7 +79,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
-| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空目标已实测冻结 MySQL 的精确切点、行、结构及物理归属计划和按摘要复核。限定 UNIQUE 实际恢复已通过。正式接管基线、多目标约束、写入交接和回切待验。 |
+| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 已实测限定非空 PostgreSQL 单表原子接管、冻结源切点续传及 UNIQUE 实际恢复；广范围目标/产品、业务写入交接与回切待验。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris、Hive 已有初步档案。Java 21 实测 Doris 4.1.3 单 FE/BE 的停机追平、原回执和独立 PostgreSQL 故障重放。其他生产集群、TLS 和容量待验。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 本地/外部日志可选，已实测双 Agent 核验共享报告、闭合回执和历史故障证据，原签名密钥保留在原 Agent。原始源事件和实际迁移待验。 |

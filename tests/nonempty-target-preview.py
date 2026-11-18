@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--session-fault', action='store_true', help='Kill the original MySQL view session during pinning')
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument('--only-adoption-plan', action='store_true', help='Verify the frozen existing-target admission plan')
+    profile.add_argument('--only-adoption-execution', action='store_true', help='Verify atomic adoption and first native CDC')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -44,7 +45,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('ADOPTION_PLAN' if args.only_adoption_plan else
+    profile_name = ('ADOPTION_EXECUTION' if args.only_adoption_execution else
+                    'ADOPTION_PLAN' if args.only_adoption_plan else
                     'UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
                     'UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
                     'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW')
@@ -244,6 +246,10 @@ def main():
             unchanged_target()
             passed('Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes')
 
+            if args.only_adoption_execution:
+                verify_adoption_execution(plan_config, approved, unchanged_target, target_contents, original_contents)
+                return
+
             postgres("UPDATE review.items SET name='tail' WHERE id=2")
             refused('ADOPTION_PLAN_ROWS_DIFFER', '--expect-sha256', approved)
             postgres("UPDATE review.items SET name='tail ' WHERE id=2")
@@ -285,6 +291,135 @@ def main():
             refused('ADOPTION_PLAN_SOURCE_SCOPE_UNSUPPORTED')
             unchanged_target()
             passed('Discovery of a second mapped source table refuses a partial existing-target bootstrap')
+
+        def verify_adoption_execution(plan_config, approved, unchanged_target, target_contents, original_contents):
+            request = str(uuid.uuid4())
+            acknowledgement = '--acknowledge-exclusive-freeze'
+
+            def cli(operation, *parameters, check=True):
+                return compose('run', '--rm', '-T', 'runner', operation, '/fixture/adoption-plan.yml', *parameters, check=check)
+
+            def adopt(digest=approved, actor='fixture-operator', confirmation=acknowledgement, check=True):
+                return cli('adopt-existing', 'pg', 'items', digest, request, actor, confirmation, check=check)
+
+            def refused(answer, *codes):
+                assert answer.returncode != 0 and not answer.stdout.strip()
+                assert any(code in answer.stderr for code in codes), re.findall(r'\b(?:ADOPTION|SQL)_[A-Z0-9_]+', answer.stderr)
+
+            refused(adopt(confirmation='--no-acknowledgement', check=False), 'ADOPTION_EXCLUSIVE_FREEZE_ACK_REQUIRED')
+            refused(adopt(digest='0' * 64, check=False), 'ADOPTION_PLAN_CHANGED')
+            unchanged_target()
+            passed('An explicit exclusive freeze acknowledgment and original plan digest are required for baseline installation')
+
+            postgres('CREATE SCHEMA review_ack; CREATE TABLE review_ack.items (LIKE review.items INCLUDING ALL); '
+                     'INSERT INTO review_ack.items SELECT * FROM review.items')
+            confirmed_target = dict(plan_config['targets'][0], metadataSchema='ack_sink', mappings={'sales': 'review_ack'})
+            confirmed_config = dict(plan_config, pipelineId='adoption-acknowledged', targets=[confirmed_target],
+                                    journal=dict(plan_config['journal'], namespace='ack_journal'))
+            (directory / 'adoption-ack.yml').write_text(json.dumps(confirmed_config))
+            confirmed_plan = json.loads(compose('run', '--rm', '-T', 'runner', 'plan-adoption', '/fixture/adoption-ack.yml', 'pg').stdout)
+            confirmed_args = ('adopt-existing', '/fixture/adoption-ack.yml', 'pg', 'items', confirmed_plan['planSha256'],
+                              str(uuid.uuid4()), 'fixture-operator', acknowledgement)
+            first = json.loads(compose('run', '--rm', '-T', 'runner', *confirmed_args).stdout)
+            second = json.loads(compose('run', '--rm', '-T', 'runner', *confirmed_args).stdout)
+            assert first['acknowledged'] and not first['replayed'] and second['acknowledged'] and second['replayed']
+            assert first['receipt'] == second['receipt'] and postgres('SELECT count(*) FROM ack_sink.rm3_sink_adoption') == '1'
+            passed('A known successful first commit and exact replay return the same single receipt and identify the replay')
+
+            with (ThreadPoolExecutor(max_workers=1) as background,
+                  sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'preview') as holder,
+                  sql_session('source', 'bash', '-c',
+                              'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -NB --unbuffered') as killer):
+                assert exchange_sql(holder, "BEGIN; LOCK TABLE pg_catalog.pg_class IN SHARE MODE; SELECT 'HELD';") == 'HELD'
+                assert exchange_sql(killer, "SELECT 'READY';") == 'READY'
+                interrupted = background.submit(adopt, check=False)
+                try:
+                    session = wait_for(lambda: int(exchange_sql(killer, """
+                        SELECT COALESCE(MAX(t.PROCESSLIST_ID),0) FROM performance_schema.user_variables_by_thread v
+                          JOIN performance_schema.threads t ON t.THREAD_ID=v.THREAD_ID
+                         WHERE v.VARIABLE_NAME='rivomesh_unique_freeze_session';
+                        """)) or None, 'pinning the original source session during adoption')
+                    wait_for(lambda: exchange_sql(holder, """
+                        SELECT EXISTS(SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid
+                         WHERE l.relation='pg_catalog.pg_class'::regclass AND l.mode='RowExclusiveLock'
+                           AND NOT l.granted AND a.query LIKE 'CREATE TABLE "planned_sink"."rm3_sink_adoption"%');
+                        """) == 't', 'observing receipt-table DDL after namespace creation')
+                    assert exchange_sql(killer, f"KILL CONNECTION {session}; SELECT 'KILLED';") == 'KILLED'
+                finally:
+                    assert exchange_sql(holder, "ROLLBACK; SELECT 'RELEASED';") == 'RELEASED'
+                rejected = interrupted.result(timeout=70)
+            unchanged_target()
+            refused(rejected, 'ADOPTION_SOURCE_FENCE_LOST', 'ADOPTION_PLAN_SOURCE_IDENTITY_CHANGED')
+            passed('Loss of the pinned source session after PostgreSQL namespace DDL rolls back ownership, namespaces and baseline')
+
+            postgres("ALTER SYSTEM SET synchronous_standby_names='fixture_missing'")
+            try:
+                postgres('SELECT pg_reload_conf()')
+                wait_for(lambda: postgres('SHOW synchronous_standby_names') == 'fixture_missing', 'stalling local commit acknowledgement')
+                with ThreadPoolExecutor(max_workers=1) as background:
+                    lost = background.submit(adopt, check=False)
+                    backend = int(wait_for(lambda: postgres("""
+                        SELECT a.pid FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
+                         WHERE a.wait_event='SyncRep' AND l.relation='review.items'::regclass
+                           AND l.granted AND l.mode='AccessExclusiveLock'
+                        """), 'waiting for the locally flushed adoption commit'))
+                    assert postgres(f'SELECT pg_terminate_backend({backend})') == 't'
+                    refused(lost.result(timeout=60), 'ADOPTION_COMMIT_UNKNOWN')
+            finally:
+                postgres('ALTER SYSTEM RESET synchronous_standby_names')
+                postgres('SELECT pg_reload_conf()')
+            wait_for(lambda: postgres('SHOW synchronous_standby_names') == '', 'releasing the fixture commit stall')
+            assert postgres(target_contents) == original_contents
+            assert postgres("SELECT run_state,epoch,next_seq,normalized_seq FROM planned_journal.rm3_job") == 'PAUSED|0|1|0'
+            assert postgres("SELECT snapshot_state,next_part,row_count FROM planned_sink.rm3_sink_table") == 'COMPLETE|0|2'
+            assert postgres("SELECT count(*) FROM planned_sink.rm3_sink_adoption") == '1'
+            compose('stop', 'source')
+            compose('restart', 'target')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'target')
+            answer = adopt()
+            assert 'sensitive-row-value' not in answer.stdout
+            replayed = json.loads(answer.stdout)
+            assert replayed['status'] == 'EXISTING_TARGET_ADOPTED' and replayed['acknowledged'] and replayed['replayed']
+            assert replayed['resumeErrorGeneration'] == 1 and replayed['receipt']['rows'] == 2
+            denied = adopt(actor='different-operator', check=False)
+            refused(denied, 'ADOPTION_APPROVAL_CONFLICT')
+            passed('Lost commit acknowledgement resolves to one exact durable receipt after PostgreSQL restart with MySQL offline')
+
+            postgres('UPDATE planned_sink.rm3_sink_table SET row_count=3')
+            refused(adopt(check=False), 'ADOPTION_BOOTSTRAP_CHECKPOINT_CHANGED')
+            postgres('UPDATE planned_sink.rm3_sink_table SET row_count=2')
+            postgres("UPDATE review.items SET name='different' WHERE id=2")
+            refused(adopt(check=False), 'ADOPTION_BOOTSTRAP_ROWS_CHANGED')
+            postgres("UPDATE review.items SET name='tail ' WHERE id=2")
+            assert json.loads(adopt().stdout)['receipt'] == replayed['receipt']
+            passed('Exact replay rejects inconsistent target checkpoints and manually drifted rows while the bootstrap is paused')
+
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'source')
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            mysql('SET PERSIST super_read_only=OFF; SET PERSIST read_only=OFF')
+            # These changes precede the worker start and therefore require capture from the adopted position.
+            mysql("START TRANSACTION; UPDATE sales.items SET name='updated' WHERE id=1; "
+                  "INSERT INTO sales.items VALUES (3,'inserted','{\"new\":true}'); DELETE FROM sales.items WHERE id=2; COMMIT")
+            cli('resume-pipeline', str(replayed['resumeErrorGeneration']))
+            worker = project + '-adopted-worker'
+            compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/adoption-plan.yml')
+            try:
+                wait_for(lambda: postgres("SELECT string_agg(id||':'||name,',' ORDER BY id) FROM review.items") == '1:updated,3:inserted',
+                         'waiting for native CDC from the first adopted position', seconds=110)
+                assert postgres('SELECT snapshot_id FROM planned_sink.rm3_sink_table') == replayed['receipt']['snapshot']
+                assert postgres('SELECT count(*) FROM planned_journal.rm3_snapshot_part') == '0'
+                assert int(postgres('SELECT stream_seq FROM planned_sink.rm3_sink_job')) >= 1
+                assert postgres('SELECT count(*) FROM planned_sink.rm3_sink_adoption') == '1'
+            except Exception:
+                worker_logs = subprocess.run(['docker', 'logs', '--tail', '80', worker], capture_output=True,
+                                             text=True, timeout=15, check=False)
+                redacted = (worker_logs.stdout + worker_logs.stderr).replace(password, '[REDACTED]')
+                (output / 'worker-redacted.log').write_text(redacted)
+                raise
+            finally:
+                subprocess.run(['docker', 'stop', '-t', '5', worker], capture_output=True, timeout=30, check=False)
+            refused(adopt(check=False), 'ADOPTION_BOOTSTRAP_MOVED')
+            passed('The ordinary worker resumes the adopted position and applies first MySQL insert, update and delete without recopying')
 
         def constraint_review():
             target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
@@ -645,7 +780,7 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_adoption_plan:
+            if args.only_adoption_plan or args.only_adoption_execution:
                 adoption_plan()
                 report['status'] = 'PASS'
                 return

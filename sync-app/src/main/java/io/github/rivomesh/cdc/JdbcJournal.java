@@ -84,25 +84,7 @@ public final class JdbcJournal implements NormalizedJournal {
         Set<String> ids=new TreeSet<>();
         for(String id:subscribers)if(id==null||!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||!ids.add(id))throw new IllegalArgumentException("SUBSCRIPTION_ID_INVALID");
         try(Connection c=connect()){
-            ddl(c,(dialect==Dialect.MYSQL?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(settings.namespace));
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("subscription")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,acknowledged BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128),PRIMARY KEY(pipeline_id,subscription_id))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("log")+" (pipeline_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512) NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,stream_seq))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("receipt")+" (pipeline_id VARCHAR(128) NOT NULL,transaction_id VARCHAR(512) NOT NULL,stream_seq BIGINT NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,transaction_id))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("schema")+" (pipeline_id VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,schema_version INTEGER NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,table_id,schema_version))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,schema_version INTEGER NOT NULL,column_count INTEGER NOT NULL,baseline "+text()+" NOT NULL,run_state VARCHAR(16) NOT NULL,next_part INTEGER NOT NULL,row_count BIGINT NOT NULL,retained INTEGER NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot_part")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,part_no INTEGER NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,row_count BIGINT NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id,part_no))");
-            ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot_ack")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,subscription_id VARCHAR(128) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id,subscription_id))");
-            new JdbcNormalization(this).initialize(c);
-            JdbcPublicationStore.initialize(this,c);
-            JdbcFailureReview.initialize(this,c);
-            JdbcCommitAcknowledgement.initialize(this,c);
-            if(settings.deliveryTiming)JdbcDeliveryTiming.initialize(this,c,dialect==Dialect.MYSQL);
-            if(settings.writerAssignment!=null)JournalWriterAssignment.initialize(this,c);
-            if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack','rm3_pipeline_failure')")){
-                p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=17)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
-            }
+            createStorage(c);
             c.setAutoCommit(false);
             try{
                 String stream=generation==null?UUID.randomUUID().toString():generation;
@@ -120,6 +102,27 @@ public final class JdbcJournal implements NormalizedJournal {
             Set<String> existing=new TreeSet<>();for(Subscription sub:subscriptions(c))existing.add(sub.id);
             if(!existing.equals(ids))throw new IllegalStateException("SUBSCRIPTION_MIGRATION_REQUIRED");
             if(settings.writerAssignment!=null){locked(c);c.commit();}
+        }
+    }
+    void createStorage(Connection c)throws Exception{
+        ddl(c,(dialect==Dialect.MYSQL?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(settings.namespace));
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("subscription")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,acknowledged BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128),PRIMARY KEY(pipeline_id,subscription_id))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("log")+" (pipeline_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512) NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,stream_seq))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("receipt")+" (pipeline_id VARCHAR(128) NOT NULL,transaction_id VARCHAR(512) NOT NULL,stream_seq BIGINT NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,transaction_id))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("schema")+" (pipeline_id VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,schema_version INTEGER NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,table_id,schema_version))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,schema_version INTEGER NOT NULL,column_count INTEGER NOT NULL,baseline "+text()+" NOT NULL,run_state VARCHAR(16) NOT NULL,next_part INTEGER NOT NULL,row_count BIGINT NOT NULL,retained INTEGER NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot_part")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,part_no INTEGER NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,row_count BIGINT NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id,part_no))");
+        ddl(c,"CREATE TABLE IF NOT EXISTS "+table("snapshot_ack")+" (pipeline_id VARCHAR(128) NOT NULL,snapshot_scope VARCHAR(128) NOT NULL,table_id VARCHAR(64) NOT NULL,subscription_id VARCHAR(128) NOT NULL,snapshot_id VARCHAR(36) NOT NULL,PRIMARY KEY(pipeline_id,snapshot_scope,table_id,subscription_id))");
+        new JdbcNormalization(this).initialize(c);
+        JdbcPublicationStore.initialize(this,c);
+        JdbcFailureReview.initialize(this,c);
+        JdbcCommitAcknowledgement.initialize(this,c);
+        if(settings.deliveryTiming)JdbcDeliveryTiming.initialize(this,c,dialect==Dialect.MYSQL);
+        if(settings.writerAssignment!=null)JournalWriterAssignment.initialize(this,c);
+        if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack','rm3_pipeline_failure')")){
+            p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=17)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
         }
     }
     /** Read-only identity guard for status and administrative controls, without initialization DDL. */

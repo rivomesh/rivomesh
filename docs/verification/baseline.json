@@ -7625,5 +7625,31 @@
       "bothArtifactVerifiers": "PASS",
       "missingDriverProbe": "PASS"
     }
+  },
+  "atomicExistingTargetBootstrap": {
+    "reproduce": "python3 tests/nonempty-target-preview.py --only-adoption-execution --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "6065ddcb304b9cf4e76a8c1065f7fd75fb64c42646d9ca68b3e73d65419fe1f7",
+      "checks": [
+        "An unfrozen or runtime-only MySQL source cannot produce an adoption plan",
+        "Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes",
+        "An explicit exclusive freeze acknowledgment and original plan digest are required for baseline installation",
+        "A known successful first commit and exact replay return the same single receipt and identify the replay",
+        "Loss of the pinned source session after PostgreSQL namespace DDL rolls back ownership, namespaces and baseline",
+        "Lost commit acknowledgement resolves to one exact durable receipt after PostgreSQL restart with MySQL offline",
+        "Exact replay rejects inconsistent target checkpoints and manually drifted rows while the bootstrap is paused",
+        "The ordinary worker resumes the adopted position and applies first MySQL insert, update and delete without recopying"
+      ],
+      "status": "PASS",
+      "profile": "ADOPTION_EXECUTION",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 67,
+    "stagedIntegration": {
+      "artifactSha256": "338c88717f4b1656c6638d36da3e35fa986ba61b6cdb02418527b90050047de0",
+      "focusedJavaTests": 62
+    }
   }
 }

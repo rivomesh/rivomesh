@@ -13,7 +13,7 @@ final class PostgresAdoptionCatalog {
     private PostgresAdoptionCatalog() {}
 
     static String inspect(Connection connection, String schema, TableSchema table, String targetMetadata,
-                          String journalNamespace) throws Exception {
+                          String journalNamespace, boolean adopted) throws Exception {
         List<String> evidence = new ArrayList<>();
         try (PreparedStatement query = connection.prepareStatement("""
                 SELECT current_setting('server_version_num')::int,current_setting('server_encoding'),
@@ -36,8 +36,8 @@ final class PostgresAdoptionCatalog {
                         || row.getBoolean(3) || !"on".equals(row.getString(4))) {
                     throw new IllegalStateException("ADOPTION_PLAN_TARGET_PROFILE_UNSUPPORTED");
                 }
-                if (row.getBoolean(8) || row.getBoolean(9)) throw new IllegalStateException("ADOPTION_PLAN_METADATA_PRESENT");
-                if (row.getBoolean(10)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_EVENT_TRIGGER_PRESENT");
+                if (!adopted && (row.getBoolean(8) || row.getBoolean(9))) throw new IllegalStateException("ADOPTION_PLAN_METADATA_PRESENT");
+                if (!adopted && row.getBoolean(10)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_EVENT_TRIGGER_PRESENT");
                 if (!row.getBoolean(11)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_OWNERSHIP_REQUIRED");
                 evidence.addAll(List.of(row.getString(5), row.getString(6), row.getString(7)));
             }

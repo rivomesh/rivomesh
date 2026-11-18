@@ -66,7 +66,8 @@
     "LG-03 exact Java 21 native Doris 4.1.3 single-FE/BE pipeline and receipt checks passed. Doris catch-up used original native metadata tablets and the PostgreSQL sibling advanced independently.",
     "CP-04/LG-05 failure evidence custody published. Each control store passed 15 native cases including signed evidence bytes, shared/disjoint mount, replay and unchanged positions with no key export.",
     "LG-10/JV-03 optional five-driver external package published. Three variants and exact runtime admission verified. Merged package gates passed plus 84 Java.",
-    "LG-05 optional Helm shared handoff evidence claim on two Agents, each with independent preprovisioned private PVC. Positive render, invalid role/claim guards, unchanged default/native templates, Compose interpolation and bilingual manual instructions verified."
+    "LG-05 optional Helm shared handoff evidence claim on two Agents, each with independent preprovisioned private PVC. Positive render, invalid role/claim guards, unchanged default/native templates, Compose interpolation and bilingual manual instructions verified.",
+    "LG-02 real existing-target atomic bootstrap published. Eight native cases verify cut and receipt, post-DDL source-loss rollback, lost ACK reconciliation after restart, and original-snapshot insert/update/delete with zero copy parts. Integrated app 62 Java."
   ],
   "lastScheduledReportAt": "2026-11-18T21:58:16+08:00",
   "lastVerifiedReactor": {
