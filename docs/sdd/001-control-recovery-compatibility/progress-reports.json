@@ -49,5 +49,8 @@
   "currentCandidateArtifact": "186cddb562acb16d913670dee1564d0d4f2942ba7978b0ccd531ed7056fc622c",
   "currentCandidateScope": "Temurin 21 parallel development candidate with 46 focused Java tests; native Oracle, handoff, diagnostics and real browser verification active or queued",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": []
+  "newSinceLastReport": [
+    "CP-06 per-target diagnostics passed 10 native cases across two controllers and one Agent, with PostgreSQL target pause, MySQL outage/rejoin, stale-cursor refusal and retained events after Agent restart.",
+    "Official-site console theme and assets passed 11 real Chrome cases on the exact Maven package, including keyboard navigation at 320 CSS pixels and cookie-backed reload after theme switching."
+  ]
 }

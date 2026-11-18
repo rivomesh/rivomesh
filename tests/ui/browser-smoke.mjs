@@ -6,6 +6,7 @@ import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {join, resolve} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
+import {verifyAppearance} from './appearance-cases.mjs';
 
 const [artifactInput, outputInput, chrome]=process.argv.slice(2);
 assert(artifactInput&&outputInput&&chrome,'Usage: node tests/ui/browser-smoke.mjs <artifact> <output> <Chrome executable>');
@@ -128,14 +129,22 @@ try{
 
   await evaluate('document.querySelector("[data-worker-diagnostics]").focus()');
   await key('Enter',13);
-  await waitFor(()=>evaluate('!!document.querySelector(".worker-diagnostics[open] section p")&&document.querySelector(".worker-diagnostics section p").textContent.includes("暂无")'),
+  await waitFor(()=>evaluate('document.querySelector(".worker-diagnostics[open] section")?.textContent.includes("暂无诊断记录")'),
                 'diagnostic dialog and native empty result');
   const ax=await cdp('Accessibility.getFullAXTree');
-  assert(ax.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='采集诊断记录'));
+  assert(ax.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='诊断记录'));
+  assert(ax.nodes.some(node=>node.role?.value==='combobox'&&node.name?.value==='查看范围'));
+  await evaluate(`(()=>{
+    const scope=document.querySelector(".worker-diagnostics select");
+    scope.value="warehouse";scope.dispatchEvent(new Event("change"));
+  })()`);
+  await waitFor(()=>evaluate(`document.querySelector(".worker-diagnostics section")?.textContent.includes("暂无诊断记录")
+    && performance.getEntriesByType("resource").some(entry=>new URL(entry.name).searchParams.get("subscriptionId")==="warehouse")`),
+    'native destination-specific diagnostics request completes');
   await screenshot('capture-diagnostics');
   await key('Escape',27);
   assert(await evaluate('!document.querySelector(".worker-diagnostics")'));
-  passed('Capture diagnostics has an accessible dialog name and works through Enter and Escape');
+  passed('Diagnostics has an accessible dialog and destination selector, routes target reads, and works through Enter and Escape');
 
   await evaluate('document.querySelector("[data-validation-catalog]").click()');
   await waitFor(()=>evaluate('document.querySelector(".validation-panel")?.textContent.includes("暂无留存报告")'),
@@ -203,6 +212,8 @@ try{
   await screenshot('oracle-task-wizard-narrow');
   await finishTask('browser-ora');
   passed('Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API');
+
+  await verifyAppearance({cdp,evaluate,key,viewport,screenshot,waitFor,passed});
 
   await evaluate('document.querySelector("#logout").click()');
   await waitFor(()=>evaluate('document.querySelector("#login-dialog").open'),'signed-out dialog');

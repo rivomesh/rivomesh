@@ -30,6 +30,7 @@ public interface TaskWorker {
         private final Thread output;
         private volatile long stopRequested;
         private volatile Diagnostic diagnostic;
+        private static final int DIAGNOSTIC_LINE_LIMIT=320;
         private static final String DIAGNOSTIC_PREFIX="PIPELINE_DIAGNOSTIC ";
         private static final Pattern DIAGNOSTIC=Pattern.compile("([A-Z_]{1,32}) ([A-Z][A-Z0-9_]{1,127})");
         public Jvm(Path config, Path log, int heapMiB) throws Exception {this(config,log,heapMiB,Collections.emptySet());}
@@ -47,7 +48,7 @@ public interface TaskWorker {
                             if(buffer[i]=='\n'){
                                 observeDiagnostic(line,log);
                                 line.setLength(0);
-                            }else if(line.length()<192)line.append((char)buffer[i]);
+                            }else if(line.length()<DIAGNOSTIC_LINE_LIMIT)line.append((char)buffer[i]);
                         }
                         if (Files.exists(log) && Files.size(log) + n > 8L * 1024 * 1024)
                             Files.move(log, log.resolveSibling(log.getFileName()+".1"), StandardCopyOption.REPLACE_EXISTING);
@@ -63,12 +64,15 @@ public interface TaskWorker {
         @Override public Diagnostic diagnostic(){return diagnostic;}
 
         private void observeDiagnostic(CharSequence line,Path log){
-            if(line.length()==0||line.length()>=192)return;
+            if(line.length()==0||line.length()>=DIAGNOSTIC_LINE_LIMIT)return;
             String message=line.toString().trim();
             if("JOURNAL_BACKPRESSURE".equals(message))record(log,WorkerDiagnostics.Event.BACKPRESSURE,null);
             else if("JOURNAL_BACKPRESSURE_CLEARED".equals(message))record(log,WorkerDiagnostics.Event.BACKPRESSURE_CLEARED,null);
             else if(message.startsWith("PIPELINE_RETRY "))record(log,WorkerDiagnostics.Event.RETRY,null);
-            else if(message.startsWith(DIAGNOSTIC_PREFIX)){
+            else if(message.startsWith("TARGET_")){
+                try{WorkerDiagnostics.observeTarget(log,message);}
+                catch(IOException unavailable){/* Target diagnostics are best effort, like capture diagnostics. */}
+            }else if(message.startsWith(DIAGNOSTIC_PREFIX)){
                 String value=message.substring(DIAGNOSTIC_PREFIX.length());
                 if("CLEAR".equals(value)){
                     diagnostic=null;

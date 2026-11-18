@@ -94,6 +94,8 @@ async function taskPage(direction){if(taskLoading)return;const before=taskAfter,
  try{if(await loadTaskPage(after)){taskHistory=direction==='first'?[]:direction==='previous'?history.slice(0,-1):[...history,before];render();}}catch(error){notify(error.message);}
 }
 let activeView='tasks';
+Object.assign(messages.zh,{skipToContent:'跳到主要内容',darkTheme:'深色外观'});
+Object.assign(messages.en,{skipToContent:'Skip to main content',darkTheme:'Dark theme'});
 let lang=localStorage.getItem('rivomesh-language')||(navigator.language.startsWith('zh')?'zh':'en'),selected='',latest={tasks:[],invalidConfigs:[]},capabilities=[],session=null,sessionGeneration=0,busy=null,step=0;
 let failureDialog=null,failureTicket=0;
 const $=id=>document.getElementById(id),t=key=>messages[lang][key]||key;
@@ -379,33 +381,54 @@ async function openCaptureExclusions(task){
  await load();
 }
 Object.assign(messages.zh,{
- workerDiagnostics:'采集诊断记录',diagnosticsEmpty:'暂无采集诊断记录',diagnosticsOlder:'查看更早记录',
+ workerDiagnostics:'诊断记录',diagnosticsCapture:'采集端',diagnosticsScope:'查看范围',
+ diagnosticsEmpty:'暂无诊断记录',diagnosticsOlder:'查看更早记录',
  DIAGNOSTICS_CURSOR_EXPIRED:'这页记录已轮换，请重新打开诊断。',
+ DIAGNOSTICS_TARGET_UNKNOWN:'当前配置中没有这个目标，请刷新任务后重试。',
  diagnostic_CAPTURE_READY:'采集已启动',diagnostic_CAPTURE_FAILURE:'采集失败',diagnostic_RETRY:'准备重试',
- diagnostic_BACKPRESSURE:'日志空间受限',diagnostic_BACKPRESSURE_CLEARED:'日志空间已恢复'
+ diagnostic_BACKPRESSURE:'日志空间受限',diagnostic_BACKPRESSURE_CLEARED:'日志空间已恢复',
+ diagnostic_TARGET_PAUSED:'目标因故障暂停',diagnostic_TARGET_RETRYING:'目标正在重试',
+ diagnostic_TARGET_RETRY_CLEARED:'目标重试已结束'
 });
 Object.assign(messages.en,{
- workerDiagnostics:'Capture diagnostics',diagnosticsEmpty:'No capture diagnostics recorded',diagnosticsOlder:'Older events',
- DIAGNOSTICS_CURSOR_EXPIRED:'This page has rotated. Reopen capture diagnostics.',
+ workerDiagnostics:'Diagnostics',diagnosticsCapture:'Source capture',diagnosticsScope:'View events for',
+ diagnosticsEmpty:'No diagnostics recorded',diagnosticsOlder:'Older events',
+ DIAGNOSTICS_CURSOR_EXPIRED:'This page has rotated. Reopen diagnostics.',
+ DIAGNOSTICS_TARGET_UNKNOWN:'This destination is unavailable in the current configuration. Refresh the task and retry.',
  diagnostic_CAPTURE_READY:'Capture started',diagnostic_CAPTURE_FAILURE:'Capture failed',diagnostic_RETRY:'Retry scheduled',
- diagnostic_BACKPRESSURE:'Journal backpressure',diagnostic_BACKPRESSURE_CLEARED:'Journal backpressure cleared'
+ diagnostic_BACKPRESSURE:'Journal backpressure',diagnostic_BACKPRESSURE_CLEARED:'Journal backpressure cleared',
+ diagnostic_TARGET_PAUSED:'Destination paused on failure',diagnostic_TARGET_RETRYING:'Destination retrying',
+ diagnostic_TARGET_RETRY_CLEARED:'Destination retry cleared'
 });
 let workerDiagnosticsDialog;
 function closeWorkerDiagnostics(){workerDiagnosticsDialog?.remove();workerDiagnosticsDialog=null;}
 function openWorkerDiagnostics(task){
  closeWorkerDiagnostics();
  const dialog=text('dialog','','failure-review-dialog worker-diagnostics'),content=text('section'),close=text('button',t('closeFailureEvidence'));
+ const scope=text('select'),source=text('option',t('diagnosticsCapture'));
+ let requestSequence=0;
+ source.value='';scope.append(source);
+ for(const destination of task.destinations||[]){
+  const option=text('option',destination.id);option.value=destination.id;scope.append(option);
+ }
  workerDiagnosticsDialog=dialog;
  dialog.setAttribute('aria-label',t('workerDiagnostics'));
  close.onclick=closeWorkerDiagnostics;
  dialog.addEventListener('cancel',closeWorkerDiagnostics);
- dialog.append(text('h2',t('workerDiagnostics')),content,close);
+ dialog.append(text('h2',t('workerDiagnostics')));
+ if(scope.options.length>1){
+  const label=text('label');label.append(text('span',t('diagnosticsScope')),scope);dialog.append(label);
+ }
+ scope.onchange=()=>load();
+ dialog.append(content,close);
  document.body.append(dialog);dialog.showModal();
  async function load(cursor=''){
+  const sequence=++requestSequence,target=scope.value;
   content.replaceChildren(text('p',t('pending')));
   try{
-   const page=await api('/tasks/'+encodeURIComponent(task.id)+'/diagnostics?limit=20'+(cursor?'&after='+encodeURIComponent(cursor):''));
-   if(workerDiagnosticsDialog!==dialog)return;
+   const page=await api('/tasks/'+encodeURIComponent(task.id)+'/diagnostics?limit=20'
+    +(target?'&subscriptionId='+encodeURIComponent(target):'')+(cursor?'&after='+encodeURIComponent(cursor):''));
+   if(workerDiagnosticsDialog!==dialog||sequence!==requestSequence)return;
    const list=text('ul');
    for(const item of page.events){
     const label=t('diagnostic_'+item.event)+(item.phase?' · '+t('fault_'+item.phase):'');
@@ -417,7 +440,7 @@ function openWorkerDiagnostics(task){
     const more=text('button',t('diagnosticsOlder'),'quiet');
     more.onclick=()=>load(page.nextCursor);content.append(more);
    }
-  }catch(error){if(workerDiagnosticsDialog===dialog)content.replaceChildren(text('p',error.message,'callout warning'));}
+  }catch(error){if(workerDiagnosticsDialog===dialog&&sequence===requestSequence)content.replaceChildren(text('p',error.message,'callout warning'));}
  }
  load();
 }
@@ -546,7 +569,17 @@ $('login-form').addEventListener('submit',e=>{
  e.preventDefault();const credential=$('token').value;$('token').value='';signIn(credential).catch(()=>{});
 });
 $('login-dialog').addEventListener('cancel',e=>e.preventDefault());$('logout').onclick=()=>{forgetSession();showLogin();sessionChannel?.postMessage({type:'signed-out'});queueAuth(revokeBrowserSession).catch(error=>notify(error.message));};$('language').onclick=()=>{lang=lang==='zh'?'en':'zh';localStorage.setItem('rivomesh-language',lang);translate();};
-function view(name){activeView=name;for(const item of ['tasks','adapters','nodes']){$(item+'-view').classList.toggle('hidden',name!==item);$(item+'-nav').classList.toggle('active',name===item);}$('page-title').textContent=t(name);}
+function view(name){
+ activeView=name;
+ for(const item of ['tasks','adapters','nodes']){
+  const current=name===item, navigation=$(item+'-nav');
+  $(item+'-view').classList.toggle('hidden',!current);
+  navigation.classList.toggle('active',current);
+  if(current)navigation.setAttribute('aria-current','page');
+  else navigation.removeAttribute('aria-current');
+ }
+ $('page-title').textContent=t(name);
+}
 
 Object.assign(messages.zh,{runtime:'运行核心',targetId:'目标标识',addTarget:'+ 添加目标实例',removeTarget:'移除此目标',journal:'持久日志',journalMode:'日志方式',journalLocal:'本机持久卷（无需独立数据库）',journalExternal:'外部事务数据库（多节点共享）',journalHelp:'本机日志由控制台放在私有目录；跨主机接管请选择外部日志。配额包含快照和无主键身份负载，数据库物理空间需另留余量。',journalQuota:'逻辑负载配额（MiB）',subscriptions:'目标投递状态',acknowledged:'已确认事务序号',resume_target:'恢复此目标',TARGET_RESUME_REQUESTED:'已允许该目标重试原事务。',PARTIAL_FAILURE:'部分目标暂停',ERROR:'源端已阻断',DISCOVERY:'发现对象',PAUSE_PENDING_TARGET_FENCE:'共享暂停已保存，部分目标的隔离尚未确认。',LOCAL_JOURNAL_MIGRATION_REQUIRED:'本机日志只能使用控制台托管目录。导入旧 CLI 日志需要迁移计划；新建任务请删除 journal.path，外部日志不受此限制。',databaseListInvalid:'请使用逗号分隔不同的 database；每项不能为空。',targetIdDuplicate:'每个目标需要不同的标识。',v3SourceRequirements:'V3 支持有主键和无主键 InnoDB、JSON、受支持的存储/虚拟生成列。仍需 GTID、ROW/FULL 和全量短锁权限。',sourceDatabase:'源 database（V3 可用逗号分隔多个）',targetHelp:'逐库填写目标 schema/database；可添加多个目标实例。当前支持 Gauss、PostgreSQL、MySQL，先检查再启动。',currentLimit:'V3 的每个目标独立投递和恢复；已有表首次要求为空。业务 UNIQUE 会转换为普通索引，接管前需要校验和恢复约束。V2 保留原单库单目标行为。',step1:'02 · 目标与日志',previewScope:'MySQL → 多种事务目标'});
 Object.assign(messages.en,{runtime:'Runtime',targetId:'Target ID',addTarget:'+ Add target instance',removeTarget:'Remove target',journal:'Durable journal',journalMode:'Journal mode',journalLocal:'Local persistent volume',journalExternal:'External transactional database',journalHelp:'Local journals use a private managed directory. Choose external storage for cross-host takeover. Logical quota includes snapshots/keyless identities; allow additional physical database space.',journalQuota:'Logical payload quota (MiB)',subscriptions:'Target deliveries',acknowledged:'Acknowledged transaction sequence',resume_target:'Resume this target',TARGET_RESUME_REQUESTED:'This target may retry its original transaction.',PARTIAL_FAILURE:'Target paused',ERROR:'Source blocked',DISCOVERY:'Discovering objects',PAUSE_PENDING_TARGET_FENCE:'Shared pause saved; some target fences remain unconfirmed.',LOCAL_JOURNAL_MIGRATION_REQUIRED:'Local journals must use the console-managed directory. Existing CLI journals need a migration plan; omit journal.path for new tasks. External journals are unaffected.',databaseListInvalid:'Use comma-separated, distinct, nonempty database names.',targetIdDuplicate:'Each target needs a distinct ID.',v3SourceRequirements:'V3 supports keyed/keyless InnoDB, JSON and supported stored/virtual generated columns. GTID, ROW/FULL and short snapshot-lock privileges are required.',sourceDatabase:'Source databases (comma-separated in V3)',targetHelp:'Map each database explicitly and add target instances. Current products are Gauss, PostgreSQL and MySQL. Check before starting.',currentLimit:'V3 targets deliver and recover independently. Initial existing tables must be empty. Business UNIQUE becomes ordinary indexes; validate/restore constraints before takeover. V2 retains its single-database core.',step1:'02 · Targets & journal',previewScope:'MySQL → Transactional targets'});

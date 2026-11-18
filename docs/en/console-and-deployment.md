@@ -129,6 +129,8 @@ Optionally run npm ci --prefix tests/ui --ignore-scripts and npm test --prefix t
 After building, python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT checks Helm/native parity, nonroot image, authentication, file permissions, request replay, and volume recovery. It removes only its own containers/volumes and never deploys into user Kubernetes clusters.
 A Chrome smoke test opens the real console, signs in with the keyboard, verifies session restoration after reload and checks the accessible diagnostics dialog and mobile viewport. Broader workflows and browsers have separate acceptance. [Browser record](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)
 
+The console uses the Rivomesh website wordmark and its light and dark palettes. It follows the browser's system preference until you choose an appearance with the moon or sun control in the navigation. Your browser remembers that choice. Keyboard users can use the first link, **Skip to main content**, to bypass navigation.
+
 ## Individual access roles
 
 Use [platform-rbac.yml](../../config/platform-rbac.yml) instead of the shared-token example, set its three token environment variables, then run `java -jar rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform-rbac.yml`. Each token must be distinct printable ASCII, 24–4096 characters; unresolved environment references are rejected. At most 32 configured users are accepted, with unique IDs and at least one ADMIN. Tokens are not passwords. Browser sign-in exchanges the token for a revocable short-lived session that survives reload; see [sessions, HTTPS/CSRF and sign-out](browser-sessions.md).

@@ -9,6 +9,7 @@ public final class FailureDiagnostics {
         targetFailure("TARGET_PAUSED",target,code,failure);
     }
     public static void targetRetrying(String target,String code,Throwable failure){targetFailure("TARGET_RETRYING",target,code,failure);}
+    public static void targetRetryCleared(String target){System.err.println("TARGET_RETRY_CLEARED "+target);}
     private static void targetFailure(String state,String target,String code,Throwable failure){
         System.err.println(state+" "+target+" "+code);
         Set<Throwable> seen=Collections.newSetFromMap(new IdentityHashMap<Throwable,Boolean>());

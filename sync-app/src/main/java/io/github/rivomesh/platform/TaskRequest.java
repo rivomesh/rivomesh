@@ -45,7 +45,7 @@ final class TaskRequest {
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}
         if(kind==Kind.VALIDATION_REPORTS&&(cursor==null||!cursor.isEmpty()&&!cursor.matches("[0-9]{1,18}_[a-f0-9-]{36}")
                 ||limit<1||limit>25))throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
-        if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit);
+        if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit,subscriptionId);
         if(kind==Kind.CAPTURE_EXCLUSIONS&&(cursor==null||!cursor.isEmpty()&&!cursor.matches("[A-Za-z0-9_-]{8,128}")
                 ||limit<1||limit>25))throw new IllegalArgumentException("CAPTURE_EXCLUSION_PAGE_INVALID");
         if(captureRetention()&&(errorCount<0||subscriptionId!=null||reference==null||!reference.matches("[0-9a-f]{64}")))

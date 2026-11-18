@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.37",
+  "version": "0.38",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -180,8 +180,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口已验证采集租约、重启后的脱敏分页、按任务/节点过滤及独立目标积压。界面支持目标选择。真实时间延迟、按目标日志及容量档案待验收。",
-        "en": "Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain."
+        "zh-CN": "双入口实测采集租约、脱敏分页、任务/节点过滤、目标积压，以及 Agent 重启后的独立目标暂停、重试和恢复记录。仍需源提交至目标确认的时间样本和容量档案。",
+        "en": "Both entries passed lease views, redacted paging, filters, per-target backlog and independent target pause/retry/recovery through Agent restart. Source-commit-to-target timing samples and capacity remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",

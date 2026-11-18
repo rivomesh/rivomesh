@@ -1,5 +1,6 @@
 package io.github.rivomesh.cdc;
 
+import io.github.rivomesh.FailureDiagnostics;
 import java.sql.SQLException;
 import java.util.*;
 
@@ -45,15 +46,21 @@ public final class FanoutDispatcher {
                     projected=normalizeProject(sink,records.get(0),diagnostic);diagnostic.phase=SubscriberFailure.Phase.RECONCILE;
                     if(!projected.id.equals(checkpoint.transactionId)||!Codec.sha256(Codec.encode(projected)).equals(checkpoint.transactionHash))throw new IllegalStateException("COMMITTED_SINK_CONTENT_MISMATCH");
                     diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;
-                    acknowledge(sink.id(),checkpoint.sequence);start=1;applied++;
+                    acknowledge(sink.id(),checkpoint.sequence,false);start=1;applied++;
                 }
                 for(int i=start;i<records.size();i++){
                     if(Thread.currentThread().isInterrupted())throw new InterruptedException("SUBSCRIBER_STOPPED");
                     Journal.Record record=records.get(i);projected=null;projected=normalizeProject(sink,record,diagnostic);
                     diagnostic.phase=SubscriberFailure.Phase.TARGET_APPLY;sink.apply(lease.epoch,record.sequence,projected);
-                    diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;acknowledge(sink.id(),record.sequence);applied++;
+                    diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;
+                    boolean observed=sink.consistency()==SinkAdapter.Consistency.TRANSACTIONAL
+                            &&projected.kind==SourceTransaction.Kind.DATA&&!projected.changes.isEmpty();
+                    acknowledge(sink.id(),record.sequence,observed);applied++;
                 }
-                if(sub.errorCode!=null||retryAfter.containsKey(sink.id()))retrying(sink.id(),null);
+                if(sub.errorCode!=null||retryAfter.containsKey(sink.id())){
+                    retrying(sink.id(),null);
+                    FailureDiagnostics.targetRetryCleared(sink.id());
+                }
                 states.put(sink.id(),"RUNNING");retryAfter.remove(sink.id());
             }catch(JdbcJournal.Fenced failure){throw failure;}
             catch(InterruptedException stopped){throw stopped;}
@@ -61,8 +68,20 @@ public final class FanoutDispatcher {
                 // Source normalization faults stop the whole stream; target faults only pause that subscriber.
                 // Transformer failures are tagged below and must never be mistaken for a target SQL failure.
                 if(failure instanceof NormalizationFailure||failure instanceof JournalFailure)throw failure;
-                String code=errorCode(failure);if(retryable(failure)){if(code.equals("TARGET_APPLY_ERROR"))code="TARGET_CONNECTION_RETRY";if(!"RETRYING".equals(states.get(sink.id()))||!Objects.equals(sub.errorCode,code))io.github.rivomesh.FailureDiagnostics.targetRetrying(sink.id(),code,failure);retrying(sink.id(),code);retryAfter.put(sink.id(),System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(2));states.put(sink.id(),"RETRYING");}
-                else{if(projected!=null)diagnostic.projectedHash=Codec.sha256(Codec.encode(projected));journal.pauseFailure(lease,sink.id(),code,diagnostic);states.put(sink.id(),"PAUSED");io.github.rivomesh.FailureDiagnostics.targetPaused(sink.id(),code,failure);}
+                String code=errorCode(failure);
+                if(retryable(failure)){
+                    if(code.equals("TARGET_APPLY_ERROR"))code="TARGET_CONNECTION_RETRY";
+                    retrying(sink.id(),code);
+                    if(!"RETRYING".equals(states.get(sink.id()))||!Objects.equals(sub.errorCode,code))
+                        FailureDiagnostics.targetRetrying(sink.id(),code,failure);
+                    retryAfter.put(sink.id(),System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(2));
+                    states.put(sink.id(),"RETRYING");
+                }else{
+                    if(projected!=null)diagnostic.projectedHash=Codec.sha256(Codec.encode(projected));
+                    journal.pauseFailure(lease,sink.id(),code,diagnostic);
+                    states.put(sink.id(),"PAUSED");
+                    FailureDiagnostics.targetPaused(sink.id(),code,failure);
+                }
             }
         }
         return applied;
@@ -79,7 +98,13 @@ public final class FanoutDispatcher {
         public JournalFailure(Phase phase,Exception cause){super(phase,cause);}
     }
     private List<Journal.Record> read(String subscription,int limit)throws Exception{try{return journal.read(subscription,limit);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
-    private void acknowledge(String subscription,long sequence)throws Exception{try{journal.acknowledge(lease,subscription,sequence);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_ACK,failure);}}
+    private void acknowledge(String subscription,long sequence,boolean applied)throws Exception{
+        try{
+            if(applied)journal.acknowledgeApplied(lease,subscription,sequence);
+            else journal.acknowledge(lease,subscription,sequence);
+        }catch(JdbcJournal.Fenced failure){throw failure;}
+        catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_ACK,failure);}
+    }
     private void retrying(String subscription,String code)throws Exception{try{journal.retrying(lease,subscription,code);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
     public static Transformer sourceTransformer(Transformer transformer){return record->{try{return transformer.normalize(record);}catch(Exception failure){if(failure instanceof JdbcJournal.Fenced)throw failure;throw new NormalizationFailure(failure);}};}
     private static boolean retryable(Exception failure){return io.github.rivomesh.Sql.retryable(failure);}

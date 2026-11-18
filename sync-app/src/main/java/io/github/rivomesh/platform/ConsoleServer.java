@@ -50,12 +50,21 @@ public final class ConsoleServer implements AutoCloseable {
             if(agentOnly){error(exchange,404,"AGENT_PROBE_ONLY");return;}
             if(!path.startsWith("/api/")) {
                 if(!method.equals("GET")){error(exchange,405,"METHOD_NOT_ALLOWED");return;}
-                String resource=path.equals("/")?"index.html":path.equals("/app.js")?"app.js":path.equals("/configuration-editor.js")?"configuration-editor.js":path.equals("/accounts.js")?"accounts.js":path.equals("/validation.js")?"validation.js":path.equals("/recovery.js")?"recovery.js":path.equals("/audit.js")?"audit.js":path.equals("/app.css")?"app.css":null;
+                String resource=switch(path) {
+                    case "/" -> "index.html";
+                    case "/app.js","/theme.js","/configuration-editor.js","/accounts.js","/validation.js",
+                         "/recovery.js","/audit.js","/app.css","/brand/favicon.svg","/brand/wordmark.svg",
+                         "/brand/wordmark-light.svg" -> path.substring(1);
+                    default -> null;
+                };
                 if(resource==null){error(exchange,404,"NOT_FOUND");return;}
                 try(InputStream in=getClass().getResourceAsStream("/console/"+resource)) {
                     if(in==null){error(exchange,404,"NOT_FOUND");return;}
                     byte[] bytes=read(in,2*1024*1024);
-                    headers.set("Content-Type",resource.endsWith(".js")?"application/javascript; charset=utf-8":resource.endsWith(".css")?"text/css; charset=utf-8":"text/html; charset=utf-8");
+                    String contentType=resource.endsWith(".js")?"application/javascript; charset=utf-8"
+                            :resource.endsWith(".css")?"text/css; charset=utf-8"
+                            :resource.endsWith(".svg")?"image/svg+xml":"text/html; charset=utf-8";
+                    headers.set("Content-Type",contentType);
                     exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);return;
                 }
             }
@@ -158,10 +167,12 @@ public final class ConsoleServer implements AutoCloseable {
             }
             if(parts.length==4&&parts[1].equals("api")&&parts[2].equals("tasks")&&method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.VIEW,parts[3],principal));return;}
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("diagnostics")&&method.equals("GET")){
-                Map<String,String> query=nodeQuery(exchange.getRequestURI().getRawQuery());
+                Map<String,String> query=pageQuery(exchange.getRequestURI().getRawQuery(),512,"DIAGNOSTICS_PAGE_INVALID",
+                        Arrays.asList("after","limit","subscriptionId"));
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.DIAGNOSTICS,parts[3]);
                 request.cursor=query.getOrDefault("after","");
                 request.limit=Integer.parseInt(query.getOrDefault("limit","20"));
+                request.subscriptionId=query.get("subscriptionId");
                 json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("capture-recovery")&&method.equals("GET")){
@@ -247,11 +258,13 @@ public final class ConsoleServer implements AutoCloseable {
     private Map<String,Object> invoke(TaskRequest.Kind kind,String task,AccessControl.Principal actor)throws Exception{return control.invoke(TaskRequest.of(kind,task),actor);}
     private static Map<String,String> nodeQuery(String raw)throws Exception{return pageQuery(raw,false);}
     private static Map<String,String> pageQuery(String raw,boolean tasks)throws Exception{
+        return tasks?pageQuery(raw,1024,"TASK_CURSOR_INVALID",Arrays.asList("after","limit","ownerNodeId","taskId"))
+                :pageQuery(raw,160,"NODE_CURSOR_INVALID",Arrays.asList("after","limit"));
+    }
+    private static Map<String,String> pageQuery(String raw,int limit,String invalid,List<String> fields)throws Exception{
         Map<String,String> result=new HashMap<>();
         if(raw==null)return result;
-        String invalid=tasks?"TASK_CURSOR_INVALID":"NODE_CURSOR_INVALID";
-        List<String> fields=tasks?Arrays.asList("after","limit","ownerNodeId","taskId"):Arrays.asList("after","limit");
-        if(raw.length()>(tasks?1024:160))throw new IllegalArgumentException(invalid);
+        if(raw.length()>limit)throw new IllegalArgumentException(invalid);
         for(String field:raw.split("&",-1)){
             String[] pair=field.split("=",-1);
             if(pair.length!=2||!fields.contains(pair[0])||result.put(pair[0],URLDecoder.decode(pair[1],"UTF-8"))!=null)

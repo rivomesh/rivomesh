@@ -129,6 +129,8 @@ Maven verify 运行单元/API 测试，tests/matrix.sh 运行 MySQL 8.0/8.4 与 
 构建镜像后执行 python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT，检查 Helm/原生清单一致性及非 root 镜像、鉴权、配置权限、重复请求和卷恢复。脚本只删除自己创建的测试容器与卷，不部署到用户 K8s 集群。
 原生 Chrome 测试打开实际控制台，验证键盘登录、刷新续登、诊断弹窗的可访问名称与移动端布局。更多操作和浏览器另行验收。[浏览器记录](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)
 
+控制台使用与 Rivomesh 官网一致的标识、浅色与深色配色。初始外观跟随浏览器的系统设置。导航栏的月亮或太阳按钮可切换外观，选择保存在当前浏览器。使用键盘时，可通过页面首个“跳到主要内容”链接略过导航。
+
 ## 独立账号与访问角色
 
 用 [platform-rbac.yml](../../config/platform-rbac.yml) 替换共享令牌示例，设置三个令牌环境变量，运行 `java -jar rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform-rbac.yml`。令牌必须各不相同，为 24–4096 位可打印 ASCII；未解析的环境变量引用会被拒绝。最多配置 32 个用户，ID 唯一，且至少保留一位 ADMIN。令牌不是密码。浏览器登录后换取可撤销的短期会话，刷新可恢复；见[会话、HTTPS/CSRF及退出处理](browser-sessions.md)。

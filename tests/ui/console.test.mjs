@@ -242,6 +242,35 @@ test('capture diagnostics pages are restricted to administrators and close on si
  }
 });
 
+test('switching diagnostic destination drops old responses and keeps the target on older pages',async()=>{
+ const task={id:'diagnose',formatVersion:3,workerState:'RUNNING',desired:'RUNNING',operations:[],
+  destinations:[{id:'pg'},{id:'mysql'}],status:{run_state:'RUNNING'}};
+ const ui=setup([task]),fallback=ui.w.fetch,now='2026-11-18T04:00:00Z';
+ let finishPostgres;
+ const reply=(event,nextCursor=null)=>({ok:true,status:200,json:async()=>({
+  ownerNodeId:'agent-a',events:[{at:now,event}],nextCursor})});
+ ui.w.fetch=async(path,options)=>{
+  if(!path.startsWith('/api/tasks/diagnose/diagnostics?'))return fallback(path,options);
+  ui.calls.push({path,...options});
+  if(path.includes('subscriptionId=pg'))return new Promise(resolve=>{finishPostgres=resolve;});
+  if(path.includes('subscriptionId=mysql'))return path.includes('after=older')
+   ?reply('TARGET_RETRYING'):reply('TARGET_RETRY_CLEARED','older');
+  return reply('CAPTURE_READY');
+ };
+ try{
+  await login(ui);ui.d.querySelector('[data-worker-diagnostics]').click();await flush();
+  const dialog=ui.d.querySelector('.worker-diagnostics'),scope=dialog.querySelector('select');
+  scope.value='pg';scope.dispatchEvent(new ui.w.Event('change'));await flush();
+  scope.value='mysql';scope.dispatchEvent(new ui.w.Event('change'));await flush();
+  finishPostgres(reply('TARGET_PAUSED'));await flush();
+  assert.match(dialog.textContent,/目标重试已结束/);
+  assert.doesNotMatch(dialog.textContent,/目标因故障暂停/);
+  dialog.querySelector('section button').click();await flush();
+  assert.ok(ui.calls.some(call=>call.path.endsWith('&subscriptionId=mysql&after=older')));
+  assert.match(dialog.textContent,/目标正在重试/);
+ }finally{ui.dom.window.close();}
+});
+
 test('validation submits explicit SQL targets and budgets without including messaging targets',async()=>{
  const task={id:'validate',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING'},operations:[],destinations:[{id:'pg',product:'POSTGRESQL',consistency:'TRANSACTIONAL'},{id:'mq',product:'KAFKA',consistency:'AT_LEAST_ONCE_EVENTS'}]};const ui=setup([task]);try{
   await login(ui);assert.equal(ui.d.querySelectorAll('[data-validation-target]').length,1);const read=ui.d.querySelector('[data-validation-limit="read"]');read.value='7200';read.dispatchEvent(new ui.w.Event('input'));ui.d.querySelector('[data-validation-action="start"]').click();await flush();

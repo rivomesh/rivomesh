@@ -34,7 +34,7 @@ parser.add_argument('--runtime-image', help='Locally built nonroot runtime image
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
-parser.add_argument('--task-views', action='store_true', help='Check global task filters and exact per-target backlog during native SQL failure')
+parser.add_argument('--task-views', action='store_true', help='Check task filters, target backlog and diagnostics with native SQL faults')
 parser.add_argument('--managed-binlog-evidence', action='store_true', help='Retain and replay source evidence through both management entries')
 parser.add_argument('--approved-binlog-exclusion', action='store_true', help='Approve a verified keyed MySQL source gap and resume without fabricating destination ACKs')
 parser.add_argument('--verify-binlog-contents', action='store_true', help='Verify the digest of native binlog bytes against the fixture file')
@@ -108,7 +108,9 @@ env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secr
            RM_GC_DATA=secrets.token_urlsafe(24), RM_GC_KEY=base64.b64encode(secrets.token_bytes(32)).decode(), RM_GC_STORE_URL='jdbc:postgresql://postgres:5432/sync_test')
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
-if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
+review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
+                       args.managed_binlog_evidence, args.task_views))
+if review_accounts:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 execution_agents = (owner_node,'node-worker-alt') if args.automatic_placement else (owner_node,) if args.separate_execution else ()
@@ -188,7 +190,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config.update(maxTasks=1,maxRunningTasks=1)
         if args.managed_failure_review or args.compensation or args.correction:
             config['cluster']['recoveryReview'] = True
-        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
+        if review_accounts:
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
         if args.managed_commit or args.compensation or args.correction:
             config['cluster']['recoveryCommit'] = True
@@ -203,7 +205,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
-        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
+        if review_accounts:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
         if args.runtime_image:
             volumes[node + '-data'] = {}
@@ -483,12 +485,54 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=99')=='0'
         assert sql('mysql-target','SELECT COUNT(*) FROM rm_my_sales.items WHERE id=99')=='1'
         passed('Only the SQL-blocked destination has a pending transaction and both management entries agree')
+        endpoint=route+'/diagnostics'
+
+        def target_events(node,subscription):
+            result=http(node,endpoint+'?subscriptionId='+subscription)
+            assert result['subscriptionId']==subscription and result['ownerNodeId']==owner_node
+            assert all(set(event)=={'at','id','event'} for event in result['events'])
+            return result['events']
+
+        paused=wait(lambda:next((entry for entry in target_events('node-a','pg')
+                                if entry['event']=='TARGET_PAUSED'),None),'PostgreSQL target fault event')
+        assert paused in target_events('node-b','pg') and target_events('node-b','my')==[]
+        http('node-b',endpoint+'?subscriptionId=pg',token=env['RM_GC_VIEWER'],expected=403)
+        http('node-b',endpoint+'?subscriptionId=../pg',expected=400)
+        assert http('node-b',endpoint+'?subscriptionId=absent',expected=409)['code']=='DIAGNOSTICS_TARGET_UNKNOWN'
+        passed('Both entries scope the redacted SQL pause event to PostgreSQL and reject unauthorized or invalid target queries')
+
         sql('postgres', 'ALTER TABLE rm_pg_sales.items DROP CONSTRAINT view_backlog')
         action('RESUME_TARGET', node='node-b', subscriptionId='pg', errorCount=pg['errorGeneration'])
         wait(rows_match, 'all actual SQL rows match after repair')
         wait(lambda: all(all(sub.get('pendingTransactions')=='0' for sub in task(node)['status']['subscriptions'])
                          for node in ('node-a','node-b')), 'both destinations caught up')
         passed('Generation-bound resume clears only the repaired destination backlog and all native rows agree')
+
+        compose('stop','--timeout','5','mysql-target')
+        sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(102,'private diagnostic row',JSON_OBJECT('n',102))")
+        retry=wait(lambda:next((entry for entry in target_events('node-a','my')
+                               if entry['event']=='TARGET_RETRYING'),None),'MySQL target retry event')
+        wait(lambda:sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=102')=='1',
+             'other destination continues during MySQL target outage')
+        compose('start','mysql-target')
+        wait(rows_match,'MySQL destination catches up after connection recovery')
+        cleared=wait(lambda:next((entry for entry in target_events('node-b','my')
+                                 if entry['event']=='TARGET_RETRY_CLEARED'),None),'MySQL target retry clears')
+        assert retry in target_events('node-b','my')
+        passed('MySQL target outage produces retry and recovery events while PostgreSQL continues to receive native CDC')
+
+        terminate_owner()
+        restart_owner()
+        wait(lambda:all(task(node).get('ownerState')=='HEALTHY' for node in ('node-a','node-b')),
+             'both entries see the restarted Agent before loading diagnostics')
+        for node in ('node-a','node-b'):
+            assert paused in target_events(node,'pg')
+            assert {retry['id'],cleared['id']} <= {entry['id'] for entry in target_events(node,'my')}
+            prior=http(node,endpoint+'?limit=1&subscriptionId=my&after='+cleared['id'])
+            assert prior['events'][0]['event']=='TARGET_RETRYING'
+            assert http(node,endpoint+'?subscriptionId=pg&after='+retry['id'],expected=409)['code']=='DIAGNOSTICS_CURSOR_EXPIRED'
+            assert all(not entry['event'].startswith('TARGET_') for entry in http(node,endpoint)['events'])
+        passed('Both management entries recover the same destination diagnostics after Agent restart with independent paging')
 
     def run_rolling_restart():
         rolls = manifest['runtimeRollout'] = {}

@@ -192,11 +192,21 @@ public final class PipelineEngine implements AutoCloseable {
                     if(dispatcher==null)try{
                         if(sink==null){if(!target.product.messaging()&&!target.product.materialized()){JdbcSink.Settings settings=config.targetSettings(target,generation);if(target.product!=TargetProduct.OCEANBASE)source.requireSeparateDatabase(settings.driver,settings.url,settings.username,settings.password);}sink=PipelineSinks.open(config,target,generation,journal,lease);}
                         SnapshotDispatcher.prepare(journal,lease,sink,schemas.values(),snapshots,()->healthy(heartbeat,capture),preparation);
-                        if(subscription.errorCode!=null)try{journal.retrying(lease,target.id,null);}catch(Exception storageFailure){throw new SourceFailure(storageFailure);}
+                        if(subscription.errorCode!=null){
+                            try{journal.retrying(lease,target.id,null);}catch(Exception storageFailure){throw new SourceFailure(storageFailure);}
+                            FailureDiagnostics.targetRetryCleared(target.id);
+                        }
                         dispatcher=new FanoutDispatcher(journal,lease,Collections.singletonList(sink),schemas,r->journal.normalize(lease,r,schemas,baselines,source::includes));
                     }catch(JdbcJournal.Fenced|SourceFailure|FanoutDispatcher.JournalFailure|InterruptedException global){throw global;}
                     catch(Exception targetFailure){
-                        if(Sql.retryable(targetFailure)){String code=errorCode(targetFailure);if(code.equals("TARGET_PREPARE_ERROR"))code="TARGET_CONNECTION_RETRY";if(!Objects.equals(subscription.errorCode,code))FailureDiagnostics.targetRetrying(target.id,code,targetFailure);journal.retrying(lease,target.id,code);Thread.sleep(config.retryDelayMillis);continue;}
+                        if(Sql.retryable(targetFailure)){
+                            String code=errorCode(targetFailure);
+                            if(code.equals("TARGET_PREPARE_ERROR"))code="TARGET_CONNECTION_RETRY";
+                            journal.retrying(lease,target.id,code);
+                            if(!Objects.equals(subscription.errorCode,code))FailureDiagnostics.targetRetrying(target.id,code,targetFailure);
+                            Thread.sleep(config.retryDelayMillis);
+                            continue;
+                        }
                         String code=errorCode(targetFailure);journal.pauseFailure(lease,target.id,code,preparation);FailureDiagnostics.targetPaused(target.id,code,targetFailure);continue;
                     }
                     int applied=dispatcher.drain(100);if(applied==0)Thread.sleep(config.pollIntervalMillis);
