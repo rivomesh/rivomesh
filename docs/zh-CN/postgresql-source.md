@@ -1,8 +1,8 @@
-# PostgreSQL 17 源端
+# PostgreSQL 源端
 
 [English](../en/postgresql-source.md)
 
-实验档案以一个 PostgreSQL 17 可写主库为源，通过原生 `pgoutput` 读取已提交事务。一个任务配置一个 PostgreSQL 数据库，`databases` 选择其中的 schema。目标映射仍通过 `targets[].mappings` 显式声明。
+实验档案以一个 PostgreSQL 17 或 18 可写主库为源，通过原生 `pgoutput` 读取已提交事务。一个任务配置一个 PostgreSQL 数据库，`databases` 选择其中的 schema。目标映射仍通过 `targets[].mappings` 显式声明。
 
 ## 配置与运行
 
@@ -18,11 +18,13 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 ## 支持边界与故障处理
 
 - 初始类型包括有符号整数、布尔、有明确精度的小数、文本、JSON/JSONB 和 BYTEA。表可有主键，也可使用完整行身份的无主键表。
-- 生成列、发布行过滤、列过滤、分区路由、TRUNCATE 及自动 DDL 迁移需要后续档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
+- PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
-- 当前档案绑定一个 PostgreSQL 17 主库与单一时间线。跨时间线切换、槽同步、共同校验点和完整驱动矩阵由 SO-06 后续任务跟踪。
+- 当前档案绑定一个 PostgreSQL 主库与单一时间线。跨时间线切换、槽同步、共同校验点和完整驱动矩阵由 SO-06 后续任务跟踪。
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
 
 已在 Java 8、11、17、21、25 上各运行七项实库检查。测试可用 `--jdk` 选择运行时。见[验收记录](../verification/README.md#postgresql-source-runtime-matrix)。
+
+PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8 通过八项实库检查，包含有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)

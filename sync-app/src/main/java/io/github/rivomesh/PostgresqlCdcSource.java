@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
-/** PostgreSQL 17 single-primary CDC using an isolated logical slot and an exported MVCC snapshot. */
+/** PostgreSQL single-primary CDC using an isolated logical slot and an exported MVCC snapshot. */
 final class PostgresqlCdcSource implements SourceAdapter {
     private static final String DRIVER="org.postgresql.Driver";
     private static final Pattern NAME=Pattern.compile("[a-z_][a-z0-9_]{0,30}");
@@ -39,7 +39,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
     private final Config.PostgresqlSource options;
     private final Set<String> namespaces;
     private final String generation,slot;
-    private final int maxRows;
+    private final int maxRows,majorVersion;
     private final String systemId,timeline;
     private final PostgresSourcePosition positions;
     private final Map<Integer,TableSchema> tables=new LinkedHashMap<>();
@@ -60,7 +60,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
             throw invalid("POSTGRESQL_SOURCE_URL_INVALID");
         if(source.nodes==null||!source.nodes.isEmpty()||!Arrays.asList("AUTO","SINGLE").contains(source.topology))
             throw invalid("POSTGRESQL_SOURCE_SINGLE_PRIMARY_REQUIRED");
-        if(source.expectedVersion!=null&&!source.expectedVersion.matches("17(\\.[0-9]{1,3})?"))
+        if(source.expectedVersion!=null&&!source.expectedVersion.matches("(17|18)(\\.[0-9]{1,3})?"))
             throw invalid("SOURCE_VERSION_PROFILE_INVALID");
         for(PipelineConfig.Target target:pipeline.targets){
             if(target!=null&&target.product!=io.github.rivomesh.cdc.TargetProduct.POSTGRESQL
@@ -82,8 +82,11 @@ final class PostgresqlCdcSource implements SourceAdapter {
                     +"current_setting('wal_level'),current_setting('server_encoding'),pg_is_in_recovery()")){
             if(!r.next()||!config.database.equals(r.getString(1)))throw invalid("POSTGRESQL_SOURCE_DATABASE_CHANGED");
             int version=r.getInt(2);
-            if(version/10000!=17||config.expectedVersion!=null&&!"17".equals(config.expectedVersion)
-                    &&!config.expectedVersion.equals("17."+version%10000))throw invalid("POSTGRESQL_SOURCE_VERSION_UNSUPPORTED");
+            majorVersion=version/10000;
+            String major=Integer.toString(majorVersion);
+            if((majorVersion!=17&&majorVersion!=18)||(config.expectedVersion!=null
+                    &&!major.equals(config.expectedVersion)&&!(major+"."+version%10000).equals(config.expectedVersion)))
+                throw invalid("POSTGRESQL_SOURCE_VERSION_UNSUPPORTED");
             if(!"logical".equals(r.getString(3))||!"UTF8".equals(r.getString(4))||r.getBoolean(5))
                 throw invalid("POSTGRESQL_LOGICAL_PRIMARY_REQUIRED");
         }
@@ -235,13 +238,21 @@ final class PostgresqlCdcSource implements SourceAdapter {
         table.database=schema;
         table.name=name;
         table.sourceEngine="POSTGRESQL";
-        try(PreparedStatement p=c.prepareStatement("SELECT attname,atttypid::text,atttypmod,attnotnull,attgenerated "
-                +"FROM pg_attribute WHERE attrelid=?::oid AND attnum>0 AND NOT attisdropped ORDER BY attnum")){
+        try(PreparedStatement p=c.prepareStatement("SELECT a.attname,a.atttypid::text,a.atttypmod,a.attnotnull,"
+                +"a.attgenerated,pg_get_expr(d.adbin,d.adrelid) FROM pg_attribute a "
+                +"LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum "
+                +"WHERE a.attrelid=?::oid AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum")){
             p.setString(1,oid);
             try(ResultSet r=p.executeQuery()){
                 while(r.next()){
-                    if(!r.getString(5).isEmpty())throw invalid("POSTGRESQL_GENERATED_COLUMN_REQUIRES_PLAN");
                     TableSchema.Column column=new TableSchema.Column();
+                    String generated=r.getString(5);
+                    if(!generated.isEmpty()){
+                        if(majorVersion<18||!"s".equals(generated)||r.getString(6)==null)
+                            throw invalid("POSTGRESQL_GENERATED_COLUMN_REQUIRES_PLAN");
+                        column.generationKind="STORED";
+                        column.generationExpression=r.getString(6);
+                    }
                     column.name=r.getString(1);
                     column.nullable=!r.getBoolean(4);
                     String type=r.getString(2);

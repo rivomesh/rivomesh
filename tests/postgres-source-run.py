@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native PostgreSQL 17 source snapshot, pgoutput, restart and missing-slot acceptance."""
+"""Native PostgreSQL source snapshot, pgoutput, restart and missing-slot acceptance."""
 import argparse
 import hashlib
 import json
@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--source-image', default='postgres:17')
+parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
 parser.add_argument('--jdk', type=int, choices=(8,11,17,21,25), default=8)
 args = parser.parse_args()
 artifact = args.artifact.resolve()
@@ -28,7 +30,9 @@ digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
 environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32))
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre'
-report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image)
+version_major='18' if args.generated else '17'
+report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
+              sourceImage=args.source_image)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -56,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
     tasks.mkdir()
     pipeline=dict(formatVersion=3,pipelineId='postgres_source',nodeId='pg-worker',databases=['sales','billing'],
                   source=dict(type='POSTGRESQL',clusterId='pg-example',topology='SINGLE',database='sync_test',
-                              username='postgres',password='${RM_PG_PASSWORD}',expectedVersion='17',
+                              username='postgres',password='${RM_PG_PASSWORD}',expectedVersion=version_major,
                               postgresql=dict(url='jdbc:postgresql://source:5432/sync_test?connectTimeout=3&socketTimeout=15',
                                               publication='rivomesh_test',slotPrefix='rivomesh_test')),
                   targets=[dict(id='pg',product='POSTGRESQL',url='jdbc:postgresql://target:5432/sync_test?connectTimeout=3&socketTimeout=15',
@@ -68,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
     (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
     (home/'platform.json').write_text(json.dumps(platform))
     database=dict(image='postgres:17',environment=dict(POSTGRES_PASSWORD='${RM_PG_PASSWORD}',POSTGRES_DB='sync_test'))
-    services=dict(source=dict(database,command=['-c','wal_level=logical','-c','max_replication_slots=8',
+    services=dict(source=dict(database,image=args.source_image,command=['-c','wal_level=logical','-c','max_replication_slots=8',
                                                 '-c','wal_sender_timeout=4000']),target=database,
                   runner=dict(image=image,entrypoint=['java','-Xmx384m','-jar','/app/rivomesh.jar'],
                               command=['serve','/fixture/platform.json'],
@@ -104,9 +108,10 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         return http(route)
 
     def equal():
+        stored=',derived' if args.generated else ''
         queries=[
-            "SELECT id,amount,active,payload::text,encode(data,'hex') FROM {schema}.items ORDER BY id",
-            "SELECT value,payload::text FROM {schema}.duplicates ORDER BY value,payload::text",
+            "SELECT id,amount,active,payload::text,encode(data,'hex')"+stored+" FROM {schema}.items ORDER BY id",
+            "SELECT value,payload::text"+stored+" FROM {schema}.duplicates ORDER BY value,payload::text",
             "SELECT id,label FROM {schema}.ledger ORDER BY id"]
         for query,schema in zip(queries,('sales','sales','billing')):
             if sql('source',query.format(schema=schema))!=sql('target',query.format(schema='copy_'+schema)):
@@ -136,6 +141,17 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
             WITH (publish='insert,update,delete');
         """)
+        metadata=json.loads(subprocess.check_output(['docker','image','inspect',args.source_image],text=True))[0]
+        report['sourceImageId']=metadata['Id']
+        if args.generated:
+            sql('source',"""
+                ALTER TABLE sales.items ADD COLUMN derived BIGINT GENERATED ALWAYS AS
+                    (CASE WHEN active THEN id*2 ELSE id*3 END) STORED;
+                ALTER TABLE sales.duplicates ADD COLUMN derived BIGINT GENERATED ALWAYS AS (value*4) STORED;
+            """)
+            check=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml',check=False)
+            assert check.returncode and 'POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED' in check.stderr
+            sql('source',"ALTER PUBLICATION rivomesh_test SET (publish_generated_columns='stored')")
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
         assert json.loads(preflight.stdout)['sourceTables']==3
         compose('up','-d','runner')
@@ -156,7 +172,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             assert healthy.code==409
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
-        passed('PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+        passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
 
         initial_lsn=initial['capture_lsn']
         sql('source','CREATE TABLE sales.unpublished(id INT); INSERT INTO sales.unpublished VALUES(1)')
@@ -174,6 +190,12 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             COMMIT""")
         require(lambda:equal() and task()['status'].get('capture_lsn')!=initial['capture_lsn'],'pgoutput transaction delivered')
         passed('A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence')
+        if args.generated:
+            assert sql('target','SELECT derived FROM copy_sales.items WHERE id=1')=='3'
+            assert sql('target','SELECT derived FROM copy_sales.duplicates ORDER BY derived')=='28\n36'
+            assert sql('target',"SELECT count(*) FROM information_schema.columns WHERE table_schema='copy_sales' "
+                        "AND column_name='derived' AND is_generated='NEVER'")=='2'
+            passed('Native stored generated columns materialize keyed and keyless updates, and missing publication coverage is refused')
 
         sql('target','ALTER TABLE copy_sales.items ADD CONSTRAINT test_stop CHECK(id<>77)')
         sql('source',"INSERT INTO sales.items VALUES(77,3.1415,true,'{}',decode('1234','hex'))")

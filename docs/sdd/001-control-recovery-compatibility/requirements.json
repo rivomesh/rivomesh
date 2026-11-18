@@ -989,8 +989,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "PostgreSQL 17.12 单主、pgoutput、LSN 续传与槽丢失拒绝已通过。生成列、主备切换、共同点核验和更广目标档案待验证。",
-        "en": "PostgreSQL 17.12 single-primary pgoutput, LSN restart and missing-slot refusal passed. Generated columns, promotion, common-cut validation and broader sinks remain."
+        "zh-CN": "PostgreSQL 17.12 与 18.7 单主、pgoutput、LSN 续传及丢槽拒绝实测通过。18.7 已支持发布的存储型生成列。主备切换、共同点对账和更广目标档案待验证。",
+        "en": "PostgreSQL 17.12 and 18.7 passed single-primary pgoutput, LSN restart and missing-slot refusal. 18.7 handles published stored generated columns. Promotion, common-cut comparison and broader target profiles remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",

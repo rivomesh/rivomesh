@@ -143,3 +143,7 @@ Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` pass
 ## Bilingual connector and API compatibility reference
 
 Combined reference SHA-256 `2dbfee089f6a7ef59296d38a6398b3a2393ef1cf045695aebec88216550e6068`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
+
+## PostgreSQL 18 stored generated columns
+
+Artifact `72357d90c1d87d99fbdf767927a0ca122286df7c7f3defc60f9abd21622b898c` passed 36 focused Java tests, eight native checks from PostgreSQL 18.7 to 17.12 and seven native PostgreSQL 17.12 regression checks on Java 8. With the PostgreSQL 18 publication enabling stored generated columns, keyed and keyless source updates changed the corresponding ordinary destination columns. A preflight without that publication coverage refused the configuration. [Reproduction](../en/postgresql-source.md) · [Manifest](baseline.json)

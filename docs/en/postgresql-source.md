@@ -1,8 +1,8 @@
-# PostgreSQL 17 source
+# PostgreSQL source
 
 [中文](../zh-CN/postgresql-source.md)
 
-This experimental profile reads committed transactions from one writable PostgreSQL 17 primary using built-in `pgoutput`. Configure one source database per task. In this profile, `databases` lists source schemas. Declare destination mappings with `targets[].mappings`.
+This experimental profile reads committed transactions from one writable PostgreSQL 17 or 18 primary using built-in `pgoutput`. Configure one source database per task. In this profile, `databases` lists source schemas. Declare destination mappings with `targets[].mappings`.
 
 ## Configure and run
 
@@ -18,7 +18,7 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 ## Profile and recovery
 
 - The initial type profile includes signed integers, booleans, bounded numeric values, text, JSON/JSONB and BYTEA. Keyed and keyless tables use full row identity.
-- Generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require further profiles. Preflight or capture reports unsupported relation changes and types.
+- PostgreSQL 18 stored generated columns can be materialized as ordinary destination columns when the publication includes them. Use `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)` and retain `REPLICA IDENTITY FULL`. PostgreSQL 17 generated columns, PostgreSQL 18 virtual generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require separate profiles. Preflight or capture reports unsupported relation changes and types.
 - Restart uses the existing LSN and snapshot when the original primary, timeline, slot and journal remain available. Resume a failed target subscription after addressing its SQL error.
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.
 - SO-06 still tracks cross-timeline promotion, synchronized slots, common-cut validation and the broader driver matrix.
@@ -26,3 +26,5 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 
 Seven native checks passed on each of Java 8, 11, 17, 21 and 25. Use `--jdk` to select the runtime. See the [verification record](../verification/README.md#postgresql-source-runtime-matrix).
+
+PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight Java 8 checks. The added fixture checks stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
