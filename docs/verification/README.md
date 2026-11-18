@@ -123,3 +123,7 @@ Artifact SHA-256 `f69e54391a22d1ff4564deb2f272a06d4850c5ea7dfe75f8f86a32601c68ee
 ## LG-10 release inventory
 
 JAR `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` and CycloneDX BOM `8361ded69144d17b670a3695ecee29bd2e303a1d088a3775e813d69bc84aba44` were compared. The inventory records 175 Maven components, 109 embedded coordinates, six without an aggregate coordinate, nine without declared license metadata, two vendor markers, and nine notice/license file hashes. See the [release inventory guide](../en/release-inventory.md).
+
+## Oracle archive coverage
+
+Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` passed seven Oracle Free 23.26.4.0.0 Java 8 checks. The probe returned a contiguous catalog interval after archive rotation and refused a wider interval containing unarchived changes. The separate LogMiner test confirmed committed transaction contents from actual redo.

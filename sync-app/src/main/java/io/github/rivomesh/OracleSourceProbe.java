@@ -27,6 +27,7 @@ final class OracleSourceProbe {
         public ConnectionSettings root,pdb;
         public String sourceId,pdbName;
         public List<String> tables;
+        public OracleArchiveWindow archiveWindow;
     }
 
     static final class ConnectionSettings {
@@ -64,6 +65,8 @@ final class OracleSourceProbe {
         try(Connection root=settings.root.connect();Connection pdb=settings.pdb.connect()){
             Authority anchor=authority(root,settings.pdbName);
             verifyPdb(pdb,settings.pdbName,anchor);
+            Map<String,Object> archive=settings.archiveWindow==null?null:
+                    settings.archiveWindow.inspect(root,anchor.resetlogsScn,anchor.currentScn);
             List<Map<String,Object>> tables=new ArrayList<>();
             for(String qualified:unique)tables.add(verifyFlashback(pdb,qualified,anchor.currentScn));
             Authority current=authority(root,settings.pdbName);
@@ -81,6 +84,7 @@ final class OracleSourceProbe {
             result.put("pdb",settings.pdbName);
             result.put("snapshotAnchor",new SourcePosition(1,"ORACLE",settings.sourceId,cursor));
             result.put("tables",tables);
+            if(archive!=null)result.put("archiveWindow",archive);
             return result;
         }
     }

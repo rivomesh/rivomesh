@@ -80,6 +80,8 @@ def main():
             GRANT SELECT ON sys.v_$database TO C##RIVO_PROBE CONTAINER=ALL;
             GRANT SELECT ON sys.v_$instance TO C##RIVO_PROBE CONTAINER=ALL;
             GRANT SELECT ON sys.v_$pdbs TO C##RIVO_PROBE CONTAINER=ALL;
+            GRANT SELECT ON sys.v_$thread TO C##RIVO_PROBE;
+            GRANT SELECT ON sys.v_$archived_log TO C##RIVO_PROBE;
             ALTER USER C##RIVO_PROBE SET CONTAINER_DATA=(CDB$ROOT,FREEPDB1) CONTAINER=CURRENT;
             ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE USER RIVO_APP NO AUTHENTICATION DEFAULT TABLESPACE USERS QUOTA 20M ON USERS;
@@ -188,6 +190,24 @@ def main():
                 assert '"VALUE"' in deletes[0][3].upper() and "'7'" in deletes[0][3], changes
                 assert int(updates[0][1]) > int(scn), changes
                 observed('LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert')
+                (options.output / 'native-synthetic-redo.json').write_text(json.dumps(changes, indent=2) + '\n')
+                document['pdb']['url'] = pdb_service
+                document['archiveWindow'] = {'startScn': scn, 'endScnExclusive': end}
+                profile.write_text(json.dumps(document))
+                coverage = json.loads(execute(*program, env=environment).stdout)['archiveWindow']
+                assert coverage['kind']=='CATALOG_CONTIGUOUS'
+                assert coverage['startScn']==scn and coverage['endScnExclusive']==end and coverage['segments']>0
+                observed('One Oracle redo thread has continuous catalog coverage for the retained SCN window')
+                sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                    INSERT INTO rivo_app.rivo_orders VALUES(3,'outside archives');
+                    COMMIT;""")
+                live_end = sql('SELECT current_scn FROM v$database;').stdout.strip()
+                assert live_end.isdecimal() and int(live_end)>int(end)
+                document['archiveWindow']['endScnExclusive'] = live_end
+                profile.write_text(json.dumps(document))
+                missing = execute(*program, env=environment, checked=False)
+                assert missing.returncode and 'ORACLE_ARCHIVE_LOG_GAP' in missing.stderr
+                observed('An unarchived part of the requested SCN window is refused')
         report['status'] = 'PASS'
     except Exception as failure:
         detail = str(failure)

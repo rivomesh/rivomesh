@@ -1227,5 +1227,22 @@
     "outsideMavenBom": 6,
     "missingDeclaredLicenses": 9,
     "noticeFiles": 9
+  },
+  "oracleArchiveCoverage": {
+    "artifactSha256": "5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "An unarchived part of the requested SCN window is refused"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0
   }
 }
