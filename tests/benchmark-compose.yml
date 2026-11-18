@@ -26,7 +26,7 @@ services:
       timeout: 5s
       retries: 60
   worker:
-    image: ${RIVOMESH_BENCH_WORKER_IMAGE:-eclipse-temurin:8-jre}
+    image: ${RIVOMESH_BENCH_WORKER_IMAGE:-eclipse-temurin:21-jre-jammy}
     cpus: ${RIVOMESH_BENCH_CPUS:-1}
     mem_limit: ${RIVOMESH_BENCH_WORKER_MEMORY:-1g}
     working_dir: /bench

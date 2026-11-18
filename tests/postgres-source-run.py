@@ -24,7 +24,7 @@ parser.add_argument('--failover', action='store_true',
                     help='Exercise a synchronized logical slot through physical standby promotion')
 parser.add_argument('--reject-old-primary', action='store_true',
                     help='After promotion, route back to the stopped original primary instead of dropping the slot')
-parser.add_argument('--jdk', type=int, choices=(8,11,17,21,25), default=8)
+parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
@@ -35,7 +35,7 @@ output.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
 environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32))
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
-image='eclipse-temurin:'+str(args.jdk)+'-jre'
+image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary)
@@ -194,7 +194,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
         matched=re.search(r'version "([^"]+)"',version.stderr)
-        assert matched and matched.group(1).startswith('1.8.' if args.jdk==8 else str(args.jdk)+'.')
+        assert matched and matched.group(1).startswith(str(args.jdk)+'.')
         report['runtimeVersion']=matched.group(1)
         metadata=json.loads(subprocess.check_output(['docker','image','inspect',image],text=True))[0]
         report['runtimeImageId']=metadata['Id']

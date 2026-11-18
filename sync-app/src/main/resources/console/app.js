@@ -72,13 +72,60 @@ async function api(path,options={}){
  const data=await r.json();if(generation!==sessionGeneration)throw new Error(t('SESSION_CHANGED'));
  if(!r.ok){const e=new Error(explain(data.code));e.code=data.code;if(r.status===401){forgetSession();if(!$('login-dialog').open)$('login-dialog').showModal();}throw e;}return data;
 }
-async function refresh(){const generation=sessionGeneration;if(!session||busy===generation)return;busy=generation;try{const recovered=await api('/session');if(session?.csrfToken&&session.csrfToken!==recovered.csrfToken)forgetSession();session=recovered;await loadTaskPage();if(!capabilities.length)capabilities=await api('/capabilities');if(globalTasks()&&can('TASK_CREATE')&&!ownerLoaded)await loadOwners();render();renderAdapters();if(activeView==='nodes')await loadNodes();$('last-refresh').textContent=new Date().toLocaleTimeString();}catch(e){notify(e.message);}finally{if(busy===generation)busy=null;}}
+async function refresh(sessionVerified=false){
+ let generation=sessionGeneration;
+ if(!session||busy===generation)return;
+ busy=generation;
+ try{
+  if(!sessionVerified){
+   const recovered=await api('/session');
+   if(session?.csrfToken&&session.csrfToken!==recovered.csrfToken){
+    forgetSession();
+    generation=sessionGeneration;
+    busy=generation;
+   }
+   session=recovered;
+  }
+  await loadTaskPage();
+  if(generation!==sessionGeneration)return;
+  if(!capabilities.length)capabilities=await api('/capabilities');
+  if(globalTasks()&&can('TASK_CREATE')&&!ownerLoaded)await loadOwners();
+  if(generation!==sessionGeneration)return;
+  render();renderAdapters();
+  if(activeView==='nodes')await loadNodes();
+  if(generation===sessionGeneration)$('last-refresh').textContent=new Date().toLocaleTimeString();
+ }catch(error){
+  if(generation===sessionGeneration)notify(error.message);
+ }finally{
+  if(busy===generation)busy=null;
+ }
+}
 let authQueue=Promise.resolve();
+let restoringSession=false;
 const sessionChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('rivomesh-session'):null;
 function queueAuth(work){const result=authQueue.then(work);authQueue=result.catch(()=>{});return result;}
 function showLogin(){if(!$('login-dialog').open)$('login-dialog').showModal();}
 if(sessionChannel)sessionChannel.onmessage=e=>{if(e.data?.type==='signed-out'){forgetSession();showLogin();queueAuth(revokeBrowserSession).catch(error=>notify(error.message));}};
-async function restoreSession(){try{session=await api('/session');$('login-dialog').close();await refresh();}catch(error){if(error.code!=='UNAUTHORIZED')notify(error.message);showLogin();}}
+function restoreSession(){
+ if(restoringSession)return;
+ const generation=sessionGeneration;
+ restoringSession=true;
+ queueAuth(async()=>{
+  if(generation!==sessionGeneration)return;
+  try{
+   session=await api('/session');
+   $('login-dialog').close();
+   await refresh(true);
+  }catch(error){
+   if(generation===sessionGeneration)notify(error.message);
+  }
+ }).finally(()=>{restoringSession=false;});
+}
+function pollConsole(){
+ if(document.hidden)return;
+ if(session)refresh();
+ else if(!$('login-dialog').open)restoreSession();
+}
 async function revokeBrowserSession(){
  // Serialize behind an outstanding login: a delayed Set-Cookie must also be revoked.
  const response=await fetch('/api/session',{credentials:'same-origin',headers:{}});
@@ -453,7 +500,8 @@ function signIn(credential){
  forgetSession();const generation=sessionGeneration;
  return queueAuth(async()=>{if(generation!==sessionGeneration)return;try{
   session=await api('/session',{method:'POST',headers:{Authorization:'Bearer '+credential}});
-  latest=await api('/tasks');$('login-dialog').close();$('login-error').textContent='';await refresh();
+  $('login-dialog').close();$('login-error').textContent='';
+  await refresh(true);
  }catch(error){if(generation===sessionGeneration||error.code==='UNAUTHORIZED')$('login-error').textContent=error.message;showLogin();throw error;}});
 }
 $('login-form').addEventListener('submit',e=>{
@@ -616,7 +664,11 @@ $('clear-task-filter').onclick=()=>{
  if(taskLoading)return;
  $('task-filter').reset();applyTaskFilters({});
 };
-$('nodes-nav').onclick=()=>{if(!can('ACCOUNT_ADMIN'))return;view('nodes');loadNodes();};$('nodes-reload').onclick=()=>loadNodes('');$('nodes-next').onclick=()=>{if(nodePage?.next)loadNodes(nodePage.next);};$('tasks-nav').onclick=()=>view('tasks');$('adapters-nav').onclick=()=>view('adapters');translate();queueAuth(restoreSession);setInterval(refresh,3000);
+$('nodes-nav').onclick=()=>{if(!can('ACCOUNT_ADMIN'))return;view('nodes');loadNodes();};$('nodes-reload').onclick=()=>loadNodes('');$('nodes-next').onclick=()=>{if(nodePage?.next)loadNodes(nodePage.next);};$('tasks-nav').onclick=()=>view('tasks');$('adapters-nav').onclick=()=>view('adapters');
+translate();
+restoreSession();
+setInterval(pollConsole,3000);
+document.addEventListener('visibilitychange',pollConsole);
 
 $('import-task').onclick=()=>{if(can('TASK_CREATE'))$('import-file').click();};
 $('import-file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file||!can('TASK_CREATE'))return;const generation=sessionGeneration;try{if(file.size>512*1024)throw new Error(lang==='zh'?'配置文件不能超过 512 KiB':'Configuration exceeds 512 KiB');const placement=ownerSelection(),yaml=await file.text();if(generation!==sessionGeneration||!can('TASK_CREATE'))return;const task=await api('/tasks',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({yaml,...placement})});selected=task.id;clearTaskPages();notify(t(globalTasks()?'accepted':'created'));await refresh();}catch(error){if(generation===sessionGeneration)notify(error.message);}finally{e.target.value='';}});

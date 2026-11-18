@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.34 · 2026-11-18 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.35 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**28 DONE、20 PARTIAL、0 NEW，20 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、五 JDK 真实进程与源目标故障阶段已验收。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**28 DONE、20 PARTIAL、0 NEW，20 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、Temurin 21 真实进程与源目标故障阶段已验收。
 
 ## 1. 当前基线
 
@@ -18,7 +18,7 @@ RM-SDD-001 · v0.34 · 2026-11-18 · 实施中：推进事务跳过与缺口
 | 2 登录保持 | SE-01～SE-05 | 0 |
 | 3 跳过与补数据 | RC-01～RC-10 | 5 |
 | 4 源版本/PG/Oracle | SO-01～SO-07 | 7 |
-| 5 五个Java版本 | JV-01～JV-04 | 4 |
+| 5 Java 21 运行基线 | JV-01～JV-04 | 4 |
 | 6 完整文档 | DO-01～DO-05 | 5 |
 | 既有范围合并保留 | LG-01～LG-10 | 10 |
 
@@ -30,7 +30,7 @@ RM-SDD-001 · v0.34 · 2026-11-18 · 实施中：推进事务跳过与缺口
 2. 登录状态刷新后保持；退出、失效和权限撤销仍必须有效。
 3. 遇到同步故障，有经审阅的人工跳过、补数据及重试路径；普通自动恢复继续默认不跳过。
 4. 源端必须纳入 MySQL5.7/8.0/8.2/8.4、PostgreSQL、Oracle；PG/Oracle从“未来预留”升级为本次承诺范围。
-5. Java8/11/17/21/25都要有实际运行证据，不能只看编译级别或镜像标签。
+5. 首版统一 Temurin 21 LTS，记录实际 JVM、架构和包 SHA。
 6. 完整中英文文档、场景和FAQ；既有多库显式映射、同源多目标、产品覆盖、可选日志、四类部署和政企迁移目标继续保留。
 
 ## 3. 多节点设计提案
@@ -75,14 +75,14 @@ RM-SDD-001 · v0.34 · 2026-11-18 · 实施中：推进事务跳过与缺口
 |---|---|---|
 | MySQL5.7 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR | 实际日志缺失保留断点 | 限定档案通过 |
 | MySQL8.0 | 8.0.46历史V2/HA等证据 | 当前发布V3和新增恢复能力补验 |
-| MySQL8.2 | 8.2.0 的 Java 8 V3 三种拓扑实库通过 | 其他 JDK 由 JV-02 跟踪 |
+| MySQL8.2 | 8.2.0 的 Java 8 V3 三种拓扑实库通过 | Java 21 其余组合由 JV-02 跟踪 |
 | MySQL8.4 | 代表性V3/恢复已验收 | 扩展认证、日志特性、拓扑、目标和JDK矩阵 |
 | PostgreSQL | SOURCE目录为PLANNED | 一致性快照/LSN/逻辑槽、事务和源切换；PG目标支持不算源支持 |
 | Oracle | SOURCE目录为PLANNED | 路线、版本、权限及分发条件；SCN/redo/归档、事务、类型及恢复 |
 
 PG使用复制槽导出快照与流位置衔接；槽恢复可能重发，因此需去重。主备续传能力与确切版本及槽同步条件有关，不能泛化到全部版本。[PG逻辑解码](https://www.postgresql.org/docs/18/logicaldecoding-explanation.html)、[PG故障切换](https://www.postgresql.org/docs/18/logical-replication-failover.html)。Oracle方案须区分源数据库及incarnation，不能只存一个数字SCN，见[Oracle19 LogMiner会话字段](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html)。以上为设计依据，不是新增连接器已经实现。
 
-Java矩阵必须绑定候选包SHA、实际JVM/架构、驱动、源版本/模式、目标、日志、权限/TLS与负载。每个批准的源档案至少与五JDK执行全量、增量、重启和内容验证。若首批为四条MySQL版本档案+一个PG档案+一个Oracle档案，最低为30个“源档案×JDK”基线组合；这不是所有目标、类型、HA和安全用例的总数。更细矩阵按已批准档案扩展，未跑/失败/实验/不支持状态必须分别展示。
+实库验收记录包 SHA、实际 Temurin 21 版本、架构、驱动、源和目标版本、日志、权限/TLS 与负载。每个批准的源档案核对全量、增量、重启和内容一致性。历史验收保存在验证记录，当前待办按 Java 21 上的连接器与恢复组合推进。
 
 ## 7. 建议实施顺序，不是工期承诺
 

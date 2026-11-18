@@ -37,7 +37,7 @@ def main():
         args = ["docker", "run", "-d", "--init", "--name", name, "--stop-timeout", "30", "--publish", "127.0.0.1::8080", "--mount", "type=bind,src=" + str(ROOT) + ",dst=/project", "--workdir", "/project", "--env", "RIVOMESH_AUDIT_DIR=/project/" + str(relative)]
         for variable in tokens:
             args.extend(["--env", variable])
-        args.extend(["maven:3.9-eclipse-temurin-8", "bash", "-ec", "mkdir -p target/audit-native-classes && javac -cp sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar -d target/audit-native-classes tests/audit/AuditServerAcceptance.java && exec java -Xmx256m -cp sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar:target/audit-native-classes io.github.rivomesh.acceptance.AuditServerAcceptance"])
+        args.extend(["maven:3.9-eclipse-temurin-21", "bash", "-ec", "mkdir -p target/audit-native-classes && javac -cp sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar -d target/audit-native-classes tests/audit/AuditServerAcceptance.java && exec java -Xmx256m -cp sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar:target/audit-native-classes io.github.rivomesh.acceptance.AuditServerAcceptance"])
         subprocess.check_output(args, cwd=ROOT, env=environment, text=True, stderr=subprocess.STDOUT)
         created = True
         base = "http://" + command("docker", "port", name, "8080/tcp").splitlines()[0]

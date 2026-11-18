@@ -1,6 +1,6 @@
 # 控制台、多任务与部署
 
-更新：2026-11-17。English: [Console and deployment](../en/console-and-deployment.md)。本页描述已实现功能；完整规划见[平台方案](platform-design.md)。
+更新：2026-11-18。English: [Console and deployment](../en/console-and-deployment.md)。本页描述已实现功能；完整规划见[平台方案](platform-design.md)。
 
 ## 运行边界
 
@@ -11,6 +11,8 @@ Web 工作台支持中英文切换、创建向导、连接/源对象检查、启
 默认控制范围为本机；可选 `cluster.sharedAccess=true`、`cluster.sharedTasks=true` 启用固定owner全局任务控制。任一入口可管理授权的远程任务，并区分持久接受、实际结果和未知状态。启用、独立目录/密钥、升级拒绝及Helm/原生双节点配置见[全局控制手册](global-control.md)。自动跨节点执行接管仍未完成。
 
 ## 本机启动
+
+构建和运行使用 Temurin 21 LTS。
 
 ```bash
 mvn -s build/settings.xml verify
@@ -193,8 +195,6 @@ python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
 
 附加节点故障档案在隔离的 Minikube 集群停止一个 worker，数据库保留在控制节点。原 worker 恢复后，任务挂载同一个卷并以更高日志租约继续增量。追加 `--worker-outage-node <测试 worker>` 可运行原生 YAML 故障档案。
 
-### 混合 Java 运行时滚动更换
+### Java 21 部署
 
-同一个 Java 8 构建包可运行在 Temurin 8、11、17、21 和 25。Linux 服务使用选定 JRE 的绝对 Java 路径。Docker 构建通过 `JAVA_IMAGE` 选择 JRE，并在部署中锁定镜像摘要。Helm values 或原生 Kubernetes 工作负载引用结果镜像。Agent 和受监督 Worker 使用 Agent 选定的同一运行时，并核对厂商驱动兼容性。
-
-实库混部档案启动 Java 8 和 21 两个 Controller，Agent 和 Worker 使用 Java 11。保留 Java 21 管理入口，更换另一个 Controller 为 Java 25。新 Controller 能读取原操作记录后，停止 Agent 上的任务，确认 Worker 退出及租约释放或过期，并记录 GTID 和目标快照。以同一节点身份、同一持久化目录重开 Java 17 Agent，确认原停止结果和断点可见，再由任一 Controller 启动任务。核对两个目标的实际内容及快照 ID。该流程在同一个应用包上更换 Java 运行时。应用版本回退、按 JDK 或驱动自动调度另行验收。[实库证据](../verification/README.md#mixed-java-rollout)
+Docker 默认使用 Temurin 21 构建镜像和 Temurin 21 JRE。Helm 和原生 Kubernetes 使用构建出的应用镜像。Linux 上确认服务使用的 Java 可执行文件报告 Java 21。滚动替换应用时保留一个管理入口，逐个核对任务断点和执行租约。记录镜像摘要、Java 版本和应用包 SHA。

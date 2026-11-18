@@ -1,6 +1,6 @@
 # Rivomesh requirements, decisions, and implementation boundaries
 
-Updated: 2026-11-16. 中文：[需求与决策](../zh-CN/requirements-and-decisions.md).
+Updated: 2026-11-18. 中文：[需求与决策](../zh-CN/requirements-and-decisions.md).
 
 This document records scope and implementation status. **Accepted requirements are not released features.** See the [README](../../README.md) for current operation and [platform design](platform-design.md) for capabilities and scenarios.
 
@@ -13,27 +13,27 @@ New/clarified scope and gaps use [SDD baseline RM-SDD-001](../sdd/001-control-re
 | D01 | Each independent task configuration binds one logical source, initially MySQL; the platform may manage multiple configurations/independent sources, with standalone task deployment retained | Web/CLI support v2/v3, multi-database/target wizard, independent recovery and journal selection |
 | D02 | Select multiple databases per topology with explicit target instance/database/schema mappings | Web/CLI v3 implement `databases` and per-target `mappings`; see V3 manual |
 | D03 | Fan out one source to multiple targets/products | Web/CLI v3 implement independent target ACKs, fault isolation and recovery |
-| D04 | Support MySQL5.7/8.0/8.2/8.4 sources;accept standalone/GTID ASYNC/single-primary MGR per profile | Basic5.7,historical8.0 V2/HA and representative8.4 V3 evidence exist;8.2.0 Java 8 V3 passes all three topologies. The broader matrix remains open |
-| D05 | Broad MySQL,PostgreSQL,openGauss,distributed GaussDB,DM,Kingbase,OceanBase and GBase product/version/mode scope | Specified initial MySQL/PG/openGauss/DM/Kingbase/GBase8c profiles exist;distributed GaussDB,full OceanBase recovery,GBase8a/8s and more modes remain |
+| D04 | Validate MySQL 5.7, 8.0, 8.2 and 8.4 as standalone, asynchronous GTID and single-primary MGR sources | All four versions have archived native topology profiles. Java 21 verification expands by connector and recovery case |
+| D05 | Cover MySQL, PostgreSQL, openGauss, distributed GaussDB, DM, Kingbase, OceanBase and GBase | OceanBase CE in MySQL mode passed outage and SQL recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s need native verification |
 | D06 | Relax Gauss business secondary UNIQUE to ordinary indexes, avoiding GSI solely for those indexes; permit relaxation for compatibility issues on other targets | V3 ordinary secondary indexes/business UNIQUE downgrade implemented; GSI has model plans; distributed hardware acceptance pending |
 | D07 | Only the synchronization service writes subscribed target tables; validate and restore required constraints before takeover | Exclusive writes currently required; takeover workflow planned |
-| D08 | Automatic recovery does not skip;manual skip/compensation requires review,original evidence and gaps;database promotion stays external | Some ASYNC/MGR/worker takeover and original-transaction retry pass;manual skip/failed-transaction compensation are not implemented |
-| D09 | Linux manual, Docker, Kubernetes Helm Chart and native manifests, comprehensive bilingual manuals/FAQ | Deployment files and bilingual operations manual provided; live K8s/full-platform acceptance remain |
+| D08 | Automatically retry from the original checkpoint. Manual skip and compensation require evidence and a durable gap. Database HA performs primary promotion | Native MySQL promotion and resume, destination skip, bounded source exclusion, compensation and typed correction are verified |
+| D09 | Ship Linux, Docker, Helm and native Kubernetes instructions with bilingual manuals and FAQ | Both Kubernetes formats passed two-node image replacement, same-volume remount and CDC continuation. External-journal stale Worker fencing passed |
 | D10 | Final name Rivomesh, directory `rivomesh`, Java package/Maven groupId `io.github.rivomesh` | Renamed in this change; no claim of domain/trademark clearance or Apache status |
 | D11 | Include no-PK tables, JSON, and STORED/VIRTUAL generated columns in first-release scope | V3 keyless multisets, JSON, STORED and whitelisted VIRTUAL materialization implemented/tested |
 | D12 | Optional independent log storage; deployment with or without it | V3 H2 local and PostgreSQL/openGauss/MySQL external journals with independent ACKs/safe reclamation implemented |
 | D13 | Broad support for existing nonempty targets, object differences, and takeover | Initial targets must be empty;COMMON_CUT repair exists while nonempty adoption/merge remains pending |
 | D14 | Publish reproducible hardware/workload/performance standards instead of universal TPS promises | Benchmark tooling and small SQL/JDK smoke evidence exist;representative capacity standards and soak remain |
-| D15 | Complete bilingual UI,wizards,diagnostics and guided recovery | Local workbench,grants,configuration,validation and MySQL/PG COMMON_CUT repair exist;global control,persistent login,skip/patch and cutover remain |
+| D15 | Provide a bilingual console, wizards, diagnostics and guided recovery | Cross-entry control, cookie reload, three source forms, reviews, skips and correction are available. Nonempty adoption and automatic Agent placement are open |
 | D16 | Government/enterprise domestic-database migration, staged switching, and parallel environments | One-way mirroring is the foundation; ownership/takeover/failback boundaries in platform design |
-| D17 | ClickHouse,Apache Doris,Apache Hive and extensible analytical destinations | All three have initial materialization/recovery profiles;cluster/security/capacity/all-JDK gates remain without relational-transaction promises |
+| D17 | Support ClickHouse, Doris, Hive and future analytical connectors | Initial materialization and recovery profiles exist for all three. Cluster, TLS, capacity and Java 21 coverage remain |
 | D18 | Kafka,Pulsar,RabbitMQ,RocketMQ,ActiveMQ Classic/Artemis,Redis Streams and NATS JetStream | All have initial transport/recovery evidence;complete cluster/TLS/capacity and new skip/compensation protocols need per-adapter acceptance |
-| D19 | PostgreSQL and Oracle sources are committed implementation scope,with neutral SPI/events/positions retained | Actual sources remain MySQL;PG/Oracle SOURCE is PLANNED and native snapshot/CDC/recovery remains |
-| D20 | Unified multi-node inventory/control;any entry manages remote tasks | Worker lease/owner foundations exist;global registry,remote command plane and control HA do not |
-| D21 | Login survives reload with logout,expiry,revocation and cross-controller policy | Current token is page-memory-only;server sessions/reload restoration remain |
-| D22 | Reviewed transaction skip,controlled source-gap recovery and guided manual corrective data | COMMON_CUT repair is not failed-transaction compensation;new modes,gap ledger and UI/API remain |
-| D23 | Java8/11/17/21/25 require real current-release profile evidence | Java8 baseline and an older ten-profile SQL matrix exist;complete current-platform/driver/recovery matrix remains |
-| D24 | Use SDD specification/design/task/acceptance tracing and complete bilingual docs | RM-SDD-001 v0.2 closes4single-controller session requirements;44remain tracked |
+| D19 | PostgreSQL and Oracle sources share the neutral SPI, event model and source coordinates | PostgreSQL passed native snapshot, logical CDC and synchronized-slot promotion. Oracle passed single-PDB archived CDC and SCN recovery |
+| D20 | Manage authorized remote tasks from any management entry | Shared node inventory, configuration and durable command routing are available. Stale Worker isolation passed. Automatic Agent placement remains |
+| D21 | Preserve login on reload with logout, expiry, revocation and cross-entry sessions | HttpOnly sessions passed actual Chrome reload and logout checks. Cross-entry shared sessions are verified |
+| D22 | Review transaction skips, source gaps and manual corrective data while retaining evidence | Native evidence covers destination skip, a keyed MySQL source exclusion and reviewed correction. Each runbook describes its supported profile |
+| D23 | Use Eclipse Temurin 21 LTS for the first release | Java 21 bytecode, actual Controller/Agent/Worker and dual-target resume passed. Acceptance expands by source, target, driver and deployment topology |
+| D24 | Trace requirements, design, tasks and acceptance in SDD and maintain bilingual manuals | Use current requirements.json, task and acceptance documents and the hourly progress record |
 
 The platform boundary is **one source per task, multiple tasks per platform**. No implicit source merging or cross-source transactions. Isolated workers may run under one console or as separate deployments.
 

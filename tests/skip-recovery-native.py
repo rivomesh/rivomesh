@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='failure-native-', dir=ROOT / 'target') 
           'environment': {'MYSQL_ROOT_PASSWORD': '${RIVOMESH_FAILURE_DB_PASSWORD}'} if mysql else {'POSTGRES_DB': 'failure_test', 'POSTGRES_USER': 'failure_test', 'POSTGRES_PASSWORD': '${RIVOMESH_FAILURE_DB_PASSWORD}'},
           'healthcheck': {'test': ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent'] if mysql else ['CMD-SHELL', 'pg_isready -U failure_test -d failure_test'], 'interval': '2s', 'timeout': '3s', 'retries': 60}}
     container_path = lambda path: '/project/' + str(path.relative_to(ROOT))
-    runner = {'image': 'eclipse-temurin:8-jre', 'volumes': [str(ROOT) + ':/project'], 'working_dir': '/project',
+    runner = {'image': 'eclipse-temurin:21-jre-jammy', 'volumes': [str(ROOT) + ':/project'], 'working_dir': '/project',
               'environment': {**{key: '${' + key + '}' for key in environment if key.startswith('RIVOMESH_FAILURE_DB_')},},
               'command': ['java', '-Xmx256m', '-cp', container_path(artifact) + ':' + container_path(classes) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar',
                           'org.junit.platform.console.ConsoleLauncher', 'execute', '--disable-banner', '--fail-if-no-tests',

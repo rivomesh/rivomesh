@@ -66,7 +66,7 @@ CPU 和数据库内存限制分别作用于**每个**数据库容器，CPU 限�
 
 ## 运行时与日志配置
 
-`--java 8|11|17|21|25` 选择对应 Temurin JRE 的 Worker 镜像，默认 8。`--journal-mode LOCAL|EXTERNAL` 默认 LOCAL；EXTERNAL 使用目标 PostgreSQL 同一实例上的独立日志 schema，日志与目标争用该容器资源，不代表远程独立日志性能。示例：
+基准测试使用 Temurin 21。`--journal-mode LOCAL|EXTERNAL` 默认 LOCAL；EXTERNAL 使用目标 PostgreSQL 同一实例上的独立日志 schema，日志与目标争用该容器资源，不代表远程独立日志性能。示例：
 
 ```bash
 python3 tests/benchmark.py --java 21 --journal-mode EXTERNAL --rows 1000 \

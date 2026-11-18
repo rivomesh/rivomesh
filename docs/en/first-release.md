@@ -2,6 +2,8 @@
 
 No first release has been published. In-place upgrades between development candidates,old package aliases and automatic control-mode migration are unsupported. Internal format numbers are not released versions.
 
+The release builds and runs on Eclipse Temurin 21 LTS. Controllers, Agents and Workers use the same Java major version.
+
 Choose the control store,access mode,roles,keys and persistent directories before first deployment. Enable full managed recovery consistently across all members:
 
 ```yaml

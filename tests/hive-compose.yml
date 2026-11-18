@@ -31,7 +31,7 @@ services:
       retries: 45
     stop_grace_period: 30s
   store:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     volumes:
       - hive-meta:/metadata
       - hive-data:/warehouse
@@ -55,7 +55,7 @@ services:
       timeout: 5s
       retries: 60
   tests:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     working_dir: /project
     environment:
       RIVOMESH_HIVE_DIR: ${RIVOMESH_HIVE_DIR:-/project/target/hive-manual}

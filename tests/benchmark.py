@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--payload-bytes", type=int, default=256)
     parser.add_argument("--chunk-size", type=int, default=1000)
     parser.add_argument("--timeout", type=int, default=900)
-    parser.add_argument("--java", choices=("8", "11", "17", "21", "25"), default="8")
+    parser.add_argument("--java", choices=("21",), default="21")
     parser.add_argument("--journal-mode", choices=("LOCAL", "EXTERNAL"), default="LOCAL")
     parser.add_argument("--artifact", type=Path, default=ROOT / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar")
     parser.add_argument("--worker-heap-mib", type=int, default=256)
@@ -44,7 +44,7 @@ def main():
     shutil.copyfile(artifact, directory / "app.jar")
     env = dict(os.environ, RIVOMESH_BENCH_DIR=str(directory),
                RIVOMESH_BENCH_WORKER_HEAP_MIB=str(args.worker_heap_mib),
-               RIVOMESH_BENCH_WORKER_IMAGE="eclipse-temurin:" + args.java + "-jre")
+               RIVOMESH_BENCH_WORKER_IMAGE="eclipse-temurin:" + args.java + "-jre-jammy")
     compose = ["docker", "compose", "-p", run_id, "-f", str(ROOT / "tests/benchmark-compose.yml")]
     report = {"formatVersion": 1, "runId": run_id, "status": "RUNNING",
               "startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),

@@ -2,7 +2,7 @@
 
 Use the [SDD requirement list](docs/sdd/001-control-recovery-compatibility/requirements.json) to identify the scope of a change. Keep the English and Chinese specifications, task list and acceptance records aligned when behavior changes.
 
-Build and verify with Java 8. The [current status](docs/en/implementation-status.md) lists the tested JDK, source, target and deployment profiles.
+Build and verify with Eclipse Temurin 21 LTS. Check `mvn -version` before packaging. The [current status](docs/en/implementation-status.md) lists the tested JDK, source, target and deployment profiles.
 
 ```sh
 mkdir -p target/test-tmp

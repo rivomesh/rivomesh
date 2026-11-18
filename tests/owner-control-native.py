@@ -61,16 +61,16 @@ with tempfile.TemporaryDirectory(prefix='owner-native-', dir=ROOT / 'target') as
         frozen_classes = '/project/' + str(test_classes.relative_to(ROOT))
         fixture_source = ROOT / 'tests/roles/ExecutionAdmissionAcceptance.java'
         fixture_digest = hashlib.sha256(fixture_source.read_bytes()).hexdigest()
-        command = ['sh', '-c', 'javac -source 8 -target 8 -cp ' + shlex.quote(artifact_path + ':' + frozen_classes) + ' -d /fixture/classes /project/tests/roles/ExecutionAdmissionAcceptance.java && java -Xmx256m -cp ' + shlex.quote(artifact_path + ':/fixture/classes:' + frozen_classes) + ' ' + fixture_class + ' /fixture/state']
+        command = ['sh', '-c', 'javac --release 21 -cp ' + shlex.quote(artifact_path + ':' + frozen_classes) + ' -d /fixture/classes /project/tests/roles/ExecutionAdmissionAcceptance.java && java -Xmx256m -cp ' + shlex.quote(artifact_path + ':/fixture/classes:' + frozen_classes) + ' ' + fixture_class + ' /fixture/state']
     elif test_classes:
         command = ['java', '-Xmx256m', '-cp', artifact_path + ':/project/' + str(test_classes.relative_to(ROOT)), fixture_class, '/fixture/state']
     else:
-        command = ['sh', '-c', 'javac -source 8 -target 8 -cp ' + shlex.quote(artifact_path) + ' -d /fixture/classes @/fixture/sources.args && java -Xmx256m -cp ' + shlex.quote('/fixture/classes:' + artifact_path) + ' ' + fixture_class + ' /fixture/state']
+        command = ['sh', '-c', 'javac --release 21 -cp ' + shlex.quote(artifact_path) + ' -d /fixture/classes @/fixture/sources.args && java -Xmx256m -cp ' + shlex.quote('/fixture/classes:' + artifact_path) + ' ' + fixture_class + ' /fixture/state']
     services = {
         'store': {'image': 'mysql:8.4' if mysql else 'postgres:17',
                   'environment': {'MYSQL_ROOT_PASSWORD': '${RIVOMESH_OWNER_DB_PASSWORD}', 'MYSQL_DATABASE': 'rivomesh_control'} if mysql else {'POSTGRES_PASSWORD': '${RIVOMESH_OWNER_DB_PASSWORD}', 'POSTGRES_DB': 'rivomesh_control'},
                   'tmpfs': ['/var/lib/mysql'] if mysql else ['/var/lib/postgresql/data']},
-        'runner': {'image': 'maven:3.9-eclipse-temurin-8', 'entrypoint': command,
+        'runner': {'image': 'maven:3.9-eclipse-temurin-21', 'entrypoint': command,
                    'environment': {'RIVOMESH_OWNER_DB_PASSWORD': '${RIVOMESH_OWNER_DB_PASSWORD}', 'RIVOMESH_OWNER_TOKEN': '${RIVOMESH_OWNER_TOKEN}', 'RIVOMESH_OWNER_KEY': '${RIVOMESH_OWNER_KEY}',
                                    'RIVOMESH_OWNER_DRIVER': 'com.mysql.cj.jdbc.Driver' if mysql else 'org.postgresql.Driver',
                                    'RIVOMESH_OWNER_URL': 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if mysql else 'jdbc:postgresql://store:5432/rivomesh_control',

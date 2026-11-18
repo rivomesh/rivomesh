@@ -83,7 +83,7 @@ try:
         environment = dict(os.environ, RIVOMESH_SESSION_TOKEN=token)
         container = command('docker', 'run', '--rm', '-d', '-e', 'RIVOMESH_SESSION_TOKEN',
                             '-p', '127.0.0.1::8080', '-v', str(jar) + ':/app/rivomesh.jar:ro',
-                            '-v', str(home) + ':/test', 'eclipse-temurin:8-jre',
+                            '-v', str(home) + ':/test', 'eclipse-temurin:21-jre-jammy',
                             'java', '-Xmx128m', '-jar', '/app/rivomesh.jar', 'serve', '/test/platform.yml', env=environment)
         backend['port'] = int(command('docker', 'port', container, '8080/tcp').rsplit(':', 1)[1])
         deadline = time.monotonic() + 60

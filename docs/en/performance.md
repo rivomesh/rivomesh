@@ -100,7 +100,7 @@ Small snapshot/CDC checks and a five-JDK/two-journal matrix previously passed;bo
 
 ## Runtime and journal profiles
 
-`--java 8|11|17|21|25` selects the corresponding Temurin JRE worker image; default is 8. `--journal-mode LOCAL|EXTERNAL` defaults to LOCAL. The EXTERNAL profile uses a separate journal schema on the same PostgreSQL instance as the target, so journal and sink compete for that container's resources. It is not a remote dedicated journal benchmark. For example:
+The benchmark uses Temurin 21. `--journal-mode LOCAL|EXTERNAL` defaults to LOCAL. The EXTERNAL profile uses a separate journal schema on the same PostgreSQL instance as the target, so journal and sink compete for that container's resources. It is not a remote dedicated journal benchmark. For example:
 
 ```bash
 python3 tests/benchmark.py --java 21 --journal-mode EXTERNAL --rows 1000 \

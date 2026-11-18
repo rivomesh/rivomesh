@@ -6,6 +6,8 @@
 
 ## 启动
 
+首版构建和运行使用 Eclipse Temurin 21 LTS。请先确认 `mvn -version` 和 `java -version` 均指向 Java 21。
+
 ```sh
 mvn -s build/settings.xml package
 export RIVOMESH_TOKEN='replace-with-at-least-24-random-bytes'
@@ -37,7 +39,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 贡献与发布包清单 | [发布审查](docs/zh-CN/release-inventory.md) | [Release inventory](docs/en/release-inventory.md) |
 | 当前验证范围 | [单一验证基线](docs/verification/README.md) | [Verification baseline](docs/verification/README.md) |
 
-目标范围包含MySQL/PostgreSQL、openGauss/分布式GaussDB、达梦/金仓/OceanBase/GBase、ClickHouse/Doris/Hive及Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ/Redis Streams/NATS JetStream。**实现和实测范围按产品档案区分；不能把产品名称、JDBC连通或同协议当成完整支持。** PostgreSQL 17 单主源已有实验档案。Oracle 源及完整集群、JDK、TLS 和性能矩阵仍在实现。
+目标范围包含MySQL/PostgreSQL、openGauss/分布式GaussDB、达梦/金仓/OceanBase/GBase、ClickHouse/Doris/Hive及Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ/Redis Streams/NATS JetStream。**实现和实测范围按产品档案区分；不能把产品名称、JDBC连通或同协议当成完整支持。** PostgreSQL 17 单主源已有实验档案。Oracle 源已有归档增量档案。集群、TLS、性能和更多连接器的 Java 21 实库验证继续进行。
 
 ## 开发迭代
 

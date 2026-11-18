@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING
 
 Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
@@ -49,8 +49,8 @@ Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01
 |---|---|---|---|
 | SO-01 | P0 / DONE | Source protocol and capability configuration | The V3 console offers capability-scoped MySQL, PostgreSQL and Oracle source forms, mappings and versions. Each preflight uses its own identity and position protocol and rejects foreign source options. |
 | SO-02 | P1 / DONE | MySQL5.7 supported profile | 5.7.44 Java 8 V3 standalone, GTID async, MGR, and native binlog-loss refusal passed. |
-| SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
-| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
+| SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 tracks remaining Java 21 combinations. |
+| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 tracks remaining Java 21 combinations. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
 | SO-06 | P1 / PARTIAL | PostgreSQL source adapter | PostgreSQL 17.12 passed snapshot, failover-slot continuation and old-timeline refusal. 18.7 passed stored generated columns. Broader types, DDL and multi-target common cuts remain. |
 | SO-07 | P1 / PARTIAL | Oracle source adapter | Oracle 26ai archived LogMiner to PostgreSQL passed single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain. |
@@ -59,10 +59,10 @@ Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| JV-01 | P0 / DONE | Java8/11/17/21/25 runnable releases | Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades. |
-| JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Five JDKs passed MySQL 8.4 basic fan-out, seven PostgreSQL 17.12 cases and eight PostgreSQL 18.7 stored-generated cases. Other sources, targets, TLS and recovery combinations remain. |
-| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor isolation/artifact checks exist without all-JDK coverage. |
-| JV-04 | P1 / PARTIAL | Multi-JDK deployment and mixed-version upgrades | One JAR passed mixed five-JDK SQL control and data. Controller rolling replacement and drained Agent restart in its original directory passed. Capability placement and application downgrades remain. |
+| JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
+| JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 passed MySQL 8.4 to PostgreSQL and MySQL snapshots, CDC and original-checkpoint resume. Historical evidence includes PostgreSQL 17.12 and 18.7. Other sources, targets, TLS and recovery combinations remain. |
+| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor SDK isolation and packaged artifact checks exist. Java 21 driver, TLS, certificate and recovery combinations remain. |
+| JV-04 | P1 / PARTIAL | Java 21 deployment and rolling replacement | Live Java 21 Controller replacement and drained Agent restart in its original directory passed. Kubernetes image rollout and rollback boundaries remain for the Java 21 release image. |
 
 ## Complete documentation
 
@@ -117,8 +117,8 @@ Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01
 | RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-02 | [validation.md](../../../docs/validation.md) / [matrix.sh](../../../tests/matrix.sh) |
-| SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
-| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
+| SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 tracks remaining Java 21 combinations. |
+| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 tracks remaining Java 21 combinations. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |

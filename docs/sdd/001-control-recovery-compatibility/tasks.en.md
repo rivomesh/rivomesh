@@ -106,17 +106,17 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-SO-07
 ## Java runtime compatibility
 
-- [x] T-JV-01 · Java8/11/17/21/25 runnable releases · P0 · Depends on: none
-  Deliver: The candidate controller/agent/worker actually starts on all five JDKs with real JVM version,artifact hash,architecture and dependencies recorded;Java8 class/driver requirements are verified.
+- [x] T-JV-01 · Temurin 21 first-release runtime · P0 · Depends on: none
+  Deliver: Run the same Temurin 21 candidate on Controller, Agent and Worker with native snapshot and CDC. Record JVM version, architecture, artifact SHA, bytecode and dependency checks.
   Acceptance: AC-JV-01
-- [ ] T-JV-02 · Cross-JDK source/sink/recovery matrix · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
-  Deliver: Each approved source profile crosses five JDKs for snapshot,CDC,restart and equality;record separate adapter/SDK/TLS/object/cluster/recovery gates and never label unrun combinations passed.
+- [ ] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
+  Deliver: On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product.
   Acceptance: AC-JV-02
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03
-- [ ] T-JV-04 · Multi-JDK deployment and mixed-version upgrades · P1 · Depends on: CP-04, JV-02, JV-03, LG-08
-  Deliver: Provide five-JDK deployment profiles/placement constraints and verify command,event,state and rolling-upgrade compatibility;unsupported downgrade is refused with recovery guidance.
+- [ ] T-JV-04 · Java 21 deployment and rolling replacement · P1 · Depends on: CP-04, JV-02, JV-03, LG-08
+  Deliver: Verify the Java 21 Linux, Docker and Kubernetes deployment paths. Rolling replacement preserves a management entry, commands and verified checkpoints. Document backup, restore and rollback boundaries.
   Acceptance: AC-JV-04
 ## Complete documentation
 

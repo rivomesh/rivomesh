@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.34",
+  "version": "0.35",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -874,8 +874,8 @@
         "en": "MySQL5.7 supported profile"
       },
       "gap": {
-        "zh-CN": "MySQL 5.7.44 的 Java 8 V3 单机、GTID 主从、单主 MGR、主从 SQL 线程故障、日志缺失及断点保护已验收。其他 JDK 由 JV-02 跟踪。",
-        "en": "MySQL 5.7.44 Java 8 V3 standalone, GTID async and single-primary MGR, replica SQL fault, missing binlog and checkpoint retention passed. JV-02 covers other JDKs."
+        "zh-CN": "MySQL 5.7.44 的 Java 8 V3 单机、GTID 主从、单主 MGR、主从 SQL 线程故障、日志缺失及断点保护已验收。Java 21 其余组合由 JV-02 跟踪。",
+        "en": "MySQL 5.7.44 Java 8 V3 standalone, GTID async and single-primary MGR, replica SQL fault, missing binlog and checkpoint retention passed. JV-02 tracks remaining Java 21 combinations."
       },
       "acceptance": {
         "zh-CN": "固定补丁、驱动、日志配置后验证全量转增量、JSON/无主键/生成列能力、重启/切主/日志缺失、所支持DDL和恢复；不支持项预检拒绝并形成独立证据。",
@@ -908,8 +908,8 @@
         "en": "MySQL8.0 current V3 acceptance"
       },
       "gap": {
-        "zh-CN": "MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。",
-        "en": "MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs."
+        "zh-CN": "MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。",
+        "en": "MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 tracks remaining Java 21 combinations."
       },
       "acceptance": {
         "zh-CN": "对本次发布包补验多库多目标、类型/生成列、事务、主备/MGR、失败恢复与人工操作；按拓扑和小版本注明范围。",
@@ -942,8 +942,8 @@
         "en": "MySQL8.2 compatibility and acceptance"
       },
       "gap": {
-        "zh-CN": "MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。",
-        "en": "MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs."
+        "zh-CN": "MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。",
+        "en": "MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 tracks remaining Java 21 combinations."
       },
       "acceptance": {
         "zh-CN": "提供可复现8.2夹具/真实环境、版本探测、连接认证、状态命令、binlog事件和首个完整同步/恢复矩阵；不能只增加版本字符串或通过JDBC连接。",
@@ -1070,16 +1070,16 @@
       "priority": "P0",
       "status": "DONE",
       "title": {
-        "zh-CN": "Java 8/11/17/21/25 可运行发布",
-        "en": "Java8/11/17/21/25 runnable releases"
+        "zh-CN": "Temurin 21 首版运行基线",
+        "en": "Temurin 21 first-release runtime"
       },
       "gap": {
-        "zh-CN": "同一候选包的 Controller、Agent 与 Worker 已在五个 JDK 完成真实同步。完整连接器矩阵和混合版本升级由 JV-02 至 JV-04 跟踪。",
-        "en": "Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades."
+        "zh-CN": "现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。",
+        "en": "The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles."
       },
       "acceptance": {
-        "zh-CN": "同一候选版本的控制器/Agent/Worker分别在五个JDK实际启动，报告真实JVM版本、包SHA、架构与所用依赖；Java8代码级别和驱动运行要求可核验。",
-        "en": "The candidate controller/agent/worker actually starts on all five JDKs with real JVM version,artifact hash,architecture and dependencies recorded;Java8 class/driver requirements are verified."
+        "zh-CN": "同一 Temurin 21 候选包的 Controller、Agent 和 Worker 须实际运行并完成全量与增量。记录 JVM 版本、架构、包 SHA、主类版本和依赖检查。",
+        "en": "Run the same Temurin 21 candidate on Controller, Agent and Worker with native snapshot and CDC. Record JVM version, architecture, artifact SHA, bytecode and dependency checks."
       },
       "dependsOn": [],
       "evidence": [
@@ -1088,13 +1088,15 @@
         "tests/control-runtime.py",
         "tests/global-control-pipeline.py",
         "tests/verify-artifact.py",
-        "docs/verification/README.md"
+        "docs/verification/README.md",
+        "pom.xml",
+        "Dockerfile"
       ],
       "verification": {
-        "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+        "artifactSha256": "cb8183632cc1297ed12332c3b9c8580ff3651309c6e648d00f5ed086ed0245cc",
         "archive": "docs/verification/README.md",
-        "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown.",
-        "criteriaSha256": "a75f19ca2d3221b816584e1d5428529357573ebb4b74683e551bb8e739782af3"
+        "profile": "Temurin 21 ARM64, class major 65. Separate two Controllers, Agent and Worker; MySQL 8.4.13 to PostgreSQL 17 and MySQL 8.4. Controller replacement and drained same-directory Agent restart.",
+        "criteriaSha256": "1d2a898e8824dcc6bd934eb79025811356b5f40a6f5bbee6ae3622697e23ec06"
       }
     },
     {
@@ -1103,16 +1105,16 @@
       "priority": "P1",
       "status": "PARTIAL",
       "title": {
-        "zh-CN": "源/目标/恢复跨JDK矩阵",
-        "en": "Cross-JDK source/sink/recovery matrix"
+        "zh-CN": "Java 21 源、目标及恢复组合",
+        "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "五种 JDK 已验证 MySQL 8.4 基础双目标、PostgreSQL 17.12 七项和 18.7 存储型生成列八项实库档案。其他源、目标、TLS 和恢复组合待验收。",
-        "en": "Five JDKs passed MySQL 8.4 basic fan-out, seven PostgreSQL 17.12 cases and eight PostgreSQL 18.7 stored-generated cases. Other sources, targets, TLS and recovery combinations remain."
+        "zh-CN": "Java 21 已通过 MySQL 8.4 到 PostgreSQL/MySQL 的全量、增量和原位续传。历史档案含 PostgreSQL 17.12 与 18.7。其余源、目标、TLS 和恢复组合待补验。",
+        "en": "Java 21 passed MySQL 8.4 to PostgreSQL and MySQL snapshots, CDC and original-checkpoint resume. Historical evidence includes PostgreSQL 17.12 and 18.7. Other sources, targets, TLS and recovery combinations remain."
       },
       "acceptance": {
-        "zh-CN": "每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。",
-        "en": "Each approved source profile crosses five JDKs for snapshot,CDC,restart and equality;record separate adapter/SDK/TLS/object/cluster/recovery gates and never label unrun combinations passed."
+        "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",
+        "en": "On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product."
       },
       "dependsOn": [
         "JV-01",
@@ -1137,8 +1139,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "已有厂商SDK隔离和完整包检查，缺全部JDK组合验证。",
-        "en": "Vendor isolation/artifact checks exist without all-JDK coverage."
+        "zh-CN": "已有厂商 SDK 隔离和完整包检查，待完成 Java 21 的驱动、TLS、证书和恢复组合。",
+        "en": "Vendor SDK isolation and packaged artifact checks exist. Java 21 driver, TLS, certificate and recovery combinations remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1158,16 +1160,16 @@
       "priority": "P1",
       "status": "PARTIAL",
       "title": {
-        "zh-CN": "多JDK部署及混合版本升级",
-        "en": "Multi-JDK deployment and mixed-version upgrades"
+        "zh-CN": "Java 21 部署及滚动替换",
+        "en": "Java 21 deployment and rolling replacement"
       },
       "gap": {
-        "zh-CN": "同一 JAR 在五种 JDK 混部下通过真实 SQL 命令和数据回归，验证 Controller 滚动替换和原目录 Agent 排空重启。按能力自动调度及跨版本降级待验收。",
-        "en": "One JAR passed mixed five-JDK SQL control and data. Controller rolling replacement and drained Agent restart in its original directory passed. Capability placement and application downgrades remain."
+        "zh-CN": "真实 Java 21 双 Controller 滚动替换与 Agent 原目录排空重启已通过。待验证首版 Java 21 镜像在 Kubernetes 中的升级及回退边界。",
+        "en": "Live Java 21 Controller replacement and drained Agent restart in its original directory passed. Kubernetes image rollout and rollback boundaries remain for the Java 21 release image."
       },
       "acceptance": {
-        "zh-CN": "提供五JDK部署档案和能力调度限制，验证混合节点间命令/事件/状态兼容与滚动升级；不支持回退时明确拒绝并保留恢复路径。",
-        "en": "Provide five-JDK deployment profiles/placement constraints and verify command,event,state and rolling-upgrade compatibility;unsupported downgrade is refused with recovery guidance."
+        "zh-CN": "核验 Java 21 的 Linux、Docker 和 Kubernetes 部署路径。滚动更换应保留管理入口、原有命令和已验证的同步断点，说明备份恢复与回退边界。",
+        "en": "Verify the Java 21 Linux, Docker and Kubernetes deployment paths. Rolling replacement preserves a management entry, commands and verified checkpoints. Document backup, restore and rollback boundaries."
       },
       "dependsOn": [
         "CP-04",

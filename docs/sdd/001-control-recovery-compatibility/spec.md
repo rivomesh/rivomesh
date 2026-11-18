@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING
 
 实施中：48项持续追踪，28项DONE、20项PARTIAL、0项NEW，余20项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
@@ -49,8 +49,8 @@ RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
 |---|---|---|---|
 | SO-01 | P0 / DONE | 多源协议与能力配置 | V3 管理界面已按能力提供 MySQL、PostgreSQL、Oracle 源类型、映射和版本表单。按各自身份和坐标预检，明确拒绝其他源类型的专用配置。 |
 | SO-02 | P1 / DONE | MySQL 5.7 完整支持档案 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR 和未采集 binlog 缺失已实测。 |
-| SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。 |
-| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
+| SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
+| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | PostgreSQL 17.12 已实测快照及可切换逻辑槽续传，回到旧时间线时拒绝。18.7 已验收存储型生成列；更多类型、DDL 与多目标共同点待验收。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB、归档 LogMiner 到 PostgreSQL 实测支持长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。 |
@@ -59,10 +59,10 @@ RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| JV-01 | P0 / DONE | Java 8/11/17/21/25 可运行发布 | 同一候选包的 Controller、Agent 与 Worker 已在五个 JDK 完成真实同步。完整连接器矩阵和混合版本升级由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | 源/目标/恢复跨JDK矩阵 | 五种 JDK 已验证 MySQL 8.4 基础双目标、PostgreSQL 17.12 七项和 18.7 存储型生成列八项实库档案。其他源、目标、TLS 和恢复组合待验收。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商SDK隔离和完整包检查，缺全部JDK组合验证。 |
-| JV-04 | P1 / PARTIAL | 多JDK部署及混合版本升级 | 同一 JAR 在五种 JDK 混部下通过真实 SQL 命令和数据回归，验证 Controller 滚动替换和原目录 Agent 排空重启。按能力自动调度及跨版本降级待验收。 |
+| JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
+| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已通过 MySQL 8.4 到 PostgreSQL/MySQL 的全量、增量和原位续传。历史档案含 PostgreSQL 17.12 与 18.7。其余源、目标、TLS 和恢复组合待补验。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商 SDK 隔离和完整包检查，待完成 Java 21 的驱动、TLS、证书和恢复组合。 |
+| JV-04 | P1 / PARTIAL | Java 21 部署及滚动替换 | 真实 Java 21 双 Controller 滚动替换与 Agent 原目录排空重启已通过。待验证首版 Java 21 镜像在 Kubernetes 中的升级及回退边界。 |
 
 ## 完整文档
 
@@ -117,8 +117,8 @@ RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING
 | RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-02 | [validation.md](../../../docs/validation.md) / [matrix.sh](../../../tests/matrix.sh) |
-| SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。 |
-| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
+| SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
+| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |

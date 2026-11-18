@@ -27,8 +27,8 @@ manifest = dict(artifactSha256=hashlib.sha256(jar.read_bytes()).hexdigest(), tes
                 scope=scope, harnessSourceSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), profiles=[],
                 notCovered='Real source/destination/JDK/TLS/SDK matrix, manual skip/patch or UI raw review')
 cp = '/project/' + str(jar.relative_to(ROOT)) + ':/project/' + str(classes.relative_to(ROOT)) + ':/project/target/tools/junit-platform-console-standalone-1.11.0.jar'
-for jdk in (8, 11, 17, 21, 25):
-    image = 'eclipse-temurin:' + str(jdk) + '-jre'
+for jdk in (21,):
+    image = 'eclipse-temurin:' + str(jdk) + '-jre-jammy'
     docker = ['docker', 'run', '--rm', '-v', str(ROOT) + ':/project:ro', '-v', str(output) + ':/evidence', image]
     log = output / ('java' + str(jdk) + '.log')
     with log.open('w') as stream:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run real SQL snapshot/CDC/content checks across JRE and journal combinations."""
+"""Run real SQL snapshot/CDC/content checks on Temurin 21 with both journal modes."""
 import argparse
 import datetime
 import hashlib
@@ -23,8 +23,8 @@ def artifact_hash():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--java", nargs="+", choices=("8", "11", "17", "21", "25"),
-                        default=["8", "11", "17", "21", "25"])
+    parser.add_argument("--java", nargs="+", choices=("21",),
+                        default=["21"])
     parser.add_argument("--journal-modes", nargs="+", choices=("LOCAL", "EXTERNAL"),
                         default=["LOCAL", "EXTERNAL"])
     parser.add_argument("--rows", type=int, default=1000)
@@ -72,7 +72,7 @@ def main():
                     raw = json.loads(candidate.read_text())
                     profile["report"] = str(candidate.relative_to(ROOT))
                     profile["actualJavaVersion"] = raw.get("worker", {}).get("javaVersion")
-                    pattern = r'version "1\.8[._"]' if runtime == "8" else r'version "' + runtime + r'[.+"-]'
+                    pattern = r'version "' + runtime + r'[.+"-]'
                     profile["runtimeMatches"] = bool(re.search(pattern, profile["actualJavaVersion"] or ""))
                     profile["artifactMatches"] = raw.get("artifactSha256") == report["artifactSha256"]
                     values = raw.get("measurements", {})

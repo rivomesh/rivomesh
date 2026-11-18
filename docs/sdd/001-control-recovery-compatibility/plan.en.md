@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.34 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **28 DONE, 20 PARTIAL and 0 NEW, with 20 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and five-JDK process and source/target diagnostic profiles passed bounded acceptance.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **28 DONE, 20 PARTIAL and 0 NEW, with 20 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and Temurin 21 process and source/target diagnostic profiles passed bounded acceptance.
 
 ## Current baseline
 
@@ -18,7 +18,7 @@ Maintain the current first-release specification and [verification baseline](../
 | 2 Persistent login | SE-01–SE-05 | 0 |
 | 3 Skip and corrective data | RC-01–RC-10 | 5 |
 | 4 Source versions/PG/Oracle | SO-01–SO-07 | 7 |
-| 5 Five Java versions | JV-01–JV-04 | 4 |
+| 5 Java 21 runtime | JV-01–JV-04 | 4 |
 | 6 Complete docs | DO-01–DO-05 | 5 |
 | Preserved previous scope | LG-01–LG-10 | 10 |
 
@@ -26,7 +26,7 @@ The 48 requirements include 19 completed, 25 partial and 4 new items. PARTIAL me
 
 ## Confirmed scope
 
-Unified multi-node management must control remote tasks from any entry,not just aggregate local pages. Login survives reload with effective logout/revocation. Reviewed manual skip/corrective data are required while automatic recovery remains no-skip by default. MySQL5.7/8.0/8.2/8.4,PostgreSQL and Oracle sources are committed scope rather than optional future placeholders. Java8/11/17/21/25 require real runtime evidence. Complete bilingual scenarios/FAQ and all earlier destination,mapping,optional-storage,deployment and migration requirements remain.
+Unified multi-node management must control remote tasks from any entry,not just aggregate local pages. Login survives reload with effective logout/revocation. Reviewed manual skip/corrective data are required while automatic recovery remains no-skip by default. MySQL5.7/8.0/8.2/8.4,PostgreSQL and Oracle sources are committed scope rather than optional future placeholders. The release uses Temurin 21 LTS for build, deployment and native verification. Complete bilingual scenarios/FAQ and all earlier destination,mapping,optional-storage,deployment and migration requirements remain.
 
 ## Proposed cluster architecture
 
@@ -67,14 +67,14 @@ A proposed gap record links source/range,transaction/raw/normalized hashes,targe
 |---|---|---|
 | MySQL5.7 | 5.7.44 Java 8 V3 standalone, GTID async and MGR | Native source binlog gap retained the last checkpoint | PASS (bounded) |
 | MySQL8.0 | Historical8.0.46 V2/HA | Current V3/new recovery acceptance |
-| MySQL8.2 | Java 8 V3 passes three native 8.2.0 topologies | JV-02 covers other JDKs |
+| MySQL8.2 | Java 8 V3 passes three native 8.2.0 topologies | JV-02 tracks remaining Java 21 combinations |
 | MySQL8.4 | Representative V3/recovery | Broader auth/log/topology/target/JDK matrix |
 | PostgreSQL | PLANNED source | Snapshot/LSN/slot,transactions,promotion;PG sink support is unrelated |
 | Oracle | PLANNED source | Capture route/version/grants/distribution,SCN/redo/archive,types and recovery |
 
 PG slot snapshot export binds baseline/stream position;recovery can resend events and needs dedup. Promotion depends on exact version and slot conditions:[logical decoding](https://www.postgresql.org/docs/18/logicaldecoding-explanation.html),[failover](https://www.postgresql.org/docs/18/logical-replication-failover.html). Oracle identity/incarnation cannot be reduced to one SCN number:[Oracle19 LogMiner fields](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html). These are design references,not implemented source claims.
 
-Runtime evidence binds candidate SHA,actual JVM/architecture,driver,source profile,destination,journal,auth/TLS and workload. Each approved source profile crosses five JDKs for snapshot,CDC,restart and content checks. Four MySQL profiles plus one PG and one Oracle profile imply at least30source/JDK baseline combinations,not the total target,type,HA or security matrix. Show unrun,failed,experimental and unsupported separately.
+Native verification records the artifact SHA, actual Temurin 21 release, architecture, driver, source, destination, journal, auth/TLS and workload. Every approved source profile verifies snapshot, CDC, restart and content. The evidence archive retains earlier results. Current acceptance expands connector and recovery profiles on Java 21.
 
 ## Proposed sequencing
 

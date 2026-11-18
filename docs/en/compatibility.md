@@ -11,7 +11,7 @@ Choose a profile by source version and topology, target product and mode, then J
 | `MYSQL` 5.7.44 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. Real retained-history loss refused. | [Pipeline configuration](pipeline-v3.md), [missing-log recovery](capture-recovery.md) |
 | `MYSQL` 8.0.46 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Pipeline configuration](pipeline-v3.md), [recovery runbook](reconciliation-workflow.md) |
 | `MYSQL` 8.2.0 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Version-specific test commands](pipeline-v3.md#mysql-820-source-regression) |
-| `MYSQL` 8.4.13 | Java 8. All three topologies and admission checks. The process matrix below covers standalone on five JDKs. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
+| `MYSQL` 8.4.13 | Java 8. All three topologies and admission checks. The historical process record includes Java 21 for the standalone source. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
 | `POSTGRESQL` 17.12 | Experimental single-primary source. Seven native PostgreSQL-to-PostgreSQL checks on each of the five JDKs. The synchronized-slot promotion profile passed on Java 8. PostgreSQL common-cut verification is pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Experimental single primary with stored generated columns published and materialized as ordinary target columns. | [Source guide and publication](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Java 8 with a separately supplied Oracle JDBC driver. Single-PDB Flashback and single-thread archived CDC to PostgreSQL. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
@@ -32,18 +32,9 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 
 The V3 wizard reads `GET /api/capabilities` for source availability and limits destinations to the selected engine’s supported products. PostgreSQL and Oracle source forms preserve their separate version, source identity, namespaces and credentials. For each planned or experimental deployment, check the product manual's topology, authorization, retention and backup scope.
 
-## Source × target × Java evidence
+## Release runtime
 
-| Tested source → destinations | Java 8 | Java 11 | Java 17 | Java 21 | Java 25 |
-|---|---|---|---|---|---|
-| MySQL 8.4 standalone → PostgreSQL 17.12 + independent MySQL 8.4 | Controller, Agent and Worker | Same | Same | Same | Same |
-| PostgreSQL 17.12 single primary → PostgreSQL 17.12 | 7 cases | 7 cases | 7 cases | 7 cases | 7 cases |
-| PostgreSQL 18.7 single primary → PostgreSQL 17.12, including stored generated columns | 8 cases | 8 cases | 8 cases | 8 cases | 8 cases |
-| MySQL 5.7.44 / 8.0.46 / 8.2.0 native source release profiles | Bounded native fixtures | Pending | Pending | Pending | Pending |
-| Oracle 26ai → PostgreSQL 17.12 | Bounded archive CDC and restart | Pending | Pending | Pending | Pending |
-| Additional target products and topologies | Product-specific evidence above | Pending | Pending | Pending | Pending |
-
-The first three rows use `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [manifests](../verification/baseline.json). For an unlisted combination, run the matching source, destination, storage and recovery fixtures with the selected JDK. [Reproduction commands](performance.md)
+Build, run and accept new candidates on Temurin 21 LTS. Record the real JVM version, architecture and artifact SHA on each live profile. The source and destination tables above include results from their tested development artifact. Earlier records are available as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [verification manifests](../verification/baseline.json). Use the matching Java 21 fixture for unverified source, destination, journal or recovery combinations. [Reproduction commands](performance.md)
 
 ## Management requests
 
@@ -53,7 +44,7 @@ Use Bearer credentials for CLI or an HttpOnly browser session. Browser writes su
 |---|---|
 | `/api/session`, `/api/session/logout`, `/api/nodes`, `/api/tasks` | Identity and scope, node/owner observation and task pagination. Global creation includes `ownerNodeId`. [Console API](console-and-deployment.md) |
 | `/api/tasks/{id}/configuration` and `/api/tasks/{id}/actions` | Mutations bind to the current `expectedRevision` and original `X-Request-ID`. Local create returns 201 and local configuration update returns 200. Global mutations and action admission return 202. Follow the persisted operation receipt. [Configuration](configuration-editor.md) · [Command lifecycle](execution-lifecycle.md) |
-| `/api/tasks/{id}/capture-recovery`, `/api/tasks/{id}/failure-evidence` | Read the retained source failure generation and the authorized target evidence. [Source review](capture-recovery.md) · [Transaction evidence](failure-review.md) |
+| `/api/tasks/{id}/capture-recovery`, `/api/tasks/{id}/capture-exclusions`, `/api/tasks/{id}/failure-evidence` | Read the retained source failure generation and the authorized target evidence. [Source review](capture-recovery.md) · [Transaction evidence](failure-review.md) |
 | `/api/tasks/{id}/recovery-plans`, `/api/tasks/{id}/gaps`, `/api/tasks/{id}/gap-verifications`, `/api/tasks/{id}/corrections`, `/api/tasks/{id}/validations` | Inspect evidence and immutable plan references, then submit the matching action and generation. [Skip](transaction-skip.md) · [Verification](gap-verification.md) · [Correction](manual-correction.md) · [Managed repair](managed-repair.md) |
 | `/api/accounts`, `/api/audit` | ADMIN account directory and authorized audit reads. [Accounts](account-management.md) · [Audit](security-audit.md) |
 

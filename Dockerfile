@@ -1,5 +1,5 @@
-ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-8
-ARG JAVA_IMAGE=eclipse-temurin:8-jre-jammy
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-21
+ARG JAVA_IMAGE=eclipse-temurin:21-jre-jammy
 FROM ${MAVEN_IMAGE} AS build
 WORKDIR /src
 COPY pom.xml ./

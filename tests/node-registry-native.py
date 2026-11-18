@@ -114,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='node-registry-', dir=ROOT / 'target') a
         if args.shared_tasks:
             config['cluster'].update({'sharedTasks':True,'taskKey':'${RIVOMESH_NODES_TASK_KEY}'})
         (home / (node + '.json')).write_text(json.dumps(config))
-        services[node] = {'image': 'eclipse-temurin:8-jre', 'entrypoint': ['java', '-Xmx512m' if args.shared_tasks else '-Xmx128m', '-jar', '/app/rivomesh.jar', 'serve', '/fixture/' + node + '.json'],
+        services[node] = {'image': 'eclipse-temurin:21-jre-jammy', 'entrypoint': ['java', '-Xmx512m' if args.shared_tasks else '-Xmx128m', '-jar', '/app/rivomesh.jar', 'serve', '/fixture/' + node + '.json'],
                           'environment': {'RIVOMESH_NODES_TOKEN': '${RIVOMESH_NODES_TOKEN}', 'RIVOMESH_NODES_DB_PASSWORD': '${RIVOMESH_NODES_DB_PASSWORD}','RIVOMESH_NODES_TASK_KEY':'${RIVOMESH_NODES_TASK_KEY}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'], 'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
     if args.shared_access:

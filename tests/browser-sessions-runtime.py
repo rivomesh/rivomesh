@@ -10,8 +10,8 @@ jar = ROOT / 'sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar'
 output = ROOT / 'target/browser-sessions-runtime'
 output.mkdir(exist_ok=True)
 manifest = {'artifactSha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'scope': 'BrowserSessionsTest; eight HTTP/session contract tests per JRE; not a source/target compatibility matrix', 'profiles': []}
-for jdk in (8, 11, 17, 21, 25):
-    image = f'eclipse-temurin:{jdk}-jre'
+for jdk in (21,):
+    image = f'eclipse-temurin:{jdk}-jre-jammy'
     log = output / f'java{jdk}.log'
     with log.open('w') as stream:
         subprocess.run(['docker', 'run', '--rm', image, 'java', '-version'], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=120)

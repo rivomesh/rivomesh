@@ -682,6 +682,8 @@ test('refresh and another page restore a cookie session without resubmitting the
   const restored=setup([], 'ADMIN',browser);try{
    await flush();assert.equal(restored.d.getElementById('login-dialog').open,false);assert.match(restored.d.getElementById('session-info').textContent,/管理员/);
    assert.equal(restored.authCalls.some(c=>c.method==='POST'),false);assert.equal(restored.calls.some(c=>c.headers.Authorization),false);
+   assert.equal(restored.authCalls.filter(c=>c.path==='/api/session').length,1);
+   assert.equal(restored.calls.filter(c=>c.path==='/api/tasks').length,1);
    assert.equal(restored.w.localStorage.length,1);assert.equal(restored.w.sessionStorage.length,0);
   }finally{restored.dom.window.close();}
  }finally{first.dom.window.close();}
@@ -689,6 +691,26 @@ test('refresh and another page restore a cookie session without resubmitting the
 
 test('an expired startup session shows login without sending control or creation requests',async()=>{
  const ui=setup();try{await flush();assert.equal(ui.d.getElementById('login-dialog').open,true);assert.equal(ui.d.getElementById('new-task').disabled,true);assert.equal(ui.calls.length,0);assert.equal(ui.authCalls.length,1);assert.equal(ui.authCalls[0].path,'/api/session');}finally{ui.dom.window.close();}
+});
+
+test('a transient session bootstrap error retries a valid browser cookie without a login prompt',async()=>{
+ const ui=setup([], 'ADMIN',{authenticated:true});
+ try{
+  Object.defineProperty(ui.d,'hidden',{configurable:true,value:false});
+  const fetch=ui.w.fetch;
+  let available=false;
+  ui.w.fetch=(path,options)=>path==='/api/session'&&!available
+   ?Promise.resolve({ok:false,status:503,json:async()=>({code:'CONTROL_STORE_UNAVAILABLE'})}):fetch(path,options);
+  await flush();
+  assert.equal(ui.d.getElementById('login-dialog').open,false);
+  assert.equal(ui.d.getElementById('new-task').disabled,true);
+  available=true;
+  ui.d.dispatchEvent(new ui.w.Event('visibilitychange'));
+  await flush();
+  assert.equal(ui.d.getElementById('login-dialog').open,false);
+  assert.match(ui.d.getElementById('session-info').textContent,/管理员/);
+  assert.equal(ui.authCalls.some(c=>c.method==='POST'),false);
+ }finally{ui.dom.window.close();}
 });
 
 test('normal requests use cookies and CSRF; logout revokes the server session before a new page restores',async()=>{

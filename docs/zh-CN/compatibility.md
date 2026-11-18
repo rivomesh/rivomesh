@@ -11,7 +11,7 @@
 | `MYSQL` 5.7.44 | Java 8。单机、GTID 主从提升和单主组复制。真实日志缺失时拒绝续传。 | [同步配置](pipeline-v3.md)、[日志缺失恢复](capture-recovery.md) |
 | `MYSQL` 8.0.46 | Java 8。单机、GTID 主从提升和单主组复制。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
 | `MYSQL` 8.2.0 | Java 8。单机、GTID 主从提升和单主组复制。 | [版本专项命令](pipeline-v3.md) |
-| `MYSQL` 8.4.13 | Java 8。三种拓扑以及 binlog 准入检查。下方进程矩阵另含五种 JDK 的单机档案。 | [8.4 binlog 档案](pipeline-v3.md) |
+| `MYSQL` 8.4.13 | Java 8。三种拓扑以及 binlog 准入检查。历史进程验证含 Java 21 单机档案。 | [8.4 binlog 档案](pipeline-v3.md) |
 | `POSTGRESQL` 17.12 | 实验性单主源。五种 JDK 分别通过 7 项 PostgreSQL 到 PostgreSQL 实库验证。Java 8 已通过同步槽切主，PostgreSQL 共同点对账待验证。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | 实验性单主源，发布存储型生成列并物化为目标普通列。 | [源指南与发布](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Java 8，单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
@@ -32,18 +32,9 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 
 V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引擎限制目标产品。PostgreSQL 和 Oracle 使用各自的版本、源身份、命名空间和凭据表单。部署前按目标手册核对拓扑、权限、保留与备份边界。
 
-## 源 × 目标 × Java 验证范围
+## 首版 Java 运行时
 
-| 实测源 → 目标 | Java 8 | Java 11 | Java 17 | Java 21 | Java 25 |
-|---|---|---|---|---|---|
-| MySQL 8.4 单机 → PostgreSQL 17.12 和独立 MySQL 8.4 | Controller、Agent、Worker | 同左 | 同左 | 同左 | 同左 |
-| PostgreSQL 17.12 单主 → PostgreSQL 17.12 | 7 项 | 7 项 | 7 项 | 7 项 | 7 项 |
-| PostgreSQL 18.7 单主 → PostgreSQL 17.12，包含存储型生成列 | 8 项 | 8 项 | 8 项 | 8 项 | 8 项 |
-| MySQL 5.7.44 / 8.0.46 / 8.2.0 原生源档案 | 限定实库 | 待验收 | 待验收 | 待验收 | 待验收 |
-| Oracle 26ai → PostgreSQL 17.12 | 限定归档增量和恢复 | 待验收 | 待验收 | 待验收 | 待验收 |
-| 其他目标和拓扑 | 上表各产品实测范围 | 待验收 | 待验收 | 待验收 | 待验收 |
-
-前三行对应[实测记录](../verification/baseline.json)里的 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix` 和 `postgresqlStoredGenerated`。其他组合按实际 JDK 运行对应源、目标、存储和恢复测试。[复现命令](performance.md)
+新候选统一在 Temurin 21 LTS 构建、运行和验收。实库档案同时记录真实 JVM 版本、架构和包 SHA。上述源和目标表保留各自实测候选的结果，历史档案可查[验收记录](../verification/baseline.json)中的 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix` 和 `postgresqlStoredGenerated`。待核验组合使用对应的 Java 21 源、目标、日志与恢复用例。[复现命令](performance.md)
 
 ## 管理端请求
 
@@ -53,7 +44,7 @@ CLI 通过 Bearer 凭据访问，浏览器使用 HttpOnly 会话。浏览器写�
 |---|---|
 | `/api/session`、`/api/session/logout`、`/api/nodes`、`/api/tasks` | 查询身份权限、节点和归属、分页任务。全局模式创建任务包含 `ownerNodeId`。[控制台接口](console-and-deployment.md) |
 | `/api/tasks/{id}/configuration`、`/api/tasks/{id}/actions` | 变更绑定当前 `expectedRevision` 和原始 `X-Request-ID`。本地创建返回 201，本地更新配置返回 200，全局变更与操作受理返回 202。随后读取持久化回执。[配置编辑](configuration-editor.md) · [操作生命周期](execution-lifecycle.md) |
-| `/api/tasks/{id}/capture-recovery`、`/api/tasks/{id}/failure-evidence` | 读取保留的采集故障代次和经授权的目标证据。[源审阅](capture-recovery.md) · [事务证据](failure-review.md) |
+| `/api/tasks/{id}/capture-recovery`、`/api/tasks/{id}/capture-exclusions`、`/api/tasks/{id}/failure-evidence` | 读取保留的采集故障代次和经授权的目标证据。[源审阅](capture-recovery.md) · [事务证据](failure-review.md) |
 | `/api/tasks/{id}/recovery-plans`、`/api/tasks/{id}/gaps`、`/api/tasks/{id}/gap-verifications`、`/api/tasks/{id}/corrections`、`/api/tasks/{id}/validations` | 先检查证据和不可变计划引用，再提交对应操作和代次。[跳过](transaction-skip.md) · [缺口核验](gap-verification.md) · [手工补录](manual-correction.md) · [对账修复](managed-repair.md) |
 | `/api/accounts`、`/api/audit` | ADMIN 账号目录与经授权的审计查询。[账号](account-management.md) · [审计](security-audit.md) |
 

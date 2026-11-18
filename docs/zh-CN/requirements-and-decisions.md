@@ -1,6 +1,6 @@
 # Rivomesh 需求、决策与实现边界
 
-更新日期：2026-11-16。English: [Requirements and decisions](../en/requirements-and-decisions.md)。
+更新日期：2026-11-18。English: [Requirements and decisions](../en/requirements-and-decisions.md)。
 
 本文记录产品范围与实现状态。**已确认需求不等于当前版本已经支持**；运行方式以 [README](../../README.md) 为准。平台设计、目标能力和场景扩展见[平台设计](platform-design.md)。
 
@@ -13,27 +13,27 @@
 | D01 | 每份独立任务配置绑定一个逻辑源；本期 MySQL，平台可管理多份配置及多个独立源，也保留每任务单独部署 | Web/CLI 均支持 v2/v3，多库多目标向导、独立恢复及日志选择已实现 |
 | D02 | 同一拓扑可选择多个 database，逐库显式映射到目标实例及 database/schema | Web/CLI v3 已实现 `databases` 和各目标 `mappings`；见 V3 运行手册 |
 | D03 | 同一源同时写入多个目标实例及不同产品 | Web/CLI v3 已实现独立目标确认、故障隔离及续传 |
-| D04 | MySQL5.7/8.0/8.2/8.4均纳入源端支持；单机、GTID主从、单主MGR按档案验收 | 5.7基础、8.0历史V2/HA、8.4代表性V3有证据；8.2.0 的 Java 8 V3 三种拓扑已验收，完整矩阵见SDD |
-| D05 | 尽量覆盖MySQL、PostgreSQL、openGauss、分布式GaussDB、达梦、金仓、OceanBase、GBase各产品/版本/模式 | MySQL/PG/openGauss及达梦/金仓/GBase8c有指定首批档案；分布式GaussDB、OceanBase完整恢复、GBase8a/8s等仍待完成 |
+| D04 | 源端包含 MySQL 5.7、8.0、8.2、8.4，按单机、GTID 主从和单主 MGR 验收 | 四个版本均有三种拓扑的历史实库档案，首版 Temurin 21 组合继续验证 |
+| D05 | 兼容 MySQL、PostgreSQL、openGauss、分布式 GaussDB、达梦、金仓、OceanBase 和 GBase | OceanBase CE MySQL 模式已通过中断和 SQL 恢复。分布式 GaussDB、OceanBase Oracle 模式与 GBase 8a/8s 实库仍待验 |
 | D06 | Gauss 业务次级 UNIQUE 转普通索引，避免仅为这些索引引入 GSI；其他目标存在约束兼容问题时也可降级 | v3 已实现普通次级索引及业务 UNIQUE 降级；GSI 模型有转换计划，商业分布式实机待验 |
 | D07 | 同步期间目标的订阅表仅由同步服务写；业务接管前校验并恢复必要约束 | 当前即要求独占写；接管工作流待实现 |
-| D08 | 自动恢复默认不跳过；人工跳过/补偿需审阅、原事件留存和缺口记录；主库提升仍由外部HA完成 | 已有部分普通主从/MGR/Worker接管与原事务重试；人工跳过和失败事务补偿尚未实现 |
-| D09 | Linux 手动、Docker、Kubernetes Helm Chart 和原生配置清单部署，完善中英文文档/FAQ | 已提供部署文件及双语操作手册；真实 K8s/完整平台验收仍待完成 |
+| D08 | 复用原断点自动重试。人工跳过与补偿要求证据和缺口记录，数据库 HA 系统执行主库提升 | 常见 MySQL 切主和续传已通过实测。目标事务跳过、源端受控跳过、补偿与手工修正各有实库档案 |
+| D09 | Linux 手动、Docker、Kubernetes Helm 和原生清单部署，提供中英文手册和 FAQ | 两种 Kubernetes 部署已通过双节点镜像替换、原卷重挂和续传，另实测外部日志旧 Worker 隔离 |
 | D10 | 最终项目名 Rivomesh，目录 `rivomesh`，Java 包/Maven groupId `io.github.rivomesh` | 本次已更名；不代表域名/商标已确权或已成为 Apache 项目 |
 | D11 | 首版纳入无主键表、JSON、STORED/VIRTUAL 生成列 | v3 已实现并实测无主键多重集、JSON、STORED 及白名单 VIRTUAL 物化 |
 | D12 | 独立日志存储可选；有独立存储与无独立存储均可部署 | v3 已有 H2 本地及 PostgreSQL/openGauss/MySQL 外部日志，独立确认和安全回收 |
 | D13 | 尽量支持既有非空目标、对象差异处理和业务接管 | 当前要求目标表首次为空；共同校验点修复已有首版，既有非空目标导入/合并仍待实现 |
 | D14 | 不定统一吞吐承诺，发布可复现的硬件—工作负载—性能标准 | 已有基准工具和小规模SQL/JDK冒烟证据；代表性硬件容量标准、长稳仍未完成 |
-| D15 | 完整中英文Web界面、向导、诊断与尽量通过界面恢复 | 本机工作台、权限、配置编辑、校验与MySQL/PG共同点修复已实现；跨节点、登录保持、跳过补数据、切换仍待完成 |
+| D15 | 完整中英文管理界面、向导、诊断与引导式恢复 | 已支持跨入口控制、刷新续登、三类源向导、失败事务审阅、跳过及补录。非空接管与自动跨 Agent 接管继续开发 |
 | D16 | 服务政企信创迁移、分阶段切换及两环境并行服务 | 单向数据镜像是基础；应用接管/回切/多写场景边界见平台设计 |
-| D17 | 目标包含ClickHouse、Apache Doris、Apache Hive及可扩展分析库/数仓 | 三者均有首批物化/恢复档案；集群、安全、容量和全部JDK验收待补，不等同关系库事务语义 |
+| D17 | 目标包括 ClickHouse、Doris、Hive 和后续分析库扩展 | 三者均有首批物化和恢复档案。集群、TLS、容量与 Java 21 组合待补验 |
 | D18 | 消息目标包含Kafka、Pulsar、RabbitMQ、RocketMQ、ActiveMQ Classic/Artemis、Redis Streams、NATS JetStream | 均有首批传输/恢复实现与证据；完整集群/TLS/容量及新跳过补偿协议仍需逐目标验收 |
-| D19 | PostgreSQL、Oracle源端为本次明确实施范围，保留中立SPI/事件/位置 | 当前真实源仍为MySQL；PG/Oracle SOURCE为PLANNED，需实现原生全量/增量和恢复 |
-| D20 | 同一平台多节点统一展示和控制；任一管理入口可操作远端任务 | 已有Worker租约/owner，不具备完整全局注册、远端命令、控制面HA |
-| D21 | 登录状态在刷新后保持，并具备退出、过期、撤销和跨管理节点策略 | 当前令牌仅在页面内存；服务器会话和刷新恢复待实现 |
-| D22 | 支持经审阅的事务跳过、受控源缺口恢复及界面手工补数据 | 共同点修复不等于失败事务补偿；新模式、缺口台账及相关UI/API尚未完成 |
-| D23 | Java8/11/17/21/25均须有当前发布档案的实际运行证据 | Java8基线与旧包10项SQL矩阵已有；当前全平台/驱动/恢复跨JDK矩阵未完成 |
-| D24 | 以SDD维护规格、设计、任务与验收追踪，并落实完整双语文档 | RM-SDD-001 v0.2已关闭4项单控制器会话需求，其余44项继续追踪 |
+| D19 | PostgreSQL 和 Oracle 源保留中立 SPI、事件模型和源坐标 | PostgreSQL 已实测快照、逻辑复制及同步槽切主。Oracle 已实测单 PDB 归档增量和 SCN 续传 |
+| D20 | 任一授权管理入口统一查看、操作远端任务 | 共享节点注册、配置与持久命令已接入。实测旧 Worker 隔离，Agent 自动调度继续开发 |
+| D21 | 刷新保留登录，支持退出、过期、撤销和跨入口会话 | HttpOnly 会话已通过真实 Chrome 刷新和退出检查，双入口共享会话档案已验收 |
+| D22 | 审阅后跳过事务或补充数据，持久保留原始证据及缺口 | 目标事务跳过、MySQL 有主键源事务跳过及受控补数据已有实库证据。适用范围见各操作手册 |
+| D23 | 首版固定 Eclipse Temurin 21 LTS | Java 21 字节码、构建、三类实际进程与双目标续传已验收。按源、目标、驱动和部署拓扑扩展兼容验证 |
+| D24 | 用 SDD 管理需求、规格、任务与验收，维护中英文文档 | 以当前 requirements.json、任务清单、验收矩阵和小时进度为准 |
 
 平台边界为：**任务单源，平台多任务**。不做隐式跨源合表或跨源事务。多份配置可由同一控制台管理、由隔离的 worker 执行，也可部署多份服务。
 

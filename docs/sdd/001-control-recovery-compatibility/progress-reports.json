@@ -13,8 +13,7 @@
   ],
   "inProgress": [
     "CP-04 managed Agent relocation and execution admission.",
-    "JV-01/02/04 release build and deployment narrowed to Eclipse Temurin 21 LTS.",
-    "LG-09 console theme from the Rivomesh site and cookie bootstrap/reload."
+    "JV-04 native Java 21 application image and live Helm/native Kubernetes release acceptance."
   ],
   "reportContents": [
     "Current totals",
@@ -40,14 +39,17 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue managed Agent relocation and remaining compatibility profiles."
+    "Continue managed Agent relocation and remaining compatibility profiles.",
+    "Extend LG-09 report discovery, retention and real browser recovery workflows."
   ],
-  "currentCandidateArtifact": "784468155a13763bf75e532cfb736269df34719a4a77942d8736390021356ffe",
-  "currentCandidateScope": "Managed MySQL retained source approval, durable exclusion and subsequent CDC; two native profiles and Chrome on the same candidate",
+  "currentCandidateArtifact": "15a81de54070880f0eaa211e4f00dca3e90696f3334f74492506a6a0248502bd",
+  "currentCandidateScope": "Temurin 21 compiled workbench with current branded navigation and single-read cookie startup",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "RC-04 final candidate passed thirteen isolated native MySQL checks, seven Chrome checks and 119 DOM tests. The stalled-capture checkpoint stayed unchanged after managed retention, aborted staging cleanup, Agent restart and a purged source log.",
     "LG-06 accepted. Helm and native YAML each passed six live checks, including a distinct replacement JAR, unchanged CSI claim/volume handle and original snapshot, newer lease, and automatic CDC after moving to a second node.",
-    "RC-04 accepted a bounded MySQL 8.4 keyed source transaction. The same candidate passed 14 native approval cases and 14 native log-purge cases, seven Chrome cases, 35 focused Java tests and 120 DOM tests. Separate scope remains for keyless and target reconciliation."
+    "RC-04 accepted a bounded MySQL 8.4 keyed source transaction. The same candidate passed 14 native approval cases and 14 native log-purge cases, seven Chrome cases, 35 focused Java tests and 120 DOM tests. Separate scope remains for keyless and target reconciliation.",
+    "Temurin 21 is the single release build and runtime. The Java 21 reactor passed 503 tests with 32 optional skips, and real Controller/Agent rollout and target continuation passed eight native cases.",
+    "Branded console and compact mobile navigation passed seven live Chrome cases, 121 DOM tests and 25 configuration examples. A valid cookie survives reload and retries after a temporary lookup failure."
   ]
 }

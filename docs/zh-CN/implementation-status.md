@@ -45,7 +45,7 @@
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
 | 消息目标 | 八种 Broker 已有确认式至少一次投递档案。NATS JetStream 三节点 TLS 和多数派恢复已通过。其他消息产品的集群与安全组合继续验收。 |
 | 部署 | Linux、Docker、Helm、原生 Kubernetes。双节点实测 RWO 重挂、配置更新、Secret 轮换、外部日志和旧 Worker 写入隔离。Helm 和原生 YAML 均通过应用镜像替换及跨节点挂载原 CSI 卷后的自动续传。 |
-| Java | Java 8 构建基线，实测 8、11、17、21、25 混部，覆盖 Controller 替换及原目录 Agent 排空重启。其余连接器和应用协议版本组合待验收。 |
+| Java | Temurin 21 LTS 是构建、运行和验收基线。后续连接器和协议组合在 Java 21 上验证。 |
 
 具体产品约束以[平台方案](platform-design.md)、[控制台](console-and-deployment.md)和各产品手册为准。协议和数据格式编号是内部状态标识，不是对开发版本升级的承诺。
 

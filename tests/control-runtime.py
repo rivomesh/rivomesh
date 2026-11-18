@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run release-first control contracts or actual management and CDC processes on five JREs."""
+"""Run release-first control contracts or actual management and CDC processes on Temurin 21."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, default=ROOT / 'sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar')
 parser.add_argument('--test-classes', type=Path, default=ROOT / 'sync-app/target/test-classes')
-parser.add_argument('--jdk', type=int, nargs='+', choices=(8,11,17,21,25), default=(8,11,17,21,25))
+parser.add_argument('--jdk', type=int, nargs='+', choices=(21,), default=(21,))
 parser.add_argument('--output', type=Path, default=ROOT / 'target/control-runtime')
 parser.add_argument('--suite', choices=('baseline','extended','global','routed','maintenance','execution','processes'), default='baseline')
 parser.add_argument('--heap-mib', type=int, choices=(128,256,512), default=128)
@@ -58,9 +58,9 @@ if args.suite in ('maintenance','execution'):
     classes += ['ManagedValidationTest','ManagedRepairTest']
 if args.suite == 'execution':
     classes += ['ExecutionRolesTest']
-manifest = {'artifactSha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'scope': classes, 'heapMiB': args.heap_mib, 'notCovered': 'Full source/destination/JDK/TLS-driver compatibility', 'profiles': []}
+manifest = {'artifactSha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'scope': classes, 'heapMiB': args.heap_mib, 'notCovered': 'Full source/destination/TLS-driver compatibility', 'profiles': []}
 for jdk in args.jdk:
-    image = f'eclipse-temurin:{jdk}-jre'
+    image = f'eclipse-temurin:{jdk}-jre-jammy'
     log = output / f'java{jdk}.log'
     with log.open('w') as stream:
         subprocess.run(['docker', 'run', '--rm', image, 'java', '-version'], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=120)

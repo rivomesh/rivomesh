@@ -32,7 +32,7 @@ services:
       timeout: 15s
       retries: 40
   tests:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     working_dir: /project
     environment:
       MAVEN_OPTS: -Xmx768m

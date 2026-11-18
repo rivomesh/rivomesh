@@ -29,7 +29,7 @@ services:
       timeout: 5s
       retries: 60
   tests:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     working_dir: /project
     environment:
       MAVEN_OPTS: -Xmx768m
@@ -40,7 +40,7 @@ services:
       - ..:/project
       - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository
   store:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     volumes:
       - fe-meta:/fe
       - be-storage:/be

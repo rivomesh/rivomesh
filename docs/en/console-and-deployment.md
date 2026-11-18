@@ -1,6 +1,6 @@
 # Console, multiple tasks, and deployment
 
-Updated: 2026-11-17. 中文：[控制台与部署](../zh-CN/console-and-deployment.md). This page describes implemented behavior; see [platform design](platform-design.md) for the full roadmap.
+Updated: 2026-11-18. 中文：[控制台与部署](../zh-CN/console-and-deployment.md). This page describes implemented behavior; see [platform design](platform-design.md) for the full roadmap.
 
 ## Runtime scope
 
@@ -11,6 +11,8 @@ The bilingual workbench provides creation, connection/source-object checks, star
 Local task control is the default. Opt in with `cluster.sharedAccess=true` and `cluster.sharedTasks=true` for fixed-owner global tasks. Any entry manages authorized remote tasks while distinguishing durable admission, actual outcomes and uncertainty. See [global control](global-control.md) for private directories/keys, upgrade refusal, Helm and native two-node deployment. Automatic execution takeover remains open.
 
 ## Local startup
+
+Use Temurin 21 LTS for Maven and for the running process.
 
 ```bash
 mvn -s build/settings.xml verify
@@ -193,8 +195,6 @@ See the [verification record](../verification/README.md#lg-06-live-kubernetes-rw
 
 The worker-outage profile stops a worker in a disposable Minikube cluster while the database remains on the control plane. CDC resumes with the same volume and a newer lease when the worker returns. Add `--worker-outage-node <test worker>` to run the native YAML outage profile.
 
-### Mixed Java rollout
+### Java 21 deployment
 
-The same Java 8 artifact runs with Temurin 8, 11, 17, 21 and 25. On Linux use an absolute Java path from the chosen runtime in the service. For Docker set the `JAVA_IMAGE` build argument to the chosen JRE image and pin its digest for deployment. Select the resulting image in Helm values or the native Kubernetes workload. Keep the Agent and its supervised Worker on the chosen Agent runtime so they share its Java executable and compatible drivers.
-
-The native mixed profile starts Controllers on Java 8 and 21 and the Agent/Worker on Java 11. Replace the Java 8 Controller with Java 25 while the Java 21 entry remains available. After the new Controller shows the same durable command history, stop the Agent task, confirm the Worker exits and its lease clears or expires, and record the GTID and target snapshots. Replace the Agent runtime with Java 17 using its existing node identity and persistent directory. Verify that the original STOP outcome and checkpoint remain visible, then start from the current Controller. Verify both target contents and original snapshot IDs. This process rolls Java runtimes on the same application artifact. Application-version downgrades and automatic placement by JDK or driver availability require separate acceptance. [Native evidence](../verification/README.md#mixed-java-rollout)
+The Docker build defaults to the Temurin 21 Maven image and the Temurin 21 JRE. Helm and native Kubernetes use the built application image. For Linux, confirm that the service's Java executable reports Java 21. For a rolling application update, keep one management entry available and follow the durable task checkpoints and owner lease through each replacement. Record the deployed image digest, Java version and application SHA in the deployment evidence.

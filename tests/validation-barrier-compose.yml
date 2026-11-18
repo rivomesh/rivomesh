@@ -49,7 +49,7 @@ services:
       timeout: 5s
       retries: 60
   tests:
-    image: maven:3.9-eclipse-temurin-8
+    image: maven:3.9-eclipse-temurin-21
     working_dir: /project
     environment:
       JAVA_TOOL_OPTIONS: -Djava.util.logging.config.file=/project/tests/logging.properties

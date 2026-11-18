@@ -11,7 +11,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 NATS = 'nats:2.11.8-alpine'
-JAVA = 'maven:3.9-eclipse-temurin-8'
+JAVA = 'maven:3.9-eclipse-temurin-21'
 MEMBERS = ('nats-a', 'nats-b', 'nats-c')
 
 

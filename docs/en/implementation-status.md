@@ -45,7 +45,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
 | Messaging | Eight broker profiles use confirmed at-least-once delivery. NATS JetStream passed three-member TLS and quorum recovery. Other cluster and security profiles remain open. |
 | Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
-| Java | Java 8 build baseline. Java 8, 11, 17, 21 and 25 ran together with Controller replacement and drained Agent restart. Broader connector and protocol-version profiles remain open. |
+| Java | Temurin 21 LTS is the build, runtime and acceptance baseline. Connector and security protocol profiles are tracked on Java 21. |
 
 See [design](platform-design.md),[console operations](console-and-deployment.md) and product guides for constraints. Protocol/data-format numbers identify internal modes,not compatibility promises for unreleased builds.
 
@@ -61,6 +61,6 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
 3. Broader PostgreSQL and Oracle types, Oracle failover, and the PostgreSQL common-cut workflow.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.
-5. Large transactions/catalogs,hardware benchmarks,liveK8s,complete JDK matrix and bilingual docs.
+5. Large transactions/catalogs,hardware benchmarks,liveK8s,Java 21 connector and recovery profiles and bilingual docs.
 
 No permanent preview is retained. Temporary fixtures are cleaned;useful dependency caches remain. Hourly report comparison state lives in[progress-reports.json](../sdd/001-control-recovery-compatibility/progress-reports.json);no independent notification scheduler is currently available.

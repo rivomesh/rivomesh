@@ -212,3 +212,13 @@ Candidate `9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365` pas
 ### Approved exclusion of a MySQL source transaction
 
 Candidate `784468155a13763bf75e532cfb736269df34719a4a77942d8736390021356ffe` passed fourteen approval and continuation checks and fourteen log-purge checks on native MySQL 8.4.13. Administrators reviewed the original bytes and exact impact, then excluded the one GTID while both real SQL target rows and acknowledgment positions stayed unchanged. The Agent reopened the paused state and gap receipt. Later transactions reached PostgreSQL and MySQL after Resume, with the contiguous applied prefixes held at the gap. A matching retained archive alone could not authorize the source range after purge. The same artifact passed seven Chrome checks, 35 focused Java tests and 120 DOM tests. [Runbook](../en/capture-recovery.md#approve-a-source-transaction-skip) · [Manifests](baseline.json)
+
+
+### Temurin 21 release baseline
+
+Candidate `cb8183632cc1297ed12332c3b9c8580ff3651309c6e648d00f5ed086ed0245cc` passed eight native checks after compiling to Java 21 class-file major 65. The fixture read the actual Controller, Agent and Worker JVMs on ARM64. Replacing one Controller left the other entry available and the original Worker continued delivery. The drained Agent used the same directory and restarted the original snapshots and GTID for PostgreSQL and MySQL. An earlier candidate built at the same class level passed 503 Java tests with 32 optional integration cases skipped. [Deployment guide](../en/console-and-deployment.md#java-21-deployment) · [Manifests](baseline.json)
+
+
+### Console branding and session bootstrap
+
+Candidate `15a81de54070880f0eaa211e4f00dca3e90696f3334f74492506a6a0248502bd` passed seven live Chrome cases on Temurin 21, 121 DOM cases and parsing of 25 configuration examples. The console uses the Rivomesh site palette and compact mobile navigation. Cookie authentication survives reload, expiry still opens sign-in, and a temporary session lookup error can recover through the same browser cookie. Login and restore each load the task list once. The real browser verified the 390px workspace, source wizard submissions and sign-out. [Browser fixture](../../tests/ui/browser-smoke.mjs) · [Manifests](baseline.json)

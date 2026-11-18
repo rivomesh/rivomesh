@@ -50,7 +50,7 @@ def main():
         args = ['docker', 'run', '-d', '--init', '--name', name, '--publish', '127.0.0.1::8080',
                 '--mount', 'type=bind,src=' + str(ROOT) + ',dst=/project', '--workdir', '/project',
                 '--env', 'RIVOMESH_NATIVE_ADMIN', '--env', 'RIVOMESH_NATIVE_VIEWER',
-                'maven:3.9-eclipse-temurin-8', 'bash', '-ec', 'read -r jar < "$1"; exec java -Xmx256m -jar "$jar" serve "$2"',
+                'maven:3.9-eclipse-temurin-21', 'bash', '-ec', 'read -r jar < "$1"; exec java -Xmx256m -jar "$jar" serve "$2"',
                 'accounts-native', prefix + '/active-jar', prefix + '/platform.json']
         subprocess.run(args, cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
         created = True
@@ -142,7 +142,7 @@ def main():
         controller.write_text(json.dumps(pending))
         assert not list((directory / 'data/logs').iterdir())
         offline = ['docker', 'run', '--rm', '--mount', 'type=bind,src=' + str(ROOT) + ',dst=/project', '--workdir', '/project',
-                   '--env', 'RIVOMESH_NATIVE_ADMIN', '--env', 'RIVOMESH_NATIVE_VIEWER', 'maven:3.9-eclipse-temurin-8',
+                   '--env', 'RIVOMESH_NATIVE_ADMIN', '--env', 'RIVOMESH_NATIVE_VIEWER', 'maven:3.9-eclipse-temurin-21',
                    'java', '-jar', prefix + '/current.jar', 'recover-access', prefix + '/platform.json', 'legacy-admin']
         result = subprocess.run(offline, cwd=ROOT, env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         assert result.returncode == 0 and 'ACCESS_RECOVERED_OFFLINE_NO_WORKERS_STARTED' in result.stdout
