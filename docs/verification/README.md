@@ -109,3 +109,7 @@ Verifier SHA-256 `d2a9fb5e16014825a51fbbd0569e885eeb00d7954ccf57c7724b5bd1fa8aef
 ## SO-07 Oracle SCN preflight
 
 Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` passed four Oracle Free 23.26.4.0.0 ARM64 native checks on Java 8. The probe validates root and PDB authority, checks Flashback on keyed and keyless tables and refuses a mismatched service. The fixture observed the original values and duplicate multiplicity after a later update and delete. CDC integration remains open. See the [preflight guide](../en/oracle-source.md).
+
+## PostgreSQL source runtime matrix
+
+Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` ran seven native PostgreSQL 17.12 source cases on each of Java 8, 11, 17, 21 and 25, a total of 35 successful cases. Runtime versions and image IDs are in the baseline. Run `python3 tests/postgres-source-run.py --jdk <8|11|17|21|25> --artifact <candidate jar> --output target/pg-source-proof` for an individual profile.

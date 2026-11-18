@@ -24,3 +24,5 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 - SO-06 still tracks cross-timeline promotion, synchronized slots, common-cut validation and the broader driver matrix.
 
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
+
+Seven native checks passed on each of Java 8, 11, 17, 21 and 25. Use `--jdk` to select the runtime. See the [verification record](../verification/README.md#postgresql-source-runtime-matrix).

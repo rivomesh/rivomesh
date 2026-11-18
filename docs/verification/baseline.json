@@ -1142,5 +1142,52 @@
     "sourceVersion": "23.26.4.0.0",
     "cleanupExitCode": 0,
     "reproduce": "python3 tests/oracle-source-probe.py --artifact <candidate jar> --jdbc-driver <ojdbc8.jar> --output target/oracle-proof"
+  },
+  "postgresqlSourceRuntimeMatrix": {
+    "artifactSha256": "4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c",
+    "scope": "Native PostgreSQL 17.12 single-primary source, pgJDBC 42.7.14, LOCAL journal, PostgreSQL 17 target. Seven cases on each ARM64 JDK profile.",
+    "casesPerJdk": 7,
+    "runtimes": [
+      {
+        "jdk": 8,
+        "runtimeVersion": "1.8.0_512",
+        "runtimeImage": "eclipse-temurin:8-jre",
+        "runtimeImageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+        "runtimeArchitecture": "arm64",
+        "status": "PASS"
+      },
+      {
+        "jdk": 11,
+        "runtimeVersion": "11.0.33",
+        "runtimeImage": "eclipse-temurin:11-jre",
+        "runtimeImageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe",
+        "runtimeArchitecture": "arm64",
+        "status": "PASS"
+      },
+      {
+        "jdk": 17,
+        "runtimeVersion": "17.0.21",
+        "runtimeImage": "eclipse-temurin:17-jre",
+        "runtimeImageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990",
+        "runtimeArchitecture": "arm64",
+        "status": "PASS"
+      },
+      {
+        "jdk": 21,
+        "runtimeVersion": "21.0.13",
+        "runtimeImage": "eclipse-temurin:21-jre",
+        "runtimeImageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+        "runtimeArchitecture": "arm64",
+        "status": "PASS"
+      },
+      {
+        "jdk": 25,
+        "runtimeVersion": "25.0.5",
+        "runtimeImage": "eclipse-temurin:25-jre",
+        "runtimeImageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3",
+        "runtimeArchitecture": "arm64",
+        "status": "PASS"
+      }
+    ]
   }
 }

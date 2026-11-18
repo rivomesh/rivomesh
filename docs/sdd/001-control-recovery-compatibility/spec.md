@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.22 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.23 · 2026-11-18 · IMPLEMENTING
 
 实施中：48项持续追踪，21项DONE、26项PARTIAL、1项NEW，余27项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
@@ -60,7 +60,7 @@ RM-SDD-001 · v0.22 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Java 8/11/17/21/25 可运行发布 | 同一候选包的 Controller、Agent 与 Worker 已在五个 JDK 完成真实同步。完整连接器矩阵和混合版本升级由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | 源/目标/恢复跨JDK矩阵 | 已有十项只覆盖单主键ASCII表和PG目标，不覆盖全部连接器。 |
+| JV-02 | P1 / PARTIAL | 源/目标/恢复跨JDK矩阵 | 五 JDK 的 MySQL 8.4 基础 SQL 档案和 PostgreSQL 17.12 七项原生源档案已通过。其余源版本、目标产品、TLS 和恢复组合仍待补齐。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商SDK隔离和完整包检查，缺全部JDK组合验证。 |
 | JV-04 | P1 / NEW | 多JDK部署及混合版本升级 | 现有基准可选JRE，生产发布/集群升级策略未完整验收。 |
 

@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.22 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.23 · 2026-11-18 · IMPLEMENTING
 
 Implementation:48requirements,21 DONE, 26 PARTIAL and 1 NEW, with 27 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
@@ -60,7 +60,7 @@ Implementation:48requirements,21 DONE, 26 PARTIAL and 1 NEW, with 27 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Java8/11/17/21/25 runnable releases | Actual synchronization with the same Controller, Agent and Worker artifact passed on five JDKs. JV-02 through JV-04 track the broader connector matrix and mixed-version upgrades. |
-| JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Ten profiles cover one keyed ASCII table/PG sink,not all adapters. |
+| JV-02 | P1 / PARTIAL | Cross-JDK source/sink/recovery matrix | Five JDKs passed the MySQL 8.4 baseline SQL profile and seven native PostgreSQL 17.12 source cases. Remaining source versions, targets, TLS and recovery combinations are open. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor isolation/artifact checks exist without all-JDK coverage. |
 | JV-04 | P1 / NEW | Multi-JDK deployment and mixed-version upgrades | Benchmarks select JREs;production/mixed-cluster upgrade policies are not accepted. |
 

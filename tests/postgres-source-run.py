@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--jdk', type=int, choices=(8,11,17,21,25), default=8)
 args = parser.parse_args()
 artifact = args.artifact.resolve()
 output = args.output.resolve()
@@ -25,7 +27,9 @@ output.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
 environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32))
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
-report = dict(artifactSha256=digest,status='RUNNING',checks=[])
+image='eclipse-temurin:'+str(args.jdk)+'-jre'
+report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image)
+local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def require(check,label,seconds=120):
@@ -66,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
     database=dict(image='postgres:17',environment=dict(POSTGRES_PASSWORD='${RM_PG_PASSWORD}',POSTGRES_DB='sync_test'))
     services=dict(source=dict(database,command=['-c','wal_level=logical','-c','max_replication_slots=8',
                                                 '-c','wal_sender_timeout=4000']),target=database,
-                  runner=dict(image='eclipse-temurin:8-jre',entrypoint=['java','-Xmx384m','-jar','/app/rivomesh.jar'],
+                  runner=dict(image=image,entrypoint=['java','-Xmx384m','-jar','/app/rivomesh.jar'],
                               command=['serve','/fixture/platform.json'],
                               environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}'),
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
@@ -93,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         if body is not None:
             headers.update({'Content-Type':'application/json','X-Request-ID':'pg_source_'+uuid.uuid4().hex})
         request=urllib.request.Request(root_url()+path,data=json.dumps(body).encode() if body is not None else None,headers=headers)
-        with urllib.request.urlopen(request,timeout=10) as response:
+        with local_http.open(request,timeout=20) as response:
             return json.load(response)
 
     def task():
@@ -135,6 +139,13 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
         assert json.loads(preflight.stdout)['sourceTables']==3
         compose('up','-d','runner')
+        version=compose('exec','-T','runner','java','-version')
+        matched=re.search(r'version "([^"]+)"',version.stderr)
+        assert matched and matched.group(1).startswith('1.8.' if args.jdk==8 else str(args.jdk)+'.')
+        report['runtimeVersion']=matched.group(1)
+        metadata=json.loads(subprocess.check_output(['docker','image','inspect',image],text=True))[0]
+        report['runtimeImageId']=metadata['Id']
+        report['runtimeArchitecture']=metadata['Architecture']
         require(stream_ready,'native consistent snapshot')
         initial=task()['status']
         snapshot_ids=sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')

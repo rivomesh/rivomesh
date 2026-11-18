@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.22",
+  "version": "0.23",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1078,8 +1078,8 @@
         "en": "Cross-JDK source/sink/recovery matrix"
       },
       "gap": {
-        "zh-CN": "已有十项只覆盖单主键ASCII表和PG目标，不覆盖全部连接器。",
-        "en": "Ten profiles cover one keyed ASCII table/PG sink,not all adapters."
+        "zh-CN": "五 JDK 的 MySQL 8.4 基础 SQL 档案和 PostgreSQL 17.12 七项原生源档案已通过。其余源版本、目标产品、TLS 和恢复组合仍待补齐。",
+        "en": "Five JDKs passed the MySQL 8.4 baseline SQL profile and seven native PostgreSQL 17.12 source cases. Remaining source versions, targets, TLS and recovery combinations are open."
       },
       "acceptance": {
         "zh-CN": "每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。",

@@ -24,3 +24,5 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - 当前档案绑定一个 PostgreSQL 17 主库与单一时间线。跨时间线切换、槽同步、共同校验点和完整驱动矩阵由 SO-06 后续任务跟踪。
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
+
+已在 Java 8、11、17、21、25 上各运行七项实库检查。测试可用 `--jdk` 选择运行时。见[验收记录](../verification/README.md#postgresql-source-runtime-matrix)。
