@@ -10,7 +10,7 @@
     "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
   ],
   "inProgress": [
-    "SO-03 MySQL 8.0.46 V3 standalone, async and MGR regression against the current candidate."
+    "SO-01 source factory and explicit MySQL type/version configuration. Source-native and full process smoke verification running."
   ],
   "reportContents": [
     "Current totals",
@@ -30,15 +30,17 @@
     "64f6eeef7f262f260ba9af5aa584803e4e682c15"
   ],
   "currentSdd": {
-    "DONE": 17,
-    "PARTIAL": 27,
+    "DONE": 18,
+    "PARTIAL": 26,
     "NEW": 4
   },
   "newSinceLastReport": [
-    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles."
+    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
+    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks."
   ],
   "nextTasks": [
-    "SO-03 MySQL 8.0.46 V3 source profiles and bounded recovery.",
+    "SO-05 review supported and refused MySQL 8.4 event profiles.",
+    "SO-06 PostgreSQL pgoutput source profile.",
     "Consolidate V2/V3 execution branches."
   ],
   "currentCandidateArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",

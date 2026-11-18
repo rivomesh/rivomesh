@@ -89,7 +89,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-02 · MySQL5.7 supported profile · P1 · Depends on: SO-01
   Deliver: Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence.
   Acceptance: AC-SO-02
-- [ ] T-SO-03 · MySQL8.0 current V3 acceptance · P1 · Depends on: SO-01
+- [x] T-SO-03 · MySQL8.0 current V3 acceptance · P1 · Depends on: SO-01
   Deliver: Reverify current-release multi-database fan-out,types/generated columns,transactions,ASYNC/MGR,recovery/manual operations with explicit patch/topology scope.
   Acceptance: AC-SO-03
 - [x] T-SO-04 · MySQL8.2 compatibility and acceptance · P1 · Depends on: SO-01

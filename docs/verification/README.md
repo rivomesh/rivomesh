@@ -63,3 +63,9 @@ All four running processes used the expected JVM on each JDK. The candidate pass
 候选包 `f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3` 通过 48 项 Java 定向检查及 109 项界面检查。真实 CDC 的源断线与 DDL 档案 6 项、解码档案 5 项、目标准备/快照/应用档案 19 项分别通过。MySQL 原生事务档案 4 项通过，并启动了含阶段记录表的 MySQL 日志库。
 
 Source connection loss is observed from both management entries and CDC resumes after the source returns. DDL and partial row images retain the original GTID and error generation across Agent restart. Destination preparation, snapshot and apply failures keep their own phases. Focused tests distinguish normalization from a journal ACK failure after a native destination commit.
+
+### SO-03 · MySQL 8.0.46
+
+Java 8 候选包 `f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3` 通过 5 项 V3 单机实库测试、GTID 主从提升和单主组复制选主各 1 项，以及 14 项跨入口恢复检查。恢复测试覆盖 PostgreSQL 目标与 MySQL 健康对照、全量转增量、前镜像补偿、类型化修正、取消及强杀后原请求恢复。
+
+The source was MySQL 8.0.46 with GTID, ROW and FULL enabled. Run the three topology profiles with `tests/matrix.sh --v3 8.0.46`. Pass `--source-image` to the global CDC recovery runner to select the same MySQL patch version.

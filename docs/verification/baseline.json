@@ -215,6 +215,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization."
       }
+    },
+    {
+      "id": "SO-03",
+      "title": {
+        "zh-CN": "MySQL 8.0 当前V3能力补验",
+        "en": "MySQL8.0 current V3 acceptance"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
+      }
     }
   ],
   "productProfiles": [
@@ -758,5 +771,20 @@
         ]
       }
     ]
+  },
+  "mysql80Source": {
+    "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+    "image": "public.ecr.aws/docker/library/mysql:8.0",
+    "imageId": "sha256:b7e118f56c5963e079252e0d6e2978c9c010eb7fc7aaaec100e367796b5dd08f",
+    "serverVersion": "8.0.46",
+    "serverProfile": "ON|ROW|FULL",
+    "checks": {
+      "V3_Standalone": 5,
+      "GTID_ASYNC": 1,
+      "Single_Primary_MGR": 1,
+      "Remote_Recovery": 14
+    },
+    "harnessSourceSha256": "04e30a84d03635fbfbdfe78c0eccfbd218017db0e747c3321d5b136381c1c7a5",
+    "scope": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
   }
 }

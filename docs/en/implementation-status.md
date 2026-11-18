@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **17 DONE, 27 PARTIAL and 4 NEW, with 31 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **18 DONE, 26 PARTIAL and 4 NEW, with 30 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -20,6 +20,7 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-01 | MySQL source, journal and target fault phases across entries and restart |
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
 | JV-01 | Actual Controller, Agent and Worker on all five JDKs with SQL snapshot and CDC verification |
+| SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery |
 | SO-04 | MySQL 8.2.0 on Java 8 with native V3 standalone, GTID async and single-primary MGR profiles |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.
@@ -51,7 +52,7 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 
 1. Controlled source range recovery and recovery protocols for other destinations.
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
-3. PostgreSQL and Oracle sources, plus complete MySQL 5.7, 8.0 and 8.4 profiles.
+3. PostgreSQL and Oracle sources, plus complete MySQL 5.7 and 8.4 profiles.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.
 5. Large transactions/catalogs,hardware benchmarks,liveK8s,complete JDK matrix and bilingual docs.
 

@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.13",
+  "version": "0.14",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -847,14 +847,14 @@
       "id": "SO-03",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "MySQL 8.0 当前V3能力补验",
         "en": "MySQL8.0 current V3 acceptance"
       },
       "gap": {
-        "zh-CN": "有8.0.46历史V2/HA记录，不能直接作为当前V3全功能验收。",
-        "en": "Historical8.0.46 V2/HA evidence is not current full V3 acceptance."
+        "zh-CN": "MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。",
+        "en": "MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs."
       },
       "acceptance": {
         "zh-CN": "对本次发布包补验多库多目标、类型/生成列、事务、主备/MGR、失败恢复与人工操作；按拓扑和小版本注明范围。",
@@ -865,8 +865,16 @@
       ],
       "evidence": [
         "docs/validation.md",
-        "tests/matrix.sh"
-      ]
+        "tests/matrix.sh",
+        "tests/matrix.sh",
+        "tests/global-control-pipeline.py",
+        "docs/verification/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
+      }
     },
     {
       "id": "SO-04",
