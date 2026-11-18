@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.36 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,29 DONE, 19 PARTIAL and 0 NEW, with 19 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -62,7 +62,7 @@ Implementation:48requirements,28 DONE, 20 PARTIAL and 0 NEW, with 20 open. RC-01
 | JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
 | JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 passed MySQL 8.4 to PostgreSQL and MySQL snapshots, CDC and original-checkpoint resume. Historical evidence includes PostgreSQL 17.12 and 18.7. Other sources, targets, TLS and recovery combinations remain. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Vendor SDK isolation and packaged artifact checks exist. Java 21 driver, TLS, certificate and recovery combinations remain. |
-| JV-04 | P1 / PARTIAL | Java 21 deployment and rolling replacement | Live Java 21 Controller replacement and drained Agent restart in its original directory passed. Kubernetes image rollout and rollback boundaries remain for the Java 21 release image. |
+| JV-04 | P1 / DONE | Java 21 deployment and rolling replacement | Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence. |
 
 ## Complete documentation
 

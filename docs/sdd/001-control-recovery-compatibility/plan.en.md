@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.36 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **28 DONE, 20 PARTIAL and 0 NEW, with 20 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and Temurin 21 process and source/target diagnostic profiles passed bounded acceptance.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **29 DONE, 19 PARTIAL and 0 NEW, with 19 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and Temurin 21 process and source/target diagnostic profiles passed bounded acceptance.
 
 ## Current baseline
 

@@ -115,7 +115,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03
-- [ ] T-JV-04 · Java 21 deployment and rolling replacement · P1 · Depends on: CP-04, JV-02, JV-03, LG-08
+- [x] T-JV-04 · Java 21 deployment and rolling replacement · P1 · Depends on: CP-04, JV-02, JV-03, LG-08
   Deliver: Verify the Java 21 Linux, Docker and Kubernetes deployment paths. Rolling replacement preserves a management entry, commands and verified checkpoints. Document backup, restore and rollback boundaries.
   Acceptance: AC-JV-04
 ## Complete documentation

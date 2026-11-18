@@ -198,3 +198,5 @@ python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
 ### Java 21 部署
 
 Docker 默认使用 Temurin 21 构建镜像和 Temurin 21 JRE。Helm 和原生 Kubernetes 使用构建出的应用镜像。Linux 上确认服务使用的 Java 可执行文件报告 Java 21。滚动替换应用时保留一个管理入口，逐个核对任务断点和执行租约。记录镜像摘要、Java 版本和应用包 SHA。
+
+替换 Java 21 应用镜像前，记录 JAR 和镜像标识，核对任务期望状态，并按部署档案一致备份 Agent 目录、控制库和外部日志。滚动更新保留原持久卷。需要恢复时，先停写，恢复到协调一致的备份点，再核对目标原生回执和断点。首版回退范围以当前发布格式为准。[实测记录](../verification/README.md#java-21-exact-release-candidate)

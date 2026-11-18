@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.35",
+  "version": "0.36",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1158,14 +1158,14 @@
       "id": "JV-04",
       "epic": "JAVA",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "Java 21 部署及滚动替换",
         "en": "Java 21 deployment and rolling replacement"
       },
       "gap": {
-        "zh-CN": "真实 Java 21 双 Controller 滚动替换与 Agent 原目录排空重启已通过。待验证首版 Java 21 镜像在 Kubernetes 中的升级及回退边界。",
-        "en": "Live Java 21 Controller replacement and drained Agent restart in its original directory passed. Kubernetes image rollout and rollback boundaries remain for the Java 21 release image."
+        "zh-CN": "Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。",
+        "en": "Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence."
       },
       "acceptance": {
         "zh-CN": "核验 Java 21 的 Linux、Docker 和 Kubernetes 部署路径。滚动更换应保留管理入口、原有命令和已验证的同步断点，说明备份恢复与回退边界。",
@@ -1182,8 +1182,17 @@
         "deploy/helm/rivomesh/values.yaml",
         "tests/global-control-pipeline.py",
         "docs/en/console-and-deployment.md",
-        "docs/zh-CN/console-and-deployment.md"
-      ]
+        "docs/zh-CN/console-and-deployment.md",
+        "tests/kubernetes-csi-runtime.py",
+        "tests/release-evidence-gate.py",
+        "docs/verification/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "be6406c60f2b2c5ab0bd00ecc64cbf28cfd09e8e764d137e19c38f26cdc7dbdb",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21.0.13+9 Linux ARM64 nonroot manual and Dockerfile; 19 real MySQL/PG/control checks; Helm/native Kubernetes v1.31 hostpath CSI with four scenarios each; seven Chrome checks and 25 examples",
+        "criteriaSha256": "608ea3fd6dc9be4975dd80a2df960b32a6055ff6962063407af7e7356febc165"
+      }
     },
     {
       "id": "DO-01",

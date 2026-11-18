@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.36 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，28项DONE、20项PARTIAL、0项NEW，余20项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，29项DONE、19项PARTIAL、0项NEW，余19项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -62,7 +62,7 @@ RM-SDD-001 · v0.35 · 2026-11-18 · IMPLEMENTING
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已通过 MySQL 8.4 到 PostgreSQL/MySQL 的全量、增量和原位续传。历史档案含 PostgreSQL 17.12 与 18.7。其余源、目标、TLS 和恢复组合待补验。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | 已有厂商 SDK 隔离和完整包检查，待完成 Java 21 的驱动、TLS、证书和恢复组合。 |
-| JV-04 | P1 / PARTIAL | Java 21 部署及滚动替换 | 真实 Java 21 双 Controller 滚动替换与 Agent 原目录排空重启已通过。待验证首版 Java 21 镜像在 Kubernetes 中的升级及回退边界。 |
+| JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档
 

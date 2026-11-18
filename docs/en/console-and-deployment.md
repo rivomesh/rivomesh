@@ -198,3 +198,5 @@ The worker-outage profile stops a worker in a disposable Minikube cluster while 
 ### Java 21 deployment
 
 The Docker build defaults to the Temurin 21 Maven image and the Temurin 21 JRE. Helm and native Kubernetes use the built application image. For Linux, confirm that the service's Java executable reports Java 21. For a rolling application update, keep one management entry available and follow the durable task checkpoints and owner lease through each replacement. Record the deployed image digest, Java version and application SHA in the deployment evidence.
+
+Before replacing a Java 21 application image, record the exact JAR and image IDs, confirm the old version's intended task state and take consistent backups of the Agent directory, control store and external journal where used. Keep the same persistent volume on a rolling restart. If restoration is necessary, stop writers, restore a coordinated point and reconcile target-native receipts before restarting from the saved position. A prior development-format application is outside the first-release rollback scope. [Live evidence](../verification/README.md#java-21-exact-release-candidate)
