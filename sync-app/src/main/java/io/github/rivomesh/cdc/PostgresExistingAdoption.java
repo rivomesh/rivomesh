@@ -28,6 +28,22 @@ public final class PostgresExistingAdoption implements AutoCloseable {
     private Approval lockedApproval;
     private Replay checkedReplay;
 
+    enum BaselinePhase {
+        ADOPTED("PAUSED", PAUSE_REASON, 1),
+        TARGET_WRITER("TARGET_WRITER", "TARGET_WRITER_AUTHORIZED", 1),
+        RETURNED("PAUSED", "TARGET_WRITER_REVOKED", 2);
+
+        final String state;
+        final String reason;
+        final long errorGeneration;
+
+        BaselinePhase(String state, String reason, long errorGeneration) {
+            this.state = state;
+            this.reason = reason;
+            this.errorGeneration = errorGeneration;
+        }
+    }
+
     public record Approval(String table, String planSha256, String requestId, String actor) {
         public Approval {
             try {
@@ -95,6 +111,10 @@ public final class PostgresExistingAdoption implements AutoCloseable {
     public PostgresAdoptionRead observation() { return read; }
 
     public Replay replay() throws Exception {
+        return replay(BaselinePhase.ADOPTED, null);
+    }
+
+    Replay replay(BaselinePhase phase, String verifiedWriterTrigger) throws Exception {
         Approval approval = requireLock();
         if (!existsRelation(settings.metadataSchema, RECEIPT)) return null;
         lockMetadata(settings.metadataSchema, RECEIPT);
@@ -121,9 +141,9 @@ public final class PostgresExistingAdoption implements AutoCloseable {
         for (String name : List.of("job", "schema", "subscription", "snapshot", "snapshot_ack", "log", "receipt", "normalized", "snapshot_part")) {
             lockMetadata(journal.settings.namespace, "rm3_" + name);
         }
-        TableSchema table = requireBaseline(receipt);
+        TableSchema table = requireBaseline(receipt, phase);
         read.pin(List.of(table));
-        if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true))) {
+        if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true, verifiedWriterTrigger))) {
             throw failure("ADOPTION_BOOTSTRAP_CATALOG_CHANGED");
         }
         checkedReplay = new Replay(receipt, table);
@@ -138,6 +158,11 @@ public final class PostgresExistingAdoption implements AutoCloseable {
             sourceFence.verify();
             read.verify();
         });
+    }
+
+    public PostgresWriterHandoff writerHandoff() throws Exception {
+        requireLock();
+        return new PostgresWriterHandoff(this, connection, settings, journal, targetSchema, lockedApproval.table);
     }
 
     public Receipt install(TableSchema table, SourcePosition cut, Map<String,Object> plan, String digest,
@@ -192,7 +217,7 @@ public final class PostgresExistingAdoption implements AutoCloseable {
                 settings.pipelineId, settings.id, table.id, table.version, receipt.schemaSha256, snapshot, rows);
         String body = Codec.encode(receipt);
         execute("INSERT INTO " + receiptTable() + " VALUES (?,?,?,?)", settings.pipelineId, settings.id, Codec.sha256(body), body);
-        requireBaseline(receipt);
+        requireBaseline(receipt, BaselinePhase.ADOPTED);
         if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true))) {
             throw failure("ADOPTION_BOOTSTRAP_CATALOG_CHANGED");
         }
@@ -206,10 +231,10 @@ public final class PostgresExistingAdoption implements AutoCloseable {
         return receipt;
     }
 
-    private TableSchema requireBaseline(Receipt receipt) throws Exception {
+    private TableSchema requireBaseline(Receipt receipt, BaselinePhase phase) throws Exception {
         Map<String,Object> job = journal.locked(connection);
-        if (!"PAUSED".equals(job.get("state")) || !PAUSE_REASON.equals(job.get("errorCode"))
-                || !Long.valueOf(1).equals(job.get("errorGeneration")) || !Long.valueOf(0).equals(job.get("epoch"))
+        if (!phase.state.equals(job.get("state")) || !phase.reason.equals(job.get("errorCode"))
+                || !Long.valueOf(phase.errorGeneration).equals(job.get("errorGeneration")) || !Long.valueOf(0).equals(job.get("epoch"))
                 || job.get("owner") != null || !Long.valueOf(0).equals(job.get("lease"))
                 || !Long.valueOf(1).equals(job.get("next")) || !Long.valueOf(0).equals(job.get("normalized"))
                 || !Long.valueOf(0).equals(job.get("bytes")) || !Long.valueOf(0).equals(job.get("snapshotBytes"))

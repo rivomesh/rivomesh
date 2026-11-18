@@ -8507,5 +8507,33 @@
     "scope": "Two real management server entries in an isolated Linux JVM use a shared H2 control store and real four-broker Kafka 3.9.2 KRaft RF3. Only scoped admin can initiate read-only review. Stable request returns checked native receipt after owner service stops, including topic digest and native offsets safely. Failed target, healthy peer, original entries and consumer commit remain unchanged.",
     "priorFixture": "First corrected artifact reached all managed assertions but incorrectly fell through to an unrelated consumer phase with a different group. The exact final harness starts a fresh named project and restricts it to managed recovery review.",
     "reproduce": "python3 tests/kafka-cluster-run.py --artifact <candidate jar> --only-managed-recovery-review --output target/kafka-managed-receipt-proof"
+  },
+  "existingPostgresTargetWriterTransition": {
+    "native": {
+      "artifactSha256": "57da4be48cffc57f6b0a0145be7f416cf40c65455df571dce11a8cf1eb4340da",
+      "checks": [
+        "An unfrozen or runtime-only MySQL source cannot produce an adoption plan",
+        "Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes",
+        "One reviewed role receives PostgreSQL DML authority and ordinary Rivomesh resume is fenced at the frozen cut",
+        "Write-free failback rejects connected roles, accepts rolled-back DML and revokes target writes first",
+        "Loss of the locally committed writer-grant response resolves by the original approval and native ACL witness",
+        "A PostgreSQL crash invalidates the no-write proof even with unchanged rows and an empty durable witness",
+        "A committed write followed by identical row contents remains witnessed across PostgreSQL restart and blocks failback"
+      ],
+      "status": "PASS",
+      "profile": "WRITER_TRANSITION",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "nativeJavaFocusedTests": 68,
+    "fixtureSha256": "a11ee15cd72ac89bac492374bdea4e47f428f535240a59b2039b1c628c78db34",
+    "integratedArtifact": {
+      "artifactSha256": "23176e1092da24b99381c921688daa4e3ae4595b44f1a2a3469c247a580c7680",
+      "verifiedScopedTree": "3710fcb2254a8fc77dc2e5b53107621f3126b442",
+      "javaFocusedTests": 68
+    },
+    "scope": "One previously adopted keyed PostgreSQL table, frozen standalone MySQL source, external colocated PostgreSQL journal, dedicated no-membership target role. Scoped transactional GRANT and journal fence. Failback requires unchanged crash continuity and no committed business operation. Source thaw is an explicit separate operator action.",
+    "remaining": "Combined bounded adoption, constraint restoration and writer transition for the same original cut remain pending; the original native restored-constraint profile is independent."
   }
 }

@@ -6,6 +6,7 @@ import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.JdbcSink;
 import io.github.rivomesh.cdc.PostgresAdoptionRead;
 import io.github.rivomesh.cdc.PostgresExistingAdoption;
+import io.github.rivomesh.cdc.PostgresWriterHandoff;
 import io.github.rivomesh.cdc.PostgresWriterReadiness;
 import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.TargetProduct;
@@ -83,17 +84,7 @@ final class PipelineAdoptionPlan {
             PostgresExistingAdoption.Replay replay = bootstrap.replay();
             if (replay == null) throw failure("WRITER_READINESS_ADOPTED_CUT_REQUIRED");
             try (MysqlUniqueFreeze source = MysqlUniqueFreeze.current(config, MAX_MILLIS)) {
-                source.verifyDurable();
-                TableSchema table = source.singleTable(config.databases.getFirst());
-                if (!replay.receipt().sourceSha256().equals(Codec.sha256(Codec.encode(source.boundary())))
-                        || !replay.receipt().schemaSha256().equals(Codec.sha256(Codec.encode(table)))) {
-                    throw failure("WRITER_READINESS_SOURCE_CUT_CHANGED");
-                }
-                PipelineAdoptionPreview.RowComparison rows = comparison(table);
-                source.scanRows(table, MAX_ROW_BYTES, MAX_ROWS, rows::source);
-                if (rows.sourceRows() != replay.receipt().rows() || !rows.sourceDigest().equals(replay.receipt().rowsSha256())) {
-                    throw failure("WRITER_READINESS_SOURCE_ROWS_CHANGED");
-                }
+                verifyFrozenRows(config, replay, source);
                 verifyTargetRows(bootstrap, replay);
                 outcome = bootstrap.prepareWriter(approval, () -> verifyExecutionFreeze(source));
             }
@@ -103,6 +94,51 @@ final class PipelineAdoptionPlan {
         return Map.of("status", "TARGET_WRITER_READINESS_RECORDED", "acknowledged", true,
                 "replayed", outcome.replayed(), "receipt", outcome.receipt(),
                 "receiptSha256", Codec.sha256(Codec.encode(outcome.receipt())));
+    }
+
+    static Map<String,Object> transitionWriter(PipelineConfig config, String targetId,
+                                               PostgresExistingAdoption.Approval adoption, String readySha256,
+                                               PostgresWriterHandoff.Approval approval, boolean exclusiveFreeze,
+                                               boolean failback) throws Exception {
+        if (!exclusiveFreeze) throw failure("TARGET_WRITER_EXCLUSIVE_FREEZE_ACK_REQUIRED");
+        PipelineConfig.Target target = profile(config, targetId);
+        PostgresWriterHandoff.Outcome outcome = null;
+        try (JdbcJournal journal = new JdbcJournal(config.existingJournalSettings());
+             PostgresExistingAdoption bootstrap = JdbcSink.adoptionBootstrap(
+                     config.targetSettings(target, "writer-transition"), journal, MAX_MILLIS)) {
+            bootstrap.lock(adoption);
+            PostgresWriterHandoff transition = bootstrap.writerHandoff();
+            PostgresExistingAdoption.Replay replay = transition.verifyBaseline(readySha256, approval, failback);
+            try (MysqlUniqueFreeze source = MysqlUniqueFreeze.current(config, MAX_MILLIS)) {
+                verifyFrozenRows(config, replay, source);
+                verifyTargetRows(bootstrap, replay);
+                outcome = transition.finish(approval, failback, () -> verifyExecutionFreeze(source));
+            }
+        } catch (Exception error) {
+            if (outcome == null) throw sanitized(error);
+        }
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("status", failback ? "TARGET_WRITER_REVOKED" : "TARGET_WRITER_AUTHORIZED");
+        result.put("acknowledged", true);
+        result.put("replayed", outcome.replayed());
+        result.put("receipt", outcome.receipt());
+        if (failback) result.put("resumeErrorGeneration", 2);
+        return result;
+    }
+
+    private static void verifyFrozenRows(PipelineConfig config, PostgresExistingAdoption.Replay replay,
+                                         MysqlUniqueFreeze source) throws Exception {
+        source.verifyDurable();
+        TableSchema table = source.singleTable(config.databases.getFirst());
+        if (!replay.receipt().sourceSha256().equals(Codec.sha256(Codec.encode(source.boundary())))
+                || !replay.receipt().schemaSha256().equals(Codec.sha256(Codec.encode(table)))) {
+            throw failure("WRITER_READINESS_SOURCE_CUT_CHANGED");
+        }
+        PipelineAdoptionPreview.RowComparison rows = comparison(table);
+        source.scanRows(table, MAX_ROW_BYTES, MAX_ROWS, rows::source);
+        if (rows.sourceRows() != replay.receipt().rows() || !rows.sourceDigest().equals(replay.receipt().rowsSha256())) {
+            throw failure("WRITER_READINESS_SOURCE_ROWS_CHANGED");
+        }
     }
 
     private static void verifyTargetRows(PostgresExistingAdoption bootstrap, PostgresExistingAdoption.Replay replay) throws Exception {

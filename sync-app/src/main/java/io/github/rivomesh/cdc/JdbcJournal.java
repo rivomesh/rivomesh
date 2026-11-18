@@ -208,6 +208,7 @@ public final class JdbcJournal implements NormalizedJournal {
     }
     @Override public void resumePipeline(long expectedErrorGeneration)throws Exception{
         try(Connection c=connect()){c.setAutoCommit(false);Map<String,Object> row=locked(c);if((long)row.get("errorGeneration")!=expectedErrorGeneration)throw new IllegalStateException("ERROR_GENERATION_CHANGED");
+            if("TARGET_WRITER".equals(row.get("state")))throw new IllegalStateException("TARGET_WRITER_AUTHORITY_ACTIVE");
             if(hasTargetGaps((int)row.get("format")))JdbcSkipJournal.requireNoPending(this,c,null);
             execute(c,"UPDATE "+table("job")+" SET run_state='RUNNING',error_code=NULL WHERE pipeline_id=?",settings.pipelineId);c.commit();}
     }

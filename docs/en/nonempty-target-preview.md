@@ -55,7 +55,25 @@ java -jar rivomesh.jar prepare-target-writer config/task.yml postgres <sourceTab
 
 The dedicated PostgreSQL login needs `CONNECT`, schema `USAGE` and table `SELECT`. Admission requires the role to be disconnected, have no role memberships and hold no table or column write privileges. Other grants that introduce a parallel writer, writable views accessible to this login, and executable user-defined `SECURITY DEFINER` routines also stop the review. Privileged administrators must keep exclusive control of schema, role and application-routing changes during the maintenance window.
 
-`TARGET_WRITER_READINESS_RECORDED` identifies a native receipt recording the exact adoption, source cut, target rows and authority evidence, role identity and review approval. On `WRITER_READINESS_COMMIT_UNKNOWN`, repeat the original request while the source is still frozen and its cut can be verified. Replay checks the live row state, authority and cut again. Keep the receipt with the original migration plan. Writer activation and failback require their own approval and write-history check.
+`TARGET_WRITER_READINESS_RECORDED` identifies a native receipt recording the exact adoption, source cut, target rows and authority evidence, role identity and review approval. On `WRITER_READINESS_COMMIT_UNKNOWN`, repeat the original request while the source is still frozen and its cut can be verified. Replay checks the live row state, authority and cut again. Keep the receipt and its `receiptSha256` with the original migration plan.
+
+## Activate one PostgreSQL writer or return the original source before any committed target write
+
+This procedure covers the original paused single-table adoption cut. Keep the MySQL write fence in effect and keep application connections stopped while changing authority. Use the same adoption identifiers and the full readiness receipt SHA-256 with a fresh operation request UUID and actor. The operator owns application routing to the target after the acknowledged grant.
+
+```sh
+java -jar rivomesh.jar activate-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <readiness-receipt-sha256> <activation-request> <actor> --acknowledge-exclusive-freeze
+```
+
+Activation holds exclusive target table and role catalog locks, checks the frozen source and approved rows, grants the reviewed login `INSERT`, `UPDATE` and `DELETE` on this table, and records `TARGET_WRITER` in the journal. The normal `resume-pipeline` command refuses this state. The same PostgreSQL commit installs a protected statement trigger that records attempted business DML in its transaction. A rolled-back statement leaves no committed witness. A committed write followed by restoring the old row contents still leaves a witness. [PostgreSQL CREATE TRIGGER](https://www.postgresql.org/docs/17/sql-createtrigger.html)
+
+Stop the target application and disconnect the dedicated login before requesting failback. Keep both administrative and application routes under exclusive control. The command locks the table, verifies the witness definition and catalog revision, checks both original row digests, then revokes the target write privileges before marking the pipeline `PAUSED`. `TARGET_WRITER_REVOKED` confirms that the original source is eligible for the operator to re-enable. If needed, resume the pipeline using the returned `resumeErrorGeneration` after reopening source writes.
+
+```sh
+java -jar rivomesh.jar failback-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <readiness-receipt-sha256> <failback-request> <actor> --acknowledge-exclusive-freeze
+```
+
+On `TARGET_WRITER_COMMIT_UNKNOWN`, keep application routes closed and the MySQL freeze active, and repeat the identical operation. `TARGET_WRITER_WRITE_OCCURRED` requires a separately reconciled reverse migration with an approved new source baseline. `TARGET_WRITER_HISTORY_UNCERTAIN` indicates the continuity marker is missing. PostgreSQL clears it after crash recovery, when an asynchronously acknowledged application commit and its write witness might both have been lost. A changed or missing witness requires investigation before any source write re-enable. [PostgreSQL unlogged tables](https://www.postgresql.org/docs/17/sql-createtable.html)
 
 ## Review downgraded UNIQUE indexes before handover
 

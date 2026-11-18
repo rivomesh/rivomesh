@@ -563,6 +563,10 @@ public final class JdbcSink implements SinkAdapter {
         DatabaseMetaData m=c.getMetaData();try(ResultSet rs=m.getTables(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name,new String[]{"TABLE"})){while(rs.next())if(table.name.equals(rs.getString("TABLE_NAME")))return true;return false;}
     }
     void validateShape(Connection c,TableSchema table)throws Exception{
+        validateShape(c,table,null);
+    }
+    void validateShape(Connection c,TableSchema table,String verifiedWriterTrigger)throws Exception{
+        if(verifiedWriterTrigger!=null&&settings.product!=TargetProduct.POSTGRESQL)throw new IllegalArgumentException("TARGET_WRITER_PROFILE_UNSUPPORTED");
         // A zero-row select validates exact quoted names and order without loading data.
         try(Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT * FROM "+table(table)+" WHERE 1=0")){
             ResultSetMetaData m=rs.getMetaData();if(m.getColumnCount()!=table.columns.size()+(table.keyless()?1:0))throw new IllegalStateException("TARGET_COLUMN_COUNT_MISMATCH");
@@ -597,8 +601,9 @@ public final class JdbcSink implements SinkAdapter {
         Map<Short,String> primary=new TreeMap<>();try(ResultSet rs=c.getMetaData().getPrimaryKeys(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name)){while(rs.next())primary.put(rs.getShort("KEY_SEQ"),rs.getString("COLUMN_NAME"));}
         if(!new ArrayList<>(primary.values()).equals(keys(table)))throw new IllegalStateException("TARGET_PRIMARY_KEY_MISMATCH");
         try(ResultSet rs=c.getMetaData().getImportedKeys(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name)){if(rs.next())throw new IllegalStateException("TARGET_FOREIGN_KEYS_REQUIRE_PLAN");}
-        if(settings.product!=TargetProduct.H2)try(PreparedStatement p=c.prepareStatement(dm()?"SELECT 1 FROM ALL_TRIGGERS WHERE TABLE_OWNER=? AND TABLE_NAME=?":"SELECT 1 FROM information_schema.triggers WHERE event_object_schema=? AND event_object_table=? LIMIT 1")){
-            p.setString(1,destination(table));p.setString(2,table.name);try(ResultSet rs=p.executeQuery()){if(rs.next())throw new IllegalStateException("TARGET_TRIGGERS_REQUIRE_PLAN");}
+        if(settings.product!=TargetProduct.H2)try(PreparedStatement p=c.prepareStatement(dm()?"SELECT 1 FROM ALL_TRIGGERS WHERE TABLE_OWNER=? AND TABLE_NAME=?":"SELECT 1 FROM information_schema.triggers WHERE event_object_schema=? AND event_object_table=?"+(verifiedWriterTrigger==null?"":" AND trigger_name<>?")+" LIMIT 1")){
+            p.setString(1,destination(table));p.setString(2,table.name);if(verifiedWriterTrigger!=null)p.setString(3,verifiedWriterTrigger);
+            try(ResultSet rs=p.executeQuery()){if(rs.next())throw new IllegalStateException("TARGET_TRIGGERS_REQUIRE_PLAN");}
         }
         if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?")){
             p.setString(1,destination(table));p.setString(2,table.name);try(ResultSet rs=p.executeQuery()){if(!rs.next()||!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("TARGET_ENGINE_NOT_TRANSACTIONAL");}

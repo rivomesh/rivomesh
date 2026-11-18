@@ -41,25 +41,17 @@ public final class PostgresWriterReadiness {
     static Outcome record(Connection c, JdbcSink.Settings settings, String targetSchema,
                           PostgresExistingAdoption.Receipt adoption, Approval approval,
                           PostgresExistingAdoption.SourceFence verify) throws Exception {
-        PostgresUniqueRestoreEvidence.requireSafeDdlSession(c, "WRITER_READINESS");
-        try (Statement sql = c.createStatement()) {
-            // Prevent native role/SET ROLE grant changes while computing and persisting authority evidence.
-            sql.execute("LOCK TABLE pg_catalog.pg_authid IN SHARE MODE");
-            sql.execute("LOCK TABLE pg_catalog.pg_auth_members IN SHARE MODE");
-        }
+        lockAuthority(c, "WRITER_READINESS");
         Evidence evidence = evidence(c, targetSchema, adoption, approval);
         String digest = Codec.sha256(Codec.encode(evidence));
-        String relation = Sql.pg(settings.metadataSchema) + "." + Sql.pg(NAME);
+        String relation = relation(settings);
         if (!ledger(c, settings.metadataSchema)) {
             try (Statement sql = c.createStatement()) {
                 sql.execute("CREATE TABLE " + relation + " (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,"
                         + "receipt_sha256 VARCHAR(64) NOT NULL,receipt TEXT NOT NULL,PRIMARY KEY(pipeline_id,subscription_id))");
             }
         }
-        try (Statement sql = c.createStatement()) {
-            sql.execute("LOCK TABLE ONLY " + relation + " IN SHARE ROW EXCLUSIVE MODE");
-        }
-        if (!ledger(c, settings.metadataSchema)) throw failure("WRITER_READINESS_LEDGER_MISSING");
+        lockLedger(c, settings);
         Receipt receipt = find(c, relation, settings);
         boolean replayed = receipt != null;
         if (replayed) {
@@ -89,8 +81,38 @@ public final class PostgresWriterReadiness {
         return new Outcome(receipt, replayed);
     }
 
-    private static Evidence evidence(Connection c, String schema, PostgresExistingAdoption.Receipt adoption,
-                                     Approval approval) throws Exception {
+    static void lockAuthority(Connection c, String operation) throws Exception {
+        PostgresUniqueRestoreEvidence.requireSafeDdlSession(c, operation);
+        try (Statement sql = c.createStatement()) {
+            // Role and SET ROLE grants must remain stable while changing authority.
+            sql.execute("LOCK TABLE pg_catalog.pg_authid IN SHARE MODE");
+            sql.execute("LOCK TABLE pg_catalog.pg_auth_members IN SHARE MODE");
+        }
+    }
+
+    static Receipt requireReceipt(Connection c, JdbcSink.Settings settings, String expectedSha256) throws Exception {
+        if (!ledger(c, settings.metadataSchema)) throw failure("WRITER_READINESS_REQUIRED");
+        lockLedger(c, settings);
+        Receipt receipt = find(c, relation(settings), settings);
+        if (receipt == null || !expectedSha256.equals(Codec.sha256(Codec.encode(receipt)))) {
+            throw failure("WRITER_READINESS_RECEIPT_CHANGED");
+        }
+        return receipt;
+    }
+
+    private static void lockLedger(Connection c, JdbcSink.Settings settings) throws SQLException {
+        try (Statement sql = c.createStatement()) {
+            sql.execute("LOCK TABLE ONLY " + relation(settings) + " IN SHARE ROW EXCLUSIVE MODE");
+        }
+        if (!ledger(c, settings.metadataSchema)) throw failure("WRITER_READINESS_LEDGER_MISSING");
+    }
+
+    private static String relation(JdbcSink.Settings settings) {
+        return Sql.pg(settings.metadataSchema) + "." + Sql.pg(NAME);
+    }
+
+    static Evidence evidence(Connection c, String schema, PostgresExistingAdoption.Receipt adoption,
+                             Approval approval) throws Exception {
         try (Statement statistics = c.createStatement()) {
             statistics.execute("SELECT pg_stat_clear_snapshot()");
         }

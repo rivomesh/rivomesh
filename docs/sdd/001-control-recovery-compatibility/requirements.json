@@ -1472,8 +1472,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "限定非空 PostgreSQL 单表原子接管、冻结源切点续传与 UNIQUE 恢复已实测。新业务角色准备回执可跨重启查回，并核验现有权限和源冻结。实际改授写入权、回切、多目标与其他产品待验。",
-        "en": "Atomic adoption, original-cut resume and UNIQUE restoration passed for one existing PostgreSQL table. A restart-safe business-writer readiness receipt rechecks the original source freeze and role authority. Actual grant transfer, failback, additional tables and products remain."
+        "zh-CN": "限定非空 PostgreSQL 单表原子接管、源切点续传、业务授权与首次写入前回切已实测。写后或崩溃证据不全会拒绝回切。UNIQUE 恢复已有独立档案，同一采集切点联验约束恢复及其他产品待验。",
+        "en": "One existing PostgreSQL table passed atomic adoption, exact-cut continuation, real writer grants and pre-write failback. Committed writes or uncertain crash history refuse failback. UNIQUE restoration has independent native evidence; the combined same-cut constraint/transition workflow and additional products remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1492,7 +1492,9 @@
         "sync-app/src/main/java/io/github/rivomesh/recovery/UniqueRestoreOperation.java",
         "sync-app/src/main/java/io/github/rivomesh/PipelineAdoptionPlan.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresExistingAdoption.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresWriterReadiness.java"
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresWriterReadiness.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresWriterHandoff.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresTargetWriteWitness.java"
       ]
     },
     {

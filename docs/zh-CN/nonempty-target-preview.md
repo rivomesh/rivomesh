@@ -55,7 +55,25 @@ java -jar rivomesh.jar prepare-target-writer config/task.yml postgres <sourceTab
 
 专用 PostgreSQL 登录角色需有数据库 `CONNECT`、schema `USAGE` 和表 `SELECT`。准入要求该角色无连接、无角色成员关系、无表级和列级写权限。其他并行写入授权、该角色能写入的视图，以及该角色有权执行的用户定义 `SECURITY DEFINER` 例程都会拒绝审查。维护期间由特权运维人员独占管理 schema、角色和应用路由。
 
-`TARGET_WRITER_READINESS_RECORDED` 返回原生回执，记录精确的接管基线、源端位点、目标数据与权限证据、角色身份和审查审批。遇到 `WRITER_READINESS_COMMIT_UNKNOWN` 时，保持源库冻结并能核验其位点，使用原请求重试。重放会重新核对现场数据、权限和位点。将回执与原迁移计划一起保留。启用应用写入与回切需另行审批并核对写入记录。
+`TARGET_WRITER_READINESS_RECORDED` 返回原生回执，记录精确的接管基线、源端位点、目标数据与权限证据、角色身份和审查审批。遇到 `WRITER_READINESS_COMMIT_UNKNOWN` 时，保持源库冻结并能核验其位点，使用原请求重试。重放会重新核对现场数据、权限和位点。将回执及其 `receiptSha256` 与原迁移计划一起保留。
+
+## 启用 PostgreSQL 应用写入及首次提交写入前回切
+
+此流程覆盖原始暂停的单表接管点。变更写入权限期间，保持 MySQL 写入冻结，停止应用连接。使用原接管标识、完整的就绪回执 SHA-256，以及本次操作的请求 UUID 和操作标识。确认目标已授权后，由运维人员切换应用路由。
+
+```sh
+java -jar rivomesh.jar activate-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <readiness-receipt-sha256> <activation-request> <actor> --acknowledge-exclusive-freeze
+```
+
+启用过程持有目标表独占锁及角色目录锁，核验源端冻结与批准的数据行，对已审查的登录角色授予该表 `INSERT`、`UPDATE`、`DELETE` 权限，并将同步日志任务状态置为 `TARGET_WRITER`。常规 `resume-pipeline` 会拒绝这个状态。该 PostgreSQL 事务同时安装受保护的语句触发器，在业务 DML 的事务内登记写入。事务回滚时，该次记录也回滚。若提交后数据恢复原值，写入记录依然存在。[PostgreSQL CREATE TRIGGER](https://www.postgresql.org/docs/17/sql-createtrigger.html)
+
+申请回切前，停止目标应用并断开专用登录角色的全部连接，运维人员保持独占管理数据库及应用路由。回切命令锁定业务表，核对写入触发器的定义和目录版本以及两侧原始数据摘要，先撤回目标写权限，再把同步任务设为 `PAUSED`。收到 `TARGET_WRITER_REVOKED` 后，运维人员可恢复原源库写入。若需要继续同步，在源库恢复写入后使用返回的 `resumeErrorGeneration` 执行恢复。
+
+```sh
+java -jar rivomesh.jar failback-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <readiness-receipt-sha256> <failback-request> <actor> --acknowledge-exclusive-freeze
+```
+
+收到 `TARGET_WRITER_COMMIT_UNKNOWN` 时，保持应用路由关闭、MySQL 冻结，重试完全相同的操作。`TARGET_WRITER_WRITE_OCCURRED` 表示需要单独对账并审批新的源端基线后执行逆向迁移。`TARGET_WRITER_HISTORY_UNCERTAIN` 表示连续性标记缺失。PostgreSQL 崩溃恢复会清除此标记，因为曾确认的异步提交及其写入记录可能同时丢失。记录缺失或变化时，先排查再恢复源端写入。[PostgreSQL 不记日志的表](https://www.postgresql.org/docs/17/sql-createtable.html)
 
 ## 写入交接前检查降级的 UNIQUE 索引
 

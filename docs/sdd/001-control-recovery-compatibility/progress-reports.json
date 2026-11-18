@@ -76,7 +76,8 @@
     "SO-06 PostgreSQL civil and UTC microsecond timestamps to PostgreSQL and MySQL passed nine native cases, 55 original and 57 latest focused Java tests. An intermediate full reactor passed 559 Java app and two isolated transport tests with 34 optional integration skips.",
     "CP-04 same-store internal writer+placement commit published. Five native PostgreSQL transactional checks with synthetic readiness, 61 latest scoped Java. Verified old live lease refusal, full rollback, new epoch and old owner fencing. Public execute and real candidate installation remain.",
     "CP-04/LG-05 candidate report and receipt staging published: 19 native checks plus 30 original focused Java. Exact staged copies survive Controller replay with parked shared ZIP. Ordinary CLI and registry remain fenced.",
-    "RC-10 managed Kafka receipt review published after two real Kafka KRaft checks through both management entries, owner-offline receipt lookup, exact offsets and unchanged ACKs. Combined publish package passes 72 focused Java, one optional external database case skipped, 141 DOM and binary gates."
+    "RC-10 managed Kafka receipt review published after two real Kafka KRaft checks through both management entries, owner-offline receipt lookup, exact offsets and unchanged ACKs. Combined publish package passes 72 focused Java, one optional external database case skipped, 141 DOM and binary gates.",
+    "LG-02 real dedicated PostgreSQL business writer grant and pre-write failback published: seven native checks, 68 Java. Ordinary replication resume is fenced, lost grant ACK resolves, committed writes and crash uncertainty refuse failback. Same-cut downgraded UNIQUE restore plus transition remains."
   ],
   "lastScheduledReportAt": "2026-11-18T22:58:16+08:00",
   "lastVerifiedReactor": {

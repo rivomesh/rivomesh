@@ -29,6 +29,7 @@ def main():
     profile.add_argument('--only-adoption-plan', action='store_true', help='Verify the frozen existing-target admission plan')
     profile.add_argument('--only-adoption-execution', action='store_true', help='Verify atomic adoption and first native CDC')
     profile.add_argument('--only-writer-readiness', action='store_true', help='Verify a durable business writer readiness receipt')
+    profile.add_argument('--only-writer-transition', action='store_true', help='Verify target writer authority and write-free failback')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -46,7 +47,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('WRITER_READINESS' if args.only_writer_readiness else
+    profile_name = ('WRITER_TRANSITION' if args.only_writer_transition else
+                    'WRITER_READINESS' if args.only_writer_readiness else
                     'ADOPTION_EXECUTION' if args.only_adoption_execution else
                     'ADOPTION_PLAN' if args.only_adoption_plan else
                     'UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
@@ -253,6 +255,9 @@ def main():
                 return
             if args.only_writer_readiness:
                 verify_writer_readiness(approved, target_contents, original_contents)
+                return
+            if args.only_writer_transition:
+                verify_writer_transition(plan_config, approved, target_contents, original_contents)
                 return
 
             postgres("UPDATE review.items SET name='tail' WHERE id=2")
@@ -504,6 +509,119 @@ def main():
             assert postgres('SELECT count(*) FROM planned_sink.rm3_sink_writer_ready') == '1'
             checkpoint_unchanged()
             passed('Replay checks the live source freeze and refuses changed authority evidence without rewriting the receipt')
+
+        def verify_writer_transition(plan_config, approved, target_contents, original_contents):
+            acknowledgement = '--acknowledge-exclusive-freeze'
+            actor = 'fixture-transition-operator'
+
+            def fixture(config_path, plan, role, schema):
+                def cli(operation, *parameters, check=True):
+                    return compose('run', '--rm', '-T', 'runner', operation, config_path, *parameters, check=check)
+
+                adoption_args = ('pg', 'items', plan, str(uuid.uuid4()), actor)
+                assert json.loads(cli('adopt-existing', *adoption_args, acknowledgement).stdout)['acknowledged']
+                postgres(f'CREATE ROLE {role} LOGIN NOINHERIT; GRANT USAGE ON SCHEMA {schema} TO {role}; '
+                         f'GRANT SELECT ON {schema}.items TO {role}')
+                ready = json.loads(cli('prepare-target-writer', *adoption_args, role, str(uuid.uuid4()), actor,
+                                       acknowledgement).stdout)
+
+                def transition(operation, request, digest=ready['receiptSha256'], confirmation=acknowledgement, check=True):
+                    return cli(operation, *adoption_args, digest, request, actor, confirmation, check=check)
+
+                return cli, transition
+
+            def refused(answer, code):
+                assert answer.returncode != 0 and not answer.stdout.strip()
+                assert code in answer.stderr, (code, re.findall(r'\b(?:TARGET_WRITER|WRITER_READINESS|SQL)_[A-Z0-9_]+', answer.stderr))
+
+            def app_session(role):
+                return sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', role, '-d', 'preview')
+
+            cli, transition = fixture('/fixture/adoption-plan.yml', approved, 'first_writer', 'review')
+            activate = 'activate-target-writer'
+            failback = 'failback-target-writer'
+            activation = str(uuid.uuid4())
+            reversal = str(uuid.uuid4())
+            refused(transition(failback, reversal, check=False), 'TARGET_WRITER_ACTIVATION_REQUIRED')
+            refused(transition(activate, activation, digest='0' * 64, check=False), 'WRITER_READINESS_RECEIPT_CHANGED')
+            refused(transition(activate, activation, confirmation='--not-acknowledged', check=False),
+                    'TARGET_WRITER_EXCLUSIVE_FREEZE_ACK_REQUIRED')
+            first = json.loads(transition(activate, activation).stdout)
+            assert first['acknowledged'] and not first['replayed'] and first['status'] == 'TARGET_WRITER_AUTHORIZED'
+            assert postgres('SELECT run_state FROM planned_journal.rm3_job') == 'TARGET_WRITER'
+            refused(cli('resume-pipeline', '1', check=False), 'TARGET_WRITER_AUTHORITY_ACTIVE')
+            exact = json.loads(transition(activate, activation).stdout)
+            assert exact['replayed'] and exact['receipt'] == first['receipt']
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            passed('One reviewed role receives PostgreSQL DML authority and ordinary Rivomesh resume is fenced at the frozen cut')
+
+            with app_session('first_writer') as app:
+                assert exchange_sql(app, "SELECT 'CONNECTED';") == 'CONNECTED'
+                refused(transition(failback, reversal, check=False), 'TARGET_WRITER_ROLE_CONNECTED')
+                assert exchange_sql(app, "BEGIN; UPDATE review.items SET name='rolled-back' WHERE id=2; ROLLBACK; SELECT 'ROLLED_BACK';") == 'ROLLED_BACK'
+            assert postgres('SELECT write_seen FROM planned_sink.rm3_sink_writer_handoff') == 'f'
+            assert postgres(target_contents) == original_contents
+            returned = json.loads(transition(failback, reversal).stdout)
+            assert returned['status'] == 'TARGET_WRITER_REVOKED' and returned['acknowledged'] and not returned['replayed']
+            assert returned['resumeErrorGeneration'] == 2
+            assert postgres("SELECT run_state,error_generation FROM planned_journal.rm3_job") == 'PAUSED|2'
+            assert postgres("SELECT has_any_column_privilege('first_writer','review.items','INSERT,UPDATE') OR "
+                            "has_table_privilege('first_writer','review.items','DELETE')") == 'f'
+            replayed = json.loads(transition(failback, reversal).stdout)
+            assert replayed['replayed'] and replayed['receipt'] == returned['receipt']
+            refused(transition(activate, activation, check=False), 'TARGET_WRITER_APPROVAL_CONFLICT')
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            passed('Write-free failback rejects connected roles, accepts rolled-back DML and revokes target writes first')
+
+            postgres('CREATE SCHEMA review_spent; CREATE TABLE review_spent.items (LIKE review.items INCLUDING ALL); '
+                     'INSERT INTO review_spent.items SELECT * FROM review.items')
+            spent_target = dict(plan_config['targets'][0], metadataSchema='spent_sink', mappings={'sales': 'review_spent'})
+            spent_config = dict(plan_config, pipelineId='adoption-writer-spent', targets=[spent_target],
+                                journal=dict(plan_config['journal'], namespace='spent_journal'))
+            (directory / 'writer-spent.yml').write_text(json.dumps(spent_config))
+            spent_plan = json.loads(compose('run', '--rm', '-T', 'runner', 'plan-adoption', '/fixture/writer-spent.yml', 'pg').stdout)
+            _, spent = fixture('/fixture/writer-spent.yml', spent_plan['planSha256'], 'second_writer', 'review_spent')
+            spent_request = str(uuid.uuid4())
+            postgres("ALTER SYSTEM SET synchronous_standby_names='fixture_missing'")
+            try:
+                postgres('SELECT pg_reload_conf()')
+                wait_for(lambda: postgres('SHOW synchronous_standby_names') == 'fixture_missing', 'stalling writer transition ACK')
+                with ThreadPoolExecutor(max_workers=1) as background:
+                    lost = background.submit(spent, activate, spent_request, check=False)
+                    backend = int(wait_for(lambda: postgres("""
+                        SELECT a.pid FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid
+                         WHERE a.wait_event='SyncRep' AND l.relation='review_spent.items'::regclass
+                           AND l.granted AND l.mode='AccessExclusiveLock'
+                        """), 'waiting for locally flushed writer grant'))
+                    assert postgres(f'SELECT pg_terminate_backend({backend})') == 't'
+                    refused(lost.result(timeout=60), 'TARGET_WRITER_COMMIT_UNKNOWN')
+            finally:
+                postgres('ALTER SYSTEM RESET synchronous_standby_names')
+                postgres('SELECT pg_reload_conf()')
+            wait_for(lambda: postgres('SHOW synchronous_standby_names') == '', 'releasing writer transition ACK stall')
+            resolved = json.loads(spent(activate, spent_request).stdout)
+            assert resolved['replayed'] and resolved['acknowledged']
+            passed('Loss of the locally committed writer-grant response resolves by the original approval and native ACL witness')
+
+            assert postgres('SELECT count(*) FROM spent_sink.rm3_sink_writer_continuity') == '1'
+            compose('kill', '-s', 'SIGKILL', 'target')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'target')
+            assert postgres('SELECT count(*) FROM spent_sink.rm3_sink_writer_continuity') == '0'
+            assert postgres('SELECT write_seen FROM spent_sink.rm3_sink_writer_handoff') == 'f'
+            refused(spent(failback, str(uuid.uuid4()), check=False), 'TARGET_WRITER_HISTORY_UNCERTAIN')
+            passed('A PostgreSQL crash invalidates the no-write proof even with unchanged rows and an empty durable witness')
+
+            with app_session('second_writer') as app:
+                assert exchange_sql(app, "BEGIN; UPDATE review_spent.items SET name='committed-temporary' WHERE id=2; "
+                                    "UPDATE review_spent.items SET name='tail ' WHERE id=2; COMMIT; SELECT 'COMMITTED';") == 'COMMITTED'
+            assert postgres(target_contents.replace('review.items', 'review_spent.items')) == original_contents
+            assert postgres('SELECT write_seen FROM spent_sink.rm3_sink_writer_handoff') == 't'
+            compose('restart', 'target')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'target')
+            refused(spent(failback, str(uuid.uuid4()), check=False), 'TARGET_WRITER_WRITE_OCCURRED')
+            assert postgres('SELECT run_state FROM spent_journal.rm3_job') == 'TARGET_WRITER'
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            passed('A committed write followed by identical row contents remains witnessed across PostgreSQL restart and blocks failback')
 
         def constraint_review():
             target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
@@ -864,7 +982,7 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_adoption_plan or args.only_adoption_execution or args.only_writer_readiness:
+            if args.only_adoption_plan or args.only_adoption_execution or args.only_writer_readiness or args.only_writer_transition:
                 adoption_plan()
                 report['status'] = 'PASS'
                 return

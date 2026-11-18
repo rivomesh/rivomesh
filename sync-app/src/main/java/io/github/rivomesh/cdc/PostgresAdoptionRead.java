@@ -107,10 +107,10 @@ public final class PostgresAdoptionRead implements AutoCloseable {
     }
 
     public String blocker(TableSchema table) throws Exception {
-        return blocker(table, false);
+        return blocker(table, false, null);
     }
 
-    private String blocker(TableSchema table, boolean adopted) throws Exception {
+    private String blocker(TableSchema table, boolean adopted, String verifiedWriterTrigger) throws Exception {
         if (!snapshot) throw new IllegalStateException("ADOPTION_VIEW_NOT_PINNED");
         verify();
         if (table.primaryKey.isEmpty()) return "ADOPTION_SOURCE_PRIMARY_KEY_REQUIRED";
@@ -152,7 +152,9 @@ public final class PostgresAdoptionRead implements AutoCloseable {
                 + "AND NOT attisdropped AND (attgenerated<>'' OR attidentity<>'')", oid)) {
             return "ADOPTION_TARGET_GENERATION_REQUIRES_PLAN";
         }
-        if (exists("SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid=?::oid AND NOT tgisinternal", oid)
+        if ((verifiedWriterTrigger == null
+                ? exists("SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid=?::oid AND NOT tgisinternal", oid)
+                : exists("SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid=?::oid AND NOT tgisinternal AND tgname<>?", oid, verifiedWriterTrigger))
                 || exists("SELECT 1 FROM pg_catalog.pg_rewrite WHERE ev_class=?::oid", oid)) {
             return "ADOPTION_TARGET_TRIGGERS_OR_RULES_REQUIRE_PLAN";
         }
@@ -162,7 +164,7 @@ public final class PostgresAdoptionRead implements AutoCloseable {
             return "ADOPTION_TARGET_CONSTRAINTS_REQUIRE_PLAN";
         }
         try {
-            sink.validateShape(connection, table);
+            sink.validateShape(connection, table, verifiedWriterTrigger);
         } catch (IllegalStateException failure) {
             String code = failure.getMessage();
             if (code != null && code.matches("TARGET_[A-Z0-9_]+")) return code;
@@ -213,7 +215,11 @@ public final class PostgresAdoptionRead implements AutoCloseable {
     }
 
     String planEvidence(TableSchema table, String journalNamespace, boolean adopted) throws Exception {
-        String blocker = blocker(table, adopted);
+        return planEvidence(table, journalNamespace, adopted, null);
+    }
+
+    String planEvidence(TableSchema table, String journalNamespace, boolean adopted, String verifiedWriterTrigger) throws Exception {
+        String blocker = blocker(table, adopted, verifiedWriterTrigger);
         if (blocker != null) throw new IllegalStateException(blocker);
         String evidence = PostgresAdoptionCatalog.inspect(connection, destination(table), table,
                 settings.metadataSchema, journalNamespace, adopted);
