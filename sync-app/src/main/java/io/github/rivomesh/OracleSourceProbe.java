@@ -65,6 +65,12 @@ final class OracleSourceProbe {
         }
         try(Connection root=settings.root.connect();Connection pdb=settings.pdb.connect()){
             Authority anchor=authority(root,settings.pdbName);
+            Map<String,String> cursor=new LinkedHashMap<>();
+            cursor.put("databaseId",anchor.databaseId);
+            cursor.put("resetlogsScn",anchor.resetlogsScn);
+            cursor.put("pdbGuid",anchor.pdbGuid);
+            cursor.put("scn",anchor.currentScn);
+            SourcePosition snapshot=new SourcePosition(1,"ORACLE",settings.sourceId,cursor);
             verifyPdb(pdb,settings.pdbName,anchor);
             OracleArchiveWindow.Coverage archive=settings.archiveWindow==null?null:
                     settings.archiveWindow.inspect(root,anchor.resetlogsScn,anchor.currentScn);
@@ -73,22 +79,17 @@ final class OracleSourceProbe {
             if(archive!=null&&settings.archiveWindow.decodeCommitted){
                 Map<String,TableSchema> selected=new LinkedHashMap<>();
                 for(String qualified:unique)selected.put(qualified,redoSchema(pdb,settings.pdbName,qualified));
-                archive.summary.put("decoded",OracleArchiveRead.inspect(root,settings.pdbName,archive,selected));
+                archive.summary.put("decoded",OracleArchiveRead.inspect(root,settings.pdbName,archive,selected,snapshot));
             }
             Authority current=authority(root,settings.pdbName);
             if(!anchor.databaseId.equals(current.databaseId)||!anchor.resetlogsScn.equals(current.resetlogsScn)
                     ||!anchor.pdbGuid.equals(current.pdbGuid))
                 throw new IllegalStateException("ORACLE_SOURCE_AUTHORITY_CHANGED");
 
-            Map<String,String> cursor=new LinkedHashMap<>();
-            cursor.put("databaseId",anchor.databaseId);
-            cursor.put("resetlogsScn",anchor.resetlogsScn);
-            cursor.put("pdbGuid",anchor.pdbGuid);
-            cursor.put("scn",anchor.currentScn);
             Map<String,Object> result=new LinkedHashMap<>();
             result.put("sourceVersion",anchor.version);
             result.put("pdb",settings.pdbName);
-            result.put("snapshotAnchor",new SourcePosition(1,"ORACLE",settings.sourceId,cursor));
+            result.put("snapshotAnchor",snapshot);
             result.put("tables",tables);
             if(archive!=null)result.put("archiveWindow",archive.summary);
             return result;

@@ -1,7 +1,9 @@
 package io.github.rivomesh;
 
+import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Change;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
 
 import java.math.BigDecimal;
@@ -12,9 +14,11 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Inspects a closed archive range using a dedicated, read-only application session. */
@@ -24,9 +28,21 @@ final class OracleArchiveRead {
 
     private OracleArchiveRead(){}
 
+    @FunctionalInterface
+    interface Receiver { void committed(SourceTransaction transaction)throws Exception; }
+
     static Map<String,Object> inspect(Connection root,String pdb,OracleArchiveWindow.Coverage range,
-                                     Map<String,TableSchema> tables)throws Exception{
+                                     Map<String,TableSchema> tables,SourcePosition anchor)throws Exception{
+        Preview preview=new Preview();
+        visit(root,pdb,range,tables,anchor,"oracle-preview",MAX_PREVIEW_ROWS,preview::record);
+        return preview.result();
+    }
+
+    static void visit(Connection root,String pdb,OracleArchiveWindow.Coverage range,Map<String,TableSchema> tables,
+                      SourcePosition anchor,String generation,int maxTransactionRows,Receiver receiver)throws Exception{
         if(tables.isEmpty()||tables.size()>200)throw invalid("ORACLE_ARCHIVE_TABLE_LIMIT");
+        if(maxTransactionRows<1)throw invalid("ORACLE_ARCHIVE_ROW_LIMIT");
+        if(range.files.isEmpty())throw invalid("ORACLE_ARCHIVE_LOG_GAP");
         boolean first=true;
         for(String file:range.files){
             String mode=first?"NEW":"ADDFILE";
@@ -47,21 +63,19 @@ final class OracleArchiveRead {
         try(CallableStatement end=root.prepareCall("BEGIN DBMS_LOGMNR.END_LOGMNR; END;")){
             end.setQueryTimeout(QUERY_SECONDS);
             try(AutoCloseable cleanup=()->end.execute()){
-                return read(root,pdb,range,tables);
+                read(root,pdb,range,tables,anchor,generation,maxTransactionRows,receiver);
             }
         }
     }
 
-    private static Map<String,Object> read(Connection root,String pdb,OracleArchiveWindow.Coverage range,
-                                           Map<String,TableSchema> tables)throws Exception{
+    private static void read(Connection root,String pdb,OracleArchiveWindow.Coverage range,
+                             Map<String,TableSchema> tables,SourcePosition anchor,String generation,
+                             int maxTransactionRows,Receiver receiver)throws Exception{
         String scope=String.join(" OR ",Collections.nCopies(tables.size(),"(seg_owner=? AND table_name=?)"));
         String sql="SELECT operation,seg_owner,table_name,start_scn,commit_scn,RAWTOHEX(xid),csf,status,sql_redo,sql_undo "
                 +"FROM v$logmnr_contents WHERE operation='MISSING_SCN' OR (src_con_name=? AND ("+scope+")) "
-                +"ORDER BY commit_scn,RAWTOHEX(xid),scn,rs_id,ssn";
-        MessageDigest digest=MessageDigest.getInstance("SHA-256");
-        int transactions=0,count=0;
-        String prior=null;
-        Map<String,Integer> operations=new LinkedHashMap<>();
+                +"ORDER BY CASE WHEN operation='MISSING_SCN' THEN 0 ELSE 1 END,commit_scn,RAWTOHEX(xid),scn,rs_id,ssn";
+        Commit group=null;
         try(PreparedStatement query=root.prepareStatement(sql)){
             query.setQueryTimeout(QUERY_SECONDS);
             query.setFetchSize(32);
@@ -83,26 +97,77 @@ final class OracleArchiveRead {
                         throw invalid("ORACLE_ARCHIVE_TRANSACTION_CROSSES_RANGE");
                     String xid=rows.getString(6);
                     if(xid==null||!xid.matches("[0-9A-F]{16}"))throw invalid("ORACLE_REDO_XID_INVALID");
-                    String transaction=commit+":"+xid;
-                    if(!transaction.equals(prior)){transactions++;prior=transaction;}
-                    if(++count>MAX_PREVIEW_ROWS)throw invalid("ORACLE_ARCHIVE_PREVIEW_ROW_LIMIT");
+                    if(group==null||!group.commit.equals(commit)){
+                        if(group!=null)receiver.committed(group.transaction(anchor,generation));
+                        group=new Commit(start,commit,xid);
+                    }else if(!group.xid.equals(xid)||!group.start.equals(start)){
+                        throw invalid("ORACLE_REDO_COMMIT_ORDER_UNPROVEN");
+                    }
+                    if(group.changes.size()>=maxTransactionRows)throw invalid("TRANSACTION_ROW_LIMIT");
                     TableSchema table=tables.get(rows.getString(2)+"."+rows.getString(3));
                     if(table==null)throw invalid("ORACLE_REDO_TABLE_OR_OPERATION_MISMATCH");
                     Change event=OracleRedoDml.decode(table,operation,rows.getString(9),rows.getString(10));
-                    event.eventId=transaction+":"+count;
-                    digest.update(Codec.encode(event).getBytes(StandardCharsets.UTF_8));
-                    digest.update((byte)'\n');
-                    operations.merge(operation,1,Integer::sum);
+                    event.eventId=group.id+":"+group.changes.size();
+                    group.changes.add(event);
                 }
             }
         }
-        StringBuilder checksum=new StringBuilder();
-        for(byte value:digest.digest())checksum.append(String.format("%02x",value&255));
-        Map<String,Object> report=new LinkedHashMap<>();
-        report.put("committedTransactions",transactions);
-        report.put("operations",operations);
-        report.put("contentSha256",checksum.toString());
-        return report;
+        if(group!=null)receiver.committed(group.transaction(anchor,generation));
+    }
+
+    private static final class Commit {
+        final BigInteger start,commit;
+        final String xid,id;
+        final List<Change> changes=new ArrayList<>();
+
+        Commit(BigInteger start,BigInteger commit,String xid){
+            this.start=start;this.commit=commit;this.xid=xid;
+            this.id="oracle:"+commit+":"+xid;
+        }
+
+        SourceTransaction transaction(SourcePosition anchor,String generation){
+            Map<String,String> fields=new LinkedHashMap<>(anchor.getPayload());
+            fields.put("scn",commit.toString());
+            fields.put("xid",xid);
+            SourceTransaction out=new SourceTransaction();
+            out.id=id;
+            out.position=new SourcePosition(1,"ORACLE",anchor.getSourceId(),fields);
+            out.attributes.put("startScn",start.toString());
+            out.streamGeneration=generation;
+            out.changes=changes;
+            out.validate();
+            return out;
+        }
+    }
+
+    private static final class Preview {
+        final MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        final Map<String,Integer> operations=new LinkedHashMap<>();
+        int transactions,rows;
+        SourcePosition lastCommit;
+
+        Preview()throws Exception{}
+
+        void record(SourceTransaction transaction){
+            rows=Math.addExact(rows,transaction.changes.size());
+            if(rows>MAX_PREVIEW_ROWS)throw invalid("ORACLE_ARCHIVE_PREVIEW_ROW_LIMIT");
+            transactions++;
+            lastCommit=transaction.position;
+            for(Change event:transaction.changes)operations.merge(event.operation.name(),1,Integer::sum);
+            digest.update(Codec.encode(transaction).getBytes(StandardCharsets.UTF_8));
+            digest.update((byte)'\n');
+        }
+
+        Map<String,Object> result(){
+            StringBuilder checksum=new StringBuilder();
+            for(byte value:digest.digest())checksum.append(String.format("%02x",value&255));
+            Map<String,Object> report=new LinkedHashMap<>();
+            report.put("committedTransactions",transactions);
+            report.put("operations",operations);
+            report.put("contentSha256",checksum.toString());
+            if(lastCommit!=null)report.put("lastCommit",lastCommit);
+            return report;
+        }
     }
 
     private static BigInteger scn(String value){

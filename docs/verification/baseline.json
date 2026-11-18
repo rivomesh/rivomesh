@@ -1845,5 +1845,24 @@
       "OCEANBASE_NATIVE_CONTRACT_ACCEPTED: strong reads, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen",
       "OCEANBASE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+OceanBase4.3.5 MySQL tenant, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, target outage with independent SQL progress/catchup, worker SIGKILL resume, independent SQL error rollback/repair/retry, persistent pause, missing-table isolation and transactional fences"
     ]
+  },
+  "oracleCommitOrdering": {
+    "artifactSha256": "e6186b17a8b357db1b1a577aa7f1372b1f19241509f17c2a5b8ceafcd6f33f52",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0
   }
 }

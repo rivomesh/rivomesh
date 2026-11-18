@@ -163,3 +163,7 @@ Artifact `3355bdc100775f7ce813a61309a1306ab6a03cd4a7078d6a68ba1784065777d9` pass
 ## OceanBase MySQL tenant recovery
 
 Artifact `58cc370518c0f92271f39fafab02b8c508beb59bf736bdb797eb3a8add050ff4` passed 501 Java tests with 32 optional cases skipped. The actual OceanBase CE 4.3.5.6 ARM64 fixture passed native transactional/checkpoint rollback, epoch and reopen checks with Java 8. In mixed MySQL 8.4.13 to PostgreSQL 17.12 and OceanBase delivery, it passed snapshot and CDC including generated and keyless rows, target restart and catch-up, Worker SIGKILL, independent SQL constraint recovery, persistent failure generation and missing-target-table isolation. The fixture cleaned up its own containers and volumes. [Reproduction](../en/oceanbase-v3.md) · [Manifest](baseline.json)
+
+## Oracle typed commit ordering
+
+Artifact `e6186b17a8b357db1b1a577aa7f1372b1f19241509f17c2a5b8ceafcd6f33f52` passed nine Oracle Free 26ai Java 8 checks. LogMiner changes are grouped into complete source transactions with repeatable per-transaction event IDs. The scoped probe retained the original authority and emitted typed SCN/XID commit coordinates. After rotating the archive, the second transaction appeared as a distinct later coordinate. [Manifest](baseline.json)

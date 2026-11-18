@@ -101,6 +101,7 @@ def main():
             sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                 ALTER TABLE rivo_app.rivo_orders ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
                 ALTER TABLE rivo_app.rivo_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
+            sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'
         pdb_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREEPDB1'
         document = {
@@ -206,6 +207,11 @@ def main():
                 typed = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
                 assert typed['committedTransactions']==1 and typed['operations']=={'UPDATE':1,'DELETE':1}
                 assert len(typed['contentSha256'])==64
+                last=typed['lastCommit']
+                assert last['sourceId']==anchor['sourceId'] and last['sourceType']=='ORACLE'
+                for field in ('databaseId','resetlogsScn','pdbGuid'):
+                    assert last['payload'][field]==anchor['payload'][field]
+                assert last['payload']['scn']==updates[0][1] and last['payload']['xid']==updates[0][2]
                 replayed = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
                 assert replayed==typed
                 observed('The Java probe decodes one committed Oracle transaction and repeats the same typed content hash')
@@ -219,6 +225,14 @@ def main():
                 missing = execute(*program, env=environment, checked=False)
                 assert missing.returncode and 'ORACLE_ARCHIVE_LOG_GAP' in missing.stderr
                 observed('An unarchived part of the requested SCN window is refused')
+                sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+                extended = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
+                assert extended['committedTransactions']==2
+                assert extended['operations']=={'UPDATE':1,'DELETE':1,'INSERT':1}
+                assert int(extended['lastCommit']['payload']['scn']) > int(last['payload']['scn'])
+                assert extended['lastCommit']['payload']['xid']!=last['payload']['xid']
+                assert extended['contentSha256']!=typed['contentSha256']
+                observed('After archive rotation, a second complete commit has a distinct typed SCN and XID')
         report['status'] = 'PASS'
     except Exception as failure:
         detail = str(failure)
