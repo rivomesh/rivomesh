@@ -168,7 +168,7 @@ final class JdbcSourceExclusion {
                         + " (pipeline_id,subscription_id,after_seq,operation_id,receipt_hash) VALUES (?,?,?,?,?)",
                         plan.pipelineId, subscription, plan.afterSequence, operation, digest);
             }
-            int format = JdbcJournal.hasTargetGaps((int) job.get("format")) ? 6 : 5;
+            int format = JdbcJournal.withSourceExclusions((int) job.get("format"));
             JdbcJournal.execute(c, "UPDATE " + journal.table("job")
                     + " SET captured=?,format_version=?,run_state='PAUSED',error_generation=?,"
                     + " error_code='CAPTURE_TRANSACTION_EXCLUDED',epoch=epoch+1,owner=NULL,lease_until=0 WHERE pipeline_id=?",

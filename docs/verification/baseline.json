@@ -3410,5 +3410,56 @@
     },
     "javaFocusedPassed": 5,
     "runtime": "Temurin 21.0.13+9"
+  },
+  "standaloneWriterHandoff": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "109361ade9b29a7caacb7da04cbd7b09e13c2f87b2893998290f41975b3bab8e",
+      "harnessSha256": "70bcb2fc58d16c0caa2c6d7a81b84030e666e656e17a3be88a95a10cbbc53015",
+      "checks": [
+        "Explicit enrollment and original live snapshot/CDC on the same journal generation",
+        "Live lease and wrong journal generation cannot change assignment",
+        "An inconsistent original snapshot is refused; verified transfer preserves position and retries idempotently",
+        "An older JAR fails closed before it can obtain a lease on the enrolled journal",
+        "Thawed former Worker cannot claim; replacement reuses the original snapshot and catches up exactly"
+      ],
+      "previousArtifactSha256": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+      "sourceVersion": "8.4.13",
+      "targetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "receipt": {
+        "assignment": "c82386f8-6e63-43ae-b1ed-450430c54ef0",
+        "node": "candidate",
+        "previousAssignment": "f4e5d42d-8541-468f-8a86-4a5c357cee07",
+        "generation": "3135b531-38c6-4b82-8455-6b2f499de0f9",
+        "epoch": 2,
+        "sequence": 1,
+        "checkpointSha256": "a9638a91eb6e515cdc691480382a0c5269d0175e79ac8403a3df4c315492d617",
+        "evidenceSha256": "550be21c3cf2c74836f00e39c043dec73da1aec1bba24e88324a57c6ab6c74f1"
+      },
+      "runtimeImage": "eclipse-temurin:21-jre-jammy",
+      "cleanupExitCode": 0
+    },
+    "javaFocusedPassed": 55
+  },
+  "nonemptyPostgresAdoptionPreview": {
+    "native": {
+      "artifactSha256": "f49f52d6ce34862664c70bbed9f8815517d1bf115bec6d7b6adb95689c535488",
+      "checks": [
+        "Matching keyed rows and canonical JSON are reported through a SELECT-only account without initialization",
+        "Disconnecting the original MySQL snapshot invalidates the report despite reconnect and preserves a fresh retry",
+        "Equal counts still identify missing, extra and changed rows and distinguish SQL NULL from JSON null",
+        "An empty compatible target is reported as entirely missing existing source rows",
+        "Keyless, missing and incompatible tables block independently of the other table comparison",
+        "Row security and extra UNIQUE constraints require an explicit plan",
+        "Existing physical ownership or a target checkpoint cannot be mistaken for fresh adoption",
+        "An unknown target is rejected before the CLI can create task state",
+        "A non-PostgreSQL configuration is rejected before either database is opened"
+      ],
+      "status": "PASS",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    }
   }
 }

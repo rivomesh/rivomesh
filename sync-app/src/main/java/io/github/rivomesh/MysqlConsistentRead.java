@@ -17,6 +17,7 @@ final class MysqlConsistentRead implements SourceAdapter.ConsistentRead {
     private final AtomicBoolean closed=new AtomicBoolean();
     private final long readDeadline;
     private final AtomicReference<String> expiration=new AtomicReference<>();
+    private final String gateSession=UUID.randomUUID().toString(), readSession=UUID.randomUUID().toString();
     private volatile Connection gate,read;
     private volatile boolean writesReleased;
     private ScheduledFuture<?> gateTimer;
@@ -33,6 +34,7 @@ final class MysqlConsistentRead implements SourceAdapter.ConsistentRead {
             deadlines.schedule(()->expire("SOURCE_CONSISTENT_READ_TIMED_OUT"),Math.max(1,TimeUnit.NANOSECONDS.toMillis(readDeadline-System.nanoTime())),TimeUnit.MILLISECONDS);
             gate=source.readConnection();check();
             sessionTimeout(gate,gateMillis);
+            markSession(gate,gateSession);
             gateTimer=deadlines.schedule(()->{if(!writesReleased)expire("SOURCE_WRITE_GATE_TIMED_OUT");},gateMillis,TimeUnit.MILLISECONDS);
             try(Statement sql=gate.createStatement()){sql.setQueryTimeout((int)Math.max(1,Math.min(10,gateMillis/1000)));sql.execute("FLUSH TABLES WITH READ LOCK");}
             check();
@@ -40,16 +42,33 @@ final class MysqlConsistentRead implements SourceAdapter.ConsistentRead {
             if(actual.size()!=tables.size())throw failure("SOURCE_SCHEMA_CHANGED_BEFORE_VALIDATION");
             for(TableSchema table:actual)if(!Codec.encode(table).equals(Codec.encode(tables.get(table.id))))throw failure("SOURCE_SCHEMA_CHANGED_BEFORE_VALIDATION");
             read=source.readConnection();sessionTimeout(read,readMillis);read.setAutoCommit(false);
+            markSession(read,readSession);
             try(Statement sql=read.createStatement()){
                 sql.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");sql.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT");
                 // Pin table definitions in this transaction before releasing the source gate.
                 for(TableSchema table:tables.values())try(ResultSet ignored=sql.executeQuery("SELECT "+columns(table)+" FROM "+qualified(table)+" LIMIT 0")){check();}
             }
-            baseline=source.position(gate);check();
+            baseline=source.position(gate);verify();
         }catch(Exception error){close();if(expiration.get()!=null)throw failure(expiration.get());throw error;}
     }
     private static void sessionTimeout(Connection c,long millis)throws SQLException{
         try(Statement sql=c.createStatement()){sql.execute("SET SESSION wait_timeout="+(TimeUnit.MILLISECONDS.toSeconds(millis)+3));}
+    }
+    private static void markSession(Connection connection,String marker)throws SQLException{
+        try(PreparedStatement sql=connection.prepareStatement("SET @rivomesh_consistent_view_session=?")){
+            sql.setString(1,marker);sql.execute();
+        }
+    }
+    private void verifySession(Connection connection,String marker)throws Exception{
+        try(Statement sql=connection.createStatement()){
+            sql.setQueryTimeout(3);
+            try(ResultSet row=sql.executeQuery("SELECT @@global.server_uuid,@@global.read_only,"
+                    +"@@global.super_read_only,@rivomesh_consistent_view_session")){
+                if(!row.next()||!Objects.equals(baseline.getPayload().get("serverUuid"),row.getString(1))
+                        ||row.getBoolean(2)||row.getBoolean(3))throw failure("SOURCE_VALIDATION_BACKEND_CHANGED");
+                if(!marker.equals(row.getString(4)))throw failure("SOURCE_VALIDATION_SESSION_CHANGED");
+            }
+        }
     }
     private static String columns(TableSchema table){return MysqlCdcSource.readColumns(table);}
     private static String qualified(TableSchema table){return Sql.mysql(table.database)+"."+Sql.mysql(table.name);}
@@ -65,23 +84,22 @@ final class MysqlConsistentRead implements SourceAdapter.ConsistentRead {
     @Override public SourcePosition baseline(){if(baseline==null)throw new IllegalStateException("SOURCE_BASELINE_UNAVAILABLE");return baseline;}
     @Override public synchronized void releaseWrites()throws Exception{
         check();if(writesReleased)return;
+        verify();
         try(Statement sql=gate.createStatement()){sql.setQueryTimeout(2);sql.execute("UNLOCK TABLES");}
+        verifySession(gate,gateSession);
         check();writesReleased=true;gateTimer.cancel(false);
         sessionTimeout(gate,Math.max(1000,TimeUnit.NANOSECONDS.toMillis(readDeadline-System.nanoTime())));
     }
     @Override public synchronized void verify()throws Exception{
         check();
-        try(Statement sql=gate.createStatement()){
-            sql.setQueryTimeout(3);
-            try(ResultSet row=sql.executeQuery("SELECT @@global.server_uuid,@@global.read_only,@@global.super_read_only")){
-                if(!row.next()||!Objects.equals(baseline.getPayload().get("serverUuid"),row.getString(1))||row.getBoolean(2)||row.getBoolean(3))throw failure("SOURCE_VALIDATION_BACKEND_CHANGED");
-            }
-        }
+        verifySession(gate,gateSession);
+        if(active==null)verifySession(read,readSession);
         check();
     }
     @Override public synchronized SourceAdapter.Snapshot table(TableSchema table)throws Exception{
         check();if(active!=null)throw failure("SOURCE_VALIDATION_CURSOR_ACTIVE");
         TableSchema expected=tables.get(table.id);if(expected==null||!Codec.encode(expected).equals(Codec.encode(table)))throw failure("SOURCE_VALIDATION_SCHEMA_MISMATCH");
+        verifySession(read,readSession);
         PreparedStatement query=read.prepareStatement("SELECT "+columns(table)+" FROM "+qualified(table),ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
         try{query.setFetchSize(Integer.MIN_VALUE);query.setQueryTimeout((int)Math.max(1,TimeUnit.NANOSECONDS.toSeconds(readDeadline-System.nanoTime())));ResultSet rows=query.executeQuery();active=new Cursor(expected,query,rows);return active;}
         catch(Exception error){query.close();throw error;}

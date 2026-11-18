@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.41",
+  "version": "0.42",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -120,8 +120,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "外部日志双节点已验证旧 Worker 隔离。PostgreSQL/MySQL 控制库均实测按授权和剩余任务槽分配新任务。运行任务仍需交接准入、证据可达与自动接管。",
-        "en": "External-journal stale Worker fencing passed. PostgreSQL and MySQL control stores verified initial Agent assignment by grants and capacity. Active Agent handoff, evidence availability and automatic takeover remain."
+        "zh-CN": "已实测自动初分配与独立 Worker 在共享 PostgreSQL 日志上的隔离交接，保留原快照和目标回执。运行任务跨管理 Agent 的归属、私有证据和自动接管仍待实现。",
+        "en": "Native evidence covers initial Agent allocation and fenced standalone Worker handoff through a shared PostgreSQL journal with original snapshots and receipts. Managed Agent ownership, private evidence and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -139,7 +139,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/AgentDirectory.java",
         "docs/sdd/001-control-recovery-compatibility/design-agent-handoff.en.md",
         "docs/sdd/001-control-recovery-compatibility/design-agent-handoff.md",
-        "docs/verification/README.md"
+        "docs/verification/README.md",
+        "tests/standalone-writer-handoff.py"
       ]
     },
     {
@@ -1419,8 +1420,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "当前首用目标要求为空，修复成功也不是业务切换完成。",
-        "en": "Initial destinations must be empty;repair completion is not cutover."
+        "zh-CN": "实测只读对比 MySQL 有主键源表与已有 PostgreSQL 表，提供差异与阻断清单，并拒绝原快照会话丢失。正式基线、约束恢复、写入交接和回切仍待验收。",
+        "en": "A read-only preview compares keyed MySQL and existing PostgreSQL rows, reports blockers, and refuses a lost physical snapshot session. Verified baseline, constraints, cutover and failback remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1432,7 +1433,8 @@
       ],
       "evidence": [
         "docs/zh-CN/platform-design.md",
-        "docs/zh-CN/gaussdb-index-policy.md"
+        "docs/zh-CN/gaussdb-index-policy.md",
+        "tests/nonempty-target-preview.py"
       ]
     },
     {

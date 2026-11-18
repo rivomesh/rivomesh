@@ -12,6 +12,16 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RepairTest {
+    @Test void checkingBeforeReceiptStorageExistsDoesNotCreateIt()throws Exception{
+        try(Fixture f=new Fixture(false)){
+            f.sql("DROP TABLE \"rivomesh_v3\".\"rm3_sink_repair\"");
+            RepairPlan.Table table=f.plan.tables.values().iterator().next();
+            assertNull(f.sink.repairReceipt(f.plan,table));
+            assertThrows(SQLException.class,()->f.sql("SELECT COUNT(*) FROM \"rivomesh_v3\".\"rm3_sink_repair\""));
+            f.sink.prepareRepair();
+            assertFalse(f.repair().alreadyApplied);
+        }
+    }
     @TempDir Path root;
     final class Fixture implements AutoCloseable {
         final JdbcSink.Settings settings;

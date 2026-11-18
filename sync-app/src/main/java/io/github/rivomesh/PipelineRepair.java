@@ -37,7 +37,7 @@ public final class PipelineRepair {
             Map<String,JdbcSink.RepairReceipt> result=new TreeMap<>();List<RepairPlan.Table> pending=new ArrayList<>();
             for(RepairPlan.Table table:plan.tables.values()){
                 PipelineConfig.Target target=target(config,table.target);try(JdbcSink sink=JdbcSink.existing(config.targetSettings(target,plan.certificate.generation))){
-                    sink.prepareRepair();JdbcSink.RepairReceipt receipt=sink.repairReceipt(plan,table);if(receipt==null)pending.add(table);else result.put(table.target+"/"+table.tableId,receipt);
+                    JdbcSink.RepairReceipt receipt=sink.repairReceipt(plan,table);if(receipt==null)pending.add(table);else result.put(table.target+"/"+table.tableId,receipt);
                 }
             }
             if(pending.isEmpty())return result;
@@ -47,6 +47,7 @@ public final class PipelineRepair {
             try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings());PausedRepairFence fence=new PausedRepairFence(journal,plan.certificate,plan.maximumMillis)){
                 journal.verifyIdentity(config.fingerprint(),config.subscribers());
                 for(RepairPlan.Table table:pending)try(JdbcSink sink=JdbcSink.existing(config.targetSettings(target(config,table.target),plan.certificate.generation))){
+                    fence.verify();sink.prepareRepair();
                     result.put(table.target+"/"+table.tableId,sink.repair(plan,table,store,reports.resolve(reportId).resolve("repair-scratch"),actor,requestHash,fence));
                 }
             }

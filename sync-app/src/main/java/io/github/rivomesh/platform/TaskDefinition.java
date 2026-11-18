@@ -27,6 +27,7 @@ public final class TaskDefinition {
         ObjectMapper mapper=new ObjectMapper(new YAMLFactory());JsonNode tree=mapper.readTree(value);
         if(tree!=null&&tree.path("formatVersion").asInt()==3){
             PipelineConfig pipeline=PipelineConfig.parse(value,directory);
+            if(pipeline.journal.writerAssignment!=null)throw new TaskService.Conflict("WRITER_ASSIGNMENT_STANDALONE_REQUIRED");
             if("LOCAL".equals(pipeline.journal.mode)){
                 Path managed=platformData.toAbsolutePath().normalize().resolve("journals").resolve(pipeline.pipelineId);
                 if(tree.path("journal").has("path")&&!managed.equals(pipeline.localDirectory()))throw new TaskService.Conflict("LOCAL_JOURNAL_MIGRATION_REQUIRED");

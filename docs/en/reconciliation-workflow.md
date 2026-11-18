@@ -47,7 +47,7 @@ Per-target/table results contain counts, content roots and `missing`, `extra`, `
 
 Recovery boundaries:
 
-- An interrupted incomplete source scan cannot resume its lost MVCC cursor. Inspect the durable pause, explicitly resume as appropriate and establish a new cut. Never mix source views.
+- A lost MySQL gate or snapshot session invalidates an incomplete source scan even if the driver reconnects to the same server. Inspect the durable pause, explicitly resume as appropriate and establish a new cut.
 - Once source data is sealed, `validate-compare` checks configuration/generation/epoch/error version/positions and physical target checkpoints, validates the source seal and row checksums, discards partial destination scans and rereads them. The source database need not be online during this phase.
 - Resuming/reconfiguring the pipeline or changing checkpoints invalidates continued comparison. Historical reports remain readable and do not prove current equality.
 - Success, failure and timeout all retain the pause. Use the current error version with the existing `status` / `resume-pipeline` controls to resume explicitly.
@@ -83,6 +83,8 @@ The console keeps operation history. API writes use `POST /api/tasks/{task}/acti
 Relational, analytical and messaging targets report product-specific progress. A broker acknowledgment confirms acceptance by the broker. Verify application or persistence using the downstream system. Native SQL receipts, compensation and gap verification follow the accepted profiles in the linked guides.
 
 ## Cutover and fallback
+
+For an initial comparison of existing MySQL data in a PostgreSQL target, use the [existing target preview](nonempty-target-preview.md).
 
 Keep the source authoritative for business writes and let Rivomesh write the targets. Pause business writes for the final cut, establish a fresh common boundary, compare destination content and downstream visibility, and restore business constraints before handing over writes. Revalidate UNIQUE or GSI constraints that were represented as ordinary indexes against the target product. Historical reports retain the earlier results. Validate the new business state and a fallback baseline separately after cutover. Nonempty target adoption, automatic Agent takeover and cross-product constraint recovery follow their explicit acceptance profiles.
 

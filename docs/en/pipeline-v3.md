@@ -70,6 +70,28 @@ Use `tests/mysql84-profile-run.sh` to reproduce the admission and live refusal c
 
 [MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
 
+## Standalone writer transfer with a PostgreSQL journal
+
+For a new standalone MySQL pipeline, set `journal.mode: EXTERNAL`, `journal.product: POSTGRESQL` and `journal.writerAssignment` to a fresh UUID. Use up to eight PostgreSQL/MySQL targets and 256 source tables. Keep the journal, target metadata and source logs accessible on both Workers, and reserve an independent private directory for any report files you generate separately.
+
+```bash
+java -jar rivomesh.jar init-writer original.yml
+java -jar rivomesh.jar run original.yml
+```
+
+`init-writer` creates the initial placement of a new pipeline. An enrolled Worker opens the existing journal on restart. A missing journal or placement requires restoring the original state. The command rejects enrollment on a previously created ordinary journal. Earlier application builds refuse the enrolled journal format.
+
+Wait for the original snapshot and every target acknowledgment to catch up. Stop the original Worker cleanly, or wait for its database-clock lease to expire after a failure. Use `status original.yml` to obtain `generation`, `epoch` and `writerPlacement.assignment`. Create a private candidate configuration with the same pipeline and destination settings, a different `nodeId` if changing hosts, and a fresh `journal.writerAssignment`. Ensure the candidate can read the original source logs and native target metadata.
+
+```bash
+java -jar rivomesh.jar transfer-writer candidate.yml "$previous_assignment" "$journal_generation" "$expected_epoch"
+java -jar rivomesh.jar run candidate.yml
+```
+
+The command verifies GTID history, the original snapshot IDs and target receipts before changing the placement. A live lease, incomplete snapshot, lagging/paused targets, or an unresolved skip intent blocks transfer. If confirmation is lost, repeat the exact original command to recover its durable receipt. A successful transfer keeps the capture position and target acknowledgments. The candidate claims a newer lease. The former configuration cannot claim or renew a lease, and a retired assignment UUID cannot be reused. Use a new UUID for any later transfer, including a move back to the original host. A paused or incomplete job must recover on its currently assigned Worker first.
+
+The cluster console manages Agent assignments separately. This CLI workflow covers the standalone Worker, the existing shared journal and transactional targets. It leaves report files and Agent ownership in their original locations.
+
 ## Troubleshooting and FAQ
 
 - **SQL errors:** only that subscriber pauses with an error generation. Repair privileges/schema/data, then resume the original transaction using the current generation from `status`. Resume never skips data or edits GTIDs.

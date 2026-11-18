@@ -70,6 +70,28 @@ MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿
 
 [MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
 
+## 使用 PostgreSQL 日志接管独立 Worker
+
+新建独立 MySQL 同步任务时，将 `journal.mode` 设为 `EXTERNAL`，`journal.product` 设为 `POSTGRESQL`，并为 `journal.writerAssignment` 生成新的 UUID。该流程支持最多八个 PostgreSQL/MySQL 目标和 256 张源表。两个 Worker 都应能连接原日志库、目标元数据和源日志。单独生成的校验报告保存在自己的私有目录中。
+
+```bash
+java -jar rivomesh.jar init-writer original.yml
+java -jar rivomesh.jar run original.yml
+```
+
+`init-writer` 为新任务登记初始写入归属。重启时，Worker 打开已登记的日志。日志或归属记录缺失时需要恢复原状态。命令拒绝给此前创建的普通日志补登记。较早的程序版本会拒绝使用新格式的日志。
+
+等待原快照及各目标确认位点追平，停止原 Worker，或者在故障后等数据库时钟判定其租约过期。用 `status original.yml` 查询 `generation`、`epoch` 和 `writerPlacement.assignment`。新 Worker 使用同一任务及目标配置，换主机时配置新 `nodeId`，并为 `journal.writerAssignment` 生成新的 UUID。确认新 Worker 可以读取原源日志及目标原生元数据。
+
+```bash
+java -jar rivomesh.jar transfer-writer candidate.yml "$previous_assignment" "$journal_generation" "$expected_epoch"
+java -jar rivomesh.jar run candidate.yml
+```
+
+转移前会检查 GTID 历史、原快照 ID 和目标事务回执。租约仍有效、快照未完成、目标落后或暂停、跳过操作尚未结案时会拒绝执行。如果命令结果丢失，原样重试可读取持久回执。转移成功后，源位点和各目标确认位点保持原值。新 Worker 以更高的租约代次续传，原配置无法重新领取或续期。每次转移都使用新的 UUID，回到原主机也一样。暂停或未完成的任务应先在当前归属 Worker 上恢复。
+
+集群控制台的 Agent 归属有独立管理流程。这个命令适用于独立 Worker、原外部日志和事务型目标。报告文件及 Agent 归属保留在原位置。
+
 ## 错误与恢复 FAQ
 
 - **目标 SQL 错误**：该订阅进入 PAUSED，保存错误版本。修复目标权限、结构或数据原因后，使用 `status` 返回的 `errorGeneration` 恢复原事务。默认恢复不跳过、不修改 GTID。

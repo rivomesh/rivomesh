@@ -63,6 +63,26 @@ class JournalTest {
             assertEquals("CLAIMED",a.status().get("captureLeaseState"));
         }
     }
+    @Test void assignedJournalCannotBeBootstrappedByWorkersOrClaimedWithAnOldPlacement()throws Exception{
+        JdbcJournal.Settings enrolled=settings(),stale=settings(),unassigned=settings();
+        enrolled.writerAssignment=UUID.randomUUID().toString();enrolled.writerNode="origin";
+        stale.writerAssignment=UUID.randomUUID().toString();stale.writerNode="candidate";
+        try(JdbcJournal origin=new JdbcJournal(enrolled);JdbcJournal candidate=new JdbcJournal(stale);
+            JdbcJournal oldBinary=new JdbcJournal(unassigned)){
+            assertThrows(SQLException.class,()->initialize(origin));
+            origin.initializeStorage(Codec.sha256("config"),"generation",List.of("fast","slow"));
+            initialize(origin);
+            assertEquals(7,origin.status().get("dataFormat"));
+            assertThrows(JdbcJournal.Fenced.class,()->initialize(candidate));
+            assertThrows(JdbcJournal.Fenced.class,()->oldBinary.claim("original-deployment",30000));
+            Journal.Lease lease=origin.claim("worker",30000);
+            origin.append(lease,transaction(1));
+            assertThrows(JdbcJournal.Fenced.class,()->candidate.heartbeat(lease,30000));
+            assertThrows(JdbcJournal.Fenced.class,()->candidate.append(lease,transaction(2)));
+            assertThrows(JdbcJournal.Fenced.class,oldBinary::pausePipeline);
+            assertEquals(transaction(1).position,origin.captured());
+        }
+    }
     @Test void byteBudgetLimitsBatchButKeepsAnOversizedHeadTransaction()throws Exception{
         try(JdbcJournal journal=new JdbcJournal(settings())){
             initialize(journal);

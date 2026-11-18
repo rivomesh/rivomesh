@@ -11,6 +11,7 @@ import java.util.*;
 public final class JdbcJournal implements NormalizedJournal {
     public static final class Settings {
         public String driver,url,username="",password="",namespace="rivomesh_v3",pipelineId;
+        public String writerAssignment,writerNode;
         public long maxPendingBytes=1024L*1024*1024;
     }
     public static final class Busy extends IllegalStateException { public Busy(){super("JOURNAL_BUSY");} }
@@ -27,7 +28,9 @@ public final class JdbcJournal implements NormalizedJournal {
     public JdbcJournal(Settings settings)throws Exception{
         if(settings==null||settings.url==null||settings.driver==null||settings.pipelineId==null
                 ||!settings.pipelineId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
-                ||settings.namespace==null||!settings.namespace.matches("[A-Za-z_][A-Za-z0-9_]{0,62}")||settings.maxPendingBytes<1)
+                ||settings.namespace==null||!settings.namespace.matches("[A-Za-z_][A-Za-z0-9_]{0,62}")||settings.maxPendingBytes<1
+                ||settings.writerAssignment!=null&&(!JournalWriterAssignment.validId(settings.writerAssignment)
+                ||settings.writerNode==null||!settings.writerNode.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")))
             throw new IllegalArgumentException("JOURNAL_CONFIG_INVALID");
         this.settings=settings;
         anchor=JdbcConnections.open(settings.driver,settings.url,settings.username,settings.password);
@@ -50,14 +53,30 @@ public final class JdbcJournal implements NormalizedJournal {
         try(Statement s=c.createStatement()){s.execute(sql);}
         catch(SQLException e){if(!Arrays.asList("42P06","42P07","42710","23505").contains(e.getSQLState()))throw e;}
     }
-    static boolean hasTargetGaps(int format){return format==4||format==6;}
-    static boolean hasSourceExclusions(int format){return format==5||format==6;}
-    private static boolean supported(int format){return format>=3&&format<=6;}
+    static boolean assignedWriter(int format){return format>=7&&format<=10;}
+    private static int baseFormat(int format){return assignedWriter(format)?format-4:format;}
+    static boolean hasTargetGaps(int format){return baseFormat(format)==4||baseFormat(format)==6;}
+    static boolean hasSourceExclusions(int format){return baseFormat(format)==5||baseFormat(format)==6;}
+    static int withTargetGaps(int format){return (hasSourceExclusions(format)?6:4)+(assignedWriter(format)?4:0);}
+    static int withSourceExclusions(int format){return (hasTargetGaps(format)?6:5)+(assignedWriter(format)?4:0);}
+    private static boolean supported(int format){return format>=3&&format<=10;}
     private void verifyRecoveryTables(Connection c,int format)throws Exception{
         if(hasTargetGaps(format))JdbcSkipJournal.verifyTables(this,c);
         if(hasSourceExclusions(format))JdbcSourceExclusion.verify(this,c);
     }
     @Override public void initialize(String fingerprint,String generation,List<String> subscribers)throws Exception{
+        if(settings.writerAssignment!=null){
+            verifyIdentity(fingerprint,subscribers);
+            try(Connection c=connect()){
+                c.setAutoCommit(false);
+                Map<String,Object> job=locked(c);
+                if(generation!=null&&!generation.equals(job.get("generation")))
+                    throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");
+                c.commit();
+            }
+        }else initializeStorage(fingerprint,generation,subscribers);
+    }
+    void initializeStorage(String fingerprint,String generation,List<String> subscribers)throws Exception{
         if(fingerprint==null||fingerprint.length()!=64||(generation!=null&&(generation.isEmpty()||generation.length()>128))||subscribers==null||subscribers.isEmpty())
             throw new IllegalArgumentException("JOURNAL_IDENTITY_INVALID");
         Set<String> ids=new TreeSet<>();
@@ -77,13 +96,16 @@ public final class JdbcJournal implements NormalizedJournal {
             JdbcPublicationStore.initialize(this,c);
             JdbcFailureReview.initialize(this,c);
             JdbcCommitAcknowledgement.initialize(this,c);
+            if(settings.writerAssignment!=null)JournalWriterAssignment.initialize(this,c);
             if(dialect==Dialect.MYSQL)try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_job','rm3_subscription','rm3_log','rm3_receipt','rm3_schema','rm3_snapshot','rm3_snapshot_part','rm3_snapshot_ack','rm3_normalized','rm3_identity','rm3_identity_seed','rm3_publication','rm3_publication_schema','rm3_publication_snapshot','rm3_failure','rm3_recovery_ack','rm3_pipeline_failure')")){
                 p.setString(1,settings.namespace);try(ResultSet rs=p.executeQuery()){int count=0;while(rs.next()){count++;if(!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("JOURNAL_ENGINE_NOT_TRANSACTIONAL");}if(count!=17)throw new IllegalStateException("JOURNAL_TABLES_MISSING");}
             }
             c.setAutoCommit(false);
             try{
-                execute(c,"INSERT INTO "+table("job")+" (pipeline_id,format_version,fingerprint,generation,epoch,owner,lease_until,next_seq,captured,pending_bytes,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation) VALUES (?,3,?,?,0,NULL,0,1,NULL,0,0,0,0,'RUNNING',0)",settings.pipelineId,fingerprint,generation==null?UUID.randomUUID().toString():generation);
+                String stream=generation==null?UUID.randomUUID().toString():generation;
+                execute(c,"INSERT INTO "+table("job")+" (pipeline_id,format_version,fingerprint,generation,epoch,owner,lease_until,next_seq,captured,pending_bytes,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation) VALUES (?,?,?,?,0,NULL,0,1,NULL,0,0,0,0,'RUNNING',0)",settings.pipelineId,settings.writerAssignment==null?3:7,fingerprint,stream);
                 for(String id:ids)execute(c,"INSERT INTO "+table("subscription")+" (pipeline_id,subscription_id,acknowledged,run_state,error_generation) VALUES (?,?,0,'RUNNING',0)",settings.pipelineId,id);
+                if(settings.writerAssignment!=null)JournalWriterAssignment.initial(this,c,stream);
                 c.commit();
             }catch(SQLException e){c.rollback();if(!duplicate(e))throw e;}
             try(PreparedStatement p=c.prepareStatement("SELECT format_version,fingerprint,generation FROM "+table("job")+" WHERE pipeline_id=?")){
@@ -94,6 +116,7 @@ public final class JdbcJournal implements NormalizedJournal {
             }
             Set<String> existing=new TreeSet<>();for(Subscription sub:subscriptions(c))existing.add(sub.id);
             if(!existing.equals(ids))throw new IllegalStateException("SUBSCRIPTION_MIGRATION_REQUIRED");
+            if(settings.writerAssignment!=null){locked(c);c.commit();}
         }
     }
     /** Read-only identity guard for status and administrative controls, without initialization DDL. */
@@ -103,15 +126,20 @@ public final class JdbcJournal implements NormalizedJournal {
             Set<String> actual=new TreeSet<>();for(Subscription sub:subscriptions(c))actual.add(sub.id);if(!actual.equals(new TreeSet<>(subscribers)))throw new IllegalStateException("SUBSCRIPTION_MIGRATION_REQUIRED");
         }
     }
-    private long now(Connection c)throws SQLException{
+    long now(Connection c)throws SQLException{
         String sql=dialect==Dialect.MYSQL?"SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)":dialect==Dialect.POSTGRES?"SELECT CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)":"SELECT DATEDIFF('MILLISECOND',TIMESTAMP WITH TIME ZONE '1970-01-01 00:00:00+00:00',CURRENT_TIMESTAMP)";
         try(Statement s=c.createStatement();ResultSet rs=s.executeQuery(sql)){rs.next();return rs.getLong(1);}
     }
     Map<String,Object> locked(Connection c)throws SQLException{
-        try(PreparedStatement p=c.prepareStatement("SELECT epoch,owner,lease_until,next_seq,captured,pending_bytes,generation,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation,error_code,format_version FROM "+table("job")+" WHERE pipeline_id=? FOR UPDATE")){
+        Map<String,Object> row=assignmentLock(c);
+        JournalWriterAssignment.requireConfigured(this,c,row);
+        return row;
+    }
+    Map<String,Object> assignmentLock(Connection c)throws SQLException{
+        try(PreparedStatement p=c.prepareStatement("SELECT epoch,owner,lease_until,next_seq,captured,pending_bytes,generation,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation,error_code,format_version,fingerprint FROM "+table("job")+" WHERE pipeline_id=? FOR UPDATE")){
             p.setString(1,settings.pipelineId);try(ResultSet rs=p.executeQuery()){
                 if(!rs.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");Map<String,Object> row=new HashMap<>();
-                row.put("epoch",rs.getLong(1));row.put("owner",rs.getString(2));row.put("lease",rs.getLong(3));row.put("next",rs.getLong(4));row.put("captured",rs.getString(5));row.put("bytes",rs.getLong(6));row.put("generation",rs.getString(7));row.put("snapshotBytes",rs.getLong(8));row.put("normalized",rs.getLong(9));row.put("identityBytes",rs.getLong(10));row.put("state",rs.getString(11));row.put("errorGeneration",rs.getLong(12));row.put("errorCode",rs.getString(13));row.put("format",rs.getInt(14));if(!supported(rs.getInt(14)))throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");return row;
+                row.put("epoch",rs.getLong(1));row.put("owner",rs.getString(2));row.put("lease",rs.getLong(3));row.put("next",rs.getLong(4));row.put("captured",rs.getString(5));row.put("bytes",rs.getLong(6));row.put("generation",rs.getString(7));row.put("snapshotBytes",rs.getLong(8));row.put("normalized",rs.getLong(9));row.put("identityBytes",rs.getLong(10));row.put("state",rs.getString(11));row.put("errorGeneration",rs.getLong(12));row.put("errorCode",rs.getString(13));row.put("format",rs.getInt(14));row.put("fingerprint",rs.getString(15));if(!supported(rs.getInt(14)))throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");return row;
             }
         }
     }
@@ -381,7 +409,7 @@ public final class JdbcJournal implements NormalizedJournal {
             }return result;}
         }
     }
-    private SnapshotState snapshot(Connection c,String scope,String tableId,boolean lock)throws SQLException{
+    SnapshotState snapshot(Connection c,String scope,String tableId,boolean lock)throws SQLException{
         try(PreparedStatement p=c.prepareStatement("SELECT snapshot_id,schema_version,baseline,run_state,next_part,row_count,column_count,retained FROM "+table("snapshot")+" WHERE pipeline_id=? AND snapshot_scope=? AND table_id=?"+(lock?" FOR UPDATE":""))){
             p.setString(1,settings.pipelineId);p.setString(2,scope);p.setString(3,tableId);try(ResultSet rs=p.executeQuery()){
                 if(!rs.next())return null;SnapshotState state=new SnapshotState();state.scope=scope;state.tableId=tableId;state.snapshotId=rs.getString(1);state.schemaVersion=rs.getInt(2);state.baseline=Codec.decode(rs.getString(3),SourcePosition.class);state.state=rs.getString(4);state.nextPart=rs.getInt(5);state.rows=rs.getLong(6);state.columnCount=rs.getInt(7);state.retained=rs.getInt(8)!=0;return state;
@@ -480,6 +508,8 @@ public final class JdbcJournal implements NormalizedJournal {
             String leaseState=result.get("owner")==null?"UNCLAIMED":
                     (long)result.get("leaseUntil")>observedAt?"CLAIMED":"EXPIRED";
             result.put("captureLeaseState",leaseState);
+            if(assignedWriter((int)result.get("dataFormat")))
+                result.put("writerPlacement",JournalWriterAssignment.current(this,c));
             if("ERROR".equals(result.get("run_state")))
                 result.put("errorStage",pipelineFailurePhase(c,(long)result.get("errorGeneration")));
             if(hasTargetGaps((int)result.get("dataFormat")))result.putAll(JdbcSkipJournal.summary(this,c));

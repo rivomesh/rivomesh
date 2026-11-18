@@ -26,22 +26,26 @@ public final class JdbcSink implements SinkAdapter {
     private final Map<String,TableSchema> schemas=new HashMap<>();
     private Connection anchor;
     private boolean skipAware;
-    public JdbcSink(Settings s)throws Exception{this(s,true);}
+    private enum OpenMode { INITIALIZE, EXISTING, RECOVERY, ADOPTION_PREVIEW }
+    public JdbcSink(Settings s)throws Exception{this(s,OpenMode.INITIALIZE);}
     /** Administrative reads/fences must never recreate lost target metadata. */
-    public static JdbcSink existing(Settings s)throws Exception{return new JdbcSink(s,false);}
-    private JdbcSink(Settings s,boolean initialize)throws Exception{
-        this(s,initialize,false);
+    public static JdbcSink existing(Settings s)throws Exception{return new JdbcSink(s,OpenMode.EXISTING);}
+    public static PostgresAdoptionRead adoptionRead(Settings s,long maximumMillis)throws Exception{
+        if(s.product!=TargetProduct.POSTGRESQL)throw new IllegalArgumentException("ADOPTION_TARGET_PRODUCT_UNSUPPORTED");
+        JdbcSink sink=new JdbcSink(s,OpenMode.ADOPTION_PREVIEW);
+        return new PostgresAdoptionRead(sink,s,sink.connect(),maximumMillis);
     }
-    private JdbcSink(Settings s,boolean initialize,boolean incompleteRecovery)throws Exception{
+    private JdbcSink(Settings s,OpenMode mode)throws Exception{
         if(s==null||s.product==null||s.uniquePolicy==null||s.fingerprint==null||s.fingerprint.length()!=64||s.generation==null||s.generation.isEmpty()
                 ||s.generation.length()>128||s.driver==null||s.url==null||s.databases==null||s.databases.isEmpty())throw new IllegalArgumentException("SINK_CONFIG_INVALID");
         for(String id:Arrays.asList(s.id,s.pipelineId))if(id==null||!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("SINK_ID_INVALID");
         settings=s;q(s.metadataSchema);Set<String> destinations=new HashSet<>();
         for(Map.Entry<String,String> entry:s.databases.entrySet())if(entry.getKey()==null||entry.getKey().isEmpty()||q(entry.getValue())==null||entry.getValue().equalsIgnoreCase(s.metadataSchema)||!destinations.add(entry.getValue().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("SINK_MAPPING_COLLISION");
+        if(mode==OpenMode.ADOPTION_PREVIEW)return;
         anchor=connect();String product=anchor.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
         if(!(s.product.mysqlDialect()&&(product.contains("mysql")||product.contains("oceanbase"))||s.product==TargetProduct.POSTGRESQL&&product.contains("postgresql")
                 ||s.product==TargetProduct.GAUSS&&(product.contains("gauss")||product.contains("postgresql"))||s.product==TargetProduct.GBASE_8C&&product.equals("gbase8c")||s.product==TargetProduct.KINGBASE&&product.contains("kingbase")||s.product==TargetProduct.DM&&product.equals("dm dbms")||s.product==TargetProduct.H2&&product.contains("h2"))){anchor.close();throw new IllegalArgumentException("SINK_PRODUCT_MISMATCH");}
-        try{if(initialize)initialize();skipAware=skipColumns(anchor,incompleteRecovery)==2;if(!initialize)try(RepairConnectionGuard guard=new RepairConnectionGuard(anchor,30000)){validateMetadata(anchor);anchor.setAutoCommit(false);boundRecoveryLocks(anchor);locked(anchor,null);guard.verify();anchor.rollback();}}catch(Exception e){anchor.close();throw e;}
+        try{if(mode==OpenMode.INITIALIZE)initialize();skipAware=skipColumns(anchor,mode==OpenMode.RECOVERY)==2;if(mode!=OpenMode.INITIALIZE)try(RepairConnectionGuard guard=new RepairConnectionGuard(anchor,30000)){validateMetadata(anchor);anchor.setAutoCommit(false);boundRecoveryLocks(anchor);locked(anchor,null);guard.verify();anchor.rollback();}}catch(Exception e){anchor.close();throw e;}
     }
     private Connection connect()throws SQLException{
         Connection c=JdbcConnections.open(settings.driver,settings.url,settings.username,settings.password);
@@ -86,7 +90,7 @@ public final class JdbcSink implements SinkAdapter {
     }
     static JdbcSink forSkipRecovery(Settings settings)throws Exception{
         if(settings.product!=TargetProduct.POSTGRESQL&&settings.product!=TargetProduct.MYSQL&&settings.product!=TargetProduct.H2)throw new IllegalStateException("SKIP_TARGET_UNSUPPORTED");
-        return new JdbcSink(settings,false,true);
+        return new JdbcSink(settings,OpenMode.RECOVERY);
     }
     private int skipColumns(Connection c,boolean incompleteRecovery)throws SQLException{
         Set<String> found=skipColumnNames(c);if(found.size()==1&&!incompleteRecovery)throw new IllegalStateException("SINK_RECOVERY_METADATA_INCOMPLETE");return found.size();
@@ -122,6 +126,25 @@ public final class JdbcSink implements SinkAdapter {
             if(cp.epoch!=epoch)sql(c,"UPDATE "+metadata("job")+" SET epoch=? WHERE pipeline_id=? AND subscription_id=?",epoch,settings.pipelineId,settings.id);c.commit();cp.epoch=epoch;return cp;}
     }
     @Override public Checkpoint checkpoint()throws Exception{try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,30000)){c.setAutoCommit(false);Checkpoint cp=locked(c,null);guard.verify();c.rollback();return cp;}}
+    Checkpoint verifyWriterCut(long maximumEpoch,long sequence,List<TableSchema> tables,
+                               Map<String,Journal.SnapshotState> expected)throws Exception{
+        try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,30000)){
+            c.setAutoCommit(false);boundRecoveryLocks(c);Checkpoint checkpoint=locked(c,null);
+            boolean validReceipt=sequence==0?checkpoint.transactionId==null&&checkpoint.transactionHash==null:
+                    checkpoint.transactionId!=null&&io.github.rivomesh.recovery.FailureEvidence.hash(checkpoint.transactionHash);
+            if(checkpoint.epoch<1||checkpoint.epoch>maximumEpoch||sequence!=checkpoint.sequence||!validReceipt)
+                throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_CHECKPOINT_CHANGED");
+            for(TableSchema table:tables){
+                SnapshotCheckpoint actual=snapshotCheckpoint(c,table);
+                Journal.SnapshotState original=expected.get(table.id);
+                if(!"COMPLETE".equals(actual.state)||!original.snapshotId.equals(actual.snapshotId)
+                        ||original.nextPart!=actual.nextPart||original.rows!=actual.rows)
+                    throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_SNAPSHOT_CHANGED");
+                validateShape(c,table);
+            }
+            guard.verify();c.rollback();return checkpoint;
+        }
+    }
     interface CheckpointAction<T>{T run(Checkpoint checkpoint)throws Exception;}
     /** Recovery caller must already hold a PAUSED pipeline's journal job/subscription locks. */
     <T>T withRecoveryCheckpoint(long epoch,Checkpoint expected,CheckpointAction<T> action)throws Exception{
@@ -238,7 +261,7 @@ public final class JdbcSink implements SinkAdapter {
             if(!"COMPLETE".equals(snapshotCheckpoint(c,table).state))throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");validateShape(c,table);
         });
     }
-    private String validationSql(TableSchema table){
+    String validationSql(TableSchema table){
         List<String> columns=new ArrayList<>();for(TableSchema.Column column:table.columns){String value=q(column.name);
             if(column.type==TableSchema.Type.TIME&&mysql())value="CAST("+value+" AS CHAR)";
             if(column.type==TableSchema.Type.TIME&&!mysql()&&settings.product!=TargetProduct.H2){
@@ -525,7 +548,7 @@ public final class JdbcSink implements SinkAdapter {
     private boolean exists(Connection c,TableSchema table)throws Exception{
         DatabaseMetaData m=c.getMetaData();try(ResultSet rs=m.getTables(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name,new String[]{"TABLE"})){while(rs.next())if(table.name.equals(rs.getString("TABLE_NAME")))return true;return false;}
     }
-    private void validateShape(Connection c,TableSchema table)throws Exception{
+    void validateShape(Connection c,TableSchema table)throws Exception{
         // A zero-row select validates exact quoted names and order without loading data.
         try(Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT * FROM "+table(table)+" WHERE 1=0")){
             ResultSetMetaData m=rs.getMetaData();if(m.getColumnCount()!=table.columns.size()+(table.keyless()?1:0))throw new IllegalStateException("TARGET_COLUMN_COUNT_MISMATCH");
@@ -634,19 +657,28 @@ public final class JdbcSink implements SinkAdapter {
     }
     private void requireRowId(String id){if(id==null||!id.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("ROW_IDENTITY_REQUIRED");}
     private void repairProduct(){if(settings.product!=TargetProduct.H2&&settings.product!=TargetProduct.MYSQL&&settings.product!=TargetProduct.POSTGRESQL)throw new IllegalArgumentException("REPAIR_TARGET_PROFILE_UNVERIFIED");}
+    private boolean repairStorageExists(Connection c)throws SQLException{
+        try(ResultSet tables=c.getMetaData().getTables(mysql()?settings.metadataSchema:c.getCatalog(),
+                mysql()?null:settings.metadataSchema,"rm3_sink_repair",new String[]{"TABLE"})){
+            while(tables.next())if("rm3_sink_repair".equals(tables.getString("TABLE_NAME")))return true;
+            return false;
+        }
+    }
     /** Explicit preparation creates only receipts, never missing job/table/ownership metadata. */
     public void prepareRepair()throws Exception{
         repairProduct();try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,600000)){
             c.setAutoCommit(false);locked(c,null);
             ddl(c,"CREATE TABLE IF NOT EXISTS "+metadata("repair")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,plan_id VARCHAR(36) NOT NULL,table_id VARCHAR(64) NOT NULL,plan_hash VARCHAR(64) NOT NULL,before_root VARCHAR(64) NOT NULL,after_root VARCHAR(64) NOT NULL,schema_hash VARCHAR(64) NOT NULL,epoch BIGINT NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512),transaction_hash VARCHAR(64),deleted_rows BIGINT NOT NULL,inserted_rows BIGINT NOT NULL,actor VARCHAR(128) NOT NULL,request_hash VARCHAR(64) NOT NULL,committed_at VARCHAR(40) NOT NULL,PRIMARY KEY(pipeline_id,subscription_id,plan_id,table_id))"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
-            locked(c,null);try(Statement sql=c.createStatement();ResultSet rows=sql.executeQuery("SELECT pipeline_id,subscription_id,plan_id,table_id,plan_hash,before_root,after_root,schema_hash,epoch,stream_seq,transaction_id,transaction_hash,deleted_rows,inserted_rows,actor,request_hash,committed_at FROM "+metadata("repair")+" WHERE 1=0")){
-                ResultSetMetaData m=rows.getMetaData();if(m.getColumnCount()!=17)throw new IllegalStateException("REPAIR_RECEIPT_SHAPE_INVALID");
-                int[] lengths={128,128,36,64,64,64,64,64,0,0,512,64,0,0,128,64,40};for(int i=0;i<lengths.length;i++)if(lengths[i]==0?m.getColumnType(i+1)!=Types.BIGINT:m.getColumnType(i+1)!=Types.VARCHAR||m.getPrecision(i+1)<lengths[i])throw new IllegalStateException("REPAIR_RECEIPT_SHAPE_INVALID");
-            }
-            Map<Short,String> primary=new TreeMap<>();try(ResultSet keys=c.getMetaData().getPrimaryKeys(mysql()?settings.metadataSchema:c.getCatalog(),mysql()?null:settings.metadataSchema,"rm3_sink_repair")){while(keys.next())primary.put(keys.getShort("KEY_SEQ"),keys.getString("COLUMN_NAME").toLowerCase(Locale.ROOT));}if(!new ArrayList<>(primary.values()).equals(Arrays.asList("pipeline_id","subscription_id","plan_id","table_id")))throw new IllegalStateException("REPAIR_RECEIPT_PRIMARY_KEY_INVALID");
-            if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_sink_job','rm3_sink_table','rm3_sink_repair')")){p.setString(1,settings.metadataSchema);try(ResultSet r=p.executeQuery()){int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new IllegalStateException("REPAIR_RECEIPT_ENGINE_INVALID");}if(count!=3)throw new IllegalStateException("SINK_METADATA_TABLES_MISSING");}}
-            c.commit();
+            locked(c,null);validateRepairStorage(c);guard.verify();c.commit();
         }
+    }
+    private void validateRepairStorage(Connection c)throws SQLException{
+        try(Statement sql=c.createStatement();ResultSet rows=sql.executeQuery("SELECT pipeline_id,subscription_id,plan_id,table_id,plan_hash,before_root,after_root,schema_hash,epoch,stream_seq,transaction_id,transaction_hash,deleted_rows,inserted_rows,actor,request_hash,committed_at FROM "+metadata("repair")+" WHERE 1=0")){
+            ResultSetMetaData m=rows.getMetaData();if(m.getColumnCount()!=17)throw new IllegalStateException("REPAIR_RECEIPT_SHAPE_INVALID");
+            int[] lengths={128,128,36,64,64,64,64,64,0,0,512,64,0,0,128,64,40};for(int i=0;i<lengths.length;i++)if(lengths[i]==0?m.getColumnType(i+1)!=Types.BIGINT:m.getColumnType(i+1)!=Types.VARCHAR||m.getPrecision(i+1)<lengths[i])throw new IllegalStateException("REPAIR_RECEIPT_SHAPE_INVALID");
+        }
+        Map<Short,String> primary=new TreeMap<>();try(ResultSet keys=c.getMetaData().getPrimaryKeys(mysql()?settings.metadataSchema:c.getCatalog(),mysql()?null:settings.metadataSchema,"rm3_sink_repair")){while(keys.next())primary.put(keys.getShort("KEY_SEQ"),keys.getString("COLUMN_NAME").toLowerCase(Locale.ROOT));}if(!new ArrayList<>(primary.values()).equals(Arrays.asList("pipeline_id","subscription_id","plan_id","table_id")))throw new IllegalStateException("REPAIR_RECEIPT_PRIMARY_KEY_INVALID");
+        if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rm3_sink_job','rm3_sink_table','rm3_sink_repair')")){p.setString(1,settings.metadataSchema);try(ResultSet r=p.executeQuery()){int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new IllegalStateException("REPAIR_RECEIPT_ENGINE_INVALID");}if(count!=3)throw new IllegalStateException("SINK_METADATA_TABLES_MISSING");}}
     }
     public void checkRepairDependencies(TableSchema table,Checkpoint expected)throws Exception{
         repairProduct();try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,600000)){c.setAutoCommit(false);Checkpoint actual=locked(c,expected.epoch);if(!Codec.encode(actual).equals(Codec.encode(expected)))throw new IllegalStateException("VALIDATION_TARGET_CHECKPOINT_MISMATCH");if(!"COMPLETE".equals(snapshotCheckpoint(c,table).state))throw new IllegalStateException("SINK_SNAPSHOT_INCOMPLETE");RepairDependencies.verify(c,settings.product,destination(table),table.name,table(table));validateShape(c,table);c.rollback();}
@@ -672,7 +704,12 @@ public final class JdbcSink implements SinkAdapter {
     }
     /** Receipt resolution remains valid after resume; it does not assert current live equality. */
     public RepairReceipt repairReceipt(RepairPlan plan,RepairPlan.Table table)throws Exception{
-        repairScope(plan,table);try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,plan.maximumMillis)){c.setAutoCommit(false);locked(c,null);RepairReceipt result=receipt(c,plan,table);c.rollback();return result;}
+        repairScope(plan,table);
+        try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,plan.maximumMillis)){
+            c.setAutoCommit(false);locked(c,null);
+            if(!repairStorageExists(c)){c.rollback();return null;}
+            validateRepairStorage(c);RepairReceipt result=receipt(c,plan,table);guard.verify();c.rollback();return result;
+        }
     }
     private static RepairProbe.Result scanRepair(JdbcTargetRead reader,RepairProbe probe)throws Exception{
         while(true){List<TargetRead.Row> rows=reader.next(128);if(rows.isEmpty())break;for(TargetRead.Row row:rows)probe.append(row);}reader.finishScan();return probe.finish();

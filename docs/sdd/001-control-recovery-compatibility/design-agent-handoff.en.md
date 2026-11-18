@@ -27,4 +27,10 @@ The two stores commit separately. Persist each phase and its evidence before the
 
 Initial assignment is validated independently of relocation. Apply the shared-journal handoff first to target profiles with native verified epoch fencing.
 
+## Standalone journal admission
+
+The [standalone pipeline workflow](../../en/pipeline-v3.md#standalone-writer-transfer-with-a-postgresql-journal) exercises the journal-side placement change through `init-writer` and `transfer-writer`. It commits a placement receipt and a higher epoch in one PostgreSQL transaction after checking one fully acknowledged cut. The replacement then raises each transactional target's epoch before applying data. If the former Worker thaws between the two steps, the completed snapshot and acknowledged stream tail leave it no outstanding business transaction, and the journal rejects its next mutation or claim.
+
+The managed handoff still needs durable control phases and verified access to original operation receipts and recovery documents. Bounded diagnostic rotations are operator observations. Plan their continued visibility through the original Agent or an archive, independently of whether the replacement can resume the stream. The first standalone path requires an expired or released lease, a complete snapshot, fully caught-up targets and intact journal and target metadata. Interrupted snapshots, unreachable targets, open operations, and recovery across stores require separate acceptance.
+
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

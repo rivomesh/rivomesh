@@ -105,7 +105,7 @@ public final class TransactionCompensation {
                 source.setAutoCommit(false);
                 job = journal.locked(source);
                 if (!"PAUSED".equals(job.get("state"))) throw refused("COMPENSATION_REQUIRES_PIPELINE_PAUSED");
-                if ((int)job.get("format") == 4) JdbcSkipJournal.requireNoPending(journal, source, target.id);
+                if (JdbcJournal.hasTargetGaps((int)job.get("format"))) JdbcSkipJournal.requireNoPending(journal, source, target.id);
                 FailureCheckpointInspection.verify(review, new JdbcFailureReview(journal)
                         .inspect(source, target.id, review.subscription.errorGeneration, 4L * 1024 * 1024));
                 wait.verify();

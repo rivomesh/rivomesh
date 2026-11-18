@@ -58,7 +58,7 @@ final class JdbcSkipJournal {
         FailureCheckpointInspection.verify(evidence.review,new JdbcFailureReview(j).inspect(c,plan.subscriptionId,plan.errorGeneration,4L*1024*1024));
         requireNoPending(j,c,plan.subscriptionId);verifyTables(j,c);
         JdbcJournal.execute(c,"INSERT INTO "+j.table("skip_plan")+" (pipeline_id,operation_id,subscription_id,stream_seq,request_hash,plan_hash,payload,run_state) VALUES (?,?,?,?,?,?,?,'PREPARED')",plan.pipelineId,plan.id,plan.subscriptionId,plan.sequence,plan.requestHash,plan.hash(),Codec.encode(plan));
-        int format=JdbcJournal.hasSourceExclusions((int)job.get("format"))?6:4;
+        int format=JdbcJournal.withTargetGaps((int)job.get("format"));
         JdbcJournal.execute(c,"UPDATE "+j.table("job")+" SET format_version=? WHERE pipeline_id=?",format,plan.pipelineId);
         Stored stored=new Stored();stored.plan=plan;stored.hash=plan.hash();stored.state="PREPARED";return stored;
     }

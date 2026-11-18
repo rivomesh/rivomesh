@@ -16,6 +16,12 @@ final class PipelineMain {
                 try{engine.run();}finally{try{Runtime.getRuntime().removeShutdownHook(hook);}catch(IllegalStateException ignored){/* shutdown */}}
             }
         }else if(args.length==2&&args[0].equals("check"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineEngine.check(config)));
+        else if(args.length==2&&args[0].equals("init-writer"))
+            System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(JournalWriterAssignment.initialize(
+                    config,generation->PipelineSources.open(config,generation))));
+        else if(args.length==5&&args[0].equals("transfer-writer"))
+            System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(JournalWriterAssignment.transfer(
+                    config,args[2],args[3],Long.parseLong(args[4]),generation->PipelineSources.open(config,generation))));
         else if(args[0].equals("review-source")&&(args.length==2||args.length==3&&args[2].equals("--verify-contents")))
             System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(CaptureRecoveryReview.inspect(config,args.length==3,null)));
         else if(args.length==4&&args[0].equals("review-source")&&args[2].equals("--retain-contents"))
@@ -39,6 +45,8 @@ final class PipelineMain {
             System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineRepair.plan(config,Paths.get(args[2]),args[3],scope,args[5])));
         }
         else if(args.length==8&&args[0].equals("repair-execute"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineRepair.execute(config,Paths.get(args[2]),args[3],args[4],args[5],args[6],args[7])));
-        else throw new IllegalArgumentException("V3_USAGE: run|check|status|pause config.yml; review-source config.yml [--verify-contents | --retain-contents privateDirectory]; resume config.yml subscriptionId expectedErrorGeneration; resume-pipeline config.yml expectedErrorGeneration; validate-data|validate-stage config.yml privateReportsDirectory target1,target2; validate-compare|validation-report config.yml privateReportsDirectory reportId; repair-plan config.yml reports reportId target/tableId,... actor; repair-execute config.yml reports reportId planId approvedHash actor requestUUID");
+        else if(args.length==3&&args[0].equals("preview-adoption"))
+            System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineAdoptionPreview.inspect(config,args[2])));
+        else throw new IllegalArgumentException("V3_USAGE: run|check|status|pause|init-writer config.yml; transfer-writer candidate.yml previousAssignment journalGeneration expectedEpoch; review-source config.yml [--verify-contents | --retain-contents privateDirectory]; resume config.yml subscriptionId expectedErrorGeneration; resume-pipeline config.yml expectedErrorGeneration; validate-data|validate-stage config.yml privateReportsDirectory target1,target2; validate-compare|validation-report config.yml privateReportsDirectory reportId; repair-plan config.yml reports reportId target/tableId,... actor; repair-execute config.yml reports reportId planId approvedHash actor requestUUID; preview-adoption config.yml targetId");
     }
 }
