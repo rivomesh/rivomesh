@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.30 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,25 DONE, 22 PARTIAL and 1 NEW, with 23 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -13,7 +13,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | CP-01 | P0 / DONE | Global node registry and state | Shared registry passes PostgreSQL/MySQL two-node,kill/rejoin and storage-outage acceptance;global task authority/commands remain CP-02/03. |
 | CP-02 | P0 / PARTIAL | Global task/configuration authority | Opt-in fixed-owner global HTTP/UI,shared configuration and history are wired;legacy import,complete business and scale acceptance remain open. |
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
-| CP-04 | P0 / PARTIAL | Failover,fencing and placement | Worker leases/epochs exist;global scheduling,remote lifecycle and rolling-upgrade protocols do not. |
+| CP-04 | P0 / PARTIAL | Failover,fencing and placement | Two nodes with an external journal passed Worker takeover and stale-writer fencing. Agent placement, remote lifecycle, capacity and upgrades remain open. |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
 | CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
@@ -52,7 +52,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
-| SO-06 | P1 / PARTIAL | PostgreSQL source adapter | 17.12 single-primary snapshot, CDC, LSN restart and slot-loss refusal passed. Promotion and common-cut validation remain. |
+| SO-06 | P1 / PARTIAL | PostgreSQL source adapter | PostgreSQL 17.12 passed snapshot, failover-slot continuation and old-timeline refusal. 18.7 passed stored generated columns. Broader types, DDL and multi-target common cuts remain. |
 | SO-07 | P1 / PARTIAL | Oracle source adapter | Oracle 26ai archived LogMiner to PostgreSQL passed single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain. |
 
 ## Java runtime compatibility
@@ -72,7 +72,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | DO-02 | P1 / DONE | Deployment and cluster operations docs | Bilingual instructions cover four standalone and cluster deployment paths, stores, sessions, node maintenance, backups and upgrades. Cross-node volumes and automatic takeover continue under live platform requirements. |
 | DO-03 | P1 / DONE | Recovery scenarios and FAQ | The bilingual runbook covers promotion, log loss, SQL/ack, node, storage, sessions, manual recovery and cutover with actions and product boundaries. |
 | DO-04 | P1 / DONE | Configuration/API/compatibility and upgrade docs | Bilingual reference covers configuration, API, grants, coordinates, consistency, upgrades and cross-JDK evidence. Connector combinations continue under their corresponding compatibility requirements. |
-| DO-05 | P1 / PARTIAL | Documentation and evidence release gates | Archives/hash/preview checks exist without a complete requirement release gate. |
+| DO-05 | P1 / DONE | Documentation and evidence release gates | The gate verifies candidate SHA, 25 examples, bilingual docs, real Chrome, separate-Agent native recovery and both live Kubernetes paths. A different candidate manifest is rejected. |
 
 ## Preserved earlier scope
 
@@ -83,7 +83,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Initial transports exist for all confirmed queues;complete cluster/TLS/capacity coverage is open. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
-| LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain. |
+| LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Two live nodes verified both deployment paths, rotation, volume remount, shared-journal takeover and stale Worker fencing. Cross-node CSI relocation remains. |
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | LOCAL and EXTERNAL passed content checks for 100,000 snapshot rows and 120,000 changes per run. Incremental reads are byte-bounded and the BIGINT key scan was fixed. Repeated hardware measurements, oversized transactions and large catalogs remain. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Native Chrome passed login, cookie reload, diagnostic keyboard and accessible name, mobile layout and logout. Full report catalog, scratch cleanup and more workflows remain. |
@@ -130,7 +130,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | DO-02 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) / [console-and-deployment.md](../../../docs/zh-CN/console-and-deployment.md) |
 | DO-03 | [managed-repair.md](../../../docs/zh-CN/managed-repair.md) / [recovery.md](../../../docs/recovery.md) |
 | DO-04 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [validation.md](../../../docs/en/validation.md) |
-| DO-05 | [verify-artifact.py](../../../tests/verify-artifact.py) / [README.md](../../../docs/verification/README.md) |
+| DO-05 | [release-evidence-gate.py](../../../tests/release-evidence-gate.py) / [README.md](../../../docs/verification/README.md) |
 | LG-01 | [implementation-status.md](../../../docs/zh-CN/implementation-status.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-02 | [platform-design.md](../../../docs/zh-CN/platform-design.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-03 | [clickhouse-v3.md](../../../docs/zh-CN/clickhouse-v3.md) / [doris-v3.md](../../../docs/zh-CN/doris-v3.md) / [hive-v3.md](../../../docs/zh-CN/hive-v3.md) |

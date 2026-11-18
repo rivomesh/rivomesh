@@ -50,8 +50,8 @@
     "e8b49039e5d7a67fa36c32751b63a3948a98385f"
   ],
   "currentSdd": {
-    "DONE": 24,
-    "PARTIAL": 23,
+    "DONE": 25,
+    "PARTIAL": 22,
     "NEW": 1
   },
   "nextTasks": [
@@ -59,13 +59,15 @@
     "Implement durable Oracle archive checkpoints and extend certification of supported sink profiles.",
     "Continue guarded execution relocation and capture-range review."
   ],
-  "currentCandidateArtifact": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
-  "currentCandidateScope": "Java 8 native PostgreSQL 17.12 synchronized logical slot promotion after SIGKILL, missing slot, and old primary refusal. 18 focused Java and 15 native checks across two fixtures.",
+  "currentCandidateArtifact": "54485ac2862a4d12efec26c8e319f4c811b023c33774be995fd3b5fbe0d6cfab",
+  "currentCandidateScope": "Java 8 release evidence gate and Kubernetes external-journal stale Worker fencing",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "CP-06 and LG-09. Seven native cross-entry checks and five Chrome checks passed on one frozen artifact. The diagnostic page persisted across Agent restart without exposing business values or credentials.",
     "LG-01 and LG-03 OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and the full mixed restart/SQL recovery fixture. Full Java regression passed 501 cases plus 32 skips.",
     "SO-07 Oracle 26ai passed nine native checks for typed complete transactions and distinct commit SCN/XIDs after archive rotation.",
-    "SO-07 Oracle 26ai to PostgreSQL V3 passed 13 native checks, including a transaction spanning the snapshot, archive rotation, SIGKILL/resume and DDL refusal at the original SCN."
+    "SO-07 Oracle 26ai to PostgreSQL V3 passed 13 native checks, including a transaction spanning the snapshot, archive rotation, SIGKILL/resume and DDL refusal at the original SCN.",
+    "DO-05 accepted. One frozen candidate passed 25 configuration examples, five real Chrome checks, seven native CDC checks and eight live Helm/native Kubernetes checks. A different Chrome candidate was rejected.",
+    "CP-04 and LG-06. Two native Kubernetes Worker nodes with one PostgreSQL journal passed three checks. Freezing the owner switched epoch 1 to 2 and the resumed Worker remained fenced."
   ]
 }

@@ -20,3 +20,17 @@ The comparison records both SHA-256 digests, Maven coordinates inside the JAR, e
 The current run found 175 Maven components, 109 embedded coordinates, six embedded coordinates outside the aggregate list, nine components without a declared license and two vendor markers. These are inventory results. Distribution review covers source ownership, the actual contents of each distribution, and the applicable LICENSE and NOTICE text. [ASF third-party licensing policy](https://www.apache.org/legal/resolved)
 
 Use the project name **Rivomesh** and namespace `io.github.rivomesh` during preparation. The ASF proposal, naming and branding guides define the later review and adoption process. [Proposal guide](https://incubator.apache.org/guides/proposal.html) · [Name search](https://incubator.apache.org/guides/names.html) · [Branding](https://incubator.apache.org/guides/branding.html)
+
+## Candidate evidence gate
+
+Keep an immutable copy of the candidate JAR and pass it to the [Chrome](../../tests/ui/browser-smoke.mjs), [native CDC](../../tests/global-control-pipeline.py), and [Kubernetes](../../tests/kubernetes-csi-runtime.py) fixtures. Set `--artifact-sha256` on the Kubernetes fixture to verify the JAR inside both running workloads. Pass the exact candidate and each generated manifest to the gate.
+
+```sh
+python3 tests/release-evidence-gate.py \
+  --artifact target/candidate/rivomesh.jar \
+  --browser target/candidate/browser/manifest.json \
+  --kubernetes target/candidate/kubernetes/manifest.json \
+  --native-cdc target/candidate/native-cdc/manifest.json
+```
+
+The gate also checks SDD status and evidence, local links, bilingual API and connector coverage, packaged resources, and all shipped YAML examples using synthetic credentials. `--examples-only` runs these checks by themselves. The full command requires a real browser, successful native recovery with separate Agents, and both live Kubernetes deployment profiles on the same artifact. Record separate native results for each additional adapter or deployment profile on the [verification baseline](../verification/README.md).

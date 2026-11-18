@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.29",
+  "version": "0.30",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -120,8 +120,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "已有Worker租约/epoch，缺少统一节点调度、远端生命周期和滚动升级协议。",
-        "en": "Worker leases/epochs exist;global scheduling,remote lifecycle and rolling-upgrade protocols do not."
+        "zh-CN": "已在双节点用外部日志验证自动续写及旧 Worker 写入隔离。缺少统一 Agent 调度、远端生命周期、容量与升级验证。",
+        "en": "Two nodes with an external journal passed Worker takeover and stale-writer fencing. Agent placement, remote lifecycle, capacity and upgrades remain open."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -134,7 +134,8 @@
       ],
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
+        "tests/kubernetes-csi-runtime.py"
       ]
     },
     {
@@ -992,8 +993,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "PostgreSQL 17.12 与 18.7 单主通过 LSN 续传及丢槽拒绝。18.7 实测存储型生成列，17.12 实测同步槽切主及误回旧主拒绝。共同点对账和更多目标拓扑待验收。",
-        "en": "PostgreSQL 17.12 and 18.7 passed single-primary restart and missing-slot refusal. Native evidence covers 18.7 stored generated columns and 17.12 synchronized-slot promotion and old-primary refusal. Common-cut comparison and broader target topologies remain."
+        "zh-CN": "PostgreSQL 17.12 已实测快照及可切换逻辑槽续传，回到旧时间线时拒绝。18.7 已验收存储型生成列；更多类型、DDL 与多目标共同点待验收。",
+        "en": "PostgreSQL 17.12 passed snapshot, failover-slot continuation and old-timeline refusal. 18.7 passed stored generated columns. Broader types, DDL and multi-target common cuts remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1312,14 +1313,14 @@
       "id": "DO-05",
       "epic": "DOCS",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "文档和证据发布门禁",
         "en": "Documentation and evidence release gates"
       },
       "gap": {
-        "zh-CN": "已有验收归档/哈希及预览检查，缺覆盖所有需求的统一门禁。",
-        "en": "Archives/hash/preview checks exist without a complete requirement release gate."
+        "zh-CN": "门禁核对候选包 SHA、25 份示例、双语文档和真实 Chrome、独立 Agent 原生恢复、两类实机 Kubernetes 证据。不同候选包的清单已验证会被拒绝。",
+        "en": "The gate verifies candidate SHA, 25 examples, bilingual docs, real Chrome, separate-Agent native recovery and both live Kubernetes paths. A different candidate manifest is rejected."
       },
       "acceptance": {
         "zh-CN": "链接/配置示例/API/中英文覆盖检查通过；每个完成项关联候选包SHA及真实环境证据；DOM不代替视觉，静态YAML不代替实机，构建通过不代替适配器验收。",
@@ -1333,9 +1334,17 @@
         "LG-09"
       ],
       "evidence": [
+        "tests/release-evidence-gate.py",
         "tests/verify-artifact.py",
         "docs/verification/README.md"
-      ]
+      ],
+      "verification": {
+        "artifactSha256": "54485ac2862a4d12efec26c8e319f4c811b023c33774be995fd3b5fbe0d6cfab",
+        "artifactKind": "Java 8 shaded application JAR",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "dbc2deed3cd201dc46c7ea77a0897ef6e2efae21c7452773558a7eecedc94d75",
+        "profile": "25 parsed YAML examples, real Chrome (5), MySQL native separate-Agent control and recovery (7), Kubernetes 1.31.0 Helm/checked-in native YAML (8). Same candidate passed and a previous Chrome candidate was rejected."
+      }
     },
     {
       "id": "LG-01",
@@ -1476,8 +1485,8 @@
         "en": "Live K8s/CSI and node-fault acceptance"
       },
       "gap": {
-        "zh-CN": "已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。",
-        "en": "Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain."
+        "zh-CN": "双节点实测两种部署、轮换、原卷重挂及外部日志接管与旧 Worker 隔离。跨节点 CSI 卷迁移待验收。",
+        "en": "Two live nodes verified both deployment paths, rotation, volume remount, shared-journal takeover and stale Worker fencing. Cross-node CSI relocation remains."
       },
       "acceptance": {
         "zh-CN": "在真实集群验证升级、扩缩、Pod/节点故障、RWO/CSI挂载重连、Secret轮换及旧owner隔离，发布实际配置和证据。",

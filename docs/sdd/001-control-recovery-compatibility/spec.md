@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.30 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，24项DONE、23项PARTIAL、1项NEW，余24项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，25项DONE、22项PARTIAL、1项NEW，余23项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -13,7 +13,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | CP-01 | P0 / DONE | 统一节点注册与状态 | 共享节点目录已通过PostgreSQL/MySQL双节点、kill/重开及控制库中断验收；任务权威/远端命令仍属CP-02/03。 |
 | CP-02 | P0 / PARTIAL | 全局任务、配置与操作权威状态 | 可选固定owner全局HTTP/界面、共享配置及历史已接入；旧任务升级导入、完整业务及规模验收仍未完成。 |
 | CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
-| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已有Worker租约/epoch，缺少统一节点调度、远端生命周期和滚动升级协议。 |
+| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已在双节点用外部日志验证自动续写及旧 Worker 写入隔离。缺少统一 Agent 调度、远端生命周期、容量与升级验证。 |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
 | CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口实测独立采集租约和脱敏诊断分页，Agent 重启后保留事件。全局节点及目标过滤、积压和容量验收待完成。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
@@ -52,7 +52,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
-| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | 17.12 单主已实测快照、增量、续传与槽丢失。跨时间线切换及共同点未验收。 |
+| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | PostgreSQL 17.12 已实测快照及可切换逻辑槽续传，回到旧时间线时拒绝。18.7 已验收存储型生成列；更多类型、DDL 与多目标共同点待验收。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB、归档 LogMiner 到 PostgreSQL 实测支持长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。 |
 
 ## Java运行时兼容
@@ -72,7 +72,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | DO-02 | P1 / DONE | 四类部署与多节点运维文档 | 四种单机与集群部署路径、存储、会话、节点维护和备份升级已形成双语操作说明。跨节点卷和自动接管按对应实机需求继续验收。 |
 | DO-03 | P1 / DONE | 恢复场景和FAQ完整手册 | 中英文故障手册覆盖切主、日志丢失、SQL/确认错误、节点、存储、会话、人工恢复与交接，按已有产品档案给出操作和边界。 |
 | DO-04 | P1 / DONE | 配置/API/兼容性与升级文档 | 配置、API、权限、坐标、一致性、升级和实际跨 JDK 档案已整理为中英文索引。各未验收组合继续由对应兼容事项跟踪。 |
-| DO-05 | P1 / PARTIAL | 文档和证据发布门禁 | 已有验收归档/哈希及预览检查，缺覆盖所有需求的统一门禁。 |
+| DO-05 | P1 / DONE | 文档和证据发布门禁 | 门禁核对候选包 SHA、25 份示例、双语文档和真实 Chrome、独立 Agent 原生恢复、两类实机 Kubernetes 证据。不同候选包的清单已验证会被拒绝。 |
 
 ## 历史范围合并保留
 
@@ -83,7 +83,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
-| LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。 |
+| LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 双节点实测两种部署、轮换、原卷重挂及外部日志接管与旧 Worker 隔离。跨节点 CSI 卷迁移待验收。 |
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
 | LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 原生 Chrome 已通过登录、刷新续登、诊断键盘与无障碍名称、移动端布局和退出。完整报告目录、scratch 清理和其他工作流仍待完成。 |
@@ -130,7 +130,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | DO-02 | [rivomesh](../../../deploy/helm/rivomesh) / [kubernetes](../../../deploy/kubernetes) / [console-and-deployment.md](../../../docs/zh-CN/console-and-deployment.md) |
 | DO-03 | [managed-repair.md](../../../docs/zh-CN/managed-repair.md) / [recovery.md](../../../docs/recovery.md) |
 | DO-04 | [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) / [validation.md](../../../docs/en/validation.md) |
-| DO-05 | [verify-artifact.py](../../../tests/verify-artifact.py) / [README.md](../../../docs/verification/README.md) |
+| DO-05 | [release-evidence-gate.py](../../../tests/release-evidence-gate.py) / [README.md](../../../docs/verification/README.md) |
 | LG-01 | [implementation-status.md](../../../docs/zh-CN/implementation-status.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-02 | [platform-design.md](../../../docs/zh-CN/platform-design.md) / [gaussdb-index-policy.md](../../../docs/zh-CN/gaussdb-index-policy.md) |
 | LG-03 | [clickhouse-v3.md](../../../docs/zh-CN/clickhouse-v3.md) / [doris-v3.md](../../../docs/zh-CN/doris-v3.md) / [hive-v3.md](../../../docs/zh-CN/hive-v3.md) |

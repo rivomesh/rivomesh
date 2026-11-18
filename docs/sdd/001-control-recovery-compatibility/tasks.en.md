@@ -132,7 +132,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-DO-04 · Configuration/API/compatibility and upgrade docs · P1 · Depends on: SO-01, JV-02, CP-03
   Deliver: Document configuration,grants,codes,request/command/plan versions,source coordinates,consistency and source/sink/JDK profiles with examples/evidence;schema changes update both languages.
   Acceptance: AC-DO-04
-- [ ] T-DO-05 · Documentation and evidence release gates · P1 · Depends on: DO-01, DO-02, DO-03, DO-04, LG-09
+- [x] T-DO-05 · Documentation and evidence release gates · P1 · Depends on: DO-01, DO-02, DO-03, DO-04, LG-09
   Deliver: Check links,examples,APIs and bilingual coverage;completion links candidate hash/native evidence;DOM is not visual,static YAML is not live deployment,and builds are not adapter acceptance.
   Acceptance: AC-DO-05
 ## Preserved earlier scope

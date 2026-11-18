@@ -14,4 +14,6 @@ npm --prefix tests/ui test
 
 Use disposable databases for recovery tests. Include the pinned versions, artifact hash, commands and results in the change description. Upload concise diagnostics with authentication material and business rows removed.
 
+Run the [candidate evidence gate](docs/en/release-inventory.md#candidate-evidence-gate) for release preparation.
+
 See the [release inventory guide](docs/en/release-inventory.md) for the SBOM, embedded dependency markers and the distribution review still required. See the [Chinese project and acceptance notes](docs/zh-CN/requirements-and-decisions.md) for the same SDD workflow.

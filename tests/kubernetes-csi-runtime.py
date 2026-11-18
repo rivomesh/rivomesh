@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from http.cookies import SimpleCookie
 import json
 from pathlib import Path
+import re
 import secrets
 import socket
 import subprocess
@@ -123,6 +124,13 @@ def profile(options, mode, record):
     def pod():
         return json.loads(kube('get', 'pods', '-l', 'app.kubernetes.io/name=rivomesh',
                                '-o', 'json'))['items'][0]
+
+    def artifact_hash():
+        digest = kube('exec', 'deployment/rivomesh', '--', 'sha256sum', '/app/rivomesh.jar').split()[0]
+        assert re.fullmatch('[a-f0-9]{64}', digest), 'Invalid runtime artifact hash'
+        if options.artifact_sha256:
+            assert options.artifact_sha256 == digest, 'Running JAR differs from the candidate'
+        return digest
 
     def volume():
         pvc = json.loads(kube('get', 'pvc', 'rivomesh-data', '-o', 'json'))
@@ -243,6 +251,7 @@ def profile(options, mode, record):
         original_pod = pod()
         record['node'] = original_pod['spec']['nodeName']
         record['containerImageID'] = original_pod['status']['containerStatuses'][0]['imageID']
+        record['artifactSha256'] = artifact_hash()
         with forward(client, original_pod['metadata']['name']) as base:
             wait(lambda: request(base, '/api/session', token), 'console authentication')
             session = request(base, '/api/session', token, issue_cookie=True)
@@ -314,6 +323,7 @@ def profile(options, mode, record):
                                and view(base)['status'], 'lease epoch advances')
                 assert resumed['capture_lsn'] != before['capture_lsn']
             observe('worker-node outage retains the local CSI volume and CDC resumes under a newer lease')
+        assert artifact_hash() == record['artifactSha256'], 'Runtime artifact changed during the fixture'
         record['status'] = 'PASS'
     except Exception as failure:
         details = [str(failure)]
@@ -338,15 +348,150 @@ def profile(options, mode, record):
                 command(*cluster, 'delete', 'sc', storage_class, '--ignore-not-found')
 
 
+def external_fence(options, record):
+    namespace='rivomesh-proof-fence-'+secrets.token_hex(4)
+    cluster=['kubectl','--context',options.context]
+    client=[*cluster,'-n',namespace]
+    nodes=json.loads(command(*cluster,'get','nodes','-o','json'))['items']
+    control=next(node['metadata']['name'] for node in nodes
+                 if 'node-role.kubernetes.io/control-plane' in node['metadata'].get('labels',{}))
+    worker=next(node['metadata']['name'] for node in nodes if node['metadata']['name']!=control)
+    actual={line.split()[0] for line in command('minikube','-p',options.context,'node','list').splitlines()}
+    assert {control,worker}<=actual, 'Use a disposable Minikube Docker profile'
+    password=secrets.token_urlsafe(32)
+    paused=None
+
+    def kube(*args,**kwargs):
+        return command(*client,*args,**kwargs)
+
+    def apply(item):
+        kube('apply','-f','-',data=json.dumps(item))
+
+    def sql(database,statement):
+        return kube('exec','pg-fence','--','psql','-XAt','-v','ON_ERROR_STOP=1','-U','postgres','-d',database,'-c',statement)
+
+    def observed(label):
+        record['checks'].append(label)
+        print('PASS external-fence '+label,flush=True)
+
+    def node_selector(node):
+        return {'nodeSelector':{'kubernetes.io/hostname':node},'tolerations':[
+            {'key':'node-role.kubernetes.io/control-plane','operator':'Exists','effect':'NoSchedule'}]}
+
+    def launch(pod_name,node):
+        worker_config={
+            'formatVersion':3,'pipelineId':'external-fence','nodeId':pod_name,'databases':['sales'],
+            'source':{'type':'POSTGRESQL','clusterId':'external-fence-pg','database':'postgres','topology':'SINGLE',
+                      'expectedVersion':'17','username':'postgres','password':'${PG_FIXTURE_PASSWORD}',
+                      'postgresql':{'url':'jdbc:postgresql://pg-fence:5432/postgres?connectTimeout=5',
+                                    'publication':'fence_capture','slotPrefix':'fence_capture'}},
+            'journal':{'mode':'EXTERNAL','product':'POSTGRESQL',
+                       'url':'jdbc:postgresql://pg-fence:5432/journal_store?connectTimeout=5',
+                       'username':'postgres','password':'${PG_FIXTURE_PASSWORD}','namespace':'fence_journal'},
+            'targets':[{'id':'pg','product':'POSTGRESQL','username':'postgres','password':'${PG_FIXTURE_PASSWORD}',
+                        'url':'jdbc:postgresql://pg-fence:5432/sync_test?connectTimeout=5',
+                        'metadataSchema':'fence_meta','mappings':{'sales':'copy_sales'}}],
+            'leaseMillis':5000,'heartbeatMillis':500,'pollIntervalMillis':100,'retryDelayMillis':300,
+        }
+        apply(resource('ConfigMap',pod_name,data={'task.json':json.dumps(worker_config)}))
+        apply(resource('Pod',pod_name,spec={**node_selector(node),'restartPolicy':'Never','containers':[{
+            'name':'rivomesh','image':options.image,'imagePullPolicy':'IfNotPresent',
+            'args':['run','/fixture/task.json'],'env':[
+                {'name':'JAVA_TOOL_OPTIONS','value':'-Xmx256m'},
+                {'name':'PG_FIXTURE_PASSWORD','valueFrom':{'secretKeyRef':{'name':'pg-fence','key':'password'}}}
+            ],'volumeMounts':[{'name':'task','mountPath':'/fixture','readOnly':True}]
+        }],'volumes':[{'name':'task','configMap':{'name':pod_name}}]}))
+        kube('wait','--for=condition=Ready','pod/'+pod_name,'--timeout=120s')
+        data=json.loads(kube('get','pod',pod_name,'-o','json'))
+        assert data['spec']['nodeName']==node
+        backend=data['status']['containerStatuses'][0]['containerID']
+        assert backend.startswith('docker://'),'This fixture needs the Minikube Docker runtime'
+        digest=kube('exec',pod_name,'--','sha256sum','/app/rivomesh.jar').split()[0]
+        if options.artifact_sha256:
+            assert digest==options.artifact_sha256
+        return backend.removeprefix('docker://'),digest
+
+    def owner():
+        row=sql('journal_store',"SELECT owner||'|'||epoch FROM fence_journal.rm3_job WHERE pipeline_id='external-fence'")
+        node,epoch=row.split('|')
+        return node,int(epoch)
+
+    def contents():
+        return sql('sync_test',"SELECT string_agg(id::text||':'||label,',' ORDER BY id) FROM copy_sales.items")
+
+    try:
+        command(*cluster,'create','namespace',namespace)
+        apply(resource('Secret','pg-fence',type='Opaque',stringData={'password':password}))
+        apply(resource('Service','pg-fence',spec={'selector':{'app':'pg-fence'},'ports':[{'port':5432}]}))
+        database=resource('Pod','pg-fence',spec={**node_selector(control),'containers':[{
+            'name':'postgres','image':'postgres:17.12','args':['-c','wal_level=logical','-c','wal_sender_timeout=4000'],
+            'env':[{'name':'POSTGRES_PASSWORD','valueFrom':{'secretKeyRef':{'name':'pg-fence','key':'password'}}}]
+        }]})
+        database['metadata']['labels']={'app':'pg-fence'}
+        apply(database)
+        wait(lambda:kube('exec','pg-fence','--','pg_isready','-h','127.0.0.1'),'PostgreSQL fence fixture ready')
+        sql('postgres','CREATE DATABASE sync_test')
+        sql('postgres','CREATE DATABASE journal_store')
+        sql('postgres',"""CREATE SCHEMA sales; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,label TEXT);
+            ALTER TABLE sales.items REPLICA IDENTITY FULL; INSERT INTO sales.items VALUES(1,'snapshot');
+            CREATE PUBLICATION fence_capture FOR TABLE sales.items WITH (publish='insert,update,delete')""")
+        old,digest=launch('worker-a',control)
+        record['artifactSha256']=digest
+        wait(lambda:contents()=='1:snapshot','first worker snapshot')
+        prior=owner()
+        assert prior[0].startswith('worker-a-')
+        snapshot=sql('sync_test','SELECT snapshot_id FROM fence_meta.rm3_sink_table')
+        _,standby_artifact=launch('worker-b',worker)
+        assert standby_artifact==digest and owner()==prior
+        observed('Workers on distinct nodes share one external journal and one owner epoch')
+
+        command('docker','exec',control,'docker','pause',old)
+        paused=(control,old)
+        takeover=wait(lambda:(value if (value:=owner())[0].startswith('worker-b-') and value[1]>prior[1] else None),
+                      'standby takes next epoch from the external journal',timeout=60)
+        sql('postgres',"UPDATE sales.items SET label='takeover' WHERE id=1; INSERT INTO sales.items VALUES(2,'peer')")
+        wait(lambda:contents()=='1:takeover,2:peer','replacement worker delivers through original PostgreSQL slot')
+        assert snapshot==sql('sync_test','SELECT snapshot_id FROM fence_meta.rm3_sink_table')
+        assert sql('sync_test','SELECT epoch FROM fence_meta.rm3_sink_job')==str(takeover[1])
+        observed('An OS-frozen Worker loses its lease and the other node delivers under a newer target epoch')
+
+        command('docker','exec',control,'docker','unpause',old)
+        paused=None
+        wait(lambda:'PIPELINE_RETRY Fenced' in kube('logs','worker-a'),'stale Worker observes the fence')
+        sql('postgres',"UPDATE sales.items SET label='fenced' WHERE id=1; DELETE FROM sales.items WHERE id=2")
+        wait(lambda:contents()=='1:fenced','new owner continues after the stale Worker returns')
+        assert owner()==takeover and snapshot==sql('sync_test','SELECT snapshot_id FROM fence_meta.rm3_sink_table')
+        assert sql('sync_test','SELECT epoch FROM fence_meta.rm3_sink_job')==str(takeover[1])
+        observed('The stale process resumes but cannot regain ownership or change the newer target epoch')
+        record.update(status='PASS',nodes=[control,worker],initialEpoch=prior[1],takeoverEpoch=takeover[1])
+    except Exception as error:
+        logs=[str(error)]
+        for pod in ('worker-a','worker-b','pg-fence'):
+            result=subprocess.run([*client,'logs',pod],cwd=ROOT,text=True,capture_output=True)
+            logs.append(result.stdout+result.stderr)
+        (options.output/'external-fence-failure.log').write_text('\n'.join(logs).replace(password,'[REDACTED]'))
+        raise
+    finally:
+        if paused:
+            command('docker','exec',paused[0],'docker','unpause',paused[1])
+        kube('delete','namespace',namespace,'--ignore-not-found','--timeout=180s')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--context', required=True, help='Explicit context for the disposable test cluster')
     parser.add_argument('--image', default='rivomesh:0.1.0-SNAPSHOT')
+    parser.add_argument('--artifact-sha256', help='Verify the actual JAR in each live deployment')
     parser.add_argument('--storage-class', default='csi-hostpath-sc')
     parser.add_argument('--csi-driver', default='hostpath.csi.k8s.io')
     parser.add_argument('--worker-outage-node', help='Also stop and restart a worker in the named disposable Minikube profile')
+    parser.add_argument('--external-fence', action='store_true', help='Validate two-node external-journal takeover from a frozen live Worker')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
+    if options.artifact_sha256 and not re.fullmatch('[a-f0-9]{64}',options.artifact_sha256):
+        parser.error('Invalid artifact SHA-256')
+    if options.external_fence and options.worker_outage_node:
+        parser.error('Run the separate outage and external-fence profiles independently')
     if options.worker_outage_node:
         kube = ['kubectl', '--context', options.context]
         worker = json.loads(command(*kube, 'get', 'node', options.worker_outage_node, '-o', 'json'))
@@ -360,6 +505,11 @@ def main():
               'csiDriver': options.csi_driver, 'image': options.image, 'profiles': {}}
     options.output.mkdir(parents=True, exist_ok=True)
     try:
+        if options.external_fence:
+            record={'checks':[],'status':'FAIL'}
+            report['profiles']['external-fence']=record
+            external_fence(options,record)
+            return
         for mode in ('native',) if options.worker_outage_node else ('helm', 'native'):
             record = {'checks': [], 'status': 'FAIL'}
             report['profiles'][mode] = record
