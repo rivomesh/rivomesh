@@ -1,6 +1,6 @@
 # Managed data validation
 
-The first management workflow supports SQL destination selection, time/staging budgets, durable background jobs, cancellation, sealed-source target retries and per-table summaries. Validation does not change business rows; see [managed repair](managed-repair.md) for the subsequent reviewed workflow. Manual skip, constraint rebuilding and cutover remain open. Managed HTTP/database acceptance is separate; earlier CLI/barrier acceptance cannot establish it.
+Use the validation workflow to select SQL destinations, set time and storage budgets, run or cancel background checks, retry destination comparisons against a sealed source, and review per-table results. To correct differences reported at a common cut, use [managed repair](managed-repair.md). To review a stalled MySQL source transaction, see [capture recovery](capture-recovery.md).
 
 ## Use the console
 
@@ -27,7 +27,7 @@ ADMIN starts/cancels/retries; OPERATOR/VIEWER read summaries only for granted ta
 
 Audit records actor, task, report ID, request hash and acceptance/completion/cancellation/read events. Corresponding audit writes are required before the HTTP response. Raw business values are excluded from summaries/history.
 
-Reports live under `platform.dataDirectory/validations/<taskId>/<reportId>`. Private plaintext H2 files need protected persistent disk/PVC and coordinated backup; no encryption/external immutable anchor is provided. The console retains approximately40recent operations per task. Older files remain and known report IDs are readable through the API; full report catalogs/retention, large-directory pagination and controller HA remain pending. Local file locking is not cluster HA.
+Reports live under `platform.dataDirectory/validations/<taskId>/<reportId>`. Put the private H2 files on a protected persistent volume and include them in coordinated backups. The console keeps approximately 40 recent operations per task. Reports can still be opened by ID or browsed in the historical directory. A restarted Agent must have access to the original report directory.
 
 ## API
 
@@ -79,3 +79,7 @@ Repair is separate from read-only validation. The new [managed repair workflow](
 In **Data validation**, choose **Browse historical reports** to open reports retained in the task owner's data directory. The list shows report IDs and creation times, newest first. It remains available after the original operation leaves recent history. Open a report to read its summary. Detailed differences and row values still use the task's administrator grants. The report remains readable after the Agent reopens its original directory.
 
 Clients can page metadata using `GET /api/tasks/{id}/validations?limit=20` and pass `nextCursor` as `after`. The task owner removes abandoned summary staging files when it next acquires the report lock. Include retained reports and review evidence in the task's protected backup policy.
+
+The catalog uses each report's identifier and creation time. It does not open the report's H2 database or read row values to build the list. Opening a report that is currently in use returns `VALIDATION_REPORT_BUSY`. Wait for the operation to finish and open it again. Only administrators can explicitly reveal raw values after selecting a difference; use **Previous** and **Next** to page through identities for the selected destination and table.
+
+There is no automatic expiration of report or recovery evidence. Budget for the retained files in addition to the current job's quota. Keep a report while a retry, repair plan, gap verification, or audit relies on it. Removal from recent operation history does not release any report storage.

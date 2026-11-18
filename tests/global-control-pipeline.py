@@ -48,9 +48,15 @@ parser.add_argument('--managed-commit', action='store_true', help='Protocol6 man
 parser.add_argument('--managed-skip', action='store_true', help='Protocol7 complete-transaction skip and lost source-ACK recovery with durable gaps')
 parser.add_argument('--compensation', action='store_true', help='Exercise real CDC before-image compensation across two management entries')
 parser.add_argument('--correction', action='store_true', help='Check administrator typed correction and JSON import against a real failed CDC transaction')
+parser.add_argument('--browser', type=Path, help='Use a real Chrome executable to approve the validation repair and typed correction')
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.browser and (not args.correction or not args.separate_execution
+                     or not os.access(args.browser.resolve(), os.X_OK)
+                     or any((args.recovery_jobs, args.automatic_placement, args.task_views, args.compensation,
+                             args.failure_diagnostics, args.snapshot_diagnostics, args.source_diagnostics))):
+    parser.error('--browser requires an executable Chrome path and the focused --separate-execution --correction profile')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_views and not args.separate_execution:
@@ -324,6 +330,27 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if complete:
             wait(lambda: outcome(request, node), name)
         return request, accepted
+
+    def browser_check(scenario, **state):
+        # Only a disposable loopback browser receives the random credential. Keep it out of args and evidence.
+        options = dict(first=bases['node-a'], second=bases['node-b'], token=env['RM_GC_TOKEN'],
+                       taskId='global_cdc', **state)
+        browser_test = ROOT / 'tests/ui/browser-recovery.mjs'
+        sources = (browser_test, browser_test.with_name('chromium.mjs'))
+        hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
+        command = ['node', str(browser_test), str(args.browser.resolve()), scenario]
+        result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
+        if result.returncode:
+            details = result.stderr.replace(env['RM_GC_TOKEN'], '[REDACTED]')
+            (output / ('chrome-' + scenario + '-redacted.log')).write_text(details)
+            raise AssertionError('Chrome ' + scenario + ' failed, inspect the redacted browser log')
+        evidence = json.loads(result.stdout)
+        assert evidence['status'] == 'PASS' and evidence['scenario'] == scenario and evidence['checks']
+        assert all(hashlib.sha256(path.read_bytes()).hexdigest()==hashes[path.name] for path in sources)
+        evidence['sourceSha256'] = hashes
+        manifest.setdefault('browserRecovery', {})[scenario] = evidence
+        for check in evidence['checks']:
+            passed('Chrome: ' + check)
 
     def terminate_owner():
         compose('kill', '-s', 'SIGKILL', owner_node)
@@ -841,6 +868,58 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
 
 
 
+    def run_validation_repair():
+        sql('postgres', "UPDATE rm_pg_sales.items SET note='reviewed-drift' WHERE id=1")
+        sql('mysql-target', "UPDATE rm_my_sales.items SET note='reviewed-drift' WHERE id=1")
+        if args.browser:
+            sql('postgres', """INSERT INTO rm_pg_sales.items(id,note,payload,derived)
+                SELECT n,'reviewed-drift','{}',n*2 FROM generate_series(300,325) n""")
+        validation, _ = action('VALIDATE', complete=True, validation={'targets': ['pg', 'my'], 'gateMillis': 15000, 'sourceMillis': 60000, 'targetMillis': 30000})
+        wait(lambda: operation(validation).get('validation', {}).get('reportId'), 'visible report identity')
+        report_id = operation(validation)['validation']['reportId']
+        report_path = route + '/validations/' + report_id
+        report = http('node-a', report_path)
+        assert report['code'] == 'VALIDATION_DIFFERENCES'
+        assert http('node-b', report_path)['results'] == report['results']
+        assert task()['desired'] == 'PAUSED'
+        scope = [key for key, row in report['results'].items() if row['missing'] + row['extra'] + row['changed'] > 0]
+        assert len(scope) == 2
+        names = {table['id']: table['name'] for table in report['tables']}
+        for key in scope:
+            row = report['results'][key]
+            page = http('node-a', report_path + '/differences', {'target': row['target'], 'tableId': row['tableId'], 'limit': 1})
+            assert len(page['items']) == 1
+            values = http('node-b', report_path + '/values', {'target': row['target'], 'tableId': row['tableId'], 'identityHash': page['items'][0]['identityHash']})
+            assert ('reviewed-drift' if names[row['tableId']] == 'items' else '99') in json.dumps(values)
+        passed('Remote validation pauses CDC and exposes shared report identities, differences and authorized row values')
+        catalog_path=route+'/validations'
+        terminate_owner()
+        restart_owner()
+        catalogs=[http(node,catalog_path+'?limit=1') for node in ('node-a','node-b')]
+        assert catalogs[0]==catalogs[1] and catalogs[0]['nextCursor'] is None
+        saved=catalogs[0]['reports'][0]
+        assert saved['id']==report_id and saved['createdAt'] and set(saved)=={'id','createdAt'}
+        assert http('node-b',report_path)['results']==report['results']
+        http('node-b',catalog_path+'?limit=26',expected=400)
+        passed('After Agent restart both management entries discover the durable report and its metadata only')
+        if args.browser:
+            browser_check('repair', reportId=report_id)
+        else:
+            plan, _ = action('REPAIR_PLAN', repair={'reportId': report_id, 'scope': scope})
+            wait(lambda: operation(plan).get('repair', {}).get('planId'), 'visible plan identity')
+            plan_id = operation(plan)['repair']['planId']
+            plan_path = report_path + '/repairs/' + plan_id
+            reviewed = http('node-a', plan_path)
+            assert http('node-b', plan_path)['hash'] == reviewed['hash']
+            action('REPAIR_EXECUTE', node='node-b', repair={'reportId': report_id, 'planId': plan_id, 'approvedHash': reviewed['hash']})
+        wait(rows_match, 'reviewed SQL repair restores exact rows')
+        assert task()['desired'] == 'PAUSED'
+        passed('Cross-entry reviewed repair approval restores both targets and leaves replication paused')
+        action('RESUME', errorCount=task()['status']['error_count'])
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(11,'after-repair',JSON_OBJECT('n',11))")
+        wait(rows_match, 'explicit post-repair CDC resume')
+        passed('Explicit resume after reviewed repair continues original binlog progress')
+
     def run_recovery_cases():
         if args.compensation:
             baseline_note = sql('mysql', 'SELECT note FROM sales.items WHERE id=1')
@@ -945,11 +1024,15 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert any(row['before'] and row['before'].get('note')=='private extra row' for row in preview['rows'])
             assert any(row['after'] and '18446744073709551615' in (row['after'].get('payload') or '') for row in preview['rows'])
             assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0'
-            approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
-            applied,accepted=recovery_write('CORRECTION_EXECUTE', failed['acknowledged'],
-                                             lambda: sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0',
-                                             correction=approved,**options)
-            assert 'reviewed pre-image' not in json.dumps(accepted)
+            if args.browser:
+                browser_check('correction', patch={'edits': edits})
+                applied = next(op['id'] for op in task()['operations'] if op['action']=='CORRECTION_EXECUTE')
+            else:
+                approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
+                applied,accepted=recovery_write('CORRECTION_EXECUTE', failed['acknowledged'],
+                                                 lambda: sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0',
+                                                 correction=approved,**options)
+                assert 'reviewed pre-image' not in json.dumps(accepted)
             wait(lambda:operation(applied).get('result',{}).get('code')=='CORRECTION_COMPLETED','target receipt visible through both entries')
             assert 'reviewed pre-image' not in json.dumps(operation(applied))
             assert task()['desired']=='PAUSED' and manual_failure()['acknowledged']==failed['acknowledged']
@@ -1041,6 +1124,14 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.browser:
+            run_validation_repair()
+            run_recovery_cases()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_BROWSER_RECOVERY_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.automatic_placement:
             def candidate(index):
                 alternate=json.loads(json.dumps(document))
@@ -1301,50 +1392,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         # Existing equal rows do not establish that a newly spawned Worker has claimed the journal lease.
         sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(12,'after-config-restart',JSON_OBJECT('n',12))")
         wait(rows_match, 'restored configuration catches up')
-        sql('postgres', "UPDATE rm_pg_sales.items SET note='reviewed-drift' WHERE id=1")
-        sql('mysql-target', "UPDATE rm_my_sales.items SET note='reviewed-drift' WHERE id=1")
-        validation, _ = action('VALIDATE', complete=True, validation={'targets': ['pg', 'my'], 'gateMillis': 15000, 'sourceMillis': 60000, 'targetMillis': 30000})
-        wait(lambda: operation(validation).get('validation', {}).get('reportId'), 'visible report identity')
-        report_id = operation(validation)['validation']['reportId']
-        report_path = route + '/validations/' + report_id
-        report = http('node-a', report_path)
-        assert report['code'] == 'VALIDATION_DIFFERENCES'
-        assert http('node-b', report_path)['results'] == report['results']
-        assert task()['desired'] == 'PAUSED'
-        scope = [key for key, row in report['results'].items() if row['missing'] + row['extra'] + row['changed'] > 0]
-        assert len(scope) == 2
-        names = {table['id']: table['name'] for table in report['tables']}
-        for key in scope:
-            row = report['results'][key]
-            page = http('node-a', report_path + '/differences', {'target': row['target'], 'tableId': row['tableId'], 'limit': 1})
-            assert len(page['items']) == 1
-            values = http('node-b', report_path + '/values', {'target': row['target'], 'tableId': row['tableId'], 'identityHash': page['items'][0]['identityHash']})
-            assert ('reviewed-drift' if names[row['tableId']] == 'items' else '99') in json.dumps(values)
-        passed('Remote validation pauses CDC and exposes shared report identities, differences and authorized row values')
-        catalog_path=route+'/validations'
-        terminate_owner()
-        restart_owner()
-        catalogs=[http(node,catalog_path+'?limit=1') for node in ('node-a','node-b')]
-        assert catalogs[0]==catalogs[1] and catalogs[0]['nextCursor'] is None
-        saved=catalogs[0]['reports'][0]
-        assert saved['id']==report_id and saved['createdAt'] and set(saved)=={'id','createdAt'}
-        assert http('node-b',report_path)['results']==report['results']
-        http('node-b',catalog_path+'?limit=26',expected=400)
-        passed('After Agent restart both management entries discover the durable report and its metadata only')
-        plan, _ = action('REPAIR_PLAN', repair={'reportId': report_id, 'scope': scope})
-        wait(lambda: operation(plan).get('repair', {}).get('planId'), 'visible plan identity')
-        plan_id = operation(plan)['repair']['planId']
-        plan_path = report_path + '/repairs/' + plan_id
-        reviewed = http('node-a', plan_path)
-        assert http('node-b', plan_path)['hash'] == reviewed['hash']
-        action('REPAIR_EXECUTE', node='node-b', repair={'reportId': report_id, 'planId': plan_id, 'approvedHash': reviewed['hash']})
-        wait(rows_match, 'reviewed SQL repair restores exact rows')
-        assert task()['desired'] == 'PAUSED'
-        passed('Cross-entry reviewed repair approval restores both targets and leaves replication paused')
-        action('RESUME', errorCount=task()['status']['error_count'])
-        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(11,'after-repair',JSON_OBJECT('n',11))")
-        wait(rows_match, 'explicit post-repair CDC resume')
-        passed('Explicit resume after reviewed repair continues original binlog progress')
+        run_validation_repair()
         if args.managed_skip:
             def pg_sub():
                 return next(s for s in task()['status']['subscriptions'] if s['id'] == 'pg')

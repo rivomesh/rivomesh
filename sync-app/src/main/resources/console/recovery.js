@@ -8,9 +8,22 @@ window.RivomeshRecovery=(()=>{
  const currentTask=task=>bridge.task(task.id)||task;
  const paused=task=>task.desired==='PAUSED'&&task.status?.run_state==='PAUSED'&&task.statusAvailable!==false;
  const base=task=>'/tasks/'+encodeURIComponent(task.id);
- function close(){ticket++;if(dialog){dialog.replaceChildren();dialog.remove();dialog=null;}}
+ function close(){
+  ticket++;
+  if(!dialog)return;
+  const closed=dialog;dialog=null;closed.close();closed.replaceChildren();closed.remove();
+ }
  function translate(){document.querySelectorAll('[data-recovery-label]').forEach(e=>e.textContent=t(e.dataset.recoveryLabel));}
- function open(title){close();const generation=++ticket,d=document.createElement('dialog');dialog=d;d.className='failure-review-dialog recovery-dialog';const exit=label('button','recoveryClose');exit.onclick=close;d.addEventListener('cancel',event=>{event.preventDefault();close();});const body=text('div');d.append(label('h2',title),exit,body);document.body.append(d);d.showModal();return{d,body,current:()=>generation===ticket&&dialog===d&&d.isConnected&&active()};}
+ function open(title){
+  close();
+  const generation=++ticket,d=document.createElement('dialog'),heading=label('h2',title);
+  dialog=d;d.className='failure-review-dialog recovery-dialog';
+  heading.id='recovery-dialog-title';d.setAttribute('aria-labelledby',heading.id);
+  const exit=label('button','recoveryClose');exit.onclick=close;
+  d.addEventListener('cancel',event=>{event.preventDefault();close();});
+  const body=text('div');d.append(heading,exit,body);document.body.append(d);d.showModal();
+  return{d,body,current:()=>generation===ticket&&dialog===d&&d.isConnected&&active()};
+ }
  async function submit(task,action,sub,errorGeneration,skip,current,onAccepted){
   if(!current()||!active())return;const latest=currentTask(task);if(!paused(latest)){notify(t('SKIP_REQUIRES_PIPELINE_PAUSED'));return;}
   await api(base(task)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({action,expectedRevision:latest.revision,subscriptionId:sub,errorCount:errorGeneration,skip})});

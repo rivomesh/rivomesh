@@ -51,6 +51,7 @@
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "CP-06 per-target diagnostics passed 10 native cases across two controllers and one Agent, with PostgreSQL target pause, MySQL outage/rejoin, stale-cursor refusal and retained events after Agent restart.",
-    "Official-site console theme and assets passed 11 real Chrome cases on the exact Maven package, including keyboard navigation at 320 CSS pixels and cookie-backed reload after theme switching."
+    "Official-site console theme and assets passed 11 real Chrome cases on the exact Maven package, including keyboard navigation at 320 CSS pixels and cookie-backed reload after theme switching.",
+    "LG-09 passed 15 combined native/browser cases, including six real Chrome checks for cookie-backed dual entry, retained report and 27-row paging, reviewed repair and restart, and typed manual correction with exact retained receipts."
   ]
 }

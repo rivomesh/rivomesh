@@ -19,6 +19,21 @@ export function registerRecoveryTests({setup,flush,login}){
  async function openReview(ui){await login(ui);[...ui.d.querySelectorAll('.history button')].find(b=>b.textContent==='查看事务证据').click();await flush();}
  async function inspect(ui){await login(ui);await ui.w.RivomeshRecovery.openPlan(ui.task,ui.planId);clickLabel(ui,'recoveryInspect');await flush();}
 
+ test('recovery dialog has a visible translated title and closes through Escape',async()=>{
+  const ui=fixture();
+  try{
+   await login(ui);await ui.w.RivomeshRecovery.openPlan(ui.task,ui.planId);
+   const dialog=ui.d.querySelector('.recovery-dialog'),heading=ui.d.getElementById(dialog.getAttribute('aria-labelledby'));
+   assert.equal(heading,dialog.querySelector('h2'));
+   const title=heading.textContent;
+   ui.d.getElementById('language').click();
+   assert.notEqual(heading.textContent,title);
+   dialog.dispatchEvent(new ui.w.Event('cancel',{cancelable:true}));
+   assert(!dialog.hasAttribute('open'));
+   assert(!dialog.isConnected);
+  }finally{ui.dom.window.close();}
+ });
+
  test('skip approval requires explicit loss acceptance and reason,uses the current revision,and never resumes',async()=>{
   const ui=fixture();try{
    await openReview(ui);const panel=ui.d.querySelector('.recovery-skip-approval'),button=panel.querySelector('[data-recovery-action="SKIP_TRANSACTION"]');assert.ok(button.disabled);enterReason(ui,panel);assert.ok(button.disabled);const checkbox=panel.querySelector('input[type=checkbox]');checkbox.checked=true;checkbox.dispatchEvent(new ui.w.Event('change'));assert.equal(button.disabled,false);ui.task.revision='latest-paused-revision';button.click();await flush();

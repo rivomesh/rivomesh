@@ -3279,5 +3279,87 @@
       ],
       "browser": "Chrome/157.0.8103.79"
     }
+  },
+  "crossEntryBrowserRecovery": {
+    "native": {
+      "artifactSha256": "186cddb562acb16d913670dee1564d0d4f2942ba7978b0ccd531ed7056fc622c",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Remote validation pauses CDC and exposes shared report identities, differences and authorized row values",
+        "After Agent restart both management entries discover the durable report and its metadata only",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: A retained report survives Agent restart and a real 27-row difference set pages both ways with explicit raw value access",
+        "Chrome: The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload",
+        "Cross-entry reviewed repair approval restores both targets and leaves replication paused",
+        "Explicit resume after reviewed repair continues original binlog progress",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: The real correction preview preserves a 64-bit JSON integer and requires both a reason and approval",
+        "Chrome: Both management entries show the same correction receipt without the reviewed business values",
+        "Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC"
+      ],
+      "harnessSourceSha256": "e56b77be999986eff1e78a98f08ad298d0f6faf4628d57357129c62106cf0306",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "automaticPlacement": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": true,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "browserRecovery": {
+        "repair": {
+          "status": "PASS",
+          "scenario": "repair",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "A retained report survives Agent restart and a real 27-row difference set pages both ways with explicit raw value access",
+            "The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "3a4414234735541d6393a14ef987ee8dcbc5d2e3d6f33e90555f0640ea188fd2",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "correction": {
+          "status": "PASS",
+          "scenario": "correction",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "The real correction preview preserves a 64-bit JSON integer and requires both a reason and approval",
+            "Both management entries show the same correction receipt without the reviewed business values"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "3a4414234735541d6393a14ef987ee8dcbc5d2e3d6f33e90555f0640ea188fd2",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "domPassedWithNamedRecoveryDialog": 125
   }
 }
