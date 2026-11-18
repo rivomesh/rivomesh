@@ -68,6 +68,7 @@
     "CP-04 published the durable managed Agent handoff assessment previously verified in 16 native cases across the two control stores. Candidate evidence and authority transfer remain open.",
     "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing.",
     "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes.",
-    "LG-07 completed. One Java 21 artifact passed the shared hardware matrix, 256 mappings and large transaction, and real separate-journal quota, backpressure and SIGKILL catch-up to zero pending bytes."
+    "LG-07 completed. One Java 21 artifact passed the shared hardware matrix, 256 mappings and large transaction, and real separate-journal quota, backpressure and SIGKILL catch-up to zero pending bytes.",
+    "LG-04 exact RabbitMQ 4.1.4 three-member quorum ran six native checks, including independent SQL progress through loss of majority, staggered recovery, 19 deliveries / 18 IDs and manual consumer ACK."
   ]
 }

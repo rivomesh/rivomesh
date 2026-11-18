@@ -36,6 +36,19 @@ Kafka 所有 Broker 必须关闭 `auto.create.topics.enable`；服务可用 Admi
 
 Rabbit 每个通道对应一个 durable、非独占、非自动删除队列，通过默认交换机直接路由。消息为 persistent，开启 publisher confirms 和 mandatory/return；无路由或 nack 不会推进回执。默认 quorum，可显式选 classic。创建时设置 overflow 为 reject-publish；部署策略不能静默改为丢弃旧消息、过期或将超投递消息丢到无法处理的死信。生产 quorum 应部署多个节点并设置副本数；单节点测试不证明集群多数丢失或机房断电的持久性。
 
+RabbitMQ 三节点部署应在首次建队列前配置 `messaging.queueType: quorum` 和 `messaging.replicas: 3`。一个节点作为 `url`，另外两个放入 `messaging.endpoints`。入口属于同一集群，使用同一虚拟主机和 TLS 模式。副本配置是首次声明的大小，用 `rabbitmqctl list_queues -p / name type durable leader members online` 核对实际成员、在线成员和 Leader。Quorum 队列的发布确认取决于可用多数派。[RabbitMQ Quorum 队列](https://www.rabbitmq.com/docs/4.1/quorum-queues) · [发布确认](https://www.rabbitmq.com/docs/4.1/confirms)
+
+Leader 故障且多数派仍在线时，RabbitMQ 重新选主，Rivomesh 通过剩余入口重连。多数派失联时保留原数据卷和策略。先启动一个原副本并确认多数派已恢复，再启动下一个。RabbitMQ 4.1.4 夹具曾在同时启动两个故障节点时遇到 Mnesia 启动错误。在另一节点就绪后重试启动失败节点，三个原成员全部恢复。[RabbitMQ 可靠性](https://www.rabbitmq.com/docs/4.1/reliability)
+
+Broker 确认后推进发布回执。消费者在 ACK 前持久暂存原事件 ID 和消息字节，重投时跨连接按事件 ID 去重。实测收到 19 次投递，共 18 个不同事件 ID。重复投递与原字节一致，本地暂存后的手动 ACK 清空了三个队列。消费 ACK 与业务处理断点应分别核对。[RabbitMQ 消费确认](https://www.rabbitmq.com/docs/4.1/confirms)
+
+可用冻结的发布 JAR、Python 3.11 或更高版本及本地 Temurin 21 JDK 运行隔离档案。夹具将宿主机 AMQP 端口绑定在本机回环接口，检查 Broker 进程故障、源 GTID、Broker 发布回执、消费者原始字节和手动 ACK。TLS、存储丢失、性能和消费者业务事务需另行验收。[实库夹具](../../tests/rabbit-quorum-run.py)
+
+```sh
+python3 tests/rabbit-quorum-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --java-home "$JAVA_HOME" --output target/rabbit-quorum-proof
+```
+
 NATS 使用 JetStream 发布确认和 `Nats-Msg-Id`。不使用易失 Core NATS。Stream 要求 File 存储、Limits 保留、Discard New、无消息年龄过期、精确的 `namespace.*` subjects，以及配置的副本数。Stream description 绑定 pipeline/subscription/generation，发现不符不会改写既有资源。有限容量满时拒绝新发布；需要恢复容量后重试，不静默覆盖未消费历史。服务不会自动清理消费者历史，请制定容量、归档和消费进度策略。Broker fsync、复制和底层磁盘决定掉电保证。
 
 NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`，配置 `messaging.replicas: 3`，在 JVM 信任库中加入 Broker CA。客户端根据证书核验地址名，并按显式配置连接。实测覆盖 Leader 停止、失去多数派时拒绝确认、恢复后使用原事件 ID 重试。Broker 节点间路由加密和双向 TLS 另行验收。[JetStream 集群](https://docs.nats.io/learn/topologies/jetstream-in-a-cluster) · [验收记录](../verification/README.md#nats-jetstream-tls-and-quorum)

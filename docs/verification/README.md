@@ -297,3 +297,7 @@ Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` pas
 ### PostgreSQL business UNIQUE restoration preview
 
 The same Temurin 21 candidate passed five native MySQL 8.4.13 to PostgreSQL 17.12 checks and two offline admission guards. A completed common-cut report had matching row content, while the target's case-insensitive collation exposed a conflicting group with two rows. The review retained native NULL-distinct semantics, checked only counts while the source was offline, and preserved target data, indexes and checkpoints. It refused incomplete or outdated validation evidence. [Read-only constraint review](../en/nonempty-target-preview.md) · [Manifests](baseline.json)
+
+### RabbitMQ three-member quorum recovery
+
+Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` passed six native RabbitMQ 4.1.4 cases with a PostgreSQL sibling target. After the connected leader was killed, original event IDs redelivered with identical serialized bytes. A lone surviving replica could not advance the publication receipt. The SQL target continued through both the minority outage and Worker restart. Restoring the original RabbitMQ members in sequence recovered quorum. Manual acknowledgment drained 19 deliveries with 18 distinct IDs, and four complete transaction envelopes matched the retained native source receipts. [Messaging operations](../en/messaging-v3.md) · [Manifests](baseline.json)

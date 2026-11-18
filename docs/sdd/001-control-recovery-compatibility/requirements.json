@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.51",
+  "version": "0.52",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1478,8 +1478,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "八种消息目标已有首批传输。NATS 三副本 TLS、选主与多数派恢复通过；其他产品和完整容量、消费恢复仍待验收。",
-        "en": "All eight message targets have initial transports. NATS passed three-replica client TLS, election and quorum recovery. Other cluster, capacity and consumer recovery profiles remain."
+        "zh-CN": "八种消息目标已有首批传输。NATS 已验 TLS 和多数派恢复。RabbitMQ 三成员已实测选主、少数派停止确认、SQL 目标独立前进、重启和消费确认。其他集群与容量档案仍待验收。",
+        "en": "All eight message targets have first transports. NATS passed TLS and quorum recovery. RabbitMQ verified election, minority confirmation fencing, independent SQL delivery, restart and consumer acknowledgment. Remaining broker clusters and capacity are open."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",
@@ -1491,7 +1491,8 @@
       "evidence": [
         "docs/zh-CN/messaging-v3.md",
         "docs/zh-CN/classic-v3.md",
-        "tests/nats-cluster-run.py"
+        "tests/nats-cluster-run.py",
+        "tests/rabbit-quorum-run.py"
       ]
     },
     {

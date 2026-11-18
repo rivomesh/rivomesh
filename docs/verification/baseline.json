@@ -4422,5 +4422,223 @@
     "workerJvm": "openjdk version \"21.0.13\" 2026-10-20 LTS",
     "cleanupExitCode": 0,
     "harnessSha256": "da85085a49dcb1f8bbc5aab0ed543dfab38f8437bb651287c8960188197dde33"
+  },
+  "rabbitmqQuorumRecovery": {
+    "status": "PASS",
+    "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+    "checks": [
+      "Three durable quorum replicas confirm the original snapshot and GTID; the consumer stages persistent bytes before ACK",
+      "Killing the connected leader elects new leaders and preserves exact original delivery bytes and IDs",
+      "One surviving replica leaves the RabbitMQ receipt frozen while the SQL destination applies the native source GTID",
+      "Controller and Worker SIGKILL keep the same publication receipt and snapshot while SQL resumes",
+      "Restored majority resumes the same GTIDs and exact content, then manual ACK clears durably staged deliveries",
+      "MySQL and PostgreSQL rows match, and every unique AMQP transaction envelope matches its retained native source receipt"
+    ],
+    "images": {
+      "rabbit": {
+        "tag": "rabbitmq:4.1.4-alpine",
+        "id": "sha256:fe0f115f92c19cbf3d9afaec234bb44d9a0eab8f3c85b2c02827ff11721cf7ab"
+      },
+      "mysql": {
+        "tag": "mysql:8.4",
+        "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7"
+      },
+      "postgres": {
+        "tag": "postgres:17.12",
+        "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de"
+      },
+      "runtime": {
+        "tag": "eclipse-temurin:21-jre-jammy",
+        "id": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+      }
+    },
+    "consumerSourceSha256": "232cc876420406ad2a2c0eee8baaf6e7eebafcbe7abd83f6d51c377228590202",
+    "harnessSha256": "03666570142c968242957e1fb676a21f64a92ead81db53edad93ce04945ab592",
+    "consumerJava": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "rabbitVersion": "4.1.4",
+    "runnerJava": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "initialQueues": {
+      "orders.__schema": {
+        "name": "orders.__schema",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-a",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.items": {
+        "name": "orders.items",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-a",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.__transactions": {
+        "name": "orders.__transactions",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-a",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      }
+    },
+    "promotedQueues": {
+      "orders.__schema": {
+        "name": "orders.__schema",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.items": {
+        "name": "orders.items",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.__transactions": {
+        "name": "orders.__transactions",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      }
+    },
+    "withoutMajority": {
+      "confirmed": "2|0e0b55a7-e339-11f1-b7be-d6d1e0421f56:10|8833bd0117416e59e9fd9dacda8d1d274d0498e699066998d7de4e3ef632e0e0",
+      "retryCode": "BROKER_CONNECTION_LOST",
+      "sourceGtid": "0e0b55a7-e339-11f1-b7be-d6d1e0421f56:11"
+    },
+    "restoredQueues": {
+      "orders.__schema": {
+        "name": "orders.__schema",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.items": {
+        "name": "orders.items",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      },
+      "orders.__transactions": {
+        "name": "orders.__transactions",
+        "type": "quorum",
+        "durable": true,
+        "auto_delete": false,
+        "leader": "rabbit@rabbit-c",
+        "members": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ],
+        "online": [
+          "rabbit@rabbit-a",
+          "rabbit@rabbit-c",
+          "rabbit@rabbit-b"
+        ]
+      }
+    },
+    "sourceReceipts": {
+      "0e0b55a7-e339-11f1-b7be-d6d1e0421f56:9": [
+        1,
+        "6822509e96011bf949ba84bf9b2f28d6dcd3dfa07c7007f04b6596b9ca3c9191"
+      ],
+      "0e0b55a7-e339-11f1-b7be-d6d1e0421f56:10": [
+        2,
+        "8833bd0117416e59e9fd9dacda8d1d274d0498e699066998d7de4e3ef632e0e0"
+      ],
+      "0e0b55a7-e339-11f1-b7be-d6d1e0421f56:11": [
+        3,
+        "70e2bd5498ed42b8b278fefffe397d9658cb5b840561a42d58420b94b8dd8f7b"
+      ],
+      "0e0b55a7-e339-11f1-b7be-d6d1e0421f56:12": [
+        4,
+        "103a4fe7cba0c56c339b5e287f6ab613ed2b72a715200443812a535afe999e61"
+      ]
+    },
+    "snapshotId": "53b9ff2e-76b9-472b-9792-ece766b79bd0",
+    "deliveredCount": 19,
+    "cleanupExitCode": 0,
+    "distinctEventIds": 18
   }
 }
