@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.43",
+  "version": "0.44",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1145,8 +1145,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "已有厂商 SDK 隔离和完整包检查，待完成 Java 21 的驱动、TLS、证书和恢复组合。",
-        "en": "Vendor SDK isolation and packaged artifact checks exist. Java 21 driver, TLS, certificate and recovery combinations remain."
+        "zh-CN": "已有厂商 SDK 隔离、按包清点及 Java 21 的 MySQL JDBC 外置运行、缺失提示和滚动恢复。各产品 TLS、证书、其他厂商驱动及恢复组合待验收。",
+        "en": "Vendor SDK isolation and artifact inventory exist. Temurin 21 verified out-of-package MySQL JDBC, missing-driver admission and rolling recovery. Per-product TLS, certificate, vendor-driver and recovery combinations remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1157,7 +1157,8 @@
       ],
       "evidence": [
         "tests/verify-artifact.py",
-        "docs/zh-CN/performance.md"
+        "docs/zh-CN/performance.md",
+        "tests/global-control-pipeline.py"
       ]
     },
     {
@@ -1648,8 +1649,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "已建立贡献指南、CycloneDX SBOM、厂商二进制清点与离线审计链锚点。实测旧链回退拒绝与同库重启延续。依赖分发结论、项目 LICENSE/NOTICE、外部身份和自动外部留存仍待完成。",
-        "en": "Contribution guide, CycloneDX SBOM, vendor binary inventory and offline audit checkpoints exist. Earlier valid export rollback and same-store restart were tested. Distribution review, project LICENSE/NOTICE, external identity and automatic external custody remain."
+        "zh-CN": "已有独立审计锚点和按包核验的分发清点；外置 MySQL JDBC 包已实测滚动恢复，内嵌厂商许可文件已验证。项目授权、LICENSE/NOTICE、外部身份和不可变自动留存仍待完成。",
+        "en": "Offline audit checkpoints and artifact-bound distribution inventory exist. The external MySQL JDBC package passed rolling recovery and retained verified vendor notices. Project rights, LICENSE/NOTICE, external identity and automatic immutable custody remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",

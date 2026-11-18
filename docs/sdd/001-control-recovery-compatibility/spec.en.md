@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.43 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.44 · 2026-11-18 · IMPLEMENTING
 
 Implementation:48requirements,29 DONE, 19 PARTIAL and 0 NEW, with 19 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 

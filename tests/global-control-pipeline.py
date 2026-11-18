@@ -15,6 +15,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -30,6 +31,8 @@ parser.add_argument('--runtime-jdk', type=int, choices=(21,),
                     help='Record the Java 21 JVMs used by the live controller, Agent and Worker')
 parser.add_argument('--rolling-restart', action='store_true',
                     help='Replace a Controller and drain/restart an Agent on Java 21 while another management entry stays online')
+parser.add_argument('--external-mysql-driver', type=Path,
+                    help='Operator-provided Connector/J JAR for the opt-in external MySQL candidate')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
@@ -81,6 +84,8 @@ if args.rolling_restart and (not args.separate_execution or any((args.runtime_jd
         args.failure_diagnostics, args.source_diagnostics, args.snapshot_diagnostics, args.recovery_jobs,
         args.compensation, args.correction))):
     parser.error('--rolling-restart uses the separate Agent and baseline SQL process profile')
+if args.external_mysql_driver and not (args.runtime_jdk or args.rolling_restart):
+    parser.error('--external-mysql-driver requires --runtime-jdk or --rolling-restart')
 if args.runtime_image and not args.separate_execution:
     parser.error('--runtime-image requires --separate-execution')
 if args.source_diagnostics and (not args.separate_execution or any((args.runtime_jdk, args.runtime_image,
@@ -106,6 +111,16 @@ if args.recovery_jobs and not (args.separate_execution and (args.compensation or
     parser.error('--recovery-jobs requires --separate-execution, --compensation or --correction, and --test-classes')
 jar = args.artifact.resolve()
 digest = hashlib.sha256(jar.read_bytes()).hexdigest()
+mysql_driver = args.external_mysql_driver.resolve(strict=True) if args.external_mysql_driver else None
+mysql_driver_digest = None
+launch = ['-jar', '/app/rivomesh.jar']
+if mysql_driver:
+    provider = 'com/mysql/cj/jdbc/Driver.class'
+    with ZipFile(jar) as application, ZipFile(mysql_driver) as driver:
+        if provider in application.namelist() or provider not in driver.namelist():
+            parser.error('Use a JAR without embedded Connector/J and a separate Connector/J driver JAR')
+    mysql_driver_digest = hashlib.sha256(mysql_driver.read_bytes()).hexdigest()
+    launch = ['-cp', '/app/rivomesh.jar:/operator/mysql-connector-j.jar', 'io.github.rivomesh.Main']
 output = args.output.resolve()
 output.relative_to(ROOT)
 output.mkdir(parents=True, exist_ok=True)
@@ -150,6 +165,8 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
+if mysql_driver:
+    manifest['externalMysqlDriverSha256'] = mysql_driver_digest
 def passed(name):
     checks.append(name)
     print('PASS ' + name, flush=True)
@@ -207,10 +224,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
-        services[node] = {'image': 'eclipse-temurin:21-jre-jammy', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if node in execution_agents else 'serve', '/fixture/' + node + '.json'],
+        services[node] = {'image': 'eclipse-temurin:21-jre-jammy', 'entrypoint': ['java', '-Xmx512m', *launch, 'agent' if node in execution_agents else 'serve', '/fixture/' + node + '.json'],
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
+        if mysql_driver:
+            services[node]['volumes'].append({'type':'bind','source':str(mysql_driver),
+                                              'target':'/operator/mysql-connector-j.jar','read_only':True})
         if review_accounts:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
         if args.runtime_image:
@@ -261,7 +281,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             java.append((node, 'AGENT' if node == owner_node else 'CONTROLLER', binary))
         worker_binary = compose('exec', '-T', owner_node, 'sh', '-ec',
             r'''for file in /proc/[0-9]*/cmdline; do
-                if tr '\000' '\n' < "$file" 2>/dev/null | grep -qx io.github.rivomesh.Main; then
+                if tr '\000' '\n' < "$file" 2>/dev/null | grep -qx io.github.rivomesh.Main &&
+                   tr '\000' '\n' < "$file" 2>/dev/null | grep -qx run; then
                     readlink "${file%/cmdline}/exe"
                 fi
             done''').stdout.strip()
@@ -1193,6 +1214,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 observe_jvms()
             action('STOP')
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            if mysql_driver:
+                assert hashlib.sha256(mysql_driver.read_bytes()).hexdigest() == mysql_driver_digest
             manifest['status'] = 'PASS'
             print('GLOBAL_CONTROL_RUNTIME_ACCEPTED artifact=' + digest)
             raise SystemExit(0)

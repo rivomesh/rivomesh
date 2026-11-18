@@ -18,7 +18,7 @@ public final class MysqlSource {
     public Connection connect() throws SQLException {
         Config.Source s = config.source;
         String url = "jdbc:mysql://" + endpoint.host + ":" + endpoint.port + "/?" + s.jdbcOptions;
-        Connection c = DriverManager.getConnection(url, s.username, s.password);
+        Connection c = JdbcConnections.open("com.mysql.cj.jdbc.Driver", url, s.username, s.password);
         try (Statement statement = c.createStatement()) {
             statement.execute("SET time_zone = '+00:00'");
             if (expected != null) try (ResultSet rs = statement.executeQuery("SELECT @@global.server_uuid,@@global.read_only,@@global.super_read_only")) {
