@@ -85,3 +85,13 @@ Clients can page metadata using `GET /api/tasks/{id}/validations?limit=20` and p
 The catalog lists report metadata without opening the H2 database or reading row values. Opening a report that is currently in use returns `VALIDATION_REPORT_BUSY`. Wait for the operation to finish and open it again. Use **Previous** and **Next** to page through identities for the selected destination and table. An administrator can explicitly reveal raw values for a selected difference.
 
 There is no automatic expiration of report or recovery evidence. Budget for the retained files in addition to the current job's quota. Keep a report while a retry, repair plan, gap verification, or audit relies on it. Removal from recent operation history does not release any report storage.
+
+### Check report storage
+
+An administrator can select **View storage** on a report card, or use `GET /api/tasks/{taskId}/validations/{reportId}/storage`. The response contains observed byte lengths for the report database and the known summary and diagnostic files. **Protected** means the owning Agent observed the report in use in its process. **Activity unknown** covers other processes. Use the observations for storage and backup planning. File lengths can change during an active operation.
+
+### Find a recovery operation receipt
+
+In global task control, an administrator can choose **Find receipt by request ID** in the task details. A current recovery operation also has a **View receipt** shortcut. The exact lookup `GET /api/tasks/{taskId}/recovery-receipts/{requestId}` reads the persisted control-plane result after the request has left recent history, including while its Agent is unavailable.
+
+The response includes the recorded operation state, actor, owner, time and available report or plan identifiers. For example, a correction receipt can show its associated failure evidence ID. A report ID assigned only on the Agent may be available through the historical report directory. Destination commit and gap evidence remains in its native ledger. The receipt lookup uses both task and node grants and returns the same absence response for unrelated request IDs.

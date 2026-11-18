@@ -63,6 +63,42 @@ class CommandDispatchTest {
         a.enqueue(action("request_validate_job","VALIDATE"),admin());DurableCommands.Dispatch parent=claim("request_validate_job");bind(parent,"local-before-validation");a.enqueue(action("request_cancel_job","VALIDATE_CANCEL"),admin());assertNull(claim("request_cancel_job"));
         assertEquals("PENDING",a.view("request_cancel_job",admin()).get("status"));complete(parent,"ACCEPTED","LOCAL_OPERATION_ACCEPTED");DurableCommands.Dispatch cancellation=claim("request_cancel_job");assertNotNull(cancellation);bind(cancellation,"local-after-validation");complete(cancellation,"SUCCEEDED","VALIDATION_CANCEL_REQUESTED");complete(parent,"FAILED","VALIDATION_CANCELLED");
     }
+    @Test void historicalRecoveryReceiptsAreRedactedTaskScopedAndAvailableWithTheOwnerOffline()throws Exception{
+        TaskRequest original=action("request_repair_receipt","REPAIR_EXECUTE");
+        original.repair=new RepairRequest();
+        original.repair.reportId=UUID.randomUUID().toString();
+        original.repair.planId=UUID.randomUUID().toString();
+        original.repair.approvedHash="f".repeat(64);
+        a.enqueue(original,admin());
+        DurableCommands.Dispatch dispatched=claim(original.requestId);
+        bind(dispatched,"local-repair");complete(dispatched,"SUCCEEDED","REPAIR_COMPLETED");
+        for(int i=0;i<21;i++){
+            TaskRequest followup=action("request_post_repair_"+i,"CHECK");
+            a.enqueue(followup,admin());
+            DurableCommands.Dispatch ticket=claim(followup.requestId);
+            bind(ticket,"local-check");complete(ticket,"SUCCEEDED","CHECKED");
+        }
+        Map<String,Object> recent=fixture.a.transaction("job",admin(),(c,task,actor)->
+                Map.of("operations",a.operations(c,task.id,actor)));
+        assertFalse(Model.JSON.writeValueAsString(recent).contains(original.requestId));
+        fixture.a.create("other","a",fixture.directory,"password: private-source","import_task_other",admin());
+        owner.registry.stopped(owner.lease);
+        Map<String,Object> receipt=b.recoveryReceipt("job",original.requestId,admin());
+        assertEquals(receipt,a.recoveryReceipt("job",original.requestId,admin()));
+        assertEquals("CONTROL_OPERATION",receipt.get("kind"));
+        assertEquals("REPAIR_COMPLETED",receipt.get("code"));
+        assertEquals(Map.of("reportId",original.repair.reportId,"repairPlanId",original.repair.planId),receipt.get("references"));
+        assertFalse(Model.JSON.writeValueAsString(receipt).contains(original.repair.approvedHash));
+        assertFalse(receipt.containsKey("result"));
+        assertThrows(NoSuchElementException.class,()->b.recoveryReceipt("other",original.requestId,admin()));
+        assertThrows(NoSuchElementException.class,()->b.recoveryReceipt("job","request_post_repair_1",admin()));
+
+        fixture.access.mutate("CREATE",null,Model.JSON.readTree("{\"expectedRevision\":\""+fixture.access.accounts().revision
+                +"\",\"id\":\"receipt-viewer\",\"role\":\"VIEWER\",\"enabled\":true,\"taskIds\":[\"job\"],\"nodeIds\":[\"a\"],"
+                +"\"token\":\"receipt-viewer-test-token-at-least-32-bytes\"}"),"request_add_receipt_viewer",admin());
+        AccessControl.Principal viewer=AccountDirectory.authenticate(fixture.access.accounts(),"Bearer receipt-viewer-test-token-at-least-32-bytes");
+        assertThrows(SecurityException.class,()->b.recoveryReceipt("job",original.requestId,viewer));
+    }
     @Test void changedPayloadWrongDirectoryExpiredLeaseAndFalseSuccessAreRejected()throws Exception{
         a.enqueue(action("request_check_job","CHECK"),admin());DurableCommands.Dispatch ticket=claim("request_check_job");
         assertEquals("COMMAND_LOCAL_REQUEST_REQUIRED",assertThrows(TaskService.Conflict.class,()->complete(ticket,"SUCCEEDED","CHECKED")).getMessage());TaskRequest altered=ticket.command.request.snapshot();altered.action="STOP";

@@ -1097,6 +1097,19 @@ public final class TaskService implements AutoCloseable {
         if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Map<String,Object> result=backend.validationReport(entry.config,reports(id),reportId);
         AuditStore.Event event=new AuditStore.Event();event.kind="VALIDATION_REPORT_READ";event.action="READ_VALIDATION_REPORT";event.taskId=id;event.subjectId=reportId;event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;
     }
+    synchronized Map<String,Object> validationStorage(String id,String reportId,AccessControl.Principal actor)throws Exception{
+        ensureOpen();currentActor(actor);
+        if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");
+        if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
+        if(require(id).config.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
+        Map<String,Object> result;
+        try{result=io.github.rivomesh.validation.ValidationStore.storage(reports(id),reportId);}
+        catch(io.github.rivomesh.SyncFailure unavailable){throw new Conflict(unavailable.code);}
+        AuditStore.Event event=new AuditStore.Event();
+        event.kind="VALIDATION_STORAGE_READ";event.action="READ_VALIDATION_STORAGE";event.taskId=id;event.subjectId=reportId;
+        event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);
+        return result;
+    }
     synchronized Map<String,Object> validationDifferences(String id,String reportId,String target,String table,String after,int limit,String identity,AccessControl.Principal actor)throws Exception{
         currentActor(actor);if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");if(!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");Entry entry=require(id);
         if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId)||target==null||table==null)throw new IllegalArgumentException("VALIDATION_DIFF_SCOPE_INVALID");

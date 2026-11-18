@@ -27,6 +27,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
         switch(request.kind){
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
+            case RECOVERY_RECEIPT:return commands.recoveryReceipt(request.taskId,request.reference,actor);
             case HANDOFF_ASSESS:case HANDOFF_LATEST:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);
@@ -62,7 +63,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
                 if(request.kind==TaskRequest.Kind.RESTORE_PREVIEW)return preview(request.taskId,document(selected.yaml),request.revision,actor);
                 commands.update(request.taskId,selected.yaml,request,actor);return get(request.taskId,actor);
             }
-            case VALIDATION_REPORTS:case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case REPAIR_PLAN:case CAPTURE_RECOVERY:case CAPTURE_EXCLUSIONS:case DIAGNOSTICS:
+            case VALIDATION_REPORTS:case VALIDATION_REPORT:case VALIDATION_DIFFERENCES:case VALIDATION_STORAGE:case REPAIR_PLAN:case CAPTURE_RECOVERY:case CAPTURE_EXCLUSIONS:case DIAGNOSTICS:
             case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:case GAP_VERIFICATION:case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return queries.await(queries.submit(request,actor),actor);
             default:throw new TaskService.Conflict("GLOBAL_CONFIGURATION_WORKFLOW_PENDING");
         }

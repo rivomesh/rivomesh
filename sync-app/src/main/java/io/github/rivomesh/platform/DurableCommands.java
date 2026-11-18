@@ -75,9 +75,17 @@ final class DurableCommands {
     private String signature(TaskRequest request,AccessControl.Principal actor)throws Exception{return cipher.signature("command-input\n"+actor.id+"\n"+Model.JSON.writeValueAsString(request));}
     private Stored read(Connection c,String id)throws Exception{
         try(PreparedStatement p=db.prepare(c,"SELECT * FROM "+db.table("command")+" WHERE cluster_id=? AND request_id=?",cluster,id);ResultSet r=p.executeQuery()){
-            if(!r.next())return null;Stored command=Model.JSON.readValue(cipher.open("command/"+id,r.getString("envelope")),Stored.class);
-            if(command.version!=1||!id.equals(command.id)||!Objects.equals(command.task,r.getString("task_id"))||!Objects.equals(command.owner,r.getString("owner_id"))||!Objects.equals(command.phase,r.getString("phase"))||command.priority!=r.getInt("priority")||command.createdAt!=r.getLong("created_at")||command.request==null||!id.equals(command.request.requestId)||!Objects.equals(command.task,command.request.taskId))throw new TaskService.Conflict("COMMAND_RECORD_INVALID");return command;
+            return r.next()?authenticated(r,id):null;
         }
+    }
+    private Stored authenticated(ResultSet r,String id)throws Exception{
+        Stored command=Model.JSON.readValue(cipher.open("command/"+id,r.getString("envelope")),Stored.class);
+        if(command.version!=1||!id.equals(command.id)||!Objects.equals(command.task,r.getString("task_id"))
+                ||!Objects.equals(command.owner,r.getString("owner_id"))||!Objects.equals(command.phase,r.getString("phase"))
+                ||command.priority!=r.getInt("priority")||command.createdAt!=r.getLong("created_at")||command.request==null
+                ||!id.equals(command.request.requestId)||!Objects.equals(command.task,command.request.taskId))
+            throw new TaskService.Conflict("COMMAND_RECORD_INVALID");
+        return command;
     }
     private static void authorize(TaskRequest request,AccessControl.Principal actor){if(request.admin()&&!actor.administers()||request.kind==TaskRequest.Kind.ACTION&&!actor.operates())throw new SecurityException("FORBIDDEN");}
     private Stored replay(Connection c,TaskRequest request,AccessControl.Principal actor)throws Exception{
@@ -254,6 +262,28 @@ final class DurableCommands {
     Map<String,Object> view(String requestId,AccessControl.Principal actor)throws Exception{
         String task;try(Connection c=db.connect();PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("command")+" WHERE cluster_id=? AND request_id=?",cluster,requestId);ResultSet r=p.executeQuery()){if(!r.next())throw new NoSuchElementException("COMMAND_NOT_FOUND");task=r.getString(1);}
         return tasks.transaction(task,actor,(c,record,current)->{root(c);Stored command=read(c,requestId);if(command==null||!current.node(command.owner))throw new NoSuchElementException("COMMAND_NOT_FOUND");return view(command);});
+    }
+    Map<String,Object> recoveryReceipt(String task,String requestId,AccessControl.Principal actor)throws Exception{
+        if(requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}"))
+            throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
+        return tasks.transaction(task,actor,(c,record,current)->{
+            if(!current.administers())throw new SecurityException("FORBIDDEN");
+            root(c,false);
+            String sql="SELECT * FROM "+db.table("command")+" WHERE cluster_id=? AND request_id=? AND task_id=?";
+            try(PreparedStatement p=db.prepare(c,sql,cluster,requestId,record.id);ResultSet r=p.executeQuery()){
+                if(!r.next())throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+                Stored command=authenticated(r,requestId);
+                if(!current.node(command.owner)||!RecoveryReceipts.supports(command.request))
+                    throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+                Map<String,Object> result=view(command);
+                result.put("kind","CONTROL_OPERATION");
+                result.put("actorRole",command.actorRole);
+                String target=command.request.subscriptionId;
+                if(target!=null&&target.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))result.put("subscriptionId",target);
+                result.put("references",RecoveryReceipts.references(command.request));
+                return result;
+            }
+        });
     }
     List<Map<String,Object>> operations(Connection c,String task,AccessControl.Principal actor)throws Exception{
         root(c,false);List<Map<String,Object>> result=new ArrayList<>();

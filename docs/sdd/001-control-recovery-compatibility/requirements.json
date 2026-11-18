@@ -1655,8 +1655,8 @@
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "真实 Chrome 已实测跨入口历史报告按 ID 查询、分页与轮询后的键盘焦点，以及修复和补数据。仍需跨类型恢复回执检索及可配置长期保留策略。",
-        "en": "Real Chrome verified cross-entry retained-report lookup, pagination, periodic-refresh keyboard focus, repair and typed correction. Cross-type receipt discovery and configurable retention remain."
+        "zh-CN": "已实测跨入口报告、27 行分页、审批及检索旧修复/补数据回执，含 Agent 离线和 21 条后续命令。报告文件占用可查，保留状态和清理需继续验收。",
+        "en": "Dual-entry reports, 27-row paging, approval and historical repair/correction receipt lookup passed, including Agent loss and 21 later commands. File metadata is visible. Retention and cleanup remain."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",
@@ -1674,7 +1674,8 @@
         "docs/verification/baseline.json",
         "sync-app/src/main/java/io/github/rivomesh/validation/ValidationStore.java",
         "tests/global-control-pipeline.py",
-        "tests/ui/browser-recovery.mjs"
+        "tests/ui/browser-recovery.mjs",
+        "sync-app/src/main/java/io/github/rivomesh/platform/RecoveryReceipts.java"
       ]
     },
     {

@@ -157,6 +157,82 @@ test('opening a validation report by exact ID uses its scoped endpoint and prese
  }finally{ui.dom.window.close();}
 });
 
+test('the report storage view is read only and reports protection without showing unknown filenames',async()=>{
+ const reportId='a4500000-1223-4abc-8abc-0123456789ab';
+ const task={id:'report-storage',formatVersion:3,workerState:'STOPPED',operations:[],status:{},destinations:[]};
+ const ui=setup([task]),fallback=ui.w.fetch;
+ const calls=[];
+ ui.w.fetch=async(path,options)=>{
+  const base='/api/tasks/report-storage/validations';
+  if(path.startsWith(base+'?'))return{ok:true,status:200,json:async()=>({reports:[{id:reportId}],nextCursor:null})};
+  if(path===base+'/'+reportId+'/storage'){
+   calls.push({path,options});
+   return{ok:true,status:200,json:async()=>({id:reportId,activity:'PROTECTED_ACTIVE',observedAt:'2026-11-18T09:00:00Z',
+    files:{'rows.mv.db':8192,'summary.json':1024,'private-source-name':1000}})};
+  }
+  return fallback(path,options);
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('[data-validation-catalog]').click();await flush();
+  ui.d.querySelector('[data-validation-storage="'+reportId+'"]').click();await flush();
+  const dialog=ui.d.querySelector('.validation-storage-dialog');
+  assert.equal(ui.d.getElementById(dialog.getAttribute('aria-labelledby')).textContent,'报告存储检查');
+  assert.match(dialog.textContent,/报告受保护/);
+  assert.match(dialog.textContent,/8,192 字节/);
+  assert.ok(!dialog.textContent.includes('private-source-name'));
+  assert.equal(dialog.querySelectorAll('button').length,1);
+  assert.equal(calls.length,1);assert.equal(calls[0].options.method,undefined);
+ }finally{ui.dom.window.close();}
+});
+
+test('recovery receipt lookup reads earlier requests for the active task and withholds approval payloads',async()=>{
+ const task={id:'recovery-archive',formatVersion:3,workerState:'STOPPED',operations:[],status:{},destinations:[]};
+ const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoverySkip:false}),fallback=ui.w.fetch;
+ const paths=[],id='original_correction_request';
+ let mismatch=true;
+ ui.w.fetch=async(path,options)=>{
+  const endpoint='/api/tasks/recovery-archive/recovery-receipts/'+id;
+  if(path!==endpoint)return fallback(path,options);
+  paths.push(path);
+  return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:mismatch?'another-task':task.id,id,
+   action:'CORRECTION_EXECUTE',status:'SUCCEEDED',code:'CORRECTION_COMPLETED',createdAt:'2026-11-18T09:00:00Z',
+   ownerNodeId:'agent-a',actorId:'admin',subscriptionId:'warehouse',references:{failureEvidenceId:'evidence-id-001',reason:'private-reference'},
+   correction:{importJson:'private values'},reason:'private reason',result:{rows:['private-row']}})};
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('[data-recovery-receipt-lookup]').click();
+  const dialog=ui.d.querySelector('.recovery-dialog'),input=dialog.querySelector('[name=requestId]');
+  const submit=()=>dialog.querySelector('form').dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(ui.d.activeElement,input);
+  input.value='../other-task';submit();await flush();
+  assert.equal(paths.length,0);assert.match(dialog.querySelector('[role=alert]').textContent,/有效的管理请求 ID/);
+  input.value=id;submit();await flush();
+  assert.match(dialog.querySelector('[role=alert]').textContent,/返回的回执与当前请求不符/);
+  mismatch=false;submit();await flush();
+  const result=dialog.querySelector('[data-recovery-receipt-result]');
+  assert.match(result.textContent,/原始|手工修正/);
+  assert.match(result.textContent,/agent-a.*warehouse.*evidence-id-001/s);
+  assert.ok(!result.textContent.includes('private'));
+  assert.equal(paths.length,2);
+  dialog.dispatchEvent(new ui.w.Event('cancel',{cancelable:true}));
+  assert(!dialog.isConnected);
+ }finally{ui.dom.window.close();}
+});
+
+test('a Global viewer cannot open recovery or report-storage lookup controls',async()=>{
+ const reportId='a4500000-1223-4abc-8abc-0123456789ab';
+ const task={id:'restricted-receipt',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],
+  operations:[{id:'request_validated_001',action:'VALIDATE',status:'SUCCEEDED',validation:{reportId}}]};
+ const ui=setup([task],'VIEWER',{authenticated:false,taskControlScope:'GLOBAL'});
+ try{
+  await login(ui);
+  assert.ok(ui.d.querySelector('[data-validation-report]'));
+  assert.equal(ui.d.querySelector('[data-validation-storage],[data-recovery-receipt-lookup],[data-recovery-receipt-request]'),null);
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery shows native header evidence as text and still requires retained event contents',async()=>{
  const task={id:'headers',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_DECODE',error_code:'BINLOG_SCHEMA_WIDTH_CHANGED'}};

@@ -19,33 +19,40 @@ window.RivomeshValidation=(()=>{
    if(matches.length===1&&!matches[0].disabled)matches[0].focus({preventScroll:true});
   };
  }
- let searchDialog=null;
+ let reportDialog=null;
  const catalogLabels={
   zh:{open:'浏览历史校验报告',retained:'已留存',empty:'暂无留存报告',back:'返回最新报告',
       search:'按报告 ID 打开',id:'报告 ID',close:'取消',invalid:'请输入有效的报告 ID。',
-      mismatch:'返回的报告 ID 与输入不符。',directory:'返回历史目录'},
+      mismatch:'返回的报告 ID 与输入不符。',directory:'返回历史目录',
+      storage:'查看存储',closeStorage:'关闭',storageTitle:'报告存储检查',observed:'观测时间',
+      protected:'该 Agent 正在使用此报告，报告受保护。',unknown:'报告在其他进程中的活动状态未知。',
+      fileHelp:'以下为已知文件的观测字节长度。',database:'报告数据库',trace:'数据库诊断',summary:'报告摘要',bytes:'字节'},
   en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports',
       search:'Open by report ID',id:'Report ID',close:'Cancel',invalid:'Enter a valid report ID.',
-      mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory'}
+      mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory',
+      storage:'View storage',closeStorage:'Close',storageTitle:'Report storage inspection',observed:'Observed at',
+      protected:'The Agent is using this report and protecting it.',unknown:'Activity in other processes is unknown.',
+      fileHelp:'Observed byte lengths for known files.',database:'Report database',trace:'Database diagnostics',
+      summary:'Report summary',bytes:'bytes'}
  };
  const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
  const fetchReport=(task,id)=>api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));
 
- function closeSearch(){
-  if(!searchDialog)return;
-  const dialog=searchDialog;searchDialog=null;dialog.close();dialog.remove();
+ function closeDialog(){
+  if(!reportDialog)return;
+  const dialog=reportDialog;reportDialog=null;dialog.close();dialog.remove();
  }
  function searchReport(task){
-  closeSearch();
+  closeDialog();
   const dialog=text('dialog','','validation-report-search'),heading=text('h2',catalogLabel('search')),
    form=text('form'),field=text('label'),input=text('input'),message=text('p','','error'),actions=text('div','','dialog-actions'),
    cancel=text('button',catalogLabel('close'),'quiet'),submit=text('button',label('view'),'primary');
-  searchDialog=dialog;
+  reportDialog=dialog;
   heading.id='validation-report-search-title';dialog.setAttribute('aria-labelledby',heading.id);
   input.required=true;input.maxLength=64;input.autocomplete='off';input.name='reportId';
   message.setAttribute('role','alert');
-  cancel.type='button';cancel.onclick=closeSearch;submit.type='submit';
-  dialog.addEventListener('cancel',event=>{event.preventDefault();closeSearch();});
+  cancel.type='button';cancel.onclick=closeDialog;submit.type='submit';
+  dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog();});
   field.append(text('span',catalogLabel('id')),input);actions.append(cancel,submit);form.append(field,message,actions);
   form.onsubmit=async event=>{
    event.preventDefault();
@@ -57,18 +64,47 @@ window.RivomeshValidation=(()=>{
    submit.disabled=true;message.textContent='';
    try{
     const report=await fetchReport(task,id);
-    if(searchDialog!==dialog)return;
+    if(reportDialog!==dialog)return;
     if(report?.id!==id)throw new Error(catalogLabel('mismatch'));
     const state=catalogs.get(task.id);
-    if(!state?.page){closeSearch();return;}
+    if(!state?.page){closeDialog();return;}
     reports.set(task.id+'/'+id,{report,page:0});
     catalogs.set(task.id,{...state,selectedId:id});
-    closeSearch();bridge.render();
+    closeDialog();bridge.render();
    }catch(error){
-    if(searchDialog===dialog){message.textContent=error.message;submit.disabled=false;}
+    if(reportDialog===dialog){message.textContent=error.message;submit.disabled=false;}
    }
   };
   dialog.append(heading,form);document.body.append(dialog);dialog.showModal();input.focus();
+ }
+ async function inspectStorage(task,id){
+  if(!can('TASK_CONFIG'))return;
+  closeDialog();
+  const dialog=text('dialog','','validation-storage-dialog'),heading=text('h2',catalogLabel('storageTitle')),
+   close=text('button',catalogLabel('closeStorage'),'quiet'),body=text('section',t('loading'));
+  reportDialog=dialog;
+  heading.id='validation-storage-title';dialog.setAttribute('aria-labelledby',heading.id);
+  close.type='button';close.onclick=closeDialog;
+  dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog();});
+  body.setAttribute('role','status');body.dataset.validationStorageResult='';
+  dialog.append(heading,close,body);document.body.append(dialog);dialog.showModal();
+  const current=()=>reportDialog===dialog&&can('TASK_CONFIG')&&!!bridge.task(task.id);
+  try{
+   const storage=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id)+'/storage');
+   if(!current())return;
+   if(storage?.id!==id||!['PROTECTED_ACTIVE','ACTIVITY_UNKNOWN'].includes(storage.activity)
+      ||!Number.isFinite(Date.parse(storage.observedAt)))throw new Error(catalogLabel('mismatch'));
+   const format=new Intl.NumberFormat(document.documentElement.lang),facts=text('dl');
+   for(const [filename,key] of [['rows.mv.db','database'],['rows.trace.db','trace'],['summary.json','summary']]){
+    const bytes=storage.files?.[filename];
+    if(Number.isSafeInteger(bytes)&&bytes>=0)facts.append(text('dt',catalogLabel(key)),
+     text('dd',format.format(bytes)+' '+catalogLabel('bytes')));
+   }
+   body.replaceChildren(text('p',catalogLabel(storage.activity==='PROTECTED_ACTIVE'?'protected':'unknown'),'callout'),
+    text('p',catalogLabel('observed')+' '+new Date(storage.observedAt).toLocaleString()),text('p',catalogLabel('fileHelp')),facts);
+  }catch(error){
+   if(current())body.replaceChildren(text('p',error.message,'error'));
+  }
  }
 
  async function loadCatalog(task,after='',previous=[]){
@@ -195,6 +231,10 @@ window.RivomeshValidation=(()=>{
    if(job.code||!job.retained)card.append(text('p',job.code?explain(job.code):label('pending')));
    if(job.status==='PENDING'&&can('TASK_CONFIG')){const cancel=control(text('button',label('cancel')),'report',id,entry,'cancel');cancel.dataset.validationAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'VALIDATE_CANCEL');card.append(cancel);}
    const view=control(text('button',label('view')),'report',id,entry,'view');view.dataset.validationReport=id;view.disabled=job.status==='PENDING';view.onclick=async()=>{try{const report=await fetchReport(task,id);reports.set(task.id+'/'+id,{report,page:0});bridge.render();}catch(error){notify(error.message);}};card.append(view);
+   if(can('TASK_CONFIG')){
+    const storage=control(text('button',catalogLabel('storage'),'quiet'),'report',id,entry,'storage');
+    storage.dataset.validationStorage=id;storage.onclick=()=>inspectStorage(task,id);card.append(storage);
+   }
    const cached=reports.get(task.id+'/'+id);if(cached){const report=cached.report;if(!cached.selected)cached.selected=new Set();card.append(text('p',report.code==='VALIDATION_MATCH'?label('MATCH'):report.code==='VALIDATION_DIFFERENCES'?label('DIFF'):report.state),text('p',label('historical'),'subtle'));const table=text('table'),head=text('tr');for(const key of ['destination','table','source','target','missing','extra','changed'])head.append(text('th',label(key)));table.append(head);
     const results=Object.values(report.results||{}),names=new Map((report.tables||[]).map(item=>[item.id,item.database+'.'+item.name]));for(const result of results.slice(cached.page*50,cached.page*50+50)){const row=text('tr');for(const value of [result.target,names.get(result.tableId)||result.tableId,result.sourceRows,result.targetRows,result.missing,result.extra,result.changed])row.append(text('td',String(value)));if(can('TASK_CONFIG')&&(result.missing||result.extra||result.changed)){if((task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product))){const cell=text('td'),key=result.target+'/'+result.tableId,input=control(document.createElement('input'),'report',id,entry,key,'scope');input.type='checkbox';input.checked=cached.selected.has(key);input.disabled=pending;input.dataset.repairScope=key;input.setAttribute('aria-label',repairLabel('select')+' '+result.target+' '+(names.get(result.tableId)||result.tableId));input.onchange=()=>input.checked?cached.selected.add(key):cached.selected.delete(key);cell.append(input);row.append(cell);}const cell=text('td'),button=control(text('button',label('differences')),'report',id,entry,result.target,result.tableId,'differences');button.dataset.validationDifferences=result.tableId;button.onclick=()=>loadDifferences(task,id,cached,result,'',[]);cell.append(button);row.append(cell);}table.append(row);}card.append(table);if(can('TASK_CONFIG')&&report.state==='COMPLETE'&&report.code==='VALIDATION_DIFFERENCES'){const create=control(text('button',repairLabel('plan')),'report',id,entry,'repair-plan');create.dataset.repairAction='plan';create.disabled=pending||task.status.run_state!=='PAUSED'||!results.some(result=>(result.missing||result.extra||result.changed)&&(task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product)));create.onclick=()=>{const scope=[...cached.selected].sort();if(scope.length<1||scope.length>200){notify(repairLabel('scope'));return;}submit(task,'REPAIR_PLAN',null,{reportId:id,scope});};card.append(create);}if(can('TASK_CONFIG')&&cached.details)renderDifferences(card,task,id,entry,cached,names);window.RivomeshRecovery?.renderVerificationFromReport(card,task,{...report,id});
     if(results.length>50){for(const [key,step] of [['previous',-1],['next',1]]){const button=control(text('button',label(key)),'report',id,entry,cached.page,key);button.disabled=cached.page+step<0||(cached.page+step)*50>=results.length;button.onclick=()=>{cached.page+=step;bridge.render();};card.append(button);}}
@@ -202,5 +242,5 @@ window.RivomeshValidation=(()=>{
    }section.append(card);
   }root.append(section);renderRepairs(root,task,pending);
  }
- return{render,rememberFocus,close(){closeSearch();drafts.clear();reports.clear();plans.clear();catalogs.clear();reportDisclosure.clear();}};
+ return{render,rememberFocus,close(){closeDialog();drafts.clear();reports.clear();plans.clear();catalogs.clear();reportDisclosure.clear();}};
 })();

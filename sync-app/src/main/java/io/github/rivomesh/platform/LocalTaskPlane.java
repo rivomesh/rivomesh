@@ -22,6 +22,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
+            case RECOVERY_RECEIPT:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
             case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);
@@ -32,6 +33,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case RESTORE:return tasks.restoreConfiguration(r.taskId,r.reference,r.revision,r.requestId,actor);
             case VALIDATION_REPORTS:return tasks.validationReports(r.taskId,r.cursor,r.limit,actor);
             case VALIDATION_REPORT:return tasks.validationReport(r.taskId,r.reportId,actor);
+            case VALIDATION_STORAGE:return tasks.validationStorage(r.taskId,r.reportId,actor);
             case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
             case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);
             case CAPTURE_RECOVERY:return tasks.captureRecovery(r.taskId,actor);

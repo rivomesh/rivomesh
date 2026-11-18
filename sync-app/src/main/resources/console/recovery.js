@@ -14,7 +14,7 @@ window.RivomeshRecovery=(()=>{
   const closed=dialog;dialog=null;closed.close();closed.replaceChildren();closed.remove();
  }
  function translate(){document.querySelectorAll('[data-recovery-label]').forEach(e=>e.textContent=t(e.dataset.recoveryLabel));}
- function open(title){
+ function open(title,permitted=active){
   close();
   const generation=++ticket,d=document.createElement('dialog'),heading=label('h2',title);
   dialog=d;d.className='failure-review-dialog recovery-dialog';
@@ -22,7 +22,72 @@ window.RivomeshRecovery=(()=>{
   const exit=label('button','recoveryClose');exit.onclick=close;
   d.addEventListener('cancel',event=>{event.preventDefault();close();});
   const body=text('div');d.append(heading,exit,body);document.body.append(d);d.showModal();
-  return{d,body,current:()=>generation===ticket&&dialog===d&&d.isConnected&&active()};
+  return{d,body,current:()=>generation===ticket&&dialog===d&&d.isConnected&&permitted()};
+ }
+ const receiptId=/^[A-Za-z0-9_-]{8,128}$/;
+ const receiptActions=new Set([
+  'VALIDATE','VALIDATE_RETRY','VALIDATE_CANCEL','REPAIR_PLAN','REPAIR_EXECUTE','REPAIR_CANCEL',
+  'FAILURE_REVIEW','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
+  'GAP_VERIFY_PLAN','GAP_VERIFY_EXECUTE','GAP_VERIFY_CANCEL','COMPENSATION_PLAN','COMPENSATION_EXECUTE',
+  'CORRECTION_EXECUTE','RECOVERY_CANCEL','CAPTURE_RETAIN','CAPTURE_EXCLUDE'
+ ]);
+ const receiptAllowed=task=>!!task&&(task.formatVersion===3||task.formatVersion==null&&!!task.ownerNodeId)
+  &&bridge.session()?.taskControlScope==='GLOBAL'&&can('TASK_CONFIG');
+ const receiptFields={reportId:'receiptReport',repairPlanId:'receiptRepairPlan',failureEvidenceId:'receiptEvidence',
+  skipPlanId:'receiptSkipPlan',gapPlanId:'receiptGapPlan'};
+ function receiptAction(task,operation){
+  if(!receiptAllowed(task)||!receiptActions.has(operation.action)||!receiptId.test(operation.id||''))return null;
+  const button=label('button','receiptView');button.className='quiet';
+  button.dataset.recoveryReceiptTask=task.id;button.dataset.recoveryReceiptRequest=operation.id;
+  button.onclick=()=>openReceipt(task,operation.id);return button;
+ }
+ function rememberReceiptFocus(root,taskId){
+  const before=document.activeElement,key=before?.dataset.recoveryReceiptRequest;
+  if(!taskId||before?.dataset.recoveryReceiptTask!==taskId||!root.contains(before))return;
+  return()=>{
+   if(before.isConnected||document.activeElement!==document.body)return;
+   const matches=[...root.querySelectorAll('[data-recovery-receipt-task]')].filter(element=>
+    element.dataset.recoveryReceiptTask===taskId&&element.dataset.recoveryReceiptRequest===key);
+   if(matches.length===1)matches[0].focus({preventScroll:true});
+  };
+ }
+ function openReceipt(task,known=''){
+  const permitted=()=>receiptAllowed(bridge.task(task.id));
+  if(!permitted())return;
+  const dialog=open('receiptTitle',permitted),form=text('form'),field=text('label'),input=document.createElement('input'),
+   button=label('button','receiptFind'),feedback=text('p','','error'),result=text('section');
+  input.name='requestId';input.maxLength=128;input.required=true;input.autocomplete='off';input.value=known;
+  feedback.setAttribute('role','alert');result.setAttribute('aria-live','polite');result.dataset.recoveryReceiptResult='';
+  button.type='submit';field.append(label('span','receiptId'),input);form.append(field,button,feedback);
+  dialog.body.append(label('p','receiptHelp'),form,result);
+  const load=async()=>{
+   if(!dialog.current()||button.disabled)return;
+   const id=input.value.trim();
+   result.replaceChildren();feedback.textContent='';
+   if(!receiptId.test(id)){feedback.textContent=t('receiptInvalid');return;}
+   button.disabled=input.disabled=true;
+   try{
+    const receipt=await api(base(task)+'/recovery-receipts/'+encodeURIComponent(id));
+    if(!dialog.current())return;
+    if(receipt?.kind!=='CONTROL_OPERATION'||receipt.id!==id||receipt.taskId!==task.id||!receiptActions.has(receipt.action))
+     throw new Error(t('receiptMismatch'));
+    const facts=text('dl'),values=[
+     ['receiptId',id],['receiptAction',t(receipt.action.toLowerCase())],
+     ['ownerNode',receipt.ownerNodeId],['receiptActor',receipt.actorId],['receiptTarget',receipt.subscriptionId],
+     ['receiptTime',Number.isFinite(Date.parse(receipt.createdAt))?new Date(receipt.createdAt).toLocaleString():null],
+     ['receiptParent',receipt.parentRequestId]
+    ];
+    for(const [field,key] of Object.entries(receiptFields))
+     if(receiptId.test(receipt.references?.[field]||''))values.push([key,receipt.references[field]]);
+    for(const [key,value] of values)if(typeof value==='string'&&value)facts.append(label('dt',key),text('dd',value));
+    result.append(text('p',t(receipt.status),'badge'));
+    if(typeof receipt.code==='string'&&/^[A-Z0-9_]{1,120}$/.test(receipt.code))result.append(text('p',bridge.explain(receipt.code)));
+    result.append(facts);
+   }catch(error){if(dialog.current())feedback.textContent=error.message;}
+   finally{if(dialog.current())button.disabled=input.disabled=false;}
+  };
+  form.onsubmit=event=>{event.preventDefault();load();};
+  if(known)load();else input.focus();
  }
  async function submit(task,action,sub,errorGeneration,skip,current,onAccepted){
   if(!current()||!active())return;const latest=currentTask(task);if(!paused(latest)){notify(t('SKIP_REQUIRES_PIPELINE_PAUSED'));return;}
@@ -331,6 +396,11 @@ window.RivomeshRecovery=(()=>{
   const button=label('button','gapVerificationScope');button.disabled=!paused(task);button.onclick=()=>openVerificationScope(currentTask(task),report,select.value);section.append(label('p','gapVerificationHistorical'),select,button);root.append(section);
  }
  function render(root,task){
+  if(receiptAllowed(task)){
+   const lookup=label('button','receiptFind');lookup.className='quiet';lookup.dataset.recoveryReceiptLookup='';
+   lookup.dataset.recoveryReceiptTask=task.id;
+   lookup.onclick=()=>openReceipt(task);root.append(lookup);
+  }
   if(task.formatVersion!==3)return;
   if(task.status?.hasGaps){const verified=task.status.hasOpenGaps===false;const warning=text('section','','callout '+(verified?'info':'warning')+' data-gap-warning');warning.append(label('strong',verified?'gapVerifiedHistory':'recoverySkipped'),label('p',verified?'gapVerificationHistorical':'recoveryGapWarning'));if(task.status.openGapCount!=null)warning.append(text('p',t('gapOpen')+': '+task.status.openGapCount+' · '+t('gapVerifiedAtCut')+': '+task.status.verifiedGapCount+(task.status.gapCountLimited?' +':'')));root.append(warning);}
   if(!active())return;const section=text('section','','recovery-ledger');section.append(label('h2','recoveryLedgerTitle'),label('p','recoveryLedgerHelp'));
@@ -376,5 +446,22 @@ window.RivomeshRecovery=(()=>{
  {"gapVerificationTitle":"Gap verification plan and receipt","gapVerificationScope":"Select gaps and prepare verification","gapVerificationHistorical":"Verify the specified historical cut with a fresh target scan. Only the sync service may write the target. This is not current live equality;keep the task paused.","gapVerificationApproval":"I reviewed the gaps and table scope and confirm that only the sync service writes the target.","gapVerifyExecute":"Approve scope and verify again","gapVerifyPlan":"Prepare verification plan","gapMaximumSeconds":"Maximum verification seconds","gapScopeLimit":"Select at most 100 gaps per plan.","gapVerifiedAtCut":"Verified at the specified common cut","gapOpen":"Unverified gaps","gapVerifiedHistory":"Verified skip history exists","gapTable":"Table","gapRows":"Source rows","gapSourceRoot":"Source content root","gapCancel":"Request verification cancellation","gap_verify_plan":"Prepare gap verification","gap_verify_execute":"Verify gaps","gap_verify_cancel":"Cancel gap verification","GAP_VERIFICATION_PLAN_READY":"Plan prepared;review it before confirming.","GAP_VERIFICATION_COMPLETED":"Selected gaps verified at the specified cut;history retained and task paused.","GAP_LIVE_DATA_DIFFERENCES":"Live target differences remain;no successful verification was recorded.","GAP_VERIFICATION_PLAN_CHANGED":"Verification plan changed or is damaged;reload it.","GAP_VERIFICATION_CANCEL_REQUESTED":"Cancellation requested;inspect the plan receipt for the final outcome.","GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":"Verification interrupted or cancelled;commit may already have completed. Inspect the original receipt;rollback is not implied.","GAP_ALREADY_VERIFIED":"This gap already has a verification receipt;inspect its history.",recoveryPrevious:'Previous records',recoveryNext:'Next records',recoveryClose:'Close recovery',recoveryReason:'Operation reason (at least 8 characters)',recoveryLossApproval:'I reviewed the complete transaction and accept the resulting data gap.',recoverySkipTitle:'Skip a complete transaction',recoverySkipWarning:'Business changes from this transaction will not be applied. Record an explicit gap for this destination;keep task and subscriber paused.',recoveryExecuteSkip:'Accept gap and skip transaction',recoveryPauseFresh:'Pause the whole task,confirm destination fencing,and use fresh evidence matching the current failure.',recoveryPlanTitle:'Skip plan and recovery',recoveryHistorical:'Historical record or point-in-time observation. Permissions,transaction and checkpoints are rechecked when executing.',recoveryInspect:'Inspect native commit (read-only)',recoveryUnknown:'Native commit cannot currently be proven. Continue/cancel are disabled;check connectivity,metadata and backups.',recoveryLeavesPaused:'These operations never resume replication automatically.',recoveryConfirmGap:'Recover committed gap acknowledgment',recoveryRetryTitle:'Continue original skip plan',recoveryRetry:'Reapprove and continue skipping',recoveryCancelTitle:'Cancel uncommitted plan',recoveryCancel:'Cancel skip plan',recoveryCancelledHelp:'Cancellation does not repair the SQL fault or advance ACK. Keep the task paused;the previous error generation becomes invalid.',recoveryGapRetained:'Transaction explicitly skipped. Its durable gap remains;this is not data equality.',recoveryGapsTitle:'View data gaps',recoveryPlansTitle:'View skip plans',recoveryEmpty:'No matching records.',recoveryViewPlan:'View/resolve plan',recoverySkipped:'Skipped data exists',recoveryGapWarning:'Acknowledged progress includes skipped transactions and does not imply source/destination equality. Review gaps and subsequent validation.',recoveryLedgerTitle:'Transaction recovery and data gaps',recoveryLedgerHelp:'Open the original plan and inspect the native commit. Recover committed skips;reapprove or cancel uncommitted plans.',recoveryState_PREPARED:'Prepared;execution or recovery pending',recoveryState_COMPLETED:'Completed;gap retained',recoveryState_CANCELLED:'Plan cancelled',skip_transaction:'Skip transaction',skip_retry:'Continue skip plan',skip_recover:'Recover gap acknowledgment',skip_cancel:'Cancel skip plan',SKIP_DISABLED:'Controlled transaction skipping is not enabled for this cluster.',SKIP_REQUIRES_PIPELINE_PAUSED:'Pause the whole task first.',SKIP_COMPLETED:'Skip confirmed;gap retained and task remains paused.',SKIP_RECOVERED:'Gap acknowledgment recovered;task remains paused.',SKIP_CANCELLED:'Plan cancelled;the original fault still needs handling.',SKIP_RECOVERY_PENDING:'Resolve,continue or cancel the pending skip plan before resuming.',SKIP_PLAN_CHANGED:'Plan hash or reference changed;reload it.',SKIP_PLAN_NOT_FOUND:'No such plan exists;the original operation may have refused before preparation.',SKIP_PLAN_CANCELLED:'Original skip plan cancelled;retain fresh evidence.',SKIP_ALREADY_COMMITTED:'Native skip already committed;recover acknowledgment instead of cancelling.',SKIP_CHECKPOINT_RECONCILIATION_REQUIRED:'Compare native checkpoints first;proven commits need acknowledgment reconciliation.',SKIP_NATIVE_COMMIT_NOT_PROVEN:'Native commit is not proven;acknowledgment recovery refused.',SKIP_NATIVE_CHECKPOINT_CHANGED:'Native checkpoint differs from the plan;execution refused.',SKIP_DATA_LOSS_APPROVAL_REQUIRED:'Explicitly accept this transaction data gap.'});
  bridge.register({"compensationPreview": "生成事务补偿预览", "compensationReview": "审阅事务补偿计划", "compensationHelp": "补偿只还原受影响行的事务前状态。确认后任务保持暂停，请检查结果再恢复原事务。", "compensationIdentities": "受影响行标识", "compensationDeletes": "需删除", "compensationInserts": "需写入", "compensationExecute": "确认并执行补偿", "compensationApproval": "我已审阅目标和行变更范围。", "compensation_plan": "事务补偿预览", "compensation_execute": "执行事务补偿", "COMPENSATION_PLAN_READY": "补偿预览已生成。", "COMPENSATION_COMPLETED": "补偿已提交，任务保持暂停。", "COMPENSATION_PLAN_CHANGED": "目标数据或断点已变化，请重新预览。", "COMPENSATION_CHECKPOINT_RECONCILIATION_REQUIRED": "请先确认目标库是否已提交原事务。"},{"compensationPreview": "Generate compensation preview", "compensationReview": "Review compensation plan", "compensationHelp": "Compensation restores affected rows to their pre-transaction state. The task stays paused for review before replay.", "compensationIdentities": "Affected identities", "compensationDeletes": "Rows to delete", "compensationInserts": "Rows to insert", "compensationExecute": "Approve and apply compensation", "compensationApproval": "I reviewed the target and row changes.", "compensation_plan": "Compensation preview", "compensation_execute": "Apply compensation", "COMPENSATION_PLAN_READY": "Compensation preview ready.", "COMPENSATION_COMPLETED": "Compensation committed. The task remains paused.", "COMPENSATION_PLAN_CHANGED": "Target rows or checkpoints changed. Generate a new preview.", "COMPENSATION_CHECKPOINT_RECONCILIATION_REQUIRED": "Reconcile the original target commit first."});
  bridge.register({"correctionOpen": "手工补数据", "correctionHelp": "选择数据表和行操作。加入批次后预览前后值，确认后任务仍会保持暂停。", "correctionForm": "逐行录入", "correctionImport": "导入 JSON", "correctionMode": "录入方式", "correctionImportFile": "选择 JSON 文件", "correctionImportText": "批次 JSON", "correctionAction": "行操作", "correctionAdd": "加入批次", "correctionBatch": "待预览行", "correctionRemove": "移除", "correctionRowId": "无主键行 ROW_ID", "correctionGenerated": "物化的生成值", "correctionUnchanged": "保留当前值", "correctionValue": "输入值", "correctionNull": "SQL NULL", "correction_INSERT": "新增", "correction_UPDATE": "修改", "correction_DELETE": "删除", "correctionPreview": "预览手工修正", "correctionChangedRows": "行将变化", "correctionBefore": "修改前", "correctionAfter": "修改后", "correctionApproval": "我已审阅前后值和受影响行。", "correctionApply": "确认并提交手工修正", "correction_execute": "手工修正", "CORRECTION_COMPLETED": "手工修正已提交，任务保持暂停。", "CORRECTION_PLAN_CHANGED": "目标数据或任务已变化，请重新预览。", "CORRECTION_BATCH_REQUIRED": "请加入待修正行或导入 JSON。", "CORRECTION_BATCH_LIMIT": "一次最多 50 行，JSON 不超过 128 KiB。", "CORRECTION_ROW_ID_INVALID": "请输入证据中的 64 位 ROW_ID。", "CORRECTION_VALUES_INVALID": "请至少选择一个字段填写。", "CORRECTION_IMPORT_INVALID": "JSON 无法解析，请检查格式和重复字段。", "CORRECTION_TYPED_TEXT_REQUIRED": "请用字符串传值，SQL NULL 使用 JSON null。", "CORRECTION_ROW_ALREADY_EXISTS": "要新增的行已存在，请检查目标键。", "CORRECTION_ROW_MISSING": "目标行已不存在，请检查行标识。", "CORRECTION_NULL_NOT_ALLOWED": "该字段不允许 SQL NULL。", "CORRECTION_TYPED_VALUE_INVALID": "字段值不符合类型或精度要求。"},{"correctionOpen": "Correct target rows", "correctionHelp": "Choose a table and row operation. Add edits to the batch, review before and after values and confirm. The task stays paused.", "correctionForm": "Enter rows", "correctionImport": "Import JSON", "correctionMode": "Input mode", "correctionImportFile": "Choose JSON file", "correctionImportText": "Batch JSON", "correctionAction": "Row action", "correctionAdd": "Add to batch", "correctionBatch": "Rows to preview", "correctionRemove": "Remove", "correctionRowId": "Keyless row ID", "correctionGenerated": "Materialized generated value", "correctionUnchanged": "Keep current value", "correctionValue": "Value", "correctionNull": "SQL NULL", "correction_INSERT": "Insert", "correction_UPDATE": "Update", "correction_DELETE": "Delete", "correctionPreview": "Preview corrections", "correctionChangedRows": "rows will change", "correctionBefore": "Before", "correctionAfter": "After", "correctionApproval": "I reviewed the before and after values and affected rows.", "correctionApply": "Approve and apply corrections", "correction_execute": "Manual correction", "CORRECTION_COMPLETED": "Corrections committed. The task remains paused.", "CORRECTION_PLAN_CHANGED": "Target data or task state changed. Preview again.", "CORRECTION_BATCH_REQUIRED": "Add rows or import a JSON batch.", "CORRECTION_BATCH_LIMIT": "A batch can contain up to 50 rows and 128 KiB of JSON.", "CORRECTION_ROW_ID_INVALID": "Enter the 64-character ROW_ID from evidence.", "CORRECTION_VALUES_INVALID": "Select at least one field to update.", "CORRECTION_IMPORT_INVALID": "Invalid import JSON. Check the format and duplicate fields.", "CORRECTION_TYPED_TEXT_REQUIRED": "Use JSON strings for values and JSON null for SQL NULL.", "CORRECTION_ROW_ALREADY_EXISTS": "The insert identity already exists. Check its key.", "CORRECTION_ROW_MISSING": "The requested row is absent. Check its identity.", "CORRECTION_NULL_NOT_ALLOWED": "This field cannot be SQL NULL.", "CORRECTION_TYPED_VALUE_INVALID": "A value does not fit its type or precision."});
- return{render,renderSkipApproval,renderCompensationPreview,renderCorrection,openPlan,openVerificationPlan,openVerificationScope,renderVerificationFromReport,close,translate};
+ bridge.register({
+  receiptTitle:'恢复操作回执',receiptFind:'按请求 ID 查询回执',receiptView:'查看回执',
+  receiptHelp:'回执展示控制面记录的操作状态。可查询已离开近期列表的请求。',
+  receiptId:'管理请求 ID',receiptAction:'操作',receiptActor:'发起人',receiptTarget:'目标',receiptTime:'提交时间',receiptParent:'关联请求',
+  receiptReport:'校验报告',receiptRepairPlan:'修复计划',receiptEvidence:'事务证据',receiptSkipPlan:'跳过计划',
+  receiptGapPlan:'缺口核验计划',receiptInvalid:'请输入有效的管理请求 ID。',receiptMismatch:'返回的回执与当前请求不符。',
+  RECOVERY_RECEIPT_NOT_FOUND:'当前任务下没有对应的恢复操作回执。'
+ },{
+  receiptTitle:'Recovery operation receipt',receiptFind:'Find receipt by request ID',receiptView:'View receipt',
+  receiptHelp:'A receipt shows the operation state recorded by the control plane. Earlier requests can be found after they leave recent history.',
+  receiptId:'Management request ID',receiptAction:'Operation',receiptActor:'Requested by',receiptTarget:'Destination',receiptTime:'Submitted at',
+  receiptParent:'Related request',receiptReport:'Validation report',receiptRepairPlan:'Repair plan',receiptEvidence:'Transaction evidence',
+  receiptSkipPlan:'Skip plan',receiptGapPlan:'Gap verification plan',receiptInvalid:'Enter a valid management request ID.',
+  receiptMismatch:'The returned receipt does not match the current request.',
+  RECOVERY_RECEIPT_NOT_FOUND:'No corresponding recovery operation receipt exists for this task.'
+ });
+ return{render,renderSkipApproval,renderCompensationPreview,renderCorrection,openPlan,openVerificationPlan,openVerificationScope,
+  renderVerificationFromReport,receiptAction,rememberReceiptFocus,close,translate};
 })();

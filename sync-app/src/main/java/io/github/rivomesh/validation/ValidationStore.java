@@ -65,6 +65,30 @@ public final class ValidationStore implements AutoCloseable {
     }
     public static ValidationStore open(Path root,String id)throws Exception{return new ValidationStore(reportPath(root,id),null);}
 
+    /** Metadata only. This observer never acquires the report lock or opens its database. */
+    public static Map<String,Object> storage(Path root,String id)throws Exception{
+        Path directory=reportPath(root,id);
+        if(!Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS))throw fail("VALIDATION_REPORT_NOT_CREATED");
+        Path observedDirectory=directory.toRealPath();
+        if(!observedDirectory.equals(directory.getParent().toRealPath().resolve(id)))throw fail("VALIDATION_PATH_INVALID");
+        Map<String,Long> sizes=new LinkedHashMap<>();
+        for(String name:List.of("rows.mv.db","rows.trace.db","summary.json")){
+            try{
+                BasicFileAttributes attributes=Files.readAttributes(observedDirectory.resolve(name),BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
+                if(!attributes.isRegularFile())throw fail("VALIDATION_PATH_INVALID");
+                sizes.put(name,attributes.size());
+            }catch(NoSuchFileException absent){
+                if("rows.mv.db".equals(name))throw fail("VALIDATION_REPORT_NOT_CREATED");
+            }
+        }
+        Map<String,Object> result=new LinkedHashMap<>();
+        result.put("id",id);
+        result.put("files",sizes);
+        result.put("observedAt",Instant.now().toString());
+        result.put("activity",LOCAL_WRITERS.contains(observedDirectory)?"PROTECTED_ACTIVE":"ACTIVITY_UNKNOWN");
+        return result;
+    }
+
     private record ReportEntry(String id,long created) {
         String cursor(){return created+"_"+id;}
         Map<String,String> view(){return Map.of("id",id,"createdAt",Instant.ofEpochMilli(created).toString());}

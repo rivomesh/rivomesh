@@ -166,6 +166,15 @@ public final class ConsoleServer implements AutoCloseable {
                 if(parts.length==5&&method.equals("PUT")||parts.length==6&&parts[5].equals("validate")&&method.equals("POST")){JsonNode body=body(exchange),document=configurationDocument(body);String revision=body.path("expectedRevision").asText("");TaskRequest request=TaskRequest.of(parts.length==6?TaskRequest.Kind.CONFIG_PREVIEW:TaskRequest.Kind.CONFIG_UPDATE,id);request.document=document;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");json(exchange,!control.localOnly()&&request.mutation()?202:200,control.invoke(request,principal));return;}
             }
             if(parts.length==4&&parts[1].equals("api")&&parts[2].equals("tasks")&&method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.VIEW,parts[3],principal));return;}
+            if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("recovery-receipts")&&method.equals("GET")){
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.RECOVERY_RECEIPT,parts[3]);request.reference=parts[5];
+                try{json(exchange,200,control.invoke(request,principal));}
+                catch(NoSuchElementException missing){
+                    if(!"RECOVERY_RECEIPT_NOT_FOUND".equals(missing.getMessage()))throw missing;
+                    error(exchange,404,"RECOVERY_RECEIPT_NOT_FOUND");
+                }
+                return;
+            }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("handoff")){
                 if(method.equals("GET")){
                     try{json(exchange,200,invoke(TaskRequest.Kind.HANDOFF_LATEST,parts[3],principal));}
@@ -237,6 +246,10 @@ public final class ConsoleServer implements AutoCloseable {
                 json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&method.equals("GET")){TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_REPORT,parts[3]);request.reportId=parts[5];json(exchange,200,control.invoke(request,principal));return;}
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&parts[6].equals("storage")&&method.equals("GET")){
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_STORAGE,parts[3]);request.reportId=parts[5];
+                json(exchange,200,control.invoke(request,principal));return;
+            }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&Arrays.asList("differences","values").contains(parts[6])&&method.equals("POST")){
                 if(!principal.administers()){error(exchange,403,"FORBIDDEN");return;}JsonNode input=body(exchange);boolean values=parts[6].equals("values");String identity=values?input.path("identityHash").asText(null):null;if(values&&(identity==null||!identity.matches("[0-9a-f]{64}")))throw new IllegalArgumentException("VALIDATION_IDENTITY_INVALID");
                 TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_DIFFERENCES,parts[3]);request.reportId=parts[5];request.target=input.path("target").asText(null);request.tableId=input.path("tableId").asText(null);request.after=input.path("after").asText("");request.limit=input.path("limit").asInt(50);request.identityHash=identity;json(exchange,200,control.invoke(request,principal));return;
@@ -316,7 +329,7 @@ public final class ConsoleServer implements AutoCloseable {
         return expected.equals(origin);
     }
     private static String auditAction(String method,String path){
-        String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
+        String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/recovery-receipts/[A-Za-z0-9_-]{8,128}")?"RECOVERY_RECEIPT":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
         return (Arrays.asList("GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS").contains(method)?method:"OTHER")+"_"+action;
     }
     private static Map<String,Long> auditQuery(String query){

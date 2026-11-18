@@ -70,6 +70,7 @@ parser.add_argument('--managed-skip', action='store_true', help='Protocol7 compl
 parser.add_argument('--compensation', action='store_true', help='Exercise real CDC before-image compensation across two management entries')
 parser.add_argument('--correction', action='store_true', help='Check administrator typed correction and JSON import against a real failed CDC transaction')
 parser.add_argument('--browser', type=Path, help='Use a real Chrome executable to approve the validation repair and typed correction')
+parser.add_argument('--receipt-lookup', action='store_true', help='Find older recovery receipts with the Agent offline after browser repair and correction')
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
@@ -86,6 +87,8 @@ if args.browser and (not args.correction or not args.separate_execution
                      or any((args.recovery_jobs, args.automatic_placement, args.task_views, args.compensation,
                              args.failure_diagnostics, args.snapshot_diagnostics, args.source_diagnostics))):
     parser.error('--browser requires an executable Chrome path and the focused --separate-execution --correction profile')
+if args.receipt_lookup and not args.browser:
+    parser.error('--receipt-lookup requires --browser and its recovery profile')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_authority and (not args.separate_execution or any((args.automatic_placement, args.runtime_image,
@@ -203,6 +206,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
+            'receiptLookup': args.receipt_lookup,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -414,6 +418,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 return value
 
     route = '/api/tasks/global_cdc'
+    retained_receipts = {}
 
     def task(node='node-a', task_path=route):
         return http(node, task_path)
@@ -1428,7 +1433,15 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         http('node-b',catalog_path+'?limit=26',expected=400)
         passed('After Agent restart both management entries discover the durable report and its metadata only')
         if args.browser:
-            browser_check('repair', reportId=report_id)
+            browser_check('repair', reportId=report_id, inspectStorage=args.receipt_lookup)
+            if args.receipt_lookup:
+                retained_receipts['REPAIR_EXECUTE'] = next(op['id'] for op in task()['operations'] if op['action']=='REPAIR_EXECUTE')
+                storage=http('node-a',report_path+'/storage')
+                assert storage['id']==report_id and storage['activity']=='ACTIVITY_UNKNOWN'
+                assert storage['files']['rows.mv.db']>0 and storage['files']['summary.json']>0
+                assert set(storage)=={'id','activity','observedAt','files'}
+                http('node-b',report_path+'/storage',token=env['RM_GC_VIEWER'],expected=403)
+                passed('Task-scoped storage inspection reads bounded file metadata and refuses a viewer')
         else:
             plan, _ = action('REPAIR_PLAN', repair={'reportId': report_id, 'scope': scope})
             wait(lambda: operation(plan).get('repair', {}).get('planId'), 'visible plan identity')
@@ -1552,6 +1565,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             if args.browser:
                 browser_check('correction', patch={'edits': edits})
                 applied = next(op['id'] for op in task()['operations'] if op['action']=='CORRECTION_EXECUTE')
+                if args.receipt_lookup:
+                    retained_receipts['CORRECTION_EXECUTE']=applied
             else:
                 approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
                 applied,accepted=recovery_write('CORRECTION_EXECUTE', failed['acknowledged'],
@@ -1568,6 +1583,25 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             action('RESUME',errorCount=task()['status']['error_count'])
             wait(rows_match,'full source and target equality after correction and normal CDC replay')
             passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
+
+    def run_receipt_lookup():
+        for _ in range(21):
+            action('STOP')
+        old_ids=set(retained_receipts.values())
+        for node in ('node-a','node-b'):
+            assert old_ids.isdisjoint(op['id'] for op in task(node)['operations'])
+        terminate_owner()
+        for action_name, request_id in retained_receipts.items():
+            path=route+'/recovery-receipts/'+request_id
+            first=http('node-a',path)
+            assert http('node-b',path)==first and first['kind']=='CONTROL_OPERATION'
+            assert first['id']==request_id and first['action']==action_name and first['status']=='SUCCEEDED'
+            assert 'result' not in first and 'correction' not in first and 'repair' not in first
+            assert 'reviewed pre-image' not in json.dumps(first)
+            http('node-a',path,token=env['RM_GC_VIEWER'],expected=403)
+        assert http('node-b',route+'/recovery-receipts/unknown_request_001',expected=404)['code']=='RECOVERY_RECEIPT_NOT_FOUND'
+        passed('Repair and correction receipts remain available across entries after history rollover and Agent loss')
+        browser_check('receipt', receiptId=retained_receipts['CORRECTION_EXECUTE'], ownerNodeId=owner_node)
 
     try:
         databases = ('mysql', 'mysql-target', 'postgres', 'store') if args.separate_execution else ('mysql', 'mysql-target', 'postgres')
@@ -1821,6 +1855,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             run_validation_repair()
             run_recovery_cases()
             action('STOP')
+            if args.receipt_lookup:
+                run_receipt_lookup()
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
             manifest['status'] = 'PASS'
             print('GLOBAL_CONTROL_BROWSER_RECOVERY_ACCEPTED artifact=' + digest)

@@ -88,6 +88,25 @@ class ValidationStoreTest {
     @Test void anActiveReportRejectsASecondWriter()throws Exception{
         TableSchema t=table(false);PipelineValidationBarrier.Certificate cert=certificate(t);try(ValidationStore store=create(t,cert,new ValidationStore.Limits())){assertEquals("VALIDATION_REPORT_BUSY",assertThrows(SyncFailure.class,()->ValidationStore.open(root,cert.id)).code);}
     }
+    @Test void storageInspectionObservesProtectionWithoutOpeningOrCleaningUpAReport()throws Exception{
+        TableSchema table=table(false);
+        PipelineValidationBarrier.Certificate certificate=certificate(table);
+        Path abandoned;
+        try(ValidationStore report=create(table,certificate,new ValidationStore.Limits())){
+            Path directory=root.resolve(certificate.id);
+            abandoned=Files.writeString(directory.resolve("summary-127.tmp"),"retained inspection fixture");
+            Map<String,Object> active=ValidationStore.storage(root,certificate.id);
+            assertEquals(certificate.id,active.get("id"));
+            assertEquals("PROTECTED_ACTIVE",active.get("activity"));
+            Map<?,?> files=(Map<?,?>)active.get("files");
+            assertEquals(Files.size(directory.resolve("rows.mv.db")),files.get("rows.mv.db"));
+            assertFalse(files.containsKey(abandoned.getFileName().toString()));
+            assertTrue(Files.exists(abandoned));
+            assertEquals("SCANNING_SOURCE",report.manifest().state);
+        }
+        assertEquals("ACTIVITY_UNKNOWN",ValidationStore.storage(root,certificate.id).get("activity"));
+        assertTrue(Files.exists(abandoned));
+    }
     @Test void retainedReportCatalogPagesWithoutOpeningTheReportDatabases()throws Exception{
         TableSchema table=table(false);
         PipelineValidationBarrier.Certificate first=certificate(table),second=certificate(table);

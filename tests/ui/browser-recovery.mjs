@@ -6,7 +6,7 @@ import {launchChrome,waitFor} from './chromium.mjs';
 
 // The disposable native fixture supplies its loopback endpoints and token via stdin.
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['repair','correction'].includes(scenario));
+assert(binary&&['repair','correction','receipt'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const fixture=JSON.parse(Buffer.concat(chunks));
@@ -77,6 +77,14 @@ try{
     await poll('document.querySelectorAll("[data-repair-scope]").length===2','direct lookup opens the retained report summary');
     await clickNamed('.validation-catalog-actions button','返回历史目录');
     checks.push('Keyboard report lookup opens one authorized historical report by ID and returns to the original directory page');
+    if(fixture.inspectStorage){
+      await activate('[data-validation-storage="'+fixture.reportId+'"]','authorized report storage inspection');
+      await poll('document.querySelector("[data-validation-storage-result]")?.textContent.includes("活动状态未知")',
+        'real file metadata and unknown cross-process activity');
+      assert(await evaluate('document.querySelector("[data-validation-storage-result]").textContent.includes("报告数据库")'));
+      await key('Escape',27);
+      checks.push('Report storage displays file metadata with the correct unknown-activity state');
+    }
     await poll('document.querySelectorAll("[data-repair-scope]").length===2','both destination repair scopes');
     await evaluate(`window.reportDifferenceBeforeRefresh=[...document.querySelectorAll('[data-repair-scope]')]
       .find(input=>input.dataset.repairScope.startsWith('pg/')).closest('tr').querySelector('[data-validation-differences]');
@@ -117,7 +125,7 @@ try{
     await poll('[...document.querySelectorAll(".repair-panel h3")].some(heading=>heading.textContent==="目标提交凭据")',
       'visible receipts after browser reload');
     checks.push('The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload');
-  }else{
+  }else if(scenario==='correction'){
     await clickNamed('.history button','查看事务证据');
     await activate('button[data-recovery-label="correctionOpen"]','typed correction for the retained failure');
     const dialog='.recovery-dialog[open]';
@@ -151,6 +159,18 @@ try{
     const observed=await poll(operations('CORRECTION_EXECUTE'),'correction receipt at other Controller');
     assert.deepEqual(observed.result,completed.result);
     checks.push('Both management entries show the same correction receipt without the reviewed business values');
+  }else{
+    await activate('[data-recovery-receipt-lookup]','look up a recovery action with the owner offline');
+    const input='.recovery-dialog[open] input[name="requestId"]';
+    await poll(`Boolean(${query(input)})`,'request ID input');
+    assert(await evaluate(`document.activeElement===${query(input)}`));
+    await cdp('Input.insertText',{text:fixture.receiptId});
+    await key('Enter',13);
+    const result=await poll(`(()=>{const summary=document.querySelector('[data-recovery-receipt-result]')?.textContent;
+      return summary?.includes(${quoted(fixture.receiptId)})&&summary;})()`,'older operational receipt');
+    assert(result.includes('手工修正')&&result.includes(fixture.ownerNodeId));
+    for(const value of ['reviewed pre-image','private extra row','18446744073709551615'])assert(!result.includes(value));
+    checks.push('Chrome reads the correction receipt after history rollover and Agent loss without exposing imported values');
   }
   console.log(JSON.stringify({status:'PASS',scenario,browser:version,checks}));
 }catch(error){
