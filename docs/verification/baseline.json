@@ -1705,5 +1705,66 @@
         "cleanupExitCode": 0
       }
     ]
+  },
+  "postgresqlSynchronizedSlotPromotion": {
+    "artifactSha256": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
+    "focusedJavaTests": 18,
+    "runs": [
+      {
+        "artifactSha256": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
+        "status": "PASS",
+        "checks": [
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot",
+          "The missing slot is refused and the last durable LSN remains available",
+          "Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint"
+        ],
+        "jdk": 8,
+        "runtimeImage": "eclipse-temurin:8-jre",
+        "sourceImage": "postgres:17.12",
+        "failover": true,
+        "rejectOldPrimary": false,
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "runtimeVersion": "1.8.0_512",
+        "runtimeImageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+        "runtimeArchitecture": "arm64",
+        "checkpointBeforePromotion": "0/30185a8",
+        "slotBeforePromotion": "rivomesh_test_2fe5a5e028f13087",
+        "checkpointAfterPromotion": "0/3018938",
+        "cleanupExitCode": 0
+      },
+      {
+        "artifactSha256": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
+        "status": "PASS",
+        "checks": [
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot",
+          "Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint"
+        ],
+        "jdk": 8,
+        "runtimeImage": "eclipse-temurin:8-jre",
+        "sourceImage": "postgres:17.12",
+        "failover": true,
+        "rejectOldPrimary": true,
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "runtimeVersion": "1.8.0_512",
+        "runtimeImageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+        "runtimeArchitecture": "arm64",
+        "checkpointBeforePromotion": "0/30185a8",
+        "slotBeforePromotion": "rivomesh_test_7fda23790050922d",
+        "checkpointAfterPromotion": "0/3018938",
+        "cleanupExitCode": 0
+      }
+    ]
   }
 }

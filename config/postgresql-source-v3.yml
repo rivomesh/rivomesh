@@ -13,6 +13,8 @@ source:
     url: jdbc:postgresql://postgres-source:5432/accounting
     publication: rivomesh_sales
     slotPrefix: rivomesh_sales
+    # Set true for a new task routed through a writer endpoint with synchronized standby slots.
+    failoverSlot: false
 databases:
   - sales
   - billing

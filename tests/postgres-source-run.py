@@ -20,8 +20,14 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
+parser.add_argument('--failover', action='store_true',
+                    help='Exercise a synchronized logical slot through physical standby promotion')
+parser.add_argument('--reject-old-primary', action='store_true',
+                    help='After promotion, route back to the stopped original primary instead of dropping the slot')
 parser.add_argument('--jdk', type=int, choices=(8,11,17,21,25), default=8)
 args = parser.parse_args()
+if args.reject_old_primary and not args.failover:
+    parser.error('--reject-old-primary requires --failover')
 artifact = args.artifact.resolve()
 output = args.output.resolve()
 output.relative_to(ROOT)
@@ -32,7 +38,7 @@ project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
-              sourceImage=args.source_image)
+              sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -67,6 +73,10 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                                 username='postgres',password='${RM_PG_PASSWORD}',mappings=dict(sales='copy_sales',billing='copy_billing'),
                                 metadataSchema='copy_meta')],
                   journal=dict(mode='LOCAL'),chunkSize=1,pollIntervalMillis=100,retryDelayMillis=200,leaseMillis=5000,heartbeatMillis=300)
+    if args.failover:
+        pipeline['source']['postgresql'].update(
+            failoverSlot=True,url='jdbc:postgresql://source-rw:5432/sync_test?connectTimeout=3&socketTimeout=15')
+    live_source='source'
     platform=dict(bind='0.0.0.0',port=8080,authToken='${RM_PG_TOKEN}',tasksDirectory='/fixture/tasks',
                   dataDirectory='/fixture/platform',autoStart=True,pollMillis=200,workerHeapMiB=256)
     (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
@@ -79,14 +89,32 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                               environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}'),
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
+    document=dict(services=services)
+    if args.failover:
+        assert not args.generated, 'Use the first physical promotion profile with PostgreSQL 17'
+        services['source']['networks']={'default':{},'access':{'aliases':['source-rw']}}
+        services['source']['command']+=['-c','synchronized_standby_slots=rivomesh_wal']
+        services['runner']['networks']=['default','access']
+        standby_script = '\n'.join([
+            'install -d -m 0700 -o postgres -g postgres /standby/data',
+            "gosu postgres pg_basebackup -d 'host=source user=postgres dbname=sync_test' "
+            '-D /standby/data -X stream -S rivomesh_wal -R',
+            'exec gosu postgres postgres -D /standby/data -c wal_level=logical '
+            '-c max_replication_slots=8 -c hot_standby_feedback=on -c sync_replication_slots=on',
+        ])
+        services['standby']=dict(image=args.source_image,entrypoint=['bash','-ceu',standby_script],
+                                 environment={'PGPASSWORD':'${RM_PG_PASSWORD}'},volumes=['standby-data:/standby'])
+        document.update(networks={'default':{},'access':{}},volumes={'standby-data':{}})
     composition=home/'compose.json'
-    composition.write_text(json.dumps(dict(services=services)))
+    composition.write_text(json.dumps(document))
 
     def compose(*arguments,check=True):
         return subprocess.run(['docker','compose','-p',project,'-f',str(composition),*arguments],
                               cwd=ROOT,env=environment,capture_output=True,text=True,check=check,timeout=180)
 
     def sql(service,statement):
+        if service=='source':
+            service=live_source
         return compose('exec','-T',service,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-A','-t','-F','|','-c',statement).stdout.strip()
 
@@ -141,6 +169,15 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
             WITH (publish='insert,update,delete');
         """)
+        if args.failover:
+            compose('exec','-T','source','sh','-c',
+                    'printf "\\nhost replication postgres samenet scram-sha-256\\n" >> "$PGDATA/pg_hba.conf"')
+            assert sql('source','SELECT pg_reload_conf()')=='t'
+            sql('source',"SELECT pg_create_physical_replication_slot('rivomesh_wal',true)")
+            compose('up','-d','standby')
+            require(lambda:sql('standby','SELECT pg_is_in_recovery()')=='t','physical standby ready')
+            require(lambda:sql('source',"SELECT state FROM pg_stat_replication WHERE state='streaming'")=='streaming',
+                    'standby streaming')
         metadata=json.loads(subprocess.check_output(['docker','image','inspect',args.source_image],text=True))[0]
         report['sourceImageId']=metadata['Id']
         if args.generated:
@@ -222,30 +259,77 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         assert slot.startswith('rivomesh_test_') and len(slot.splitlines())==1
         passed('SIGKILL and restart reuse the original slot and snapshot with continuing LSN')
 
+        if args.failover:
+            def synchronized_slot():
+                return sql('standby',f"""
+                    SELECT synced AND failover AND restart_lsn <= '{durable}'::pg_lsn
+                    AND confirmed_flush_lsn <= '{durable}'::pg_lsn
+                    AND pg_last_wal_replay_lsn() >= '{durable}'::pg_lsn
+                    FROM pg_replication_slots WHERE slot_name='{slot}'
+                """)=='t'
+
+            require(synchronized_slot,'logical failover slot synchronized and standby past durable LSN')
+            report['checkpointBeforePromotion']=durable
+            report['slotBeforePromotion']=slot
+            compose('kill','-s','SIGKILL','source')
+            assert sql('standby','SELECT pg_promote(true,60)')=='t'
+            live_source='standby'
+            standby_id=compose('ps','-q','standby').stdout.strip()
+            subprocess.run(['docker','network','connect','--alias','source-rw',project+'_access',standby_id],
+                           check=True,timeout=30,capture_output=True)
+            sql('source',"UPDATE billing.ledger SET label='promoted commit' WHERE id=1; "
+                         "INSERT INTO sales.duplicates VALUES(7,'{}')")
+            require(lambda:stream_ready() and task()['status']['capture_lsn']!=durable,'automatic promotion continuation')
+            assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
+            assert sql('source',"SELECT timeline_id FROM pg_control_checkpoint()")!='1'
+            assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE failover AND slot_name='"+slot+"'")=='1'
+            durable=task()['status']['capture_lsn']
+            report['checkpointAfterPromotion']=durable
+            passed('After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot')
+
         compose('kill','-s','SIGKILL','runner')
-        require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
-        sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
-        compose('up','-d','runner')
-        def missing_slot_fault():
-            status=task()['status']
-            return status if status.get('error_code')=='POSTGRESQL_REQUIRED_WAL_UNAVAILABLE' and status.get('run_state')=='ERROR' else None
-        missing=require(missing_slot_fault,'lost slot fails closed')
-        assert missing['capture_lsn']==durable
-        assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
-        passed('The missing slot is refused and the last durable LSN remains available')
-        recovery=http(route+'/capture-recovery')
-        assert recovery['sourceAdmission']=='POSTGRESQL_REQUIRED_WAL_UNAVAILABLE'
-        assert recovery['phase']=='SOURCE_CONNECT' and recovery['scope']=='UNPROVEN_SOURCE_RANGE'
-        assert recovery['affectedSubscriptions']==['pg'] and len(recovery['checkpointHash'])==64
-        assert recovery['actions']==['PRESERVE_SOURCE_LOGS','RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE','REVIEW_NEW_BASELINE']
-        assert task()['status']['capture_lsn']==durable
-        assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
-        passed('Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint')
+        if args.reject_old_primary:
+            compose('stop','standby')
+            compose('up','-d','source')
+            live_source='source'
+            require(lambda:sql('source','SELECT pg_is_in_recovery()')=='f','original server reopens on its branch')
+            compose('up','-d','runner')
+
+            def old_timeline_fault():
+                status=task()['status']
+                return status if status.get('error_code')=='POSTGRESQL_POSITION_LINEAGE_CHANGED' else None
+
+            refused=require(old_timeline_fault,'previous timeline fails closed')
+            assert refused['run_state']=='ERROR' and refused['capture_lsn']==durable
+            assert sql('target',"SELECT label FROM copy_billing.ledger WHERE id=1")=='promoted commit'
+            passed('Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint')
+        else:
+            require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
+            sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
+            compose('up','-d','runner')
+
+            def missing_slot_fault():
+                status=task()['status']
+                return status if status.get('error_code')=='POSTGRESQL_REQUIRED_WAL_UNAVAILABLE' and status.get('run_state')=='ERROR' else None
+
+            missing=require(missing_slot_fault,'lost slot fails closed')
+            assert missing['capture_lsn']==durable
+            assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
+            passed('The missing slot is refused and the last durable LSN remains available')
+            recovery=http(route+'/capture-recovery')
+            assert recovery['sourceAdmission']=='POSTGRESQL_REQUIRED_WAL_UNAVAILABLE'
+            assert recovery['phase']=='SOURCE_CONNECT' and recovery['scope']=='UNPROVEN_SOURCE_RANGE'
+            assert recovery['affectedSubscriptions']==['pg'] and len(recovery['checkpointHash'])==64
+            assert recovery['actions']==['PRESERVE_SOURCE_LOGS','RESTORE_LOGS_OR_SELECT_ELIGIBLE_SOURCE','REVIEW_NEW_BASELINE']
+            assert task()['status']['capture_lsn']==durable
+            assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
+            passed('Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint')
         assert hashlib.sha256(artifact.read_bytes()).hexdigest()==digest
         report['status']='PASS'
     except Exception as error:
         report['status']='FAIL'
-        log=compose('logs','--no-color','--tail','80','runner',check=False).stdout
+        log_services=('runner','standby','source') if args.failover else ('runner',)
+        log=compose('logs','--no-color','--tail','80',*log_services,check=False).stdout
         worker_log=home/'platform'/'logs'/'postgres_source.log'
         if worker_log.is_file():
             log+='\n'+'\n'.join(worker_log.read_text(errors='replace').splitlines()[-80:])

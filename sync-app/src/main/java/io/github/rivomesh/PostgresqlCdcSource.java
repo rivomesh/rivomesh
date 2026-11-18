@@ -12,6 +12,7 @@ import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationStream;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,6 +21,7 @@ import java.sql.SQLTransientConnectionException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +89,8 @@ final class PostgresqlCdcSource implements SourceAdapter {
             if((majorVersion!=17&&majorVersion!=18)||(config.expectedVersion!=null
                     &&!major.equals(config.expectedVersion)&&!(major+"."+version%10000).equals(config.expectedVersion)))
                 throw invalid("POSTGRESQL_SOURCE_VERSION_UNSUPPORTED");
+            if(r.getBoolean(5)&&options.failoverSlot)
+                throw new SQLTransientConnectionException("POSTGRESQL_PRIMARY_NOT_READY","08006");
             if(!"logical".equals(r.getString(3))||!"UTF8".equals(r.getString(4))||r.getBoolean(5))
                 throw invalid("POSTGRESQL_LOGICAL_PRIMARY_REQUIRED");
         }
@@ -94,7 +98,9 @@ final class PostgresqlCdcSource implements SourceAdapter {
             String[] identity=identify(c);
             systemId=identity[0];
             timeline=identity[1];
-            positions=new PostgresSourcePosition(config.clusterId,systemId,timeline,slot);
+            Map<String,Long> ancestors=options.failoverSlot&&!"1".equals(timeline)?
+                    timelineHistory(c,timeline):Collections.emptyMap();
+            positions=new PostgresSourcePosition(config.clusterId,systemId,timeline,slot,ancestors);
         }
     }
 
@@ -121,9 +127,24 @@ final class PostgresqlCdcSource implements SourceAdapter {
         }
     }
 
+    private static Map<String,Long> timelineHistory(Connection c,String timeline)throws Exception{
+        if(!timeline.matches("[1-9][0-9]{0,9}"))throw invalid("POSTGRESQL_TIMELINE_HISTORY_INVALID");
+        try(Statement statement=c.createStatement();ResultSet result=statement.executeQuery("TIMELINE_HISTORY "+timeline)){
+            if(!result.next())throw invalid("POSTGRESQL_TIMELINE_HISTORY_INVALID");
+            byte[] contents=result.getBytes("content");
+            if(contents==null||contents.length>65536)throw invalid("POSTGRESQL_TIMELINE_HISTORY_INVALID");
+            return PostgresSourcePosition.history(new String(contents,StandardCharsets.US_ASCII),timeline);
+        }
+    }
+
     private void requireIdentity(Connection c)throws Exception{
         String[] observed=identify(c);
-        if(!systemId.equals(observed[0])||!timeline.equals(observed[1]))throw invalid("POSTGRESQL_TIMELINE_CHANGED");
+        if(!systemId.equals(observed[0]))throw invalid("POSTGRESQL_SYSTEM_ID_CHANGED");
+        if(!timeline.equals(observed[1])){
+            if(options.failoverSlot)
+                throw new SQLTransientConnectionException("POSTGRESQL_RECHECK_PROMOTED_PRIMARY","08006");
+            throw invalid("POSTGRESQL_TIMELINE_CHANGED");
+        }
     }
 
     @Override public String type(){return PostgresSourcePosition.TYPE;}
@@ -138,12 +159,13 @@ final class PostgresqlCdcSource implements SourceAdapter {
     }
 
     private long[] slotPosition()throws Exception{
-        try(Connection c=sql();PreparedStatement p=c.prepareStatement("SELECT database,plugin,restart_lsn::text,confirmed_flush_lsn::text,wal_status "
+        try(Connection c=sql();PreparedStatement p=c.prepareStatement("SELECT database,plugin,restart_lsn::text,confirmed_flush_lsn::text,wal_status,failover,two_phase "
                 +"FROM pg_replication_slots WHERE slot_name=?")){
             p.setString(1,slot);
             try(ResultSet r=p.executeQuery()){
                 if(!r.next())return null;
-                if(!config.database.equals(r.getString(1))||!"pgoutput".equals(r.getString(2)))
+                if(!config.database.equals(r.getString(1))||!"pgoutput".equals(r.getString(2))
+                        ||r.getBoolean(6)!=options.failoverSlot||r.getBoolean(7))
                     throw invalid("POSTGRESQL_SLOT_SCOPE_CHANGED");
                 String wal=r.getString(5);
                 if(!Arrays.asList("reserved","extended").contains(wal)||r.getString(3)==null||r.getString(4)==null)
@@ -154,11 +176,20 @@ final class PostgresqlCdcSource implements SourceAdapter {
     }
 
     @Override public SourcePosition position()throws Exception{
+        if(options.failoverSlot){
+            try(Connection c=sql();Statement s=c.createStatement();
+                ResultSet r=s.executeQuery("SHOW synchronized_standby_slots")){
+                if(!r.next()||r.getString(1).trim().isEmpty())
+                    throw invalid("POSTGRESQL_SYNCHRONIZED_STANDBY_SLOT_REQUIRED");
+            }
+        }
         long[] existing=slotPosition();
         if(existing!=null)return positions.at(existing[1]);
         try(Connection c=replication()){
             requireIdentity(c);
-            try(Statement st=c.createStatement();ResultSet r=st.executeQuery("CREATE_REPLICATION_SLOT "+slot+" LOGICAL pgoutput (SNAPSHOT 'nothing')")){
+            String flags=options.failoverSlot?"SNAPSHOT 'nothing', FAILOVER true":"SNAPSHOT 'nothing'";
+            try(Statement st=c.createStatement();ResultSet r=st.executeQuery("CREATE_REPLICATION_SLOT "+slot
+                    +" LOGICAL pgoutput ("+flags+")")){
                 if(!r.next())throw invalid("POSTGRESQL_SLOT_CREATE_FAILED");
                 return positions.at(PostgresSourcePosition.parse(r.getString("consistent_point")));
             }

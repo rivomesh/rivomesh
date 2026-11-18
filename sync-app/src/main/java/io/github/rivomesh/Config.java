@@ -47,6 +47,7 @@ public final class Config {
     public static final class PostgresqlSource {
         public String url,publication;
         public String slotPrefix="rivomesh";
+        public boolean failoverSlot;
     }
 
     public static final class Endpoint {

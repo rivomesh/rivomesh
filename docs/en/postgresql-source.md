@@ -21,10 +21,18 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 - PostgreSQL 18 stored generated columns can be materialized as ordinary destination columns when the publication includes them. Use `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)` and retain `REPLICA IDENTITY FULL`. PostgreSQL 17 generated columns, PostgreSQL 18 virtual generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require separate profiles. Preflight or capture reports unsupported relation changes and types.
 - Restart uses the existing LSN and snapshot when the original primary, timeline, slot and journal remain available. Resume a failed target subscription after addressing its SQL error.
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.
-- SO-06 still tracks cross-timeline promotion, synchronized slots, common-cut validation and the broader driver matrix.
+- SO-06 continues to track common-cut validation and additional target, promotion and driver profiles.
 
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 
 Seven native checks passed on each of Java 8, 11, 17, 21 and 25. Use `--jdk` to select the runtime. See the [verification record](../verification/README.md#postgresql-source-runtime-matrix).
 
 PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight checks on each of Java 8, 11, 17, 21 and 25. The added fixture checks stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+
+## Synchronized standby promotion
+
+For a new task, keep one stable PostgreSQL writer endpoint in `source.postgresql.url` and set `source.postgresql.failoverSlot: true`. Equip the primary with a physical standby slot listed in `synchronized_standby_slots`. Configure the standby with that `primary_slot_name`, `hot_standby_feedback=on`, `sync_replication_slots=on` and a valid database name in `primary_conninfo`. Verify that the logical slot on the standby is persistent, synchronized and has received the required WAL before routing a failover. [PostgreSQL slot synchronization](https://www.postgresql.org/docs/17/logicaldecoding-explanation.html#LOGICALDECODING-REPLICATION-SLOTS-SYNCHRONIZATION) · [Failover checklist](https://www.postgresql.org/docs/17/logical-replication-failover.html)
+
+The database HA service fences the previous primary, promotes the standby and routes the writer endpoint. Rivomesh reconnects through that endpoint. The promoted server must have the original system ID, an actual timeline history covering the durable LSN and snapshot coordinates, and the original failover slot. The slot must retain the required WAL and its confirmed LSN must not lead the journal. Retain the journal and old WAL if any of these checks fails. Configure the next physical standby before attempting another promotion.
+
+PostgreSQL 17.12 on Java 8 passed actual primary SIGKILL, native promotion, continued delivery with unchanged snapshot IDs, and refusal of a route back to the original timeline. Select `--source-image postgres:17.12 --failover` in the fixture. Append `--reject-old-primary` to run the divergent-route case. Load balancer products, cascading topologies and further version combinations have separate acceptance.

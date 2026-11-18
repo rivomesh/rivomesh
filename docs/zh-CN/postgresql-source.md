@@ -21,10 +21,18 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
-- 当前档案绑定一个 PostgreSQL 主库与单一时间线。跨时间线切换、槽同步、共同校验点和完整驱动矩阵由 SO-06 后续任务跟踪。
+- 共同点对账、更多目标与切换档案继续由 SO-06 跟踪。
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
 
 已在 Java 8、11、17、21、25 上各运行七项实库检查。测试可用 `--jdk` 选择运行时。见[验收记录](../verification/README.md#postgresql-source-runtime-matrix)。
 
 PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8、11、17、21、25 各通过八项实库检查，包含有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+
+## 同步槽与备库提升
+
+创建新任务时在 `source.postgresql.url` 配置稳定的 PostgreSQL 写入口，在 `source.postgresql.failoverSlot` 设置 `true`。主库的 `synchronized_standby_slots` 列出用于物理备库的槽。备库设置对应的 `primary_slot_name`、`hot_standby_feedback=on`、`sync_replication_slots=on`，并在 `primary_conninfo` 配置有效的数据库名。写入口切换前，确认备库上的逻辑槽持久化、已同步且具备所需 WAL。[PostgreSQL 复制槽同步](https://www.postgresql.org/docs/17/logicaldecoding-explanation.html#LOGICALDECODING-REPLICATION-SLOTS-SYNCHRONIZATION) · [切换检查](https://www.postgresql.org/docs/17/logical-replication-failover.html)
+
+数据库高可用服务隔离旧主、提升备库并更新写入口，Rivomesh 通过原入口重新连接。新主需要有相同的 system ID、覆盖原持久 LSN 和快照坐标的时间线历史，以及原 failover 槽。该槽须保有所需 WAL，确认位置不能领先 Rivomesh 日志。检查失败时保留旧 WAL 和日志。下一次切换前准备下一台物理备库。
+
+PostgreSQL 17.12 在 Java 8 下已实测强杀原主、原生备库提升、复用快照继续投递，以及误指回旧主时保留新时间线断点并拒绝续传。测试参数为 `--source-image postgres:17.12 --failover`，追加 `--reject-old-primary` 可复现旧主路由拒绝。负载均衡产品、级联拓扑和其他版本组合单独验收。

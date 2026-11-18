@@ -27,6 +27,17 @@ class PgOutputTest {
         assertThrows(IllegalArgumentException.class,()->PostgresSourcePosition.parse("0/100000000"));
     }
 
+    @Test void promotedTimelineAdmitsOnlyTheSharedPrefix(){
+        PostgresSourcePosition current=new PostgresSourcePosition("cluster","729911","4","rm_slot",
+                PostgresSourcePosition.history("1\t0/1000\tfirst promotion\n3\t0/3000\tsecond promotion\n","4"));
+        PostgresSourcePosition original=new PostgresSourcePosition("cluster","729911","1","rm_slot");
+        PostgresSourcePosition sibling=new PostgresSourcePosition("cluster","729911","2","rm_slot");
+        assertTrue(current.covers(current.at(0x4000),original.at(0x1000)));
+        assertThrows(IllegalArgumentException.class,()->current.lsn(original.at(0x1001)));
+        assertThrows(IllegalArgumentException.class,()->current.lsn(sibling.at(0x500)));
+        assertThrows(IllegalArgumentException.class,()->PostgresSourcePosition.history("1 0/3000\n3 0/1000","4"));
+    }
+
     @Test void pgoutputPublishesOnlyCompleteTransactionsAndChecksRelationMetadata()throws Exception{
         TableSchema table=new TableSchema();
         table.id=TableSchema.identity("database","sales","items");

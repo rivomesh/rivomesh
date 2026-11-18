@@ -151,3 +151,7 @@ Artifact `72357d90c1d87d99fbdf767927a0ca122286df7c7f3defc60f9abd21622b898c` pass
 ## Bilingual deployment and maintenance reference
 
 Combined guide SHA-256 `32cad011e732673d4e33857945269cee8b81933f082cb3a15584a8d53df6797e`. Both languages document Linux, Docker, Helm and native Kubernetes examples for standalone and separated execution, plus node enrollment, an operator-driven drain, stores, secrets, sessions and coordinated backup and upgrade. Both Compose configurations passed render validation. Helm lint passed, and the standalone, Controller A, Controller B and Agent A renders matched their four native files byte for byte. The live Kubernetes evidence above covers separately scoped CSI and interruption tests. [English guide](../en/execution-lifecycle.md) · [中文](../zh-CN/execution-lifecycle.md)
+
+## Native PostgreSQL 17 synchronized-slot promotion
+
+Artifact `49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b` passed 18 focused Java checks and two PostgreSQL 17.12 Java 8 profiles with 8 and 7 native checks. The original primary was killed, the physical standby promoted after validating its synchronized slot, and the writer endpoint routed to the standby. Delivery resumed automatically from the prior WAL position with the same snapshot IDs. The two profiles then refused a lost slot and a route back to the earlier primary, retaining the latest journal position. [Operations and reproduction](../en/postgresql-source.md) · [Manifests](baseline.json)

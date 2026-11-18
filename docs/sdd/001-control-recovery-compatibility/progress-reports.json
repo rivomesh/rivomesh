@@ -58,7 +58,8 @@
     "DO-04 accepted. Bilingual connector/JDK/API reference ties the actual source and destination profiles to exact evidence, request examples and upgrade boundaries.",
     "SO-06 PostgreSQL 18.7 to 17.12 passed 8 native checks including stored generated columns, and 17.12 passed 7 native regression checks on the same Java 8 artifact.",
     "JV-02 PostgreSQL 18.7 stored generated case group passed all 40 native checks across Java 8, 11, 17, 21 and 25 on one artifact.",
-    "DO-02 accepted. Bilingual standalone and multi-node deployment paths, secret/TLS, drain, backup and upgrade guidance passed link, Compose and four Helm/native parity checks."
+    "DO-02 accepted. Bilingual standalone and multi-node deployment paths, secret/TLS, drain, backup and upgrade guidance passed link, Compose and four Helm/native parity checks.",
+    "SO-06 PostgreSQL 17.12 physical promotion passed native SIGKILL, same-snapshot automatic continuation and refusal of return to the old timeline. The guarded writer endpoint profile is opt-in."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",
