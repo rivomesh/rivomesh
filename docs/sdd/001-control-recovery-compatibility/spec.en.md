@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.32 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.33 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,26 DONE, 22 PARTIAL and 0 NEW, with 22 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,27 DONE, 21 PARTIAL and 0 NEW, with 21 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -83,7 +83,7 @@ Implementation:48requirements,26 DONE, 22 PARTIAL and 0 NEW, with 22 open. RC-01
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | All eight message targets have initial transports. NATS passed three-replica client TLS, election and quorum recovery. Other cluster, capacity and consumer recovery profiles remain. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
-| LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Two live nodes verified both deployment paths, rotation, volume remount, shared-journal takeover and stale Worker fencing. Cross-node CSI relocation remains. |
+| LG-06 | P1 / DONE | Live K8s/CSI and node-fault acceptance | Live ARM64 accepted Helm and native YAML image replacement, same-claim RWO CSI relocation and automatic CDC. Separate native cases cover physical worker loss, Secret rotation, external-journal takeover and stale Writer fencing. |
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | LOCAL and EXTERNAL passed content checks for 100,000 snapshot rows and 120,000 changes per run. Incremental reads are byte-bounded and the BIGINT key scan was fixed. Repeated hardware measurements, oversized transactions and large catalogs remain. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Native Chrome passed login, cookie reload, diagnostic keyboard and accessible name, mobile layout and logout. Full report catalog, scratch cleanup and more workflows remain. |

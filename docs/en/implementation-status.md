@@ -44,7 +44,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Relational targets | MySQL, PostgreSQL and openGauss have native profiles. DM, Kingbase, GBase8c and OceanBase MySQL mode have bounded native transaction and mixed restart profiles. Distributed GaussDB and other vendor modes remain open. |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
 | Messaging | Eight broker profiles use confirmed at-least-once delivery. NATS JetStream passed three-member TLS and quorum recovery. Other cluster and security profiles remain open. |
-| Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes passed RWO remount, rollout, Secret rotation and external-journal stale Worker fencing. Cross-node CSI relocation is under test. |
+| Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
 | Java | Java 8 build baseline. Java 8, 11, 17, 21 and 25 ran together with Controller replacement and drained Agent restart. Broader connector and protocol-version profiles remain open. |
 
 See [design](platform-design.md),[console operations](console-and-deployment.md) and product guides for constraints. Protocol/data-format numbers identify internal modes,not compatibility promises for unreleased builds.

@@ -364,6 +364,20 @@
         "criteriaSha256": "5a26453bc2fb0771ce406d91e1615bb5b5c37959bb66eb819511d6a39e6e7399",
         "profile": "Seven real Chrome checks including PostgreSQL and Oracle task saves; 115 DOM cases; 23 Java focused cases; 25 parsed config examples. Native PostgreSQL 17.12 and Oracle 26ai profiles are linked with their exact separate artifact evidence."
       }
+    },
+    {
+      "id": "LG-06",
+      "title": {
+        "zh-CN": "真实K8s/CSI与节点故障验收",
+        "en": "Live K8s/CSI and node-fault acceptance"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
+        "archive": "docs/verification/README.md",
+        "profile": "Kubernetes v1.31.0 ARM64; Helm and native YAML each six live checks; NFS CSI 4.13.5 on NFS 4.0; prior hostpath physical outage and external PostgreSQL journal stale-worker fixtures",
+        "criteriaSha256": "50b1324f68fa2877f584a4cacbc5f418ac46c9f6742fe3fb160cd598da8e8689"
+      }
     }
   ],
   "productProfiles": [
@@ -2402,5 +2416,74 @@
       "browser": "Chrome/157.0.8103.79"
     },
     "domPassed": 119
+  },
+  "kubernetesSharedCsiUpgrade": {
+    "nfsCsiVersion": "4.13.5",
+    "nfsProtocol": "4.0",
+    "nfsServer": "Ganesha 6.5",
+    "clusterArchitecture": "arm64",
+    "nodes": 2,
+    "harnessSha256": "e5c92b32a6b0963a66e373f387ec0a6b2c60991404d388bc3d57282e3fb40370",
+    "fixtureSha256": "a7c74e2c3479262e4d3e61928ca2b28d2169c6ebc42bb3ae3452026f0632771c",
+    "manifest": {
+      "serverVersion": "v1.31.0",
+      "storageClass": "rivomesh-shared-csi-v40",
+      "csiDriver": "nfs.csi.k8s.io",
+      "image": "rivomesh:shared-csi-proof",
+      "profiles": {
+        "helm": {
+          "checks": [
+            "cookie login survives refresh and SQL snapshot writes to a dynamically provisioned RWO CSI volume",
+            "scale to zero and back remounts the same CSI volume and resumes without resnapshot",
+            "configuration rollout preserves the task and CSI claim",
+            "Secret rotation rejects the old token after Pod replacement",
+            "Replacing the application image preserves the original volume and snapshot and resumes CDC without START",
+            "The same RWO CSI claim moves to another node and restarts CDC automatically with original snapshot and newer lease"
+          ],
+          "status": "PASS",
+          "node": "rivomesh-shared-volume-m02",
+          "containerImageID": "docker://sha256:5a7e2e9e5997b6802c89f9c3473a6c1d7bff4a94c2568cb9c7fb6d9ff510a955",
+          "artifactSha256": "b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32",
+          "upgrade": {
+            "artifactSha256": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
+            "containerImageID": "docker://sha256:fc07dfba755a1a05d052fbe18ee487616d0a7aa2296c2f0e2882cc90c78b649e",
+            "initialEpoch": 2,
+            "newEpoch": 3
+          },
+          "crossNode": {
+            "before": "rivomesh-shared-volume-m02",
+            "after": "rivomesh-shared-volume",
+            "initialEpoch": 3,
+            "newEpoch": 4
+          }
+        },
+        "native": {
+          "checks": [
+            "cookie login survives refresh and SQL snapshot writes to a dynamically provisioned RWO CSI volume",
+            "scale to zero and back remounts the same CSI volume and resumes without resnapshot",
+            "configuration rollout preserves the task and CSI claim",
+            "Secret rotation rejects the old token after Pod replacement",
+            "Replacing the application image preserves the original volume and snapshot and resumes CDC without START",
+            "The same RWO CSI claim moves to another node and restarts CDC automatically with original snapshot and newer lease"
+          ],
+          "status": "PASS",
+          "node": "rivomesh-shared-volume-m02",
+          "containerImageID": "docker://sha256:5a7e2e9e5997b6802c89f9c3473a6c1d7bff4a94c2568cb9c7fb6d9ff510a955",
+          "artifactSha256": "b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32",
+          "upgrade": {
+            "artifactSha256": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
+            "containerImageID": "docker://sha256:fc07dfba755a1a05d052fbe18ee487616d0a7aa2296c2f0e2882cc90c78b649e",
+            "initialEpoch": 2,
+            "newEpoch": 3
+          },
+          "crossNode": {
+            "before": "rivomesh-shared-volume-m02",
+            "after": "rivomesh-shared-volume",
+            "initialEpoch": 3,
+            "newEpoch": 4
+          }
+        }
+      }
+    }
   }
 }

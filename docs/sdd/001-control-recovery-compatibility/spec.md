@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.32 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.33 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，26项DONE、22项PARTIAL、0项NEW，余22项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，27项DONE、21项PARTIAL、0项NEW，余21项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -83,7 +83,7 @@ RM-SDD-001 · v0.32 · 2026-11-18 · IMPLEMENTING
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | 八种消息目标已有首批传输。NATS 三副本 TLS、选主与多数派恢复通过；其他产品和完整容量、消费恢复仍待验收。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
-| LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 双节点实测两种部署、轮换、原卷重挂及外部日志接管与旧 Worker 隔离。跨节点 CSI 卷迁移待验收。 |
+| LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
 | LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 原生 Chrome 已通过登录、刷新续登、诊断键盘与无障碍名称、移动端布局和退出。完整报告目录、scratch 清理和其他工作流仍待完成。 |

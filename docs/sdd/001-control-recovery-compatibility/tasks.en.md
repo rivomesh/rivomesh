@@ -152,7 +152,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05
-- [ ] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
+- [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06
 - [ ] T-LG-07 · Large catalogs,transactions and hardware standards · P1 · Depends on: JV-02, LG-05

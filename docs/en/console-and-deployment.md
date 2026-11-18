@@ -169,7 +169,7 @@ Optional protocol5 adds administrator evidence creation,raw/normalized pages and
 
 ### Two-node live verification
 
-The same ARM64 build passed Helm and native YAML on two-node Kubernetes v1.31.0. Each format verified cookie login after refresh, initial delivery, remount of the same RWO CSI volume, incremental recovery, configuration rollout and Secret rotation. The profile uses node-local `hostpath.csi.k8s.io`. LG-06 still tracks cross-node CSI and stale-owner fencing.
+The same ARM64 build passed Helm and native YAML on two-node Kubernetes v1.31.0. Each format verified cookie login after refresh, initial delivery, remount of the same RWO CSI volume, incremental recovery, configuration rollout and Secret rotation. The node-local profile uses `hostpath.csi.k8s.io`. The shared NFS CSI profile also verified a replacement application image and same-claim relocation to another live node without resnapshot or manual START.
 
 Load the candidate image on every node of a disposable cluster and enable `csi-hostpath-driver`. The runner creates and deletes namespaces with unique names.
 
@@ -177,6 +177,17 @@ Load the candidate image on every node of a disposable cluster and enable `csi-h
 python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
   --image rivomesh:0.1.0-SNAPSHOT --output target/kubernetes-proof
 ```
+
+For the shared volume profile, provide a StorageClass that can attach a ReadWriteOnce volume to either node sequentially. Load both images on every node. The isolated [NFS fixture](../../tests/kubernetes-nfs-fixture.yaml) uses a Ganesha service and temporary storage. Install the [NFS CSI driver](https://github.com/kubernetes-csi/csi-driver-nfs) and create a StorageClass with provisioner `nfs.csi.k8s.io`, the Service ClusterIP as `parameters.server`, `parameters.share: /` and the tested mount option `nfsvers=4.0`.
+
+```sh
+python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
+  --storage-class rivomesh-shared --csi-driver nfs.csi.k8s.io \
+  --image rivomesh:before --upgrade-image rivomesh:after --cross-node \
+  --output target/kubernetes-shared-proof
+```
+
+For a planned move, confirm the old Pod has exited before attaching its claim on the new node. Keep the claim UID, PV backing volume and application configuration. Verify the original snapshot ID, a newer lease and incremental delivery before declaring recovery. An external journal can fence concurrent Workers. Agent handoff to a different private directory has separate requirements.
 
 See the [verification record](../verification/README.md#lg-06-live-kubernetes-rwo-csi).
 

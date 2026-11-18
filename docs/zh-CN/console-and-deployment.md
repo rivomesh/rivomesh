@@ -169,7 +169,7 @@ Doris向导分别配置SQL和Stream Load HTTP入口、重定向白名单、副�
 
 ### 双节点 K8s 实库复验
 
-已在 ARM64、双节点 Kubernetes v1.31.0 用同一构建分别测试 Helm 与原生 YAML。每种方式验证浏览器刷新保留登录、初始同步、RWO CSI 同卷重挂、停机期间增量追赶、配置滚动替换和 Secret 轮换。使用的是节点本地 `hostpath.csi.k8s.io`。跨节点卷挂载和旧执行所有者隔离继续由 LG-06 跟踪。
+已在 ARM64、双节点 Kubernetes v1.31.0 用同一构建分别测试 Helm 与原生 YAML。每种方式验证浏览器刷新保留登录、初始同步、RWO CSI 同卷重挂、停机期间增量追赶、配置滚动替换和 Secret 轮换。节点本地档案使用 `hostpath.csi.k8s.io`。共享 NFS CSI 档案还通过了应用镜像替换和跨节点重挂原卷，两种部署均保留原快照并自动续传。
 
 将待验收镜像加载到隔离集群的所有节点，启用 `csi-hostpath-driver`，再执行下列命令。测试会创建并清理带随机名称的命名空间。
 
@@ -177,6 +177,17 @@ Doris向导分别配置SQL和Stream Load HTTP入口、重定向白名单、副�
 python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
   --image rivomesh:0.1.0-SNAPSHOT --output target/kubernetes-proof
 ```
+
+复验共享卷时，准备可在两个节点先后挂载 ReadWriteOnce 卷的 StorageClass，并将升级前后的镜像都加载到各节点。隔离环境的 [NFS 测试配置](../../tests/kubernetes-nfs-fixture.yaml) 使用 Ganesha 服务和临时目录。安装 [NFS CSI 驱动](https://github.com/kubernetes-csi/csi-driver-nfs)，配置 StorageClass 的 provisioner 为 `nfs.csi.k8s.io`，`parameters.server` 填该服务的 ClusterIP，`parameters.share` 填 `/`，挂载参数使用实测的 `nfsvers=4.0`。
+
+```sh
+python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
+  --storage-class rivomesh-shared --csi-driver nfs.csi.k8s.io \
+  --image rivomesh:before --upgrade-image rivomesh:after --cross-node \
+  --output target/kubernetes-shared-proof
+```
+
+计划迁移时，先确认旧 Pod 已退出，再在新节点挂回原 Claim。保留 Claim UID、PV 后端和应用配置，核对原快照标识、新租约及实际增量投递。外部日志可隔离仍存活的旧 Worker。切换到另一份 Agent 私有目录需要单独处理。
 
 见[复验记录](../verification/README.md#lg-06-live-kubernetes-rwo-csi)。
 

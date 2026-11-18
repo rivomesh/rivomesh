@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.32",
+  "version": "0.33",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1495,14 +1495,14 @@
       "id": "LG-06",
       "epic": "CARRYOVER",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "真实K8s/CSI与节点故障验收",
         "en": "Live K8s/CSI and node-fault acceptance"
       },
       "gap": {
-        "zh-CN": "双节点实测两种部署、轮换、原卷重挂及外部日志接管与旧 Worker 隔离。跨节点 CSI 卷迁移待验收。",
-        "en": "Two live nodes verified both deployment paths, rotation, volume remount, shared-journal takeover and stale Worker fencing. Cross-node CSI relocation remains."
+        "zh-CN": "双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。",
+        "en": "Live ARM64 accepted Helm and native YAML image replacement, same-claim RWO CSI relocation and automatic CDC. Separate native cases cover physical worker loss, Secret rotation, external-journal takeover and stale Writer fencing."
       },
       "acceptance": {
         "zh-CN": "在真实集群验证升级、扩缩、Pod/节点故障、RWO/CSI挂载重连、Secret轮换及旧owner隔离，发布实际配置和证据。",
@@ -1515,10 +1515,17 @@
       ],
       "evidence": [
         "tests/kubernetes-csi-runtime.py",
+        "tests/kubernetes-nfs-fixture.yaml",
         "docs/en/console-and-deployment.md",
         "docs/zh-CN/console-and-deployment.md",
         "docs/verification/baseline.json"
-      ]
+      ],
+      "verification": {
+        "artifactSha256": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
+        "archive": "docs/verification/README.md",
+        "profile": "Kubernetes v1.31.0 ARM64; Helm and native YAML each six live checks; NFS CSI 4.13.5 on NFS 4.0; prior hostpath physical outage and external PostgreSQL journal stale-worker fixtures",
+        "criteriaSha256": "50b1324f68fa2877f584a4cacbc5f418ac46c9f6742fe3fb160cd598da8e8689"
+      }
     },
     {
       "id": "LG-07",

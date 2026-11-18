@@ -125,11 +125,11 @@ def profile(options, mode, record):
         return json.loads(kube('get', 'pods', '-l', 'app.kubernetes.io/name=rivomesh',
                                '-o', 'json'))['items'][0]
 
-    def artifact_hash():
+    def artifact_hash(expected):
         digest = kube('exec', 'deployment/rivomesh', '--', 'sha256sum', '/app/rivomesh.jar').split()[0]
         assert re.fullmatch('[a-f0-9]{64}', digest), 'Invalid runtime artifact hash'
-        if options.artifact_sha256:
-            assert options.artifact_sha256 == digest, 'Running JAR differs from the candidate'
+        if expected:
+            assert expected == digest, 'Running JAR differs from the candidate'
         return digest
 
     def volume():
@@ -139,8 +139,8 @@ def profile(options, mode, record):
         assert pvc['spec']['accessModes'] == ['ReadWriteOnce']
         return pvc['metadata']['uid'], pv['spec']['csi']['volumeHandle']
 
-    def deploy(heap):
-        repository, tag = options.image.rsplit(':', 1)
+    def deploy(heap, image):
+        repository, tag = image.rsplit(':', 1)
         if mode == 'helm':
             command('helm', '--kube-context', options.context, '-n', namespace,
                     'upgrade', '--install', 'rivomesh', str(CHART),
@@ -155,7 +155,7 @@ def profile(options, mode, record):
                 deployment = {
                     'apiVersion': 'apps/v1', 'kind': 'Deployment', 'metadata': {'name': 'rivomesh'},
                     'spec': {'template': {'spec': {'containers': [
-                        {'name': 'rivomesh', 'image': options.image,
+                        {'name': 'rivomesh', 'image': image,
                          'env': [{'name': 'JAVA_TOOL_OPTIONS', 'value': f'-Xmx{heap}m'}]}
                     ]}}}
                 }
@@ -246,12 +246,12 @@ def profile(options, mode, record):
         sql('postgres', """CREATE SCHEMA sales; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,label TEXT);
             ALTER TABLE sales.items REPLICA IDENTITY FULL; INSERT INTO sales.items VALUES(1,'snapshot');
             CREATE PUBLICATION rive_test FOR TABLE sales.items WITH (publish='insert,update,delete')""")
-        deploy(512)
+        deploy(512, options.image)
         first = volume()
         original_pod = pod()
         record['node'] = original_pod['spec']['nodeName']
         record['containerImageID'] = original_pod['status']['containerStatuses'][0]['imageID']
-        record['artifactSha256'] = artifact_hash()
+        record['artifactSha256'] = artifact_hash(options.artifact_sha256)
         with forward(client, original_pod['metadata']['name']) as base:
             wait(lambda: request(base, '/api/session', token), 'console authentication')
             session = request(base, '/api/session', token, issue_cookie=True)
@@ -280,7 +280,7 @@ def profile(options, mode, record):
         observe('scale to zero and back remounts the same CSI volume and resumes without resnapshot')
 
         previous = pod()['metadata']['uid']
-        deploy(640)
+        deploy(640, options.image)
         assert volume() == first and pod()['metadata']['uid'] != previous
         with forward(client, pod()['metadata']['name']) as base:
             wait(lambda: request(base, '/api/session', token), 'console after configuration rollout')
@@ -295,6 +295,79 @@ def profile(options, mode, record):
             wait(lambda: request(base, '/api/session', rotated), 'rotated API token')
             request(base, '/api/session', token, expected=401)
         observe('Secret rotation rejects the old token after Pod replacement')
+
+        token = rotated
+        previous_label = 'offline'
+        expected_artifact = record['artifactSha256']
+        if options.upgrade_image:
+            previous = pod()
+            with forward(client, previous['metadata']['name']) as base:
+                before = wait(lambda: view(base)['status'].get('capture_lsn') and view(base),
+                              'capture position before image replacement')
+                assert before['desired'] == 'RUNNING'
+            deploy(640, options.upgrade_image)
+            replacement = pod()
+            assert replacement['metadata']['uid'] != previous['metadata']['uid']
+            assert volume() == first and snapshot() == initial
+            expected_artifact = artifact_hash(options.upgrade_artifact_sha256)
+            assert expected_artifact != record['artifactSha256']
+            previous_label = 'upgraded'
+            sql('postgres', "UPDATE sales.items SET label='upgraded' WHERE id=1")
+            wait(lambda: sql('sync_test', 'SELECT label FROM copy_sales.items') == previous_label,
+                 'incremental delivery after the image replacement')
+            with forward(client, replacement['metadata']['name']) as base:
+                def upgraded_capture():
+                    current = view(base)
+                    status = current['status']
+                    return current if (status.get('epoch', -1) > before['status']['epoch']
+                                       and status.get('capture_lsn')
+                                       and status['capture_lsn'] != before['status']['capture_lsn']) else None
+                after = wait(upgraded_capture, 'new lease and capture position after image replacement')
+                assert after['desired'] == 'RUNNING'
+            assert snapshot() == initial
+            record['upgrade'] = {
+                'artifactSha256': expected_artifact,
+                'containerImageID': replacement['status']['containerStatuses'][0]['imageID'],
+                'initialEpoch': before['status']['epoch'], 'newEpoch': after['status']['epoch'],
+            }
+            observe('Replacing the application image preserves the original volume and snapshot and resumes CDC without START')
+
+        if options.cross_node:
+            previous=pod()
+            old_node=previous['spec']['nodeName']
+            peers=json.loads(command(*cluster,'get','nodes','-o','json'))['items']
+            candidates=[node['metadata']['name'] for node in peers if node['metadata']['name']!=old_node
+                        and any(state['type']=='Ready' and state['status']=='True' for state in node['status']['conditions'])]
+            assert candidates, 'A second ready node is required for shared CSI acceptance'
+            next_node=candidates[0]
+            with forward(client,previous['metadata']['name']) as base:
+                before=wait(lambda:view(base)['status'].get('capture_lsn') and view(base), 'existing source position')
+                assert before['desired']=='RUNNING'
+            kube('scale','deployment/rivomesh','--replicas=0')
+            wait(lambda:not kube('get','pod',previous['metadata']['name'],'--ignore-not-found','-o','name'), 'old Pod terminates before move')
+            sql('postgres',"UPDATE sales.items SET label='moved node' WHERE id=1")
+            assert sql('sync_test','SELECT label FROM copy_sales.items')==previous_label
+            update={'spec':{'template':{'spec':{'nodeSelector':{'kubernetes.io/hostname':next_node},
+                    'tolerations':[{'key':'node-role.kubernetes.io/control-plane','operator':'Exists','effect':'NoSchedule'}]}}}}
+            kube('patch','deployment/rivomesh','--type=merge','-p',json.dumps(update))
+            kube('scale','deployment/rivomesh','--replicas=1')
+            ready()
+            replacement=pod()
+            assert replacement['metadata']['uid']!=previous['metadata']['uid'] and replacement['spec']['nodeName']==next_node
+            assert volume()==first
+            wait(lambda:sql('sync_test','SELECT label FROM copy_sales.items')=='moved node','native CDC resumes automatically on the second node')
+            assert snapshot()==initial
+            with forward(client,replacement['metadata']['name']) as base:
+                def moved_capture():
+                    current = view(base)
+                    status = current['status']
+                    return current if (status.get('epoch',-1)>before['status']['epoch']
+                                       and status.get('capture_lsn')
+                                       and status['capture_lsn']!=before['status']['capture_lsn']) else None
+                after=wait(moved_capture, 'new lease and capture position on the second node')
+                assert after['desired']=='RUNNING'
+            record['crossNode']={'before':old_node,'after':next_node,'initialEpoch':before['status']['epoch'],'newEpoch':after['status']['epoch']}
+            observe('The same RWO CSI claim moves to another node and restarts CDC automatically with original snapshot and newer lease')
 
         if worker:
             token = rotated
@@ -323,7 +396,7 @@ def profile(options, mode, record):
                                and view(base)['status'], 'lease epoch advances')
                 assert resumed['capture_lsn'] != before['capture_lsn']
             observe('worker-node outage retains the local CSI volume and CDC resumes under a newer lease')
-        assert artifact_hash() == record['artifactSha256'], 'Runtime artifact changed during the fixture'
+        assert artifact_hash(expected_artifact) == expected_artifact
         record['status'] = 'PASS'
     except Exception as failure:
         details = [str(failure)]
@@ -482,16 +555,24 @@ def main():
     parser.add_argument('--context', required=True, help='Explicit context for the disposable test cluster')
     parser.add_argument('--image', default='rivomesh:0.1.0-SNAPSHOT')
     parser.add_argument('--artifact-sha256', help='Verify the actual JAR in each live deployment')
+    parser.add_argument('--upgrade-image', help='Replace the application with a second loaded image on the same CSI volume')
+    parser.add_argument('--upgrade-artifact-sha256', help='Expected SHA-256 of the replacement image JAR')
     parser.add_argument('--storage-class', default='csi-hostpath-sc')
     parser.add_argument('--csi-driver', default='hostpath.csi.k8s.io')
     parser.add_argument('--worker-outage-node', help='Also stop and restart a worker in the named disposable Minikube profile')
+    parser.add_argument('--cross-node', action='store_true', help='Drain and move the same RWO workload across two nodes using shared CSI')
     parser.add_argument('--external-fence', action='store_true', help='Validate two-node external-journal takeover from a frozen live Worker')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     if options.artifact_sha256 and not re.fullmatch('[a-f0-9]{64}',options.artifact_sha256):
         parser.error('Invalid artifact SHA-256')
-    if options.external_fence and options.worker_outage_node:
-        parser.error('Run the separate outage and external-fence profiles independently')
+    if options.upgrade_image and (options.external_fence or options.worker_outage_node):
+        parser.error('Run image replacement independently of the fencing and physical outage cases')
+    if options.upgrade_artifact_sha256 and (not options.upgrade_image or not re.fullmatch(
+            '[a-f0-9]{64}', options.upgrade_artifact_sha256)):
+        parser.error('Specify an upgrade image and a valid replacement artifact SHA-256')
+    if sum(bool(profile) for profile in (options.external_fence, options.worker_outage_node, options.cross_node))>1:
+        parser.error('Run the node outage, external fence and shared CSI relocation independently')
     if options.worker_outage_node:
         kube = ['kubectl', '--context', options.context]
         worker = json.loads(command(*kube, 'get', 'node', options.worker_outage_node, '-o', 'json'))
