@@ -3,6 +3,7 @@ package io.github.rivomesh;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.cdc.TableSchema;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -65,10 +66,15 @@ final class OracleSourceProbe {
         try(Connection root=settings.root.connect();Connection pdb=settings.pdb.connect()){
             Authority anchor=authority(root,settings.pdbName);
             verifyPdb(pdb,settings.pdbName,anchor);
-            Map<String,Object> archive=settings.archiveWindow==null?null:
+            OracleArchiveWindow.Coverage archive=settings.archiveWindow==null?null:
                     settings.archiveWindow.inspect(root,anchor.resetlogsScn,anchor.currentScn);
             List<Map<String,Object>> tables=new ArrayList<>();
             for(String qualified:unique)tables.add(verifyFlashback(pdb,qualified,anchor.currentScn));
+            if(archive!=null&&settings.archiveWindow.decodeCommitted){
+                Map<String,TableSchema> selected=new LinkedHashMap<>();
+                for(String qualified:unique)selected.put(qualified,redoSchema(pdb,settings.pdbName,qualified));
+                archive.summary.put("decoded",OracleArchiveRead.inspect(root,settings.pdbName,archive,selected));
+            }
             Authority current=authority(root,settings.pdbName);
             if(!anchor.databaseId.equals(current.databaseId)||!anchor.resetlogsScn.equals(current.resetlogsScn)
                     ||!anchor.pdbGuid.equals(current.pdbGuid))
@@ -84,7 +90,7 @@ final class OracleSourceProbe {
             result.put("pdb",settings.pdbName);
             result.put("snapshotAnchor",new SourcePosition(1,"ORACLE",settings.sourceId,cursor));
             result.put("tables",tables);
-            if(archive!=null)result.put("archiveWindow",archive);
+            if(archive!=null)result.put("archiveWindow",archive.summary);
             return result;
         }
     }
@@ -163,6 +169,46 @@ final class OracleSourceProbe {
         result.put("primaryKey",primaryKey);
         result.put("containsRows",containsRows);
         return result;
+    }
+
+    private static TableSchema redoSchema(Connection pdb,String pdbName,String qualified)throws Exception{
+        String[] names=qualified.split("\\.",2);
+        TableSchema schema=new TableSchema();
+        schema.database=names[0];
+        schema.name=names[1];
+        schema.id=TableSchema.identity(pdbName,names[0],names[1]);
+        schema.sourceEngine="ORACLE";
+        try(PreparedStatement query=pdb.prepareStatement("SELECT column_name,data_type,data_precision,data_scale,char_length,nullable,"
+                +"virtual_column FROM all_tab_cols WHERE owner=? AND table_name=? AND hidden_column='NO' ORDER BY column_id")){
+            query.setQueryTimeout(QUERY_SECONDS);
+            query.setString(1,names[0]);query.setString(2,names[1]);
+            try(ResultSet rows=query.executeQuery()){
+                while(rows.next()){
+                    if(!"NO".equals(rows.getString(7)))throw new IllegalStateException("ORACLE_VIRTUAL_COLUMN_REQUIRES_PROFILE");
+                    TableSchema.Column column=new TableSchema.Column();
+                    column.name=rows.getString(1);
+                    column.sourceType=rows.getString(2);
+                    column.nullable="Y".equals(rows.getString(6));
+                    switch(column.sourceType){
+                        case "NUMBER":
+                            column.precision=rows.getInt(3);
+                            column.scale=rows.getInt(4);
+                            if(column.precision<1||column.precision>38||column.scale<0||column.scale>column.precision)
+                                throw new IllegalStateException("ORACLE_NUMBER_REQUIRES_PROFILE");
+                            column.type=column.scale==0&&column.precision<=18?TableSchema.Type.INT64:TableSchema.Type.DECIMAL;
+                            break;
+                        case "VARCHAR2":
+                            column.type=TableSchema.Type.STRING;
+                            column.length=rows.getLong(5);
+                            break;
+                        default:throw new IllegalStateException("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
+                    }
+                    schema.columns.add(column);
+                }
+            }
+        }
+        schema.validate();
+        return schema;
     }
 
     private static String unsigned(String value){

@@ -95,6 +95,9 @@ def main():
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_keyless TO C##RIVO_PROBE;
             """)
         if options.logminer:
+            sql("""GRANT LOGMINING TO C##RIVO_PROBE;
+                GRANT EXECUTE ON sys.dbms_logmnr TO C##RIVO_PROBE;
+                GRANT SELECT ON sys.v_$logmnr_contents TO C##RIVO_PROBE;""")
             sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                 ALTER TABLE rivo_app.rivo_orders ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
                 ALTER TABLE rivo_app.rivo_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
@@ -198,6 +201,14 @@ def main():
                 assert coverage['kind']=='CATALOG_CONTIGUOUS'
                 assert coverage['startScn']==scn and coverage['endScnExclusive']==end and coverage['segments']>0
                 observed('One Oracle redo thread has continuous catalog coverage for the retained SCN window')
+                document['archiveWindow']['decodeCommitted'] = True
+                profile.write_text(json.dumps(document))
+                typed = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
+                assert typed['committedTransactions']==1 and typed['operations']=={'UPDATE':1,'DELETE':1}
+                assert len(typed['contentSha256'])==64
+                replayed = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
+                assert replayed==typed
+                observed('The Java probe decodes one committed Oracle transaction and repeats the same typed content hash')
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(3,'outside archives');
                     COMMIT;""")

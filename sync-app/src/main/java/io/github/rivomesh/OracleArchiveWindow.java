@@ -6,18 +6,29 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Establishes continuous archived redo coverage in a single Oracle redo thread. */
 final class OracleArchiveWindow {
     public String startScn,endScnExclusive;
+    public boolean decodeCommitted;
 
-    Map<String,Object> inspect(Connection root,String incarnationScn,String currentScn)throws Exception{
+    static final class Coverage {
+        final BigInteger start,end;
+        final Map<String,Object> summary=new LinkedHashMap<>();
+        final List<String> files=new ArrayList<>();
+        Coverage(BigInteger start,BigInteger end){this.start=start;this.end=end;}
+    }
+
+    Coverage inspect(Connection root,String incarnationScn,String currentScn)throws Exception{
         BigInteger start=scn(startScn);
         BigInteger end=scn(endScnExclusive);
         if(start.compareTo(end)>=0||end.compareTo(scn(currentScn))>0)
             throw new IllegalArgumentException("ORACLE_ARCHIVE_WINDOW_INVALID");
+        Coverage result=new Coverage(start,end);
         int thread;
         try(Statement query=root.createStatement()){
             query.setQueryTimeout(20);
@@ -29,10 +40,10 @@ final class OracleArchiveWindow {
         }
         BigInteger covered=start;
         long archives=0;
-        try(PreparedStatement query=root.prepareStatement("SELECT first_change#,next_change# "
+        try(PreparedStatement query=root.prepareStatement("SELECT first_change#,next_change#,name "
                 +"FROM v$archived_log WHERE thread#=? AND resetlogs_change#=? "
                 +"AND archived='YES' AND status='A' AND deleted='NO' AND name IS NOT NULL "
-                +"AND first_change#<? AND next_change#>? ORDER BY first_change#,next_change# DESC")){
+                +"AND first_change#<? AND next_change#>? ORDER BY first_change#,next_change# DESC,name")){
             query.setQueryTimeout(20);
             query.setFetchSize(256);
             query.setInt(1,thread);
@@ -47,17 +58,20 @@ final class OracleArchiveWindow {
                     if(next.compareTo(covered)>0){
                         covered=next;
                         archives++;
+                        if(decodeCommitted){
+                            if(archives>1024)throw new IllegalStateException("ORACLE_ARCHIVE_FILE_LIMIT");
+                            result.files.add(rows.getString(3));
+                        }
                     }
                 }
             }
         }
         if(covered.compareTo(end)<0)throw new IllegalStateException("ORACLE_ARCHIVE_LOG_GAP");
-        Map<String,Object> result=new LinkedHashMap<>();
-        result.put("kind","CATALOG_CONTIGUOUS");
-        result.put("thread",thread);
-        result.put("startScn",startScn);
-        result.put("endScnExclusive",endScnExclusive);
-        result.put("segments",archives);
+        result.summary.put("kind","CATALOG_CONTIGUOUS");
+        result.summary.put("thread",thread);
+        result.summary.put("startScn",startScn);
+        result.summary.put("endScnExclusive",endScnExclusive);
+        result.summary.put("segments",archives);
         return result;
     }
 

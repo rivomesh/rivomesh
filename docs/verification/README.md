@@ -127,3 +127,7 @@ JAR `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` and Cyclo
 ## Oracle archive coverage
 
 Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` passed seven Oracle Free 23.26.4.0.0 Java 8 checks. The probe returned a contiguous catalog interval after archive rotation and refused a wider interval containing unarchived changes. The separate LogMiner test confirmed committed transaction contents from actual redo.
+
+## Oracle typed archived changes
+
+Oracle Free 23.26.4.0.0 ARM64 on Java 8 passed eight native checks on artifact `a59076b9c8d364a47a2848a59179ca70b05ceae8b52e655427f9d15ae3e0404e`. The scoped JDBC account opened the archived files with LogMiner. The same Oracle update and keyless delete decoded into one typed transaction with identical content hashes on two reads. A rolled-back insert stayed outside the committed set and the unarchived suffix was refused. See the [native fixture](../../tests/oracle-source-probe.py) and [manifest](baseline.json).

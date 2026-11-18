@@ -34,7 +34,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-04 | SO-04 | 提供可复现8.2夹具/真实环境、版本探测、连接认证、状态命令、binlog事件和首个完整同步/恢复矩阵；不能只增加版本字符串或通过JDBC连接。 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | 在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。 | [PASS · MySQL 8.4.13](../../verification/README.md) |
 | AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收 |
-| AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 部分验收（SCN 预检实库） |
+| AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 部分验收（SCN、归档覆盖和有类型变更实库） |
 | AC-JV-01 | JV-01 | 同一候选版本的控制器/Agent/Worker分别在五个JDK实际启动，报告真实JVM版本、包SHA、架构与所用依赖；Java8代码级别和驱动运行要求可核验。 | [PASS · Five JDKs](../../verification/README.md) |
 | AC-JV-02 | JV-02 | 每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。 | 待验收 |
 | AC-JV-03 | JV-03 | 验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。 | 待验收 |

@@ -53,7 +53,8 @@
   "newSinceLastReport": [
     "DO-03 accepted. Bilingual recovery runbook covers source, targets, distributed control, storage, browser sessions and manual repair with scoped operations.",
     "LG-10 contribution guide and actual CycloneDX/JAR inventory published. The run found 175 Maven components, 109 embedded coordinates and two vendored binary markers.",
-    "SO-07 Oracle archive coverage passed seven native checks. Catalog range validation rejects an unarchived SCN suffix."
+    "SO-07 Oracle archive coverage passed seven native checks. Catalog range validation rejects an unarchived SCN suffix.",
+    "SO-07 Oracle 26ai Java 8 passed eight native checks on a frozen artifact, including repeatable typed decoding of committed archive changes."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

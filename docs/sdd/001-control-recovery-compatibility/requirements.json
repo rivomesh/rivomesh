@@ -1016,8 +1016,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 已实测 SCN 快照、归档 LogMiner 提交/回滚和单线程归档连续性检查。未知归档区间被拒绝；生产事务流、断点和 RAC 待实现。",
-        "en": "Oracle 26ai passed SCN flashback, archived LogMiner commit/rollback and single-thread archive coverage. Uncovered windows are refused; production CDC/checkpoints and RAC remain."
+        "zh-CN": "Oracle 26ai 已实测 SCN 快照、单线程归档覆盖、提交事务的有类型变更解码和重复读取内容校验。自动投递、持久断点与 RAC 待实现。",
+        "en": "Oracle 26ai passed SCN flashback, single-thread archive coverage and typed decoding with identical committed content on replay. Automatic delivery, durable checkpoints and RAC remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1033,7 +1033,8 @@
         "docs/zh-CN/oracle-source.md",
         "tests/oracle-source-probe.py",
         "docs/verification/baseline.json",
-        "sync-app/src/main/java/io/github/rivomesh/OracleArchiveWindow.java"
+        "sync-app/src/main/java/io/github/rivomesh/OracleArchiveWindow.java",
+        "sync-app/src/main/java/io/github/rivomesh/OracleArchiveRead.java"
       ]
     },
     {
