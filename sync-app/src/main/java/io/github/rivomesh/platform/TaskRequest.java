@@ -15,6 +15,7 @@ final class TaskRequest {
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
+    public String placement;
     public JsonNode document;
     public long errorCount=-1;
     public int limit=50;
@@ -34,6 +35,8 @@ final class TaskRequest {
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
         if(kind==null)throw new IllegalArgumentException("TASK_REQUEST_KIND_REQUIRED");
         if(ownerNodeId!=null&&!ownerNodeId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))throw new IllegalArgumentException("TASK_OWNER_INVALID");
+        if(placement!=null&&(kind!=Kind.CREATE||!"AUTO".equals(placement)||ownerNodeId!=null))
+            throw new IllegalArgumentException("TASK_PLACEMENT_INVALID");
         if(taskId==null&&kind!=Kind.LIST&&kind!=Kind.CREATE
                 ||taskId!=null&&!taskId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
             throw new IllegalArgumentException("TASK_REQUEST_ID_INVALID");

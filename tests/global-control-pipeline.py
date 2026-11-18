@@ -2,6 +2,7 @@
 """Two controller JVMs, real MySQL CDC and PostgreSQL/MySQL targets; isolated fixtures."""
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -22,6 +23,8 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='mysql:8.4', help='MySQL source fixture image or pinned digest')
 parser.add_argument('--source-expected-version', help='Set the source type and optional version check in the fixture task')
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
+parser.add_argument('--automatic-placement', action='store_true',
+                    help='Create live tasks across two separate Agents with capacity-bound automatic placement')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
                     help='Record the Java 21 JVMs used by the live controller, Agent and Worker')
@@ -48,6 +51,8 @@ parser.add_argument('--correction', action='store_true', help='Check administrat
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
+    parser.error('--automatic-placement requires the separate Agent baseline profile')
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
 if args.managed_binlog_evidence and not args.verify_binlog_contents:
@@ -106,7 +111,8 @@ if (args.compensation or args.correction) and not args.separate_execution:
 if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
-members = ('node-a', 'node-b', 'node-worker') if args.separate_execution else ('node-a', 'node-b')
+execution_agents = (owner_node,'node-worker-alt') if args.automatic_placement else (owner_node,) if args.separate_execution else ()
+members = ('node-a','node-b',*execution_agents)
 if args.separate_execution:
     env['RM_GC_STORE_URL'] = 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if args.control_product == 'MYSQL' else 'jdbc:postgresql://store:5432/rivomesh_control'
 checks = []
@@ -115,6 +121,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'harnessSourceSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'executionProfile': 'SEPARATE_AGENT' if args.separate_execution else 'COMBINED',
             'controlProduct': args.control_product,
+            'automaticPlacement': args.automatic_placement,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -157,10 +164,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
     home = Path(temporary)
     home.chmod(0o755 if args.runtime_image else 0o700)  # Optional bind holds ENV references only; actual private state stays in named volumes.
     volumes = {}
+    replica_updates = '--log-slave-updates=ON' if (args.source_expected_version or '').startswith('5.7') else '--log-replica-updates=ON'
     services = {
         'mysql': {'image': args.source_image, 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_DATA}', 'MYSQL_ROOT_HOST': '%'},
                   'command': ['--server-id=1', '--log-bin=mysql-bin', '--binlog-format=ROW', '--binlog-row-image=FULL',
-                              '--gtid-mode=ON', '--enforce-gtid-consistency=ON', '--log-replica-updates=ON']},
+                              '--gtid-mode=ON', '--enforce-gtid-consistency=ON', replica_updates]},
         'mysql-target': {'image': 'mysql:8.4', 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_DATA}', 'MYSQL_ROOT_HOST': '%'},
                          'command': ['--server-id=90']},
         'postgres': {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'sync_test'}}}
@@ -176,6 +184,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               'username': 'postgres', 'password': '${RM_GC_CONTROL}', 'heartbeatMillis': 300, 'leaseMillis': 5000}}
         if args.managed_binlog_evidence:
             config['cluster'].update(heartbeatMillis=1000,leaseMillis=15000)
+        if args.automatic_placement and node in execution_agents:
+            config.update(maxTasks=1,maxRunningTasks=1)
         if args.managed_failure_review or args.compensation or args.correction:
             config['cluster']['recoveryReview'] = True
         if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
@@ -185,11 +195,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.managed_skip or args.compensation or args.correction:
             config['cluster']['recoverySkip'] = True
         if args.separate_execution:
-            config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node == owner_node else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
+            config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node in execution_agents else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
-        services[node] = {'image': 'eclipse-temurin:21-jre-jammy', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if args.separate_execution and node == owner_node else 'serve', '/fixture/' + node + '.json'],
+        services[node] = {'image': 'eclipse-temurin:21-jre-jammy', 'entrypoint': ['java', '-Xmx512m', '-jar', '/app/rivomesh.jar', 'agent' if node in execution_agents else 'serve', '/fixture/' + node + '.json'],
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
@@ -924,8 +934,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             address(node)
             wait(lambda n=node: http(n, '/api/session')['taskControlScope'] == 'GLOBAL', node + ' global admission')
         if args.separate_execution:
-            address(owner_node)
-            wait(lambda: http(owner_node, '/readyz')['status'] == 'UP', 'Agent ready')
+            for agent in execution_agents:
+                address(agent)
+                wait(lambda: http(agent, '/readyz')['status'] == 'UP', 'Agent ready')
             for path in ('/', '/api/session', '/api/tasks', '/api/nodes'):
                 assert http(owner_node, path, expected=404)['code'] == 'AGENT_PROBE_ONLY'
             assert http('node-a', '/api/session')['nodeRole'] == 'CONTROLLER'
@@ -944,7 +955,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         for product, target, url, username in [('POSTGRESQL', 'pg', 'jdbc:postgresql://postgres:5432/sync_test', 'sync_target'), ('MYSQL', 'my', 'jdbc:mysql://mysql-target:3306/?allowPublicKeyRetrieval=true&sslMode=DISABLED', 'root')]:
             document['targets'].append({'id': target, 'product': product, 'url': url, 'username': username, 'password': env['RM_GC_DATA'], 'metadataSchema': 'rm_' + target + '_meta', 'mappings': {'sales': 'rm_' + target + '_sales', 'billing': 'rm_' + target + '_billing'}})
         created = 'gc_create_' + uuid.uuid4().hex
-        http('node-a', '/api/tasks', {'config': document, 'ownerNodeId': owner_node}, request=created, expected=202)
+        body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement else {'ownerNodeId':owner_node})}
+        http('node-a','/api/tasks',body,request=created,expected=202)
         wait(lambda: outcome(created), 'remote create')
         assert task()['ownerNodeId'] == owner_node
         assert task('node-b')['revision'] == task()['revision']
@@ -985,6 +997,46 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.automatic_placement:
+            def candidate(index):
+                alternate=json.loads(json.dumps(document))
+                alternate['pipelineId']='allocated_'+str(index)
+                alternate['source']['serverId']+=index
+                for target in alternate['targets']:
+                    target['metadataSchema']+='_alt'+str(index)
+                    target['mappings']={database:schema+'_alt'+str(index) for database,schema in target['mappings'].items()}
+                return alternate
+            def place(node,index):
+                config=candidate(index)
+                receipt='gc_create_'+uuid.uuid4().hex
+                result=http(node,'/api/tasks',{'config':config,'placement':'AUTO'},request=receipt,expected=(202,409))
+                return config['pipelineId'],receipt,result
+            with ThreadPoolExecutor(max_workers=2) as requests:
+                first=requests.submit(place,'node-a',1)
+                second=requests.submit(place,'node-b',2)
+                outcomes=[first.result(),second.result()]
+            accepted=[(task_id,receipt) for task_id,receipt,result in outcomes if result.get('ownerNodeId')=='node-worker-alt']
+            rejected=[task_id for task_id,_,result in outcomes if result.get('code')=='AGENT_PLACEMENT_UNAVAILABLE']
+            assert len(accepted)==len(rejected)==1
+            task_id,receipt=accepted[0]
+            def assigned():
+                view=http('node-a','/api/tasks/'+task_id)
+                return view if any(op['id']==receipt and op['status']=='SUCCEEDED' for op in view.get('operations',[])) else None
+            assert wait(assigned,'secondary Agent accepts a task')['ownerNodeId']=='node-worker-alt'
+            http('node-b','/api/tasks/'+rejected[0],expected=404)
+            passed('Two controllers race for the second live Agent and reserve its remaining task slot exactly once')
+            assert http('node-a','/api/tasks',{'config':candidate(3),'placement':'AUTO'},expected=409)['code']=='AGENT_PLACEMENT_UNAVAILABLE'
+            http('node-b','/api/tasks/allocated_3',expected=404)
+            passed('When both Agents are full the next automatic request is refused without creating a task')
+            replay=http('node-b','/api/tasks',body,request=created,expected=202)
+            assert replay['ownerNodeId']==owner_node and replay['id']==document['pipelineId']
+            assert http('node-a','/api/tasks',dict(body,ownerNodeId=owner_node),expected=400)['code']=='TASK_PLACEMENT_INVALID'
+            passed('The original request remains assigned after capacity changes and conflicting manual/auto selection is refused')
+            action('STOP')
+            manifest['status']='PASS'
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            print('GLOBAL_CONTROL_AGENT_PLACEMENT_ACCEPTED artifact='+digest)
+            raise SystemExit(0)
         if args.task_views:
             run_task_views()
             action('STOP')

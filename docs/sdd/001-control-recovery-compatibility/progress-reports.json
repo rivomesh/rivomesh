@@ -42,11 +42,12 @@
     "Continue managed Agent relocation and remaining compatibility profiles.",
     "Extend LG-09 report discovery, retention and real browser recovery workflows."
   ],
-  "currentCandidateArtifact": "480c85fa9a20bb1e6d331a360fdefbf4e1b9a9e768aac5c85d13579e2ef06794",
-  "currentCandidateScope": "Temurin 21 report metadata catalog, restart persistence and private scratch cleanup",
+  "currentCandidateArtifact": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+  "currentCandidateScope": "Temurin 21 new-task Agent placement with PostgreSQL and MySQL capacity races",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed.",
-    "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests."
+    "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests.",
+    "CP-04 initial placement raced two Controllers for the last slot with both native control databases. Each profile passed seven cases on one artifact; global UI passed 123 DOM tests. Running-task handoff has a bilingual SDD design."
   ]
 }

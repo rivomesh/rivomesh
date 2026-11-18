@@ -29,13 +29,19 @@ helm upgrade --install rivomesh-global-b deploy/helm/rivomesh --namespace rivome
 
 ## 管理界面与配置
 
-登录响应的 taskControlScope=GLOBAL 表示全局模式。任一入口可分页读取授权任务，展示 owner、节点状态、全局修订、Worker 状态、目标/有效配置和命令结果。创建/导入表单选择实际执行节点；导入表单表示新建任务，不是旧断点迁移工具。节点不可用时状态为 UNKNOWN，不能认为同步进程已停止。
+登录响应的 taskControlScope=GLOBAL 表示全局模式。任一入口可分页读取授权任务，展示 owner、节点状态、全局修订、Worker 状态、目标/有效配置和命令结果。创建和导入可指定执行节点，也可自动分配。导入会创建一份新任务。节点不可用时状态为 UNKNOWN，不能认为同步进程已停止。
 
 创建、编辑、恢复和动作返回 202，只表示共享存储已接受。配置历史区分 desired/active，只有 owner 成功应用才更新有效版本；失败提案保留，旧有效配置继续有效。配置编辑、历史和保密字段引用可跨入口使用。连接预览、原始差异和修复计划等只读操作通过有期限的 owner 查询通道执行，owner 离线时不能完成。完整过滤、全量日志聚合、真实浏览器视觉/可访问性验收仍开放。
 
 全局 maximumTasks/maximumCommands 与每节点 maxTasks/maxRunningTasks 是不同预算。当前默认全局任务上限 10000、活动命令上限 1000，配置范围见示例/Schema；这只是资源保护参数，不是硬件吞吐承诺。查询请求最多 512KiB、响应 1MiB，有效期 1–60 秒；线程池和保留容量均有界。
 
 全局任务列表支持按精确任务 ID 或执行节点 ID 筛选，也可以同时使用两项。`GET /api/tasks?ownerNodeId=agent-a&taskId=orders&limit=20` 先应用当前授权和筛选条件，再计算总数及下一页。使用 `after` 时保持原筛选条件。在任务详情中选择目标可单独查看该目标的状态、SQL 故障及待确认日志事务。积压数是观察时已采集序号与安全覆盖序号的差值，观察过期时隐藏。消费完成及实际时间延迟分别度量。[验收证据](../verification/README.md#global-task-filters-and-destination-backlog)
+
+### 新任务自动分配
+
+创建向导或导入 YAML 时，可选择 **自动分配执行 Agent**。共享控制库在授权范围内选择在线且有任务容量的 Agent，按已分配任务占 `maxTasks` 的比例排序，并在保存任务的同一事务中预留一个槽。API 可向 `POST /api/tasks` 提供配置、`placement: "AUTO"` 和 `X-Request-ID`。指定 Agent 时填写 `ownerNodeId`。
+
+任务列表显示实际分配节点。用相同请求 ID 和配置重试时，返回第一次的分配。出现 `AGENT_PLACEMENT_UNAVAILABLE` 时，检查当前授权范围内的在线节点和任务槽，确保可选节点都具备该任务所需的驱动、密钥引用和网络访问。运行中任务的自动接管由 Agent 交接流程单独追踪。
 
 ## 接受、执行和恢复
 

@@ -138,7 +138,12 @@ public final class ConsoleServer implements AutoCloseable {
                 if(body.hasNonNull("yaml")&&body.get("yaml").isTextual())yaml=body.get("yaml").asText();
                 else if(body.has("config")&&body.get("config").isObject())yaml=new ObjectMapper(new YAMLFactory()).writeValueAsString(body.get("config"));
                 else throw new IllegalArgumentException("CONFIG_REQUIRED");
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.CREATE,null);request.yaml=yaml;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");request.ownerNodeId=body.hasNonNull("ownerNodeId")?body.path("ownerNodeId").asText():null;json(exchange,control.localOnly()?201:202,control.invoke(request,principal));return;
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.CREATE,null);request.yaml=yaml;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");request.ownerNodeId=body.hasNonNull("ownerNodeId")?body.path("ownerNodeId").asText():null;
+                if(body.hasNonNull("placement")){
+                    request.placement=body.path("placement").textValue();
+                    if(request.placement==null)throw new IllegalArgumentException("TASK_PLACEMENT_INVALID");
+                }
+                json(exchange,control.localOnly()?201:202,control.invoke(request,principal));return;
             }
             if(path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")&&!principal.administers()){error(exchange,403,"FORBIDDEN");return;}
             String[] parts=path.split("/");
@@ -222,7 +227,7 @@ public final class ConsoleServer implements AutoCloseable {
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
         catch(IllegalArgumentException e){
             String message=e.getMessage();
-            boolean known=message!=null&&(message.matches("CORRECTION_[A-Z_]+")
+            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("CORRECTION_[A-Z_]+")
                     ||exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message.matches("ACCOUNT_[A-Z_]+"));
             error(exchange,400,known?message:"REQUEST_INVALID");
         }

@@ -232,6 +232,16 @@ final class DurableCommands {
         TaskRequest request=supplied.snapshot();if(request.kind!=TaskRequest.Kind.CREATE)throw new IllegalArgumentException("COMMAND_CREATE_REQUIRED");request.taskId=id;definition(id,request.yaml);
         return tasks.create(id,owner,directory,request.yaml,request.requestId,actor,(c,task,current)->insert(c,task,request,current));
     }
+    GlobalTaskStore.Record allocate(String id,TaskRequest supplied,AccessControl.Principal actor,AgentDirectory agents)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(request.kind!=TaskRequest.Kind.CREATE||!"AUTO".equals(request.placement))
+            throw new IllegalArgumentException("TASK_PLACEMENT_INVALID");
+        request.taskId=id;
+        definition(id,request.yaml);
+        TaskRequest template=request.snapshot();
+        template.placement=null;
+        return tasks.allocate(id,request.yaml,request.requestId,actor,agents,(c,task,current)->insert(c,task,request,current,template));
+    }
     GlobalTaskStore.Record update(String id,String yaml,TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if((request.kind!=TaskRequest.Kind.CONFIG_UPDATE&&request.kind!=TaskRequest.Kind.RESTORE)||!id.equals(request.taskId))throw new IllegalArgumentException("COMMAND_CONFIGURATION_REQUIRED");definition(id,yaml);
         TaskRequest template=request.snapshot();template.kind=TaskRequest.Kind.CONFIG_UPDATE;template.reference=null;template.document=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).readTree(yaml);template.validate();

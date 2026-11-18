@@ -162,3 +162,18 @@ button, input, select, textarea {
     white-space: nowrap;
   }
 }
+
+
+.placement-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.placement-option input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  accent-color: var(--accent);
+}
+.placement-option span {
+  margin: 0;
+}

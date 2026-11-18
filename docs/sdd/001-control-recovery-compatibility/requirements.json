@@ -120,8 +120,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "已在双节点用外部日志验证自动续写及旧 Worker 写入隔离。缺少统一 Agent 调度、远端生命周期、容量与升级验证。",
-        "en": "Two nodes with an external journal passed Worker takeover and stale-writer fencing. Agent placement, remote lifecycle, capacity and upgrades remain open."
+        "zh-CN": "外部日志双节点已验证旧 Worker 隔离。PostgreSQL/MySQL 控制库均实测按授权和剩余任务槽分配新任务。运行任务仍需交接准入、证据可达与自动接管。",
+        "en": "External-journal stale Worker fencing passed. PostgreSQL and MySQL control stores verified initial Agent assignment by grants and capacity. Active Agent handoff, evidence availability and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -135,7 +135,11 @@
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
-        "tests/kubernetes-csi-runtime.py"
+        "tests/kubernetes-csi-runtime.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/AgentDirectory.java",
+        "docs/sdd/001-control-recovery-compatibility/design-agent-handoff.en.md",
+        "docs/sdd/001-control-recovery-compatibility/design-agent-handoff.md",
+        "docs/verification/README.md"
       ]
     },
     {

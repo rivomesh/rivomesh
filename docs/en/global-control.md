@@ -29,13 +29,19 @@ Alternatively adapt and apply the native manifests [A](../../deploy/kubernetes/r
 
 ## UI and configuration
 
-The session field taskControlScope=GLOBAL identifies this profile. Any entry lists authorized tasks with cursor pagination, owner/node state, global revision, Worker state, desired/active configuration and command results. Creation/import forms select the execution node; form import creates a new task and does not migrate old checkpoints. Unavailable owner execution is UNKNOWN, not stopped.
+The session field taskControlScope=GLOBAL identifies this profile. Any entry lists authorized tasks with cursor pagination, owner/node state, global revision, Worker state, desired/active configuration and command results. Creation and import allow a specific execution node or automatic assignment. Import creates a new task. Unavailable owner execution is UNKNOWN, not stopped.
 
 Create/edit/restore/actions return 202 for durable admission only. Configuration history separates desired/active; the active pointer advances after successful owner application. Failed proposals preserve the old active configuration. Masked secret references work across entries. Connection previews, raw differences and repair-plan reads use expiring owner queries and cannot complete while the owner is offline. Managers can read the selected owner’s structured capture events through the diagnostics panel. Full cluster filters and wider browser acceptance remain open.
 
 Global maximumTasks/maximumCommands differ from per-node maxTasks/maxRunningTasks. Defaults are 10000 global tasks and 1000 active commands; configuration ranges are resource guards, not hardware throughput promises. Queries are limited to 512KiB requests, 1MiB responses, 1–60 second lifetime, bounded readers and retained capacity.
 
 Filter the shared task list by exact task ID or execution node ID. Both filters also work together. `GET /api/tasks?ownerNodeId=agent-a&taskId=orders&limit=20` applies account grants and the requested filters before computing the total or next page. Keep the same filters when using `after`. Within a task select a destination to isolate its state, SQL error and pending journal transactions. The count is the difference between captured and safely covered sequence at the observation time. Stale observations hide this count. Consumer completion and wall-clock lag need their own measurements. [Evidence](../verification/README.md#global-task-filters-and-destination-backlog)
+
+### Automatic assignment for new tasks
+
+In the create wizard or YAML import, select **Assign an Agent automatically**. The control store chooses an authorized, live Agent with task capacity. It compares assigned tasks as a share of each Agent's `maxTasks` and reserves the chosen slot in the same transaction that persists the task. Use `placement: "AUTO"` with `POST /api/tasks`, the configuration and an `X-Request-ID`. To choose a specific Agent, send `ownerNodeId`.
+
+The saved task lists its actual owner. A repeat with the same payload and request identity returns that original assignment even when other tasks have filled the cluster. `AGENT_PLACEMENT_UNAVAILABLE` means no permitted healthy Agent has a free task slot. Provision required connector drivers, secret references and network access on eligible Agents. Automatic transfer of a running task is covered by the Agent handoff requirements.
 
 ## Admission and recovery
 

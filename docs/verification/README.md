@@ -232,3 +232,8 @@ The Dockerfile produced nonroot ARM64 image `sha256:7fd83307056d33e6e87b6734de8d
 ### Durable validation report directory
 
 Candidate `480c85fa9a20bb1e6d331a360fdefbf4e1b9a9e768aac5c85d13579e2ef06794` passed nineteen native cases, eight real Chrome cases, 122 DOM tests and 35 focused Java tests. Both Controllers found the same actual validation report after Agent restart and paged its metadata without exposing row contents. The report could still be opened for authorized inspection and repair. The browser exercised the actual catalog endpoint, with DOM coverage for opening a retained report whose operation has aged out. The workspace lock protects active projections, and reopening a report removes abandoned summary staging files. [Report guide](../en/managed-validation.md) · [Manifests](baseline.json)
+
+
+### Capacity-bound Agent assignment
+
+Candidate `cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40` passed seven native cases each with PostgreSQL and MySQL control stores. Two Controllers and two registered Agents used Temurin 21. The first automatically assigned task delivered snapshots and native incremental rows to both SQL destinations. Simultaneous creates from the two entries competed for the remaining slot and only one acquired it. Further creates were refused before a new task appeared. The first request replayed its original owner after both Agents filled. Console DOM coverage passed 123 cases, including the single automatic placement payload. [Global control](../en/global-control.md#automatic-assignment-for-new-tasks) · [Handoff design](../sdd/001-control-recovery-compatibility/design-agent-handoff.en.md) · [Manifests](baseline.json)

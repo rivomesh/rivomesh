@@ -104,13 +104,39 @@ final class GlobalTaskStore {
     }
     Record create(String id,String owner,String directory,String yaml,String request,AccessControl.Principal supplied)throws Exception{return create(id,owner,directory,yaml,request,supplied,null);}
     Record create(String id,String owner,String directory,String yaml,String request,AccessControl.Principal supplied,CommitHook hook)throws Exception{
-        valid(id,"[A-Za-z0-9][A-Za-z0-9._-]{0,127}");valid(owner,"[A-Za-z0-9][A-Za-z0-9._-]{0,63}");valid(directory,"[a-f0-9-]{36}");valid(request,"[A-Za-z0-9_-]{8,128}");String signature="CREATE\n"+id+"\n"+owner+"\n"+directory+"\n"+yaml;
+        if(owner==null||directory==null)throw new IllegalArgumentException("GLOBAL_TASK_REQUEST_INVALID");
+        return create(id,owner,directory,yaml,request,supplied,hook,null);
+    }
+    Record allocate(String id,String yaml,String request,AccessControl.Principal supplied,
+                    AgentDirectory agents,CommitHook hook)throws Exception{
+        return create(id,null,null,yaml,request,supplied,hook,Objects.requireNonNull(agents));
+    }
+    private Record create(String id,String owner,String directory,String yaml,String request,AccessControl.Principal supplied,
+                          CommitHook hook,AgentDirectory agents)throws Exception{
+        valid(id,"[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
+        valid(request,"[A-Za-z0-9_-]{8,128}");
+        boolean automatic=agents!=null;
+        if(!automatic){
+            valid(owner,"[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+            valid(directory,"[a-f0-9-]{36}");
+        }
+        String signature=automatic?"CREATE_AUTO\n"+id+"\n"+yaml
+                :"CREATE\n"+id+"\n"+owner+"\n"+directory+"\n"+yaml;
         try(Connection c=db.connect()){
-            c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);scope(actor,id,owner,true);root(c);
-            if(replay(c,request,signature,id,actor)){Record old=read(c,id);configuration(c,old);c.commit();return old;}
+            if(automatic)c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+            c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);
+            if(!actor.task(id)||!actor.administers())throw new SecurityException("FORBIDDEN");
+            if(!automatic)scope(actor,id,owner,true);
+            root(c);
+            if(replay(c,request,signature,id,actor)){Record old=read(c,id);scope(actor,id,old.owner,true);configuration(c,old);c.commit();return old;}
             long registered;try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();registered=r.getLong(1);if(registered>=maximum)throw new TaskService.Conflict("GLOBAL_TASK_CAPACITY");}
             try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("task_authority")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)!=registered)throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");}
             try{read(c,id);throw new TaskService.Conflict("TASK_ID_EXISTS");}catch(NoSuchElementException absent){/* checked under the authority root lock */}
+            if(automatic){
+                AgentDirectory.Binding chosen=agents.allocate(c,actor);
+                owner=chosen.node;directory=chosen.directory;
+                scope(actor,id,owner,true);
+            }
             Record record=new Record();record.id=id;record.owner=owner;record.directory=directory;record.yaml=yaml;record.revision=UUID.randomUUID().toString();record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=1;
             try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();record.sequence=r.getLong(1)+1;}
             version(c,record,actor);db.update(c,"INSERT INTO "+db.table("task_authority")+" (cluster_id,task_id,owner_id,directory_id,revision,configuration_version,active_version,configuration_index,record_hash,sequence_no) VALUES (?,?,?,?,?,?,?,?,?,?)",cluster,id,owner,directory,record.revision,record.configurationVersion,null,record.configurationIndex,recordSignature(record),record.sequence);

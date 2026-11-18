@@ -10,6 +10,9 @@ final class AgentDirectory {
         String node,directory,incarnation,state;
         long epoch,boundAt;
     }
+    private record Capacity(String node,int maximum,long assigned) {
+        double utilization(){return (double)assigned/maximum;}
+    }
     private final GlobalTaskStore tasks;
     private final SharedAccessStore access;
     private final JdbcControlStore db;
@@ -85,6 +88,31 @@ final class AgentDirectory {
         directory(directory);return tasks.service((c,accountDirectory)->owner(c,node,directory));
     }
     Binding owner(String node)throws Exception{return tasks.service((c,accountDirectory)->owner(c,node,null));}
+    /** The caller holds the task authority lock through selection and creation. */
+    Binding allocate(Connection c,AccessControl.Principal actor)throws Exception{
+        List<Capacity> candidates=new ArrayList<>();
+        String sql="SELECT n.node_id,n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")
+                +" t WHERE t.cluster_id=n.cluster_id AND t.owner_id=n.node_id) AS assigned FROM "+db.table("node")
+                +" n JOIN "+db.table("agent")+" a ON a.cluster_id=n.cluster_id AND a.node_id=n.node_id"
+                +" AND a.node_epoch=n.epoch AND a.incarnation=n.incarnation"
+                +" WHERE n.cluster_id=? AND n.lifecycle='RUNNING' AND n.lease_until>?";
+        try(PreparedStatement p=db.prepare(c,sql,cluster,db.now(c));ResultSet rows=p.executeQuery()){
+            while(rows.next()){
+                String node=rows.getString(1);
+                if(!actor.node(node))continue;
+                ControlStore.Node metadata=io.github.rivomesh.Model.JSON.readValue(rows.getString(2),ControlStore.Node.class);
+                long assigned=rows.getLong(3);
+                if(node.equals(metadata.id)&&metadata.executes()&&metadata.taskCapacity>assigned&&metadata.runningCapacity>0)
+                    candidates.add(new Capacity(node,metadata.taskCapacity,assigned));
+            }
+        }
+        candidates.sort(Comparator.comparingDouble(Capacity::utilization).thenComparing(Capacity::node));
+        for(Capacity capacity:candidates){
+            Binding ready=owner(c,capacity.node,null);
+            if("HEALTHY".equals(ready.state))return ready;
+        }
+        throw new TaskService.Conflict("AGENT_PLACEMENT_UNAVAILABLE");
+    }
     Binding owner(Connection c,String node,String directory)throws Exception{
         if(node==null||!node.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))throw new IllegalArgumentException("AGENT_NODE_INVALID");
         String incarnation=null,lifecycle=null;long epoch=0,until=0;

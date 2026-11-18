@@ -21,7 +21,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
-            case CREATE:return tasks.create(r.yaml,r.requestId,actor);
+            case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);
             case CONFIG_HISTORY:return tasks.configurationHistory(r.taskId,r.cursor);
             case CONFIG_PREVIEW:return tasks.previewConfiguration(r.taskId,r.document,r.revision);

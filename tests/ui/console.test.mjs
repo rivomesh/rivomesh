@@ -912,6 +912,23 @@ test('global YAML import uses placement and never submits a file after session r
   ui.d.getElementById('task-owner').value='node-b';Object.defineProperty(input,'files',{value:[{size:24,text:async()=>'jobId: imported'}],configurable:true});input.dispatchEvent(new ui.w.Event('change'));await flush();const call=ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST');assert.equal(JSON.parse(call.body).ownerNodeId,'node-b');assert.equal(JSON.parse(call.body).yaml,'jobId: imported');
  }finally{ui.dom.window.close();}
 });
+test('automatic task placement disables manual ownership and sends a single assignment mode',async()=>{
+ const ui=globalFixture();try{
+  await login(ui);ui.d.getElementById('new-task').click();
+  const form=ui.d.getElementById('create-form'),f=form.elements,automatic=ui.d.getElementById('create-auto-placement');
+  f.formatVersion.value='2';f.formatVersion.dispatchEvent(new ui.w.Event('change'));
+  for(const [name,value] of Object.entries({jobId:'placed',clusterId:'mysql',sourceDatabase:'sales',sourceUsername:'source',
+   targetSchema:'sales',targetUsername:'target'}))f[name].value=value;
+  automatic.checked=true;automatic.dispatchEvent(new ui.w.Event('change'));
+  assert.equal(ui.d.getElementById('create-owner').disabled,true);
+  ui.d.getElementById('next-step').click();ui.d.getElementById('next-step').click();
+  const preview=JSON.parse(ui.d.getElementById('plan-preview').textContent);
+  assert.equal(preview.placement,'AUTO');assert.equal(preview.ownerNodeId,undefined);
+  form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+  const body=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body);
+  assert.equal(body.placement,'AUTO');assert.equal(body.ownerNodeId,undefined);
+ }finally{ui.dom.window.close();}
+});
 test('a late global page cannot restore old data after sign-out and sign-in',async()=>{
  const ui=globalFixture();try{
   await login(ui);let resolve;const fallback=ui.w.fetch;ui.w.fetch=(path,options)=>path.includes('after=a-task')?new Promise(done=>resolve=done):fallback(path,options);ui.d.getElementById('tasks-next').click();assert.ok(resolve);ui.d.getElementById('logout').click();await login(ui);resolve({ok:true,status:200,json:async()=>({tasks:[{id:'private-stale-task'}],invalidConfigs:[],total:9,next:null})});await flush();assert.ok(!ui.d.getElementById('task-list').textContent.includes('private-stale-task'));assert.match(ui.d.getElementById('task-list').textContent,/a-task/);assert.equal(ui.d.getElementById('login-dialog').open,false);

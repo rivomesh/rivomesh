@@ -28,7 +28,12 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case CREATE:{
                 ObjectMapper yaml=new ObjectMapper(new YAMLFactory()).enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);JsonNode document=yaml.readTree(request.yaml);ConfigurationDocuments.validate(document);
                 if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");String id=document.path(document.path("formatVersion").asInt()==3?"pipelineId":"jobId").asText();
-                if(!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("TASK_REQUEST_ID_INVALID");if(request.ownerNodeId==null&&!localExecution)throw new TaskService.Conflict("TASK_OWNER_REQUIRED");String owner=request.ownerNodeId==null?localNode:request.ownerNodeId;
+                if(!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("TASK_REQUEST_ID_INVALID");
+                if("AUTO".equals(request.placement)){
+                    commands.allocate(id,request,actor,agents);
+                    return get(id,actor);
+                }
+                if(request.ownerNodeId==null&&!localExecution)throw new TaskService.Conflict("TASK_OWNER_REQUIRED");String owner=request.ownerNodeId==null?localNode:request.ownerNodeId;
                 if(!actor.node(owner)||!actor.task(id))throw new SecurityException("FORBIDDEN");AgentDirectory.Binding binding=agents.owner(owner);commands.create(id,owner,binding.directory,request,actor);return get(id,actor);
             }
             case ACTION:

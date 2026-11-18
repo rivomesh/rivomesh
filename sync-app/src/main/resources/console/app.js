@@ -20,15 +20,46 @@ Object.assign(messages.en,{filterTaskId:'Task ID',filterOwner:'Execution node ID
 
 Object.assign(messages.zh,{nodeController:'管理入口',nodeAgent:'执行 Agent',OWNER_ROLE_REQUIRED:'所选节点只负责管理，不能执行任务，请选择执行 Agent。',TASK_OWNER_REQUIRED:'请指定执行 Agent。',CONTROLLER_OWNS_TASKS:'该节点仍拥有执行任务，请保留原节点和目录作为 Agent。',CONTROLLER_EXECUTION_DIRECTORY_NOT_EMPTY:'含执行任务的目录不能作为纯管理入口打开。'});
 Object.assign(messages.en,{nodeController:'Management entry',nodeAgent:'Execution Agent',OWNER_ROLE_REQUIRED:'This node only serves management. Choose an execution Agent.',TASK_OWNER_REQUIRED:'Select an execution Agent.',CONTROLLER_OWNS_TASKS:'This node still owns tasks. Keep its original identity/directory as an Agent.',CONTROLLER_EXECUTION_DIRECTORY_NOT_EMPTY:'A directory with execution tasks cannot open as a controller-only entry.'});
+Object.assign(messages.zh,{automaticPlacement:'自动分配执行 Agent',AGENT_PLACEMENT_UNAVAILABLE:'当前授权范围内没有可用的 Agent 任务槽。请核对节点状态和任务容量。',TASK_PLACEMENT_INVALID:'请选择自动分配或指定节点。'});
+Object.assign(messages.en,{automaticPlacement:'Assign an Agent automatically',AGENT_PLACEMENT_UNAVAILABLE:'No authorized Agent currently has a free task slot. Check node status and capacity.',TASK_PLACEMENT_INVALID:'Choose automatic assignment or select a node.'});
 function globalTasks(){return session?.taskControlScope==='GLOBAL';}
 function clearTaskPages(){taskTicket++;taskAfter='';taskHistory=[];taskLoading=false;}
 function clearTaskFilters(){taskFilters={};selectedDestination='';$('task-filter').reset();}
 function filteredTasks(){return Boolean(taskFilters.taskId||taskFilters.ownerNodeId);}
 
-function clearOwners(){ownerTicket++;ownerChoices=[];ownerNext=null;ownerLoaded=false;ownerLoading=false;$('task-owner').value='';$('create-owner').value='';$('owner-options').replaceChildren();}
+function clearOwners(){
+ ownerTicket++;ownerChoices=[];ownerNext=null;ownerLoaded=false;ownerLoading=false;
+ $('task-owner').value='';$('create-owner').value='';
+ $('task-auto-placement').checked=false;$('create-auto-placement').checked=false;
+ $('owner-options').replaceChildren();
+}
 function renderOwners(){
- const enabled=globalTasks()&&can('TASK_CREATE');$('task-owner-control').classList.toggle('hidden',!enabled);$('create-owner-row').classList.toggle('hidden',!enabled);$('task-owner').disabled=!enabled;$('create-owner').disabled=!enabled;$('create-owner').required=enabled;$('owners-reload').disabled=ownerLoading;$('owners-more').disabled=ownerLoading;$('owners-more').classList.toggle('hidden',!ownerNext);
- if(enabled){if(session.nodeRole==='CONTROLLER'&&$('task-owner').value===session.nodeId)$('task-owner').value='';if(!$('task-owner').value){const preferred=session.nodeRole==='CONTROLLER'?(ownerChoices.find(node=>node.state==='HEALTHY')||ownerChoices[0])?.id:session.nodeId;$('task-owner').value=preferred||'';if(!$('create-owner').value)$('create-owner').value=preferred||'';}}const options=$('owner-options');options.replaceChildren();for(const node of ownerChoices){const option=document.createElement('option');option.value=node.id;option.label=node.id+' · '+t(node.state||'UNKNOWN');options.append(option);}
+ const enabled=globalTasks()&&can('TASK_CREATE');
+ $('task-owner-control').classList.toggle('hidden',!enabled);
+ $('create-owner-row').classList.toggle('hidden',!enabled);
+ $('create-placement-row').classList.toggle('hidden',!enabled);
+ const globalOption=$('task-auto-placement'),wizardOption=$('create-auto-placement');
+ globalOption.disabled=!enabled;wizardOption.disabled=!enabled;
+ const globalInput=$('task-owner'),wizardInput=$('create-owner');
+ globalInput.disabled=!enabled||globalOption.checked;wizardInput.disabled=!enabled||wizardOption.checked;
+ wizardInput.required=enabled&&!wizardOption.checked;
+ $('owners-reload').disabled=ownerLoading;$('owners-more').disabled=ownerLoading;
+ $('owners-more').classList.toggle('hidden',!ownerNext);
+ if(enabled){
+  if(session.nodeRole==='CONTROLLER'&&globalInput.value===session.nodeId)globalInput.value='';
+  if(!globalInput.value){
+   const choice=ownerChoices.find(node=>node.state==='HEALTHY')||ownerChoices[0];
+   const preferred=session.nodeRole==='CONTROLLER'?choice?.id:session.nodeId;
+   globalInput.value=preferred||'';
+   if(!wizardInput.value)wizardInput.value=preferred||'';
+  }
+ }
+ const options=$('owner-options');options.replaceChildren();
+ for(const node of ownerChoices){
+  const option=document.createElement('option');
+  option.value=node.id;option.label=node.id+' · '+t(node.state||'UNKNOWN');
+  options.append(option);
+ }
 }
 async function loadOwners(after='',hops=0){
  if(!globalTasks()||!can('TASK_CREATE')||ownerLoading)return;const ticket=++ownerTicket;ownerLoading=true;renderOwners();
@@ -36,7 +67,14 @@ async function loadOwners(after='',hops=0){
  catch(error){if(ticket===ownerTicket)notify(error.message);}finally{if(ticket===ownerTicket){ownerLoading=false;renderOwners();}}
  if(ticket===ownerTicket&&!ownerChoices.length&&ownerNext&&ownerNext!==after&&hops<500)await loadOwners(ownerNext,hops+1);
 }
-function ownerSelection(){if(!globalTasks())return{};const id=($('create-dialog').open?$('create-owner').value:$('task-owner').value).trim();if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))throw new Error(t('ownerRequired'));return{ownerNodeId:id};}
+function ownerSelection(){
+ if(!globalTasks())return{};
+ const wizard=$('create-dialog').open;
+ if($(wizard?'create-auto-placement':'task-auto-placement').checked)return{placement:'AUTO'};
+ const id=$(wizard?'create-owner':'task-owner').value.trim();
+ if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id))throw new Error(t('ownerRequired'));
+ return{ownerNodeId:id};
+}
 async function loadTaskPage(after=taskAfter,filters=taskFilters){
  const ticket=++taskTicket;taskLoading=true;
  const query=new URLSearchParams({limit:'20'});
@@ -461,7 +499,7 @@ function renderDetail(task){const root=$('task-detail');root.replaceChildren();i
  renderSubscriptions(body,task,pending);const details=text('details'),summary=text('summary',t('position'));details.append(summary,text('pre',JSON.stringify(task.status,null,2)));body.append(details,text('h2',t('history')));const history=text('div','','history');task.operations.slice(-8).reverse().forEach(op=>{const row=text('div'),left=text('span',t(op.action.toLowerCase())+' · '+(op.code?explain(op.code):op.status)+(op.actorId?' · '+op.actorId+' ('+t('ROLE_'+op.actorRole)+')':''));row.append(left,badge(op.status));if(op.deliveryStatus&&op.deliveryStatus!==op.status)row.append(badge(op.deliveryStatus));if(op.result&&Object.keys(op.result).length){const details=text('details');details.append(text('summary',t('operationDetails')),text('pre',JSON.stringify(maskPlan(op.result),null,2)));row.append(details);}const plan=op.result?.exclusionPlan;if(plan&&op.action==='CAPTURE_RETAIN'&&op.status==='SUCCEEDED'&&task.statusAvailable&&task.status.run_state==='ERROR'&&task.status.error_count===plan.errorGeneration&&!pending&&can('TASK_CONFIG')){const review=text('button',t('reviewCaptureExclusion'),'quiet');review.onclick=()=>openCaptureExclusion(task,plan);row.append(review);}if(op.failureEvidenceId&&op.status==='SUCCEEDED'&&session?.recoveryReview&&can('TASK_CONFIG')){const review=text('button',t('viewFailureEvidence'),'quiet');review.onclick=()=>openFailureEvidence(task,op.failureEvidenceId);row.append(review);}history.append(row);});body.append(history);window.RivomeshValidation?.render(body,task,pending);window.RivomeshRecovery?.render(body,task);root.append(body);}
 async function command(task,action,subscription){try{await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({action,expectedRevision:task.revision,errorCount:subscription?subscription.errorGeneration:(task.status.error_count??-1),...(subscription?{subscriptionId:subscription.id}:{})})});notify(t('accepted'));await refresh();}catch(e){notify(e.message);await refresh();}}
 function renderAdapters(){const root=$('adapter-list');root.replaceChildren();capabilities.forEach(a=>{const box=text('article','',a.status==='PLANNED'?'planned':'');box.append(text('strong',a.id),badge(a.status),text('p',t(a.role)+(a.note?' · '+a.note:'')));root.append(box);});}
-function openCreate(){if(!can('TASK_CREATE'))return;step=0;$('create-form').reset();$('create-owner').value=$('task-owner').value;renderOwners();$('extra-targets').replaceChildren();$('first-extra-mappings').replaceChildren();$('primary-messaging').replaceChildren();extraTargetCounter=1;$('create-error').textContent='';const id=crypto.getRandomValues(new Uint32Array(1))[0]||910001;$('create-form').elements.serverId.value=id;wizardMode();showStep();$('create-dialog').showModal();}
+function openCreate(){if(!can('TASK_CREATE'))return;step=0;$('create-form').reset();$('create-owner').value=$('task-owner').value;$('create-auto-placement').checked=$('task-auto-placement').checked;renderOwners();$('extra-targets').replaceChildren();$('first-extra-mappings').replaceChildren();$('primary-messaging').replaceChildren();extraTargetCounter=1;$('create-error').textContent='';const id=crypto.getRandomValues(new Uint32Array(1))[0]||910001;$('create-form').elements.serverId.value=id;wizardMode();showStep();$('create-dialog').showModal();}
 function sourceConfiguration(f){
  const type=wizardSource(),source={clusterId:f.clusterId.value.trim()};
  let version;
@@ -672,6 +710,9 @@ document.addEventListener('visibilitychange',pollConsole);
 
 $('import-task').onclick=()=>{if(can('TASK_CREATE'))$('import-file').click();};
 $('import-file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file||!can('TASK_CREATE'))return;const generation=sessionGeneration;try{if(file.size>512*1024)throw new Error(lang==='zh'?'配置文件不能超过 512 KiB':'Configuration exceeds 512 KiB');const placement=ownerSelection(),yaml=await file.text();if(generation!==sessionGeneration||!can('TASK_CREATE'))return;const task=await api('/tasks',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({yaml,...placement})});selected=task.id;clearTaskPages();notify(t(globalTasks()?'accepted':'created'));await refresh();}catch(error){if(generation===sessionGeneration)notify(error.message);}finally{e.target.value='';}});
+for(const [source,target] of [['task-auto-placement','create-auto-placement'],['create-auto-placement','task-auto-placement']]){
+ $(source).onchange=()=>{$(target).checked=$(source).checked;renderOwners();};
+}
 $('task-owner').addEventListener('input',()=>{$('create-owner').value=$('task-owner').value;});$('create-owner').addEventListener('input',()=>{$('task-owner').value=$('create-owner').value;});$('owners-reload').onclick=()=>loadOwners('');$('owners-more').onclick=()=>{if(ownerNext)loadOwners(ownerNext);};$('tasks-first').onclick=()=>taskPage('first');$('tasks-previous').onclick=()=>taskPage('previous');$('tasks-next').onclick=()=>taskPage('next');
 
 Object.assign(messages.zh,{TARGET_CONNECTION_RETRY:'目标连接暂不可用，保留断点并自动重试；无需手动恢复。'});
