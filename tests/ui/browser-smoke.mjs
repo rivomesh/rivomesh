@@ -145,6 +145,59 @@ try{
   await screenshot('workspace-narrow');
   passed('English workspace stays within the mobile viewport');
 
+  async function fillSource(type,values){
+    await evaluate(`(()=>{
+      document.querySelector('#new-task').click();
+      const f=document.querySelector('#create-form').elements;
+      f.sourceType.value=${JSON.stringify(type)};
+      f.sourceType.dispatchEvent(new Event('change'));
+      for(const [name,value] of Object.entries(${JSON.stringify(values)})) f[name].value=value;
+    })()`);
+  }
+  async function finishTask(id){
+    await evaluate(`(()=>{
+      const f=document.querySelector('#create-form').elements;
+      document.querySelector('#next-step').click();
+      f.targetSchema.value='browser_copy';
+      f.targetUsername.value='fixture';
+      document.querySelector('#next-step').click();
+    })()`);
+    assert(await evaluate(`(()=>{
+      const preview=document.querySelector('#plan-preview').textContent;
+      return preview.includes(${JSON.stringify(id)})&&!preview.includes('fixture-private');
+    })()`));
+    await evaluate("document.querySelector('#save-task').focus()");
+    await key('Enter',13);
+    await waitFor(()=>evaluate(`!document.querySelector('#create-dialog').open&&
+      Array.from(document.querySelectorAll('.task-card')).some(card=>card.textContent.includes(${JSON.stringify(id)}))`),
+                  'actual API saves '+id+' as a stopped task');
+  }
+
+  await fillSource('POSTGRESQL',{jobId:'browser-pg',clusterId:'browser-pg-source',pgUrl:'jdbc:postgresql://fixture.invalid/accounts',
+    pgDatabase:'accounts',pgSchemas:'sales',pgUsername:'fixture',pgPassword:'fixture-private-pg',pgPublication:'browser_pub'});
+  assert(await evaluate("!document.querySelector('[name=pgUrl]').disabled&&document.querySelector('[name=sourceHost]').disabled"));
+  assert(await evaluate("document.querySelector('[name=targetType] option[value=GAUSS]').disabled"));
+  await viewport(1280,900);
+  await screenshot('postgresql-task-wizard');
+  await finishTask('browser-pg');
+  passed('PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API');
+
+  await viewport(390,844);
+  await fillSource('ORACLE',{jobId:'browser-ora',clusterId:'browser-ora-source',oraclePdb:'FREEPDB1',
+    oracleRootUrl:'jdbc:oracle:thin:@//fixture.invalid:1521/FREE',oraclePdbUrl:'jdbc:oracle:thin:@//fixture.invalid:1521/FREEPDB1',
+    oracleRootUser:'C##FIXTURE',oraclePdbUser:'FIXTURE',oracleRootPassword:'fixture-private-root',oraclePdbPassword:'fixture-private-pdb',
+    oracleTables:'SALES.ORDERS'});
+  assert(await evaluate(`(()=>{
+    const dialog=document.querySelector('#create-dialog'),bounds=dialog.getBoundingClientRect();
+    return dialog.scrollWidth<=dialog.clientWidth&&bounds.left>=0&&bounds.right<=innerWidth&&
+      document.querySelector('#next-step').getBoundingClientRect().bottom<=bounds.bottom&&
+      document.querySelector('[name=oracleVersion]').labels[0].textContent.includes('source version')&&
+      document.querySelector('[name=targetType] option[value=MYSQL]').disabled;
+  })()`));
+  await screenshot('oracle-task-wizard-narrow');
+  await finishTask('browser-ora');
+  passed('Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API');
+
   await evaluate('document.querySelector("#logout").click()');
   await waitFor(()=>evaluate('document.querySelector("#login-dialog").open'),'signed-out dialog');
   await waitFor(()=>evaluate("fetch('/api/session').then(response=>response.status===401)"),'server revokes cookie');

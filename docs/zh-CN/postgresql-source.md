@@ -9,7 +9,7 @@
 1. 在源实例启用 `wal_level=logical`，为任务的持久槽和导出快照的临时槽预留容量。源账号需要 `LOGIN`、`REPLICATION` 和已发布表的 `SELECT` 权限。
 2. 创建明确列出同步表的发布，包含 INSERT、UPDATE 和 DELETE。对这些表设置 `REPLICA IDENTITY FULL`，以获取包括无主键行在内的完整前镜像。保持发布的表、列和行范围稳定，结构变更先暂停并审阅。
 3. 按[示例配置](../../config/postgresql-source-v3.yml)设置源库、发布和目标。使用 PostgreSQL 目标时，连接角色需要读取 `pg_control_system()` 以核对物理连接身份。源库与目标库采用独立数据库。
-4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。也可以从管理界面导入 V3 配置。
+4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL 和 MySQL 目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
 
 数据库会在创建逻辑复制槽时提供一致位置。Rivomesh 导入导出的 MVCC 快照读取表数据，按原 LSN 捕获快照期间及之后的事务。提交已写入 Rivomesh 日志后才确认源槽。每个任务使用与日志世代绑定的槽名。[PostgreSQL 复制协议](https://www.postgresql.org/docs/17/protocol-replication.html) · [pgJDBC 复制 API](https://jdbc.postgresql.org/documentation/server-prepare/)
 

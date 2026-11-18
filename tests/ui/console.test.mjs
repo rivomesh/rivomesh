@@ -41,7 +41,7 @@ function setup(initial=[],role='ADMIN',browser={authenticated:false}){
     if(path==='/api/session/logout'){browser.authenticated=false;return{ok:true,status:200,json:async()=>({status:'SIGNED_OUT'})};}
     let data;
     if(path==='/api/session')data={id:'test-user',role,recoveryReview:Boolean(browser.recoveryReview),recoveryCommit:Boolean(browser.recoveryCommit),recoverySkip:Boolean(browser.recoverySkip),authentication:'COOKIE',csrfToken:'test-csrf',nodeId:'node-a',nodeRole:browser.nodeRole||'CONTROLLER_WORKER',taskControlScope:browser.taskControlScope||'LOCAL',nodeScope:browser.nodeIds??null,permissions:['TASK_READ',...(role!=='VIEWER'?['TASK_CONTROL']:[]),...(role==='ADMIN'?['TASK_CREATE','TASK_CONFIG','AUDIT_READ','ACCOUNT_ADMIN']:[])]};
-    else if(path==='/api/capabilities')data=[{id:'MYSQL',role:'SOURCE',status:'AVAILABLE',note:''},{id:'PULSAR',role:'SINK',status:'PLANNED',note:''}];
+    else if(path==='/api/capabilities')data=browser.capabilities??[{id:'MYSQL',role:'SOURCE',status:'AVAILABLE',note:''},{id:'PULSAR',role:'SINK',status:'PLANNED',note:''}];
     else if(options.method==='POST'&&path==='/api/tasks'){
       const config=JSON.parse(options.body).config;
       const task={id:config.jobId||config.pipelineId,revision:'revision-1',formatVersion:config.formatVersion||2,desired:'STOPPED',workerState:'STOPPED',sourceDatabase:config.source.database||config.databases.join(', '),sourceCluster:config.source.clusterId,targetSchema:config.target?.schema||config.targets.length+' targets',status:{},statusAvailable:true,observedAt:null,operations:[]};tasks.push(task);data=task;
@@ -234,6 +234,76 @@ test('v3 wizard maps two databases to independent targets and masks every creden
     ui.d.getElementById('next-step').click();const preview=ui.d.getElementById('plan-preview').textContent;assert.doesNotMatch(preview,/source-private|gauss-private|pg-private|journal-private|embedded-private/);
     form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();const request=ui.calls.find(c=>c.path==='/api/tasks'&&c.method==='POST');assert.ok(request);const config=JSON.parse(request.body).config;
     assert.equal(config.formatVersion,3);assert.equal(config.source.type,'MYSQL');assert.equal(config.source.expectedVersion,'8.2.0');assert.deepEqual(config.databases,['sales','inventory']);assert.deepEqual(config.targets[0].mappings,{sales:'sales_copy',inventory:'inventory_copy'});assert.deepEqual(config.targets[1].mappings,{sales:'sales_other',inventory:'inventory_other'});assert.equal(config.journal.mode,'EXTERNAL');assert.equal(config.journal.password,'journal-private');assert.equal(ui.calls.filter(c=>c.path.endsWith('/actions')).length,0);
+  }finally{ui.dom.window.close();}
+});
+
+const additionalSources=[
+  {id:'MYSQL',role:'SOURCE',status:'AVAILABLE'},
+  {id:'POSTGRESQL',role:'SOURCE',status:'EXPERIMENTAL'},
+  {id:'ORACLE',role:'SOURCE',status:'EXPERIMENTAL'}
+];
+
+test('PostgreSQL source wizard scopes destinations and submits a masked failover-slot task',async()=>{
+  const ui=setup([],'ADMIN',{authenticated:false,capabilities:additionalSources});
+  try{
+    await login(ui);ui.d.getElementById('new-task').click();
+    const form=ui.d.getElementById('create-form'),f=form.elements;
+    assert.equal(f.sourceType.querySelector('[value=POSTGRESQL]').disabled,false);
+    f.sourceType.value='POSTGRESQL';f.sourceType.dispatchEvent(new ui.w.Event('change'));
+    assert.equal(f.sourceHost.disabled,true);assert.equal(f.oracleRootUrl.disabled,true);
+    assert.equal(f.targetType.querySelector('[value=GAUSS]').disabled,true);
+    assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,false);
+    assert.equal(f.targetType.value,'POSTGRESQL');
+    for(const [name,value] of Object.entries({jobId:'web-pg',clusterId:'shared-pg',pgUrl:'jdbc:postgresql://writer:5432/accounts',pgDatabase:'accounts',pgSchemas:'sales, billing',pgVersion:'17.12',pgUsername:'reader',pgPassword:'PRIVATE_PG',pgPublication:'sales_pub'}))f[name].value=value;
+    f.pgFailoverSlot.checked=true;
+    ui.d.getElementById('next-step').click();f.targetSchema.value='sales_copy';f.targetUsername.value='writer';
+    ui.d.querySelector('#first-extra-mappings input').value='billing_copy';
+    ui.d.getElementById('add-target').click();
+    const card=ui.d.querySelector('#extra-targets .target-settings');
+    assert.equal(card.querySelector('option[value=HIVE]').disabled,true);
+    card.querySelector('[data-field=username]').value='warehouse';
+    card.querySelectorAll('.mapping-fields input').forEach(input=>input.value=input.dataset.database+'_extra');
+    ui.d.getElementById('next-step').click();
+    assert.doesNotMatch(ui.d.getElementById('plan-preview').textContent,/PRIVATE_PG/);
+    form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+    const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
+    assert.deepEqual(config.source,{type:'POSTGRESQL',clusterId:'shared-pg',database:'accounts',topology:'SINGLE',username:'reader',password:'PRIVATE_PG',expectedVersion:'17.12',postgresql:{url:'jdbc:postgresql://writer:5432/accounts',publication:'sales_pub',slotPrefix:'rivomesh',failoverSlot:true}});
+    assert.deepEqual(config.databases,['sales','billing']);
+    assert.deepEqual(config.targets.map(target=>target.mappings),[{sales:'sales_copy',billing:'billing_copy'},{sales:'sales_extra',billing:'billing_extra'}]);
+    assert.equal(ui.calls.filter(call=>call.path.endsWith('/actions')).length,0);
+  }finally{ui.dom.window.close();}
+});
+
+test('Oracle source wizard derives owner mappings and keeps root and PDB credentials separate',async()=>{
+  const ui=setup([],'ADMIN',{authenticated:false,capabilities:additionalSources});
+  try{
+    await login(ui);ui.d.getElementById('new-task').click();
+    const form=ui.d.getElementById('create-form'),f=form.elements;
+    f.sourceType.value='ORACLE';f.sourceType.dispatchEvent(new ui.w.Event('change'));
+    assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,true);
+    assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);
+    for(const [name,value] of Object.entries({jobId:'web-oracle',clusterId:'ora',oraclePdb:'FREEPDB1',oracleVersion:'23.26.4.0.0',oracleRootUrl:'jdbc:oracle:thin:@//ora:1521/FREE',oraclePdbUrl:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',oracleRootUser:'C##READER',oraclePdbUser:'PDB_READER',oracleRootPassword:'PRIVATE_ROOT',oraclePdbPassword:'PRIVATE_PDB',oracleTables:'owner.TABLE'}))f[name].value=value;
+    ui.d.getElementById('next-step').click();assert.equal(f.oracleTables.validity.customError,true);
+    f.oracleTables.value='SALES.ORDERS\nSALES.ITEMS\nBILLING.INVOICE';
+    ui.d.getElementById('next-step').click();f.targetSchema.value='sales_copy';f.targetUsername.value='writer';
+    const mapping=ui.d.querySelector('#first-extra-mappings input');assert.equal(mapping.dataset.database,'BILLING');mapping.value='billing_copy';
+    ui.d.getElementById('next-step').click();assert.doesNotMatch(ui.d.getElementById('plan-preview').textContent,/PRIVATE_ROOT|PRIVATE_PDB/);
+    form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+    const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
+    assert.deepEqual(config.source,{type:'ORACLE',clusterId:'ora',database:'FREEPDB1',topology:'SINGLE',expectedVersion:'23.26.4.0.0',oracle:{tables:['SALES.ORDERS','SALES.ITEMS','BILLING.INVOICE'],root:{url:'jdbc:oracle:thin:@//ora:1521/FREE',username:'C##READER',password:'PRIVATE_ROOT'},pdb:{url:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',username:'PDB_READER',password:'PRIVATE_PDB'}}});
+    assert.deepEqual(config.targets[0].mappings,{SALES:'sales_copy',BILLING:'billing_copy'});
+  }finally{ui.dom.window.close();}
+});
+
+test('wizard gates source by advertised role and status and returns to MySQL in V2',async()=>{
+  const capabilities=[additionalSources[0],{id:'POSTGRESQL',role:'SINK',status:'AVAILABLE'},{id:'ORACLE',role:'SOURCE',status:'PLANNED'}];
+  const ui=setup([],'ADMIN',{authenticated:false,capabilities});
+  try{
+    await login(ui);ui.d.getElementById('new-task').click();const f=ui.d.getElementById('create-form').elements;
+    assert.equal(f.sourceType.querySelector('[value=POSTGRESQL]').disabled,true);
+    assert.equal(f.sourceType.querySelector('[value=ORACLE]').disabled,true);
+    f.formatVersion.value='2';f.formatVersion.dispatchEvent(new ui.w.Event('change'));
+    assert.equal(f.sourceType.disabled,true);assert.equal(f.sourceHost.disabled,false);assert.equal(f.pgUrl.disabled,true);
   }finally{ui.dom.window.close();}
 });
 

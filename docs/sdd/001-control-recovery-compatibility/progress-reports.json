@@ -50,8 +50,8 @@
     "e8b49039e5d7a67fa36c32751b63a3948a98385f"
   ],
   "currentSdd": {
-    "DONE": 25,
-    "PARTIAL": 23,
+    "DONE": 26,
+    "PARTIAL": 22,
     "NEW": 0
   },
   "nextTasks": [
@@ -59,8 +59,8 @@
     "Implement durable Oracle archive checkpoints and extend certification of supported sink profiles.",
     "Continue guarded execution relocation and capture-range review."
   ],
-  "currentCandidateArtifact": "54485ac2862a4d12efec26c8e319f4c811b023c33774be995fd3b5fbe0d6cfab",
-  "currentCandidateScope": "Java 8 release evidence gate and Kubernetes external-journal stale Worker fencing",
+  "currentCandidateArtifact": "0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b",
+  "currentCandidateScope": "Source capability wizard, 7 Chrome, 115 DOM, 23 focused Java, 25 shipped configurations",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
     "CP-06 and LG-09. Seven native cross-entry checks and five Chrome checks passed on one frozen artifact. The diagnostic page persisted across Agent restart without exposing business values or credentials.",
@@ -70,6 +70,7 @@
     "DO-05 accepted. One frozen candidate passed 25 configuration examples, five real Chrome checks, seven native CDC checks and eight live Helm/native Kubernetes checks. A different Chrome candidate was rejected.",
     "CP-04 and LG-06. Two native Kubernetes Worker nodes with one PostgreSQL journal passed three checks. Freezing the owner switched epoch 1 to 2 and the resumed Worker remained fenced.",
     "LG-04 NATS JetStream 2.11.8 three native replicas passed six checks: client TLS trust, hostname refusal, actual leader loss, no confirmed publication without quorum, and stable-ID retry after restoration.",
-    "JV-04 started and passed eight native mixed-JDK checks. Controllers 8/21 and Agent/Worker 11 ran together, Controller 25 replaced 8 with CDC live, then Agent/Worker 17 resumed from the original directory and GTID after a controlled stop."
+    "JV-04 started and passed eight native mixed-JDK checks. Controllers 8/21 and Agent/Worker 11 ran together, Controller 25 replaced 8 with CDC live, then Agent/Worker 17 resumed from the original directory and GTID after a controlled stop.",
+    "SO-01 accepted. PostgreSQL and Oracle V3 source wizards, explicit target restrictions and source-specific configuration guards. Seven Chrome checks against the live API, 115 DOM, 23 focused Java and 25 configuration examples passed; PostgreSQL and Oracle native regressions passed seven and thirteen."
   ]
 }

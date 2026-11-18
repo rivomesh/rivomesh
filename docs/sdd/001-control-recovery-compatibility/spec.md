@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.31 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.32 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，25项DONE、23项PARTIAL、0项NEW，余23项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，26项DONE、22项PARTIAL、0项NEW，余22项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -47,7 +47,7 @@ RM-SDD-001 · v0.31 · 2026-11-18 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| SO-01 | P0 / PARTIAL | 多源协议与能力配置 | MySQL、PostgreSQL 与 Oracle 使用同一 V3 源适配器入口，保留各自坐标和版本。跨引擎能力探测、完整配置向导待完成。 |
+| SO-01 | P0 / DONE | 多源协议与能力配置 | V3 管理界面已按能力提供 MySQL、PostgreSQL、Oracle 源类型、映射和版本表单。按各自身份和坐标预检，明确拒绝其他源类型的专用配置。 |
 | SO-02 | P1 / DONE | MySQL 5.7 完整支持档案 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR 和未采集 binlog 缺失已实测。 |
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |

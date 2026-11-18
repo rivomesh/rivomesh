@@ -313,7 +313,7 @@
       },
       "status": "DONE",
       "verification": {
-        "artifactSha256": "2c0f5f83a185d98def0b12ac6068727981a3341cd1fd6b78480bd239d2999587",
+        "artifactSha256": "c8408cd8f98974b6aaf4e3de66b2a5312d686daf1c99fe03d6cd16af8ef4ec3a",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
@@ -348,6 +348,21 @@
         "archive": "docs/verification/README.md",
         "criteriaSha256": "dbc2deed3cd201dc46c7ea77a0897ef6e2efae21c7452773558a7eecedc94d75",
         "profile": "25 parsed YAML examples, real Chrome (5), MySQL native separate-Agent control and recovery (7), Kubernetes 1.31.0 Helm/checked-in native YAML (8). Same candidate passed and a previous Chrome candidate was rejected."
+      }
+    },
+    {
+      "id": "SO-01",
+      "title": {
+        "zh-CN": "多源协议与能力配置",
+        "en": "Source protocol and capability configuration"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b",
+        "artifactKind": "Java 8 shaded application JAR",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "5a26453bc2fb0771ce406d91e1615bb5b5c37959bb66eb819511d6a39e6e7399",
+        "profile": "Seven real Chrome checks including PostgreSQL and Oracle task saves; 115 DOM cases; 23 Java focused cases; 25 parsed config examples. Native PostgreSQL 17.12 and Oracle 26ai profiles are linked with their exact separate artifact evidence."
       }
     }
   ],
@@ -2154,5 +2169,40 @@
       ]
     },
     "cleanupExitCode": 0
+  },
+  "sourceWizard": {
+    "browser": {
+      "artifactSha256": "0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b",
+      "status": "PASS",
+      "checks": [
+        "Native Tab navigation stays in the login dialog and Escape keeps login required",
+        "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+        "Capture diagnostics has an accessible dialog name and works through Enter and Escape",
+        "English workspace stays within the mobile viewport",
+        "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+        "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+        "Actual sign-out revokes the browser session"
+      ],
+      "browser": "Chrome/157.0.8103.79"
+    },
+    "focusedJavaPassed": 23,
+    "domPassed": 115,
+    "configurationExamples": 25,
+    "sourceRevalidation": {
+      "postgres": {
+        "artifactSha256": "dd11a9bb3b63fdac6f02cdfe6c5061c7c3c5c5de014979b6eb15daecee912ecc",
+        "checks": 7,
+        "status": "PASS"
+      },
+      "oracle": {
+        "artifactSha256": "dd11a9bb3b63fdac6f02cdfe6c5061c7c3c5c5de014979b6eb15daecee912ecc",
+        "checks": 13,
+        "status": "PASS"
+      }
+    },
+    "priorFullJava": {
+      "passed": 502,
+      "optionalSkipped": 32
+    }
   }
 }

@@ -33,7 +33,7 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main check config/oracle-s
 java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-source-v3.yml
 ```
 
-使用相同类路径运行 `serve` 后可在界面导入 V3 任务，受监督 Worker 继承该类路径中的外置 Oracle 驱动。首批类型为有明确精度的 `NUMBER(p,s)` 和 `VARCHAR2`，验证有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
+使用相同类路径启动拥有 Worker 的进程（组合模式使用 `serve`，分离模式使用 `agent`）。可在界面导入 V3 配置，或在新建任务选择 **V3 → Oracle**，分别填 CDB 根和 PDB 连接、PDB 名称及大写 `OWNER.TABLE` 表名。每个源 owner 显式映射到 PostgreSQL Schema，启动前在选定 Agent 上执行 **检查**。受监督的 Worker 继承所属进程类路径中的外置 Oracle 驱动。首批类型为有明确精度的 `NUMBER(p,s)` 和 `VARCHAR2`，验证有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 

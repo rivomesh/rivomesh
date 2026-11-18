@@ -8,7 +8,12 @@ final class PipelineSources {
     private PipelineSources() {}
 
     static void validate(PipelineConfig config) {
-        switch(config.effectiveSourceType()){
+        String type=config.effectiveSourceType();
+        if(config.source.postgresql!=null&&!"POSTGRESQL".equals(type))
+            throw new IllegalArgumentException("POSTGRESQL_OPTIONS_REQUIRE_POSTGRESQL_SOURCE");
+        if(config.source.oracle!=null&&!"ORACLE".equals(type))
+            throw new IllegalArgumentException("ORACLE_OPTIONS_REQUIRE_ORACLE_SOURCE");
+        switch(type){
             case "MYSQL":config.legacy().validate();break;
             case "POSTGRESQL":PostgresqlCdcSource.validate(config);break;
             case "ORACLE":OracleCdcSource.validate(config);break;

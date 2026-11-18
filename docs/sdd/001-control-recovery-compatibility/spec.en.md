@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.31 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.32 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,25 DONE, 23 PARTIAL and 0 NEW, with 23 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,26 DONE, 22 PARTIAL and 0 NEW, with 22 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -47,7 +47,7 @@ Implementation:48requirements,25 DONE, 23 PARTIAL and 0 NEW, with 23 open. RC-01
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| SO-01 | P0 / PARTIAL | Source protocol and capability configuration | MySQL, PostgreSQL and Oracle share the V3 adapter entry point with engine-specific coordinates and versions. Full capability discovery and wizard coverage remain. |
+| SO-01 | P0 / DONE | Source protocol and capability configuration | The V3 console offers capability-scoped MySQL, PostgreSQL and Oracle source forms, mappings and versions. Each preflight uses its own identity and position protocol and rejects foreign source options. |
 | SO-02 | P1 / DONE | MySQL5.7 supported profile | 5.7.44 Java 8 V3 standalone, GTID async, MGR, and native binlog-loss refusal passed. |
 | SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |

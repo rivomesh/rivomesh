@@ -43,6 +43,16 @@ class PipelineConfigTest {
         config.source.type="ORACLE";
         assertEquals("ORACLE_SOURCE_CONFIG_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
     }
+    @Test void sourceEngineRejectsOptionsForAnotherProtocol(){
+        PipelineConfig c=config();
+        c.source.oracle=new Config.OracleSource();
+        assertEquals("ORACLE_OPTIONS_REQUIRE_ORACLE_SOURCE",assertThrows(IllegalArgumentException.class,c::validate).getMessage());
+        c.source.type="POSTGRESQL";
+        assertEquals("ORACLE_OPTIONS_REQUIRE_ORACLE_SOURCE",assertThrows(IllegalArgumentException.class,c::validate).getMessage());
+        c.source.type="ORACLE";
+        c.source.postgresql=new Config.PostgresqlSource();
+        assertEquals("POSTGRESQL_OPTIONS_REQUIRE_POSTGRESQL_SOURCE",assertThrows(IllegalArgumentException.class,c::validate).getMessage());
+    }
     @Test void passwordsAndTuningCanRotateWhileSemanticChangesRequireAMigration(){PipelineConfig c=config();c.validate();String fingerprint=c.fingerprint();c.source.password="rotated";c.targets.get(0).password="rotated-too";c.chunkSize=200;c.nodeId="another-node";c.journal.maxBytes*=2;assertEquals(fingerprint,c.fingerprint());c.targets.get(0).mappings.put("orders","renamed");assertNotEquals(fingerprint,c.fingerprint());}
     @Test void sourceMappingsCannotCollideOrDisappear(){PipelineConfig c=config();c.targets.get(0).mappings.put("inventory","orders");assertThrows(IllegalArgumentException.class,c::validate);c.targets.get(0).mappings.remove("inventory");assertThrows(IllegalArgumentException.class,c::validate);}
     @Test void embeddedSqlDriverAndUrlOptionsCannotBeImportedAsTargetsOrLocalPaths(){PipelineConfig c=config();c.journal.path="data/journal;INIT=RUNSCRIPT FROM 'remote'";assertThrows(IllegalArgumentException.class,c::validate);c=config();c.targets.get(0).product=TargetProduct.H2;assertThrows(IllegalArgumentException.class,c::validate);c=config();c.targets.get(0).url="jdbc:h2:mem:danger";assertThrows(IllegalArgumentException.class,c::validate);}

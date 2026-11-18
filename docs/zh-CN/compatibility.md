@@ -30,7 +30,7 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 | `CLICKHOUSE`、`DORIS`、`HIVE` | 首批实库分析档案，采用版本化物化与回执。数据可见性和重放规则按引擎区分。 | [ClickHouse](clickhouse-v3.md)、[Doris](doris-v3.md)、[Hive](hive-v3.md) |
 | `KAFKA`、`PULSAR`、`RABBITMQ`、`ROCKETMQ`、`ACTIVEMQ_CLASSIC`、`ACTIVEMQ_ARTEMIS`、`REDIS_STREAMS`、`NATS_JETSTREAM` | 限定 broker 档案，确认式至少一次投递。消费端按稳定事件 ID 去重，独立记录业务消费进度。 | [消息目标](messaging-v3.md)、[ActiveMQ Classic](classic-v3.md) |
 
-向导读取 `GET /api/capabilities`。部署前按目标手册核对拓扑、权限、保留与备份边界。
+V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引擎限制目标产品。PostgreSQL 和 Oracle 使用各自的版本、源身份、命名空间和凭据表单。部署前按目标手册核对拓扑、权限、保留与备份边界。
 
 ## 源 × 目标 × Java 验证范围
 

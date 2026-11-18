@@ -142,7 +142,7 @@ Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` pass
 
 ## Bilingual connector and API compatibility reference
 
-Combined reference SHA-256 `2c0f5f83a185d98def0b12ac6068727981a3341cd1fd6b78480bd239d2999587`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
+English and Chinese reference files concatenated in that order have SHA-256 `c8408cd8f98974b6aaf4e3de66b2a5312d686daf1c99fe03d6cd16af8ef4ec3a`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
 
 ## PostgreSQL 18 stored generated columns
 
@@ -185,3 +185,7 @@ Java 8 candidate `411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab
 ### Mixed Java rollout
 
 Candidate `411dafb3780dabe7b718458c8e05ddbb99146113d8abbf79e72bb5a9098fab04` passed eight native checks with MySQL 8.4.13, PostgreSQL and separate Controller/Agent processes. Controllers Java 8 and 21 ran with Agent/Worker Java 11. Replacing Java 8 with Java 25 left the original Worker delivering native CDC while the Java 21 Controller admitted a durable check. Reopening the drained Agent on Java 17 preserved the earlier STOP and GTID. Its Java 17 Worker resumed both SQL targets with all original snapshot IDs. The fixture identifies the actual running JVM executables and image IDs at each phase. [Fixture](../../tests/global-control-pipeline.py) · [Baseline](baseline.json)
+
+### Source capability wizard
+
+Candidate `0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b` passed seven real Chrome cases, including PostgreSQL and Oracle forms submitting stopped tasks to the live API, password masking and mobile Oracle layout. The DOM suite passed 115 checks. Twenty-three focused Java checks verify source profile validation and native position decoding, and 25 configuration examples passed the shipped parsers. The preceding build passed 502 Java cases with 32 optional cases skipped. On candidate `dd11a9bb3b63fdac6f02cdfe6c5061c7c3c5c5de014979b6eb15daecee912ecc`, PostgreSQL 17.12 passed seven native checks and Oracle 26ai passed thirteen, including original LSN/SCN restart and refusal at missing or unsupported input. [Wizard browser fixture](../../tests/ui/browser-smoke.mjs) · [Baseline](baseline.json)

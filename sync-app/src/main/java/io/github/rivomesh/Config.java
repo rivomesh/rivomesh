@@ -128,6 +128,7 @@ public final class Config {
         required(jobId, "jobId"); required(source.database, "source.database");
         if(source.type!=null&&!"MYSQL".equals(source.type))throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
         if(source.postgresql!=null)throw new IllegalArgumentException("POSTGRESQL_OPTIONS_REQUIRE_POSTGRESQL_SOURCE");
+        if(source.oracle!=null)throw new IllegalArgumentException("ORACLE_OPTIONS_REQUIRE_ORACLE_SOURCE");
         if(source.expectedVersion!=null&&!source.expectedVersion.matches("[1-9][0-9]{0,2}\\.(0|[1-9][0-9]{0,2})(\\.(0|[1-9][0-9]{0,3}))?"))
             throw new IllegalArgumentException("SOURCE_VERSION_PROFILE_INVALID");
         required(source.host, "source.host"); required(source.username, "source.username");

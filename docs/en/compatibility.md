@@ -30,7 +30,7 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 | `CLICKHOUSE`, `DORIS`, `HIVE` | First native analytical profiles. Versioned materialization and receipts, with visibility and replay rules defined per engine. | [ClickHouse](clickhouse-v3.md), [Doris](doris-v3.md), [Hive](hive-v3.md) |
 | `KAFKA`, `PULSAR`, `RABBITMQ`, `ROCKETMQ`, `ACTIVEMQ_CLASSIC`, `ACTIVEMQ_ARTEMIS`, `REDIS_STREAMS`, `NATS_JETSTREAM` | Bounded broker profiles with confirmed at-least-once publishing. Deduplicate stable event IDs and track consumer completion separately. | [Messaging](messaging-v3.md), [ActiveMQ Classic](classic-v3.md) |
 
-The current wizard capability endpoint is `GET /api/capabilities`. For each planned or experimental deployment, check the product manual's topology, authorization, retention and backup scope.
+The V3 wizard reads `GET /api/capabilities` for source availability and limits destinations to the selected engine’s supported products. PostgreSQL and Oracle source forms preserve their separate version, source identity, namespaces and credentials. For each planned or experimental deployment, check the product manual's topology, authorization, retention and backup scope.
 
 ## Source × target × Java evidence
 
