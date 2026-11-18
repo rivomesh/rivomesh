@@ -41,7 +41,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Relational targets | Actual MySQL/PostgreSQL/openGauss profiles;experimental DM/Kingbase/GBase8c profiles;OceanBase full recovery and distributed GaussDB remain open |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
 | Messaging | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream have bounded confirmation/recovery profiles;complete cluster/TLS matrices remain open |
-| Deployment | Linux,Docker,Helm,native Kubernetes YAML;liveK8s/CSI/node-fault acceptance remains open |
+| Deployment | Linux, Docker, Helm and native Kubernetes YAML. Two-node Kubernetes tested RWO remount, rollout and Secret rotation. Cross-node CSI and old-owner fencing remain open. |
 | Java | Java8 build baseline;partial five-JRE profiles,not the full source/target/driver/TLS/recovery matrix |
 
 See [design](platform-design.md),[console operations](console-and-deployment.md) and product guides for constraints. Protocol/data-format numbers identify internal modes,not compatibility promises for unreleased builds.

@@ -41,7 +41,7 @@
 | 关系目标 | MySQL/PostgreSQL/openGauss已有实际档案；达梦/金仓/GBase8c为限定实验档案；OceanBase完整恢复未验收；分布式GaussDB待实机 |
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
 | 消息目标 | Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ Classic/Artemis/Redis Streams/NATS JetStream已有不同范围的确认/恢复档案；全部集群/TLS矩阵未完成 |
-| 部署 | Linux、Docker、Helm、原生Kubernetes YAML；真实K8s/CSI及节点故障验收未完成 |
+| 部署 | Linux、Docker、Helm、原生Kubernetes YAML；已实测双节点 Kubernetes 的 Helm/原生 YAML 与 RWO CSI 重挂，跨节点存储和旧 owner 隔离待验收 |
 | Java | Java8构建基线；五JRE已有部分档案，完整源×目标×驱动×TLS×恢复矩阵未完成 |
 
 具体产品约束以[平台方案](platform-design.md)、[控制台](console-and-deployment.md)和各产品手册为准。协议和数据格式编号是内部状态标识，不是对开发版本升级的承诺。

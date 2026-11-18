@@ -102,7 +102,7 @@ kubectl -n rivomesh port-forward service/rivomesh 8080:8080
 
 当前控制面单副本、Recreate 更新和持久 PVC；不通过增加 replicas 声称控制面 HA。单任务原有数据库租约接管机制保留，控制面跨实例一致调度尚待实现。探针不因业务源离线/任务暂停而失败。Secret 或原生 ConfigMap 修改后需按操作计划重启；任务保持原身份恢复。
 
-Chart 已提供持久化、防提权、只读根文件系统、临时目录、优雅停止和进程探针；实际集群/CSI/镜像架构与系统兼容性须按环境验证，渲染检查不等于真实 K8s 部署验收。
+Chart 已提供持久化、防提权、只读根文件系统、临时目录、优雅停止和进程探针；已在双节点 Kubernetes v1.31.0 测试两种部署方法。
 
 ## FAQ
 
@@ -143,7 +143,7 @@ Linux 可在现有服务命令/环境中指定该配置；Docker、原生 Kubern
 
 Helm 角色配置：预先建立 Secret `rivomesh-accounts`，分别提供不同的 `admin-token`、`operator-token`、`viewer-token` 键，执行 `helm upgrade --install rivomesh deploy/helm/rivomesh -n rivomesh -f deploy/helm/rivomesh/values-rbac.yaml`。手动 YAML 使用 `deploy/kubernetes/rivomesh-rbac.yaml` 替代默认清单；同一资源选择一种管理方式/配置。两份原生文件均由 Chart 渲染并检查一致性。自定义用户格式为 `auth.users: [{id, role, secretRef: {name, key}}]`，`auth.legacyTokenEnabled: false` 关闭共享入口，至少保留一位 ADMIN。重复 ID/Secret 键、非法角色和令牌明文 `token` 字段在渲染时拒绝；不同 Secret 键内容恰好相同则由应用启动检查拒绝。
 
-Secret 环境值在进程启动时读取。仅修改 Kubernetes Secret 不会轮换运行中的管理服务，修改后需执行受控滚动重启；角色/配置变化会改变部署的配置校验和。ConfigMap 和原生 YAML 均不写 Secret 内容。真实 Kubernetes/CSI/滚动升级验收仍待完成，离线 lint/渲染/一致性检查不能替代集群实测。
+Secret 环境值在进程启动时读取。仅修改 Kubernetes Secret 不会轮换运行中的管理服务，修改后需执行受控滚动重启；角色/配置变化会改变部署的配置校验和。ConfigMap 和原生 YAML 均不写 Secret 内容。下文列出的滚动更新和 Secret 轮换已通过双节点实测。
 
 通过 HTTP 新建的配置记录 `createdBy`、`createdRole`、`createdAt`；任务操作记录认证得到的 `actorId`、`actorRole` 及异步结果，管理进程重启后仍保留。身份由服务端填写，请求正文里的身份字段不能冒名覆盖。新幂等回执将请求标识绑定身份/角色，同身份重放仍幂等，其他身份重放返回 `REQUEST_IDENTITY_CHANGED`。旧版无归属回执保持兼容；历史记录、直接文件/内部 API 变更不会被猜测归属。
 
@@ -162,3 +162,16 @@ Doris向导分别配置SQL和Stream Load HTTP入口、重定向白名单、副�
 上述引导 Secret/环境重启说明适用于 CONFIG 或托管前的初始身份。启用托管后使用账号界面/API轮换；若移除引导凭据，请使用 accessMode: MANAGED 并保留匹配的控制/审计持久卷，见[账号管理](account-management.md)。
 
 事务证据审阅采用可选控制协议5，支持管理员保存历史证据、原始/规范化事件分页及表格镜像；启用/升级及四类部署示例见[审阅手册](failure-review.md)。默认旧档案不自动升级。手工跳过、补偿和缺口台账仍未完成。
+
+### 双节点 K8s 实库复验
+
+已在 ARM64、双节点 Kubernetes v1.31.0 用同一构建分别测试 Helm 与原生 YAML。每种方式验证浏览器刷新保留登录、初始同步、RWO CSI 同卷重挂、停机期间增量追赶、配置滚动替换和 Secret 轮换。使用的是节点本地 `hostpath.csi.k8s.io`。跨节点卷挂载和旧执行所有者隔离继续由 LG-06 跟踪。
+
+将待验收镜像加载到隔离集群的所有节点，启用 `csi-hostpath-driver`，再执行下列命令。测试会创建并清理带随机名称的命名空间。
+
+```sh
+python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
+  --image rivomesh:0.1.0-SNAPSHOT --output target/kubernetes-proof
+```
+
+见[复验记录](../verification/README.md#lg-06-live-kubernetes-rwo-csi)。

@@ -11,8 +11,8 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "LG-06 dual-node live Kubernetes. Helm RWO CSI remount with ongoing CDC passed; both deployment formats and rotation checks rerunning.",
-    "SO-07 Oracle Free ARM64 native probe and SCN position admission."
+    "LG-06 worker-node outage and recovery, plus external-volume and old-owner fencing follow-up.",
+    "SO-07 Oracle Free ARM64 native source probe and SCN flashback."
   ],
   "reportContents": [
     "Current totals",
@@ -41,7 +41,8 @@
     "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
     "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check.",
     "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
-    "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback."
+    "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback.",
+    "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation."
   ],
   "nextTasks": [
     "Verify both Kubernetes deployment formats and recovery on CSI.",

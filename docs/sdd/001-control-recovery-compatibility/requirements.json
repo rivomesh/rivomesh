@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.18",
+  "version": "0.19",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1399,8 +1399,8 @@
         "en": "Live K8s/CSI and node-fault acceptance"
       },
       "gap": {
-        "zh-CN": "Helm/原生清单通过静态检查，不能证明真实集群安全。",
-        "en": "Helm/native static checks do not establish live-cluster safety."
+        "zh-CN": "双节点 Kubernetes v1.31.0 已验证 Helm 与原生 YAML 的 CSI 挂载、缩到 0 后续传、配置替换与 Secret 轮换。跨节点 CSI 重挂和旧 owner 隔离待验收。",
+        "en": "Helm and native YAML passed two-node Kubernetes v1.31.0 RWO CSI remount, scale/restart, configuration rollout and Secret rotation. Cross-node CSI and stale-owner fencing remain."
       },
       "acceptance": {
         "zh-CN": "在真实集群验证升级、扩缩、Pod/节点故障、RWO/CSI挂载重连、Secret轮换及旧owner隔离，发布实际配置和证据。",
@@ -1412,8 +1412,10 @@
         "LG-05"
       ],
       "evidence": [
-        "deploy/helm/rivomesh",
-        "deploy/kubernetes"
+        "tests/kubernetes-csi-runtime.py",
+        "docs/en/console-and-deployment.md",
+        "docs/zh-CN/console-and-deployment.md",
+        "docs/verification/baseline.json"
       ]
     },
     {

@@ -162,3 +162,16 @@ tasks; omitting the new field retains NONE automatically. See the [ClickHouse ha
 The Doris wizard configures SQL/Stream Load HTTP origins, redirect allowlist, replicas/buckets and index policy. Default3 replicas; one-BE tests explicitly select1. Expand `dorisIndexPlans` in check results. Pause leaves materialization in flight unconfirmed, not a cutover barrier. Initial identity checks require a Doris ADMIN account; see the [Doris handbook](doris-v3.md).
 
 Optional protocol5 adds administrator evidence creation,raw/normalized pages and typed image review. See [review operations](failure-review.md) for activation/upgrade and deployment profiles. Default legacy profiles do not upgrade automatically;manual skip,compensation and gaps remain open.
+
+### Two-node live verification
+
+The same ARM64 build passed Helm and native YAML on two-node Kubernetes v1.31.0. Each format verified cookie login after refresh, initial delivery, remount of the same RWO CSI volume, incremental recovery, configuration rollout and Secret rotation. The profile uses node-local `hostpath.csi.k8s.io`. LG-06 still tracks cross-node CSI and stale-owner fencing.
+
+Load the candidate image on every node of a disposable cluster and enable `csi-hostpath-driver`. The runner creates and deletes namespaces with unique names.
+
+```sh
+python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
+  --image rivomesh:0.1.0-SNAPSHOT --output target/kubernetes-proof
+```
+
+See the [verification record](../verification/README.md#lg-06-live-kubernetes-rwo-csi).

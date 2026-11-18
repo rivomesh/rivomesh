@@ -1030,5 +1030,42 @@
     "crossEntryChecks": 6,
     "crossEntryCheck": "SOURCE_DECODE: both entries route a read-only recovery review to the owner without changing the checkpoint or pause",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --source-diagnostics decode --source-expected-version 8.4 --artifact <candidate jar> --output target/source-review-proof"
+  },
+  "kubernetesCsiPilot": {
+    "artifactSha256": "16efe0b21bad57fda1418195484595ac20b8e5579f4763f4a109e474beef44a9",
+    "nodes": 2,
+    "architecture": "arm64",
+    "driver": "minikube 1.34 Docker Desktop",
+    "manifest": {
+      "serverVersion": "v1.31.0",
+      "storageClass": "csi-hostpath-sc",
+      "csiDriver": "hostpath.csi.k8s.io",
+      "image": "rivomesh:local-csi-explicit-lsn",
+      "profiles": {
+        "helm": {
+          "checks": [
+            "cookie login survives refresh and SQL snapshot writes to a dynamically provisioned RWO CSI volume",
+            "scale to zero and back remounts the same CSI volume and resumes without resnapshot",
+            "configuration rollout preserves the task and CSI claim",
+            "Secret rotation rejects the old token after Pod replacement"
+          ],
+          "status": "PASS",
+          "node": "rivomesh-sdd",
+          "containerImageID": "docker://sha256:8dbfef96508e5cfc32827c6ef074d3de2cb60506fe1979ae429641484db2333b"
+        },
+        "native": {
+          "checks": [
+            "cookie login survives refresh and SQL snapshot writes to a dynamically provisioned RWO CSI volume",
+            "scale to zero and back remounts the same CSI volume and resumes without resnapshot",
+            "configuration rollout preserves the task and CSI claim",
+            "Secret rotation rejects the old token after Pod replacement"
+          ],
+          "status": "PASS",
+          "node": "rivomesh-sdd-m02",
+          "containerImageID": "docker://sha256:8dbfef96508e5cfc32827c6ef074d3de2cb60506fe1979ae429641484db2333b"
+        }
+      }
+    },
+    "reproduce": "python3 tests/kubernetes-csi-runtime.py --context <disposable context> --image <loaded candidate> --output target/kubernetes-proof"
   }
 }
