@@ -240,6 +240,53 @@ final class ManagedHandoff {
         });
     }
 
+    /** From the candidate's authenticated private admission proof, after durable staging. */
+    record CandidateAdmission(String preparation,HandoffPreparations.Binding binding,String desired,
+                              String configurationSha256,String stagingSha256){}
+
+    // Internal transaction only. Candidate staging is not an HTTP grant to call this method.
+    Map<String,Object> commitAdmittedWriter(String taskId,CandidateAdmission candidate,AccessControl.Principal supplied)throws Exception{
+        if(candidate==null||candidate.preparation()==null||candidate.binding()==null||!"STOPPED".equals(candidate.desired())
+                ||!digest(candidate.configurationSha256())||!digest(candidate.stagingSha256()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED");
+        return tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            HandoffPreparations.Plan plan=tasks.preparations().byRequest(c,candidate.preparation(),db.now(c));
+            if(plan==null||!plan.id().equals(candidate.preparation()))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+            requirePlanGrants(actor,task,plan);
+            if(!plan.evidence().candidate().equals(candidate.binding()))
+                throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+            if(plan.writerCommit()!=null){
+                if(!plan.writerCommit().actor().equals(actor.id)||!plan.writerCommit().stagingSha256().equals(candidate.stagingSha256())
+                        ||!plan.writerCommit().configurationSha256().equals(candidate.configurationSha256()))
+                    throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
+                return HandoffPreparations.summary(plan);
+            }
+            if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
+                throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+            if(!"PREPARED".equals(plan.phase())||plan.activation()==null||!plan.activation().checkedInControlTransaction())
+                throw new TaskService.Conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
+            Assessment current=read(c,task.id);
+            HandoffPreparations.Evidence active=current==null?null:preparationEvidence(current,db.now(c));
+            if(!plan.evidence().equals(active)||stale(c,task,actor,current))
+                throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+            if(!(current.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory)
+                    ||!"ABSENT".equals(inventory.get("sourceEvidence"))||!"ABSENT".equals(inventory.get("failureEvidence")))
+                throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+            AgentDirectory.HandoffCapacity capacity=agents.handoffCapacity(c,candidate.binding().node());
+            long total=capacity.assignedTasks()+capacity.reservedTasks();
+            if(capacity.reservedTasks()<1||total>capacity.taskSlots()||total>capacity.workerSlots())
+                throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
+            String yaml=ManagedWriterDeclaration.successorYaml(tasks.activeYaml(c,task),task.owner,
+                    candidate.binding().node(),plan.activation().nextAssignment());
+            if(!AuditStore.hash(yaml).equals(candidate.configurationSha256()))
+                throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+            JournalWriterAssignment.CutProof cut=Model.JSON.convertValue(current.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
+            return HandoffPreparations.summary(tasks.commitPreparedWriter(c,task,plan,actor,cut,yaml,candidate.stagingSha256()));
+        });
+    }
+
+    private static boolean digest(String value){return value!=null&&value.matches("[a-f0-9]{64}");}
+
     private HandoffPreparations.WriterActivation writerActivation(Connection c,GlobalTaskStore.Record task,Assessment assessment)throws Exception{
         ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(tasks.activeYaml(c,task));
         if(declaration==null)return null;

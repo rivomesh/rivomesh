@@ -8314,5 +8314,31 @@
     },
     "scope": "PostgreSQL 17.12 textual snapshot and pgoutput with non-ISO server style and different source/Worker time zones. Microsecond civil values preserve the clock, zoned values preserve the UTC instant as equivalent destination-local UTC text. PostgreSQL 17.12 and MySQL 8.4.13 destinations.",
     "reproduce": "python3 tests/postgres-source-run.py --source-image postgres:17.12 --timestamp-values --artifact <candidate jar> --output target/pg-timestamp-proof"
+  },
+  "internalManagedWriterSharedPostgresAtomicCommit": {
+    "native": {
+      "status": "PASS",
+      "scope": "internal same PostgreSQL journal and signed control SQL. Fixture evidence and configurations are synthetic. No public dispatch or actual private candidate admission.",
+      "baseGitHead": "b47eb36",
+      "sourceTree": "ddba19ab57b1212039b95b78000bec305966795f",
+      "fixtureSourceSha256": "2d832c5ba1b4cafb4ae211d5a9af89aee5ea64b499564a6d4748a962303ff1a6",
+      "nativeImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "databaseVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "temporarySchemasRemaining": 0,
+      "cleanupExitCode": 0,
+      "checks": [
+        "An existing live lease rejects the joined transaction",
+        "A post-write failure rolls back the writer history and epoch, owner binding, configuration and prepared receipt",
+        "The successful transaction commits both authorities and advances the epoch by exactly one",
+        "The authenticated prior configuration binds only the original Agent directory",
+        "The former assignment is fenced and the successor claims a higher epoch"
+      ]
+    },
+    "integratedArtifact": {
+      "artifactSha256": "902fe9ba792da8073d83a6c7966940597cb1d74305cc57ce20d2a56b4bd81ffa",
+      "verifiedScopedTree": "f6a19ce65b0ff65d7a2ad890363e46621d9cbe0e",
+      "javaFocusedTests": 61
+    },
+    "scope": "Internal transfer transaction uses same PostgreSQL connection for exact stopped journal cut, old assignment and epoch CAS, signed global owner retirement and task binding, and completion receipt. Final public configuration staging and real candidate installation require separate acceptance."
   }
 }

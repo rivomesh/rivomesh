@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "已实测双入口准备、同库 PostgreSQL 托管写入登记与后继身份绑定。双 Agent 核验报告、回执、历史异常和真实原始 binlog。候选状态安装、旧 Agent 退役及双端写入权原子切换待验。",
-        "en": "Both entries verified preparation and same-store PostgreSQL binding for managed successor identity. Both Agents verified report, receipt, historical failure and real raw binlog custody. Candidate installation, retirement and atomic writer transfer remain."
+        "zh-CN": "双 Agent 原始证据核验、同库托管写入者登记已实测。内部 PostgreSQL 事务通过原租约拒绝、两端回滚、原身份隔离与后继高代次验证。实际候选配置安装、操作入口和自动故障接管待验。",
+        "en": "Native dual-Agent raw proof and managed enrollment passed. The internal same-store PostgreSQL transaction verified live lease refusal, joint rollback, former fencing and successor epoch. Real candidate configuration installation, public transition and automatic failure takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -158,7 +158,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
         "tests/ui/browser-handoff.mjs",
         "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedWriterDeclaration.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedWriterDeclaration.java",
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedWriterTransactionTest.java"
       ]
     },
     {

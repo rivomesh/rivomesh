@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.JournalWriterAssignment;
 import java.sql.*;
 import java.util.*;
 
@@ -202,6 +203,58 @@ final class GlobalTaskStore {
     void applied(Connection c,Record record,String version)throws Exception{
         if(!record.configurationVersion.equals(version))throw new TaskService.Conflict("CONFIGURATION_VERSION_CHANGED");configuration(c,record);record.activeConfigurationVersion=version;
         db.update(c,"UPDATE "+db.table("task_authority")+" SET active_version=?,record_hash=? WHERE cluster_id=? AND task_id=?",version,recordSignature(record),cluster,record.id);
+    }
+    HandoffPreparations.Plan commitPreparedWriter(Connection c,Record record,HandoffPreparations.Plan plan,
+            AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successorYaml,
+            String candidateStagingSha256)throws Exception{
+        if(candidateStagingSha256==null||!candidateStagingSha256.matches("[a-f0-9]{64}"))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED");
+        HandoffPreparations.Evidence evidence=plan.evidence();
+        HandoffPreparations.WriterActivation activation=plan.activation();
+        if(!actor.administers()||!actor.node(evidence.original().node())||!actor.node(evidence.candidate().node()))
+            throw new SecurityException("FORBIDDEN");
+        if(!record.id.equals(plan.task())||!record.owner.equals(evidence.original().node())
+                ||!record.directory.equals(evidence.original().directory())||!record.revision.equals(evidence.revision())
+                ||!evidence.configuration().equals(record.activeConfigurationVersion)
+                ||!evidence.configuration().equals(record.configurationVersion)||!"PREPARED".equals(plan.phase())
+                ||activation==null||!activation.checkedInControlTransaction()||db.now(c)>=plan.expires())
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        String originalYaml=activeYaml(c,record);
+        ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(originalYaml);
+        if(declaration==null||!db.sharesPostgresUrl(declaration.journalUrl())||cut==null||cut.managedWriter()==null
+                ||!activation.originalAssignmentSha256().equals(cut.managedWriter().originalAssignmentSha256())
+                ||!activation.journalGenerationSha256().equals(cut.journalGenerationSha256())
+                ||!activation.nativeEvidenceSha256().equals(cut.nativeEvidenceSha256())
+                ||!evidence.cut().epoch().equals(Long.toString(cut.managedWriter().epoch()))
+                ||!evidence.cut().sequence().equals(Long.toString(cut.managedWriter().sequence()))
+                ||!evidence.cut().checkpointSha256().equals(cut.managedWriter().checkpointSha256())
+                ||!successorYaml.equals(ManagedWriterDeclaration.successorYaml(originalYaml,record.owner,
+                    evidence.candidate().node(),activation.nextAssignment())))
+            throw new TaskService.Conflict("HANDOFF_MANAGED_PLACEMENT_INVALID");
+        JournalWriterAssignment.Placement placement=JournalWriterAssignment.writeManagedControlPlacement(c,
+                declaration.namespace(),record.id,declaration.assignment(),cut,activation.nextAssignment(),evidence.candidate().node());
+        record.owner=evidence.candidate().node();record.directory=evidence.candidate().directory();record.revision=UUID.randomUUID().toString();
+        record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();
+        record.activeConfigurationVersion=record.configurationVersion;record.configurationIndex=Math.addExact(record.configurationIndex,1);
+        record.configurationAction="AGENT_HANDOFF";record.yaml=successorYaml;
+        version(c,record,actor);
+        if(db.update(c,"UPDATE "+db.table("task_authority")+" SET owner_id=?,directory_id=?,revision=?,configuration_version=?,"
+                +"active_version=?,configuration_index=?,record_hash=? WHERE cluster_id=? AND task_id=? AND owner_id=? AND directory_id=?"
+                +" AND revision=? AND active_version=?",record.owner,record.directory,record.revision,record.configurationVersion,
+                record.activeConfigurationVersion,record.configurationIndex,recordSignature(record),cluster,record.id,
+                evidence.original().node(),evidence.original().directory(),evidence.revision(),evidence.configuration())!=1)
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        db.update(c,"DELETE FROM "+db.table("task_observation")+" WHERE cluster_id=? AND task_id=?",cluster,record.id);
+        HandoffPreparations.Plan committed=preparations.commitWriter(c,plan,new HandoffPreparations.WriterCommit(actor.id,
+                candidateStagingSha256,AuditStore.hash(successorYaml),record.revision,record.configurationVersion,placement.epoch()),db.now(c));
+        access.append(c,event(record,plan.id(),actor,"MANAGED_HANDOFF_WRITER_COMMITTED"));
+        return committed;
+    }
+    String retiredConfiguration(Connection c,Record current,String original,String directory)throws Exception{
+        if(original.equals(current.owner)&&directory.equals(current.directory))return null;
+        HandoffPreparations.Plan retired=preparations.retirement(c,current.id,original,directory);
+        if(retired==null)throw new TaskService.Conflict("COMMAND_OWNER_CHANGED");
+        return version(c,current.id,retired.evidence().configuration()).yaml;
     }
     private String reference(Record record,Version version){return version.id+"."+cipher.signature("config-history\n"+record.id+"\n"+record.configurationVersion+"\n"+version.id);}
     private Version selected(Connection c,Record record,String reference)throws Exception{

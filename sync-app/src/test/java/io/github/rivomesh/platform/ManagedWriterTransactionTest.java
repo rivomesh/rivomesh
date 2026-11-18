@@ -1,0 +1,146 @@
+package io.github.rivomesh.platform;
+
+import io.github.rivomesh.JdbcConnections;
+import io.github.rivomesh.Model;
+import io.github.rivomesh.Sql;
+import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.JdbcJournal;
+import io.github.rivomesh.cdc.JournalWriterAssignment;
+import java.io.IOException;
+import java.sql.*;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import static org.junit.jupiter.api.Assertions.*;
+
+/** Exercises the transactional SQL substrate without granting candidate admission through an endpoint. */
+@EnabledIfSystemProperty(named="sync.handoff.transaction.jdbc",matches="jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/[^?]+")
+class ManagedWriterTransactionTest {
+    private static final String TASK="handoff-orders",PREPARATION="handoff_transaction_prepared",OWNER="first",CANDIDATE="second";
+    private final String url=System.getProperty("sync.handoff.transaction.jdbc");
+    private final String username=System.getProperty("sync.handoff.transaction.username","postgres");
+    private final String password=System.getenv().getOrDefault("RM_HANDOFF_FIXTURE_PASSWORD","");
+    private final String suffix=UUID.randomUUID().toString().substring(0,8),journal="handoff_journal_"+suffix;
+    private final String firstDirectory=UUID.randomUUID().toString(),nextDirectory=UUID.randomUUID().toString();
+    private final String first=UUID.randomUUID().toString(),next=UUID.randomUUID().toString();
+    private final String generation=UUID.randomUUID().toString();
+    private final SourcePosition position=new SourcePosition(1,"MYSQL","fixture-source",Map.of("gtidSet","fixture:1-2"));
+
+    @Test void rollbackAndCommitPreserveOneNativeEpochAndSignedRetirement()throws Exception{
+        PlatformConfig config=configuration();
+        try{
+            SharedAccessStore access=new SharedAccessStore(config,AccountDirectory.configured(config),null,Map.of());
+            AccessControl.Principal actor=AccountDirectory.authenticate(access.accounts(),"Bearer "+config.authToken);
+            GlobalTaskStore store=new GlobalTaskStore(config.cluster,access,config.cluster.taskKey,null,32);
+            JdbcControlStore database=store.database();
+            new GlobalTaskViews(config.cluster,store,new AgentDirectory(config.cluster,access,store),15000);
+            seedJournal();
+            String active="""
+                    formatVersion: 3
+                    pipelineId: %s
+                    nodeId: %s
+                    journal:
+                      mode: EXTERNAL
+                      url: %s
+                      namespace: %s
+                      managedWriter: true
+                      writerAssignment: %s
+                    """.formatted(TASK,OWNER,url,journal,first);
+            GlobalTaskStore.Record original=store.create(TASK,OWNER,firstDirectory,active,"handoff_transaction_original",actor);
+            store.service((c,accounts)->{store.applied(c,original,original.configurationVersion);return null;});
+            String checkpoint=AuditStore.hash(Model.JSON.writeValueAsString(position)),nativeProof="a".repeat(64);
+            JournalWriterAssignment.CutProof cut=new JournalWriterAssignment.CutProof(Codec.sha256(generation),nativeProof,List.of("pg"),true,
+                    new JournalWriterAssignment.ManagedCut(OWNER,Codec.sha256(first),9,2,checkpoint));
+            HandoffPreparations.Evidence evidence=new HandoffPreparations.Evidence("handoff_transaction_assess",original.revision,
+                    original.configurationVersion,new HandoffPreparations.Binding(OWNER,firstDirectory,UUID.randomUUID().toString(),3),
+                    new HandoffPreparations.Binding(CANDIDATE,nextDirectory,UUID.randomUUID().toString(),4),
+                    new HandoffPreparations.JournalCut("9","2",checkpoint),"b".repeat(64),"c".repeat(64));
+            String staged="d".repeat(64),successor=ManagedWriterDeclaration.successorYaml(active,OWNER,CANDIDATE,next);
+            store.transaction(TASK,actor,(c,row,current)->store.preparations().prepare(c,row,PREPARATION,current,evidence,
+                    new HandoffPreparations.WriterActivation(Codec.sha256(first),next,Codec.sha256(generation),nativeProof,true),database.now(c)));
+            sql("UPDATE "+table("job")+" SET owner='fixture-live',lease_until=9223372036854775807");
+            assertEquals("HANDOFF_MANAGED_CONTROL_CUT_CHANGED",assertThrows(IllegalStateException.class,()->
+                    store.transaction(TASK,actor,(c,row,current)->commit(store,c,row,current,cut,successor,staged))).getMessage());
+            sql("UPDATE "+table("job")+" SET owner=NULL,lease_until=0");
+            assertThrows(IOException.class,()->store.transaction(TASK,actor,(c,row,current)->{
+                commit(store,c,row,current,cut,successor,staged);
+                throw new IOException("fixture failure before commit");
+            }));
+            assertEquals(OWNER,store.get(TASK,actor).owner);
+            assertEquals(original.configurationVersion,store.get(TASK,actor).activeConfigurationVersion);
+            assertEquals("9",value("SELECT epoch FROM "+table("job")));
+            assertEquals(first,value("SELECT assignment_id FROM "+table("writer_assignment")));
+            assertEquals("1",value("SELECT COUNT(*) FROM "+table("writer_assignment_history")));
+            HandoffPreparations.Plan live=store.service((c,accounts)->store.preparations().byRequest(c,PREPARATION,database.now(c)));
+            assertEquals("PREPARED",live.phase());
+            HandoffPreparations.Plan moved=store.transaction(TASK,actor,(c,row,current)->commit(store,c,row,current,cut,successor,staged));
+            GlobalTaskStore.Record installed=store.get(TASK,actor);
+            assertEquals(CANDIDATE,installed.owner);
+            assertEquals(nextDirectory,installed.directory);
+            assertEquals(successor,installed.yaml);
+            assertEquals("COMMITTED",moved.phase());
+            assertEquals(10,moved.writerCommit().journalEpoch());
+            assertEquals(installed.activeConfigurationVersion,moved.writerCommit().configuration());
+            assertEquals(next,value("SELECT assignment_id FROM "+table("writer_assignment")));
+            assertEquals("10",value("SELECT epoch FROM "+table("job")));
+            assertEquals(generation,value("SELECT generation FROM "+table("job")));
+            assertEquals("2",value("SELECT COUNT(*) FROM "+table("writer_assignment_history")));
+            String retired=store.service((c,accounts)->store.retiredConfiguration(c,installed,OWNER,firstDirectory));
+            assertEquals(active,retired);
+            assertThrows(TaskService.Conflict.class,()->store.service((c,accounts)->
+                    store.retiredConfiguration(c,installed,OWNER,UUID.randomUUID().toString())));
+            try(JdbcJournal stale=new JdbcJournal(writerSettings(first,OWNER))){
+                assertThrows(JdbcJournal.Fenced.class,()->stale.claim("former-worker",30000));
+            }
+            try(JdbcJournal admitted=new JdbcJournal(writerSettings(next,CANDIDATE))){
+                var lease=admitted.claim("candidate-worker",30000);
+                assertEquals(11,lease.epoch);admitted.release(lease);
+            }
+        }finally{
+            sql("DROP SCHEMA IF EXISTS "+Sql.pg(journal)+" CASCADE");
+            sql("DROP SCHEMA IF EXISTS "+Sql.pg(config.cluster.namespace)+" CASCADE");
+        }
+    }
+
+    private HandoffPreparations.Plan commit(GlobalTaskStore store,Connection c,GlobalTaskStore.Record row,
+            AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successor,String staged)throws Exception{
+        HandoffPreparations.Plan plan=store.preparations().byRequest(c,PREPARATION,store.database().now(c));
+        return store.commitPreparedWriter(c,row,plan,actor,cut,successor,staged);
+    }
+    private PlatformConfig configuration(){
+        PlatformConfig config=new PlatformConfig();config.authToken="handoff-txn-fixture-token-with-at-least-32-characters";
+        config.cluster=new ClusterConfig();config.cluster.id="handoff-fixture";config.cluster.nodeId=OWNER;
+        config.cluster.sharedAccess=true;config.cluster.sharedTasks=true;config.cluster.url=url;config.cluster.username=username;
+        config.cluster.password=password;config.cluster.namespace="handoff_control_"+suffix;
+        config.cluster.taskKey=GlobalTaskStoreTest.key(5);return config;
+    }
+    private JdbcJournal.Settings writerSettings(String assignment,String node){
+        JdbcJournal.Settings s=new JdbcJournal.Settings();s.driver="org.postgresql.Driver";s.url=url;s.username=username;s.password=password;
+        s.namespace=journal;s.pipelineId=TASK;s.managedWriter=true;s.writerAssignment=assignment;s.writerNode=node;return s;
+    }
+    private void seedJournal()throws Exception{
+        sql("CREATE SCHEMA "+Sql.pg(journal));
+        sql("CREATE TABLE "+table("job")+" (pipeline_id text PRIMARY KEY,format_version integer,fingerprint text,generation text,"
+                +"epoch bigint,owner text,lease_until bigint,next_seq bigint,captured text,pending_bytes bigint,snapshot_bytes bigint,"
+                +"normalized_seq bigint,identity_bytes bigint,run_state text,error_generation bigint,error_code text)");
+        sql("CREATE TABLE "+table("writer_assignment")+" (pipeline_id text PRIMARY KEY,assignment_id text)");
+        sql("CREATE TABLE "+table("writer_assignment_history")+" (pipeline_id text,assignment_id text,node_id text,previous_assignment text,"
+                +"generation text,activated_epoch bigint,last_sequence bigint,checkpoint_hash text,evidence_hash text,PRIMARY KEY(pipeline_id,assignment_id))");
+        sql("CREATE TABLE "+table("subscription")+" (pipeline_id text,subscription_id text,acknowledged bigint,run_state text)");
+        try(Connection c=database()){
+            JdbcControlStore.execute(c,"INSERT INTO "+table("writer_assignment")+" VALUES ('"+TASK+"','"+first+"')");
+            JdbcControlStore.execute(c,"INSERT INTO "+table("writer_assignment_history")+" VALUES ('"+TASK+"','"+first+"','"+OWNER+"',NULL,'"+generation+"',0,0,NULL,NULL)");
+            JdbcControlStore.execute(c,"INSERT INTO "+table("subscription")+" VALUES ('"+TASK+"','pg',2,'RUNNING')");
+            try(PreparedStatement p=c.prepareStatement("INSERT INTO "+table("job")+" VALUES (?,11,?, ?,9,NULL,0,3,?,0,0,2,0,'RUNNING',0,NULL)")){
+                p.setString(1,TASK);p.setString(2,"f".repeat(64));p.setString(3,generation);p.setString(4,Codec.encode(position));p.executeUpdate();
+            }
+        }
+    }
+    private String table(String name){return Sql.pg(journal)+".rm3_"+name;}
+    private Connection database()throws SQLException{return JdbcConnections.open("org.postgresql.Driver",url,username,password);}
+    private void sql(String statement)throws Exception{try(Connection c=database()){JdbcControlStore.execute(c,statement);}}
+    private String value(String query)throws Exception{
+        try(Connection c=database();Statement s=c.createStatement();ResultSet r=s.executeQuery(query)){assertTrue(r.next());return r.getString(1);}
+    }
+}

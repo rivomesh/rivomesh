@@ -14,10 +14,13 @@ final class HandoffPreparations {
     record JournalCut(String epoch,String sequence,String checkpointSha256){}
     record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
                             String nativeEvidenceSha256,boolean checkedInControlTransaction){}
+    record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){}
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                WriterActivation activation){}
+                WriterActivation activation,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                WriterCommit writerCommit){}
 
     private final JdbcControlStore db;
     private final ControlCipher cipher;
@@ -51,9 +54,11 @@ final class HandoffPreparations {
                 ||!Objects.equals(row.getString("release_id"),p.releaseId)
                 ||p.sequence<1||p.created<=0||p.expires-p.created!=REVIEW_MILLIS
                 ||!(switch(p.phase){
-                    case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0;
-                    case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created;
-                    case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires;
+                    case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
+                    case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
+                    case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
+                    case "COMMITTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
+                            &&p.activation!=null&&p.writerCommit!=null;
                     default->false;
                 }))throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
@@ -67,7 +72,7 @@ final class HandoffPreparations {
     }
     private Plan close(Connection c,Plan p,String phase,String release,String actor,long now)throws Exception{
         Plan closed=new Plan(p.id,p.task,p.sequence,phase,p.actor,p.actorRevision,p.evidence,p.created,p.expires,
-                release,actor,now,p.activation);
+                release,actor,now,p.activation,null);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,release_id=?,envelope=?"
                         +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",phase,release,seal(closed),cluster,p.id)!=1)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
@@ -107,7 +112,7 @@ final class HandoffPreparations {
         Plan latest=latest(c,task.id,now);
         if(latest!=null&&"PREPARED".equals(latest.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
         int next=latest==null?1:Math.addExact(latest.sequence,1);
-        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation);
+        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation,null);
         db.update(c,"INSERT INTO "+db.table("task_handoff_plan")
                         +" (cluster_id,request_id,task_id,candidate_id,ordinal,phase,envelope) VALUES (?,?,?,?,?,?,?)",
                 cluster,p.id,p.task,p.evidence.candidate.node,p.sequence,p.phase,seal(p));
@@ -117,6 +122,29 @@ final class HandoffPreparations {
         if(!"PREPARED".equals(p.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         return close(c,p,"RELEASED",request,actor.id,Math.max(p.created,now));
     }
+    Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
+        if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires)
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
+                null,null,Math.max(now,p.created),p.activation,receipt);
+        if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",complete.phase,seal(complete),cluster,p.id)!=1)
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        return complete;
+    }
+
+    Plan retirement(Connection c,String task,String original,String directory)throws Exception{
+        try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
+                +" WHERE cluster_id=? AND task_id=? AND phase='COMMITTED' ORDER BY ordinal DESC",cluster,task);
+            ResultSet rows=statement.executeQuery()){
+            while(rows.next()){
+                Plan p=read(rows);
+                if(p.evidence.original.node.equals(original)&&p.evidence.original.directory.equals(directory))return p;
+            }
+            return null;
+        }
+    }
+
     static Map<String,Object> summary(Plan p){
         Evidence e=p.evidence;
         Map<String,Object> view=new LinkedHashMap<>();
@@ -129,6 +157,11 @@ final class HandoffPreparations {
         view.put("executionAuthorized",false);view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
         view.put("reservedWorkerSlots","PREPARED".equals(p.phase)?1:0);
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
+        if(p.writerCommit!=null){
+            view.put("activatedJournalEpoch",Long.toString(p.writerCommit.journalEpoch));
+            view.put("committedRevision",p.writerCommit.revision);
+            view.put("committedConfigurationVersion",p.writerCommit.configuration);
+        }
         if(p.activation!=null)view.put("writerActivation",Map.of(
                 "checkedInControlTransaction",p.activation.checkedInControlTransaction,
                 "activationSha256",AuditStore.hash(p.id+"\n"+e.proof+"\n"+p.activation.nextAssignment),

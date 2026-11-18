@@ -186,8 +186,41 @@ public final class JournalWriterAssignment {
         return Codec.sha256(Model.JSON.writeValueAsString(Codec.decode(captured,SourcePosition.class)));
     }
 
+    private record LockedControlCut(String generation,String captured){}
+
     /** Lock and check the same managed journal cut using the caller's PostgreSQL control transaction. */
     public static void verifyManagedControlCut(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
+        lockManagedControlCut(c,namespace,task,assignment,proof);
+    }
+
+    /** Writes the journal half on the caller's control transaction. The caller must commit both halves together. */
+    public static Placement writeManagedControlPlacement(Connection c,String namespace,String task,String previous,
+                                                         CutProof proof,String next,String candidate)throws Exception{
+        if(proof==null||proof.managedWriter()==null||!validId(next)||next.equals(previous)
+                ||candidate==null||!candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+                ||candidate.equals(proof.managedWriter().originalNode())||proof.managedWriter().epoch()>=Long.MAX_VALUE
+                ||!Objects.toString(proof.nativeEvidenceSha256(),"").matches("[a-f0-9]{64}"))
+            throw new IllegalStateException("HANDOFF_MANAGED_PLACEMENT_INVALID");
+        LockedControlCut locked=lockManagedControlCut(c,namespace,task,previous,proof);
+        ManagedCut cut=proof.managedWriter();
+        long nextEpoch=Math.addExact(cut.epoch(),1);
+        Placement placement=new Placement(next,candidate,previous,locked.generation,nextEpoch,cut.sequence(),
+                Codec.sha256(locked.captured),proof.nativeEvidenceSha256());
+        String schema=Sql.pg(namespace);
+        JdbcJournal.execute(c,"INSERT INTO "+schema+".rm3_writer_assignment_history"
+                        +" (pipeline_id,assignment_id,node_id,previous_assignment,generation,activated_epoch,last_sequence,checkpoint_hash,evidence_hash)"
+                        +" VALUES (?,?,?,?,?,?,?,?,?)",task,next,candidate,previous,locked.generation,nextEpoch,cut.sequence(),
+                placement.checkpointSha256(),placement.evidenceSha256());
+        if(JdbcJournal.execute(c,"UPDATE "+schema+".rm3_writer_assignment SET assignment_id=?"
+                +" WHERE pipeline_id=? AND assignment_id=?",next,task,previous)!=1
+                ||JdbcJournal.execute(c,"UPDATE "+schema+".rm3_job SET epoch=?,owner=NULL,lease_until=0"
+                +" WHERE pipeline_id=? AND epoch=? AND generation=? AND next_seq=?",nextEpoch,task,cut.epoch(),
+                locked.generation,Math.addExact(cut.sequence(),1))!=1)
+            throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
+        return placement;
+    }
+
+    private static LockedControlCut lockManagedControlCut(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
         if(c.getAutoCommit()||!"PostgreSQL".equals(c.getMetaData().getDatabaseProductName())||proof==null
                 ||proof.managedWriter()==null||!validId(assignment)||!Codec.sha256(assignment).equals(proof.managedWriter().originalAssignmentSha256()))
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_INVALID");
@@ -198,6 +231,7 @@ public final class JournalWriterAssignment {
                 +"CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT) FROM "+schema+".rm3_job j JOIN "
                 +schema+".rm3_writer_assignment a ON a.pipeline_id=j.pipeline_id JOIN "+schema+".rm3_writer_assignment_history h"
                 +" ON h.pipeline_id=a.pipeline_id AND h.assignment_id=a.assignment_id WHERE j.pipeline_id=? FOR UPDATE OF j";
+        LockedControlCut locked;
         try(PreparedStatement statement=c.prepareStatement(sql)){
             statement.setQueryTimeout(5);statement.setString(1,task);
             try(ResultSet row=statement.executeQuery()){
@@ -208,6 +242,7 @@ public final class JournalWriterAssignment {
                         ||!assignment.equals(row.getString(10))||!expected.originalNode().equals(row.getString(11))
                         ||!row.getString(2).equals(row.getString(12))||row.getLong(13)>expected.epoch())
                     throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
+                locked=new LockedControlCut(row.getString(2),row.getString(6));
             }
         }
         Set<String> destinations=new TreeSet<>();
@@ -224,6 +259,7 @@ public final class JournalWriterAssignment {
         }
         if(!destinations.equals(new TreeSet<>(proof.destinations())))
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
+        return locked;
     }
 
     private static long requireReadyCut(PipelineConfig candidate,JdbcJournal j,Connection c,Map<String,Object> job)throws Exception{

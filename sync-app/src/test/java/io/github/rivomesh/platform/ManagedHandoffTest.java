@@ -15,6 +15,7 @@ class ManagedHandoffTest {
     private GlobalTaskViews views;
     private DurableCommands commands;
     private GlobalTaskPlane a,b;
+    private ManagedHandoff aHandoff;
     private OwnerQueries aQueries,bQueries;
     private ControlStore.Lease aLease,bLease;
     private ClusterConfig bConfig;
@@ -65,7 +66,7 @@ class ManagedHandoffTest {
                                   DurableCommands commands,GlobalTaskViews views)throws Exception{
         ManagedHandoff handoff=new ManagedHandoff(config,fixture.access,store,commands,agents,views);
         OwnerQueries transport=new OwnerQueries(config,store,agents,10,30000,handoff);
-        if(config.nodeId.equals("a"))aQueries=transport;else bQueries=transport;
+        if(config.nodeId.equals("a")){aQueries=transport;aHandoff=handoff;}else bQueries=transport;
         return new GlobalTaskPlane(store,commands,agents,views,transport,
                 config.nodeId,false,handoff);
     }
@@ -417,6 +418,23 @@ class ManagedHandoffTest {
         TaskRequest release=release("managed_writer_release",preparation.requestId);release.taskId=task.id;
         assertEquals(activation,b.invoke(release,fixture.admin).get("writerActivation"));
         assertEquals("a",fixture.b.get(task.id,fixture.admin).owner);
+    }
+
+    @Test void evidenceStageAloneDoesNotGrantInternalCommitAndSeparateStoresStayFenced()throws Exception{
+        Map<String,Object> evidence=verifiedAssessment("handoff_guarded_commit_assessment",fixture.admin);
+        TaskRequest prepared=prepare("handoff_guarded_commit",evidence);
+        a.invoke(prepared,fixture.admin);
+        HandoffPreparations.Binding binding=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
+        String configuration="c".repeat(64),stage="d".repeat(64);
+        conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED",()->aHandoff.commitAdmittedWriter("orders",
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STAGED",configuration,stage),fixture.admin));
+        conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED",()->aHandoff.commitAdmittedWriter("orders",
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STOPPED",configuration,stage),fixture.admin));
+        HandoffPreparations.Binding stranger=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch+1);
+        conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED",()->aHandoff.commitAdmittedWriter("orders",
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,stranger,"STOPPED",configuration,stage),fixture.admin));
+        assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
+        assertEquals("PREPARED",entryB().invoke(currentPreparation(),fixture.admin).get("state"));
     }
 
 }

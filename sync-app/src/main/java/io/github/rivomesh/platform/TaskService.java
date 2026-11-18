@@ -106,7 +106,7 @@ public final class TaskService implements AutoCloseable {
     private final Map<String,Thread> operationThreads=new ConcurrentHashMap<>();
     private final Map<String,AtomicBoolean> recoveryCancellations=new HashMap<>();
     private final Set<String> ownerRequests=new HashSet<>();
-    private final Set<String> ownerStartBlocks=new HashSet<>();
+    private final Set<String> ownerStartBlocks=new HashSet<>(),retiredOwners=new HashSet<>();
     private final List<Map<String,String>> invalid=new ArrayList<>();
     private final Path statePath, logDirectory, workerDirectory;
     private final FileChannel lockChannel;
@@ -188,6 +188,16 @@ public final class TaskService implements AutoCloseable {
     }
     synchronized void beginOwnerScheduling(){ensureOpen();if(config.cluster!=null&&!config.cluster.executes())throw new Conflict("OWNER_ROLE_REQUIRED");if(!schedulingStarted){scheduler.scheduleWithFixedDelay(this::schedule,0,config.pollMillis,TimeUnit.MILLISECONDS);schedulingStarted=true;}}
     synchronized void holdOwnerStart(String task,boolean hold){if(hold)ownerStartBlocks.add(task);else ownerStartBlocks.remove(task);}
+    synchronized void retainRetiredOwners(Set<String> tasks){
+        ensureOpen();
+        for(String id:tasks){
+            Entry entry=require(id);Control control=registry.tasks.get(id);
+            if(!"STOPPED".equals(control.desired)||entry.worker!=null&&entry.worker.alive()
+                    ||control.operations.stream().anyMatch(op->"PENDING".equals(op.status)))
+                throw new Conflict("HANDOFF_ORIGINAL_WORKER_CHANGED");
+        }
+        retiredOwners.clear();retiredOwners.addAll(tasks);
+    }
     synchronized Map<String,String> ownerDocuments(){ensureOpen();if(!invalid.isEmpty()||!entries.keySet().equals(registry.tasks.keySet()))throw new Conflict("OWNER_LOCAL_CONFIGURATION_INVALID");Map<String,String> result=new LinkedHashMap<>();for(Map.Entry<String,Entry> item:entries.entrySet())result.put(item.getKey(),item.getValue().config.workerYaml);return result;}
     private void bindSharedAccess()throws Exception{
         Map<String,Object> localHead=audit.page(0,0,1),anchor=new LinkedHashMap<>();anchor.put("storeId",localHead.get("storeId"));anchor.put("lastSequence",localHead.get("lastSequence"));anchor.put("lastHash",localHead.get("lastHash"));
@@ -823,7 +833,7 @@ public final class TaskService implements AutoCloseable {
                 entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
             }}
             if(entry.worker==null&&entry.exits<5&&System.currentTimeMillis()>=entry.retryAt) {
-                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
+                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
                     if(slots.tryAcquire()){
                         entry.permit=true;
                         try{Control committed=registry.tasks.get(id);if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));entry.config.holdLocalJournal();entry.worker=workers.start(entry.path,logDirectory.resolve(id+".log"),config.workerHeapMiB);entry.workerState="RUNNING";}

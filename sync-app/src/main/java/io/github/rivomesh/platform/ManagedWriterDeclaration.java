@@ -2,6 +2,7 @@ package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.rivomesh.cdc.JournalWriterAssignment;
 import java.util.Objects;
@@ -32,6 +33,18 @@ record ManagedWriterDeclaration(String assignment,String node,String journalUrl,
 
     void requireOwner(String owner){
         if(!node.equals(owner))throw new TaskService.Conflict("MANAGED_WRITER_OWNER_REQUIRED");
+    }
+    static String successorYaml(String active,String expectedOriginal,String candidate,String nextAssignment)throws Exception{
+        ManagedWriterDeclaration original=read(active);
+        if(original==null||!JournalWriterAssignment.validId(nextAssignment)||original.assignment.equals(nextAssignment)
+                ||Objects.equals(expectedOriginal,candidate))throw new TaskService.Conflict("HANDOFF_MANAGED_PLACEMENT_INVALID");
+        original.requireOwner(expectedOriginal);
+        ObjectNode document=(ObjectNode)YAML.readTree(active);
+        document.put("nodeId",candidate);
+        ((ObjectNode)document.get("journal")).put("writerAssignment",nextAssignment);
+        String successor=YAML.writeValueAsString(document);
+        read(successor).requireOwner(candidate);
+        return successor;
     }
     static void requireUnchanged(String before,String after)throws Exception{
         if(!Objects.equals(read(before),read(after)))throw new TaskService.Conflict("MANAGED_WRITER_PLACEMENT_IMMUTABLE");

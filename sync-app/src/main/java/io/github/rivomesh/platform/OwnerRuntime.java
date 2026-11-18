@@ -23,6 +23,7 @@ final class OwnerRuntime implements AutoCloseable {
     private final ScheduledExecutorService commandLoop,queryLoop;
     private final ThreadPoolExecutor readers;
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
+    private Set<String> retiredTasks=Set.of();
     private final AtomicBoolean started=new AtomicBoolean(),closed=new AtomicBoolean();
     private volatile String commandProblem,queryProblem;
 
@@ -41,23 +42,37 @@ final class OwnerRuntime implements AutoCloseable {
     }
     private void verifyDefinitions()throws Exception{
         Map<String,String> documents=local.ownerDocuments();
-        authority.service((c,accounts)->{
+        Set<String> retired=authority.service((c,accounts)->{
             ControlStore.Lease lease=leases.get();agents.require(c,lease,directory);ObjectMapper yaml=new ObjectMapper(new YAMLFactory());
+            Set<String> prior=new HashSet<>();
             for(Map.Entry<String,String> entry:documents.entrySet()){
                 GlobalTaskStore.Record record;try{record=authority.record(c,entry.getKey());}catch(NoSuchElementException missing){throw new TaskService.Conflict("OWNER_TASK_NOT_REGISTERED");}
-                if(!lease.nodeId.equals(record.owner)||!directory.equals(record.directory))throw new TaskService.Conflict("COMMAND_OWNER_CHANGED");
-                TaskDefinition expected=TaskDefinition.parse(authority.activeYaml(c,record),Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory),lease.nodeId);
+                String historical=authority.retiredConfiguration(c,record,lease.nodeId,directory);
+                String expectedYaml=historical==null?authority.activeYaml(c,record):historical;
+                TaskDefinition expected=TaskDefinition.parse(expectedYaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory),lease.nodeId);
                 if(!yaml.readTree(expected.workerYaml).equals(yaml.readTree(entry.getValue())))throw new TaskService.Conflict("OWNER_CONFIGURATION_PROJECTION_CHANGED");
-                durable.reserveExisting(c,record,expected);
-            }agents.require(c,lease,directory);return null;
+                if(historical==null)durable.reserveExisting(c,record,expected);
+                else prior.add(record.id);
+            }
+            agents.require(c,lease,directory);
+            return prior;
         });
+        local.retainRetiredOwners(retired);
+        retiredTasks=Set.copyOf(retired);
     }
     @SuppressWarnings("unchecked") private void publish()throws Exception{
         List<Map<String,Object>> tasks=(List<Map<String,Object>>)local.list(null).get("tasks");
+        if(!retiredTasks.isEmpty())tasks=tasks.stream().filter(t->!retiredTasks.contains(t.get("id"))).toList();
         for(int offset=0;offset<tasks.size();offset+=20)views.publish(leases.get(),directory,tasks.subList(offset,Math.min(tasks.size(),offset+20)));
     }
     private void commands(){
-        if(closed.get())return;try{execution.cycle();publish();commandProblem=null;}catch(Exception failure){commandProblem=code(failure);}
+        if(closed.get())return;
+        try{
+            execution.cycle();
+            try{publish();}
+            catch(ControlStore.Fenced changed){verifyDefinitions();publish();}
+            commandProblem=null;
+        }catch(Exception failure){commandProblem=code(failure);}
     }
     private void queries(){
         if(closed.get())return;
