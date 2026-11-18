@@ -9,6 +9,16 @@ import java.util.Map;
 /** Preserve signed TIME/TIME2 values while retaining the pinned SDK's other event codecs. */
 final class MysqlEventDeserializer {
     private MysqlEventDeserializer(){}
+    static void requireSupported(EventType event){
+        switch(event){
+            case PARTIAL_UPDATE_ROWS_EVENT:throw new IllegalStateException("MYSQL_PARTIAL_JSON_UNSUPPORTED");
+            case TRANSACTION_PAYLOAD:throw new IllegalStateException("MYSQL_COMPRESSED_TX_UNSUPPORTED");
+            case ANONYMOUS_GTID:throw new IllegalStateException("MYSQL_GTID_REQUIRED");
+            case UNKNOWN:case INCIDENT:throw new IllegalStateException("BINLOG_EVENT_PROFILE_UNSUPPORTED");
+            default:if(event.name().contains("TAGGED"))throw new IllegalStateException("MYSQL_TAGGED_GTID_UNSUPPORTED");
+        }
+    }
+
     static EventDeserializer create(Map<Long,TableMapEventData> tables){
         EventDeserializer result=new EventDeserializer();
         result.setCompatibilityMode(EventDeserializer.CompatibilityMode.CHAR_AND_BINARY_AS_BYTE_ARRAY,EventDeserializer.CompatibilityMode.DATE_AND_TIME_AS_LONG_MICRO,EventDeserializer.CompatibilityMode.INVALID_DATE_AND_TIME_AS_MIN_VALUE);

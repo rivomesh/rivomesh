@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.14 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.15 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **18 DONE, 26 PARTIAL and 4 NEW, with 30 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, MySQL 8.2.0 and five-JDK process and source/target diagnostic profiles passed bounded acceptance.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **19 DONE, 25 PARTIAL and 4 NEW, with 29 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and five-JDK process and source/target diagnostic profiles passed bounded acceptance.
 
 ## Current baseline
 
@@ -22,7 +22,7 @@ Maintain the current first-release specification and [verification baseline](../
 | 6 Complete docs | DO-01–DO-05 | 5 |
 | Preserved previous scope | LG-01–LG-10 | 10 |
 
-The 48 requirements include 18 completed, 26 partial and 4 new items. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
+The 48 requirements include 19 completed, 25 partial and 4 new items. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
 
 ## Confirmed scope
 

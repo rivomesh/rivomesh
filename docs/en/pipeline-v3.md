@@ -62,6 +62,14 @@ Use `source.type: MYSQL` in task configuration and the Web wizard. Identify the 
 
 Run `tests/matrix.sh --v3 8.2.0` for the V3 standalone, GTID async and single-primary group replication suites. The tests use Docker Compose, the `mysql:8.2.0` source image and reports under `target/matrix-v3/8.2.0/`. The source uses GTID, ROW binlog and FULL row images. In the async suite, the fixture promotes a caught-up replica and Rivomesh validates the required history before resuming from the original position.
 
+### MySQL 8.4 binlog profile
+
+MySQL 8.4 uses untagged GTIDs, ROW binlogs and FULL row images. Preflight refuses anonymous-capable mode, tagged history, partial JSON and transaction compression. Capture stops before the failing transaction if it sees partial JSON or a compressed event. Review the retained logs and available source history before resuming or building a new baseline.
+
+Use `tests/mysql84-profile-run.sh` to reproduce the admission and live refusal checks. The fixture writes a tagged test transaction in its disposable database and cleans up afterward.
+
+[MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
+
 ## Troubleshooting and FAQ
 
 - **SQL errors:** only that subscriber pauses with an error generation. Repair privileges/schema/data, then resume the original transaction using the current generation from `status`. Resume never skips data or edits GTIDs.

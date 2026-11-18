@@ -32,7 +32,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-SO-02 | SO-02 | Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence. | NOT_RUN |
 | AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
-| AC-SO-05 | SO-05 | Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance. | NOT_RUN |
+| AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
 | AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | NOT_RUN |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | NOT_RUN |
 | AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
@@ -74,7 +74,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | MySQL5.7 | Basic historical5.7.44 | Dedicated source-version evidence missing | PARTIAL |
 | MySQL8.0 | 8.0.46 V3 three topologies and manual recovery passed | Tracked in JV-02 | DONE (bounded profile) |
 | MySQL8.2 | V3 standalone, GTID async and single-primary MGR passed | Tracked in JV-02 | DONE (bounded profile) |
-| MySQL8.4 | Current representative SQL/repair paths | Older one-table SQL benchmark only | PARTIAL |
+| MySQL8.4 | V3 topologies and log admission pass on 8.4.13 | Five JDK process profiles passed | DONE (bounded profile) |
 | PostgreSQL source | Not implemented | Not implemented | NEW;sink evidence is unrelated |
 | Oracle source | Not implemented | Not implemented | NEW |
 

@@ -62,6 +62,14 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar run config/pipeline-v3
 
 运行 `tests/matrix.sh --v3 8.2.0`，逐一测试 V3 单机、GTID 主从和单主组复制。测试要求 Docker Compose，源镜像为 `mysql:8.2.0`，报告保存在 `target/matrix-v3/8.2.0/`。源端使用 GTID、ROW binlog 和 FULL 行镜像。主从场景由夹具提升追平的副本，Rivomesh 校验所需历史并从原位置续传。
 
+### MySQL 8.4 日志档案
+
+MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿名事务模式、带标签的历史、部分 JSON 和事务压缩。采集中遇到部分 JSON 或压缩事件会在失败事务前停住。先检查所需历史日志及候选源，再决定恢复原日志还是建立新基线。
+
+使用 `tests/mysql84-profile-run.sh` 复验日志准入和停止行为。该夹具创建带标签的测试事务并在结束时清理独立数据库容器。
+
+[MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
+
 ## 错误与恢复 FAQ
 
 - **目标 SQL 错误**：该订阅进入 PAUSED，保存错误版本。修复目标权限、结构或数据原因后，使用 `status` 返回的 `errorGeneration` 恢复原事务。默认恢复不跳过、不修改 GTID。

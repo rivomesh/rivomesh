@@ -110,6 +110,14 @@ Object.assign(messages.zh,{
  SOURCE_TYPE_CONFLICT:'源类型字段冲突，请使用一致的配置。',
  SOURCE_ADAPTER_UNAVAILABLE:'该源类型尚未开放。',
  SOURCE_VERSION_PROFILE_INVALID:'请输入主版本和次版本，可加补丁号。',
+ MYSQL_BINLOG_REQUIRED:'请在源库启用 binlog。',
+ MYSQL_ROW_BINLOG_REQUIRED:'源库 binlog 必须使用 ROW 格式。',
+ MYSQL_FULL_ROW_IMAGE_REQUIRED:'源库 binlog 必须使用 FULL 行镜像。',
+ MYSQL_PARTIAL_JSON_UNSUPPORTED:'请关闭源库的部分 JSON 行镜像，并处理仍需读取的历史 binlog。',
+ MYSQL_COMPRESSED_TX_UNSUPPORTED:'请关闭源库的事务压缩，并处理仍需读取的历史 binlog。',
+ MYSQL_TAGGED_GTID_UNSUPPORTED:'源端包含带标签 GTID。请核对所需日志和受支持的源档案。',
+ MYSQL_GTID_REQUIRED:'请使用完整 GTID 模式并启用 GTID 一致性。',
+ MYSQL_REPLICA_UPDATES_REQUIRED:'请启用副本更新写入 binlog。',
  MYSQL_VERSION_PROFILE_MISMATCH:'实际 MySQL 版本与配置的预期版本不符。'
 });
 Object.assign(messages.en,{
@@ -117,6 +125,14 @@ Object.assign(messages.en,{
  SOURCE_TYPE_CONFLICT:'The configured source type fields disagree.',
  SOURCE_ADAPTER_UNAVAILABLE:'This source type is unavailable.',
  SOURCE_VERSION_PROFILE_INVALID:'Enter the major and minor version, with an optional patch number.',
+ MYSQL_BINLOG_REQUIRED:'Enable binary logging on the source.',
+ MYSQL_ROW_BINLOG_REQUIRED:'The source binary log must use ROW format.',
+ MYSQL_FULL_ROW_IMAGE_REQUIRED:'The source binary log must use FULL row images.',
+ MYSQL_PARTIAL_JSON_UNSUPPORTED:'Disable partial JSON row images and review the retained logs still needed for capture.',
+ MYSQL_COMPRESSED_TX_UNSUPPORTED:'Disable transaction compression and review the retained logs still needed for capture.',
+ MYSQL_TAGGED_GTID_UNSUPPORTED:'The source contains tagged GTIDs. Review the required logs and supported source profile.',
+ MYSQL_GTID_REQUIRED:'Enable full GTID mode and GTID consistency.',
+ MYSQL_REPLICA_UPDATES_REQUIRED:'Enable logging of replica updates.',
  MYSQL_VERSION_PROFILE_MISMATCH:'The MySQL server version differs from the configured version.'
 });
 const pipelineFaultStages=new Set(['SOURCE_CONNECT','SOURCE_DISCOVERY','SOURCE_READ','SOURCE_DECODE',

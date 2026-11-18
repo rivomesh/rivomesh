@@ -136,7 +136,7 @@ test('wizard validates, masks its plan, creates a stopped task and never auto-st
     ui.d.getElementById('next-step').click();assert.equal(ui.d.getElementById('step-0').classList.contains('hidden'),false);
     const form=ui.d.getElementById('create-form');
     form.elements.formatVersion.value='2';form.elements.formatVersion.dispatchEvent(new ui.w.Event('change'));
-    for(const [name,value]of Object.entries({jobId:'sales',clusterId:'sales-source',sourceDatabase:'orders',sourceUsername:'reader',sourcePassword:'source-private',sourceExpectedVersion:'8.2.0'}))form.elements[name].value=value;
+    for(const [name,value]of Object.entries({jobId:'sales',clusterId:'sales-source',sourceDatabase:'orders',sourceUsername:'reader',sourcePassword:'source-private'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();assert.equal(ui.d.getElementById('step-1').classList.contains('hidden'),false);
     for(const [name,value]of Object.entries({targetType:'POSTGRESQL',targetSchema:'orders',targetUsername:'writer',targetPassword:'target-private'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();
@@ -154,7 +154,7 @@ test('wizard validates, masks its plan, creates a stopped task and never auto-st
 test('v3 wizard maps two databases to independent targets and masks every credential',async()=>{
   const ui=setup();try{
     await login(ui);ui.d.getElementById('new-task').click();const form=ui.d.getElementById('create-form');assert.equal(form.elements.formatVersion.value,'3');
-    for(const [name,value]of Object.entries({jobId:'fanout',clusterId:'source',sourceDatabase:'sales, inventory',sourceUsername:'reader',sourcePassword:'source-private'}))form.elements[name].value=value;
+    for(const [name,value]of Object.entries({jobId:'fanout',clusterId:'source',sourceDatabase:'sales, inventory',sourceUsername:'reader',sourcePassword:'source-private',sourceExpectedVersion:'8.2.0'}))form.elements[name].value=value;
     ui.d.getElementById('next-step').click();for(const [name,value]of Object.entries({targetSchema:'sales_copy',targetUsername:'writer',targetPassword:'gauss-private'}))form.elements[name].value=value;
     ui.d.querySelector('#first-extra-mappings input').value='inventory_copy';ui.d.getElementById('add-target').click();const card=ui.d.querySelector('#extra-targets .target-settings');
     card.querySelector('[data-field=username]').value='other';card.querySelector('[data-field=password]').value='pg-private';card.querySelectorAll('.mapping-fields input').forEach(input=>input.value=input.dataset.database+'_other');

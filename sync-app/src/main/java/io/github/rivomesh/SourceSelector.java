@@ -84,10 +84,14 @@ public final class SourceSelector {
                     + rowOptions+","+compression+",@@global.gtid_mode,@@global.enforce_gtid_consistency,"
                     + "@@global.gtid_executed,@@global.gtid_purged,@@global.read_only,@@global.super_read_only,@@global.server_id,"+replicaUpdates)) {
                 rs.next();
-                if (!rs.getBoolean(1) || !"ROW".equalsIgnoreCase(rs.getString(2)) || !"FULL".equalsIgnoreCase(rs.getString(3))
-                        || !rs.getString(5).isEmpty() || rs.getBoolean(6) || !"ON".equalsIgnoreCase(rs.getString(7))
-                        || !"ON".equalsIgnoreCase(rs.getString(8)) || !rs.getBoolean(14))
-                    throw new IllegalArgumentException("源节点必须启用 GTID、enforce_gtid_consistency、log_replica_updates/log_slave_updates、ROW/FULL binlog，并关闭适用版本的事务压缩和部分 JSON 行镜像: " + endpoint);
+                if(!rs.getBoolean(1))throw new IllegalArgumentException("MYSQL_BINLOG_REQUIRED");
+                if(!"ROW".equalsIgnoreCase(rs.getString(2)))throw new IllegalArgumentException("MYSQL_ROW_BINLOG_REQUIRED");
+                if(!"FULL".equalsIgnoreCase(rs.getString(3)))throw new IllegalArgumentException("MYSQL_FULL_ROW_IMAGE_REQUIRED");
+                if(!rs.getString(5).isEmpty())throw new IllegalArgumentException("MYSQL_PARTIAL_JSON_UNSUPPORTED");
+                if(rs.getBoolean(6))throw new IllegalArgumentException("MYSQL_COMPRESSED_TX_UNSUPPORTED");
+                if(!"ON".equalsIgnoreCase(rs.getString(7))||!"ON".equalsIgnoreCase(rs.getString(8)))
+                    throw new IllegalArgumentException("MYSQL_GTID_REQUIRED");
+                if(!rs.getBoolean(14))throw new IllegalArgumentException("MYSQL_REPLICA_UPDATES_REQUIRED");
                 probe.uuid = rs.getString(4); probe.executed = Gtids.parse(rs.getString(9)).toString(); probe.purged = Gtids.parse(rs.getString(10)).toString();
                 probe.writable = !rs.getBoolean(11) && !rs.getBoolean(12); probe.serverId = rs.getLong(13);
             }

@@ -32,7 +32,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-02 | SO-02 | 固定补丁、驱动、日志配置后验证全量转增量、JSON/无主键/生成列能力、重启/切主/日志缺失、所支持DDL和恢复；不支持项预检拒绝并形成独立证据。 | 待验收 |
 | AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
-| AC-SO-05 | SO-05 | 在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。 | 待验收 |
+| AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
 | AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 待验收 |
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 待验收 |
 | AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
@@ -74,7 +74,7 @@ RM-SDD-001 · 2026-11-17
 | MySQL5.7 | 有5.7.44基础历史证据 | 缺该源版本专项证据 | PARTIAL，需补完整档案 |
 | MySQL8.0 | 8.0.46 的 V3 三种拓扑及人工恢复通过 | 由 JV-02 跟踪 | DONE（限定档案） |
 | MySQL8.2 | V3 单机、GTID 主从和单主组复制通过 | 由 JV-02 跟踪 | DONE（限定档案） |
-| MySQL8.4 | 当前代表性SQL/修复链路有证据 | 旧包单表SQL基准通过，不代表当前全平台 | PARTIAL |
+| MySQL8.4 | 8.4.13 的 V3 三种拓扑及日志准入实库通过 | 五 JDK 真实进程通过 | DONE（限定档案） |
 | PostgreSQL源 | 未实现 | 未实现 | NEW；目标PG证据不可替代 |
 | Oracle源 | 未实现 | 未实现 | NEW |
 

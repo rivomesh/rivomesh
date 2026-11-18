@@ -228,6 +228,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
       }
+    },
+    {
+      "id": "SO-05",
+      "title": {
+        "zh-CN": "MySQL 8.4 扩展兼容与回归",
+        "en": "MySQL8.4 expanded compatibility"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+        "archive": "docs/verification/README.md",
+        "profile": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
+      }
     }
   ],
   "productProfiles": [
@@ -386,52 +399,33 @@
   },
   "currentValidation": {
     "artifact": "target/release-evidence/current/rivomesh.jar",
-    "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+    "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
     "testClasses": "target/release-evidence/current/test-classes",
-    "testClassesSha256": "46f9433503f66af02dc28000cc613248e88e9500965a739cb716bcc40abe2132",
+    "testClassesSha256": "1d8405fa35109c9459c1b9278b5639e4f0f63f8ff28d67d6d5d626f2b06a257f",
     "sourceManifest": "target/release-evidence/current/sources.json",
-    "sourceManifestSha256": "c75eb94d8a79062b61d11463611aff09c791c69c262619a5d2411f73ce48e524",
-    "status": "PASS_BOUNDED_RC01",
-    "focusedContracts": 48,
+    "sourceManifestSha256": "2631fbb4dae4ac272497a68c19186d2e4355fa29e013ce48b276e963ad43a781",
+    "status": "PASS_BOUNDED_SO05",
+    "focusedContracts": 41,
     "domTests": 109,
-    "nativeProducts": {
-      "MYSQL": {
-        "tests": 4,
-        "suite": "compensation",
-        "cleanupExitCode": 0,
-        "testClassesSha256": "b97e46c79a0f225c453842b90fb2b47b7c0729f60f8ab91280a2f332814fa23e",
-        "images": {
-          "mysql:8.4": {
-            "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
-            "architecture": "arm64"
-          },
-          "eclipse-temurin:8-jre": {
-            "id": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
-            "architecture": "arm64"
-          }
-        }
-      }
+    "sourceVersion": "8.4.13",
+    "nativeSourceChecks": {
+      "integration": 6,
+      "ha": 1,
+      "group": 1,
+      "policy-native": 1
     },
-    "realCdc": {
-      "checksPerProfile": {
-        "connection-ddl": 6,
-        "decode": 5,
-        "target-phases": 19
-      },
-      "harnessSourceSha256": "412c04cfda4ecb9ef0bcd6ff1a12ea0bcaf2f273485b8bc9f631d8f2c2efa26a",
-      "controlStore": "PostgreSQL 17",
-      "source": "MySQL 8.4",
-      "journal": "LOCAL/H2",
-      "targets": [
-        "PostgreSQL 17",
-        "MySQL 8.4"
-      ],
-      "cleanupExitCode": 0
-    },
-    "scope": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization.",
+    "realProcessChecksPerJdk": 5,
+    "jdks": [
+      8,
+      11,
+      17,
+      21,
+      25
+    ],
+    "scope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",
     "sddCounts": {
-      "DONE": 17,
-      "PARTIAL": 27,
+      "DONE": 19,
+      "PARTIAL": 25,
       "NEW": 4
     }
   },
@@ -795,5 +789,188 @@
     "realCdcChecks": 5,
     "sourceVersion": "8.4.13",
     "scope": "Explicit MySQL source type, optional expected version, stable identity and one adapter entry point. Newer source protocols are tracked under SO-06 and SO-07."
+  },
+  "mysql84Source": {
+    "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+    "nativeSourceChecks": {
+      "integration": 6,
+      "ha": 1,
+      "group": 1,
+      "policy-native": 1
+    },
+    "serverVersion": "8.4.13",
+    "fiveJdks": [
+      {
+        "jdk": 8,
+        "status": "PASS",
+        "manifest": "java8/manifest.json",
+        "exitCode": 0,
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "1.8.0_512",
+            "architecture": "aarch64"
+          }
+        ],
+        "imageId": "sha256:1afe630c420f3f276515f570d8d4c82394dd6f072e5619244299438e692f9f09",
+        "architecture": "arm64"
+      },
+      {
+        "jdk": 11,
+        "status": "PASS",
+        "manifest": "java11/manifest.json",
+        "exitCode": 0,
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "11.0.33",
+            "architecture": "aarch64"
+          }
+        ],
+        "imageId": "sha256:22c2bde574529e7d421e516a3b530d959628dd94dc081e9c40a0544aa7a09bfe",
+        "architecture": "arm64"
+      },
+      {
+        "jdk": 17,
+        "status": "PASS",
+        "manifest": "java17/manifest.json",
+        "exitCode": 0,
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "17.0.21",
+            "architecture": "aarch64"
+          }
+        ],
+        "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990",
+        "architecture": "arm64"
+      },
+      {
+        "jdk": 21,
+        "status": "PASS",
+        "manifest": "java21/manifest.json",
+        "exitCode": 0,
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64"
+          }
+        ],
+        "imageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+        "architecture": "arm64"
+      },
+      {
+        "jdk": 25,
+        "status": "PASS",
+        "manifest": "java25/manifest.json",
+        "exitCode": 0,
+        "processes": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "25.0.5",
+            "architecture": "aarch64"
+          }
+        ],
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3",
+        "architecture": "arm64"
+      }
+    ],
+    "scope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
   }
 }

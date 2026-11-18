@@ -73,6 +73,7 @@ public final class BinlogCapture implements AutoCloseable {
     void accept(Event event) throws Exception {
         EventData data = event.getData();
         EventHeaderV4 header = event.getHeader();
+        MysqlEventDeserializer.requireSupported(header.getEventType());
         if (data instanceof RotateEventData) {
             if (!pending.isEmpty() || pendingGtid != null) throw new IllegalStateException("未提交事务中发生 binlog 切换");
             RotateEventData rotate = (RotateEventData) data;
@@ -132,8 +133,6 @@ public final class BinlogCapture implements AutoCloseable {
                 // through qualified identifiers, comments, RENAME, or cross-database SQL.
                 throw new SyncFailure("DDL_UNSUPPORTED", "CAPTURE", false, "检测到 DDL 或非 ROW SQL，未跳过失败事务", null, null, 0, pendingGtid);
             }
-        } else if (header.getEventType().name().equals("TRANSACTION_PAYLOAD")) {
-            throw new IllegalStateException("首版不支持压缩 binlog 事务，请关闭 binlog_transaction_compression");
         }
         // Only published after all preceding commits have reached GaussDB.
         if (next.offset > 0) observed = next;

@@ -10,8 +10,7 @@
     "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
   ],
   "inProgress": [
-    "SO-05 native MySQL 8.4 binlog profile compatibility and restart checks.",
-    "SO-06 PostgreSQL source capture design and implementation."
+    "SO-06 PostgreSQL 17 pgoutput decoder and source adapter. First native snapshot and restart verification being prepared."
   ],
   "reportContents": [
     "Current totals",
@@ -31,21 +30,21 @@
     "64f6eeef7f262f260ba9af5aa584803e4e682c15"
   ],
   "currentSdd": {
-    "DONE": 18,
-    "PARTIAL": 26,
+    "DONE": 19,
+    "PARTIAL": 25,
     "NEW": 4
   },
   "newSinceLastReport": [
     "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
     "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks.",
-    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending."
+    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending.",
+    "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "nextTasks": [
-    "SO-05 review supported and refused MySQL 8.4 event profiles.",
     "SO-06 PostgreSQL pgoutput source profile.",
     "Consolidate V2/V3 execution branches."
   ],
-  "currentCandidateArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "currentCandidateScope": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization.",
+  "currentCandidateArtifact": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+  "currentCandidateScope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3"
 }

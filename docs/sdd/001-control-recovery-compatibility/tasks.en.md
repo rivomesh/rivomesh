@@ -95,7 +95,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-SO-04 · MySQL8.2 compatibility and acceptance · P1 · Depends on: SO-01
   Deliver: Provide reproducible8.2 environment,version/auth/status/binlog handling and a complete first sync/recovery matrix;string matching/JDBC connectivity alone is insufficient.
   Acceptance: AC-SO-04
-- [ ] T-SO-05 · MySQL8.4 expanded compatibility · P1 · Depends on: SO-01
+- [x] T-SO-05 · MySQL8.4 expanded compatibility · P1 · Depends on: SO-01
   Deliver: Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance.
   Acceptance: AC-SO-05
 - [ ] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01

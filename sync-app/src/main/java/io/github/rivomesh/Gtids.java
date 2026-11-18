@@ -1,14 +1,19 @@
 package io.github.rivomesh;
 
 import com.github.shyiko.mysql.binlog.GtidSet;
+import java.util.regex.Pattern;
 
 final class Gtids {
     private Gtids() {}
+    private static final Pattern CLASSICAL=Pattern.compile("[0-9a-fA-F-]{36}(?::[0-9]+(?:-[0-9]+)?)+");
+    private static final Pattern TAG=Pattern.compile(":[A-Za-z_][A-Za-z0-9_]{0,31}:[0-9]");
     static GtidSet parse(String value) {
         String normalized = value == null ? "" : value.replaceAll("\\s", "");
         for (String part : normalized.split(",")) {
-            if (!part.isEmpty() && !part.matches("[0-9a-fA-F-]{36}(?::[0-9]+(?:-[0-9]+)?)+"))
-                throw new IllegalArgumentException("GTID 格式不支持；当前仅支持非 tagged MySQL GTID");
+            if(!part.isEmpty()&&!CLASSICAL.matcher(part).matches()){
+                if(TAG.matcher(part).find())throw new IllegalArgumentException("MYSQL_TAGGED_GTID_UNSUPPORTED");
+                throw new IllegalArgumentException("MYSQL_GTID_FORMAT_INVALID");
+            }
         }
         return new GtidSet(normalized);
     }

@@ -75,3 +75,9 @@ The source was MySQL 8.0.46 with GTID, ROW and FULL enabled. Run the three topol
 候选包 `4722408f57a63e883147b979c3c706dd20d1ff6cf9aefcc6cba973fbb8c96ee2` 通过 Java 43 项、界面 109 项、MySQL 原生 2 项和真实 CDC 5 项检查。原生检查确认可按主次版本或精确补丁验证目标 MySQL 实例。双入口用 `source.type: MYSQL` 和 `source.expectedVersion: "8.4"` 创建任务，并完成全量与增量。
 
 Capture, preflight and common-cut validation share the source adapter entry point. PostgreSQL and Oracle source execution remain tracked in SO-06 and SO-07.
+
+### SO-05 · MySQL 8.4.13
+
+候选包 `d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0` 通过 41 项 Java 检查、109 项界面检查、6 项 V3 单机实库检查和两项真实选主检查。独立日志档案验证了非 FULL、匿名模式、部分 JSON、压缩事务和带标签历史的拒绝。部分 JSON 与压缩事务也通过了采集中的原生事件拒绝测试。该包在五个 JDK 复跑 Controller、Agent 和 Worker 启动、全量与增量。
+
+Native MySQL version was 8.4.13. Reproduce the profile with `tests/mysql84-profile-run.sh` and `tests/matrix.sh --v3 8.4`.

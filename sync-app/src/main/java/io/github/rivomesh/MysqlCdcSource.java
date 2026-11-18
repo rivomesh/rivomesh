@@ -195,8 +195,8 @@ public final class MysqlCdcSource implements SourceAdapter {
             if(gtid==null)throw new IllegalStateException("BINLOG_GTID_MISSING");String next=Gtids.union(committed,gtid);Model.Position p=new Model.Position(file,header.getNextPosition());p.gtidSet=next;p.sourceUuid=selected.identity();SourceTransaction tx=new SourceTransaction();tx.id=gtid;tx.streamGeneration=generation;tx.position=position(p);tx.changes.addAll(changes);tx.validate();delivering=true;try{receiver.committed(tx);}finally{lastEvent=System.nanoTime();delivering=false;}committed=next;changes.clear();gtid=null;
         }
         void accept(Event e)throws Exception{
-            EventData data=e.getData();EventHeaderV4 h=e.getHeader();String event=h.getEventType().name();
-            if(event.contains("ANONYMOUS")||event.contains("TAGGED")||event.equals("TRANSACTION_PAYLOAD"))throw new IllegalStateException("BINLOG_EVENT_PROFILE_UNSUPPORTED");
+            EventData data=e.getData();EventHeaderV4 h=e.getHeader();
+            MysqlEventDeserializer.requireSupported(h.getEventType());
             if(data instanceof RotateEventData){if(gtid!=null||!changes.isEmpty())throw new IllegalStateException("BINLOG_ROTATE_INSIDE_TRANSACTION");file=((RotateEventData)data).getBinlogFilename();tableIds.clear();}
             else if(data instanceof GtidEventData){if(gtid!=null)throw new IllegalStateException("BINLOG_TRANSACTION_UNFINISHED");gtid=((GtidEventData)data).getGtid();Gtids.parse(gtid);}
             else if(data instanceof TableMapEventData){TableMapEventData map=(TableMapEventData)data;tableIds.put(map.getTableId(),map);table(map.getTableId());}

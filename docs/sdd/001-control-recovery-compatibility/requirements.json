@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.14",
+  "version": "0.15",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -918,14 +918,14 @@
       "id": "SO-05",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "MySQL 8.4 扩展兼容与回归",
         "en": "MySQL8.4 expanded compatibility"
       },
       "gap": {
-        "zh-CN": "8.4已有代表性V3/恢复证据，但不是所有日志特性、认证、拓扑和目标组合。",
-        "en": "Representative8.4 V3/recovery evidence is not every log/auth/topology/destination combination."
+        "zh-CN": "MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。",
+        "en": "MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately."
       },
       "acceptance": {
         "zh-CN": "在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。",
@@ -936,8 +936,16 @@
       ],
       "evidence": [
         "docs/validation.md",
-        "docs/zh-CN/pipeline-v3.md"
-      ]
+        "docs/zh-CN/pipeline-v3.md",
+        "tests/mysql84-profile-run.sh",
+        "sync-app/src/test/java/io/github/rivomesh/Mysql84ProfileTest.java",
+        "docs/verification/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+        "archive": "docs/verification/README.md",
+        "profile": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
+      }
     },
     {
       "id": "SO-06",
