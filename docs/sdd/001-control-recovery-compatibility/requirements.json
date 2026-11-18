@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.28",
+  "version": "0.29",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1191,14 +1191,14 @@
       "id": "DO-02",
       "epic": "DOCS",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "四类部署与多节点运维文档",
         "en": "Deployment and cluster operations docs"
       },
       "gap": {
-        "zh-CN": "现有Linux/Docker/Helm/原生K8s文件未覆盖新集群控制与会话模型。",
-        "en": "Existing deployment artifacts do not cover new cluster control/session models."
+        "zh-CN": "四种单机与集群部署路径、存储、会话、节点维护和备份升级已形成双语操作说明。跨节点卷和自动接管按对应实机需求继续验收。",
+        "en": "Bilingual instructions cover four standalone and cluster deployment paths, stores, sessions, node maintenance, backups and upgrades. Cross-node volumes and automatic takeover continue under live platform requirements."
       },
       "acceptance": {
         "zh-CN": "提供单机及多节点四类可运行示例，说明控制/日志/会话/报告存储、Secret/TLS、节点注册排空、备份恢复升级和无独立存储边界；K8s实机另有证据。",
@@ -1214,8 +1214,20 @@
       "evidence": [
         "deploy/helm/rivomesh",
         "deploy/kubernetes",
-        "docs/zh-CN/console-and-deployment.md"
-      ]
+        "docs/zh-CN/console-and-deployment.md",
+        "docs/en/execution-lifecycle.md",
+        "docs/zh-CN/execution-lifecycle.md",
+        "deploy/linux/rivomesh.service",
+        "deploy/docker-compose-execution.yml",
+        "docs/verification/baseline.json"
+      ],
+      "verification": {
+        "artifactSha256": "32cad011e732673d4e33857945269cee8b81933f082cb3a15584a8d53df6797e",
+        "artifactKind": "bilingual deployment and maintenance guide",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "acae4ad404e870c5c2b027cb2bb1687585375ee33cbc55bdea2f1b8d9814d1a9",
+        "profile": "Linux, Docker, Helm and native Kubernetes standalone and separated examples. Two Compose renders, four Helm/native parity comparisons and separate live two-node Kubernetes evidence."
+      }
     },
     {
       "id": "DO-03",

@@ -147,3 +147,7 @@ Combined reference SHA-256 `00f118ef3c6e37194925adf6e39e4e4fcdcbe9fcd77b7d40457c
 ## PostgreSQL 18 stored generated columns
 
 Artifact `72357d90c1d87d99fbdf767927a0ca122286df7c7f3defc60f9abd21622b898c` passed 36 focused Java tests, eight native checks on each of Java 8, 11, 17, 21 and 25 from PostgreSQL 18.7 to 17.12, plus seven native PostgreSQL 17.12 regression checks on Java 8. With the PostgreSQL 18 publication enabling stored generated columns, keyed and keyless source updates changed the corresponding ordinary destination columns. A preflight without that publication coverage refused the configuration. [Reproduction](../en/postgresql-source.md) · [Manifest](baseline.json)
+
+## Bilingual deployment and maintenance reference
+
+Combined guide SHA-256 `32cad011e732673d4e33857945269cee8b81933f082cb3a15584a8d53df6797e`. Both languages document Linux, Docker, Helm and native Kubernetes examples for standalone and separated execution, plus node enrollment, an operator-driven drain, stores, secrets, sessions and coordinated backup and upgrade. Both Compose configurations passed render validation. Helm lint passed, and the standalone, Controller A, Controller B and Agent A renders matched their four native files byte for byte. The live Kubernetes evidence above covers separately scoped CSI and interruption tests. [English guide](../en/execution-lifecycle.md) · [中文](../zh-CN/execution-lifecycle.md)

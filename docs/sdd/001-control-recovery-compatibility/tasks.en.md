@@ -123,7 +123,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-DO-01 · Bilingual traceable SDD baseline · P0 · Depends on: none
   Deliver: Each requirement has stable ID,status,gap,dependencies,priority,acceptance and task;ZH/EN IDs match and changes preserve evidence scope.
   Acceptance: AC-DO-01
-- [ ] T-DO-02 · Deployment and cluster operations docs · P1 · Depends on: CP-07, SE-04, JV-04, LG-05, LG-06
+- [x] T-DO-02 · Deployment and cluster operations docs · P1 · Depends on: CP-07, SE-04, JV-04, LG-05, LG-06
   Deliver: Provide runnable standalone/cluster examples for four deployment paths with stores,secrets/TLS,enrollment/drain,backup/restore/upgrades and local-storage boundaries;live K8s requires separate evidence.
   Acceptance: AC-DO-02
 - [x] T-DO-03 · Recovery scenarios and FAQ · P1 · Depends on: RC-09, RC-10, SE-05

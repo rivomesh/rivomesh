@@ -44,8 +44,8 @@
     "71202816e47a1af17d6b484800b0603a83c5ec93"
   ],
   "currentSdd": {
-    "DONE": 23,
-    "PARTIAL": 24,
+    "DONE": 24,
+    "PARTIAL": 23,
     "NEW": 1
   },
   "newSinceLastReport": [
@@ -57,7 +57,8 @@
     "LG-07 LOCAL and EXTERNAL passed identical 100,000-row snapshots and 120,000 changes with a 256 MiB Worker heap and matching ordered content hashes.",
     "DO-04 accepted. Bilingual connector/JDK/API reference ties the actual source and destination profiles to exact evidence, request examples and upgrade boundaries.",
     "SO-06 PostgreSQL 18.7 to 17.12 passed 8 native checks including stored generated columns, and 17.12 passed 7 native regression checks on the same Java 8 artifact.",
-    "JV-02 PostgreSQL 18.7 stored generated case group passed all 40 native checks across Java 8, 11, 17, 21 and 25 on one artifact."
+    "JV-02 PostgreSQL 18.7 stored generated case group passed all 40 native checks across Java 8, 11, 17, 21 and 25 on one artifact.",
+    "DO-02 accepted. Bilingual standalone and multi-node deployment paths, secret/TLS, drain, backup and upgrade guidance passed link, Compose and four Helm/native parity checks."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

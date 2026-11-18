@@ -53,6 +53,28 @@ helm upgrade --install rivomesh-agent-a deploy/helm/rivomesh -n rivomesh -f depl
 
 Without Helm,adapt/apply native manifests [A](../../deploy/kubernetes/rivomesh-controller-a.yaml),[B](../../deploy/kubernetes/rivomesh-controller-b.yaml),[Agent](../../deploy/kubernetes/rivomesh-agent-a.yaml). Each release has one replica/private PVC. Add Agents with distinct releases/node IDs/volumes. Static rendering/invalid-setting checks exist;live Kubernetes/CSI/node-fault acceptance is separate.
 
+## Deployment profiles
+
+| Deployment | Single instance | Multiple management entries and Agents |
+|---|---|---|
+| Linux | [Systemd unit](../../deploy/linux/rivomesh.service) and [platform file](../../deploy/linux/platform.yml) | Independent [Controller](../../config/platform-controller.example.yml) and [Agent](../../config/platform-agent.example.yml) launches above |
+| Docker | [Standalone Compose](../../deploy/docker-compose.yml) | [Execution Compose](../../deploy/docker-compose-execution.yml) |
+| Kubernetes with Helm | [Chart defaults](../../deploy/helm/rivomesh/values.yaml) | [Controller values](../../deploy/helm/rivomesh/values-controller.yaml) and [Agent values](../../deploy/helm/rivomesh/values-agent.yaml) |
+| Native Kubernetes | [Standalone manifest](../../deploy/kubernetes/rivomesh.yaml) | [Controller A](../../deploy/kubernetes/rivomesh-controller-a.yaml), [Controller B](../../deploy/kubernetes/rivomesh-controller-b.yaml), [Agent A](../../deploy/kubernetes/rivomesh-agent-a.yaml) |
+
+For either Kubernetes path create the [namespace](../../deploy/kubernetes/namespace.yaml), provide the control database accessible from pods, and create `rivomesh-auth` (key `token`) and `rivomesh-control-store` (keys `username`, `password`, `task-key`) from protected files. Linux and Docker pass the same values through the environment. Set `sessions.secureCookie: true` and the same HTTPS `sessions.publicOrigin` on each management entry behind one ingress. Keep Agent probes on the deployment network. Use database TLS and trusted CA settings supported by the selected JDBC profile. See [session deployment](browser-sessions.md) and [shared credentials](shared-access.md).
+
+If there is no independent database available for control metadata, deploy standalone with its private directory. LOCAL journals use the owning Agent's private directory or PVC. EXTERNAL journals put capture transactions, snapshot pieces and subscription checkpoints in a separate database namespace. Shared task definitions, accounts, sessions and command metadata remain in the control store. Agent-local validation/repair reports, audit projections, keys and Worker configuration remain part of the owner recovery set. [Journal settings](pipeline-v3.md) · [Shared control](global-control.md)
+
+## Enrollment, maintenance and restoration
+
+1. Enroll each Controller and Agent with a unique stable `nodeId` and private directories. Verify the role and fresh registration in **Nodes** and `GET /api/nodes`. Choose the intended Agent when creating a task. Record the owner and directory or PVC identity.
+2. To drain an Agent for planned maintenance, stop assigning new tasks, issue STOP through either entry for each owned task and wait for original request receipts and stopped Workers. For a controlled cut, pause first and verify destination acknowledgments. Confirm capture leases are inactive before stopping the Agent service. Restart the same node/volume and explicitly start stopped tasks when maintenance is complete.
+3. For a coordinated backup, quiesce the tasks and management writes. Back up the control database, all private node directories and keys, external journals if configured, and target business/checkpoint stores at the approved cut. Use a database-consistent backup method for each store. Preserve permissions and volume identity. Restore a matched set in an isolated environment, verify the node/configuration identities and each target receipt, and only then resume. [Recovery and cutover](reconciliation-workflow.md)
+4. Before changing the release, runtime or drivers, record the active artifact, configurations and checkpoints. Keep the same node IDs, paths and keys during the rehearsal. Use separate validation for deployments with mixed versions or cross-node volume replacement. The initial release procedure uses a controlled stop and restart. [First-release configuration](first-release.md) · [Compatibility matrix](compatibility.md)
+
+The live evidence includes Helm and native YAML on a two-node Kubernetes cluster, configuration and Secret replacement, local CSI remount and Worker-node interruption. Cross-node CSI availability and automatic Agent relocation have separate acceptance. [Kubernetes live evidence](../verification/README.md)
+
 ## Recovery FAQ
 
 **What if every management entry stops?** The Agent independently reads the shared queue. The tested LOCAL/H2 profile continues CDC;management rejoin reads the same owner and authority. This does not relocate execution to another Agent.
@@ -67,4 +89,4 @@ Without Helm,adapt/apply native manifests [A](../../deploy/kubernetes/rivomesh-c
 
 **NODE_ID_IN_USE after restart?** SIGKILL leaves an old lease until expiry;never bypass the guard.Supervisors may retry normally;if another member keeps renewing,fix duplicate configuration.
 
-**VALIDATION_BARRIER_MOVED immediately after configuration restart?** Process liveness and already-equal rows do not establish a new journal claim.Check shared state and actual incremental catchup before retrying.The guard must not accept a moved cut;clearer startup readiness remains CP-06.
+**VALIDATION_BARRIER_MOVED immediately after configuration restart?** Process liveness and already-equal rows do not establish a new journal claim.Check shared state and actual incremental catchup before retrying.The task detail shows the capture lease separately from Worker process status.

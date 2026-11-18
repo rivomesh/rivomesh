@@ -319,6 +319,21 @@
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
         "profile": "124 Markdown files checked; both languages map 21 connector IDs, version profiles and public API references to exact runtime provenance and operational guides."
       }
+    },
+    {
+      "id": "DO-02",
+      "title": {
+        "zh-CN": "四类部署与多节点运维文档",
+        "en": "Deployment and cluster operations docs"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "32cad011e732673d4e33857945269cee8b81933f082cb3a15584a8d53df6797e",
+        "artifactKind": "bilingual deployment and maintenance guide",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "acae4ad404e870c5c2b027cb2bb1687585375ee33cbc55bdea2f1b8d9814d1a9",
+        "profile": "Linux, Docker, Helm and native Kubernetes standalone and separated examples. Two Compose renders, four Helm/native parity comparisons and separate live two-node Kubernetes evidence."
+      }
     }
   ],
   "productProfiles": [
