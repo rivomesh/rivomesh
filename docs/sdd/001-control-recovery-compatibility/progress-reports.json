@@ -72,6 +72,7 @@
   "newSinceLastReport": [
     "CP-04/LG-05 published shared validation report custody. Both control stores passed 12 native cases and the integrated artifact passed 30 Java tests. Candidate isolated-mount refusal and exact original bytes verified.",
     "JV-02 MySQL 8.4.13 live async GTID failover passed eight checks on exact Java 21. Both PostgreSQL and MySQL moved from receipt sequence 1 to 2 after external promotion, with exact data and original snapshots.",
-    "LG-09 historical repair/correction request lookup published with 21 native checks including ten real Chrome cases. Both older receipts stayed available after 21 subsequent controls and Agent loss."
+    "LG-09 historical repair/correction request lookup published with 21 native checks including ten real Chrome cases. Both older receipts stayed available after 21 subsequent controls and Agent loss.",
+    "LG-04 Redis Streams 7.4.2 passed six native checks for original-AOF promotion, one required replica fsync, stable event replay, durable consumer takeover and cold restart."
   ]
 }

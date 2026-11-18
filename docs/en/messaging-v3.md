@@ -80,6 +80,19 @@ Each batch uses `XADD` followed by **WAITAOF on the same physical connection**. 
 
 The publisher ACL needs connection/auth/select as applicable, INFO, CONFIG GET maxmemory-policy, CLIENT ID, EXISTS/TYPE/PTTL, HGET/HSETNX, XGROUP CREATE, XADD and WAITAOF, limited to the selected stream and ownership hash. Consumers need their own read/group permissions. `check` reads capabilities without creating keys. WAITAOF and fsync can affect latency; measure against the actual storage and replication topology. No automatic stream trimming is performed; capacity and consumer-safe archival remain an operator responsibility.
 
+The direct-primary profile can use an externally managed stable entrance. Fence the unavailable primary before promoting the original AOF replica. Verify its stream entries, ownership binding and consumer group state against the retained checkpoints. Point the existing entrance at the promoted replica and restore enough AOF replicas to meet the configured `replicas` count. With `replicas: 2`, an unavailable second fsync keeps the publication receipt unchanged. An earlier local `XADD` can already be visible, so consumers deduplicate by event ID and wait for COMMIT and the expected rows. [WAITAOF](https://redis.io/docs/latest/commands/waitaof/) · [REPLICAOF](https://redis.io/docs/latest/commands/replicaof/)
+
+Stage the raw event and its stream entry ID before `XACK`. If the consumer must preserve its acknowledgements on AOF replicas, run `WAITAOF` on the same connection after `XACK` and check both counts. Recover the failed consumer's pending entries with `XAUTOCLAIM` before processing new records. The idle threshold should account for the time a healthy consumer needs to finish processing. [Redis Streams replication](https://redis.io/docs/latest/develop/data-types/streams/) · [XAUTOCLAIM](https://redis.io/docs/latest/commands/xautoclaim/)
+
+The [Redis native fixture](../../tests/redis-promotion-run.py) uses Redis 7.4.2, Temurin 21 and source events seeded into the packaged JDBC journal. It exercises operator-driven promotion, loss and restoration of a replica fsync, immutable retry bytes, consumer acknowledgements and pending-entry recovery, and a cold restart on the promoted primary's original AOF volume. Sentinel, Redis Cluster, TLS and loss of the acknowledged storage have separate acceptance scopes.
+
+The six-check native run kept the publication receipt at sequence 1 until the second fsync returned, then delivered the original transaction at sequence 2. It retained 11 stream entries with 10 unique event IDs. The repeated event had identical bytes. Four earlier consumer acknowledgements stayed effective, and the recovered consumer claimed the three pending IDs. After the promoted primary restarted, its original stream IDs, group cursor and empty pending list were intact.
+
+```sh
+python3 tests/redis-promotion-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --java-home "$JAVA_HOME" --output target/redis-promotion-proof
+```
+
 ### Pulsar
 
 Pulsar uses a dedicated **persistent, non-partitioned topic** for all mapped namespaces. Configure `url: pulsar://host:6650`, `messaging.adminUrl: http://host:8080`, `cluster`, and `topic: persistent://tenant/namespace/topic`. The tenant/namespace must already exist and belong to exactly the configured cluster; geo-replication needs a separate plan. The first profile uses one service endpoint with native broker discovery; extra `endpoints` and username/password authentication are rejected. Token authentication uses `messaging.token`. TLS requires both `pulsar+ssl://` and HTTPS admin access with hostname verification. Actual token/TLS and multi-broker/BookKeeper-failure acceptance remain pending.

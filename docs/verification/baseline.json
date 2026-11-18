@@ -5766,5 +5766,144 @@
       "focusedJavaTests": 47,
       "domTests": 134
     }
+  },
+  "nativeRedisPromotion": {
+    "status": "PASS",
+    "artifactSha256": "93740e78e05df5d83d821bd4f6c3583f9a21d1ae2c85c5d62538fdc84d2ff01a",
+    "harnessSha256": "647ae10f95f1e394b7c7088923380fb6679da0cb3dbcf05ee2426da2e29347a1",
+    "acceptanceSourceSha256": "f5c721dd4d3fb562c5b413d211d73a00b4507ec6c2d64c9cf4b1fd8050b824b4",
+    "checks": [
+      "Native WAITAOF preserves the exact original messages, consumer acknowledgements and pending IDs on the designated replica",
+      "The stable endpoint refuses its read-only replacement, then admits the original fenced replica with unchanged bytes and group state",
+      "One local AOF fsync without its required replica leaves the publisher at the old receipt and a replayable BEGIN",
+      "Restored replica fsync delivers the retained transaction on the same endpoint and proves byte-identical uncertain replay",
+      "Consumer recovery claims the original pending IDs and persists acknowledgement after staging bytes and checking event identity",
+      "Cold restart of the promoted primary loads the same stream IDs, original bytes, group position and empty PEL from AOF"
+    ],
+    "phases": {
+      "initial": {
+        "journalAcknowledged": 1,
+        "publicationReceipt": {
+          "epoch": 1,
+          "sequence": 1,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:101",
+          "transactionHash": "a2ce6f1726d7885bd4b5d24aaab5d74e6d9607c515b1cc22982a2ca3c1f5da79"
+        },
+        "snapshotId": "cde5630a-5ce9-416e-873d-b803a9f24029",
+        "sourceTransactionHash": "a2ce6f1726d7885bd4b5d24aaab5d74e6d9607c515b1cc22982a2ca3c1f5da79",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:101"
+      },
+      "replica-refused": {
+        "retryCode": "REDIS_WRITABLE_PRIMARY_REQUIRED"
+      },
+      "no-replica": {
+        "journalAcknowledged": 1,
+        "publicationReceipt": {
+          "epoch": 2,
+          "sequence": 1,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:101",
+          "transactionHash": "a2ce6f1726d7885bd4b5d24aaab5d74e6d9607c515b1cc22982a2ca3c1f5da79"
+        },
+        "retryCode": "REDIS_DURABILITY_NOT_CONFIRMED",
+        "snapshotId": "cde5630a-5ce9-416e-873d-b803a9f24029",
+        "sourceTransactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102"
+      },
+      "restored": {
+        "journalAcknowledged": 2,
+        "publicationReceipt": {
+          "epoch": 3,
+          "sequence": 2,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102",
+          "transactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a"
+        },
+        "snapshotId": "cde5630a-5ce9-416e-873d-b803a9f24029",
+        "sourceTransactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102"
+      },
+      "restarted": {
+        "publicationReceipt": {
+          "epoch": 3,
+          "sequence": 2,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102",
+          "transactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a"
+        },
+        "snapshotId": "cde5630a-5ce9-416e-873d-b803a9f24029",
+        "sourcePosition": {
+          "formatVersion": 1,
+          "sourceType": "MYSQL",
+          "sourceId": "fixture-source",
+          "payload": {
+            "file": "binlog.000001",
+            "gtidSet": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-102",
+            "offset": "320",
+            "serverUuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          }
+        }
+      }
+    },
+    "serverVersion": "7.4.2",
+    "images": {
+      "redis:7.4.2-alpine": "sha256:dc11e3ccde3c4defde0194f58c3ec2cf270ed7401560d82d8bd548284b82dfba",
+      "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+    },
+    "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "initialRunId": "7e68ee65a5d0be5911aeb72be912d0471e8ecc0a",
+    "promotionRunId": "3464e5f401812d6192046d73189d9bbe58ea0c25",
+    "initialConsumer": {
+      "acknowledged": [
+        "1795000354781-0",
+        "1795000354986-0",
+        "1795000355170-0",
+        "1795000355280-0"
+      ],
+      "pending": [
+        [
+          "1795000355657-0",
+          "original-consumer"
+        ],
+        [
+          "1795000355750-0",
+          "original-consumer"
+        ],
+        [
+          "1795000355835-0",
+          "original-consumer"
+        ]
+      ],
+      "lastDelivered": "1795000355835-0"
+    },
+    "consumerGroup": {
+      "reclaimed": [
+        "1795000355657-0",
+        "1795000355750-0",
+        "1795000355835-0"
+      ],
+      "acknowledged": [
+        "1795000355657-0",
+        "1795000355750-0",
+        "1795000355835-0",
+        "1795000403509-0",
+        "1795000421907-0",
+        "1795000421961-0",
+        "1795000422007-0"
+      ],
+      "lastDelivered": "1795000422007-0"
+    },
+    "afterRestartRunId": "14f073b987d20cf919f7be4d95773836fc12c2ed",
+    "producerUniqueEventIds": {
+      "redis-cluster/fixture-generation/6bd852de5061337c471f28144266823a91df89e705c0b7cc36b4e2e3fd31bf47": "49033929eec0214eea70714c1ffd1dfb92da16c1eb1962610ba12e061a53838c",
+      "redis-cluster/fixture-generation/142695dfc606e78162df8db016fd5dedf7608c3d4b5d65b4e26b46aa8f54988a": "95d9a1de13c7b9a9747706e9c997a3ef4c8ffdbcd739049c7336ccb3edf8e040",
+      "redis-cluster/fixture-generation/4380ddebfaba39845160a50e1fde398a35d16a5069959083295eff04d6fa76bf": "c0d70c49c803386dca2e33a2ed207e08865edd0afec6001c96fb1e493b6afc97",
+      "redis-cluster/fixture-generation/309ec335dd2522ec2fbdcb506e09739c6e65b4d0093419e21b51574f2d37f86b": "2bfb68313cf05e09123cec91c892a8baea3036f18c43e36678db57415c4524c7",
+      "redis-cluster/fixture-generation/fe7ce9d7b41f7c71757e6b3bfe103bf9d05f9bf130fefe905294dcf707f70c9c": "4440c10bacf7c658ba9157f6e9d5c42b035af403075d4865da41c2354aeb6a1a",
+      "redis-cluster/fixture-generation/de5d5087fd4a48fccbeec5be2beae05dcd04137412c405eac3d9455d468a7694": "b0b6e94bcd9d590a26074e75919c8bfc9a1eaf8ccc6178aed73ac034a19d63b9",
+      "redis-cluster/fixture-generation/603089b71cd01a81accad2dca5c0cbb8664618c7d8f4d26fdaefed1d482ec558": "2642fceea5dd925560fc5db138109b9a8021c39084f98e5330c1522896e16383",
+      "redis-cluster/fixture-generation/520c8c2e6180dab8019a3aa5be70bf4bb35020de15ade0150b12522f4cdc47b3": "843f78b77db631b9951ddb36b0dfbac9be8332be2bc4575fc2f20ef6febb89f8",
+      "redis-cluster/fixture-generation/418014dc18ddd1b9e517db7ac8c5b994198470a0bfd5738493ca464a31653ae0": "5f72b6f6dd0023cbf3f1ebbb65757b1f067c9ace85d155c580eeaca35a3de977",
+      "redis-cluster/fixture-generation/460d9dff32c3c72be3e502f1a0d5fca9f0090f1f02cebafb67d7ab20f713f26e": "0a2bff4b9561ca8023c252874e39edf6bd3d6236084d02b7106883cb68259dfc"
+    },
+    "physicalRedisEntries": 11,
+    "cleanupExitCode": 0
   }
 }

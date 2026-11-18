@@ -80,6 +80,19 @@ NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`�
 
 发布账号需要连接/认证/SELECT（适用时）、INFO、CONFIG GET maxmemory-policy、CLIENT ID、EXISTS/TYPE/PTTL、HGET/HSETNX、XGROUP CREATE、XADD、WAITAOF 权限，并将键权限限制到选定 Stream 与所有权 hash。消费者另配读取/消费者组权限。`check` 只读能力，不创建键。WAITAOF/fsync 会影响延迟，需要按实际磁盘与复制拓扑测量。服务不自动裁剪 Stream，容量和消费者安全归档需要单独规划。
 
+直连主库档案可使用运维系统管理的固定入口。提升原 AOF 副本前先隔离故障主库，并对照保留的确认位点核查原 Stream 记录、归属及消费者组状态。把现有入口指向已提升的副本，再恢复足够的 AOF 副本满足 `replicas`。配置 `replicas: 2` 时，第二份 fsync 未确认会保持发布回执不动。此前本地 `XADD` 仍可能可见，消费者应按事件 ID 去重，等齐事务 COMMIT 和所需行数后处理。[WAITAOF](https://redis.io/docs/latest/commands/waitaof/) · [REPLICAOF](https://redis.io/docs/latest/commands/replicaof/)
+
+先持久暂存原事件和流条目 ID，再执行 `XACK`。消费确认也要落到 AOF 副本时，在 `XACK` 后用同一连接调用 `WAITAOF`，核对本地及副本数。使用 `XAUTOCLAIM` 认领失联消费者的待确认条目，再读取新记录。空闲阈值应考虑正常消费者完成处理所需的时间。[Redis Streams 复制](https://redis.io/docs/latest/develop/data-types/streams/) · [XAUTOCLAIM](https://redis.io/docs/latest/commands/xautoclaim/)
+
+[Redis 实库夹具](../../tests/redis-promotion-run.py) 使用 Redis 7.4.2、Temurin 21 和写入发布包 JDBC 日志的确定性源事务，验收运维提升、副本 fsync 暂缺及恢复、原字节重投、消费者 ACK 和待确认条目恢复，以及使用提升节点原 AOF 卷冷重启。Sentinel、Redis Cluster、TLS 和已确认存储本身丢失需分别验收。
+
+六项实库检查中，第二份 fsync 恢复前发布回执停在序列 1，恢复后用原事务推进到序列 2。11 个流条目对应 10 个事件 ID，重复事件的字节一致。此前四条消费确认继续有效，恢复消费者认领了原有三条待确认记录。提升后的主库重启后，原流条目 ID、消费组位点和空待确认列表均保留。
+
+```sh
+python3 tests/redis-promotion-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --java-home "$JAVA_HOME" --output target/redis-promotion-proof
+```
+
 ### Pulsar
 
 Pulsar 为全部映射命名空间使用一个 **persistent、非分区专用 Topic**。配置 `url: pulsar://host:6650`、`messaging.adminUrl: http://host:8080`、`cluster` 和 `topic: persistent://tenant/namespace/topic`。tenant/namespace 必须已经存在，且只属于配置的集群；跨地域复制需要单独计划。首个档案使用一个服务入口和原生 Broker 发现，拒绝额外 `endpoints` 和用户名/密码认证；令牌使用 `messaging.token`。TLS 要求同时使用 `pulsar+ssl://` 和 HTTPS 管理入口，并验证主机名。真实令牌/TLS、多 Broker/BookKeeper 故障验收仍待完成。

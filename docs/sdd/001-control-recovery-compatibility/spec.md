@@ -81,7 +81,7 @@ RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
 | LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空 PostgreSQL 差异预检和冻结 MySQL 下的只读 UNIQUE 恢复计划已实测，计划复核拒绝索引、数据或源 GTID 漂移。正式基线、执行约束、写入交接和回切待验。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
-| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | 八种消息目标已有首批传输。NATS TLS 和多数派恢复、RabbitMQ 三成员及独立 SQL 目标、Kafka KRaft 数据选主、ISR 保护及消费位点恢复已实测。其余集群、TLS 和容量待验。 |
+| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 支持本地与外部日志，双 Agent 共享挂载的已完成报告字节级核验已实测。仍需验证跨节点原事件、故障证据及操作回执的可达性和实际迁移。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |

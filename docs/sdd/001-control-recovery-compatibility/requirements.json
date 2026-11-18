@@ -1503,8 +1503,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "八种消息目标已有首批传输。NATS TLS 和多数派恢复、RabbitMQ 三成员及独立 SQL 目标、Kafka KRaft 数据选主、ISR 保护及消费位点恢复已实测。其余集群、TLS 和容量待验。",
-        "en": "All eight targets have first transport profiles. Native NATS TLS and quorum recovery, RabbitMQ quorum with independent SQL progress, and Kafka KRaft data election, ISR and consumer offset recovery passed. Other cluster, TLS and capacity profiles remain."
+        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。",
+        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",
@@ -1518,7 +1518,8 @@
         "docs/zh-CN/classic-v3.md",
         "tests/nats-cluster-run.py",
         "tests/rabbit-quorum-run.py",
-        "tests/kafka-cluster-run.py"
+        "tests/kafka-cluster-run.py",
+        "tests/redis-promotion-run.py"
       ]
     },
     {
