@@ -34,18 +34,18 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Capability | Current boundary |
 |---|---|
 | Replication | MySQL multi-database mappings/fan-out,table creation,chunked snapshot-to-stream,durable progress,keyless/JSON/supported generated columns |
-| PostgreSQL source | 17.12 single-primary experimental profile covering pgoutput, JSONB, keyless rows, LSN restart and missing-slot refusal. See the [operator guide](postgresql-source.md) |
-| Oracle source | CDB/PDB identity, SCN and Flashback read admission tested on 26ai Free. CDC remains open. See the [preflight guide](oracle-source.md). |
-| Capture recovery | Console and CLI provide read-only admission, affected subscriptions and checkpoint review. Range quarantine remains open. See the [operator guide](capture-recovery.md) |
+| PostgreSQL source | 17.12 and 18.7 pgoutput profiles. The 17.12 synchronized-slot promotion and 18.7 stored generated columns passed. [Operator guide](postgresql-source.md) |
+| Oracle source | 26ai Free single-PDB Flashback and archived LogMiner CDC to PostgreSQL with durable SCN restart. [Source guide](oracle-source.md) |
+| Capture recovery | Original checkpoint and impacted targets, same-file MySQL GTID headers, CRC32 and private archival of original event bytes. Approved range exclusion remains open. [Operator guide](capture-recovery.md) |
 | Management | Bilingual wizard,configuration revisions,isolated Workers,durable cross-entry commands,accounts/grants/audit |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |
 | Gap verification | Reviewed plans,administrator confirmation,fresh scans,atomic receipts and cross-entry cancellation;bounded PG/MySQL,see [guide](gap-verification.md) for acceptance |
 | Transaction compensation | Administrator review and approval for PostgreSQL and MySQL with atomic target receipts and original transaction replay. See the [operator guide](transaction-compensation.md) |
-| Relational targets | Actual MySQL/PostgreSQL/openGauss profiles;experimental DM/Kingbase/GBase8c profiles;OceanBase full recovery and distributed GaussDB remain open |
+| Relational targets | MySQL, PostgreSQL and openGauss have native profiles. DM, Kingbase, GBase8c and OceanBase MySQL mode have bounded native transaction and mixed restart profiles. Distributed GaussDB and other vendor modes remain open. |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
-| Messaging | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream have bounded confirmation/recovery profiles;complete cluster/TLS matrices remain open |
-| Deployment | Linux, Docker, Helm and native Kubernetes YAML. Two-node Kubernetes tested RWO remount, rollout and Secret rotation. Cross-node CSI and old-owner fencing remain open. |
-| Java | Java8 build baseline;partial five-JRE profiles,not the full source/target/driver/TLS/recovery matrix |
+| Messaging | Eight broker profiles use confirmed at-least-once delivery. NATS JetStream passed three-member TLS and quorum recovery. Other cluster and security profiles remain open. |
+| Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes passed RWO remount, rollout, Secret rotation and external-journal stale Worker fencing. Cross-node CSI relocation is under test. |
+| Java | Java 8 build baseline. Java 8, 11, 17, 21 and 25 ran together with Controller replacement and drained Agent restart. Broader connector and protocol-version profiles remain open. |
 
 See [design](platform-design.md),[console operations](console-and-deployment.md) and product guides for constraints. Protocol/data-format numbers identify internal modes,not compatibility promises for unreleased builds.
 
@@ -59,7 +59,7 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 
 1. Controlled source range recovery and recovery protocols for other destinations.
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
-3. PostgreSQL and Oracle sources, plus complete MySQL 5.7 profiles.
+3. Broader PostgreSQL and Oracle types, Oracle failover, and the PostgreSQL common-cut workflow.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.
 5. Large transactions/catalogs,hardware benchmarks,liveK8s,complete JDK matrix and bilingual docs.
 

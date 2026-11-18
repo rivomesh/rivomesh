@@ -34,18 +34,18 @@
 | 能力 | 当前状态 |
 |---|---|
 | 同步链路 | MySQL多库映射、同源多目标、自动建表、分块全量转增量、持久断点；无主键/JSON/受支持生成列 |
-| PostgreSQL 源 | 17.12 单主实验档案，涵盖 pgoutput、JSONB、无主键、LSN 续传及槽缺失拒绝。见[配置与恢复](postgresql-source.md) |
-| Oracle 源 | 26ai Free 的 CDB/PDB 身份、SCN 和 Flashback 权限预检已实测。增量尚未接入。见[预检](oracle-source.md)。 |
-| 采集故障恢复 | 管理界面和 CLI 提供只读检查、受影响订阅及原断点复验。范围隔离待实现。见[操作说明](capture-recovery.md) |
+| PostgreSQL 源 | 17.12 和 18.7 已实测 pgoutput。17.12 可切换逻辑槽续传、18.7 存储型生成列已通过。 [配置与恢复](postgresql-source.md) |
+| Oracle 源 | 26ai Free 单 PDB Flashback、归档 LogMiner 增量和 SCN 续传到 PostgreSQL 已通过。 [源库手册](oracle-source.md) |
+| 采集故障恢复 | 提供原断点与受影响目标检查，验证 MySQL 同文件 GTID 边界和原始事件 CRC32，支持私有归档。审批后排除源范围仍待完成。 [操作说明](capture-recovery.md) |
 | 管理 | 中英文向导、配置/修订、独立Worker、跨入口持久命令、账号/权限/审计 |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
 | 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |
 | 事务补偿 | PostgreSQL 和 MySQL 的管理员预览、确认、目标原子凭据和原事务重放。见[操作说明](transaction-compensation.md) |
-| 关系目标 | MySQL/PostgreSQL/openGauss已有实际档案；达梦/金仓/GBase8c为限定实验档案；OceanBase完整恢复未验收；分布式GaussDB待实机 |
+| 关系目标 | MySQL、PostgreSQL、openGauss 有实库档案。达梦、金仓、GBase8c、OceanBase MySQL 模式通过限定事务和联合中断恢复。分布式 GaussDB 和其他厂商模式待验收。 |
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
-| 消息目标 | Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ Classic/Artemis/Redis Streams/NATS JetStream已有不同范围的确认/恢复档案；全部集群/TLS矩阵未完成 |
-| 部署 | Linux、Docker、Helm、原生Kubernetes YAML；已实测双节点 Kubernetes 的 Helm/原生 YAML 与 RWO CSI 重挂，跨节点存储和旧 owner 隔离待验收 |
-| Java | Java8构建基线；五JRE已有部分档案，完整源×目标×驱动×TLS×恢复矩阵未完成 |
+| 消息目标 | 八种 Broker 已有确认式至少一次投递档案。NATS JetStream 三节点 TLS 和多数派恢复已通过。其他消息产品的集群与安全组合继续验收。 |
+| 部署 | Linux、Docker、Helm、原生 Kubernetes。双节点实测 RWO 重挂、配置更新、Secret 轮换、外部日志和旧 Worker 写入隔离。跨节点 CSI 卷恢复正在实测。 |
+| Java | Java 8 构建基线，实测 8、11、17、21、25 混部，覆盖 Controller 替换及原目录 Agent 排空重启。其余连接器和应用协议版本组合待验收。 |
 
 具体产品约束以[平台方案](platform-design.md)、[控制台](console-and-deployment.md)和各产品手册为准。协议和数据格式编号是内部状态标识，不是对开发版本升级的承诺。
 
@@ -59,7 +59,7 @@ V2/V3双执行链、对应向导和旧配置仍有交叉引用，将作为下一
 
 1. 源端受控范围恢复及其他目标恢复协议。
 2. 自动跨Agent接管、排空迁移、完整全局诊断与存储可达性。
-3. PostgreSQL 源的主备切换和共同校验点，以及 Oracle 源。
+3. PostgreSQL 共同校验点、Oracle 源主备切换及更完整的类型档案。
 4. 分布式GaussDB、其他厂商/消息/分析目标生产矩阵。
 5. 大事务/海量表/硬件基准、真实K8s、完整JDK矩阵与双语文档。
 
