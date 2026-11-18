@@ -195,6 +195,16 @@ public final class PostgresAdoptionRead implements AutoCloseable {
         verify();
     }
 
+    /** Exact native schema and unclaimed namespace evidence from the pinned target view. */
+    public String planEvidence(TableSchema table, String journalNamespace) throws Exception {
+        String blocker = blocker(table);
+        if (blocker != null) throw new IllegalStateException(blocker);
+        String evidence = PostgresAdoptionCatalog.inspect(connection, destination(table), table,
+                settings.metadataSchema, journalNamespace);
+        verify();
+        return evidence;
+    }
+
     private boolean exists(String sql, Object... values) throws SQLException {
         try (PreparedStatement query = connection.prepareStatement(sql)) {
             for (int i = 0; i < values.length; i++) query.setObject(i + 1, values[i]);

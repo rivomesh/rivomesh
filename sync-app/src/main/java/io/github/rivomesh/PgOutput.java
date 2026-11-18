@@ -165,6 +165,7 @@ final class PgOutput {
                 throw invalid("POSTGRESQL_BOOLEAN_INVALID");
             case INT64:return Cell.value(Long.toString(Long.parseLong(text)));
             case DECIMAL:return Cell.value(new BigDecimal(text).toPlainString());
+            case DATE:return Cell.value(PostgresDate.canonicalSource(text));
             case BYTES:
                 if(!text.startsWith("\\x")||(text.length()&1)!=0)throw invalid("POSTGRESQL_BYTEA_HEX_REQUIRED");
                 byte[] bytes=new byte[(text.length()-2)/2];

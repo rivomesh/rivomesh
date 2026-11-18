@@ -7373,5 +7373,70 @@
       "focusedJavaTests": 69,
       "domTests": 140
     }
+  },
+  "frozenExistingTargetAdoptionPlan": {
+    "reproduce": "python3 tests/nonempty-target-preview.py --only-adoption-plan --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "07e70a2c8bf0a21bc2e142dc6aab9bb0e64a787211faaec54f83bd47d46674d9",
+      "checks": [
+        "An unfrozen or runtime-only MySQL source cannot produce an adoption plan",
+        "Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes",
+        "A changed row, target width, or target column default fails adoption admission",
+        "A registered owner or pre-existing journal namespace fails closed",
+        "A recreated physical PostgreSQL primary index invalidates the previously reviewed plan",
+        "An oversized source row is rejected by a bounded size probe before streaming business values",
+        "Discovery of a second mapped source table refuses a partial existing-target bootstrap"
+      ],
+      "status": "PASS",
+      "profile": "ADOPTION_PLAN",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 64,
+    "stagedIntegration": {
+      "artifactSha256": "d8c7bcb2e39f492505522b512584e1a6e0e1c6902b2f7480f7f02b1ea246bfec",
+      "focusedJavaTests": 43
+    }
+  },
+  "postgresCivilDateDelivery": {
+    "reproduce": "python3 tests/postgres-source-run.py --source-image postgres:17.12 --date-values --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "d27ebc75279169bed072345c768b2dfc9b513a0722d332b999ef1586693f95c2",
+      "status": "PASS",
+      "checks": [
+        "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+        "DATE snapshots agree in PostgreSQL and MySQL under SQL DateStyle and a skipped JVM local day",
+        "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+        "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+        "DATE redo changes a primary key and deletes one exact duplicate without changing the adjacent local date",
+        "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+        "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+        "DATE catch-up after SIGKILL reuses the source slot and both sets of destination snapshot IDs",
+        "An infinite DATE stops native decoding at the original LSN without applying its transaction to either target"
+      ],
+      "jdk": 21,
+      "runtimeImage": "eclipse-temurin:21-jre-jammy",
+      "sourceImage": "postgres:17.12",
+      "failover": false,
+      "rejectOldPrimary": false,
+      "uuid": false,
+      "dateValues": true,
+      "deliveryTiming": false,
+      "tls": false,
+      "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "mysqlVersion": "8.4.13",
+      "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "runtimeVersion": "21.0.13",
+      "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+      "runtimeArchitecture": "arm64",
+      "cleanupExitCode": 0
+    },
+    "nativeCandidateJavaTests": 13,
+    "stagedIntegration": {
+      "artifactSha256": "d8c7bcb2e39f492505522b512584e1a6e0e1c6902b2f7480f7f02b1ea246bfec",
+      "focusedJavaTests": 43
+    }
   }
 }

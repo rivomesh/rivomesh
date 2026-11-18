@@ -60,7 +60,9 @@
   "newSinceLastReport": [
     "LG-09 completed. Exact audited reclaim/restore passed 18 native cases, eight real Chrome, 47 Java and 136 DOM. Report bytes were recovered after Agent restart and replay did not remove them again.",
     "Removed 287 expired or generated target files totaling 18,066,734,774 logical bytes. Target measured 28 GiB before cleanup and 11 GiB afterward; source, vendor installers, manifests and active candidates were preserved.",
-    "CP-04 staged handoff capacity reservation published: both native stores 16 each, 18 native including four real Chrome, and a merged 69 Java/140 DOM. Task owner and all positions were preserved."
+    "CP-04 staged handoff capacity reservation published: both native stores 16 each, 18 native including four real Chrome, and a merged 69 Java/140 DOM. Task owner and all positions were preserved.",
+    "LG-02 exact frozen-source existing PostgreSQL adoption plan published; seven native and 64 Java checks include stable digest replay plus content/schema/ownership drift refusal.",
+    "SO-06 civil PostgreSQL DATE to native PostgreSQL/MySQL passed nine actual cases and 43 integrated Java. Preserved original slots and snapshots; infinity refused before checkpoint."
   ],
   "lastScheduledReportAt": "2026-11-18T21:58:16+08:00",
   "lastVerifiedReactor": {

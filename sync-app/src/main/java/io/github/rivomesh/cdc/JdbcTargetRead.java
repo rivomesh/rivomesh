@@ -2,10 +2,12 @@ package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.MysqlDuration;
 import io.github.rivomesh.OracleDate;
+import io.github.rivomesh.PostgresDate;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
@@ -74,7 +76,15 @@ final class JdbcTargetRead implements TargetRead {
         switch(column.type){
             case BYTES:case GEOMETRY:value=binary(result,index,maximum,verify);break;
             case STRING:case JSON:value=text(result,index,maximum,verify);break;
-            case DATE:java.sql.Date date=result.getDate(index);value=date==null?null:date.toString();break;
+            case DATE:
+                if(PostgresDate.isColumn(column)){
+                    LocalDate date=result.getObject(index,LocalDate.class);
+                    value=date==null?null:date.toString();
+                }else{
+                    java.sql.Date date=result.getDate(index);
+                    value=date==null?null:date.toString();
+                }
+                break;
             case DATETIME:case TIMESTAMP:
                 if(product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(column)){
                     LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);

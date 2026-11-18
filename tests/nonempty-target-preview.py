@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--session-fault', action='store_true', help='Kill the original MySQL view session during pinning')
     profile = parser.add_mutually_exclusive_group()
+    profile.add_argument('--only-adoption-plan', action='store_true', help='Verify the frozen existing-target admission plan')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -43,7 +44,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
+    profile_name = ('ADOPTION_PLAN' if args.only_adoption_plan else
+                    'UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
                     'UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
                     'CONSTRAINT_REVIEW' if args.only_constraints else 'ADOPTION_PREVIEW')
     report = {'artifactSha256': digest, 'checks': [], 'status': 'FAIL', 'profile': profile_name}
@@ -187,6 +189,102 @@ def main():
                 finally:
                     postgres("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE " + blocking_session)
                     blocked.result(timeout=60)
+
+        def adoption_plan():
+            target = dict(case['targets'][0], username='postgres', metadataSchema='planned_sink')
+            journal = {'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'url': target['url'],
+                       'username': 'postgres', 'password': '${RM_ADOPTION_PASSWORD}', 'namespace': 'planned_journal'}
+            plan_config = dict(case, journal=journal, targets=[target])
+            (directory / 'adoption-plan.yml').write_text(json.dumps(plan_config))
+            mysql("""
+                CREATE DATABASE sales CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin;
+                CREATE TABLE sales.items(id BIGINT PRIMARY KEY,name VARCHAR(80),doc JSON) ENGINE=InnoDB;
+                INSERT INTO sales.items VALUES (2,'tail ',NULL),(1,'sensitive-row-value','{"b":2,"a":1.0}');
+            """)
+            postgres('''
+                CREATE SCHEMA review;
+                CREATE TABLE review.items(id BIGINT PRIMARY KEY,name VARCHAR(80) COLLATE "C",doc JSONB);
+                INSERT INTO review.items VALUES (1,'sensitive-row-value','{"a":1,"b":2.0}'),(2,'tail ',NULL);
+            ''')
+            target_contents = "SELECT md5(jsonb_agg(to_jsonb(item) ORDER BY id)::text) FROM review.items item"
+            original_contents = postgres(target_contents)
+
+            def plan(*options, check=True):
+                return compose('run', '--rm', '-T', 'runner', 'plan-adoption', '/fixture/adoption-plan.yml', 'pg',
+                               *options, check=check)
+
+            def refused(code, *options):
+                answer = plan(*options, check=False)
+                assert answer.returncode and not answer.stdout.strip()
+                assert code in answer.stderr, (code, re.findall(r'\b(?:ADOPTION|SQL)_[A-Z0-9_]+', answer.stderr))
+
+            def unchanged_target():
+                assert postgres("SELECT to_regnamespace('planned_sink') IS NULL AND "
+                                "to_regnamespace('planned_journal') IS NULL AND "
+                                "to_regclass('review._rivomesh_owner_v3') IS NULL") == 't'
+                assert postgres(target_contents) == original_contents
+                assert not (directory / 'journal').exists()
+
+            refused('ADOPTION_PLAN_SOURCE_NOT_FROZEN')
+            mysql('SET GLOBAL super_read_only=ON')
+            refused('ADOPTION_PLAN_SOURCE_FREEZE_NOT_PERSISTED')
+            unchanged_target()
+            passed('An unfrozen or runtime-only MySQL source cannot produce an adoption plan')
+
+            mysql('SET PERSIST read_only=ON; SET PERSIST super_read_only=ON')
+            original = plan()
+            assert 'sensitive-row-value' not in original.stdout
+            observed = json.loads(original.stdout)
+            assert observed['status'] == 'ADOPTION_PLAN_OBSERVED' and observed['plan']['matchedRows'] == 2
+            approved = observed['planSha256']
+            assert re.fullmatch('[a-f0-9]{64}', approved)
+            exact = json.loads(plan('--expect-sha256', approved).stdout)
+            assert exact['expectedDigestMatched'] and exact['plan'] == observed['plan'] and exact['planSha256'] == approved
+            refused('ADOPTION_PLAN_CHANGED', '--expect-sha256', '0' * 64)
+            unchanged_target()
+            passed('Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes')
+
+            postgres("UPDATE review.items SET name='tail' WHERE id=2")
+            refused('ADOPTION_PLAN_ROWS_DIFFER', '--expect-sha256', approved)
+            postgres("UPDATE review.items SET name='tail ' WHERE id=2")
+            postgres("ALTER TABLE review.items ALTER COLUMN name TYPE VARCHAR(81) COLLATE \"C\"")
+            refused('ADOPTION_PLAN_TARGET_COLUMN_MISMATCH')
+            postgres("ALTER TABLE review.items ALTER COLUMN name TYPE VARCHAR(80) COLLATE \"C\"")
+            postgres("ALTER TABLE review.items ALTER COLUMN name SET DEFAULT 'x'")
+            refused('ADOPTION_PLAN_TARGET_COLUMN_MISMATCH')
+            postgres("ALTER TABLE review.items ALTER COLUMN name DROP DEFAULT")
+            unchanged_target()
+            passed('A changed row, target width, or target column default fails adoption admission')
+
+            postgres("CREATE TABLE review._rivomesh_owner_v3(table_name TEXT PRIMARY KEY); "
+                     "INSERT INTO review._rivomesh_owner_v3 VALUES ('items')")
+            refused('ADOPTION_TARGET_ALREADY_OWNED')
+            postgres("DROP TABLE review._rivomesh_owner_v3; CREATE SCHEMA planned_journal")
+            refused('ADOPTION_PLAN_METADATA_PRESENT')
+            postgres("DROP SCHEMA planned_journal")
+            unchanged_target()
+            passed('A registered owner or pre-existing journal namespace fails closed')
+
+            after_edits = json.loads(plan().stdout)['planSha256']
+            postgres('REINDEX INDEX review.items_pkey')
+            refused('ADOPTION_PLAN_CHANGED', '--expect-sha256', after_edits)
+            unchanged_target()
+            passed('A recreated physical PostgreSQL primary index invalidates the previously reviewed plan')
+
+            mysql('SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF; '
+                  "UPDATE sales.items SET doc=JSON_OBJECT('large',REPEAT('z',1048576)) WHERE id=1; "
+                  'SET GLOBAL read_only=ON; SET GLOBAL super_read_only=ON')
+            refused('ADOPTION_ROW_TOO_LARGE')
+            unchanged_target()
+            passed('An oversized source row is rejected by a bounded size probe before streaming business values')
+
+            mysql('SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF; '
+                  'UPDATE sales.items SET doc=\'{"b":2,"a":1.0}\' WHERE id=1; '
+                  'CREATE TABLE sales.additional(id BIGINT PRIMARY KEY); '
+                  'SET GLOBAL read_only=ON; SET GLOBAL super_read_only=ON')
+            refused('ADOPTION_PLAN_SOURCE_SCOPE_UNSUPPORTED')
+            unchanged_target()
+            passed('Discovery of a second mapped source table refuses a partial existing-target bootstrap')
 
         def constraint_review():
             target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
@@ -547,6 +645,10 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
+            if args.only_adoption_plan:
+                adoption_plan()
+                report['status'] = 'PASS'
+                return
             if args.only_constraints or restoration_profile:
                 constraint_review()
                 report['status'] = 'PASS'

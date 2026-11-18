@@ -1056,8 +1056,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 实测 PostgreSQL 17.12 同步槽切主、拒绝旧时间线、UUID 主键变更与无主键行，18.7 生成列和缺槽保护。更多类型、DDL 与多目标共同点待验收。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 slot promotion and old-timeline refusal, UUID primary-key changes and keyless rows, plus 18.7 generated columns and missing-slot protection. Broader types, DDL and common cuts remain."
+        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID，以及 DATE 双目标投递和 18.7 存储型生成列。更多类型、DDL 及多目标共同校验点待验。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 logical failover slots, UUID and civil DATE (DATE uses PostgreSQL and MySQL targets), and PostgreSQL 18.7 stored generated columns. More types, DDL and common cuts remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1464,8 +1464,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "非空预检和冻结 MySQL 到同库 PostgreSQL 日志/目标的 UNIQUE 执行已实测，含源故障回滚与未知提交查回。正式接管基线、多目标约束、写入交接及回切待验。",
-        "en": "Nonempty comparison and actual frozen-MySQL UNIQUE restoration with a same-database PostgreSQL journal passed, including rollback and uncertain-commit reconciliation. Formal adoption, multi-target constraints, writer handover and failback remain."
+        "zh-CN": "非空目标已实测冻结 MySQL 的精确切点、行、结构及物理归属计划和按摘要复核。限定 UNIQUE 实际恢复已通过。正式接管基线、多目标约束、写入交接和回切待验。",
+        "en": "Native existing-target adoption plans bind a frozen MySQL cut, content, schema and physical ownership to a reproducible digest. Bounded UNIQUE execution passed. Transactional adoption, multiple targets, cutover and failback remain."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1481,7 +1481,8 @@
         "tests/nonempty-target-preview.py",
         "sync-app/src/main/java/io/github/rivomesh/PipelineConstraintReview.java",
         "sync-app/src/main/java/io/github/rivomesh/PipelineUniqueRestoration.java",
-        "sync-app/src/main/java/io/github/rivomesh/recovery/UniqueRestoreOperation.java"
+        "sync-app/src/main/java/io/github/rivomesh/recovery/UniqueRestoreOperation.java",
+        "sync-app/src/main/java/io/github/rivomesh/PipelineAdoptionPlan.java"
       ]
     },
     {

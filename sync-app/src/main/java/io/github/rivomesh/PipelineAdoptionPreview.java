@@ -10,6 +10,8 @@ import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.TargetProduct;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,6 +19,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HexFormat;
+import java.util.TreeMap;
 
 /** Read-only preflight for assessing an existing, unowned SQL destination. */
 final class PipelineAdoptionPreview {
@@ -101,9 +105,12 @@ final class PipelineAdoptionPreview {
         return comparison;
     }
 
-    private static final class RowComparison {
+    static final class RowComparison {
         private final TableSchema table;
         private final Map<String,String> expected = new HashMap<>();
+        private final int maximumRows;
+        private final int maximumRowBytes;
+        private final long maximumRetainedBytes;
         private long retainedBytes;
         private int sourceRows;
         private int targetRows;
@@ -111,21 +118,28 @@ final class PipelineAdoptionPreview {
         private int changed;
 
         RowComparison(TableSchema table) {
+            this(table, MAXIMUM_ROWS, MAXIMUM_ROW_BYTES, MAXIMUM_RETAINED_BYTES);
+        }
+
+        RowComparison(TableSchema table, int maximumRows, int maximumRowBytes, long maximumRetainedBytes) {
             this.table = table;
+            this.maximumRows = maximumRows;
+            this.maximumRowBytes = maximumRowBytes;
+            this.maximumRetainedBytes = maximumRetainedBytes;
         }
 
         void source(List<Cell> row) {
-            if (++sourceRows > MAXIMUM_ROWS) throw rejected("ADOPTION_SOURCE_ROW_LIMIT");
+            if (++sourceRows > maximumRows) throw rejected("ADOPTION_SOURCE_ROW_LIMIT");
             String canonical = canonical(row);
             String key = RowValues.identity(table, row, null);
             // UTF-16 worst case plus fixed map/row overhead.
             retainedBytes += 2L * (canonical.length() + key.length()) + 128;
-            if (retainedBytes > MAXIMUM_RETAINED_BYTES) throw rejected("ADOPTION_COMPARISON_MEMORY_LIMIT");
+            if (retainedBytes > maximumRetainedBytes) throw rejected("ADOPTION_COMPARISON_MEMORY_LIMIT");
             if (expected.putIfAbsent(key, canonical) != null) throw rejected("ADOPTION_SOURCE_IDENTITY_DUPLICATE");
         }
 
         void target(List<Cell> row) {
-            if (++targetRows > MAXIMUM_ROWS) throw rejected("ADOPTION_TARGET_ROW_LIMIT");
+            if (++targetRows > maximumRows) throw rejected("ADOPTION_TARGET_ROW_LIMIT");
             String canonical = canonical(row);
             String source = expected.remove(RowValues.identity(table, row, null));
             if (source == null) extra++;
@@ -136,12 +150,36 @@ final class PipelineAdoptionPreview {
             return expected.size();
         }
 
+        int sourceRows() {
+            return sourceRows;
+        }
+
+        boolean matched() {
+            return missing() == 0 && extra == 0 && changed == 0;
+        }
+
+        /** Called after loading the source and before its matched keys are removed by the target scan. */
+        String sourceDigest() throws Exception {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (Map.Entry<String,String> row : new TreeMap<>(expected).entrySet()) {
+                hash(digest, row.getKey());
+                hash(digest, row.getValue());
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        }
+
+        private static void hash(MessageDigest digest, String value) {
+            byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(encoded.length).array());
+            digest.update(encoded);
+        }
+
         private String canonical(List<Cell> row) {
             long bytes = 64L * row.size();
             for (Cell cell : row) if (cell.value != null) bytes += cell.value.getBytes(StandardCharsets.UTF_8).length;
-            if (bytes > MAXIMUM_ROW_BYTES) throw rejected("ADOPTION_ROW_TOO_LARGE");
+            if (bytes > maximumRowBytes) throw rejected("ADOPTION_ROW_TOO_LARGE");
             String canonical = RowValues.canonical(table, row);
-            if (canonical.getBytes(StandardCharsets.UTF_8).length > MAXIMUM_ROW_BYTES) {
+            if (canonical.getBytes(StandardCharsets.UTF_8).length > maximumRowBytes) {
                 throw rejected("ADOPTION_ROW_TOO_LARGE");
             }
             return canonical;

@@ -4,6 +4,7 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Change;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.PipelineFailure;
+import io.github.rivomesh.cdc.RowValues;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
 import java.io.ByteArrayOutputStream;
@@ -48,6 +49,25 @@ class PgOutputTest {
         assertEquals(value,PgOutput.value(uuid,value).value);
         assertNull(PgOutput.value(uuid,null).value);
         assertThrows(IllegalStateException.class,()->PgOutput.value(uuid,"a0eebc999c0b4ef8bb6d6bb9bd380a11"));
+    }
+
+    @Test void civilDatesShareOneBoundedCanonicalRepresentation(){
+        TableSchema.Column day=new TableSchema.Column();
+        day.type=TableSchema.Type.DATE;
+        day.sourceType=Integer.toString(PostgresDate.OID);
+        TableSchema table=new TableSchema();
+        table.columns.add(day);
+        for(String valid:new String[]{"1000-01-01","1582-10-10","2011-12-30","2024-02-29","9999-12-31"}){
+            var value=PgOutput.value(day,valid);
+            assertEquals(valid,value.value);
+            assertEquals(valid,RowValues.decode(RowValues.canonical(table,Collections.singletonList(value))).get(0).value);
+        }
+        assertNull(PgOutput.value(day,null).value);
+        for(String invalid:new String[]{"infinity","-infinity","0001-12-31 BC","0999-12-31",
+                "10000-01-01","2023-02-29","29/02/2024"}){
+            assertEquals("POSTGRESQL_DATE_OUT_OF_RANGE",
+                    assertThrows(IllegalStateException.class,()->PgOutput.value(day,invalid)).getMessage());
+        }
     }
 
     @Test void pgoutputPublishesOnlyCompleteTransactionsAndChecksRelationMetadata()throws Exception{

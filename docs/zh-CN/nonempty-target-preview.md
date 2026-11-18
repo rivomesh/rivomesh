@@ -16,6 +16,21 @@ java -jar rivomesh.jar preview-adoption config/task.yml postgres
 
 当前上限为发现 100 张源表、每张待比较表每侧 10 万行、单行解码或规范化后 4 MiB，以及每表计入预算的比较数据 64 MiB。两个读视图分别有 120 秒截止时间。数据上限适用于预检处理的解码值，JDBC 取数和 JVM 开销需要额外内存。超限、权限不足或视图失效会终止命令，无法生成最终比较结果。JSON 结果包含表名、数量和本次观察到的源端位点的 SHA-256 摘要。
 
+## 在冻结的源库边界生成接管计划
+
+`preview-adoption` 发现数据匹配后，可以用 `plan-adoption` 核对接管条件。此档案覆盖直连 MySQL 8.4 上一个数据库的一张非空 InnoDB 表，以及一个 UTF-8 编码的 PostgreSQL 17 主库。只配置一个目标，外部 PostgreSQL 日志和目标使用相同 JDBC URL，使用两个尚不存在的独立元数据 schema，且没有已有写入节点分配。审查期间保持两边应用写入和同步进程停止。[PostgreSQL 事务隔离](https://www.postgresql.org/docs/17/transaction-iso.html)
+
+MySQL 运维人员需启用并持久化 `read_only` 和 `super_read_only`，同时保持 `persisted_globals_load` 开启。MySQL 账号需要看见全部表和相关元数据，并有全局读锁及复制状态查询权限。有入站复制或组复制成员时会拒绝计划。命令在原物理会话取得有截止时间的全局读锁，比对前后核验源实例身份及精确 binlog 位点。[MySQL FLUSH 语句](https://dev.mysql.com/doc/refman/8.4/en/flush.html)
+
+源表必须以单个有符号 `BIGINT` 列为主键，无二级索引、生成值、非 `NULL` 默认值、触发器或外键。其他列可使用有符号整数、JSON 或最多 4,000 字符的 `utf8mb4_0900_bin` VARCHAR。目标匹配列顺序和可空性，类型对应 `bigint`、`jsonb` 或等宽且显式使用 `pg_catalog."C"` 排序规则的 `varchar`。目标只包含一个索引，对应不可延迟的 `bigint` B-tree 主键。目标账号需有表归属权限、创建 schema 及 schema 内对象的权限，以及调用 `pg_control_system()` 的权限。目标已有 Rivomesh 归属、同步日志、目标元数据、启用的事件触发器或物理表在订阅内时会拒绝计划。
+
+```sh
+java -jar rivomesh.jar plan-adoption config/task.yml postgres
+java -jar rivomesh.jar plan-adoption config/task.yml postgres --expect-sha256 <reviewed-digest>
+```
+
+`ADOPTION_PLAN_OBSERVED` 返回计划 SHA-256 摘要，绑定源端精确位点、匹配行数及摘要、配置和目标原生身份。在相同状态下重跑会得到同一个摘要。上限为 1 万行、单行 1 MiB、保留的比较数据 16 MiB，各读视图期限为 30 秒。JDBC 取数和 JVM 开销需要额外内存。使用私有运维记录保存结果。目标证据来自 PostgreSQL 只读快照。从该基线启动需要另一个操作，在同一目标事务中重新核验计划、获取目标归属、建立日志及快照断点。
+
 ## 写入交接前检查降级的 UNIQUE 索引
 
 对于已有同步任务管理的 PostgreSQL 目标，先为该目标生成[共同校验点报告](reconciliation-workflow.md)并完成源目标比较。任务保持暂停，同时停止目标业务写入及 DDL。使用相同任务配置及该报告 ID 运行检查。

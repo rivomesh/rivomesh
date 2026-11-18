@@ -16,6 +16,21 @@ Schedule the preview during a maintenance window. It holds the MySQL write gate 
 
 The preview covers at most 100 discovered source tables, 100,000 rows per side of each compared table, 4 MiB per decoded or canonical row and 64 MiB of accounted retained comparison data per table. Read deadlines are 120 seconds for each view. The limits apply to decoded data in the verifier, while JDBC fetches and JVM overhead require additional memory. Limit, permission and view errors terminate the command without a comparison result. The JSON result contains table names and totals, and uses a SHA-256 digest to identify the observed source position.
 
+## Plan adoption at a frozen source boundary
+
+Use `plan-adoption` after `preview-adoption` finds matching data. This profile covers one nonempty InnoDB table in one directly connected MySQL 8.4 database and one UTF-8 PostgreSQL 17 primary. Configure one target and an external PostgreSQL journal with the same JDBC URL as the target, separate absent metadata schemas, and no existing writer assignment. Hold all application writers and pipeline workers stopped while reviewing the plan. [PostgreSQL transaction isolation](https://www.postgresql.org/docs/17/transaction-iso.html)
+
+The source operator must enable and persist `read_only` and `super_read_only` and keep `persisted_globals_load` enabled. The MySQL account must see all tables and related schema metadata and have the grants for the global read lock and replication status checks. The planner refuses inbound replication and group membership. It takes a bounded lock on the original MySQL session and verifies the original physical server and exact binlog boundary before and after comparison. [MySQL FLUSH statement](https://dev.mysql.com/doc/refman/8.4/en/flush.html)
+
+The source has a single signed `BIGINT` primary key and no secondary indexes, generated values, defaults other than `NULL`, triggers or foreign keys. Other columns may be signed integers, JSON or `utf8mb4_0900_bin` VARCHAR up to 4,000 characters. The target must have matching column order and nullability, mapped to `bigint`, `jsonb` and equal-width `varchar` with explicit `pg_catalog."C"` collation. The target has a single index on its nondeferrable `bigint` B-tree primary key. The target role must have ownership authority, schema and database creation privileges and permission to read `pg_control_system()`. Existing Rivomesh ownership, journal state, sink metadata, enabled event triggers and target subscription membership stop the plan.
+
+```sh
+java -jar rivomesh.jar plan-adoption config/task.yml postgres
+java -jar rivomesh.jar plan-adoption config/task.yml postgres --expect-sha256 <reviewed-digest>
+```
+
+`ADOPTION_PLAN_OBSERVED` binds the exact source position, matching row count and digest, configuration and native target identities to the plan SHA-256 digest. The digest stays stable while those inputs match. Limits are 10,000 rows, 1 MiB per row, 16 MiB of retained comparison data and 30 seconds per read guard. JDBC and JVM overhead require additional memory. Keep the result in the operator's private records. PostgreSQL uses a read-only snapshot, so this result is evidence from that snapshot. Starting from that baseline requires a separate operation that rechecks the plan while acquiring target ownership and creating the journal and snapshot checkpoints in a single transaction.
+
 ## Review downgraded UNIQUE indexes before handover
 
 For an already managed PostgreSQL target, establish and complete a [common-cut report](reconciliation-workflow.md) for the destination, and keep the pipeline paused. Suspend business writes and DDL on the target, then run the review with the same task configuration and report ID.

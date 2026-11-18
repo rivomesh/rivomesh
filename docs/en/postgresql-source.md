@@ -19,12 +19,15 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 
 - The initial type profile includes signed integers, booleans, bounded numeric values, text, JSON/JSONB and BYTEA. Keyed and keyless tables use full row identity.
 - PostgreSQL UUID values are copied as lowercase canonical text in `VARCHAR(36)`. PostgreSQL 17.12 to PostgreSQL 17.12 verified nullable UUID values and primary-key changes through CDC. Reproduce with `--uuid` in the native fixture. [PostgreSQL UUID representation](https://www.postgresql.org/docs/17/datatype-uuid.html)
+- PostgreSQL `DATE` maps to `DATE` in both PostgreSQL and MySQL. The supported range is 1000-01-01 through 9999-12-31, and SQL `NULL` stays null. Snapshot and pgoutput use the same ISO representation. A civil date stays the same across Worker time zones and dates in the Gregorian calendar transition. [PostgreSQL date and time](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL DATE range](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
 - PostgreSQL 18 stored generated columns can be materialized as ordinary destination columns when the publication includes them. Use `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)` and retain `REPLICA IDENTITY FULL`. PostgreSQL 17 generated columns, PostgreSQL 18 virtual generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require separate profiles. Preflight or capture reports unsupported relation changes and types.
 - Restart uses the existing LSN and snapshot when the original primary, timeline, slot and journal remain available. Resume a failed target subscription after addressing its SQL error.
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.
 - SO-06 continues to track common-cut validation and additional target, promotion and driver profiles.
 
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
+
+Add `--source-image postgres:17.12 --date-values` to run the civil date fixture against PostgreSQL and MySQL destinations. It covers a DATE primary-key change, an exact keyless occurrence, restart from the original slot and snapshot, and refusal of an infinite date without applying its transaction. BCE dates and dates outside the profile range produce the same `POSTGRESQL_DATE_OUT_OF_RANGE` diagnostic. Review source values and the retained LSN before retrying. Timestamp and time columns require separate profiles.
 
 Use Temurin 21 for current builds and fixtures. Earlier cross-runtime results are archived with their exact artifact. [Verification record](../verification/README.md#postgresql-source-runtime-matrix)
 

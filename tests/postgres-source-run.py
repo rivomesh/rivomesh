@@ -22,6 +22,7 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
 parser.add_argument('--uuid', action='store_true', help='Exercise UUID keys and nullable UUID values')
+parser.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
 parser.add_argument('--tls', action='store_true',
                     help='Require CA and host verification for SQL and pgoutput and exercise rejected certificates')
@@ -46,7 +47,7 @@ image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
 report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runtimeImage=image,
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
-              uuid=args.uuid,deliveryTiming=args.delivery_timing,tls=args.tls)
+              uuid=args.uuid,dateValues=args.date_values,deliveryTiming=args.delivery_timing,tls=args.tls)
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -113,6 +114,12 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     if args.failover:
         pipeline['source']['postgresql'].update(
             failoverSlot=True,url='jdbc:postgresql://source-rw:5432/sync_test?connectTimeout=3&socketTimeout=15')
+    if args.date_values:
+        pipeline['targets'].append(dict(
+            id='mysql',product='MYSQL',
+            url='jdbc:mysql://mysql:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true',
+            username='root',password='${RM_PG_PASSWORD}',mappings=dict(sales='copy_sales',billing='copy_billing'),
+            metadataSchema='copy_meta'))
     live_source='source'
     platform=dict(bind='0.0.0.0',port=8080,authToken='${RM_PG_TOKEN}',tasksDirectory='/fixture/tasks',
                   dataDirectory='/fixture/platform',autoStart=True,pollMillis=200,workerHeapMiB=256)
@@ -126,6 +133,11 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
     document=dict(services=services)
+    if args.date_values:
+        services['source']['command']+=['-c','datestyle=SQL, DMY']
+        services['runner']['environment']['TZ']='Pacific/Apia'
+        services['mysql']=dict(image='mysql:8.4',environment=dict(
+            MYSQL_ROOT_PASSWORD='${RM_PG_PASSWORD}',MYSQL_ROOT_HOST='%'))
     if args.tls:
         private_certificates=Path(private_tls)
         trust=certificates(private_certificates)
@@ -182,6 +194,24 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         return compose('exec','-T',service,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-A','-t','-F','|','-c',statement).stdout.strip()
 
+    def mysql(statement):
+        return compose('exec','-T','mysql','sh','-c',
+                       'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -NB -e "$1"',
+                       'rivomesh-date',statement).stdout.strip()
+
+    def date_rows():
+        key=("SELECT TO_CHAR(event_date,'YYYY-MM-DD'),COALESCE(TO_CHAR(follow_up,'YYYY-MM-DD'),'<NULL>') "
+             "FROM {schema}.date_key ORDER BY event_date")
+        keyless=("SELECT COALESCE(TO_CHAR(event_date,'YYYY-MM-DD'),'<NULL>') "
+                 "FROM {schema}.date_keyless ORDER BY event_date NULLS LAST")
+        source=(sql('source',key.format(schema='billing')),sql('source',keyless.format(schema='sales')))
+        pg=(sql('target',key.format(schema='copy_billing')),sql('target',keyless.format(schema='copy_sales')))
+        my=(mysql("SELECT CONCAT(CAST(event_date AS CHAR),'|',COALESCE(CAST(follow_up AS CHAR),'<NULL>')) "
+                  "FROM copy_billing.date_key ORDER BY event_date"),
+            mysql("SELECT COALESCE(CAST(event_date AS CHAR),'<NULL>') "
+                  "FROM copy_sales.date_keyless ORDER BY event_date IS NULL,event_date"))
+        return source,pg,my
+
     def source_timeline():
         identity=compose('exec','-T',live_source,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres',
                          '-d','dbname=sync_test replication=database','-A','-t','-F','|',
@@ -217,6 +247,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         for query,schema in tables:
             if sql('source',query.format(schema=schema))!=sql('target',query.format(schema='copy_'+schema)):
                 return False
+        if args.date_values:
+            source,pg,my=date_rows()
+            return source==pg==my
         return True
 
     def stream_ready():
@@ -236,10 +269,15 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         assert result.returncode!=0 and any(fragment in error for fragment in message), f'{name} was not rejected as expected'
 
     try:
-        compose('up','-d','source','target')
+        endpoints=['source','target']+(['mysql'] if args.date_values else [])
+        compose('up','-d',*endpoints)
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
         report['sourceVersion']=sql('source',"SHOW server_version")
+        if args.date_values:
+            report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL DATE target ready')
+            report['postgresTargetVersion']=sql('target','SHOW server_version')
+            assert sql('source','SHOW DateStyle')=='SQL, DMY'
         if args.tls:
             report['targetVersion']=sql('target',"SHOW server_version")
             report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -265,6 +303,18 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                     ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',NULL),
                     ('ffffffff-ffff-ffff-ffff-ffffffffffff','00000000-0000-0000-0000-000000000000');
                 ALTER PUBLICATION rivomesh_test ADD TABLE billing.identities;
+            """)
+        if args.date_values:
+            sql('source',"""
+                CREATE TABLE billing.date_key(event_date DATE PRIMARY KEY,follow_up DATE);
+                CREATE TABLE sales.date_keyless(event_date DATE);
+                ALTER TABLE billing.date_key REPLICA IDENTITY FULL;
+                ALTER TABLE sales.date_keyless REPLICA IDENTITY FULL;
+                INSERT INTO billing.date_key VALUES (DATE '1000-01-01',NULL),
+                    (DATE '1582-10-10',DATE '2024-02-29'),(DATE '2011-12-30',DATE '9999-12-31');
+                INSERT INTO sales.date_keyless VALUES
+                    (DATE '2011-12-30'),(DATE '2011-12-30'),(DATE '2011-12-31'),(NULL);
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.date_key,sales.date_keyless;
             """)
         if args.failover:
             compose('exec','-T','source','sh','-c',
@@ -299,7 +349,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert check.returncode and 'POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED' in check.stderr
             sql('source',"ALTER PUBLICATION rivomesh_test SET (publish_generated_columns='stored')")
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=4 if args.uuid else 3
+        table_count=3+int(args.uuid)+2*int(args.date_values)
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -327,6 +377,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+        if args.date_values:
+            baseline_dates=('1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31',
+                            '2011-12-30\n2011-12-30\n2011-12-31\n<NULL>')
+            assert date_rows()==(baseline_dates,baseline_dates,baseline_dates)
+            mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert len(mysql_snapshots.splitlines())==table_count
+            date_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+            passed('DATE snapshots agree in PostgreSQL and MySQL under SQL DateStyle and a skipped JVM local day')
 
         if args.delivery_timing:
             assert initial['subscriptions'][0]['lastDeliveryTiming']=={'state':'UNKNOWN'}
@@ -393,6 +451,19 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('target',"SELECT count(*) FROM information_schema.columns WHERE table_schema='copy_sales' "
                         "AND column_name='derived' AND is_generated='NEVER'")=='2'
             passed('Native stored generated columns materialize keyed and keyless updates, and missing publication coverage is refused')
+        if args.date_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.date_key SET event_date=DATE '9999-12-31',follow_up=DATE '2024-02-29'
+                    WHERE event_date=DATE '1000-01-01';
+                DELETE FROM sales.date_keyless WHERE ctid=(
+                    SELECT ctid FROM sales.date_keyless WHERE event_date=DATE '2011-12-30' LIMIT 1);
+                COMMIT;
+            """)
+            require(equal,'DATE key change and exact keyless occurrence delivered to both targets')
+            assert date_rows()[0]==('1582-10-10|2024-02-29\n2011-12-30|9999-12-31\n9999-12-31|2024-02-29',
+                                    '2011-12-30\n2011-12-31\n<NULL>')
+            passed('DATE redo changes a primary key and deletes one exact duplicate without changing the adjacent local date')
 
         if args.delivery_timing:
             last_success=require(observed_timing,'last SQL commit observed before target fault')
@@ -419,6 +490,13 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         previous=task()['status']['capture_lsn']
         compose('kill','-s','SIGKILL','runner')
         sql('source',"UPDATE billing.ledger SET label='offline commit' WHERE id=1; DELETE FROM sales.duplicates WHERE value=7")
+        if args.date_values:
+            sql('source',"""
+                BEGIN;
+                INSERT INTO billing.date_key VALUES(DATE '1000-01-01',NULL);
+                UPDATE sales.date_keyless SET event_date=DATE '1582-10-10' WHERE event_date=DATE '2011-12-30';
+                COMMIT;
+            """)
         compose('up','-d','runner')
         require(lambda:stream_ready() and task()['status']['capture_lsn']!=previous,'exact LSN restart')
         assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
@@ -426,6 +504,13 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
         assert slot.startswith('rivomesh_test_') and len(slot.splitlines())==1
         passed('SIGKILL and restart reuse the original slot and snapshot with continuing LSN')
+        if args.date_values:
+            assert slot==date_slot
+            assert mysql_snapshots==mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert date_rows()[0]==(
+                '1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31\n9999-12-31|2024-02-29',
+                '1582-10-10\n2011-12-31\n<NULL>')
+            passed('DATE catch-up after SIGKILL reuses the source slot and both sets of destination snapshot IDs')
         if args.tls:
             require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
                     and int(active_tls('target','rivomesh-tls-target'))>0,
@@ -464,8 +549,28 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             report['timelineAfterPromotion']=promoted_timeline
             passed('After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot')
 
-        compose('kill','-s','SIGKILL','runner')
-        if args.reject_old_primary:
+        if args.date_values:
+            before_date_fault=task()['status']
+            finished_dates=date_rows()
+            sql('source',"""
+                BEGIN;
+                INSERT INTO billing.date_key VALUES(DATE '2025-01-01',NULL);
+                INSERT INTO sales.date_keyless VALUES('infinity'::date);
+                COMMIT;
+            """)
+
+            def date_fault():
+                value=task()['status']
+                return value if value.get('error_code')=='POSTGRESQL_DATE_OUT_OF_RANGE' else None
+
+            refused=require(date_fault,'infinite DATE fails closed before changing target state')
+            assert refused['error_stage']=='SOURCE_DECODE'
+            assert refused['capture_lsn']==before_date_fault['capture_lsn']
+            assert date_rows()[1:]==finished_dates[1:]
+            passed('An infinite DATE stops native decoding at the original LSN without applying its transaction to either target')
+        else:
+            compose('kill','-s','SIGKILL','runner')
+        if args.reject_old_primary and not args.date_values:
             compose('stop','standby')
             compose('up','-d','source')
             live_source='source'
@@ -481,7 +586,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['run_state']=='ERROR' and refused['capture_lsn']==durable
             assert sql('target',"SELECT label FROM copy_billing.ledger WHERE id=1")=='promoted commit'
             passed('Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint')
-        else:
+        elif not args.date_values:
             require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
             sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
             compose('up','-d','runner')

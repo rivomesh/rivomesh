@@ -2,6 +2,7 @@ package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.JdbcConnections;
 import io.github.rivomesh.OracleDate;
+import io.github.rivomesh.PostgresDate;
 import io.github.rivomesh.PipelineValidationBarrier;
 import io.github.rivomesh.TargetOwnership;
 import io.github.rivomesh.recovery.UniqueRestoreOperation;
@@ -11,6 +12,7 @@ import java.nio.file.Path;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -647,7 +649,10 @@ public final class JdbcSink implements SinkAdapter {
             case FLOAT64:p.setDouble(n,Double.parseDouble(v));break;
             case BOOLEAN:if(!Arrays.asList("true","false","1","0").contains(v))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");p.setBoolean(n,v.equals("true")||v.equals("1"));break;
             case BYTES:case GEOMETRY:p.setBytes(n,Base64.getDecoder().decode(v));break;
-            case DATE:p.setDate(n,java.sql.Date.valueOf(v));break;
+            case DATE:
+                if(PostgresDate.isColumn(col))p.setObject(n,LocalDate.parse(v));
+                else p.setDate(n,java.sql.Date.valueOf(v));
+                break;
             case DATETIME:case TIMESTAMP:
                 if(settings.product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
                 else p.setTimestamp(n,Timestamp.valueOf(v));

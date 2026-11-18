@@ -19,12 +19,15 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 
 - 初始类型包括有符号整数、布尔、有明确精度的小数、文本、JSON/JSONB 和 BYTEA。表可有主键，也可使用完整行身份的无主键表。
 - PostgreSQL UUID 以小写标准格式写入目标 `VARCHAR(36)`。PostgreSQL 17.12 到 PostgreSQL 17.12 档案已验证 NULL 和 UUID 主键变更。夹具追加 `--uuid` 可复现。[PostgreSQL UUID 格式](https://www.postgresql.org/docs/17/datatype-uuid.html)
+- PostgreSQL `DATE` 在 PostgreSQL 和 MySQL 目标上均映射为 `DATE`。支持 1000-01-01 至 9999-12-31，保留 SQL `NULL`。快照和 pgoutput 共用 ISO 格式，日期不因 Worker 时区或公历切换而改变。[PostgreSQL 日期时间](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL DATE 取值范围](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
 - PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
 - 共同点对账、更多目标与切换档案继续由 SO-06 跟踪。
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
+
+追加 `--source-image postgres:17.12 --date-values` 可运行日期实库场景，验证 PostgreSQL 和 MySQL 两个目标、DATE 主键变更、无主键重复行的精确匹配、复用原槽与快照的重启，以及拒绝包含无穷日期的整个事务。公元前日期和超出范围的日期也会报告 `POSTGRESQL_DATE_OUT_OF_RANGE`。重试前核对源值和保留的 LSN。时间戳和时钟时间需另行验证。
 
 当前构建与夹具统一使用 Temurin 21。早期多版本测试记录按原候选包留档。[验收记录](../verification/README.md#postgresql-source-runtime-matrix)
 

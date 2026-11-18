@@ -2,9 +2,11 @@ package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.OracleDate;
+import io.github.rivomesh.PostgresDate;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDate;
 import java.util.*;
 
 import static io.github.rivomesh.cdc.JdbcJournal.execute;
@@ -41,7 +43,9 @@ final class JdbcNormalization {
                 case DATETIME:case TIMESTAMP:
                     value=(OracleDate.isColumn(table.columns.get(i))?OracleDate.localTime(value):Timestamp.valueOf(value).toLocalDateTime()).toString();
                     break;
-                case DATE:value=java.sql.Date.valueOf(value).toString();break;
+                case DATE:
+                    value=PostgresDate.isColumn(table.columns.get(i))?LocalDate.parse(value).toString():java.sql.Date.valueOf(value).toString();
+                    break;
                 case TIME:value=io.github.rivomesh.MysqlDuration.canonical(value);break;
                 case BOOLEAN:if(!Arrays.asList("true","false","0","1").contains(value))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");value=(value.equals("true")||value.equals("1"))?"true":"false";break;
                 case BYTES:case GEOMETRY:value=Base64.getEncoder().encodeToString(Base64.getDecoder().decode(value));break;
