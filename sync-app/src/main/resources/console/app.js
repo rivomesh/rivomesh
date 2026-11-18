@@ -43,7 +43,7 @@ let lang=localStorage.getItem('rivomesh-language')||(navigator.language.startsWi
 let failureDialog=null,failureTicket=0;
 const $=id=>document.getElementById(id),t=key=>messages[lang][key]||key;
 const can=permission=>Boolean(session?.permissions?.includes(permission));
-function forgetSession(){closeFailureEvidence();closeCaptureRecovery();window.RivomeshRecovery?.close();window.RivomeshValidation?.close();window.RivomeshAccounts?.close();window.RivomeshEditor?.close();window.RivomeshAudit?.close();sessionGeneration++;session=null;busy=null;clearTaskPages();clearOwners();clearNodes();clearDraft();$('create-dialog').close();capabilities=[];latest={tasks:[],invalidConfigs:[]};render();renderAdapters();}
+function forgetSession(){closeFailureEvidence();closeCaptureRecovery();closeWorkerDiagnostics();window.RivomeshRecovery?.close();window.RivomeshValidation?.close();window.RivomeshAccounts?.close();window.RivomeshEditor?.close();window.RivomeshAudit?.close();sessionGeneration++;session=null;busy=null;clearTaskPages();clearOwners();clearNodes();clearDraft();$('create-dialog').close();capabilities=[];latest={tasks:[],invalidConfigs:[]};render();renderAdapters();}
 const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
 function translate(){if(failureDialog){failureDialog.querySelectorAll('[data-failure-label]').forEach(e=>e.textContent=t(e.dataset.failureLabel));const events=failureDialog.querySelector('.failure-event-list');if(events?._failureEvents)renderFailureEvents(events,events._failureEvents);}document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));$('language').textContent=lang==='zh'?'English':'中文';[0,1,2].forEach(i=>$('step-label-'+i).textContent=t('step'+i));render();renderAdapters();renderNodes();$('page-title').textContent=t(activeView);if($('create-dialog').open)wizardMode();window.RivomeshEditor?.translate();window.RivomeshAudit?.translate();window.RivomeshAccounts?.translate();window.RivomeshRecovery?.translate();}
 function explain(code){return messages[lang][code]||(code&&code.startsWith('SQL_')?t('SQL'):t('UNKNOWN'))+(code?' ['+code+']':'');}
@@ -162,6 +162,49 @@ async function openCaptureRecovery(task){
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')),steps);
  }catch(error){content.replaceChildren(text('p',error.message,'callout warning'));}
 }
+Object.assign(messages.zh,{
+ workerDiagnostics:'采集诊断记录',diagnosticsEmpty:'暂无采集诊断记录',diagnosticsOlder:'查看更早记录',
+ DIAGNOSTICS_CURSOR_EXPIRED:'这页记录已轮换，请重新打开诊断。',
+ diagnostic_CAPTURE_READY:'采集已启动',diagnostic_CAPTURE_FAILURE:'采集失败',diagnostic_RETRY:'准备重试',
+ diagnostic_BACKPRESSURE:'日志空间受限',diagnostic_BACKPRESSURE_CLEARED:'日志空间已恢复'
+});
+Object.assign(messages.en,{
+ workerDiagnostics:'Capture diagnostics',diagnosticsEmpty:'No capture diagnostics recorded',diagnosticsOlder:'Older events',
+ DIAGNOSTICS_CURSOR_EXPIRED:'This page has rotated. Reopen capture diagnostics.',
+ diagnostic_CAPTURE_READY:'Capture started',diagnostic_CAPTURE_FAILURE:'Capture failed',diagnostic_RETRY:'Retry scheduled',
+ diagnostic_BACKPRESSURE:'Journal backpressure',diagnostic_BACKPRESSURE_CLEARED:'Journal backpressure cleared'
+});
+let workerDiagnosticsDialog;
+function closeWorkerDiagnostics(){workerDiagnosticsDialog?.remove();workerDiagnosticsDialog=null;}
+function openWorkerDiagnostics(task){
+ closeWorkerDiagnostics();
+ const dialog=text('dialog','','failure-review-dialog worker-diagnostics'),content=text('section'),close=text('button',t('closeFailureEvidence'));
+ workerDiagnosticsDialog=dialog;
+ dialog.setAttribute('aria-label',t('workerDiagnostics'));
+ close.onclick=closeWorkerDiagnostics;
+ dialog.addEventListener('cancel',closeWorkerDiagnostics);
+ dialog.append(text('h2',t('workerDiagnostics')),content,close);
+ document.body.append(dialog);dialog.showModal();
+ async function load(cursor=''){
+  content.replaceChildren(text('p',t('pending')));
+  try{
+   const page=await api('/tasks/'+encodeURIComponent(task.id)+'/diagnostics?limit=20'+(cursor?'&after='+encodeURIComponent(cursor):''));
+   if(workerDiagnosticsDialog!==dialog)return;
+   const list=text('ul');
+   for(const item of page.events){
+    const label=t('diagnostic_'+item.event)+(item.phase?' · '+t('fault_'+item.phase):'');
+    list.append(text('li',new Date(item.at).toLocaleString()+' · '+label));
+   }
+   content.replaceChildren(page.events.length?list:text('p',t('diagnosticsEmpty')));
+   if(page.ownerNodeId)content.prepend(text('p',t('ownerNode')+' · '+page.ownerNodeId,'subtle'));
+   if(page.nextCursor){
+    const more=text('button',t('diagnosticsOlder'),'quiet');
+    more.onclick=()=>load(page.nextCursor);content.append(more);
+   }
+  }catch(error){if(workerDiagnosticsDialog===dialog)content.replaceChildren(text('p',error.message,'callout warning'));}
+ }
+ load();
+}
 function renderPipelineFault(root,task){
  if(task.formatVersion!==3)return;
  const status=task.status||{};
@@ -218,6 +261,11 @@ Object.assign(messages.en,{
 });
 function renderDetail(task){const root=$('task-detail');root.replaceChildren();if(!task){root.append(text('div',t('selectTask'),'empty'));return;}const body=text('div','','detail-body'),title=text('div','','detail-title'),heading=text('div');heading.append(text('span',(task.sourceType||'MYSQL')+' → '+(task.targetType||'GAUSS'),'eyebrow'),text('h3',task.id),text('p',task.sourceCluster,'subtle'));if(task.createdBy)heading.append(text('p',t('createdBy')+': '+task.createdBy+' ('+t('ROLE_'+task.createdRole)+')','subtle'));title.append(heading,badge(status(task)));body.append(title);const actions=text('div','','detail-actions'),pending=task.operations.some(x=>x.status==='PENDING');
  ['CHECK','START','STOP','PAUSE','RESUME'].forEach(action=>{const button=text('button',t(globalTasks()&&action==='STOP'?'globalStop':action.toLowerCase()),action==='START'?'primary':'');button.disabled=!can('TASK_CONTROL')||pending||(action==='RESUME'&&!['PAUSED','ERROR'].includes(task.status.run_state));button.onclick=()=>command(task,action);actions.append(button);});const configure=text('button',t('configuration'),'quiet');configure.disabled=!can('TASK_CONFIG')||!window.RivomeshEditor;configure.onclick=()=>window.RivomeshEditor.open(task);actions.append(configure);body.append(actions,text('div',t(globalTasks()?'globalScope':'scope'),'callout'));if(task.ownerNodeId)body.append(text('p',t('ownerNode')+': '+task.ownerNodeId+' · '+t(task.ownerState||'UNKNOWN'),'callout'));if(task.ownerObservedAt)body.append(text('p',t('ownerObserved')+': '+new Date(task.ownerObservedAt).toLocaleString(),'subtle'));if(task.configurationPending)body.append(text('p',t('configurationPending'),'callout warning'));if(task.configurationProjectionPending)body.append(text('p',t('CONFIG_PROJECTION_PENDING'),'callout warning'));
+ if(task.formatVersion===3&&can('TASK_CONFIG')){
+  const diagnostics=text('button',t('workerDiagnostics'),'quiet');
+  diagnostics.dataset.workerDiagnostics='';diagnostics.onclick=()=>openWorkerDiagnostics(task);
+  body.append(diagnostics);
+ }
  renderPipelineFault(body,task);
  if(task.problem)body.append(text('div',task.problem==='NOT_INITIALIZED'?t('uninitialized'):(task.statusAvailable?'':t('stale')+' ')+explain(task.problem),'callout warning'));
  const grid=text('div','','status-grid');[['phase',task.status.phase],['sharedState',task.status.run_state],[globalTasks()?'globalWorker':'worker',task.workerState],...(task.formatVersion===3?[['captureLease','lease_'+(task.captureLeaseState||'UNKNOWN')]]:[]),['pendingTransactions',task.status.pending_transactions],...(task.status.capture_lsn?[['captureLsn',task.status.capture_lsn]]:[]),['observed',task.observedAt?new Date(task.observedAt).toLocaleTimeString():'—']].forEach(([key,value])=>{const item=text('div');item.append(text('span',t(key)),text('strong',value==null?'—':t(String(value))));grid.append(item);});body.append(grid);if(task.formatVersion===3&&task.status.maxBytes){const used=Number(task.status.pendingBytes||0)+Number(task.status.snapshotBytes||0)+Number(task.status.identityBytes||0),quota=Number(task.status.maxBytes),storage=text('section','','callout'+(used/quota>.8?' warning':'')),progress=document.createElement('progress');progress.max=quota;progress.value=used;progress.setAttribute('aria-label',t('journal'));storage.append(text('strong',t('journal')+': '+(used/1048576).toFixed(1)+' / '+(quota/1048576).toFixed(0)+' MiB'),progress,text('p',t('journalUsageHelp')));body.append(storage);}

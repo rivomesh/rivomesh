@@ -11,7 +11,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,CAPTURE_RECOVERY,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORT,VALIDATION_DIFFERENCES,REPAIR_PLAN,CAPTURE_RECOVERY,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -37,6 +37,7 @@ final class TaskRequest {
         if(mutation()&&(requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")))throw new IllegalArgumentException("REQUEST_ID_REQUIRED");
         if(kind==Kind.CREATE&&(yaml==null||yaml.getBytes(StandardCharsets.UTF_8).length>1024*1024))throw new IllegalArgumentException("CONFIG_REQUIRED");
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}
+        if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit);
         if(kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS){
             io.github.rivomesh.recovery.FailureEvidence.uuid(reference);
             if(kind==Kind.FAILURE_EVIDENCE_EVENTS&&(!Arrays.asList("RAW","NORMALIZED").contains(action)||limit<1||limit>100||cursor==null||!cursor.matches("0|[1-9][0-9]{0,6}")))throw new IllegalArgumentException("FAILURE_EVIDENCE_PAGE_INVALID");

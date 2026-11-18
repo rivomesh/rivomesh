@@ -155,3 +155,7 @@ Combined guide SHA-256 `32cad011e732673d4e33857945269cee8b81933f082cb3a15584a8d5
 ## Native PostgreSQL 17 synchronized-slot promotion
 
 Artifact `49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b` passed 18 focused Java checks and two PostgreSQL 17.12 Java 8 profiles with 8 and 7 native checks. The original primary was killed, the physical standby promoted after validating its synchronized slot, and the writer endpoint routed to the standby. Delivery resumed automatically from the prior WAL position with the same snapshot IDs. The two profiles then refused a lost slot and a route back to the earlier primary, retaining the latest journal position. [Operations and reproduction](../en/postgresql-source.md) · [Manifests](baseline.json)
+
+## Worker diagnostic events and Chrome smoke
+
+Artifact `3355bdc100775f7ce813a61309a1306ab6a03cd4a7078d6a68ba1784065777d9` passed 24 Java tests, 112 DOM tests and seven native MySQL/PostgreSQL checks across two controllers and a separate Agent. After a real incomplete-binlog-image fault and Agent restart, both entries returned the same page for an anchored cursor with only typed events, timestamps and phases. VIEWER and invalid-page requests were rejected. Chrome 157 exercised keyboard login, cookie reload, the accessible diagnostic dialog, a 390px viewport and actual sign-out. Wide, mobile and diagnostic screenshots were reviewed. [Manifests](baseline.json)

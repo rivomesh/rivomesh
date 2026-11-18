@@ -15,7 +15,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
 | CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已有Worker租约/epoch，缺少统一节点调度、远端生命周期和滚动升级协议。 |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口实测独立采集租约和脱敏诊断分页，Agent 重启后保留事件。全局节点及目标过滤、积压和容量验收待完成。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
 
 ## 登录状态保持
@@ -86,7 +86,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。 |
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | LOCAL 与 EXTERNAL 已各通过 10 万行全量及 12 万条增量内容校验。增量批次按字节限量并修复 BIGINT 主键扫描。多轮硬件矩阵、超大事务和海量表仍待验收。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
-| LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。 |
+| LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 原生 Chrome 已通过登录、刷新续登、诊断键盘与无障碍名称、移动端布局和退出。完整报告目录、scratch 清理和其他工作流仍待完成。 |
 | LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 贡献指南、CycloneDX SBOM 与厂商二进制审查已建立。依赖分发结论、项目 LICENSE/NOTICE、外部身份和审计锚点仍待完成。 |
 
 ## 现状证据索引
@@ -98,7 +98,7 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 | CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口实测独立采集租约和脱敏诊断分页，Agent 重启后保留事件。全局节点及目标过滤、积压和容量验收待完成。 |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

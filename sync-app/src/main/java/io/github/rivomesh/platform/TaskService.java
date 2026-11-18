@@ -811,6 +811,17 @@ public final class TaskService implements AutoCloseable {
         row.put("operations",operations);return row;
     }
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}
+    synchronized Map<String,Object> workerDiagnostics(String id,String cursor,int limit,AccessControl.Principal actor)throws Exception{
+        ensureOpen();
+        currentActor(actor);
+        if(!actor.administers())throw new SecurityException("FORBIDDEN");
+        if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
+        require(id);
+        Map<String,Object> result=WorkerDiagnostics.page(logDirectory.resolve(id+".log"),cursor,limit);
+        result.put("ownerNodeId",nodeId());
+        return result;
+    }
+
     Map<String,Object> captureRecovery(String id,AccessControl.Principal actor)throws Exception{
         TaskDefinition definition;String revision;
         synchronized(this){

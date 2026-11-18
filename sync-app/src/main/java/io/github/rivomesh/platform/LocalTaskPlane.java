@@ -32,6 +32,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
             case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);
             case CAPTURE_RECOVERY:return tasks.captureRecovery(r.taskId,actor);
+            case DIAGNOSTICS:return tasks.workerDiagnostics(r.taskId,r.cursor,r.limit,actor);
             case FAILURE_EVIDENCE_SUMMARY:return tasks.failureEvidence(r.taskId,r.reference,null,0,1,actor);
             case FAILURE_EVIDENCE_EVENTS:return tasks.failureEvidence(r.taskId,r.reference,r.action,Integer.parseInt(r.cursor),r.limit,actor);
             case SKIP_PLAN:return tasks.skipPlan(r.taskId,r.reference,"NATIVE".equals(r.action),actor);

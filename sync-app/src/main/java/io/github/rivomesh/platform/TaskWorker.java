@@ -45,7 +45,7 @@ public interface TaskWorker {
                     while ((n = in.read(buffer)) >= 0) {
                         for(int i=0;i<n;i++){
                             if(buffer[i]=='\n'){
-                                observeDiagnostic(line);
+                                observeDiagnostic(line,log);
                                 line.setLength(0);
                             }else if(line.length()<192)line.append((char)buffer[i]);
                         }
@@ -62,16 +62,30 @@ public interface TaskWorker {
         }
         @Override public Diagnostic diagnostic(){return diagnostic;}
 
-        private void observeDiagnostic(CharSequence line){
-            if(line.length()>=192||line.length()<=DIAGNOSTIC_PREFIX.length())return;
+        private void observeDiagnostic(CharSequence line,Path log){
+            if(line.length()==0||line.length()>=192)return;
             String message=line.toString().trim();
-            if(!message.startsWith(DIAGNOSTIC_PREFIX))return;
-            String value=message.substring(DIAGNOSTIC_PREFIX.length());
-            if("CLEAR".equals(value)){diagnostic=null;return;}
-            Matcher match=DIAGNOSTIC.matcher(value);
-            if(match.matches())try{
-                diagnostic=new Diagnostic(io.github.rivomesh.cdc.PipelineFailure.Phase.valueOf(match.group(1)),match.group(2));
-            }catch(IllegalArgumentException invalid){/* only known phases */ }
+            if("JOURNAL_BACKPRESSURE".equals(message))record(log,WorkerDiagnostics.Event.BACKPRESSURE,null);
+            else if("JOURNAL_BACKPRESSURE_CLEARED".equals(message))record(log,WorkerDiagnostics.Event.BACKPRESSURE_CLEARED,null);
+            else if(message.startsWith("PIPELINE_RETRY "))record(log,WorkerDiagnostics.Event.RETRY,null);
+            else if(message.startsWith(DIAGNOSTIC_PREFIX)){
+                String value=message.substring(DIAGNOSTIC_PREFIX.length());
+                if("CLEAR".equals(value)){
+                    diagnostic=null;
+                    record(log,WorkerDiagnostics.Event.CAPTURE_READY,null);
+                }else{
+                    Matcher match=DIAGNOSTIC.matcher(value);
+                    if(match.matches())try{
+                        diagnostic=new Diagnostic(io.github.rivomesh.cdc.PipelineFailure.Phase.valueOf(match.group(1)),match.group(2));
+                        record(log,WorkerDiagnostics.Event.CAPTURE_FAILURE,diagnostic.phase);
+                    }catch(IllegalArgumentException invalid){/* only known phases */ }
+                }
+            }
+        }
+
+        private void record(Path log,WorkerDiagnostics.Event event,io.github.rivomesh.cdc.PipelineFailure.Phase phase){
+            try{WorkerDiagnostics.append(log,event,phase);}
+            catch(IOException unavailable){/* Preserve the existing private raw log and let the worker continue. */}
         }
         static Map<String,String> environment(Map<String,String> parent,String yaml,Set<String> protectedNames){
             Map<String,String> result=new LinkedHashMap<>();for(String key:Arrays.asList("PATH","HOME","LANG","LC_ALL","LC_CTYPE","TZ","TMPDIR","TEMP","TMP","SystemRoot","WINDIR"))if(parent.containsKey(key)&&!protectedNames.contains(key))result.put(key,parent.get(key));

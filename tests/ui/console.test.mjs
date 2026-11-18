@@ -116,6 +116,36 @@ test('a running worker and an expired capture lease remain separate in the conso
  }finally{ui.dom.window.close();}
 });
 
+test('capture diagnostics pages are restricted to administrators and close on sign-out',async()=>{
+ const task={id:'diagnose',formatVersion:3,workerState:'RUNNING',desired:'RUNNING',operations:[],destinations:[],
+  status:{run_state:'RUNNING'}};
+ for(const role of ['ADMIN','VIEWER']){
+  const ui=setup([task],role),fallback=ui.w.fetch;
+  const now='2026-11-18T04:00:00Z';
+  ui.w.fetch=async(path,options)=>{
+   if(!path.startsWith('/api/tasks/diagnose/diagnostics?'))return fallback(path,options);
+   ui.calls.push({path,...options});
+   const second=path.endsWith('&after=first');
+   return {ok:true,status:200,json:async()=>({ownerNodeId:'agent-a',
+    events:[{at:now,event:second?'CAPTURE_READY':'CAPTURE_FAILURE',phase:second?null:'SOURCE_CONNECT'}],
+    nextCursor:second?null:'first'})};
+  };
+  try{
+   await login(ui);
+   const button=ui.d.querySelector('[data-worker-diagnostics]');
+   if(role==='VIEWER'){assert.equal(button,null);continue;}
+   button.click();await flush();
+   const dialog=ui.d.querySelector('.worker-diagnostics');
+   assert.match(dialog.textContent,/agent-a/);
+   assert.match(dialog.textContent,/采集失败 · 源库连接/);
+   dialog.querySelector('section button').click();await flush();
+   assert.match(dialog.textContent,/采集已启动/);
+   ui.d.getElementById('logout').click();await flush();
+   assert.equal(ui.d.querySelector('.worker-diagnostics'),null);
+  }finally{ui.dom.window.close();}
+ }
+});
+
 test('validation submits explicit SQL targets and budgets without including messaging targets',async()=>{
  const task={id:'validate',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING'},operations:[],destinations:[{id:'pg',product:'POSTGRESQL',consistency:'TRANSACTIONAL'},{id:'mq',product:'KAFKA',consistency:'AT_LEAST_ONCE_EVENTS'}]};const ui=setup([task]);try{
   await login(ui);assert.equal(ui.d.querySelectorAll('[data-validation-target]').length,1);const read=ui.d.querySelector('[data-validation-limit="read"]');read.value='7200';read.dispatchEvent(new ui.w.Event('input'));ui.d.querySelector('[data-validation-action="start"]').click();await flush();

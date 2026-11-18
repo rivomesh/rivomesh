@@ -175,8 +175,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。",
-        "en": "Both controller entries show Worker liveness and the capture lease independently, with unknown state after owner loss. Complete node and target filters, remote logs and diagnostics search remain."
+        "zh-CN": "双入口实测独立采集租约和脱敏诊断分页，Agent 重启后保留事件。全局节点及目标过滤、积压和容量验收待完成。",
+        "en": "Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",
@@ -191,7 +191,8 @@
         "sync-app/src/main/resources/console/app.js",
         "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
         "tests/global-control-pipeline.py",
-        "docs/verification/baseline.json"
+        "docs/verification/baseline.json",
+        "tests/ui/browser-smoke.mjs"
       ]
     },
     {
@@ -1552,8 +1553,8 @@
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。",
-        "en": "Summaries/details/DOM/HTTP exist;full catalogs,cleanup,visual/accessibility evidence do not."
+        "zh-CN": "原生 Chrome 已通过登录、刷新续登、诊断键盘与无障碍名称、移动端布局和退出。完整报告目录、scratch 清理和其他工作流仍待完成。",
+        "en": "Native Chrome passed login, cookie reload, diagnostic keyboard and accessible name, mobile layout and logout. Full report catalog, scratch cleanup and more workflows remain."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",
@@ -1566,7 +1567,9 @@
       ],
       "evidence": [
         "docs/verification/README.md",
-        "docs/zh-CN/managed-validation.md"
+        "docs/zh-CN/managed-validation.md",
+        "tests/ui/browser-smoke.mjs",
+        "docs/verification/baseline.json"
       ]
     },
     {

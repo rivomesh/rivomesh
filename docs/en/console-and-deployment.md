@@ -52,6 +52,8 @@ The workbench shows at most 100 tables/task with the total count; other tables c
 
 V3 task details show the Worker process and capture lease separately. `captureLeaseState` is `CLAIMED`, `EXPIRED`, or `UNCLAIMED` as observed using the journal's clock. The console shows an unknown lease when it cannot read fresh journal state. Consult the source failure stage and checkpoint to diagnose a Worker that is running while capture is stalled.
 
+An administrator can open **Capture diagnostics** in a V3 task from either management entry. The owner supplies timestamped capture-start, phase-failure, retry and journal backpressure events. It scans at most two 64 KiB segments and returns up to 25 records per page using opaque cursors. Endpoint `GET /api/tasks/{id}/diagnostics?limit=20&after={cursor}` uses the existing authorization and owner-query limits. A lost owner returns an unavailable query. An expired cursor requires reopening the first page. Phase events omit driver messages, SQL, row values and credentials. The raw Worker logs remain private.
+
 ## Durable files and APIs
 
 tasksDirectory stores configurations; dataDirectory/controller.json stores intent, revisions, and operation history using atomic replacement. A file lock permits one controller per directory; corrupt state is not silently reset. V2 checkpoints remain in target metadata. V3 stores capture/snapshot artifacts/subscriber ACKs in LOCAL or EXTERNAL journals, transactional checkpoints with target business data, and confirmed message receipts in the journal. LOCAL uses dataDirectory/journals/pipelineId; use EXTERNAL for cross-host HA. Never delete a journal and continue from old target checkpoints.
@@ -123,7 +125,7 @@ Manifests include persistence, restricted privileges, read-only root filesystem,
 Maven verify runs unit/API tests; tests/matrix.sh covers platform and existing failover behavior on MySQL 8.0/8.4 with openGauss.
 Optionally run npm ci --prefix tests/ui --ignore-scripts and npm test --prefix tests/ui for the actual HTML/JavaScript DOM interactions. Node is a development-test dependency only, not a service requirement.
 After building, python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT checks Helm/native parity, nonroot image, authentication, file permissions, request replay, and volume recovery. It removes only its own containers/volumes and never deploys into user Kubernetes clusters.
-DOM tests do not replace real-browser visual, keyboard, and accessibility acceptance. Browser automation windows were unavailable here; that acceptance remains pending.
+A Chrome smoke test opens the real console, signs in with the keyboard, verifies session restoration after reload and checks the accessible diagnostics dialog and mobile viewport. Broader workflows and browsers have separate acceptance. [Browser record](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)
 
 ## Individual access roles
 

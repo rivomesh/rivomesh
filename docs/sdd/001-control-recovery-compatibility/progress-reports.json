@@ -21,7 +21,6 @@
     "Removed 2.71 GiB of superseded temporary binaries and synthetic benchmark data, preserving verification reports."
   ],
   "inProgress": [
-    "CP-06 cross-controller, paginated and redacted Worker diagnostic events after original Agent restart.",
     "SO-07 Oracle archive transaction stream and durable checkpoint handoff.",
     "CP-04 automatic execution handoff and stale owner fencing."
   ],
@@ -57,12 +56,14 @@
     "NEW": 1
   },
   "nextTasks": [
-    "Complete native scoped diagnostic retrieval and run the full Java regression with loopback H2.",
+    "Complete the full Java regression with loopback H2 and continue node/destination filtering.",
     "Implement durable Oracle archive checkpoints and extend certification of supported sink profiles.",
     "Continue guarded execution relocation and capture-range review."
   ],
   "currentCandidateArtifact": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
   "currentCandidateScope": "Java 8 native PostgreSQL 17.12 synchronized logical slot promotion after SIGKILL, missing slot, and old primary refusal. 18 focused Java and 15 native checks across two fixtures.",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": []
+  "newSinceLastReport": [
+    "CP-06 and LG-09. Seven native cross-entry checks and five Chrome checks passed on one frozen artifact. The diagnostic page persisted across Agent restart without exposing business values or credentials."
+  ]
 }

@@ -15,7 +15,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | P0 / PARTIAL | Failover,fencing and placement | Worker leases/epochs exist;global scheduling,remote lifecycle and rolling-upgrade protocols do not. |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both controller entries show Worker liveness and the capture lease independently, with unknown state after owner loss. Complete node and target filters, remote logs and diagnostics search remain. |
+| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
 
 ## Persistent login
@@ -86,7 +86,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain. |
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | LOCAL and EXTERNAL passed content checks for 100,000 snapshot rows and 120,000 changes per run. Incremental reads are byte-bounded and the BIGINT key scan was fixed. Repeated hardware measurements, oversized transactions and large catalogs remain. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
-| LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Summaries/details/DOM/HTTP exist;full catalogs,cleanup,visual/accessibility evidence do not. |
+| LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Native Chrome passed login, cookie reload, diagnostic keyboard and accessible name, mobile layout and logout. Full report catalog, scratch cleanup and more workflows remain. |
 | LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Contribution guide, CycloneDX SBOM and packaged vendor inventory are in place. Distribution review, project LICENSE/NOTICE, external identity and audit anchors remain. |
 
 ## Baseline evidence index
@@ -98,7 +98,7 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both controller entries show Worker liveness and the capture lease independently, with unknown state after owner loss. Complete node and target filters, remote logs and diagnostics search remain. |
+| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed independent lease views and paginated redacted diagnostics across Agent restart. Full node and destination filtering, backlog metrics and capacity validation remain. |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

@@ -29,6 +29,8 @@ parser.add_argument('--runtime-image', help='Locally built nonroot runtime image
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
+parser.add_argument('--worker-diagnostics', action='store_true',
+                    help='Check redacted Worker event pages after owner restart in a source fault profile')
 parser.add_argument('--snapshot-diagnostics', action='store_true', help='Inject initial DDL permission and snapshot CHECK faults before normal catch-up')
 parser.add_argument('--managed-failure-review', action='store_true', help='Protocol5 durable evidence creation and cross-entry authorized raw review')
 parser.add_argument('--checkpoint-inspection', action='store_true', help='Check additive read-only native checkpoint result in managed review')
@@ -39,6 +41,8 @@ parser.add_argument('--correction', action='store_true', help='Check administrat
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.worker_diagnostics and not args.source_diagnostics:
+    parser.error('--worker-diagnostics requires --source-diagnostics')
 if args.control_product == 'MYSQL' and not args.separate_execution:
     parser.error('MySQL control-store business acceptance requires --separate-execution')
 if args.runtime_jdk and (not args.separate_execution or any((args.runtime_image, args.recovery_jobs,
@@ -78,7 +82,7 @@ env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secr
            RM_GC_DATA=secrets.token_urlsafe(24), RM_GC_KEY=base64.b64encode(secrets.token_bytes(32)).decode(), RM_GC_STORE_URL='jdbc:postgresql://postgres:5432/sync_test')
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
-if args.managed_failure_review or args.compensation or args.correction:
+if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 members = ('node-a', 'node-b', 'node-worker') if args.separate_execution else ('node-a', 'node-b')
@@ -100,6 +104,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'correction': args.correction,
             'recoveryJobs': args.recovery_jobs,
             'runtimeJdk': args.runtime_jdk,
+            'workerDiagnostics': args.worker_diagnostics,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
@@ -144,6 +149,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               'username': 'postgres', 'password': '${RM_GC_CONTROL}', 'heartbeatMillis': 300, 'leaseMillis': 5000}}
         if args.managed_failure_review or args.compensation or args.correction:
             config['cluster']['recoveryReview'] = True
+        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
         if args.managed_commit or args.compensation or args.correction:
             config['cluster']['recoveryCommit'] = True
@@ -158,7 +164,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
-        if args.managed_failure_review or args.compensation or args.correction:
+        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
         if args.runtime_image:
             volumes[node + '-data'] = {}
@@ -437,6 +443,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert observed['error_code'] == code and observed['run_state'] == 'ERROR'
         assert observed['capture_gtid'] == checkpoint
         assert all(sub['state'] == 'RUNNING' for sub in observed['subscriptions'])
+        endpoint = route+'/diagnostics'
+        if args.worker_diagnostics:
+            event = wait(lambda: next((event for event in http('node-a',endpoint+'?limit=25')['events']
+                                       if event.get('event')=='CAPTURE_FAILURE' and event.get('phase')==expected),None),
+                         'worker captured the native failure event')
         terminate_owner()
         restart_owner()
         restored = wait(lambda: phase(expected), 'persisted source fault survives Agent restart')
@@ -453,6 +464,19 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert verified['capture_gtid']==checkpoint and verified['error_count']==observed['error_count']
         assert verified['run_state']=='ERROR'
         passed(expected + ': both entries route a read-only recovery review to the owner without changing the checkpoint or pause')
+        if args.worker_diagnostics:
+            for node in ('node-a','node-b'):
+                page = http(node,endpoint+'?limit=25')
+                assert page['ownerNodeId']==owner_node and page['observedAt'] and event in page['events']
+                assert 'incomplete image' not in json.dumps(page) and env['RM_GC_DATA'] not in json.dumps(page)
+            assert set(event)=={'at','id','event','phase'}
+            query = endpoint+'?limit=1&after='+event['id']
+            older = [http(node,query) for node in ('node-a','node-b')]
+            assert len(older[0]['events'])==1 and older[0]['events']==older[1]['events']
+            assert older[0]['events'][0]['id']!=event['id']
+            http('node-b',endpoint,token=env['RM_GC_VIEWER'],expected=403)
+            http('node-b',endpoint+'?limit=26',expected=400)
+            passed(expected + ': bounded and redacted diagnostic pages agree across management entries after Agent restart')
 
     def run_recovery_cases():
         if args.compensation:

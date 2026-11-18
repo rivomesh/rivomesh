@@ -52,6 +52,8 @@ Worker 意外退出按退避重启，连续五次退出后显示 CRASH_LOOP，�
 
 V3 任务分别显示 Worker 进程与采集租约。采集租约按日志库时钟判断，`captureLeaseState` 可为已持有、已过期或未持有。无法取得最新日志状态时，界面显示租约未知。进程仍在而采集停滞时，可同时查看源端失败阶段和最后断点。
 
+管理员可以从任一管理入口打开 V3 任务的**采集诊断记录**。执行节点返回带时间的采集启动、失败阶段、重试和日志背压事件。最多读取两个 64 KiB 分段，每页上限 25 条，分页使用不透明游标。`GET /api/tasks/{id}/diagnostics?limit=20&after={cursor}` 沿用现有授权和远端查询限额。执行节点失联时返回暂不可用，游标过期时重新打开第一页。阶段事件仅含类型和阶段，原始 Worker 日志保存在私有目录。
+
 ## 持久文件与 API
 
 tasksDirectory 保存任务配置；dataDirectory/controller.json 保存启停意图、版本和操作记录，使用原子替换；同目录通过文件锁只允许一个控制进程。控制文件损坏时拒绝重置启动。v2 的权威断点在目标管理表。v3 的源日志/全量工件/订阅确认在 LOCAL 或 EXTERNAL 日志中，事务目标保留业务原子断点，消息目标使用确认后发布回执。LOCAL 目录为 dataDirectory/journals/pipelineId，跨主机 HA 使用 EXTERNAL；不能丢弃日志后沿用目标断点。
@@ -123,7 +125,7 @@ Chart 已提供持久化、防提权、只读根文件系统、临时目录、�
 Maven verify 运行单元/API 测试，tests/matrix.sh 运行 MySQL 8.0/8.4 与 openGauss 的平台和既有故障回归。
 可选 npm ci --prefix tests/ui --ignore-scripts 后执行 npm test --prefix tests/ui，验证实际 HTML/JavaScript 的 DOM 交互；仅开发测试需要相应 Node 版本，服务运行不需要 Node。
 构建镜像后执行 python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT，检查 Helm/原生清单一致性及非 root 镜像、鉴权、配置权限、重复请求和卷恢复。脚本只删除自己创建的测试容器与卷，不部署到用户 K8s 集群。
-DOM 检查不能替代真实浏览器的外观、键盘与可访问性验收；当前浏览器自动化窗口不可用，此项仍需补验。
+原生 Chrome 测试打开实际控制台，验证键盘登录、刷新续登、诊断弹窗的可访问名称与移动端布局。更多操作和浏览器另行验收。[浏览器记录](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)
 
 ## 独立账号与访问角色
 
