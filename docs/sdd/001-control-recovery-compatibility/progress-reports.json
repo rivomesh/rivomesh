@@ -2,53 +2,9 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T11:54:21+08:00",
-  "nextReportAt": "2026-11-18T12:54:21+08:00",
+  "lastReportAt": "2026-11-18T12:55:05+08:00",
+  "nextReportAt": "2026-11-18T13:55:05+08:00",
   "completedSincePrevious": [
-    "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
-    "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check.",
-    "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
-    "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback.",
-    "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation.",
-    "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence.",
-    "LG-06 native worker outage passed. PostgreSQL stayed online on the control plane; the recovered worker reused its CSI volume and resumed under a new lease.",
-    "SO-07 advanced to PARTIAL. Oracle 26ai ARM64 completed four SCN Flashback and source authority checks using an external Java 8 driver.",
-    "PostgreSQL 17.12 passed 35 native tests across Java 8, 11, 17, 21 and 25 on one frozen artifact.",
-    "Native Oracle 26ai archive LogMiner returns retained redo/undo, one commit SCN/XID and excludes rolled-back DML."
-  ],
-  "inProgress": [
-    "Oracle redo normalization, retained archive admission and CDC checkpoints."
-  ],
-  "reportContents": [
-    "Current totals",
-    "New completions since previous report",
-    "In-progress tasks and evidence",
-    "Remaining work and blockers",
-    "Published commits and test results"
-  ],
-  "lastReportedSdd": {
-    "DONE": 21,
-    "PARTIAL": 26,
-    "NEW": 1
-  },
-  "lastReportedPublishedCommits": [
-    "e665602bd5173545c2781351e389e489f73ee67a",
-    "10fece9bf0d3fabcbb55d9ce5d7b7c8c6e9ebad2",
-    "47c72ca64ae452e975b829919f6e53e7efac4392",
-    "4e1b4d371869c81605cd14ca2c53f83b31274e44",
-    "6871b043b7e5e4d4e40932edf226fa7f79f0463e",
-    "3511035c140e2d6276041bc7b360619c9c6c9b92",
-    "027e83157270b64212770e4c2489e68edebcdca8",
-    "c11850fad9e19157932c3a98ba875a19e6a2a7b6",
-    "1c099b4755957ec5c681bb477bf4a296b0d2782e",
-    "71202816e47a1af17d6b484800b0603a83c5ec93"
-  ],
-  "currentSdd": {
-    "DONE": 24,
-    "PARTIAL": 23,
-    "NEW": 1
-  },
-  "newSinceLastReport": [
     "DO-03 accepted. Bilingual recovery runbook covers source, targets, distributed control, storage, browser sessions and manual repair with scoped operations.",
     "LG-10 contribution guide and actual CycloneDX/JAR inventory published. The run found 175 Maven components, 109 embedded coordinates and two vendored binary markers.",
     "SO-07 Oracle archive coverage passed seven native checks. Catalog range validation rejects an unarchived SCN suffix.",
@@ -59,13 +15,54 @@
     "SO-06 PostgreSQL 18.7 to 17.12 passed 8 native checks including stored generated columns, and 17.12 passed 7 native regression checks on the same Java 8 artifact.",
     "JV-02 PostgreSQL 18.7 stored generated case group passed all 40 native checks across Java 8, 11, 17, 21 and 25 on one artifact.",
     "DO-02 accepted. Bilingual standalone and multi-node deployment paths, secret/TLS, drain, backup and upgrade guidance passed link, Compose and four Helm/native parity checks.",
-    "SO-06 PostgreSQL 17.12 physical promotion passed native SIGKILL, same-snapshot automatic continuation and refusal of return to the old timeline. The guarded writer endpoint profile is opt-in."
+    "SO-06 PostgreSQL 17.12 physical promotion passed native SIGKILL, same-snapshot automatic continuation and refusal of return to the old timeline. The guarded writer endpoint profile is opt-in.",
+    "Local H2 reverse-DNS stall diagnosed from a thread dump; default loopback binding passed the targeted restart suite.",
+    "The real Chrome console passed five checks for keyboard, cookie reload, diagnostic modal, mobile layout and logout.",
+    "Removed 2.71 GiB of superseded temporary binaries and synthetic benchmark data, preserving verification reports."
   ],
+  "inProgress": [
+    "CP-06 cross-controller, paginated and redacted Worker diagnostic events after original Agent restart.",
+    "SO-07 Oracle archive transaction stream and durable checkpoint handoff.",
+    "CP-04 automatic execution handoff and stale owner fencing."
+  ],
+  "reportContents": [
+    "Current totals",
+    "New completions since previous report",
+    "In-progress tasks and evidence",
+    "Remaining work and blockers",
+    "Published commits and test results"
+  ],
+  "lastReportedSdd": {
+    "DONE": 24,
+    "PARTIAL": 23,
+    "NEW": 1
+  },
+  "lastReportedPublishedCommits": [
+    "ba10eebf5230a07aa7a40900133fbf851705e6e0",
+    "6ba9b06e4e61db2b877c7d2d622360b5f0c510f1",
+    "e9cf102fcc7adaf552c2201c54aafb36fb757a0c",
+    "815e3216e7dad35db579dc1af25f673722032f85",
+    "fc54bf09cec6a6d7aca5039d5bc0a64163aab702",
+    "1c6501d956cb07b7a05743dcdb57d65a9da27652",
+    "05cce7e9488460ff426e8ff0a225f191b3bb2105",
+    "016179dee2f253b87853a6239e0ab4409fc770a9",
+    "69891d8d1b966a7b66e3379421992b6042147254",
+    "1ec18751d7614f3290ae977a4558733bc6bc8532",
+    "b6eb382d2d455390382eabad3bc807f1ab15d920",
+    "e8b49039e5d7a67fa36c32751b63a3948a98385f"
+  ],
+  "currentSdd": {
+    "DONE": 24,
+    "PARTIAL": 23,
+    "NEW": 1
+  },
   "nextTasks": [
-    "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",
-    "Continue safe cross-Agent relocation and capture-range review."
+    "Complete native scoped diagnostic retrieval and run the full Java regression with loopback H2.",
+    "Implement durable Oracle archive checkpoints and extend certification of supported sink profiles.",
+    "Continue guarded execution relocation and capture-range review."
   ],
-  "currentCandidateArtifact": "ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66",
-  "currentCandidateScope": "Java 8 PostgreSQL 17.12 source with explicit durable feedback and seven native checks. MySQL 8.4 cross-entry capture recovery review, six native checks. 42 targeted Java and 110 UI checks.",
-  "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3"
+  "currentCandidateArtifact": "49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b",
+  "currentCandidateScope": "Java 8 native PostgreSQL 17.12 synchronized logical slot promotion after SIGKILL, missing slot, and old primary refusal. 18 focused Java and 15 native checks across two fixtures.",
+  "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
+  "newSinceLastReport": []
 }
