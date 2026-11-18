@@ -4,11 +4,72 @@ window.RivomeshValidation=(()=>{
  const text=(tag,value,cls)=>{const element=document.createElement(tag);element.textContent=value;if(cls)element.className=cls;return element;};
  const badge=value=>text('span',t(value),'badge');
  const drafts=new Map(),reports=new Map(),plans=new Map(),catalogs=new Map();
+ const reportDisclosure=new Set();
+ function control(element,...scope){
+  element.dataset.validationFocus=JSON.stringify(scope);
+  return element;
+ }
+ function rememberFocus(root,taskId){
+  const before=document.activeElement,key=before?.dataset.validationFocus,area=before?.closest('[data-validation-task]');
+  if(!key||area?.dataset.validationTask!==taskId||!root.contains(area))return;
+  return()=>{
+   if(before.isConnected||document.activeElement!==document.body)return;
+   const matches=[...root.querySelectorAll('[data-validation-focus]')].filter(element=>
+    element.dataset.validationFocus===key&&element.closest('[data-validation-task]')?.dataset.validationTask===taskId);
+   if(matches.length===1&&!matches[0].disabled)matches[0].focus({preventScroll:true});
+  };
+ }
+ let searchDialog=null;
  const catalogLabels={
-  zh:{open:'浏览历史校验报告',retained:'已留存',empty:'暂无留存报告',back:'返回最新报告'},
-  en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports'}
+  zh:{open:'浏览历史校验报告',retained:'已留存',empty:'暂无留存报告',back:'返回最新报告',
+      search:'按报告 ID 打开',id:'报告 ID',close:'取消',invalid:'请输入有效的报告 ID。',
+      mismatch:'返回的报告 ID 与输入不符。',directory:'返回历史目录'},
+  en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports',
+      search:'Open by report ID',id:'Report ID',close:'Cancel',invalid:'Enter a valid report ID.',
+      mismatch:'The returned report ID differs from the requested ID.',directory:'Back to report directory'}
  };
  const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
+ const fetchReport=(task,id)=>api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));
+
+ function closeSearch(){
+  if(!searchDialog)return;
+  const dialog=searchDialog;searchDialog=null;dialog.close();dialog.remove();
+ }
+ function searchReport(task){
+  closeSearch();
+  const dialog=text('dialog','','validation-report-search'),heading=text('h2',catalogLabel('search')),
+   form=text('form'),field=text('label'),input=text('input'),message=text('p','','error'),actions=text('div','','dialog-actions'),
+   cancel=text('button',catalogLabel('close'),'quiet'),submit=text('button',label('view'),'primary');
+  searchDialog=dialog;
+  heading.id='validation-report-search-title';dialog.setAttribute('aria-labelledby',heading.id);
+  input.required=true;input.maxLength=64;input.autocomplete='off';input.name='reportId';
+  message.setAttribute('role','alert');
+  cancel.type='button';cancel.onclick=closeSearch;submit.type='submit';
+  dialog.addEventListener('cancel',event=>{event.preventDefault();closeSearch();});
+  field.append(text('span',catalogLabel('id')),input);actions.append(cancel,submit);form.append(field,message,actions);
+  form.onsubmit=async event=>{
+   event.preventDefault();
+   if(submit.disabled)return;
+   const id=input.value.trim().toLowerCase();
+   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)){
+    message.textContent=catalogLabel('invalid');input.focus();return;
+   }
+   submit.disabled=true;message.textContent='';
+   try{
+    const report=await fetchReport(task,id);
+    if(searchDialog!==dialog)return;
+    if(report?.id!==id)throw new Error(catalogLabel('mismatch'));
+    const state=catalogs.get(task.id);
+    if(!state?.page){closeSearch();return;}
+    reports.set(task.id+'/'+id,{report,page:0});
+    catalogs.set(task.id,{...state,selectedId:id});
+    closeSearch();bridge.render();
+   }catch(error){
+    if(searchDialog===dialog){message.textContent=error.message;submit.disabled=false;}
+   }
+  };
+  dialog.append(heading,form);document.body.append(dialog);dialog.showModal();input.focus();
+ }
 
  async function loadCatalog(task,after='',previous=[]){
   const current=catalogs.get(task.id);
@@ -32,23 +93,34 @@ window.RivomeshValidation=(()=>{
  function renderCatalog(section,task){
   const state=catalogs.get(task.id);
   const controls=text('div','','validation-catalog-actions');
-  const browse=text('button',catalogLabel('open'),'quiet');
+  const browse=control(text('button',catalogLabel('open'),'quiet'),'catalog','browse');
   browse.dataset.validationCatalog='open';
   browse.disabled=!!state?.loading;
   browse.onclick=()=>loadCatalog(task);
   controls.append(browse);
   if(state?.page){
-   const back=text('button',catalogLabel('back'),'quiet');
+   const back=control(text('button',catalogLabel('back'),'quiet'),'catalog','latest');
    back.onclick=()=>{catalogs.delete(task.id);bridge.render();};
-   controls.append(back);
-   const previous=text('button',label('previous'),'quiet'),next=text('button',label('next'),'quiet');
-   previous.disabled=!!state.loading||!state.previous.length;
-   next.disabled=!!state.loading||!state.page.nextCursor;
-   previous.onclick=()=>loadCatalog(task,state.previous.at(-1),state.previous.slice(0,-1));
-   next.onclick=()=>loadCatalog(task,state.page.nextCursor,[...state.previous,state.after]);
-   controls.append(previous,next);
+   const search=control(text('button',catalogLabel('search'),'quiet'),'catalog','search');
+   search.dataset.validationSearch='';
+   search.disabled=!!state.loading;search.onclick=()=>searchReport(task);
+   controls.append(back,search);
+   if(state.selectedId){
+    const directory=control(text('button',catalogLabel('directory'),'quiet'),'catalog',state.selectedId,'directory');
+    directory.onclick=()=>{catalogs.set(task.id,{...state,selectedId:null});bridge.render();};
+    controls.append(directory);
+   }else{
+    const previous=control(text('button',label('previous'),'quiet'),'catalog',state.after,'previous'),
+     next=control(text('button',label('next'),'quiet'),'catalog',state.after,'next');
+    previous.disabled=!!state.loading||!state.previous.length;
+    next.disabled=!!state.loading||!state.page.nextCursor;
+    previous.onclick=()=>loadCatalog(task,state.previous.at(-1),state.previous.slice(0,-1));
+    next.onclick=()=>loadCatalog(task,state.page.nextCursor,[...state.previous,state.after]);
+    controls.append(previous,next);
+   }
   }
   section.append(controls);
+  if(state?.selectedId)return {reports:[state.page.reports.find(report=>report.id===state.selectedId)||{id:state.selectedId}]};
   return state?.page;
  }
  const words={zh:{title:'数据校验',help:'校验会短时阻塞 MySQL 写入，并暂停同步。完成后需检查结果，再显式恢复。当前首批真实验收目标为 MySQL/PostgreSQL；其他 SQL 目标须单独验收。',targets:'选择事务型目标',gate:'源写锁上限（秒）',read:'源扫描上限（秒）',targetRead:'目标表扫描上限（秒）',row:'单行预算（MiB）',quota:'暂存逻辑预算（MiB）',start:'开始逐行校验',cancel:'取消校验',view:'查看报告',retry:'继续目标比对',report:'校验报告',source:'源行数',target:'目标行数',missing:'缺失',extra:'多余',changed:'内容变更',table:'表',destination:'目标',previous:'上一页',next:'下一页',empty:'暂无校验记录',pending:'作业已保存，正在等待或执行。取消不恢复同步。',MATCH:'数据匹配',DIFF:'发现差异',scope:'至少选择一个事务型 SQL 目标。',invalid:'请输入有效的时间和资源预算。',differences:'查看差异',raw:'查看原始值（敏感数据）',expected:'源校验点的值',actual:'目标校验点的值',rowId:'内部行身份',noRow:'不存在该行',nullValue:'SQL NULL',column:'字段',kind:'差异类型',historical:'这是指定历史校验点的结果，不表示当前数据仍一致，也不执行修复或业务切换。'},en:{title:'Data validation',help:'Validation briefly blocks MySQL writes and pauses replication. Review results, then resume explicitly. First native profiles cover MySQL/PostgreSQL; other SQL destinations require separate acceptance.',targets:'Select transactional destinations',gate:'Source write gate (seconds)',read:'Source scan limit (seconds)',targetRead:'Target table scan limit (seconds)',row:'Per-row budget (MiB)',quota:'Logical staging budget (MiB)',start:'Compare rows',cancel:'Cancel validation',view:'View report',retry:'Retry target comparison',report:'Validation report',source:'Source rows',target:'Target rows',missing:'Missing',extra:'Extra',changed:'Changed',table:'Table',destination:'Destination',previous:'Previous',next:'Next',empty:'No validation jobs yet',pending:'Job saved; queued or executing. Cancellation does not resume replication.',MATCH:'Data matches',DIFF:'Differences found',scope:'Select at least one transactional SQL destination.',invalid:'Enter valid time and resource limits.',differences:'View differences',raw:'Reveal raw values (sensitive)',expected:'Source cut value',actual:'Target cut value',rowId:'Internal row identity',noRow:'Row absent',nullValue:'SQL NULL',column:'Column',kind:'Difference kind',historical:'This result describes a historical cut, not current equality, repair or permission to cut over.'}};
@@ -63,35 +135,36 @@ window.RivomeshValidation=(()=>{
  async function loadDifferences(task,id,cached,result,after,previous){
   try{const page=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id)+'/differences',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({target:result.target,tableId:result.tableId,after,limit:25})});cached.details={...page,after,previous,values:new Map()};bridge.render();}catch(error){notify(error.message);}
  }
- function renderDifferences(root,task,id,cached,names){
+ function renderDifferences(root,task,id,entry,cached,names){
   const page=cached.details,section=text('section','','validation-differences');section.append(text('h3',page.target+' · '+(names.get(page.tableId)||page.tableId)));
-  for(const item of page.items||[]){const article=text('article','','subscription-card');article.append(text('strong',item.kind),text('p',item.identityHash,'subtle'));const reveal=text('button',label('raw'));reveal.dataset.validationValues=item.identityHash;
+  for(const item of page.items||[]){const article=text('article','','subscription-card');article.append(text('strong',item.kind),text('p',item.identityHash,'subtle'));const reveal=control(text('button',label('raw')),'report',id,entry,page.target,page.tableId,page.after,item.identityHash,'reveal');reveal.dataset.validationValues=item.identityHash;
    reveal.onclick=async()=>{try{const value=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id)+'/values',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({target:page.target,tableId:page.tableId,identityHash:item.identityHash})});page.values.set(item.identityHash,value);bridge.render();}catch(error){notify(error.message);}};article.append(reveal);
    const value=page.values.get(item.identityHash);if(value){if(value.values.expectedRowId||value.values.actualRowId)article.append(text('pre',label('rowId')+' · '+label('expected')+': '+(value.values.expectedRowId||label('noRow'))+' · '+label('actual')+': '+(value.values.actualRowId||label('noRow'))));const table=text('table'),head=text('tr');for(const key of ['column','expected','actual'])head.append(text('th',label(key)));table.append(head);
     value.columns.forEach((column,index)=>{const row=text('tr');row.append(text('td',column.name+' · '+column.type));for(const side of ['expected','actual']){const values=value.values[side],cell=text('td');cell.append(!values?text('span',label('noRow'),'subtle'):values[index].value===null?text('span',label('nullValue'),'badge'):text('pre',values[index].value));row.append(cell);}table.append(row);});article.append(table);
    }section.append(article);
   }
-  const previous=text('button',label('previous'));previous.disabled=!page.previous.length;previous.onclick=()=>loadDifferences(task,id,cached,page,page.previous[page.previous.length-1],page.previous.slice(0,-1));const next=text('button',label('next'));next.disabled=!page.next;next.onclick=()=>loadDifferences(task,id,cached,page,page.next,[...page.previous,page.after]);section.append(previous,next);root.append(section);
+  const previous=control(text('button',label('previous')),'report',id,entry,page.target,page.tableId,page.after,'differences-previous');previous.disabled=!page.previous.length;previous.onclick=()=>loadDifferences(task,id,cached,page,page.previous[page.previous.length-1],page.previous.slice(0,-1));const next=control(text('button',label('next')),'report',id,entry,page.target,page.tableId,page.after,'differences-next');next.disabled=!page.next;next.onclick=()=>loadDifferences(task,id,cached,page,page.next,[...page.previous,page.after]);section.append(previous,next);root.append(section);
  }
  const repairWords={zh:{title:'数据修复',plan:'生成修复计划',review:'审阅修复计划',execute:'确认执行 / 重试修复',cancel:'请求取消修复',select:'选择修复',confirm:'我已核对目标、表、改动数量和预算，确认修改目标数据。',boundary:'修复按表提交。取消不撤销已提交的表，重试会检查凭据。完成后仍保持暂停；历史差异报告不会改写。当前支持 MySQL/PostgreSQL，触发器、外键等依赖需要独立计划。',scope:'请显式选择1至200张有差异的表。',actor:'计划创建人',limits:'预算',receipt:'目标提交凭据',replayed:'此前已提交',committed:'本次已提交',remove:'删除',insert:'插入'},en:{title:'Data repair',plan:'Create repair plan',review:'Review repair plan',execute:'Confirm / retry repair',cancel:'Request repair cancellation',select:'Select repair',confirm:'I reviewed destinations, tables, change counts and budgets and approve these target changes.',boundary:'Repair commits per table. Cancellation does not undo committed tables; retries check receipts. The task remains paused and historical differences are retained. MySQL/PostgreSQL only; triggers and foreign keys require a separate dependency plan.',scope:'Explicitly select 1 to 200 differing tables.',actor:'Plan creator',limits:'Budgets',receipt:'Target commit receipts',replayed:'Previously committed',committed:'Committed this attempt',remove:'Delete',insert:'Insert'}};
  const repairLabel=key=>repairWords[document.documentElement.lang.startsWith('zh')?'zh':'en'][key]||key;
  bridge.register({repair_plan:'生成修复计划',repair_execute:'执行修复',repair_cancel:'取消修复',REPAIR_PLAN_READY:'修复计划已生成，请审阅后确认',REPAIR_COMPLETED:'修复提交已确认，任务保持暂停',REPAIR_CANCELLED:'修复已取消；已提交的表仍然有效，请查看凭据或重试',REPAIR_CANCEL_REQUESTED:'已请求取消修复',REPAIR_DEPENDENCY_PLAN_REQUIRED:'目标存在触发器、外键、行策略或继承等依赖，需要单独迁移计划。',REPAIR_METADATA_VISIBILITY_REQUIRED:'无法确认 MySQL 元数据完整可见。首版需要直接授予全局 SELECT 和 TRIGGER，暂不解析仅通过角色授予的权限。',REPAIR_TARGET_DRIFTED:'目标数据已变化。请重新校验并生成新计划。',REPAIR_APPROVAL_HASH_MISMATCH:'确认摘要与计划不一致，未执行修复。',REPAIR_TARGET_PROFILE_UNVERIFIED:'此目标尚未开放修复，请使用已验收的 MySQL/PostgreSQL 目标。'}, {repair_plan:'Create repair plan',repair_execute:'Execute repair',repair_cancel:'Cancel repair',REPAIR_PLAN_READY:'Repair plan ready; review before confirmation',REPAIR_COMPLETED:'Repair commits confirmed; task remains paused',REPAIR_CANCELLED:'Repair cancelled; committed tables remain. Inspect receipts or retry.',REPAIR_CANCEL_REQUESTED:'Repair cancellation requested',REPAIR_DEPENDENCY_PLAN_REQUIRED:'Triggers, foreign keys, row policies or inheritance require a separate dependency plan.',REPAIR_METADATA_VISIBILITY_REQUIRED:'Complete MySQL metadata visibility is unconfirmed. Initial support requires direct global SELECT and TRIGGER grants; role-only grants are not resolved.',REPAIR_TARGET_DRIFTED:'Target data changed. Obtain a new validation and plan.',REPAIR_APPROVAL_HASH_MISMATCH:'Approval does not match the plan; repair was refused.',REPAIR_TARGET_PROFILE_UNVERIFIED:'Repair is not enabled for this target profile; use accepted MySQL/PostgreSQL profiles.'});
  function renderRepairs(root,task,pending){
-  if(!can('TASK_CONFIG'))return;const jobs=task.operations.filter(op=>op.repair);if(!jobs.length)return;const section=text('section','','repair-panel');section.append(text('h2',repairLabel('title')),text('p',repairLabel('boundary'),'callout'));
+  if(!can('TASK_CONFIG'))return;const jobs=task.operations.filter(op=>op.repair);if(!jobs.length)return;const section=text('section','','repair-panel');section.dataset.validationTask=task.id;section.append(text('h2',repairLabel('title')),text('p',repairLabel('boundary'),'callout'));
   for(const job of jobs.slice().reverse()){const card=text('article','','subscription-card');card.append(text('strong',job.repair.planId),badge(job.status),text('p',job.code?explain(job.code):label('pending')));
-   if(job.status==='PENDING'){const cancel=text('button',repairLabel('cancel'));cancel.dataset.repairAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'REPAIR_CANCEL');card.append(cancel);}
-   const review=text('button',repairLabel('review'));review.dataset.repairPlan=job.repair.planId;review.disabled=pending||(job.action==='REPAIR_PLAN'&&job.code!=='REPAIR_PLAN_READY');review.onclick=async()=>{try{const plan=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(job.repair.reportId)+'/repairs/'+encodeURIComponent(job.repair.planId));plans.set(task.id,{plan,confirmed:false});bridge.render();}catch(error){notify(error.message);}};card.append(review);
+   if(job.status==='PENDING'){const cancel=control(text('button',repairLabel('cancel')),'repair',job.repair.planId,job.id,'cancel');cancel.dataset.repairAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'REPAIR_CANCEL');card.append(cancel);}
+   const review=control(text('button',repairLabel('review')),'repair',job.repair.planId,job.id,'review');review.dataset.repairPlan=job.repair.planId;review.disabled=pending||(job.action==='REPAIR_PLAN'&&job.code!=='REPAIR_PLAN_READY');review.onclick=async()=>{try{const plan=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(job.repair.reportId)+'/repairs/'+encodeURIComponent(job.repair.planId));plans.set(task.id,{plan,confirmed:false});bridge.render();}catch(error){notify(error.message);}};card.append(review);
    if(job.result&&job.result.receipts){card.append(text('h3',repairLabel('receipt')));for(const [scope,receipt] of Object.entries(job.result.receipts)){card.append(text('p',scope+' · '+repairLabel(receipt.alreadyApplied?'replayed':'committed')+' · '+repairLabel('remove')+' '+receipt.deleted+' / '+repairLabel('insert')+' '+receipt.inserted));}}
    section.append(card);
   }
   const cached=plans.get(task.id);if(cached){const plan=cached.plan,review=text('article','','repair-review');review.append(text('h3',repairLabel('review')),text('p',repairLabel('actor')+': '+plan.createdBy+' · '+plan.createdAt),text('pre',plan.id+'\n'+plan.hash),text('p',repairLabel('limits')+': '+plan.maximumAffectedRows+' / '+(plan.maximumProbeBytes/1048576)+' MiB / '+(plan.maximumMillis/1000)+' s'));
    const table=text('table'),head=text('tr');for(const key of ['destination','table','missing','extra','changed'])head.append(text('th',label(key)));table.append(head);for(const row of Object.values(plan.tables)){const line=text('tr');for(const value of [row.target,(plan.tableNames||{})[row.tableId]||row.tableId,row.missing,row.extra,row.changed])line.append(text('td',String(value)));table.append(line);}review.append(table);
-   const confirm=text('label'),checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=cached.confirmed;checkbox.disabled=pending;checkbox.dataset.repairConfirm='true';checkbox.onchange=()=>{cached.confirmed=checkbox.checked;bridge.render();};confirm.append(checkbox,document.createTextNode(repairLabel('confirm')));review.append(confirm);const execute=text('button',repairLabel('execute'),'primary');execute.dataset.repairAction='execute';execute.disabled=pending||!cached.confirmed||task.status.run_state!=='PAUSED';execute.onclick=()=>{if(!cached.confirmed)return;cached.confirmed=false;submit(task,'REPAIR_EXECUTE',null,{reportId:plan.reportId,planId:plan.id,approvedHash:plan.hash});};review.append(execute);section.append(review);
+   const confirm=text('label'),checkbox=control(document.createElement('input'),'repair',plan.id,plan.hash,'confirm');checkbox.type='checkbox';checkbox.checked=cached.confirmed;checkbox.disabled=pending;checkbox.dataset.repairConfirm='true';checkbox.onchange=()=>{cached.confirmed=checkbox.checked;bridge.render();};confirm.append(checkbox,document.createTextNode(repairLabel('confirm')));review.append(confirm);const execute=control(text('button',repairLabel('execute'),'primary'),'repair',plan.id,plan.hash,'execute');execute.dataset.repairAction='execute';execute.disabled=pending||!cached.confirmed||task.status.run_state!=='PAUSED';execute.onclick=()=>{if(!cached.confirmed)return;cached.confirmed=false;submit(task,'REPAIR_EXECUTE',null,{reportId:plan.reportId,planId:plan.id,approvedHash:plan.hash});};review.append(execute);section.append(review);
   }root.append(section);
  }
  function render(root,task,pending){
   if(task.formatVersion!==3)return;
-  const section=text('section','','validation-panel'),heading=text('h2',label('title'));section.append(heading,text('p',label('help'),'callout'));
+  const section=text('section','','validation-panel'),heading=text('h2',label('title'));
+  section.dataset.validationTask=task.id;section.append(heading,text('p',label('help'),'callout'));
   const choices=(task.destinations||[]).filter(target=>target.consistency==='TRANSACTIONAL');
   let draft=drafts.get(task.id);if(!draft){draft={targets:new Set(choices.map(target=>target.id)),gate:30,read:3600,targetRead:600,quota:1024,row:4};drafts.set(task.id,draft);}
   if(can('TASK_CONFIG')){
@@ -111,18 +184,23 @@ window.RivomeshValidation=(()=>{
   ]:recent;
   if(!jobs.length)section.append(text('p',page?catalogLabel('empty'):label('empty'),'subtle'));
   for(const job of jobs){
-   const card=text('article','','subscription-card'),id=job.validation.reportId;
-   card.append(text('strong',id),badge(job.status||catalogLabel('retained')));
-   if(job.createdAt)card.append(text('p',new Date(job.createdAt).toLocaleString(),'subtle'));
+   const card=text('article','','subscription-card'),id=job.validation.reportId,entry=job.id||id;
+   const disclosureKey=JSON.stringify([task.id,id,entry]);
+   const date=Date.parse(job.createdAt||job.finishedAt),identity=text('details');
+   identity.open=reportDisclosure.has(disclosureKey);
+   identity.ontoggle=()=>{if(identity.isConnected)identity.open?reportDisclosure.add(disclosureKey):reportDisclosure.delete(disclosureKey);};
+   identity.append(control(text('summary',catalogLabel('id')),'report',id,entry,'identity'),text('code',id));
+   card.append(text('strong',Number.isNaN(date)?label('report'):new Date(date).toLocaleString()),
+    badge(job.status||catalogLabel('retained')),identity);
    if(job.code||!job.retained)card.append(text('p',job.code?explain(job.code):label('pending')));
-   if(job.status==='PENDING'&&can('TASK_CONFIG')){const cancel=text('button',label('cancel'));cancel.dataset.validationAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'VALIDATE_CANCEL');card.append(cancel);}
-   const view=text('button',label('view'));view.dataset.validationReport=id;view.disabled=job.status==='PENDING';view.onclick=async()=>{try{const report=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));reports.set(task.id+'/'+id,{report,page:0});bridge.render();}catch(error){notify(error.message);}};card.append(view);
+   if(job.status==='PENDING'&&can('TASK_CONFIG')){const cancel=control(text('button',label('cancel')),'report',id,entry,'cancel');cancel.dataset.validationAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'VALIDATE_CANCEL');card.append(cancel);}
+   const view=control(text('button',label('view')),'report',id,entry,'view');view.dataset.validationReport=id;view.disabled=job.status==='PENDING';view.onclick=async()=>{try{const report=await fetchReport(task,id);reports.set(task.id+'/'+id,{report,page:0});bridge.render();}catch(error){notify(error.message);}};card.append(view);
    const cached=reports.get(task.id+'/'+id);if(cached){const report=cached.report;if(!cached.selected)cached.selected=new Set();card.append(text('p',report.code==='VALIDATION_MATCH'?label('MATCH'):report.code==='VALIDATION_DIFFERENCES'?label('DIFF'):report.state),text('p',label('historical'),'subtle'));const table=text('table'),head=text('tr');for(const key of ['destination','table','source','target','missing','extra','changed'])head.append(text('th',label(key)));table.append(head);
-    const results=Object.values(report.results||{}),names=new Map((report.tables||[]).map(item=>[item.id,item.database+'.'+item.name]));for(const result of results.slice(cached.page*50,cached.page*50+50)){const row=text('tr');for(const value of [result.target,names.get(result.tableId)||result.tableId,result.sourceRows,result.targetRows,result.missing,result.extra,result.changed])row.append(text('td',String(value)));if(can('TASK_CONFIG')&&(result.missing||result.extra||result.changed)){if((task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product))){const cell=text('td'),input=document.createElement('input'),key=result.target+'/'+result.tableId;input.type='checkbox';input.checked=cached.selected.has(key);input.disabled=pending;input.dataset.repairScope=key;input.setAttribute('aria-label',repairLabel('select')+' '+result.target+' '+(names.get(result.tableId)||result.tableId));input.onchange=()=>input.checked?cached.selected.add(key):cached.selected.delete(key);cell.append(input);row.append(cell);}const cell=text('td'),button=text('button',label('differences'));button.dataset.validationDifferences=result.tableId;button.onclick=()=>loadDifferences(task,id,cached,result,'',[]);cell.append(button);row.append(cell);}table.append(row);}card.append(table);if(can('TASK_CONFIG')&&report.state==='COMPLETE'&&report.code==='VALIDATION_DIFFERENCES'){const create=text('button',repairLabel('plan'));create.dataset.repairAction='plan';create.disabled=pending||task.status.run_state!=='PAUSED'||!results.some(result=>(result.missing||result.extra||result.changed)&&(task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product)));create.onclick=()=>{const scope=[...cached.selected].sort();if(scope.length<1||scope.length>200){notify(repairLabel('scope'));return;}submit(task,'REPAIR_PLAN',null,{reportId:id,scope});};card.append(create);}if(can('TASK_CONFIG')&&cached.details)renderDifferences(card,task,id,cached,names);window.RivomeshRecovery?.renderVerificationFromReport(card,task,{...report,id});
-    if(results.length>50){for(const [key,step] of [['previous',-1],['next',1]]){const button=text('button',label(key));button.disabled=cached.page+step<0||(cached.page+step)*50>=results.length;button.onclick=()=>{cached.page+=step;bridge.render();};card.append(button);}}
-    if(can('TASK_CONFIG')&&!pending&&report.sourceComplete&&report.state!=='COMPLETE'){const retry=text('button',label('retry'));retry.dataset.validationAction='retry';retry.onclick=()=>submit(task,'VALIDATE_RETRY',{reportId:id});card.append(retry);}
+    const results=Object.values(report.results||{}),names=new Map((report.tables||[]).map(item=>[item.id,item.database+'.'+item.name]));for(const result of results.slice(cached.page*50,cached.page*50+50)){const row=text('tr');for(const value of [result.target,names.get(result.tableId)||result.tableId,result.sourceRows,result.targetRows,result.missing,result.extra,result.changed])row.append(text('td',String(value)));if(can('TASK_CONFIG')&&(result.missing||result.extra||result.changed)){if((task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product))){const cell=text('td'),key=result.target+'/'+result.tableId,input=control(document.createElement('input'),'report',id,entry,key,'scope');input.type='checkbox';input.checked=cached.selected.has(key);input.disabled=pending;input.dataset.repairScope=key;input.setAttribute('aria-label',repairLabel('select')+' '+result.target+' '+(names.get(result.tableId)||result.tableId));input.onchange=()=>input.checked?cached.selected.add(key):cached.selected.delete(key);cell.append(input);row.append(cell);}const cell=text('td'),button=control(text('button',label('differences')),'report',id,entry,result.target,result.tableId,'differences');button.dataset.validationDifferences=result.tableId;button.onclick=()=>loadDifferences(task,id,cached,result,'',[]);cell.append(button);row.append(cell);}table.append(row);}card.append(table);if(can('TASK_CONFIG')&&report.state==='COMPLETE'&&report.code==='VALIDATION_DIFFERENCES'){const create=control(text('button',repairLabel('plan')),'report',id,entry,'repair-plan');create.dataset.repairAction='plan';create.disabled=pending||task.status.run_state!=='PAUSED'||!results.some(result=>(result.missing||result.extra||result.changed)&&(task.destinations||[]).some(target=>target.id===result.target&&['MYSQL','POSTGRESQL'].includes(target.product)));create.onclick=()=>{const scope=[...cached.selected].sort();if(scope.length<1||scope.length>200){notify(repairLabel('scope'));return;}submit(task,'REPAIR_PLAN',null,{reportId:id,scope});};card.append(create);}if(can('TASK_CONFIG')&&cached.details)renderDifferences(card,task,id,entry,cached,names);window.RivomeshRecovery?.renderVerificationFromReport(card,task,{...report,id});
+    if(results.length>50){for(const [key,step] of [['previous',-1],['next',1]]){const button=control(text('button',label(key)),'report',id,entry,cached.page,key);button.disabled=cached.page+step<0||(cached.page+step)*50>=results.length;button.onclick=()=>{cached.page+=step;bridge.render();};card.append(button);}}
+    if(can('TASK_CONFIG')&&!pending&&report.sourceComplete&&report.state!=='COMPLETE'){const retry=control(text('button',label('retry')),'report',id,entry,'retry');retry.dataset.validationAction='retry';retry.onclick=()=>submit(task,'VALIDATE_RETRY',{reportId:id});card.append(retry);}
    }section.append(card);
   }root.append(section);renderRepairs(root,task,pending);
  }
- return{render,close(){drafts.clear();reports.clear();plans.clear();catalogs.clear();}};
+ return{render,rememberFocus,close(){closeSearch();drafts.clear();reports.clear();plans.clear();catalogs.clear();reportDisclosure.clear();}};
 })();

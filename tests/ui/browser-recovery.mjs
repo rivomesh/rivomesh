@@ -68,11 +68,24 @@ try{
 
   if(scenario==='repair'){
     await activate('[data-validation-catalog]','historical report directory');
-    await activate('[data-validation-report="'+fixture.reportId+'"]','retained report after Agent restart');
-    await poll('document.querySelectorAll("[data-repair-scope]").length===2','both destination repair scopes');
-    await evaluate(`[...document.querySelectorAll('[data-repair-scope]')].find(input=>input.dataset.repairScope.startsWith('pg/'))
-      .closest('tr').querySelector('[data-validation-differences]').focus()`);
+    await activate('[data-validation-search]','open retained report by exact ID');
+    const reportInput='.validation-report-search[open] input[name="reportId"]';
+    await poll(`Boolean(${query(reportInput)})`,'report ID input');
+    assert(await evaluate(`document.activeElement===${query(reportInput)}`));
+    await cdp('Input.insertText',{text:fixture.reportId});
     await key('Enter',13);
+    await poll('document.querySelectorAll("[data-repair-scope]").length===2','direct lookup opens the retained report summary');
+    await clickNamed('.validation-catalog-actions button','返回历史目录');
+    checks.push('Keyboard report lookup opens one authorized historical report by ID and returns to the original directory page');
+    await poll('document.querySelectorAll("[data-repair-scope]").length===2','both destination repair scopes');
+    await evaluate(`window.reportDifferenceBeforeRefresh=[...document.querySelectorAll('[data-repair-scope]')]
+      .find(input=>input.dataset.repairScope.startsWith('pg/')).closest('tr').querySelector('[data-validation-differences]');
+      window.reportDifferenceBeforeRefresh.focus()`);
+    await poll('!window.reportDifferenceBeforeRefresh.isConnected','ordinary polling refreshes the focused destination difference');
+    assert(await evaluate('document.activeElement.dataset.validationFocus===window.reportDifferenceBeforeRefresh.dataset.validationFocus'));
+    await key('Enter',13);
+    await poll('performance.getEntriesByType("resource").some(entry=>entry.name.endsWith("/differences"))',
+      'native difference request was sent by the selected report control');
     await poll('document.querySelectorAll("[data-validation-values]").length===25','first page of native differences');
     const firstPage=await evaluate('[...document.querySelectorAll("[data-validation-values]")].map(button=>button.dataset.validationValues)');
     assert.equal(new Set(firstPage).size,25);
@@ -109,6 +122,8 @@ try{
     await activate('button[data-recovery-label="correctionOpen"]','typed correction for the retained failure');
     const dialog='.recovery-dialog[open]';
     await poll(`Boolean(${query(dialog+' select')})`,'typed correction schema');
+    const accessibility=await cdp('Accessibility.getFullAXTree');
+    assert(accessibility.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='手工补数据'));
     await evaluate(`(()=>{
       const mode=${query(dialog+' select')};
       mode.value='import';
@@ -138,6 +153,9 @@ try{
     checks.push('Both management entries show the same correction receipt without the reviewed business values');
   }
   console.log(JSON.stringify({status:'PASS',scenario,browser:version,checks}));
+}catch(error){
+  for(const check of checks)console.error('Completed before failure: '+check);
+  throw error;
 }finally{
   try{await browser?.close();}finally{await rm(profile,{recursive:true,force:true,maxRetries:3});}
 }

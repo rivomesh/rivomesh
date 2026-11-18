@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.46",
+  "version": "0.47",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1619,8 +1619,8 @@
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "真实 Chrome 已验证登录、续登、诊断、移动端、跨入口历史报告、差异分页、审批、修复和补数据。Agent 重启后仍可查询报告，对应暂存文件采用原锁清理。凭据检索和长期保留策略仍需完善。",
-        "en": "Real Chrome verified login, reload, diagnostics, mobile UX, cross-entry retained reports, difference pagination, approval, repair and typed correction after Agent restart. Staging cleanup uses the report lock. Receipt discovery and long-term retention remain open."
+        "zh-CN": "真实 Chrome 已实测跨入口历史报告按 ID 查询、分页与轮询后的键盘焦点，以及修复和补数据。仍需跨类型恢复回执检索及可配置长期保留策略。",
+        "en": "Real Chrome verified cross-entry retained-report lookup, pagination, periodic-refresh keyboard focus, repair and typed correction. Cross-type receipt discovery and configurable retention remain."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",

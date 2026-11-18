@@ -101,6 +101,59 @@ test('historical validation reports can be discovered after their operations lea
  }finally{ui.dom.window.close();}
 });
 
+test('opening a validation report by exact ID uses its scoped endpoint and preserves the prior directory page',async()=>{
+ const task={id:'archive',formatVersion:3,workerState:'STOPPED',operations:[],status:{},destinations:[]};
+ const ui=setup([task],'VIEWER'),fetch=ui.w.fetch,requests=[];
+ const reportId='a4500000-1223-4abc-8abc-0123456789ab',olderId='a4500000-1223-4abc-8abc-0123456789ac';
+ ui.w.fetch=async(path,options)=>{
+  if(path.startsWith('/api/tasks/archive/validations?')){
+   const older=path.includes('&after=');
+   return{ok:true,status:200,json:async()=>({reports:[{id:older?olderId:'latest',createdAt:'2026-11-16T07:00:00Z'}],nextCursor:older?null:'older'})};
+  }
+  if(path.startsWith('/api/tasks/archive/validations/')){
+   requests.push(path);
+   return{ok:true,status:200,json:async()=>({id:reportId,state:'COMPLETE',code:'VALIDATION_MATCH',results:{}})};
+  }
+  return fetch(path,options);
+ };
+ try{
+  await login(ui);ui.d.querySelector('[data-validation-catalog]').click();await flush();
+  const button=name=>[...ui.d.querySelectorAll('.validation-catalog-actions button')].find(item=>item.textContent===name);
+  button('下一页').click();await flush();
+  assert.ok(ui.d.querySelector('[data-validation-report="'+olderId+'"]'));
+  const search=ui.d.querySelector('[data-validation-search]');
+  search.focus();ui.w.RivomeshConfiguration.render();
+  assert(!search.isConnected);
+  assert.equal(ui.d.activeElement,ui.d.querySelector('[data-validation-search]'));
+  const logout=ui.d.getElementById('logout');
+  logout.focus();ui.w.RivomeshConfiguration.render();
+  assert.equal(ui.d.activeElement,logout);
+  ui.d.querySelector('[data-validation-search]').click();
+  const dialog=ui.d.querySelector('.validation-report-search'),input=dialog.querySelector('[name="reportId"]');
+  const submit=()=>dialog.querySelector('form').dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(ui.d.activeElement,input);
+  assert.equal(ui.d.getElementById(dialog.getAttribute('aria-labelledby')).textContent,'按报告 ID 打开');
+  input.value='../other-task';submit();await flush();
+  assert.equal(requests.length,0);assert.match(dialog.querySelector('[role="alert"]').textContent,/有效的报告 ID/);
+  input.value=olderId;submit();await flush();
+  assert.match(dialog.querySelector('[role="alert"]').textContent,/报告 ID 与输入不符/);
+  assert.equal(ui.d.querySelector('[data-validation-report="'+reportId+'"]'),null);
+  input.value=' '+reportId.toUpperCase()+' ';submit();await flush();
+  assert.deepEqual(requests,[olderId,reportId].map(id=>'/api/tasks/archive/validations/'+id));
+  assert.equal(ui.d.querySelector('.validation-report-search'),null);
+  const card=ui.d.querySelector('[data-validation-report="'+reportId+'"]').closest('article');
+  assert.equal(card.querySelector('strong').textContent,'校验报告');
+  assert.equal(card.querySelector('details:not([open]) code').textContent,reportId);
+  assert.match(card.textContent,/数据匹配/);assert.equal(card.querySelector('[data-validation-values]'),null);
+  const disclosure=card.querySelector('details'),identifier=disclosure.querySelector('summary');
+  disclosure.open=true;disclosure.dispatchEvent(new ui.w.Event('toggle'));identifier.focus();
+  ui.w.RivomeshConfiguration.render();
+  assert.equal(ui.d.activeElement.closest('details[open]').querySelector('code').textContent,reportId);
+  button('返回历史目录').click();assert.ok(ui.d.querySelector('[data-validation-report="'+olderId+'"]'));
+  button('上一页').click();await flush();assert.ok(ui.d.querySelector('[data-validation-report="latest"]'));
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery shows native header evidence as text and still requires retained event contents',async()=>{
  const task={id:'headers',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_DECODE',error_code:'BINLOG_SCHEMA_WIDTH_CHANGED'}};

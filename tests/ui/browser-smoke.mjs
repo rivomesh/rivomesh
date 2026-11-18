@@ -149,6 +149,21 @@ try{
   await evaluate('document.querySelector("[data-validation-catalog]").click()');
   await waitFor(()=>evaluate('document.querySelector(".validation-panel")?.textContent.includes("暂无留存报告")'),
                 'native validation report catalog');
+  await evaluate('window.reportSearchBeforeRefresh=document.querySelector("[data-validation-search]");window.reportSearchBeforeRefresh.focus()');
+  await waitFor(()=>evaluate('!window.reportSearchBeforeRefresh.isConnected'),'ordinary polling refreshes the focused report control');
+  assert(await evaluate('document.activeElement===document.querySelector("[data-validation-search]")'));
+  await key('Enter',13);
+  await waitFor(()=>evaluate('document.querySelector(".validation-report-search")?.open'),'report ID lookup dialog');
+  assert.equal(await evaluate('document.activeElement.name'),'reportId');
+  const reportAx=await cdp('Accessibility.getFullAXTree');
+  assert(reportAx.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='按报告 ID 打开'));
+  await cdp('Input.insertText',{text:'bad/report-id'});
+  await key('Enter',13);
+  await waitFor(()=>evaluate('document.querySelector(".validation-report-search [role=alert]")?.textContent.includes("有效的报告 ID")'),
+                'invalid ID remains local to the lookup form');
+  await key('Escape',27);
+  assert(await evaluate('!document.querySelector(".validation-report-search")'));
+  passed('Report lookup retains keyboard focus through polling, has an accessible dialog, validates typed input and closes with Escape');
   await evaluate('[...document.querySelectorAll(".validation-catalog-actions button")].find(button=>button.textContent==="返回最新报告").click()');
   passed('The workbench opens the real stored validation report catalog and returns to recent jobs');
 

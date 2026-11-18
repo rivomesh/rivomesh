@@ -3987,5 +3987,110 @@
     "workerJvm": "openjdk version \"21.0.13\" 2026-10-20 LTS",
     "cleanupExitCode": 0,
     "harnessSha256": "00424892bc7d0649222575e00e6144ecb8762c8711f6862682e12aa9a2733bee"
+  },
+  "retainedReportLookupAndFocus": {
+    "native": {
+      "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Remote validation pauses CDC and exposes shared report identities, differences and authorized row values",
+        "After Agent restart both management entries discover the durable report and its metadata only",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: Keyboard report lookup opens one authorized historical report by ID and returns to the original directory page",
+        "Chrome: A retained report survives Agent restart and a real 27-row difference set pages both ways with explicit raw value access",
+        "Chrome: The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload",
+        "Cross-entry reviewed repair approval restores both targets and leaves replication paused",
+        "Explicit resume after reviewed repair continues original binlog progress",
+        "Chrome: One real cookie signs in on the first Controller and opens the same task workbench on the second",
+        "Chrome: The real correction preview preserves a 64-bit JSON integer and requires both a reason and approval",
+        "Chrome: Both management entries show the same correction receipt without the reviewed business values",
+        "Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC"
+      ],
+      "harnessSourceSha256": "41f98ee69f8aeacb6af43ae34abb492a6fa7f1ad174cf10d93b03c10fdbb98e1",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": true,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "browserRecovery": {
+        "repair": {
+          "status": "PASS",
+          "scenario": "repair",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "Keyboard report lookup opens one authorized historical report by ID and returns to the original directory page",
+            "A retained report survives Agent restart and a real 27-row difference set pages both ways with explicit raw value access",
+            "The second Controller creates the plan, the first requires explicit approval, and both target receipts remain visible after a reload"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "2c2cb1643bd57bb7d91919293615f75d3a9ccfa4cb571fff51488991cb9f9311",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "correction": {
+          "status": "PASS",
+          "scenario": "correction",
+          "browser": "Chrome/157.0.8103.79",
+          "checks": [
+            "One real cookie signs in on the first Controller and opens the same task workbench on the second",
+            "The real correction preview preserves a 64-bit JSON integer and requires both a reason and approval",
+            "Both management entries show the same correction receipt without the reviewed business values"
+          ],
+          "sourceSha256": {
+            "browser-recovery.mjs": "2c2cb1643bd57bb7d91919293615f75d3a9ccfa4cb571fff51488991cb9f9311",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "standaloneChrome": {
+      "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+      "status": "PASS",
+      "checks": [
+        "Native Tab navigation stays in the login dialog and Escape keeps login required",
+        "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+        "Diagnostics has an accessible dialog and destination selector, routes target reads, and works through Enter and Escape",
+        "Report lookup retains keyboard focus through polling, has an accessible dialog, validates typed input and closes with Escape",
+        "The workbench opens the real stored validation report catalog and returns to recent jobs",
+        "English workspace stays within the mobile viewport",
+        "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+        "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+        "Packaged site wordmarks, favicon and palette follow the browser color scheme",
+        "An explicit keyboard-selected appearance survives reload with the authenticated cookie session",
+        "Keyboard skip and current-page navigation work at 320 CSS pixels with no page overflow",
+        "Actual sign-out revokes the browser session"
+      ],
+      "browser": "Chrome/157.0.8103.79"
+    },
+    "domPassed": 127
   }
 }

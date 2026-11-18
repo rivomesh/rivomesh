@@ -27,7 +27,7 @@ ADMIN starts/cancels/retries; OPERATOR/VIEWER read summaries only for granted ta
 
 Audit records actor, task, report ID, request hash and acceptance/completion/cancellation/read events. Corresponding audit writes are required before the HTTP response. Raw business values are excluded from summaries/history.
 
-Reports live under `platform.dataDirectory/validations/<taskId>/<reportId>`. Put the private H2 files on a protected persistent volume and include them in coordinated backups. The console keeps approximately 40 recent operations per task. Reports can still be opened by ID or browsed in the historical directory. A restarted Agent must have access to the original report directory.
+Reports live under `platform.dataDirectory/validations/<taskId>/<reportId>`. The H2 files contain unencrypted row values. Put them on a protected persistent volume and include them in coordinated backups. The console keeps approximately 40 recent operations per task. Reports can still be opened by ID or browsed in the historical directory. A restarted Agent must have access to the original report directory.
 
 ## API
 
@@ -76,10 +76,12 @@ Repair is separate from read-only validation. The new [managed repair workflow](
 
 ### Historical report directory
 
-In **Data validation**, choose **Browse historical reports** to open reports retained in the task owner's data directory. The list shows report IDs and creation times, newest first. It remains available after the original operation leaves recent history. Open a report to read its summary. Detailed differences and row values still use the task's administrator grants. The report remains readable after the Agent reopens its original directory.
+In **Data validation**, choose **Browse historical reports** to open reports retained in the task owner's data directory, newest first. Open a report to read its summary. It remains readable after the original operation leaves recent history and after the Agent reopens its original directory. Detailed differences and row values require administrator permissions for the task.
+
+Report cards show the creation time. Expand **Report ID** to copy the identifier. When you already have an identifier, select **Open by report ID** from the directory. This opens one report for the current task using the same summary grants. **Back to report directory** restores the page you were browsing. While you navigate with the keyboard, background status updates keep focus on the same available report control.
 
 Clients can page metadata using `GET /api/tasks/{id}/validations?limit=20` and pass `nextCursor` as `after`. The task owner removes abandoned summary staging files when it next acquires the report lock. Include retained reports and review evidence in the task's protected backup policy.
 
-The catalog uses each report's identifier and creation time. It does not open the report's H2 database or read row values to build the list. Opening a report that is currently in use returns `VALIDATION_REPORT_BUSY`. Wait for the operation to finish and open it again. Only administrators can explicitly reveal raw values after selecting a difference; use **Previous** and **Next** to page through identities for the selected destination and table.
+The catalog lists report metadata without opening the H2 database or reading row values. Opening a report that is currently in use returns `VALIDATION_REPORT_BUSY`. Wait for the operation to finish and open it again. Use **Previous** and **Next** to page through identities for the selected destination and table. An administrator can explicitly reveal raw values for a selected difference.
 
 There is no automatic expiration of report or recovery evidence. Budget for the retained files in addition to the current job's quota. Keep a report while a retry, repair plan, gap verification, or audit relies on it. Removal from recent operation history does not release any report storage.
