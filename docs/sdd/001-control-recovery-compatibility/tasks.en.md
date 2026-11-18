@@ -9,7 +9,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 - [x] T-CP-01 · Global node registry and state · P0 · Depends on: none
   Deliver: With two nodes,any console shows the same IDs,roles,versions/JDK/architecture,capacity,heartbeat age and ownership;stale/unreachable nodes are explicitly marked.
   Acceptance: AC-CP-01
-- [ ] T-CP-02 · Global task/configuration authority · P0 · Depends on: CP-01
+- [x] T-CP-02 · Global task/configuration authority · P0 · Depends on: CP-01
   Deliver: A task created/edited through A appears at B with the same global revision;IDs are unique within a cluster;independent sources remain isolated and standalone mode remains usable.
   Acceptance: AC-CP-02
 - [ ] T-CP-03 · Durable cross-node command routing · P0 · Depends on: CP-02

@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.52 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.53 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,30 DONE, 18 PARTIAL and 0 NEW, with 18 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,31 DONE, 17 PARTIAL and 0 NEW, with 17 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -11,7 +11,7 @@ Implementation:48requirements,30 DONE, 18 PARTIAL and 0 NEW, with 18 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | CP-01 | P0 / DONE | Global node registry and state | Shared registry passes PostgreSQL/MySQL two-node,kill/rejoin and storage-outage acceptance;global task authority/commands remain CP-02/03. |
-| CP-02 | P0 / PARTIAL | Global task/configuration authority | Opt-in fixed-owner global HTTP/UI,shared configuration and history are wired;legacy import,complete business and scale acceptance remain open. |
+| CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | P0 / PARTIAL | Failover,fencing and placement | External-journal stale Worker fencing passed. PostgreSQL and MySQL control stores verified initial Agent assignment by grants and capacity. Active Agent handoff, evidence availability and automatic takeover remain. |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
@@ -94,7 +94,7 @@ Implementation:48requirements,30 DONE, 18 PARTIAL and 0 NEW, with 18 open. RC-01
 | ID | Existing evidence/code (not completion) |
 |---|---|
 | CP-01 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [TaskWorker.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskWorker.java) |
-| CP-02 | P0 / PARTIAL | Global task/configuration authority | Opt-in fixed-owner global HTTP/UI,shared configuration and history are wired;legacy import,complete business and scale acceptance remain open. |
+| CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
 | CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |

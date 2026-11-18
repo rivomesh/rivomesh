@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.52",
+  "version": "0.53",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -47,14 +47,14 @@
       "id": "CP-02",
       "epic": "CLUSTER",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "全局任务、配置与操作权威状态",
         "en": "Global task/configuration authority"
       },
       "gap": {
-        "zh-CN": "可选固定owner全局HTTP/界面、共享配置及历史已接入；旧任务升级导入、完整业务及规模验收仍未完成。",
-        "en": "Opt-in fixed-owner global HTTP/UI,shared configuration and history are wired;legacy import,complete business and scale acceptance remain open."
+        "zh-CN": "PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。",
+        "en": "Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task."
       },
       "acceptance": {
         "zh-CN": "同一集群中从A创建/修改任务后B读到同一全局修订；全局taskId唯一，独立任务与源配置仍隔离；单机模式保留可运行配置。",
@@ -74,6 +74,12 @@
       "implementation": {
         "scope": "Opt-in fixed-owner public global HTTP/UI with shared configuration, commands, queries and startup STOP/PAUSE barrier; migration and complete business acceptance remain open",
         "design": "docs/sdd/001-control-recovery-compatibility/design-global-control.md"
+      },
+      "verification": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, ten native cases each on PostgreSQL 17.12 and MySQL 8.4.13 control stores; concurrent ID admission, same revision, independent sources, standalone SIGKILL continuation",
+        "criteriaSha256": "c7cc22900d998798fee7f94ab4bd957139bc7e3ff168201b7a5ac2993be8acba"
       }
     },
     {

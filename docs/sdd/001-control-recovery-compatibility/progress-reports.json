@@ -52,8 +52,8 @@
     "a8d76a54a3759cc4c5b7c59d9aea8fe8dd02ab70"
   ],
   "currentSdd": {
-    "DONE": 30,
-    "PARTIAL": 18,
+    "DONE": 31,
+    "PARTIAL": 17,
     "NEW": 0
   },
   "nextTasks": [
@@ -69,6 +69,7 @@
     "CP-06 MySQL 8.4 direct-origin timing passed six native checks with independent CRC-checked source timestamps; five MySQL 5.7 cases confirmed live delivery with safely unknown timing.",
     "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes.",
     "LG-07 completed. One Java 21 artifact passed the shared hardware matrix, 256 mappings and large transaction, and real separate-journal quota, backpressure and SIGKILL catch-up to zero pending bytes.",
-    "LG-04 exact RabbitMQ 4.1.4 three-member quorum ran six native checks, including independent SQL progress through loss of majority, staggered recovery, 19 deliveries / 18 IDs and manual consumer ACK."
+    "LG-04 exact RabbitMQ 4.1.4 three-member quorum ran six native checks, including independent SQL progress through loss of majority, staggered recovery, 19 deliveries / 18 IDs and manual consumer ACK.",
+    "CP-02 completed. Both native control stores passed ten cases for identical active revisions, concurrent global ID uniqueness, two physical source configurations, and standalone restart of the original task."
   ]
 }

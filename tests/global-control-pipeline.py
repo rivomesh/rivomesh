@@ -3,6 +3,7 @@
 import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -29,6 +30,8 @@ parser.add_argument('--source-expected-version', help='Set the source type and o
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
+parser.add_argument('--task-authority', action='store_true',
+                    help='Exercise global revisions, unique task IDs, independent sources and standalone control')
 parser.add_argument('--handoff-assessment', action='store_true',
                     help='Persist and refresh a managed handoff assessment through two Controllers and two Agents')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
@@ -68,6 +71,10 @@ if args.browser and (not args.correction or not args.separate_execution
     parser.error('--browser requires an executable Chrome path and the focused --separate-execution --correction profile')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
+if args.task_authority and (not args.separate_execution or any((args.automatic_placement, args.runtime_image,
+        args.runtime_jdk, args.rolling_restart, args.task_views, args.mysql_delivery_timing,
+        args.source_diagnostics, args.failure_diagnostics, args.snapshot_diagnostics, args.compensation, args.correction))):
+    parser.error('--task-authority uses the separate Agent baseline profile')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.task_views and not args.separate_execution:
@@ -157,6 +164,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'harnessSourceSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'executionProfile': 'SEPARATE_AGENT' if args.separate_execution else 'COMBINED',
             'controlProduct': args.control_product,
+            'taskAuthority': args.task_authority,
             'automaticPlacement': args.automatic_placement,
             'handoffAssessment': args.handoff_assessment,
             'failureDiagnostics': args.failure_diagnostics,
@@ -214,6 +222,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         'postgres': {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'sync_test'}}}
     if args.separate_execution:
         services['store'] = {'image': 'mysql:8.4', 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_CONTROL}', 'MYSQL_ROOT_HOST': '%', 'MYSQL_DATABASE': 'rivomesh_control'}} if args.control_product == 'MYSQL' else {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'rivomesh_control'}}
+    if args.task_authority:
+        services['mysql-target']['command'] += ['--log-bin=mysql-bin', '--binlog-format=ROW',
+                                                '--binlog-row-image=FULL', '--gtid-mode=ON',
+                                                '--enforce-gtid-consistency=ON', '--log-replica-updates=ON']
     for node in members:
         config = {'bind': '0.0.0.0', 'port': 8080, 'authToken': '${RM_GC_TOKEN}', 'pollMillis': 200,
                   'sessions': {'secureCookie': False}, 'maxRunningTasks': 2, 'workerHeapMiB': 256,
@@ -252,6 +264,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             volumes[node + '-data'] = {}
             services[node]['image'] = args.runtime_image
             services[node]['volumes'] = [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture:ro', node + '-data:/app/data']
+    if args.task_authority:
+        local = dict(bind='0.0.0.0', port=8080, authToken='${RM_GC_TOKEN}', autoStart=False,
+                     tasksDirectory='/fixture/standalone/tasks', dataDirectory='/fixture/standalone/controller',
+                     pollMillis=200, workerHeapMiB=256)
+        (home / 'standalone.json').write_text(json.dumps(local))
+        services['standalone'] = dict(services['node-a'], environment={'RM_GC_TOKEN': '${RM_GC_TOKEN}'},
+                                      entrypoint=['java', '-Xmx384m', *launch, 'serve', '/fixture/standalone.json'])
     if args.managed_commit or args.recovery_jobs:
         classes=args.test_classes.resolve();classes.relative_to(ROOT)
         services[owner_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
@@ -345,11 +364,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
 
     route = '/api/tasks/global_cdc'
 
-    def task(node='node-a'):
-        return http(node, route)
+    def task(node='node-a', task_path=route):
+        return http(node, task_path)
 
-    def outcome(request, node='node-a'):
-        for operation in task(node).get('operations', []):
+    def outcome(request, node='node-a', task_path=route):
+        for operation in task(node, task_path).get('operations', []):
             if operation['id'] == request:
                 if operation['status'] in ('FAILED', 'REJECTED', 'CANCELLED'):
                     raise AssertionError('Command failed: ' + request + '/' + str(operation.get('code')))
@@ -359,12 +378,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
     def operation(request):
         return next(op for op in task()['operations'] if op['id'] == request)
 
-    def action(name, node='node-a', complete=True, **options):
+    def action(name, node='node-a', complete=True, task_path=route, **options):
         request = 'gc_' + name.lower() + '_' + uuid.uuid4().hex
-        body = dict(action=name, expectedRevision=task(node)['revision'], **options)
-        accepted = http(node, route + '/actions', body, request=request, expected=202)
+        body = dict(action=name, expectedRevision=task(node, task_path)['revision'], **options)
+        accepted = http(node, task_path + '/actions', body, request=request, expected=202)
         if complete:
-            wait(lambda: outcome(request, node), name)
+            wait(lambda: outcome(request, node, task_path), name)
         return request, accepted
 
     def browser_check(scenario, **state):
@@ -681,6 +700,123 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert http(node,endpoint+'?subscriptionId=pg&after='+retry['id'],expected=409)['code']=='DIAGNOSTICS_CURSOR_EXPIRED'
             assert all(not entry['event'].startswith('TARGET_') for entry in http(node,endpoint)['events'])
         passed('Both management entries recover the same destination diagnostics after Agent restart with independent paging')
+
+    def run_task_authority(document):
+        manifest['controlServerVersion'] = sql('store', 'SELECT VERSION()')
+        manifest['independentSourceVersion'] = sql('mysql-target', 'SELECT VERSION()')
+        assert sql('mysql', 'SELECT @@server_uuid') != sql('mysql-target', 'SELECT @@server_uuid')
+        primary_url = route + '/configuration'
+        primary = http('node-a', primary_url)
+        assert primary == http('node-b', primary_url)
+        assert primary['configurationVersion'] == primary['activeConfigurationVersion']
+        assert primary['revision'] == task('node-a')['revision'] == task('node-b')['revision']
+        assert primary['config']['source']['host'] == 'mysql'
+        passed('Both Controllers read the same active revision and configuration created through Controller A')
+
+        def single_source(task_id, host, database, server_id, target_schema):
+            config = deepcopy(document)
+            config.update(pipelineId=task_id, databases=[database], targets=[config['targets'][0]])
+            config['source'].update(clusterId=target_schema, host=host, database=database, serverId=server_id)
+            config['targets'][0].update(metadataSchema=target_schema+'_meta', mappings={database:target_schema})
+            return config
+
+        sql('mysql-target', "CREATE DATABASE sales; CREATE TABLE sales.items (id BIGINT PRIMARY KEY,note VARCHAR(50)); "
+                            "INSERT INTO sales.items VALUES(31,'independent snapshot')")
+        second = single_source('cp02_independent', 'mysql-target', 'sales', 992202, 'cp02_copy')
+        second['source'].pop('expectedVersion', None)
+        second_path = '/api/tasks/' + second['pipelineId']
+        second_url = second_path + '/configuration'
+
+        def create_second(controller):
+            request = 'cp02_create_' + uuid.uuid4().hex
+            response = http(controller, '/api/tasks', {'ownerNodeId':owner_node,'config':second},
+                            request=request, expected=(202,409))
+            return request, response
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(create_second, ('node-a', 'node-b')))
+        admitted = [request for request,response in outcomes if response.get('id') == second['pipelineId']]
+        refused = [response for _,response in outcomes if response.get('code') == 'TASK_ID_EXISTS']
+        assert len(admitted) == len(refused) == 1, 'Expected one create and one stable duplicate ID response'
+        wait(lambda: outcome(admitted[0], 'node-b', second_path), 'winning task becomes active')
+        count_query = ("SELECT COUNT(*) FROM global_control.rmc_task_authority "
+                       "WHERE cluster_id='global-cdc' AND task_id='cp02_independent'")
+        assert sql('store', count_query) == '1'
+        assert http('node-a', second_url) == http('node-b', second_url)
+        passed('Racing the same task ID through two Controllers admits exactly one shared task and one conflict')
+
+        def independent_rows():
+            return sql('postgres', 'SELECT id,note FROM cp02_copy.items ORDER BY id')
+
+        action('START', node='node-b', task_path=second_path)
+        wait(lambda: independent_rows() == '31|independent snapshot', 'independent source snapshot')
+        sql('mysql-target', "INSERT INTO sales.items VALUES(32,'independent CDC')")
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(41,'primary CDC',JSON_OBJECT('n',41))")
+        wait(lambda: independent_rows() == '31|independent snapshot\n32|independent CDC' and rows_match(),
+             'both physical sources deliver only to their configured destinations')
+        assert sql('postgres', "SELECT COUNT(*) FROM rm_pg_sales.items WHERE id IN (31,32)") == '0'
+        untouched = http('node-b', second_url)
+        assert untouched['config']['source']['host'] == 'mysql-target'
+        assert env['RM_GC_DATA'] not in json.dumps(untouched)
+        passed('Two physical MySQL sources with the same schema and table name snapshot and stream into independent tasks')
+
+        action('STOP')
+        before = http('node-a', primary_url)
+        edited = deepcopy(before['config'])
+        edited['chunkSize'] = 2
+        foreign = deepcopy(edited)
+        foreign['source']['password'] = untouched['config']['source']['password']
+        rejected = http('node-b', primary_url + '/validate', {'config':foreign,'expectedRevision':before['revision']},
+                        expected=409)
+        assert rejected['code'] == 'CONFIG_SECRET_REFERENCE_CHANGED'
+        edit = 'cp02_edit_' + uuid.uuid4().hex
+        body = {'config':edited,'expectedRevision':before['revision']}
+        http('node-a', primary_url + '/validate', body)
+        http('node-a', primary_url, body, method='PUT', request=edit, expected=202)
+        wait(lambda: outcome(edit, 'node-b'), 'Controller B observes the edit accepted through A')
+        after = http('node-a', primary_url)
+        assert after == http('node-b', primary_url)
+        assert after['revision'] == task('node-a')['revision'] == task('node-b')['revision']
+        assert after['revision'] != before['revision'] and after['configurationVersion'] != before['configurationVersion']
+        assert after['configurationVersion'] == after['activeConfigurationVersion']
+        assert after['config']['chunkSize'] == 2 and after['config']['source']['host'] == 'mysql'
+        assert untouched == http('node-a', second_url) == http('node-b', second_url)
+        assert http('node-b', primary_url, body, method='PUT', expected=409)['code'] == 'REVISION_CHANGED'
+        passed('An edit through A is active with the same new revision at B and leaves the other task configuration untouched')
+        passed('The shared configuration refuses a secret reference from another task and refuses a stale update')
+        action('START', node='node-b')
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(42,'after authority edit',JSON_OBJECT('n',42))")
+        wait(rows_match, 'updated configuration continues real CDC')
+        action('STOP')
+        action('STOP', node='node-b', task_path=second_path)
+        stable_global = http('node-b', primary_url)
+
+        sql('mysql', "CREATE DATABASE cp02_local; CREATE TABLE cp02_local.items (id BIGINT PRIMARY KEY,note VARCHAR(50)); "
+                     "INSERT INTO cp02_local.items VALUES(71,'standalone snapshot')")
+        local = single_source(document['pipelineId'], 'mysql', 'cp02_local', 992203, 'cp02_local_copy')
+        compose('up', '-d', 'standalone')
+        address('standalone')
+        wait(lambda: http('standalone', '/api/session')['taskControlScope'] == 'LOCAL', 'standalone ready')
+        http('standalone','/api/tasks', {'config':local}, expected=201)
+        action('START', node='standalone')
+        wait(lambda: sql('postgres','SELECT id,note FROM cp02_local_copy.items') == '71|standalone snapshot',
+             'standalone task runs its own config')
+        local_config = http('standalone', primary_url)
+        assert local_config['config']['databases'] == ['cp02_local']
+        assert local_config['revision'] != stable_global['revision']
+        compose('kill', '-s', 'SIGKILL', 'standalone')
+        sql('mysql', "INSERT INTO cp02_local.items VALUES(72,'standalone resumed')")
+        compose('up', '-d', 'standalone')
+        address('standalone')
+        wait(lambda: http('standalone', '/api/session')['taskControlScope'] == 'LOCAL', 'standalone back after restart')
+        wait(lambda: sql('postgres','SELECT id,note FROM cp02_local_copy.items ORDER BY id')
+             == '71|standalone snapshot\n72|standalone resumed', 'standalone resumes original local configuration')
+        reloaded = http('standalone', primary_url)
+        assert reloaded['configurationVersion'] == local_config['configurationVersion']
+        assert reloaded['config']['databases'] == ['cp02_local']
+        assert stable_global == http('node-a', primary_url) == http('node-b', primary_url)
+        action('STOP', node='standalone')
+        passed('A standalone JVM independently creates the same ID and reloads its own runnable configuration after SIGKILL')
 
     def run_rolling_restart():
         rolls = manifest['runtimeRollout'] = {}
@@ -1256,6 +1392,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.task_authority:
+            run_task_authority(document)
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_TASK_AUTHORITY_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.handoff_assessment:
             endpoint=route+'/handoff'
             candidate='node-worker-alt'
@@ -1696,7 +1838,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             diagnostics['task'] = {key: observed.get(key) for key in ('workerState', 'captureLeaseState', 'desired', 'problem', 'statusAvailable', 'status', 'operations')}
         except Exception:
             pass
-        for node in members:
+        for node in (*members, 'standalone') if args.task_authority else members:
             logs = compose('logs', '--no-color', '--tail', '60', node, check=False)
             diagnostics[node] = logs.stdout + logs.stderr
         safe = json.dumps(diagnostics, indent=2)

@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.52 · 2026-11-18 · 实施中
+RM-SDD-001 · v0.53 · 2026-11-18 · 实施中
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**30 DONE、18 PARTIAL、0 NEW，18 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、Temurin 21 真实进程与源目标故障阶段已验收。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**31 DONE、17 PARTIAL、0 NEW，17 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、Temurin 21 真实进程与源目标故障阶段已验收。
 
 ## 1. 当前基线
 
@@ -14,7 +14,7 @@ RM-SDD-001 · v0.52 · 2026-11-18 · 实施中
 
 | 用户项 | SDD范围 | 未完成项数 |
 |---|---|---|
-| 1 多节点统一控制 | CP-01～CP-07 | 5 |
+| 1 多节点统一控制 | CP-01～CP-07 | 4 |
 | 2 登录保持 | SE-01～SE-05 | 0 |
 | 3 跳过与补数据 | RC-01～RC-10 | 1 |
 | 4 源版本/PG/Oracle | SO-01～SO-07 | 2 |

@@ -7,7 +7,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | ID | Requirement | Acceptance contract | Evidence state |
 |---|---|---|---|
 | AC-CP-01 | CP-01 | With two nodes,any console shows the same IDs,roles,versions/JDK/architecture,capacity,heartbeat age and ownership;stale/unreachable nodes are explicitly marked. | [PASS](../../verification/README.md) |
-| AC-CP-02 | CP-02 | A task created/edited through A appears at B with the same global revision;IDs are unique within a cluster;independent sources remain isolated and standalone mode remains usable. | PARTIAL · [foundations](../../verification/README.md) |
+| AC-CP-02 | CP-02 | A task created/edited through A appears at B with the same global revision;IDs are unique within a cluster;independent sources remain isolated and standalone mode remains usable. | PASS. Ten cases per native control store plus isolated standalone behavior |
 | AC-CP-03 | CP-03 | Any entry controls tasks on B;typed commands cover create/check/lifecycle/retry/validation/repair and carry request ID,revision and owner generation;duplicate delivery is idempotent and acceptance is distinct from execution. | PARTIAL · [foundations](../../verification/README.md) |
 | AC-CP-04 | CP-04 | Power loss,partition and stale-node return never permit dual writers;unconfirmed stops remain unknown/fenced;placement respects JDK,adapter,storage reachability and quotas;drain/move preserves progress. | PARTIAL (external journal and stale Worker on two nodes) |
 | AC-CP-05 | CP-05 | Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references. | PARTIAL · [shared-access](../../verification/README.md) |
