@@ -129,7 +129,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-DO-03 · Recovery scenarios and FAQ · P1 · Depends on: RC-09, RC-10, SE-05
   Deliver: Each scenario states symptoms,cause,UI/API steps,positions,gaps,idempotency/undo limits across promotion,log loss,SQL/ack,node/storage,session and manual recovery.
   Acceptance: AC-DO-03
-- [ ] T-DO-04 · Configuration/API/compatibility and upgrade docs · P1 · Depends on: SO-01, JV-02, CP-03
+- [x] T-DO-04 · Configuration/API/compatibility and upgrade docs · P1 · Depends on: SO-01, JV-02, CP-03
   Deliver: Document configuration,grants,codes,request/command/plan versions,source coordinates,consistency and source/sink/JDK profiles with examples/evidence;schema changes update both languages.
   Acceptance: AC-DO-04
 - [ ] T-DO-05 · Documentation and evidence release gates · P1 · Depends on: DO-01, DO-02, DO-03, DO-04, LG-09

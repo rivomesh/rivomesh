@@ -304,6 +304,21 @@
         "criteriaSha256": "1eaff529110a76fe18161ac296d0150b84d909e5d5364d7ee40e5e70ba7ca092",
         "profile": "Bilingual scenario runbook with UI/API, durable checkpoints, gaps, idempotency, cancellation and approved product boundaries."
       }
+    },
+    {
+      "id": "DO-04",
+      "title": {
+        "zh-CN": "配置/API/兼容性与升级文档",
+        "en": "Configuration/API/compatibility and upgrade docs"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "2dbfee089f6a7ef59296d38a6398b3a2393ef1cf045695aebec88216550e6068",
+        "artifactKind": "bilingual compatibility and API reference",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
+        "profile": "124 Markdown files checked; both languages map 21 connector IDs, version profiles and public API references to exact runtime provenance and operational guides."
+      }
     }
   ],
   "productProfiles": [

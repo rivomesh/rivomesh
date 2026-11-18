@@ -81,8 +81,24 @@ for item in requirements:
         assert archive.is_file() and evidence['artifactSha256'] in archive.read_text(), 'Unlinked completion evidence'
         criteria = json.dumps(item['acceptance'], sort_keys=True, ensure_ascii=False, separators=(',', ':'))
         assert sha256(criteria.encode()).hexdigest() == evidence['criteriaSha256'], 'Accepted criteria changed: ' + identity
-for path in list(package.glob('*.md')) + [ROOT / 'docs/zh-CN/browser-sessions.md', ROOT / 'docs/en/browser-sessions.md']:
+manuals = sorted((ROOT / 'docs').rglob('*.md')) + [ROOT / 'README.md', ROOT / 'CONTRIBUTING.md']
+for path in manuals:
     for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', path.read_text()):
         if '://' not in target and not target.startswith('#'):
             assert (path.parent / target.split('#')[0]).exists(), str(path.relative_to(ROOT)) + ': broken link ' + target
+
+catalog = (ROOT / 'sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java').read_text()
+products = set(re.findall(r'add\(rows,"([A-Z0-9_]+)","(?:SOURCE|SINK)"', catalog))
+products.discard('GAUSS_POSTGRESQL')
+products.update(('GAUSS', 'GBASE_8A', 'GBASE_8S'))
+profiles = ('5.7.44', '8.0.46', '8.2.0', '8.4.13', '17.12', '23.26.4.0.0',
+            'fiveJdkProcesses', 'postgresqlSourceRuntimeMatrix', 'X-Request-ID', 'expectedRevision',
+            '/api/capabilities', '/api/session/logout', '/api/tasks/{id}/capture-recovery',
+            '/api/tasks/{id}/recovery-plans', '/api/tasks/{id}/gap-verifications',
+            '/api/tasks/{id}/corrections', '/api/tasks/{id}/validations')
+for locale in ('en', 'zh-CN'):
+    manual = (ROOT / 'docs' / locale / 'compatibility.md').read_text()
+    for token in sorted(products) + list(profiles):
+        assert token in manual, 'Missing compatibility profile or route: ' + locale + ' ' + token
 print('SDD_ACCEPTED', data['specId'], 'v' + data['version'], len(ids), 'requirements;', dict(counts))
+print('DOCS_CHECKED', len(manuals), 'Markdown files and', len(products), 'connector IDs in both languages')

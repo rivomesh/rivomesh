@@ -139,3 +139,7 @@ Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` pass
 ## Large-payload journal performance
 
 Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` passed 43 focused Java tests. On an ARM64 Apple M1 Pro Docker Desktop host, both LOCAL and EXTERNAL reached source/target hash equality on 100,000 snapshot rows and 120,000 changes. Each fixture used one CPU per container and a 256 MiB Worker heap, and both cleaned up successfully. During diagnosis, native PostgreSQL EXPLAIN showed a sequential scan for a NUMERIC parameter against the BIGINT key. Binding the same key as BIGINT used the primary-key index. [Timing and environment](../en/performance.md) · [Raw reports](baseline.json)
+
+## Bilingual connector and API compatibility reference
+
+Combined reference SHA-256 `2dbfee089f6a7ef59296d38a6398b3a2393ef1cf045695aebec88216550e6068`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)

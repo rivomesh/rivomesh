@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.27",
+  "version": "0.28",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1258,14 +1258,14 @@
       "id": "DO-04",
       "epic": "DOCS",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "配置/API/兼容性与升级文档",
         "en": "Configuration/API/compatibility and upgrade docs"
       },
       "gap": {
-        "zh-CN": "已有部分手册，缺新接口与统一源/目标/JDK档案索引。",
-        "en": "Partial handbooks lack new APIs and a unified profile index."
+        "zh-CN": "配置、API、权限、坐标、一致性、升级和实际跨 JDK 档案已整理为中英文索引。各未验收组合继续由对应兼容事项跟踪。",
+        "en": "Bilingual reference covers configuration, API, grants, coordinates, consistency, upgrades and cross-JDK evidence. Connector combinations continue under their corresponding compatibility requirements."
       },
       "acceptance": {
         "zh-CN": "配置字段、权限、状态码、请求/命令/计划版本、Source坐标、目标一致性及源×目标×JDK矩阵都有对应样例和实测状态；增加或改字段同时更新双语文档。",
@@ -1278,8 +1278,18 @@
       ],
       "evidence": [
         "docs/zh-CN/pipeline-v3.md",
-        "docs/en/validation.md"
-      ]
+        "docs/en/validation.md",
+        "docs/en/compatibility.md",
+        "docs/zh-CN/compatibility.md",
+        "tests/sdd-check.py"
+      ],
+      "verification": {
+        "artifactSha256": "2dbfee089f6a7ef59296d38a6398b3a2393ef1cf045695aebec88216550e6068",
+        "artifactKind": "bilingual compatibility and API reference",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
+        "profile": "124 Markdown files checked; both languages map 21 connector IDs, version profiles and public API references to exact runtime provenance and operational guides."
+      }
     },
     {
       "id": "DO-05",

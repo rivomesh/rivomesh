@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.27 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.28 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,22 DONE, 25 PARTIAL and 1 NEW, with 26 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,23 DONE, 24 PARTIAL and 1 NEW, with 25 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -71,7 +71,7 @@ Implementation:48requirements,22 DONE, 25 PARTIAL and 1 NEW, with 26 open. RC-01
 | DO-01 | P0 / DONE | Bilingual traceable SDD baseline | All 48 requirements, tasks and verdicts are aligned by stable ID. The verifier checks bilingual criteria, archived evidence and progress totals. |
 | DO-02 | P1 / PARTIAL | Deployment and cluster operations docs | Existing deployment artifacts do not cover new cluster control/session models. |
 | DO-03 | P1 / DONE | Recovery scenarios and FAQ | The bilingual runbook covers promotion, log loss, SQL/ack, node, storage, sessions, manual recovery and cutover with actions and product boundaries. |
-| DO-04 | P1 / PARTIAL | Configuration/API/compatibility and upgrade docs | Partial handbooks lack new APIs and a unified profile index. |
+| DO-04 | P1 / DONE | Configuration/API/compatibility and upgrade docs | Bilingual reference covers configuration, API, grants, coordinates, consistency, upgrades and cross-JDK evidence. Connector combinations continue under their corresponding compatibility requirements. |
 | DO-05 | P1 / PARTIAL | Documentation and evidence release gates | Archives/hash/preview checks exist without a complete requirement release gate. |
 
 ## Preserved earlier scope
