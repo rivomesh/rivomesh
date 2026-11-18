@@ -1609,8 +1609,8 @@
         "en": "Report retention and real-browser acceptance"
       },
       "gap": {
-        "zh-CN": "原生 Chrome 已通过登录、刷新续登、诊断键盘与无障碍名称、移动端布局和退出。完整报告目录、scratch 清理和其他工作流仍待完成。",
-        "en": "Native Chrome passed login, cookie reload, diagnostic keyboard and accessible name, mobile layout and logout. Full report catalog, scratch cleanup and more workflows remain."
+        "zh-CN": "真实 Chrome 已通过登录、续登、诊断、报告目录、移动端及退出。两入口实测 Agent 重启后的历史报告检索，摘要暂存文件按原锁清理。凭据保留策略和更多完整浏览器工作流待验。",
+        "en": "Real Chrome passed login, reload, diagnostics, report browsing, mobile and logout. Both controllers found historical reports after Agent restart, and summary staging cleanup uses the report lock. Receipt retention and additional browser workflows remain."
       },
       "acceptance": {
         "zh-CN": "提供授权报告/凭据检索、保留与活动文件保护；真实浏览器验证跨节点、刷新登录、计划确认、错误恢复和大表分页，补齐可访问性检查。",
@@ -1625,7 +1625,9 @@
         "docs/verification/README.md",
         "docs/zh-CN/managed-validation.md",
         "tests/ui/browser-smoke.mjs",
-        "docs/verification/baseline.json"
+        "docs/verification/baseline.json",
+        "sync-app/src/main/java/io/github/rivomesh/validation/ValidationStore.java",
+        "tests/global-control-pipeline.py"
       ]
     },
     {

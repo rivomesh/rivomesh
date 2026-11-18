@@ -993,6 +993,27 @@ public final class TaskService implements AutoCloseable {
         Map<String,Object> result=backend.recoveryPage(definition,subscription,cursor,limit,gaps);
         synchronized(this){if(recoveryRead(id,actor).config!=definition)throw new Conflict("REVISION_CHANGED");if(!Objects.equals(authority,accounts().revision))throw new SecurityException("FORBIDDEN");AuditStore.Event event=new AuditStore.Event();event.kind=gaps?"DATA_GAPS_READ":"SKIP_PLANS_READ";event.action=gaps?"READ_DATA_GAPS":"READ_SKIP_PLANS";event.taskId=id;event.subjectId=subscription;event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;}
     }
+    Map<String,Object> validationReports(String id,String after,int limit,AccessControl.Principal actor)throws Exception{
+        TaskDefinition definition;
+        synchronized(this){
+            ensureOpen();
+            currentActor(actor);
+            if(actor==null||!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
+            definition=require(id).config;
+        }
+        if(definition.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
+        Map<String,Object> page=io.github.rivomesh.validation.ValidationStore.catalog(reports(id),after,limit);
+        synchronized(this){
+            ensureOpen();
+            currentActor(actor);
+            if(definition!=require(id).config)throw new Conflict("REVISION_CHANGED");
+            AuditStore.Event event=new AuditStore.Event();
+            event.kind="VALIDATION_CATALOG_READ";event.action="READ_VALIDATION_CATALOG";event.taskId=id;
+            event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";
+            appendAudit(event);
+        }
+        return page;
+    }
     synchronized Map<String,Object> validationReport(String id,String reportId,AccessControl.Principal actor)throws Exception{
         currentActor(actor);if(actor==null||!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");Entry entry=require(id);
         if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Map<String,Object> result=backend.validationReport(entry.config,reports(id),reportId);

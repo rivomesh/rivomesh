@@ -7,9 +7,11 @@ import java.nio.*;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.sql.*;
+import java.time.Instant;
 import java.util.*;
 
 /** Private disk staging. Source scans are sealed before target scans can produce differences. */
@@ -62,6 +64,58 @@ public final class ValidationStore implements AutoCloseable {
         return new ValidationStore(directory,m);
     }
     public static ValidationStore open(Path root,String id)throws Exception{return new ValidationStore(reportPath(root,id),null);}
+
+    private record ReportEntry(String id,long created) {
+        String cursor(){return created+"_"+id;}
+        Map<String,String> view(){return Map.of("id",id,"createdAt",Instant.ofEpochMilli(created).toString());}
+    }
+
+    /** Lists immutable report identities without opening any report database or reading row values. */
+    public static Map<String,Object> catalog(Path root,String after,int limit)throws IOException{
+        if(limit<1||limit>25||after==null)throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
+        ReportEntry cursor=null;
+        if(!after.isEmpty()){
+            if(!after.matches("[0-9]{1,18}_[a-f0-9-]{36}"))
+                throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
+            int split=after.indexOf('_');
+            String id=after.substring(split+1);
+            if(!reportId(id))throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
+            cursor=new ReportEntry(id,Long.parseLong(after.substring(0,split)));
+        }
+        Path directory=root.toAbsolutePath().normalize();
+        if(Files.isSymbolicLink(directory))throw new IOException("VALIDATION_PATH_INVALID");
+        Comparator<ReportEntry> recency=Comparator.comparingLong(ReportEntry::created).reversed()
+                .thenComparing(ReportEntry::id);
+        NavigableSet<ReportEntry> matches=new TreeSet<>(recency);
+        if(Files.exists(directory,LinkOption.NOFOLLOW_LINKS)){
+            try(DirectoryStream<Path> children=Files.newDirectoryStream(directory)){
+                for(Path entry:children){
+                    String id=entry.getFileName().toString();
+                    if(!reportId(id)||!Files.isDirectory(entry,LinkOption.NOFOLLOW_LINKS)
+                            ||!Files.isRegularFile(entry.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS)
+                            ||!Files.isRegularFile(entry.resolve("summary.json"),LinkOption.NOFOLLOW_LINKS))continue;
+                    BasicFileAttributes attributes;
+                    try{attributes=Files.readAttributes(entry,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);}
+                    catch(NoSuchFileException removed){continue;}
+                    ReportEntry found=new ReportEntry(id,Math.max(0,attributes.creationTime().toMillis()));
+                    if(cursor!=null&&recency.compare(found,cursor)<=0)continue;
+                    matches.add(found);
+                    if(matches.size()>limit+1)matches.pollLast();
+                }
+            }
+        }
+        boolean more=matches.size()>limit;
+        if(more)matches.pollLast();
+        Map<String,Object> page=new LinkedHashMap<>();
+        page.put("reports",matches.stream().map(ReportEntry::view).toList());
+        page.put("nextCursor",more?matches.last().cursor():null);
+        return page;
+    }
+
+    private static boolean reportId(String id){
+        if(!id.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"))return false;
+        return UUID.fromString(id).toString().equals(id);
+    }
     private static Path reportPath(Path root,String id)throws Exception{
         if(id==null||!UUID.fromString(id).toString().equals(id))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Path base=root.toAbsolutePath().normalize();
         if(base.toString().indexOf(';')>=0||base.toString().chars().anyMatch(c->c<32)||Files.isSymbolicLink(base))throw new IOException("VALIDATION_PATH_INVALID");return base.resolve(id);
@@ -79,6 +133,11 @@ public final class ValidationStore implements AutoCloseable {
         }catch(Exception failure){if(channel!=null)try{channel.close();}catch(Exception close){failure.addSuppressed(close);}LOCAL_WRITERS.remove(directory);throw failure;}
         lockChannel=channel;lock=acquired;
         try{
+            try(DirectoryStream<Path> staging=Files.newDirectoryStream(directory,"summary-*.tmp")){
+                for(Path file:staging)
+                    if(file.getFileName().toString().matches("summary-[0-9]+\\.tmp")
+                            &&Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS))Files.deleteIfExists(file);
+            }
             for(String name:Arrays.asList("rows.mv.db","rows.trace.db","summary.json"))if(Files.isSymbolicLink(path.resolve(name)))throw new IOException("VALIDATION_SYMLINK");
             String url="jdbc:h2:file:"+path.resolve("rows")+";WRITE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE;CACHE_SIZE=8192;MAX_MEMORY_ROWS=1000"+(initial==null?";IFEXISTS=TRUE":"");
             db=JdbcConnections.open("org.h2.Driver",url,"","");db.setAutoCommit(false);

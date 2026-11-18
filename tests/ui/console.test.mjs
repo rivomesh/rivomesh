@@ -75,6 +75,32 @@ test('summary readers do not receive raw-detail buttons',async()=>{
  for(const role of ['VIEWER','OPERATOR']){const ui=detailFixture(role);try{await login(ui);ui.d.querySelector('[data-validation-report]').click();await flush();assert.match(ui.d.getElementById('task-detail').textContent,/db\.<img src=x>/);assert.equal(ui.d.querySelector('[data-validation-differences]'),null);assert.equal(ui.d.querySelector('[data-validation-values]'),null);}finally{ui.dom.window.close();}}
 });
 
+test('historical validation reports can be discovered after their operations leave the task history',async()=>{
+ const task={id:'archive',formatVersion:3,workerState:'STOPPED',operations:[],status:{},destinations:[]};
+ const ui=setup([task],'VIEWER'),fetch=ui.w.fetch;
+ const first={id:'archived-first',createdAt:'2026-11-17T07:00:00Z'};
+ const second={id:'archived-second',createdAt:'2026-11-16T07:00:00Z'};
+ ui.w.fetch=async(path,options)=>{
+  if(path.startsWith('/api/tasks/archive/validations?')){
+   const next=path.includes('&after=');
+   return{ok:true,status:200,json:async()=>({reports:[next?second:first],nextCursor:next?null:'older-cursor'})};
+  }
+  if(path==='/api/tasks/archive/validations/'+second.id)
+   return{ok:true,status:200,json:async()=>({id:second.id,state:'COMPLETE',code:'VALIDATION_MATCH',results:{}})};
+  return fetch(path,options);
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('[data-validation-catalog]').click();await flush();
+  assert.ok(ui.d.querySelector('[data-validation-report="'+first.id+'"]'));
+  const next=[...ui.d.querySelectorAll('.validation-catalog-actions button')].find(button=>button.textContent==='下一页');
+  next.click();await flush();
+  ui.d.querySelector('[data-validation-report="'+second.id+'"]').click();await flush();
+  assert.match(ui.d.querySelector('.validation-panel').textContent,/archived-second.*数据匹配/);
+  assert.equal(ui.d.querySelector('[data-validation-values]'),null);
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery shows native header evidence as text and still requires retained event contents',async()=>{
  const task={id:'headers',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_DECODE',error_code:'BINLOG_SCHEMA_WIDTH_CHANGED'}};

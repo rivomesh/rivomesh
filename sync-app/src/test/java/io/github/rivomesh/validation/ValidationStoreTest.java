@@ -88,6 +88,41 @@ class ValidationStoreTest {
     @Test void anActiveReportRejectsASecondWriter()throws Exception{
         TableSchema t=table(false);PipelineValidationBarrier.Certificate cert=certificate(t);try(ValidationStore store=create(t,cert,new ValidationStore.Limits())){assertEquals("VALIDATION_REPORT_BUSY",assertThrows(SyncFailure.class,()->ValidationStore.open(root,cert.id)).code);}
     }
+    @Test void retainedReportCatalogPagesWithoutOpeningTheReportDatabases()throws Exception{
+        TableSchema table=table(false);
+        PipelineValidationBarrier.Certificate first=certificate(table),second=certificate(table);
+        try(ValidationStore open=create(table,first,new ValidationStore.Limits())){
+            try(ValidationStore other=create(table,second,new ValidationStore.Limits())){
+                Map<String,Object> a=ValidationStore.catalog(root,"",1);
+                String idA=Codec.JSON.valueToTree(a).path("reports").get(0).path("id").asText();
+                assertNotNull(a.get("nextCursor"));
+                Map<String,Object> b=ValidationStore.catalog(root,(String)a.get("nextCursor"),1);
+                String idB=Codec.JSON.valueToTree(b).path("reports").get(0).path("id").asText();
+                assertEquals(Set.of(first.id,second.id),Set.of(idA,idB));
+                assertNull(b.get("nextCursor"));
+                assertEquals("SCANNING_SOURCE",open.manifest().state);
+                assertEquals("SCANNING_SOURCE",other.manifest().state);
+            }
+        }
+        assertThrows(IllegalArgumentException.class,()->ValidationStore.catalog(root,"../reports",20));
+    }
+    @Test void reopeningAReportRemovesAnInterruptedProjection()throws Exception{
+        TableSchema table=table(false);
+        PipelineValidationBarrier.Certificate certificate=certificate(table);
+        try(ValidationStore report=create(table,certificate,new ValidationStore.Limits())){
+            report.source(table.id,row(1,"present",null));
+            report.finishSourceTable(table.id);
+            report.completeSource();
+        }
+        Path directory=root.resolve(certificate.id);
+        Path abandoned=Files.writeString(directory.resolve("summary-123.tmp"),"interrupted write");
+        Path other=Files.writeString(directory.resolve("operator-notes.tmp"),"keep");
+        try(ValidationStore report=ValidationStore.open(root,certificate.id)){
+            assertTrue(report.manifest().sourceComplete);
+            assertFalse(Files.exists(abandoned));
+            assertEquals("keep",Files.readString(other));
+        }
+    }
     @Test void targetRetryDiscardsPartialTargetsAndRetainsTheSealedSource()throws Exception{
         TableSchema t=table(false);PipelineValidationBarrier.Certificate c=certificate(t);String seal;
         try(ValidationStore store=create(t,c,new ValidationStore.Limits())){store.source(t.id,row(1,"expected",null));store.finishSourceTable(t.id);store.completeSource();seal=store.manifest().sourceSeal;store.target("target",t.id,null,row(1,"partial-target",null));store.flush();}

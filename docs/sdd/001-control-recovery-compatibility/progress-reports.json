@@ -13,8 +13,7 @@
     "The real Temurin 21 Dockerfile image ran nonroot and passed 19 native MySQL/SQL/control/recovery checks. Its exact embedded JAR also passed seven Chrome cases. Helm and checked-in Kubernetes YAML are under live verification on the same image."
   ],
   "inProgress": [
-    "CP-04 shared-journal Agent transfer and stale-execution admission.",
-    "LG-09 durable validation report discovery and cleanup after operation history ages out."
+    "CP-04 shared-journal Agent transfer and stale-execution admission."
   ],
   "reportContents": [
     "Current totals",
@@ -43,10 +42,11 @@
     "Continue managed Agent relocation and remaining compatibility profiles.",
     "Extend LG-09 report discovery, retention and real browser recovery workflows."
   ],
-  "currentCandidateArtifact": "be6406c60f2b2c5ab0bd00ecc64cbf28cfd09e8e764d137e19c38f26cdc7dbdb",
-  "currentCandidateScope": "Exact Temurin 21 Dockerfile candidate validated on Linux, Docker, native SQL, Chrome, Helm and native Kubernetes",
+  "currentCandidateArtifact": "480c85fa9a20bb1e6d331a360fdefbf4e1b9a9e768aac5c85d13579e2ef06794",
+  "currentCandidateScope": "Temurin 21 report metadata catalog, restart persistence and private scratch cleanup",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
   "newSinceLastReport": [
-    "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed."
+    "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed.",
+    "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests."
   ]
 }

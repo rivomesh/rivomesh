@@ -137,6 +137,12 @@ try{
   assert(await evaluate('!document.querySelector(".worker-diagnostics")'));
   passed('Capture diagnostics has an accessible dialog name and works through Enter and Escape');
 
+  await evaluate('document.querySelector("[data-validation-catalog]").click()');
+  await waitFor(()=>evaluate('document.querySelector(".validation-panel")?.textContent.includes("暂无留存报告")'),
+                'native validation report catalog');
+  await evaluate('[...document.querySelectorAll(".validation-catalog-actions button")].find(button=>button.textContent==="返回最新报告").click()');
+  passed('The workbench opens the real stored validation report catalog and returns to recent jobs');
+
   await evaluate('document.querySelector("#language").click()');
   assert.equal(await evaluate('document.documentElement.lang'),'en');
   await screenshot('workspace-wide');

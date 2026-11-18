@@ -131,6 +131,13 @@ button, input, select, textarea {
   overflow-wrap: anywhere;
 }
 
+.validation-catalog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 13px 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   button {
     transition: none;

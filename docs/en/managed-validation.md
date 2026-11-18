@@ -73,3 +73,9 @@ POST `/api/tasks/<taskId>/validations/<reportId>/differences` with `{"target":"p
 Before releasing values, the server checks difference hashes, raw-row checksums and row identity and requires report/scope-linked audit. Business values never enter audit/controller operations. The API checks total UTF-8 raw JSON lengths before fetching CLOBs and refuses more than1MiB with VALIDATION_DETAIL_TOO_LARGE; it never truncates or substitutes an empty row. Large-row chunking/streaming export remains pending; complete private report data is retained. Values remain in page memory and are cleared on logout. These are historical cut values, not live queries or repair.
 
 Repair is separate from read-only validation. The new [managed repair workflow](managed-repair.md) requires plan review and explicit confirmation;validation itself never changes destination data.
+
+### Historical report directory
+
+In **Data validation**, choose **Browse historical reports** to open reports retained in the task owner's data directory. The list shows report IDs and creation times, newest first. It remains available after the original operation leaves recent history. Open a report to read its summary. Detailed differences and row values still use the task's administrator grants. The report remains readable after the Agent reopens its original directory.
+
+Clients can page metadata using `GET /api/tasks/{id}/validations?limit=20` and pass `nextCursor` as `after`. The task owner removes abandoned summary staging files when it next acquires the report lock. Include retained reports and review evidence in the task's protected backup policy.

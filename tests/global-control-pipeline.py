@@ -1225,6 +1225,16 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             values = http('node-b', report_path + '/values', {'target': row['target'], 'tableId': row['tableId'], 'identityHash': page['items'][0]['identityHash']})
             assert ('reviewed-drift' if names[row['tableId']] == 'items' else '99') in json.dumps(values)
         passed('Remote validation pauses CDC and exposes shared report identities, differences and authorized row values')
+        catalog_path=route+'/validations'
+        terminate_owner()
+        restart_owner()
+        catalogs=[http(node,catalog_path+'?limit=1') for node in ('node-a','node-b')]
+        assert catalogs[0]==catalogs[1] and catalogs[0]['nextCursor'] is None
+        saved=catalogs[0]['reports'][0]
+        assert saved['id']==report_id and saved['createdAt'] and set(saved)=={'id','createdAt'}
+        assert http('node-b',report_path)['results']==report['results']
+        http('node-b',catalog_path+'?limit=26',expected=400)
+        passed('After Agent restart both management entries discover the durable report and its metadata only')
         plan, _ = action('REPAIR_PLAN', repair={'reportId': report_id, 'scope': scope})
         wait(lambda: operation(plan).get('repair', {}).get('planId'), 'visible plan identity')
         plan_id = operation(plan)['repair']['planId']

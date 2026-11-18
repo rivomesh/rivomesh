@@ -227,3 +227,8 @@ Candidate `15a81de54070880f0eaa211e4f00dca3e90696f3334f74492506a6a0248502bd` pas
 ### Java 21 exact release candidate
 
 The Dockerfile produced nonroot ARM64 image `sha256:7fd83307056d33e6e87b6734de8da5be77c8fe07324b7bb00c3c74cda11792c8` with Temurin 21.0.13+9 and JAR `be6406c60f2b2c5ab0bd00ecc64cbf28cfd09e8e764d137e19c38f26cdc7dbdb`. The same JAR started as UID 10001 on Linux with the shipped manual configuration and writable state paths. The image passed 19 live MySQL, PostgreSQL and distributed management checks, including controller loss, control-store interruption, target SQL recovery, isolated owner restart, validation and repair. Helm and native YAML each passed four actual Kubernetes v1.31.0 cases for login refresh, CSI remount, configuration rollout and Secret rotation. Chrome passed seven and the gate parsed all 25 configuration examples. SHA checks bound the three live manifests to the same JAR. [Release verifier](../../tests/release-evidence-gate.py) · [Manifests](baseline.json)
+
+
+### Durable validation report directory
+
+Candidate `480c85fa9a20bb1e6d331a360fdefbf4e1b9a9e768aac5c85d13579e2ef06794` passed nineteen native cases, eight real Chrome cases, 122 DOM tests and 35 focused Java tests. Both Controllers found the same actual validation report after Agent restart and paged its metadata without exposing row contents. The report could still be opened for authorized inspection and repair. The browser exercised the actual catalog endpoint, with DOM coverage for opening a retained report whose operation has aged out. The workspace lock protects active projections, and reopening a report removes abandoned summary staging files. [Report guide](../en/managed-validation.md) · [Manifests](baseline.json)

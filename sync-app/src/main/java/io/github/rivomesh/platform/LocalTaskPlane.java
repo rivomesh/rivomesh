@@ -28,6 +28,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case CONFIG_UPDATE:return tasks.updateConfiguration(r.taskId,r.document,r.revision,r.requestId,actor);
             case RESTORE_PREVIEW:return tasks.previewRestoreConfiguration(r.taskId,r.reference,r.revision);
             case RESTORE:return tasks.restoreConfiguration(r.taskId,r.reference,r.revision,r.requestId,actor);
+            case VALIDATION_REPORTS:return tasks.validationReports(r.taskId,r.cursor,r.limit,actor);
             case VALIDATION_REPORT:return tasks.validationReport(r.taskId,r.reportId,actor);
             case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
             case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);

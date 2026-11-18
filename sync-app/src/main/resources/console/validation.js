@@ -3,7 +3,54 @@ window.RivomeshValidation=(()=>{
  const bridge=window.RivomeshConfiguration,{api,can,notify,refresh,requestId,t,explain}=bridge;
  const text=(tag,value,cls)=>{const element=document.createElement(tag);element.textContent=value;if(cls)element.className=cls;return element;};
  const badge=value=>text('span',t(value),'badge');
- const drafts=new Map(),reports=new Map(),plans=new Map();
+ const drafts=new Map(),reports=new Map(),plans=new Map(),catalogs=new Map();
+ const catalogLabels={
+  zh:{open:'浏览历史校验报告',retained:'已留存',empty:'暂无留存报告',back:'返回最新报告'},
+  en:{open:'Browse historical reports',retained:'Retained',empty:'No retained reports',back:'Back to latest reports'}
+ };
+ const catalogLabel=key=>catalogLabels[document.documentElement.lang.startsWith('zh')?'zh':'en'][key];
+
+ async function loadCatalog(task,after='',previous=[]){
+  const current=catalogs.get(task.id);
+  if(current?.loading)return;
+  const pending={...current,loading:true};
+  catalogs.set(task.id,pending);
+  bridge.render();
+  try{
+   const path='/tasks/'+encodeURIComponent(task.id)+'/validations?limit=20'
+    +(after?'&after='+encodeURIComponent(after):'');
+   const page=await api(path);
+   if(catalogs.get(task.id)===pending)catalogs.set(task.id,{page,after,previous});
+  }catch(error){
+   if(catalogs.get(task.id)===pending){
+    if(current)catalogs.set(task.id,current);else catalogs.delete(task.id);
+    notify(error.message);
+   }
+  }
+  bridge.render();
+ }
+ function renderCatalog(section,task){
+  const state=catalogs.get(task.id);
+  const controls=text('div','','validation-catalog-actions');
+  const browse=text('button',catalogLabel('open'),'quiet');
+  browse.dataset.validationCatalog='open';
+  browse.disabled=!!state?.loading;
+  browse.onclick=()=>loadCatalog(task);
+  controls.append(browse);
+  if(state?.page){
+   const back=text('button',catalogLabel('back'),'quiet');
+   back.onclick=()=>{catalogs.delete(task.id);bridge.render();};
+   controls.append(back);
+   const previous=text('button',label('previous'),'quiet'),next=text('button',label('next'),'quiet');
+   previous.disabled=!!state.loading||!state.previous.length;
+   next.disabled=!!state.loading||!state.page.nextCursor;
+   previous.onclick=()=>loadCatalog(task,state.previous.at(-1),state.previous.slice(0,-1));
+   next.onclick=()=>loadCatalog(task,state.page.nextCursor,[...state.previous,state.after]);
+   controls.append(previous,next);
+  }
+  section.append(controls);
+  return state?.page;
+ }
  const words={zh:{title:'数据校验',help:'校验会短时阻塞 MySQL 写入，并暂停同步。完成后需检查结果，再显式恢复。当前首批真实验收目标为 MySQL/PostgreSQL；其他 SQL 目标须单独验收。',targets:'选择事务型目标',gate:'源写锁上限（秒）',read:'源扫描上限（秒）',targetRead:'目标表扫描上限（秒）',row:'单行预算（MiB）',quota:'暂存逻辑预算（MiB）',start:'开始逐行校验',cancel:'取消校验',view:'查看报告',retry:'继续目标比对',report:'校验报告',source:'源行数',target:'目标行数',missing:'缺失',extra:'多余',changed:'内容变更',table:'表',destination:'目标',previous:'上一页',next:'下一页',empty:'暂无校验记录',pending:'作业已保存，正在等待或执行。取消不恢复同步。',MATCH:'数据匹配',DIFF:'发现差异',scope:'至少选择一个事务型 SQL 目标。',invalid:'请输入有效的时间和资源预算。',differences:'查看差异',raw:'查看原始值（敏感数据）',expected:'源校验点的值',actual:'目标校验点的值',rowId:'内部行身份',noRow:'不存在该行',nullValue:'SQL NULL',column:'字段',kind:'差异类型',historical:'这是指定历史校验点的结果，不表示当前数据仍一致，也不执行修复或业务切换。'},en:{title:'Data validation',help:'Validation briefly blocks MySQL writes and pauses replication. Review results, then resume explicitly. First native profiles cover MySQL/PostgreSQL; other SQL destinations require separate acceptance.',targets:'Select transactional destinations',gate:'Source write gate (seconds)',read:'Source scan limit (seconds)',targetRead:'Target table scan limit (seconds)',row:'Per-row budget (MiB)',quota:'Logical staging budget (MiB)',start:'Compare rows',cancel:'Cancel validation',view:'View report',retry:'Retry target comparison',report:'Validation report',source:'Source rows',target:'Target rows',missing:'Missing',extra:'Extra',changed:'Changed',table:'Table',destination:'Destination',previous:'Previous',next:'Next',empty:'No validation jobs yet',pending:'Job saved; queued or executing. Cancellation does not resume replication.',MATCH:'Data matches',DIFF:'Differences found',scope:'Select at least one transactional SQL destination.',invalid:'Enter valid time and resource limits.',differences:'View differences',raw:'Reveal raw values (sensitive)',expected:'Source cut value',actual:'Target cut value',rowId:'Internal row identity',noRow:'Row absent',nullValue:'SQL NULL',column:'Column',kind:'Difference kind',historical:'This result describes a historical cut, not current equality, repair or permission to cut over.'}};
  const label=key=>words[document.documentElement.lang.startsWith('zh')?'zh':'en'][key]||key;
  const translationZh={validate:'数据校验',validate_retry:'继续目标比对',validate_cancel:'取消校验',VALIDATION_MATCH:'校验数据匹配',VALIDATION_DIFFERENCES:'校验发现差异',VALIDATION_CANCELLED:'校验已取消，请检查任务暂停状态',VALIDATION_CANCEL_REQUESTED:'已请求取消校验',VALIDATION_REPORT_BUSY:'校验正在使用报告，请稍后查看。',VALIDATION_REPORT_NOT_CREATED:'尚未建立报告。请查看操作记录中的失败原因。',VALIDATION_WORKER_REQUIRED:'请先启动当前 Worker，完成全量并进入增量后再校验。',VALIDATION_NEW_SOURCE_VIEW_REQUIRED:'源扫描未完成且原视图已丢失。检查并恢复任务后，重新开始校验。',VALIDATION_BARRIER_MOVED:'任务状态或断点已变化，需要新的校验。',VALIDATION_V3_REQUIRED:'数据校验仅支持 V3 任务。',VALIDATION_DETAIL_TOO_LARGE:'原始行超过界面显示预算（1MiB），请保留私有报告并使用受控离线工具处理。',VALIDATION_DIFFERENCE_NOT_FOUND:'该身份没有对应的差异记录。',VALIDATION_DIFF_CORRUPT:'差异内容校验失败，未返回原始值。'};
@@ -54,9 +101,20 @@ window.RivomeshValidation=(()=>{
    const start=text('button',label('start'),'primary');start.dataset.validationAction='start';start.disabled=pending||task.workerState!=='RUNNING'||task.status.run_state!=='RUNNING'||!choices.length;
    start.onclick=()=>{const ids=[...draft.targets].filter(id=>choices.some(target=>target.id===id)).sort();if(!ids.length){notify(label('scope'));return;}if(!Number.isInteger(draft.gate)||draft.gate<1||draft.gate>120||!Number.isInteger(draft.read)||draft.read<draft.gate||draft.read>86400||!Number.isInteger(draft.quota)||draft.quota<4||draft.quota>1048576||!Number.isInteger(draft.row)||draft.row<1||draft.row>32||draft.quota<draft.row*4||!Number.isInteger(draft.targetRead)||draft.targetRead<1||draft.targetRead>86400){notify(label('invalid'));return;}submit(task,'VALIDATE',{targets:ids,gateMillis:draft.gate*1000,sourceMillis:draft.read*1000,targetMillis:draft.targetRead*1000,limits:{maximumBytes:draft.quota*1048576,maximumRowBytes:draft.row*1048576,maximumRows:1000000000}});};section.append(start);
   }
-  const jobs=task.operations.filter(operation=>operation.validation).slice().reverse();if(!jobs.length)section.append(text('p',label('empty'),'subtle'));
+  const page=renderCatalog(section,task);
+  const recent=task.operations.filter(operation=>operation.validation).slice().reverse();
+  const retained=page?.reports||[];
+  const jobs=page?[
+   ...recent.filter(op=>op.status==='PENDING'&&!retained.some(report=>report.id===op.validation.reportId)),
+   ...retained.map(report=>({...recent.find(op=>op.validation.reportId===report.id),
+    validation:{reportId:report.id},createdAt:report.createdAt,retained:true}))
+  ]:recent;
+  if(!jobs.length)section.append(text('p',page?catalogLabel('empty'):label('empty'),'subtle'));
   for(const job of jobs){
-   const card=text('article','','subscription-card'),id=job.validation.reportId;card.append(text('strong',id),badge(job.status),text('p',job.code?explain(job.code):label('pending')));
+   const card=text('article','','subscription-card'),id=job.validation.reportId;
+   card.append(text('strong',id),badge(job.status||catalogLabel('retained')));
+   if(job.createdAt)card.append(text('p',new Date(job.createdAt).toLocaleString(),'subtle'));
+   if(job.code||!job.retained)card.append(text('p',job.code?explain(job.code):label('pending')));
    if(job.status==='PENDING'&&can('TASK_CONFIG')){const cancel=text('button',label('cancel'));cancel.dataset.validationAction='cancel';cancel.disabled=job.cancelRequested;cancel.onclick=()=>submit(task,'VALIDATE_CANCEL');card.append(cancel);}
    const view=text('button',label('view'));view.dataset.validationReport=id;view.disabled=job.status==='PENDING';view.onclick=async()=>{try{const report=await api('/tasks/'+encodeURIComponent(task.id)+'/validations/'+encodeURIComponent(id));reports.set(task.id+'/'+id,{report,page:0});bridge.render();}catch(error){notify(error.message);}};card.append(view);
    const cached=reports.get(task.id+'/'+id);if(cached){const report=cached.report;if(!cached.selected)cached.selected=new Set();card.append(text('p',report.code==='VALIDATION_MATCH'?label('MATCH'):report.code==='VALIDATION_DIFFERENCES'?label('DIFF'):report.state),text('p',label('historical'),'subtle'));const table=text('table'),head=text('tr');for(const key of ['destination','table','source','target','missing','extra','changed'])head.append(text('th',label(key)));table.append(head);
@@ -66,5 +124,5 @@ window.RivomeshValidation=(()=>{
    }section.append(card);
   }root.append(section);renderRepairs(root,task,pending);
  }
- return{render,close(){drafts.clear();reports.clear();plans.clear();}};
+ return{render,close(){drafts.clear();reports.clear();plans.clear();catalogs.clear();}};
 })();

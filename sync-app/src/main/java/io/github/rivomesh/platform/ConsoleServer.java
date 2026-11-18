@@ -184,6 +184,13 @@ public final class ConsoleServer implements AutoCloseable {
                     TaskRequest request=TaskRequest.of(TaskRequest.Kind.FAILURE_EVIDENCE_EVENTS,parts[3]);request.reference=parts[5];request.action=input.path("view").asText("RAW");request.cursor=input.path("from").asText("0");request.limit=input.path("limit").asInt(20);json(exchange,200,control.invoke(request,principal));return;
                 }
             }
+            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&method.equals("GET")){
+                Map<String,String> query=nodeQuery(exchange.getRequestURI().getRawQuery());
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_REPORTS,parts[3]);
+                request.cursor=query.getOrDefault("after","");
+                request.limit=Integer.parseInt(query.getOrDefault("limit","20"));
+                json(exchange,200,control.invoke(request,principal));return;
+            }
             if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&method.equals("GET")){TaskRequest request=TaskRequest.of(TaskRequest.Kind.VALIDATION_REPORT,parts[3]);request.reportId=parts[5];json(exchange,200,control.invoke(request,principal));return;}
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("validations")&&Arrays.asList("differences","values").contains(parts[6])&&method.equals("POST")){
                 if(!principal.administers()){error(exchange,403,"FORBIDDEN");return;}JsonNode input=body(exchange);boolean values=parts[6].equals("values");String identity=values?input.path("identityHash").asText(null):null;if(values&&(identity==null||!identity.matches("[0-9a-f]{64}")))throw new IllegalArgumentException("VALIDATION_IDENTITY_INVALID");
@@ -257,7 +264,7 @@ public final class ConsoleServer implements AutoCloseable {
         return expected.equals(origin);
     }
     private static String auditAction(String method,String path){
-        String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations/.*")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
+        String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
         return (Arrays.asList("GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS").contains(method)?method:"OTHER")+"_"+action;
     }
     private static Map<String,Long> auditQuery(String query){
