@@ -8038,5 +8038,66 @@
       "The first capacity competitor used managed original-Agent configuration, which correctly refused its other node before capacity admission. The final fixture uses an unbound competing task."
     ],
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --control-product POSTGRESQL --artifact <candidate jar> --output target/managed-writer-proof"
+  },
+  "damengJava21ExternalJdbcNative": {
+    "native": {
+      "status": "PASS",
+      "project": "rivomesh-dm-external-f0a2956173",
+      "runtime": [
+        "openjdk version \"21.0.13\" 2026-10-20 LTS",
+        "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+      ],
+      "fixtureSha256": "db22abd0dae03b186e86a3d0a91ce141a2014478c990350588084960e3de2049",
+      "profileSha256": "adaa1c87e4980be86d20b27b36334b902027849b35559b7526c20eaa4a88fd5c",
+      "composeSha256": "6ba2fefebab4d285a1b36054636f5adbe7b5c6317a2b5dbceddd7325008e7884",
+      "artifactSha256": "520aecc1fff7de42aaf4c51ea45b61d56a2a333675a88008bae56a3b0f3807ce",
+      "mysqlDriverSha256": "d77962877d010777cff997015da90ee689f0f4bb76848340e1488f2b83332af5",
+      "dmDriverSha256": "9af4ff4d6ed15948507f528a18ab9b7196b3600d9169ad7998c19869031a3c6f",
+      "services": {
+        "dm": {
+          "imageId": "sha256:eb5f243c8f4322596d0eac611c0fa2d8cd8a03a5d3f69889f3549a530354b210",
+          "volume": "/opt/dmdbms/data",
+          "readOnlyBindSha256": {
+            "/fixture/start.sh": "f73ee9feb37d5205c6842f781c055f30b10c6fe94c207a378e0ea7a6906f5d98",
+            "/fixture/health.sh": "a5af72a3f86bffb5525271d8d3ed286c33d5d8168b6ec2a5552093daf580e114"
+          }
+        },
+        "mysql": {
+          "imageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+          "volume": "/var/lib/mysql",
+          "readOnlyBindSha256": {}
+        },
+        "postgres": {
+          "imageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+          "volume": "/var/lib/postgresql/data",
+          "readOnlyBindSha256": {}
+        }
+      },
+      "sameEndpointAcrossRestart": true,
+      "checks": [
+        "DM_NATIVE_CONTRACT_ACCEPTED",
+        "DM_EXTERNAL_ORIGIN_AND_NATIVE_ERROR_ACCEPTED",
+        "DM_EXISTING_LAYOUTS_ACCEPTED",
+        "DM_EXTERNAL_MISSING_DRIVER_ACCEPTED",
+        "DM_NATIVE_TYPES_ACCEPTED",
+        "DM_SNAPSHOT_ACCEPTED",
+        "DM_CDC_KEYLESS_ACCEPTED",
+        "DM_OUTAGE_CATCHUP_ACCEPTED",
+        "DM_WORKER_RESTART_ACCEPTED",
+        "DM_POSTGRES_REPAIR_ACCEPTED",
+        "DM_NATIVE_SQL_REPAIR_ACCEPTED",
+        "DM_PIPELINE_ACCEPTED"
+      ],
+      "versionAndProfile": [
+        "DM_FIXTURE_MYSQL_VERSION: 8.4.13",
+        "DM_FIXTURE_POSTGRES_VERSION: PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+        "DM_NATIVE_PROFILE: {product=DM DBMS, version=8.1.4.80, compatibilityMode=0, encoding=UTF8, caseSensitive=1, blankPadMode=1, role=NORMAL, status=OPEN, commitWrite=IMMEDIATE,WAIT}"
+      ],
+      "cleanupExitCode": 0
+    },
+    "scope": "Native Dameng 8.1.4.80 in compatibility mode 0 and operator-supplied DM JDBC 8.1.3.140 plus MySQL Connector/J 8.4.0 on Temurin 21. MySQL business capture sends to Dameng and an independent PostgreSQL peer; one exact external distribution jar, three disposable native databases, verified loopback reconnect and SQL repair.",
+    "previousFixture": "The first run refused path alias mounting; a second run reproduced a published-port reassignment on Docker Desktop. Final run verified the same loopback port through restart and replay.",
+    "reproduce": "See docs/en/dm-v3.md native external JDBC profile."
   }
 }

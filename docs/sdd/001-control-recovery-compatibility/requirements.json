@@ -1189,8 +1189,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "Java 21 已实测 MySQL/PostgreSQL 双端 TLS 与重连，外置 MySQL 和四个厂商 JDBC 的包隔离与外置加载已验。其他厂商实连、TLS 及故障组合待验。",
-        "en": "Java 21 verified native MySQL/PostgreSQL TLS/reconnect and JDBC externalization for MySQL and four vendors with exact classpath admission. Further vendor endpoints, TLS and recovery profiles remain."
+        "zh-CN": "Java 21 已实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动的实连精度、原生 SQL 错误、故障续传和修正。已核对 MySQL 与四个厂商 JDBC 外置加载。其他厂商、TLS 及集群组合待验。",
+        "en": "Java 21 verified native MySQL/PostgreSQL TLS and reconnect, plus external Dameng JDBC class origin, native precision, SQL diagnostics, reconnect and repair. MySQL and four vendor JDBC packages have verified external classpath admission. Other vendor endpoints, TLS and cluster profiles remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1204,7 +1204,8 @@
         "docs/zh-CN/performance.md",
         "tests/global-control-pipeline.py",
         "tests/postgres-source-run.py",
-        "tests/mysql-tls-run.py"
+        "tests/mysql-tls-run.py",
+        "tests/dm-external-jdbc-native.py"
       ]
     },
     {

@@ -95,6 +95,8 @@ java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
   "$mysql_driver" "$gauss_driver" "$gbase_driver" "$kingbase_driver" "$dameng_driver"
 ```
 
+达梦实库档案使用同一种候选包，部署方的 classpath 只添加外置 Connector/J 和达梦驱动。实测涵盖连接认证、驱动加载来源、缺驱动拒绝、达梦原生错误处理和数据库重启后重连。[达梦实库复现](dm-v3.md#java-21-外置达梦驱动实库验收)
+
 ### 分发审核记录
 
 人工审核完成后，运行清单命令并附加 `--asf-review target/candidate/distribution-review.json`。审核记录包含以下字段。

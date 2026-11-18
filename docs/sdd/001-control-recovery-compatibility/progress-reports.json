@@ -68,7 +68,8 @@
   "currentCandidateScope": "Kafka native preceding receipt review integrated normal package, 49 targeted Java. Independent frozen candidate passed two KRaft checks.",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
-    "CP-04 opt-in managed writer enrollment and same-PostgreSQL transaction witness published. Twenty native integration cases and 58 exact Java built against the current app scope."
+    "CP-04 opt-in managed writer enrollment and same-PostgreSQL transaction witness published. Twenty native integration cases and 58 exact Java built against the current app scope.",
+    "JV-03 external Dameng JDBC profile published: 12 native tests on Java 21 verify exact external driver origins, actual vendor errors and numeric precision, target reconnect via the original address, Worker restart and independent repair."
   ],
   "lastScheduledReportAt": "2026-11-18T22:58:16+08:00",
   "lastVerifiedReactor": {

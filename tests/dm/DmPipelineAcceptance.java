@@ -12,7 +12,16 @@ import java.util.concurrent.TimeUnit;
 
 /** Actual MySQL source, PostgreSQL/Dm targets, journal and fat-JAR worker processes. */
 public final class DmPipelineAcceptance {
-    static final String JAR="/project/sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar";
+    static final String JAR=setting("RIVOMESH_DM_ARTIFACT","/project/sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar");
+    static final String MYSQL_DRIVER=System.getenv("RIVOMESH_DM_MYSQL_DRIVER");
+    static final String DM_DRIVER=System.getenv("RIVOMESH_DM_JDBC_DRIVER");
+    static final String MYSQL_ENDPOINT=setting("RIVOMESH_DM_MYSQL_ENDPOINT","mysql:3306");
+    static final String MYSQL_URL="jdbc:mysql://"+MYSQL_ENDPOINT+"/?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=3000&socketTimeout=10000";
+    static final String POSTGRES_URL="jdbc:postgresql://"+setting("RIVOMESH_DM_POSTGRES_ENDPOINT","postgres:5432")
+            +"/sync_test?connectTimeout=3&socketTimeout=10";
+    static final String DM_URL="jdbc:dm://"+setting("RIVOMESH_DM_TARGET_ENDPOINT","dm:5236")+"?connectTimeout=3000&socketTimeout=15000";
+    static final String JAVA=Path.of(System.getProperty("java.home"),"bin","java").toString();
+    static String setting(String name,String fallback){String value=System.getenv(name);return value==null?fallback:value;}
     final Path directory=Paths.get(System.getenv("RIVOMESH_DM_DIR"));
     final String id="dm_"+UUID.randomUUID().toString().replace("-","").substring(0,20);
     final PipelineConfig config=new PipelineConfig();
@@ -22,8 +31,8 @@ public final class DmPipelineAcceptance {
     interface Condition{boolean ready()throws Exception;}
     static void require(boolean condition,String message){if(!condition)throw new AssertionError(message);}
     void await(Condition condition)throws Exception{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(360);String last=null;while(System.nanoTime()<end){try{if(condition.ready())return;}catch(Exception failure){last=failure.getClass().getName();}Thread.sleep(100);}throw new AssertionError("Timed out waiting for real pipeline; last="+last);}
-    void source(String statement)throws Exception{try(Connection connection=JdbcConnections.open("com.mysql.cj.jdbc.Driver","jdbc:mysql://mysql:3306/?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=3000&socketTimeout=10000","root","Sync@Test123");Statement sql=connection.createStatement()){sql.execute(statement);}}
-    Connection postgres()throws Exception{return JdbcConnections.open("org.postgresql.Driver","jdbc:postgresql://postgres:5432/sync_test?connectTimeout=3&socketTimeout=10","sync_test","Sync@Test123");}
+    void source(String statement)throws Exception{try(Connection connection=JdbcConnections.open("com.mysql.cj.jdbc.Driver",MYSQL_URL,"root","Sync@Test123");Statement sql=connection.createStatement()){sql.execute(statement);}}
+    Connection postgres()throws Exception{return JdbcConnections.open("org.postgresql.Driver",POSTGRES_URL,"sync_test","Sync@Test123");}
     void pg(String statement)throws Exception{try(Connection connection=postgres();Statement sql=connection.createStatement()){sql.execute(statement);}}
     long pgCount(String table)throws Exception{try(Connection connection=postgres();Statement sql=connection.createStatement();ResultSet rows=sql.executeQuery("SELECT count(*) FROM "+Sql.pg(id+"_pg")+"."+Sql.pg(table))){rows.next();return rows.getLong(1);}}
     Connection dm()throws Exception{PipelineConfig.Target target=config.targets.get(0);return JdbcConnections.open("dm.jdbc.driver.DmDriver",target.url,target.username,target.password);}
@@ -31,18 +40,64 @@ public final class DmPipelineAcceptance {
     long obCount(String table)throws Exception{try(Connection c=dm();Statement sql=c.createStatement();ResultSet rows=sql.executeQuery("SELECT count(*) FROM "+Sql.pg(id+"_copy")+"."+Sql.pg(table))){rows.next();return rows.getLong(1);}}
     Journal.Subscription subscription(JdbcJournal journal,String id)throws Exception{return journal.subscriptions().stream().filter(item->item.id.equals(id)).findFirst().get();}
     void phase(String phase)throws Exception{Files.write(directory.resolve(phase+".request"),new byte[]{1});await(()->Files.exists(directory.resolve(phase+".done")));}
-    void start()throws Exception{worker=new ProcessBuilder("java","-Xmx256m","-jar",JAR,"run",configuration.toString()).redirectErrorStream(true).redirectOutput(directory.resolve("worker-"+(++starts)+".log").toFile()).start();}
+    List<String> launch(String heap,boolean includeDm,String...arguments){
+        List<String> command=new ArrayList<>(List.of(JAVA,heap));
+        if(MYSQL_DRIVER==null)command.addAll(List.of("-jar",JAR));
+        else{
+            String separator=System.getProperty("path.separator");
+            String classpath=JAR+separator+MYSQL_DRIVER+(includeDm?separator+DM_DRIVER:"");
+            command.addAll(List.of("-cp",classpath,Main.class.getName()));
+        }
+        command.addAll(Arrays.asList(arguments));
+        return command;
+    }
+    void start()throws Exception{worker=new ProcessBuilder(launch("-Xmx256m",true,"run",configuration.toString())).redirectErrorStream(true).redirectOutput(directory.resolve("worker-"+(++starts)+".log").toFile()).start();}
     void kill()throws Exception{if(worker!=null){worker.destroyForcibly();require(worker.waitFor(20,TimeUnit.SECONDS),"Worker SIGKILL was not confirmed");worker=null;}}
-    void command(String... arguments)throws Exception{List<String> args=new ArrayList<>(Arrays.asList("java","-Xmx128m","-jar",JAR));args.addAll(Arrays.asList(arguments));Process operation=new ProcessBuilder(args).redirectErrorStream(true).redirectOutput(directory.resolve("command-"+UUID.randomUUID()+".log").toFile()).start();require(operation.waitFor(45,TimeUnit.SECONDS),"CLI operation did not finish");require(operation.exitValue()==0,"CLI operation failed");}
+    void command(String... arguments)throws Exception{Process operation=new ProcessBuilder(launch("-Xmx128m",true,arguments)).redirectErrorStream(true).redirectOutput(directory.resolve("command-"+UUID.randomUUID()+".log").toFile()).start();require(operation.waitFor(45,TimeUnit.SECONDS),"CLI operation did not finish");require(operation.exitValue()==0,"CLI operation failed");}
+    void externalDrivers()throws Exception{
+        require((MYSQL_DRIVER==null)==(DM_DRIVER==null),"Supply both external drivers");
+        if(MYSQL_DRIVER==null)return;
+        Class<?>[] drivers={Class.forName("com.mysql.cj.jdbc.Driver"),Class.forName("dm.jdbc.driver.DmDriver")};
+        String[] files={MYSQL_DRIVER,DM_DRIVER};
+        for(int i=0;i<drivers.length;i++){
+            Path actual=Path.of(drivers[i].getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
+            require(actual.equals(Path.of(files[i]).toRealPath()),"Driver loaded from unexpected JAR");
+        }
+        try(Connection connection=dm();Statement sql=connection.createStatement()){
+            try{
+                sql.executeQuery("SELECT * FROM "+Sql.pg(id+"_contract")+".\"external_fixture_missing\"");
+                throw new AssertionError("Missing-table SQL unexpectedly accepted");
+            }catch(SQLException nativeError){
+                require(nativeError.getErrorCode()==-2106,"Unexpected Dameng missing-table vendor code");
+                require("TARGET_TABLE_MISSING_REBUILD_REQUIRED".equals(Sql.targetErrorCode(nativeError)),
+                        "External Dameng missing-table diagnosis changed");
+            }
+        }
+        System.out.println("DM_EXTERNAL_ORIGIN_AND_NATIVE_ERROR_ACCEPTED");
+    }
+    void verifyDriverRequired()throws Exception{
+        if(DM_DRIVER==null)return;
+        Path log=directory.resolve("missing-driver.log");
+        Process without=new ProcessBuilder(launch("-Xmx128m",false,"check",configuration.toString()))
+                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        if(!without.waitFor(45,TimeUnit.SECONDS)){
+            without.destroyForcibly();
+            throw new AssertionError("Missing-driver preflight did not finish");
+        }
+        String result=Files.readString(log);
+        require(without.exitValue()!=0&&result.contains("JDBC_DRIVER_UNAVAILABLE")&&result.contains("dm.jdbc.driver.DmDriver"),
+                "Packaged preflight did not refuse an absent Dameng driver");
+        System.out.println("DM_EXTERNAL_MISSING_DRIVER_ACCEPTED");
+    }
     void insert(int value)throws Exception{source("INSERT INTO "+Sql.mysql(id)+".items(id,u,amount,payload,bytes,base_value) SELECT "+value+",u,amount,payload,bytes,"+(value*10)+" FROM "+Sql.mysql(id)+".items WHERE id=3");}
     void versions()throws Exception{
-        try(Connection c=JdbcConnections.open("com.mysql.cj.jdbc.Driver","jdbc:mysql://mysql:3306/?useSSL=false&allowPublicKeyRetrieval=true","root","Sync@Test123");Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT VERSION()")){require(r.next(),"Source version unavailable");System.out.println("DM_FIXTURE_MYSQL_VERSION: "+r.getString(1));}
+        try(Connection c=JdbcConnections.open("com.mysql.cj.jdbc.Driver",MYSQL_URL,"root","Sync@Test123");Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT VERSION()")){require(r.next(),"Source version unavailable");System.out.println("DM_FIXTURE_MYSQL_VERSION: "+r.getString(1));}
         try(Connection c=postgres();Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT VERSION()")){require(r.next(),"PG version unavailable");System.out.println("DM_FIXTURE_POSTGRES_VERSION: "+r.getString(1));}
     }
     void configure()throws Exception{
-        Files.createDirectories(directory);Files.setPosixFilePermissions(directory,PosixFilePermissions.fromString("rwx------"));config.pipelineId=id;config.nodeId="worker";config.source.clusterId=id;config.source.host="mysql";config.source.database=id;config.source.username="root";config.source.password="Sync@Test123";config.source.serverId=991716;config.databases=Collections.singletonList(id);config.chunkSize=1;config.pollIntervalMillis=100;config.retryDelayMillis=300;config.leaseMillis=5000;config.heartbeatMillis=300;config.journal.path=directory.resolve("journal").toString();config.journal.maxBytes=128*1024*1024;
-        PipelineConfig.Target ob=new PipelineConfig.Target();ob.id="dm";ob.product=TargetProduct.DM;ob.url="jdbc:dm://dm:5236?connectTimeout=3000&socketTimeout=15000";ob.username="SYSDBA";ob.password="Sync@Test123";ob.dm=new PipelineConfig.Dm();ob.dm.acknowledgeTextConversions=true;ob.metadataSchema=id+"_meta";ob.mappings.put(id,id+"_copy");config.targets.add(ob);
-        PipelineConfig.Target pg=new PipelineConfig.Target();pg.id="postgres";pg.product=TargetProduct.POSTGRESQL;pg.url="jdbc:postgresql://postgres:5432/sync_test?connectTimeout=3&socketTimeout=10";pg.username="sync_test";pg.password="Sync@Test123";pg.metadataSchema=id+"_pg_meta";pg.mappings.put(id,id+"_pg");config.targets.add(pg);config.validate();config.prepareLocalDirectory();configuration=directory.resolve("task.yml");Files.write(configuration,new ObjectMapper(new YAMLFactory()).writeValueAsBytes(config));Files.setPosixFilePermissions(configuration,PosixFilePermissions.fromString("rw-------"));
+        Files.createDirectories(directory);Files.setPosixFilePermissions(directory,PosixFilePermissions.fromString("rwx------"));config.pipelineId=id;config.nodeId="worker";config.source.clusterId=id;config.source.host=MYSQL_ENDPOINT.substring(0,MYSQL_ENDPOINT.lastIndexOf(':'));config.source.port=Integer.parseInt(MYSQL_ENDPOINT.substring(MYSQL_ENDPOINT.lastIndexOf(':')+1));config.source.database=id;config.source.username="root";config.source.password="Sync@Test123";config.source.serverId=991716;config.databases=Collections.singletonList(id);config.chunkSize=1;config.pollIntervalMillis=100;config.retryDelayMillis=300;config.leaseMillis=5000;config.heartbeatMillis=300;config.journal.path=directory.resolve("journal").toString();config.journal.maxBytes=128*1024*1024;
+        PipelineConfig.Target ob=new PipelineConfig.Target();ob.id="dm";ob.product=TargetProduct.DM;ob.url=DM_URL;ob.username="SYSDBA";ob.password="Sync@Test123";ob.dm=new PipelineConfig.Dm();ob.dm.acknowledgeTextConversions=true;ob.metadataSchema=id+"_meta";ob.mappings.put(id,id+"_copy");config.targets.add(ob);
+        PipelineConfig.Target pg=new PipelineConfig.Target();pg.id="postgres";pg.product=TargetProduct.POSTGRESQL;pg.url=POSTGRES_URL;pg.username="sync_test";pg.password="Sync@Test123";pg.metadataSchema=id+"_pg_meta";pg.mappings.put(id,id+"_pg");config.targets.add(pg);config.validate();config.prepareLocalDirectory();configuration=directory.resolve("task.yml");Files.write(configuration,new ObjectMapper(new YAMLFactory()).writeValueAsBytes(config));Files.setPosixFilePermissions(configuration,PosixFilePermissions.fromString("rw-------"));
     }
     void verifyTypes()throws Exception{
         try(Connection connection=dm();Statement sql=connection.createStatement();ResultSet rows=sql.executeQuery("SELECT \"u\",\"amount\",\"payload\",\"bytes\",\"calc\" FROM "+Sql.pg(id+"_copy")+".\"items\" WHERE \"id\"=1")){
@@ -56,10 +111,10 @@ public final class DmPipelineAcceptance {
     boolean durationNegative()throws Exception{try(Connection c=dm();Statement sql=c.createStatement();ResultSet r=sql.executeQuery("SELECT CASE WHEN \"t6\" < INTERVAL '0 00:00:00' DAY TO SECOND THEN 1 ELSE 0 END FROM "+Sql.pg(id+"_copy")+".\"durations\"")){return r.next()&&r.getBoolean(1);}}
     boolean duplicateMicrosecond()throws Exception{try(Connection c=dm();Statement sql=c.createStatement();ResultSet r=sql.executeQuery("SELECT CAST((EXTRACT(DAY FROM \"clock\")*86400+EXTRACT(HOUR FROM \"clock\")*3600+EXTRACT(MINUTE FROM \"clock\")*60+EXTRACT(SECOND FROM \"clock\")) AS NUMERIC(20,6)) FROM "+Sql.pg(id+"_copy")+".\"duration_duplicates\"")){return r.next()&&new java.math.BigDecimal("-0.000001").compareTo(r.getBigDecimal(1))==0;}}
     void verifyDurations(boolean negative)throws Exception{
-        try(Connection c=JdbcConnections.open("com.mysql.cj.jdbc.Driver","jdbc:mysql://mysql:3306/?useSSL=false&allowPublicKeyRetrieval=true","root","Sync@Test123");Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT CAST(t1 AS CHAR),TIME_TO_SEC(t1),MICROSECOND(t1) FROM "+Sql.mysql(id)+".durations")){require(r.next(),"Source TIME probe missing");System.out.println("DM_TIME_SOURCE_PROBE: native="+r.getString(1)+",TIME_TO_SEC="+r.getString(2)+",MICROSECOND="+r.getString(3));}
+        try(Connection c=JdbcConnections.open("com.mysql.cj.jdbc.Driver",MYSQL_URL,"root","Sync@Test123");Statement q=c.createStatement();ResultSet r=q.executeQuery("SELECT CAST(t1 AS CHAR),TIME_TO_SEC(t1),MICROSECOND(t1) FROM "+Sql.mysql(id)+".durations")){require(r.next(),"Source TIME probe missing");System.out.println("DM_TIME_SOURCE_PROBE: native="+r.getString(1)+",TIME_TO_SEC="+r.getString(2)+",MICROSECOND="+r.getString(3));}
         // Integer microseconds: TIME_TO_SEC loses fractions, and default SQL division rounds to four places.
         List<String> sourceFields=new ArrayList<>(),targetFields=new ArrayList<>();for(int i=0;i<=6;i++){sourceFields.add("TIMESTAMPDIFF(MICROSECOND,'2000-01-01 00:00:00.000000',ADDTIME('2000-01-01 00:00:00.000000',t"+i+"))");targetFields.add("CAST(CAST((EXTRACT(DAY FROM \"t"+i+"\")*86400+EXTRACT(HOUR FROM \"t"+i+"\")*3600+EXTRACT(MINUTE FROM \"t"+i+"\")*60+EXTRACT(SECOND FROM \"t"+i+"\")) AS NUMERIC(20,6))*1000000 AS NUMERIC(20,0))");}
-        try(Connection source=JdbcConnections.open("com.mysql.cj.jdbc.Driver","jdbc:mysql://mysql:3306/?useSSL=false&allowPublicKeyRetrieval=true","root","Sync@Test123");Connection target=dm();Statement a=source.createStatement();Statement b=target.createStatement();ResultSet expected=a.executeQuery("SELECT "+String.join(",",sourceFields)+" FROM "+Sql.mysql(id)+".durations");ResultSet actual=b.executeQuery("SELECT "+String.join(",",targetFields)+" FROM "+Sql.pg(id+"_copy")+".\"durations\"")){
+        try(Connection source=JdbcConnections.open("com.mysql.cj.jdbc.Driver",MYSQL_URL,"root","Sync@Test123");Connection target=dm();Statement a=source.createStatement();Statement b=target.createStatement();ResultSet expected=a.executeQuery("SELECT "+String.join(",",sourceFields)+" FROM "+Sql.mysql(id)+".durations");ResultSet actual=b.executeQuery("SELECT "+String.join(",",targetFields)+" FROM "+Sql.pg(id+"_copy")+".\"durations\"")){
             require(expected.next()&&actual.next(),"Duration matrix missing");for(int i=1;i<=7;i++){require(expected.getBigDecimal(i).compareTo(actual.getBigDecimal(i))==0,"TIME precision/sign mismatch fsp="+(i-1)+" expected="+expected.getBigDecimal(i)+" actual="+actual.getBigDecimal(i));require((actual.getBigDecimal(i).signum()<0)==negative,"Duration sign changed");}
         }
     }
@@ -115,13 +170,13 @@ public final class DmPipelineAcceptance {
     }
     static Change nativeInsert(TableSchema table,int id){Change change=new Change();change.eventId=table.id+":native-"+id;change.tableId=table.id;change.operation=Change.Operation.INSERT;change.after=Collections.singletonList(Cell.value(Integer.toString(id)));return change;}
     void run()throws Exception{
-        configure();versions();nativeContract();existingLayouts();source("CREATE DATABASE "+Sql.mysql(id));String items=Sql.mysql(id)+".items",duplicates=Sql.mysql(id)+".duplicates";
+        configure();versions();nativeContract();externalDrivers();existingLayouts();source("CREATE DATABASE "+Sql.mysql(id));String items=Sql.mysql(id)+".items",duplicates=Sql.mysql(id)+".duplicates";
         try{
             source("CREATE TABLE "+items+" (id BIGINT PRIMARY KEY,u BIGINT UNSIGNED,amount DECIMAL(65,30),payload JSON,bytes VARBINARY(100),base_value INT,calc INT GENERATED ALWAYS AS (base_value*2) STORED,UNIQUE KEY uq_base(base_value)) ENGINE=InnoDB");source("CREATE TABLE "+duplicates+" (value INT,payload JSON) ENGINE=InnoDB");source("INSERT INTO "+items+"(id,u,amount,payload,bytes,base_value) VALUES(1,18446744073709551615,12345678901234567890123456789012345.123456789012345678901234567890,JSON_OBJECT('n',CAST(18446744073709551615 AS UNSIGNED)),0x00ff80,7)");source("INSERT INTO "+duplicates+" VALUES(7,JSON_OBJECT('same',true)),(7,JSON_OBJECT('same',true))");source("CREATE TABLE "+Sql.mysql(id)+".typed (id BIGINT PRIMARY KEY,note VARCHAR(100),dt DATETIME(6),clock TIME(6),day DATE,ts TIMESTAMP(6)) ENGINE=InnoDB");
             source("INSERT INTO "+Sql.mysql(id)+".typed VALUES(1,'','2026-11-15 12:34:56.123456','-25:01:02.123456','2026-11-15','2026-11-15 12:34:56.123456'),(2,CONVERT(0xe68aa5e4bbb727e29883f09f9880 USING utf8mb4),NULL,NULL,NULL,NULL)");source("CREATE TABLE "+Sql.mysql(id)+".durations (id BIGINT PRIMARY KEY,t0 TIME,t1 TIME(1),t2 TIME(2),t3 TIME(3),t4 TIME(4),t5 TIME(5),t6 TIME(6)) ENGINE=InnoDB");
             source("INSERT INTO "+Sql.mysql(id)+".durations VALUES(1,'25:01:02','25:01:02.1','25:01:02.12','25:01:02.123','25:01:02.1234','25:01:02.12345','25:01:02.123456')");
             source("CREATE TABLE "+Sql.mysql(id)+".TextKeys (id VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin PRIMARY KEY, value INT) ENGINE=InnoDB");source("INSERT INTO "+Sql.mysql(id)+".TextKeys VALUES('a',1),('a ',2),('A',3),(CONVERT(0xf09f9880 USING utf8mb4),4)");
-            source("CREATE TABLE "+Sql.mysql(id)+".duration_duplicates (clock TIME(6),note VARCHAR(20)) ENGINE=InnoDB");source("INSERT INTO "+Sql.mysql(id)+".duration_duplicates VALUES('-25:01:02.123456','same'),('-25:01:02.123456','same')");command("check",configuration.toString());
+            source("CREATE TABLE "+Sql.mysql(id)+".duration_duplicates (clock TIME(6),note VARCHAR(20)) ENGINE=InnoDB");source("INSERT INTO "+Sql.mysql(id)+".duration_duplicates VALUES('-25:01:02.123456','same'),('-25:01:02.123456','same')");verifyDriverRequired();command("check",configuration.toString());
             try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
                 start();await(()->pgCount("items")==1&&obCount("items")==1&&obCount("duplicates")==2);await(()->obCount("typed")==2);await(()->obCount("durations")==1&&obCount("duration_duplicates")==2&&obCount("TextKeys")==4);verifyTypes();verifyAdditionalTypes();verifyDurations(false);System.out.println("DM_SNAPSHOT_ACCEPTED");String generation=(String)journal.status().get("generation"),snapshot=journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId;
                 source("UPDATE "+items+" SET id=3,base_value=9 WHERE id=1");source("DELETE FROM "+duplicates+" LIMIT 1");await(()->pgCount("duplicates")==1&&obCount("duplicates")==1);await(()->subscription(journal,"dm").acknowledged==((Number)journal.status().get("lastSequence")).longValue());
