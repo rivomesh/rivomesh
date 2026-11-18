@@ -2,7 +2,7 @@
 
 首版尚未发布。Java/Maven命名空间为`io.github.rivomesh`。[完整SDD](../sdd/001-control-recovery-compatibility/spec.md) · [任务清单](../sdd/001-control-recovery-compatibility/tasks.md) · [English](../en/implementation-status.md)。
 
-48项需求：**22项完成、25项部分完成、1项未实现，剩余26项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
+进度总数和逐项状态以 SDD 为准。验收归档记录每项通过的数据库、版本及部署范围。[当前总数](../sdd/001-control-recovery-compatibility/spec.md) · [验收归档](../verification/README.md)
 
 ## 已验收
 
@@ -10,7 +10,8 @@
 |---|---|
 | DO-01 | 双语 SDD 的 48 项需求、验收、证据与进度自动核对。 |
 | DO-03 | 中英文故障手册覆盖提升、日志/存储、节点、会话及人工恢复。 |
-| CP-01 | 统一节点目录、角色、版本、心跳及归属 |
+| CP-01～03 | 全局节点目录、共享任务配置及按原请求执行的跨入口命令。 |
+| CP-05～06 | 跨入口撤权、审计关联、按任务分配凭据和脱敏限流诊断。 |
 | SE-01～05 | 刷新登录、期限/撤销、安全Cookie/CSRF、跨入口会话、API身份规则 |
 | CP-07 | 控制/执行分离；限定档案下管理故障不影响原Worker安全同步 |
 | RC-02 | 持久事务证据、管理员分页审阅、历史结构及镜像 |
@@ -21,7 +22,8 @@
 | RC-07 | 手工录入、JSON 导入、前后值预览与跨入口审批。限定 SQL 档案 |
 | RC-01 | MySQL 源连接、解码、DDL、日志及目标应用阶段诊断，跨入口和重启验证 |
 | RC-09 | 补偿与修正跨入口取消、提交前后强杀恢复，并按原请求核对凭据 |
-| JV-01 | 五个 JDK 的 Controller、Agent 和 Worker 实际启动并完成 SQL 全量和增量 |
+| JV-01 | Controller、Agent 和 Worker 当前统一使用 Temurin 21。 |
+| LG-07 | 硬件容量矩阵、256 个数据库映射、大事务和共享日志背压续传已实测。 |
 | SO-02 | MySQL 5.7.44 的 Java 8 V3 三种拓扑、真实主从 SQL 线程故障和 binlog 缺失。 |
 | SO-03 | MySQL 8.0.46 的 V3 三种拓扑及跨入口人工恢复 |
 | SO-05 | MySQL 8.4.13 的 V3 三种拓扑、日志准入和会话级不支持事件的处理 |
@@ -35,15 +37,15 @@
 |---|---|
 | 同步链路 | MySQL多库映射、同源多目标、自动建表、分块全量转增量、持久断点；无主键/JSON/受支持生成列 |
 | PostgreSQL 源 | 17.12 和 18.7 已实测 pgoutput。17.12 可切换逻辑槽续传、18.7 存储型生成列已通过。 [配置与恢复](postgresql-source.md) |
-| Oracle 源 | 26ai Free 单 PDB Flashback、归档 LogMiner 增量和 SCN 续传到 PostgreSQL 已通过。 [源库手册](oracle-source.md) |
-| 采集故障恢复 | 提供原断点与受影响目标检查，验证 MySQL 同文件 GTID 边界和原始事件 CRC32，支持私有归档。审批后排除源范围仍待完成。 [操作说明](capture-recovery.md) |
-| 管理 | 中英文向导、配置/修订、独立Worker、跨入口持久命令、账号/权限/审计 |
+| Oracle 源 | 26ai Free 单 PDB Flashback、归档 LogMiner 增量和 SCN 续传到 PostgreSQL，已验收严格文本 JSON 和 DATE。 [源库手册](oracle-source.md) |
+| 采集故障恢复 | 检查原断点及受影响目标，核对 MySQL GTID 边界和原始日志，限定档案支持审批后排除一个已核验事务。 [操作说明](capture-recovery.md) |
+| 管理 | 中英文向导、共享修订、独立 Worker 和跨入口控制。真实 Chrome 已验证刷新登录、历史报告/回执检索及审批后恢复报告。 [全局控制](global-control.md) · [报告](managed-validation.md) |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
 | 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |
 | 事务补偿 | PostgreSQL 和 MySQL 的管理员预览、确认、目标原子凭据和原事务重放。见[操作说明](transaction-compensation.md) |
 | 关系目标 | MySQL、PostgreSQL、openGauss 有实库档案。达梦、金仓、GBase8c、OceanBase MySQL 模式通过限定事务和联合中断恢复。分布式 GaussDB 和其他厂商模式待验收。 |
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
-| 消息目标 | 八种 Broker 已有确认式至少一次投递档案。NATS JetStream 三节点 TLS 和多数派恢复已通过。其他消息产品的集群与安全组合继续验收。 |
+| 消息目标 | 八种 Broker 已有确认式至少一次投递档案。实库包含 NATS TLS 和多数派、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原副本。 [消息目标](messaging-v3.md) |
 | 部署 | Linux、Docker、Helm、原生 Kubernetes。双节点实测 RWO 重挂、配置更新、Secret 轮换、外部日志和旧 Worker 写入隔离。Helm 和原生 YAML 均通过应用镜像替换及跨节点挂载原 CSI 卷后的自动续传。 |
 | Java | Temurin 21 LTS 是构建、运行和验收基线。后续连接器和协议组合在 Java 21 上验证。 |
 
@@ -51,16 +53,15 @@
 
 ## 当前清理
 
-已删除旧二进制探针、自动控制模式迁移及开发快照。控制命名空间按首次配置直接创建；模式不匹配拒绝启动，不静默升级或回退。73项相关回归已通过。传输SDK已进入Maven缓存，应用层迭代无需重复打包所有SDK。
-
-V2/V3双执行链、对应向导和旧配置仍有交叉引用，将作为下一批独立清理；当前不宣称已经全部删除。用户数据、业务表和有效状态完整性检查未被清理。
+首版手册记录当前发布包和状态格式。恢复前核对协调备份中的 Controller、日志和目标身份。验收完成后清理临时环境和重复构建产物。[首版运行手册](first-release.md)
 
 ## 下一步
 
-1. 源端受控范围恢复及其他目标恢复协议。
-2. 自动跨Agent接管、排空迁移、完整全局诊断与存储可达性。
-3. PostgreSQL 共同校验点、Oracle 源主备切换及更完整的类型档案。
-4. 分布式GaussDB、其他厂商/消息/分析目标生产矩阵。
-5. 大事务/海量表/硬件基准、真实K8s、完整JDK矩阵与双语文档。
+1. 完善跨 Agent 接管时的写入隔离和恢复证据核验。
+2. 已审批归档的报告回收、非空目标正式接管、业务切换和回切。
+3. 分目标恢复协议，以及事务库、分析库和消息队列的实库兼容组合。
+4. PostgreSQL 和 Oracle 的类型、结构及故障切换，外部身份及分发审核。
+
+[完整任务清单](../sdd/001-control-recovery-compatibility/tasks.md)
 
 开发预览不常驻；测试结束清理临时容器，保留实际需要的依赖缓存。每小时汇报的对比基线记录在[progress-reports.json](../sdd/001-control-recovery-compatibility/progress-reports.json)，独立定时通知工具当前不可用。

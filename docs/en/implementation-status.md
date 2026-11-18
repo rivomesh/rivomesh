@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **22 DONE, 25 PARTIAL and 1 NEW, with 26 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+The SDD contains the current totals and requirements. The verification archive defines the database, version and deployment profile for each accepted result. [Current totals](../sdd/001-control-recovery-compatibility/spec.en.md) · [Verification archive](../verification/README.md)
 
 ## Accepted
 
@@ -10,7 +10,8 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 |---|---|
 | DO-01 | All 48 bilingual SDD requirements, acceptance profiles, evidence and totals are checked automatically. |
 | DO-03 | Bilingual runbook covers promotion, logs, storage, nodes, sessions and manual recovery. |
-| CP-01 | Unified registry,roles,versions,heartbeat and ownership |
+| CP-01–03 | Global node registry, shared task configuration and request-bound cross-entry commands. |
+| CP-05–06 | Cross-entry revocation, audit correlation, scoped Worker credentials and bounded, redacted diagnostics. |
 | SE-01–05 | Reload persistence,expiry/revocation,secure cookies/CSRF,cross-entry sessions and API identity rules |
 | CP-07 | Separated control/execution;bounded original-Worker continuity during management outages |
 | RC-02 | Durable transaction evidence,authorized pagination,historical schemas and images |
@@ -21,7 +22,8 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-07 | Typed entry, JSON import, before/after preview and cross-entry approval. Bounded SQL profile |
 | RC-01 | MySQL source, journal and target fault phases across entries and restart |
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
-| JV-01 | Actual Controller, Agent and Worker on all five JDKs with SQL snapshot and CDC verification |
+| JV-01 | Temurin 21 is the current release baseline for Controller, Agent and Worker. |
+| LG-07 | Verified capacity matrix, 256 database mappings, large transactions and shared-journal backpressure with resume. |
 | SO-02 | MySQL 5.7.44 Java 8 V3 across three topologies, replica SQL fault and native binlog-loss refusal. |
 | SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery |
 | SO-05 | MySQL 8.4.13 V3 topologies, log profile admission and unsupported live events |
@@ -35,15 +37,15 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 |---|---|
 | Replication | MySQL multi-database mappings/fan-out,table creation,chunked snapshot-to-stream,durable progress,keyless/JSON/supported generated columns |
 | PostgreSQL source | 17.12 and 18.7 pgoutput profiles. The 17.12 synchronized-slot promotion and 18.7 stored generated columns passed. [Operator guide](postgresql-source.md) |
-| Oracle source | 26ai Free single-PDB Flashback and archived LogMiner CDC to PostgreSQL with durable SCN restart. [Source guide](oracle-source.md) |
-| Capture recovery | Original checkpoint and impacted targets, same-file MySQL GTID headers, CRC32 and private archival of original event bytes. Approved range exclusion remains open. [Operator guide](capture-recovery.md) |
-| Management | Bilingual wizard,configuration revisions,isolated Workers,durable cross-entry commands,accounts/grants/audit |
+| Oracle source | 26ai Free single-PDB Flashback and archived LogMiner CDC to PostgreSQL with durable SCN restart, strict text JSON and civil DATE. [Source guide](oracle-source.md) |
+| Capture recovery | Inspect the original position and affected targets, verify MySQL GTID boundaries and original binlog bytes, and approve one verified source transaction exclusion on the bounded profile. [Operator guide](capture-recovery.md) |
+| Management | Bilingual wizard, shared revisions, isolated Workers and cross-entry control. Real Chrome verified login refresh, historical report/receipt lookup and approved report restore. [Global control](global-control.md) · [Reports](managed-validation.md) |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |
 | Gap verification | Reviewed plans,administrator confirmation,fresh scans,atomic receipts and cross-entry cancellation;bounded PG/MySQL,see [guide](gap-verification.md) for acceptance |
 | Transaction compensation | Administrator review and approval for PostgreSQL and MySQL with atomic target receipts and original transaction replay. See the [operator guide](transaction-compensation.md) |
 | Relational targets | MySQL, PostgreSQL and openGauss have native profiles. DM, Kingbase, GBase8c and OceanBase MySQL mode have bounded native transaction and mixed restart profiles. Distributed GaussDB and other vendor modes remain open. |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
-| Messaging | Eight broker profiles use confirmed at-least-once delivery. NATS JetStream passed three-member TLS and quorum recovery. Other cluster and security profiles remain open. |
+| Messaging | Eight broker profiles use confirmed at-least-once delivery. Native profiles include NATS TLS/quorum, RabbitMQ quorum, Kafka KRaft and externally promoted Redis Streams. [Messaging guide](messaging-v3.md) |
 | Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
 | Java | Temurin 21 LTS is the build, runtime and acceptance baseline. Connector and security protocol profiles are tracked on Java 21. |
 
@@ -51,16 +53,15 @@ See [design](platform-design.md),[console operations](console-and-deployment.md)
 
 ## Cleanup
 
-Historical-binary probes,automatic control-mode migration and duplicate development snapshots are removed. Namespaces are created in the configured mode and refuse mismatches without silent migration/fallback.73 affected contracts pass. SDKs are installed in the Maven cache,so application-only iterations avoid rebuilding them.
-
-The V2/V3 execution branches,wizard and configuration fixtures still share dependencies;their consolidation is a separate pending batch. Business data and current state-integrity checks were not removed.
+The first-release runbooks describe the current artifact and state formats. Use coordinated Controller, journal and target backups and verify their identity before restoring. Temporary fixture containers and duplicate build artifacts are cleaned after verification. [First-release operations](first-release.md)
 
 ## Next work
 
-1. Controlled source range recovery and recovery protocols for other destinations.
-2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
-3. Broader PostgreSQL and Oracle types, Oracle failover, and the PostgreSQL common-cut workflow.
-4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.
-5. Large transactions/catalogs,hardware benchmarks,liveK8s,Java 21 connector and recovery profiles and bilingual docs.
+1. Managed Agent transfer with fenced write authority and reachable recovery evidence.
+2. Reviewed report reclamation, formal nonempty adoption and writer handover or failback.
+3. Per-target recovery protocols and native database, analytical and broker compatibility profiles.
+4. PostgreSQL and Oracle type, schema and failover expansion, then external identity and distribution review.
+
+[Complete task list](../sdd/001-control-recovery-compatibility/tasks.en.md)
 
 No permanent preview is retained. Temporary fixtures are cleaned;useful dependency caches remain. Hourly report comparison state lives in[progress-reports.json](../sdd/001-control-recovery-compatibility/progress-reports.json);no independent notification scheduler is currently available.
