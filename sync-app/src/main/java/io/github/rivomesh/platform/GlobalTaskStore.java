@@ -168,7 +168,11 @@ final class GlobalTaskStore {
         try(Connection c=db.connect()){c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);AccessControl.Principal actor=access.authorize(c,supplied,false);root(c,false);c.commit();return actor;}catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
     <T>T transaction(String id,AccessControl.Principal supplied,Transaction<T> work)throws Exception{
+        return transaction(id,supplied,Connection.TRANSACTION_NONE,work);
+    }
+    <T>T transaction(String id,AccessControl.Principal supplied,int isolation,Transaction<T> work)throws Exception{
         try(Connection c=db.connect()){
+            if(isolation!=Connection.TRANSACTION_NONE)c.setTransactionIsolation(isolation);
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);root(c);Record record=read(c,id);scope(actor,id,record.owner,false);T result=work.run(c,record,actor);c.commit();return result;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }

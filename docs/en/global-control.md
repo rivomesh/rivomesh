@@ -49,6 +49,14 @@ In the create wizard or YAML import, select **Assign an Agent automatically**. T
 
 The saved task lists its actual owner. A repeat with the same payload and request identity returns that original assignment even when other tasks have filled the cluster. `AGENT_PLACEMENT_UNAVAILABLE` means no permitted healthy Agent has a free task slot. Provision required connector drivers, secret references and network access on eligible Agents. Automatic transfer of a running task is covered by the Agent handoff requirements.
 
+### Assess transfer to another Agent
+
+An administrator can record a handoff assessment from either Controller. Send `POST /api/tasks/{id}/handoff` with an `X-Request-ID` and a JSON body containing `candidateNodeId` and the task's `expectedRevision`. `GET /api/tasks/{id}/handoff` reads the current assessment. To refresh it, send a new request ID and set `expectedAssessment` to the current assessment ID. Retrying the current request with its original inputs returns the same assessment. Both Agents and the task must be in the caller's scope.
+
+The assessment binds the task revision and active configuration, the two Agent registrations, candidate task capacity and the original Agent's observed capture position. It checks for outstanding commands and a complete, acknowledged cut on a supported MySQL source with a PostgreSQL external journal and PostgreSQL or MySQL targets. A change in the observed cut, pending work, Agent registration or available capacity marks the assessment `STALE`. Its checkpoint is represented by a digest. The response excludes source positions, credentials and private recovery files.
+
+`EVIDENCE_REQUIRED` means these control-plane checks passed. The candidate must still prove connectivity and access to the original recovery reports and receipts. `BLOCKED` identifies earlier prerequisites such as an active Worker or exhausted task capacity. Assessment leaves the task owner, Worker, capacity reservations and journal unchanged. The response carries `executionAuthorized: false`.
+
 ## Admission and recovery
 
 PENDING is durable queueing. DISPATCHED saves the exact original local request/revision before invocation. ACCEPTED is local durable admission. SUCCEEDED/FAILED come from actual operation receipts. UNKNOWN requires reconciliation, not a success claim or reissue under a new revision. Startup restores receipt protection and validates local configuration against shared authority before scheduling.

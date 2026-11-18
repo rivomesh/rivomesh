@@ -49,6 +49,14 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 任务列表显示实际分配节点。用相同请求 ID 和配置重试时，返回第一次的分配。出现 `AGENT_PLACEMENT_UNAVAILABLE` 时，检查当前授权范围内的在线节点和任务槽，确保可选节点都具备该任务所需的驱动、密钥引用和网络访问。运行中任务的自动接管由 Agent 交接流程单独追踪。
 
+### 评估任务迁往另一 Agent
+
+管理员可在任一管理入口发送 `POST /api/tasks/{id}/handoff`。请求头填写 `X-Request-ID`，JSON 写入候选 `candidateNodeId` 和任务 `expectedRevision`。通过 `GET /api/tasks/{id}/handoff` 查询最新评估。刷新时使用新的请求 ID，并把当前评估 ID 填入 `expectedAssessment`。原样重试当前请求会返回同一条评估。调用者须有任务和两端 Agent 的授权。
+
+评估绑定任务修订、已生效配置、两端 Agent 注册身份、候选任务容量及来自原 Agent 的采集观察。针对 MySQL 源、PostgreSQL 外部日志和 PostgreSQL/MySQL 目标，检查是否有未结束命令、已完成快照以及各目标追平的共同位点。位点、待处理命令、Agent 注册或容量变化时标为 `STALE`。接口以摘要表示检查点，响应中不含源位点原文、凭据和私有恢复文件。
+
+`EVIDENCE_REQUIRED` 表示管理端检查通过，还需核实候选 Agent 的连接能力及原恢复报告和回执的可达性。`BLOCKED` 会给出 Worker 尚未排空、任务容量耗尽等条件。评估保留原任务归属、Worker、容量和日志状态，返回 `executionAuthorized: false`。
+
 ## 接受、执行和恢复
 
 PENDING 表示持久排队；DISPATCHED 表示交给固定 owner，调用前保存原本机请求与原修订；ACCEPTED 表示本机已持久接受；SUCCEEDED/FAILED 来自实际操作回执。UNKNOWN 表示证据不足，不能伪装成功，也不能换新修订重新执行。重启先恢复原回执保护及配置权威校验，再允许本机调度。

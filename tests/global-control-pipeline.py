@@ -26,6 +26,8 @@ parser.add_argument('--source-expected-version', help='Set the source type and o
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
+parser.add_argument('--handoff-assessment', action='store_true',
+                    help='Persist and refresh a managed handoff assessment through two Controllers and two Agents')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
                     help='Record the Java 21 JVMs used by the live controller, Agent and Worker')
@@ -62,6 +64,8 @@ if args.browser and (not args.correction or not args.separate_execution
     parser.error('--browser requires an executable Chrome path and the focused --separate-execution --correction profile')
 if args.automatic_placement and (not args.separate_execution or args.source_diagnostics or args.runtime_image):
     parser.error('--automatic-placement requires the separate Agent baseline profile')
+if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
+    parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
 if args.managed_binlog_evidence and not args.verify_binlog_contents:
@@ -130,7 +134,7 @@ env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secr
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
 review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
-                       args.managed_binlog_evidence, args.task_views))
+                       args.managed_binlog_evidence, args.task_views, args.handoff_assessment))
 if review_accounts:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
@@ -145,6 +149,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'executionProfile': 'SEPARATE_AGENT' if args.separate_execution else 'COMBINED',
             'controlProduct': args.control_product,
             'automaticPlacement': args.automatic_placement,
+            'handoffAssessment': args.handoff_assessment,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -1100,6 +1105,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     'journal': {'mode': 'LOCAL'}, 'targets': []}
         if args.source_expected_version:
             document['source'].update(type='MYSQL', expectedVersion=args.source_expected_version)
+        if args.handoff_assessment:
+            document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'transfer_journal',
+                                 'url':'jdbc:postgresql://postgres:5432/sync_test','username':'sync_target',
+                                 'password':env['RM_GC_DATA']}
         for product, target, url, username in [('POSTGRESQL', 'pg', 'jdbc:postgresql://postgres:5432/sync_test', 'sync_target'), ('MYSQL', 'my', 'jdbc:mysql://mysql-target:3306/?allowPublicKeyRetrieval=true&sslMode=DISABLED', 'root')]:
             document['targets'].append({'id': target, 'product': product, 'url': url, 'username': username, 'password': env['RM_GC_DATA'], 'metadataSchema': 'rm_' + target + '_meta', 'mappings': {'sales': 'rm_' + target + '_sales', 'billing': 'rm_' + target + '_billing'}})
         created = 'gc_create_' + uuid.uuid4().hex
@@ -1145,6 +1154,59 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.handoff_assessment:
+            endpoint=route+'/handoff'
+            candidate='node-worker-alt'
+            wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING' for n in ('node-a','node-b')),
+                 'both entries see the original drained data stream')
+            request='gc_handoff_'+uuid.uuid4().hex
+            live_input={'candidateNodeId':candidate,'expectedRevision':task()['revision']}
+            http('node-b',endpoint,expected=403,token=env['RM_GC_VIEWER'])
+            http('node-b',endpoint,expected=404)
+            live=http('node-a',endpoint,live_input,request=request)
+            assert live['state']=='BLOCKED' and not live['executionAuthorized']
+            assert 'ORIGINAL_WORKER_NOT_DRAINED' in live['blockers']
+            assert live==http('node-b',endpoint)==http('node-b',endpoint,live_input,request=request)
+            passed('Authenticated Controllers replay one bounded assessment without moving a live Worker')
+            action('STOP',node='node-b')
+            wait(lambda: all(task(n).get('workerState')=='STOPPED'
+                             and task(n).get('captureLeaseState') in ('UNCLAIMED','EXPIRED')
+                             for n in ('node-a','node-b')), 'original Worker stopped without a live capture lease')
+            assert http('node-a',endpoint)['state']=='STALE'
+            stopped_input={'candidateNodeId':candidate,'expectedRevision':task()['revision']}
+            assert http('node-b',endpoint,stopped_input,expected=409)['code']=='HANDOFF_ASSESSMENT_CHANGED'
+            stopped_input['expectedAssessment']=live['id']
+            stopped=http('node-b',endpoint,stopped_input)
+            assert stopped['state']=='EVIDENCE_REQUIRED' and stopped['candidateAssignedTasks']==0, stopped['blockers']
+            assert len(stopped['originalCut']['checkpointHash'])==64 and not stopped['executionAuthorized']
+            assert stopped['blockers']==['CANDIDATE_ACCESS_UNVERIFIED','ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED']
+            assert task()['ownerNodeId']==owner_node
+            assert task()['revision']==stopped_input['expectedRevision']
+            passed('A stopped caught-up external-journal task is assessed against its original cut and the exact candidate')
+            refresh=dict(stopped_input,expectedAssessment=stopped['id'])
+            with ThreadPoolExecutor(max_workers=2) as requests:
+                attempts=[requests.submit(http,n,endpoint,refresh,expected=(200,409)) for n in ('node-a','node-b')]
+                outcomes=[attempt.result() for attempt in attempts]
+            accepted=[outcome for outcome in outcomes if outcome.get('state')=='EVIDENCE_REQUIRED']
+            assert len(accepted)==1 and any(outcome.get('code')=='HANDOFF_ASSESSMENT_CHANGED' for outcome in outcomes)
+            stopped=accepted[0]
+            passed('Concurrent refreshes against the same receipt allow exactly one replacement')
+            compose('kill','-s','SIGKILL','node-a')
+            clock=('CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)' if args.control_product=='MYSQL'
+                   else 'CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)')
+            wait(lambda: sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                             " AND node_id='node-a' AND lease_until>"+clock)=='0','management lease expired')
+            compose('up','-d','node-a')
+            address('node-a')
+            def reopened():
+                value=http('node-a',endpoint,expected=(200,503))
+                return value if value.get('id')==stopped['id'] else None
+            assert wait(reopened, 'restarted controller reads same assessment')==stopped
+            passed('Controller restart retains the assessed placement, original owner and masked cut proof')
+            manifest['status']='PASS'
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            print('GLOBAL_CONTROL_HANDOFF_ASSESSMENT_ACCEPTED artifact='+digest)
+            raise SystemExit(0)
         if args.browser:
             run_validation_repair()
             run_recovery_cases()

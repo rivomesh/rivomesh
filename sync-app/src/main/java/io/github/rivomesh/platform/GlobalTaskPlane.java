@@ -12,11 +12,13 @@ final class GlobalTaskPlane implements TaskControlPlane {
     private final AgentDirectory agents;
     private final GlobalTaskViews views;
     private final OwnerQueries queries;
+    private final ManagedHandoff handoff;
     private final String localNode;
     private final ConfigurationDocuments documents;
     private final boolean localExecution;
     GlobalTaskPlane(GlobalTaskStore tasks,DurableCommands commands,AgentDirectory agents,GlobalTaskViews views,OwnerQueries queries,String localNode){this(tasks,commands,agents,views,queries,localNode,true);}
-    GlobalTaskPlane(GlobalTaskStore tasks,DurableCommands commands,AgentDirectory agents,GlobalTaskViews views,OwnerQueries queries,String localNode,boolean localExecution){this.tasks=tasks;this.commands=commands;this.agents=agents;this.views=views;this.queries=queries;this.localNode=localNode;this.localExecution=localExecution;documents=new ConfigurationDocuments(Base64.getUrlDecoder().decode(tasks.commandCipher().signature("shared-config-references")));}
+    GlobalTaskPlane(GlobalTaskStore tasks,DurableCommands commands,AgentDirectory agents,GlobalTaskViews views,OwnerQueries queries,String localNode,boolean localExecution){this(tasks,commands,agents,views,queries,localNode,localExecution,null);}
+    GlobalTaskPlane(GlobalTaskStore tasks,DurableCommands commands,AgentDirectory agents,GlobalTaskViews views,OwnerQueries queries,String localNode,boolean localExecution,ManagedHandoff handoff){this.tasks=tasks;this.commands=commands;this.agents=agents;this.views=views;this.queries=queries;this.localNode=localNode;this.localExecution=localExecution;this.handoff=handoff;documents=new ConfigurationDocuments(Base64.getUrlDecoder().decode(tasks.commandCipher().signature("shared-config-references")));}
     public boolean localOnly(){return false;}
     public Map<String,Object> invoke(TaskRequest supplied,AccessControl.Principal proposed)throws Exception{
         TaskRequest request=supplied.snapshot();AccessControl.Principal actor=tasks.principal(proposed);
@@ -25,6 +27,9 @@ final class GlobalTaskPlane implements TaskControlPlane {
         switch(request.kind){
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
+            case HANDOFF_ASSESS:case HANDOFF_LATEST:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);
             case CREATE:{
                 ObjectMapper yaml=new ObjectMapper(new YAMLFactory()).enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);JsonNode document=yaml.readTree(request.yaml);ConfigurationDocuments.validate(document);
                 if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");String id=document.path(document.path("formatVersion").asInt()==3?"pipelineId":"jobId").asText();

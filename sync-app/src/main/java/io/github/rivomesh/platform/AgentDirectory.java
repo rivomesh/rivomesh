@@ -13,6 +13,7 @@ final class AgentDirectory {
     private record Capacity(String node,int maximum,long assigned) {
         double utilization(){return (double)assigned/maximum;}
     }
+    record HandoffCapacity(Binding binding,int taskSlots,int workerSlots,long assignedTasks){}
     private final GlobalTaskStore tasks;
     private final SharedAccessStore access;
     private final JdbcControlStore db;
@@ -122,6 +123,18 @@ final class AgentDirectory {
         root(c);Binding b=read(c,node);if(b==null)throw new TaskService.Conflict("AGENT_NOT_REGISTERED");
         if(directory!=null&&!Objects.equals(directory,b.directory))throw new TaskService.Conflict("AGENT_DIRECTORY_CHANGED");
         b.state=incarnation==null?"UNKNOWN":!"RUNNING".equals(lifecycle)?"STOPPED":until<=db.now(c)?"STALE":epoch!=b.epoch||!incarnation.equals(b.incarnation)?"REGISTERING":"HEALTHY";return b;
+    }
+    HandoffCapacity handoffCapacity(Connection c,String node)throws Exception{
+        Binding binding=owner(c,node,null);
+        String sql="SELECT n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")
+                +" t WHERE t.cluster_id=n.cluster_id AND t.owner_id=n.node_id) FROM "+db.table("node")
+                +" n WHERE n.cluster_id=? AND n.node_id=?";
+        try(PreparedStatement p=db.prepare(c,sql,cluster,node);ResultSet r=p.executeQuery()){
+            if(!r.next())return new HandoffCapacity(binding,0,0,0);
+            ControlStore.Node declared=io.github.rivomesh.Model.JSON.readValue(r.getString(1),ControlStore.Node.class);
+            if(!node.equals(declared.id)||!declared.executes())throw new TaskService.Conflict("AGENT_RECORD_INVALID");
+            return new HandoffCapacity(binding,declared.taskCapacity,declared.runningCapacity,r.getLong(2));
+        }
     }
     void require(Connection c,ControlStore.Lease lease,String directory)throws Exception{
         directory(directory);db.requireLiveOwnLease(c,lease);db.requireExecutionRole(c,lease.nodeId);root(c);Binding b=read(c,lease.nodeId);

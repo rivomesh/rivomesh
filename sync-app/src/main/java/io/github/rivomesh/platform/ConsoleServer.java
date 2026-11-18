@@ -166,6 +166,21 @@ public final class ConsoleServer implements AutoCloseable {
                 if(parts.length==5&&method.equals("PUT")||parts.length==6&&parts[5].equals("validate")&&method.equals("POST")){JsonNode body=body(exchange),document=configurationDocument(body);String revision=body.path("expectedRevision").asText("");TaskRequest request=TaskRequest.of(parts.length==6?TaskRequest.Kind.CONFIG_PREVIEW:TaskRequest.Kind.CONFIG_UPDATE,id);request.document=document;request.revision=revision;request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");json(exchange,!control.localOnly()&&request.mutation()?202:200,control.invoke(request,principal));return;}
             }
             if(parts.length==4&&parts[1].equals("api")&&parts[2].equals("tasks")&&method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.VIEW,parts[3],principal));return;}
+            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("handoff")){
+                if(method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.HANDOFF_LATEST,parts[3],principal));return;}
+                if(method.equals("POST")){
+                    if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                    JsonNode input=body(exchange);
+                    TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_ASSESS,parts[3]);
+                    request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                    request.ownerNodeId=input.path("candidateNodeId").textValue();
+                    request.revision=input.path("expectedRevision").textValue();
+                    request.reference=input.path("expectedAssessment").textValue();
+                    if(input.hasNonNull("expectedAssessment")&&request.reference==null)
+                        throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+                    json(exchange,200,control.invoke(request,principal));return;
+                }
+            }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("diagnostics")&&method.equals("GET")){
                 Map<String,String> query=pageQuery(exchange.getRequestURI().getRawQuery(),512,"DIAGNOSTICS_PAGE_INVALID",
                         Arrays.asList("after","limit","subscriptionId"));
@@ -238,7 +253,7 @@ public final class ConsoleServer implements AutoCloseable {
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
         catch(IllegalArgumentException e){
             String message=e.getMessage();
-            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("CORRECTION_[A-Z_]+")
+            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("(CORRECTION|HANDOFF)_[A-Z_]+")
                     ||exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message.matches("ACCOUNT_[A-Z_]+"));
             error(exchange,400,known?message:"REQUEST_INVALID");
         }

@@ -283,3 +283,7 @@ The same artifact then passed 256 MySQL database mappings to 256 PostgreSQL sche
 ### Report lookup and keyboard focus through polling
 
 Candidate `5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40` passed 16 native checks, including seven real Chrome interactions across two Controllers. The browser found the original report by ID after Agent restart, returned to its directory page and kept keyboard focus through a real periodic refresh before opening native differences. It verified named correction controls, 27-row paging, explicit raw reveal, two repair receipts and typed correction with exact JSON integer precision. The same Maven artifact passed 12 standalone Chrome checks and the DOM suite passed 127 cases. [Report operations](../en/managed-validation.md) · [Manifests](baseline.json)
+
+### Managed Agent handoff assessment
+
+The exact Temurin 21 candidate `43b01b78bf4aa661119f9f49ae8a1057e92d98f9a52c5d2dbf0d1eb1c2d72597` passed 41 focused Java tests and eight native cases on each of PostgreSQL and MySQL control stores. Two real Controllers read and replayed the same assessment for two real Agents and a caught-up external PostgreSQL journal. The original Worker remained assigned. One of two simultaneous refreshes replaced the expected assessment and the persisted result survived SIGKILL of a Controller. The response exposes the checkpoint hash and reports the required evidence checks before actual transfer. [Global control API](../en/global-control.md#assess-transfer-to-another-agent) · [Manifests](baseline.json)

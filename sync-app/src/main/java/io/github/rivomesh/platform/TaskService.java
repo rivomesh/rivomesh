@@ -800,6 +800,8 @@ public final class TaskService implements AutoCloseable {
         Object captureLease=db.get("captureLeaseState");
         if(config.pipeline!=null&&Arrays.asList("CLAIMED","EXPIRED","UNCLAIMED").contains(captureLease))
             out.put("captureLeaseState",captureLease);
+        if(config.pipeline!=null&&db.get("normalizedSequence") instanceof Number sequence)
+            out.put("normalized_sequence",Long.toString(sequence.longValue()));
         if(config.pipeline!=null&&db.get("gapsBySubscription") instanceof Map){
             Map<?,?> observed=(Map<?,?>)db.get("gapsBySubscription");Map<String,Long> counts=new LinkedHashMap<>();
             for(io.github.rivomesh.PipelineConfig.Target target:config.pipeline.targets){Object count=observed.get(target.id);if(count instanceof Number&&((Number)count).longValue()>=0&&((Number)count).longValue()<=1001)counts.put(target.id,((Number)count).longValue());}

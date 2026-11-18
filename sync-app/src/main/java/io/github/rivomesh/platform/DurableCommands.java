@@ -263,5 +263,17 @@ final class DurableCommands {
             }
         }Collections.reverse(result);return result;
     }
+    boolean hasUnresolved(Connection c,String task)throws Exception{
+        root(c,false);
+        try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("command")
+                +" WHERE cluster_id=? AND task_id=? AND phase NOT IN ('SUCCEEDED','FAILED','REJECTED','CANCELLED')"
+                +" ORDER BY created_at,request_id LIMIT 1",cluster,task);ResultSet r=p.executeQuery()){
+            if(!r.next())return false;
+            Stored command=read(c,r.getString(1));
+            if(command==null||!task.equals(command.task)||terminal(command.phase))
+                throw new TaskService.Conflict("COMMAND_STATE_INVALID");
+            return true;
+        }
+    }
     private static Map<String,Object> view(Stored command){Map<String,Object> view=new LinkedHashMap<>();view.put("id",command.id);view.put("taskId",command.task);view.put("ownerNodeId",command.owner);view.put("action",command.request.action==null?command.request.kind.name():command.request.action);view.put("status",command.phase);view.put("code",command.code);view.put("actorId",command.actor);view.put("revision",command.acceptedRevision);view.put("createdAt",Instant.ofEpochMilli(command.createdAt).toString());view.put("parentRequestId",command.parent);return view;}
 }

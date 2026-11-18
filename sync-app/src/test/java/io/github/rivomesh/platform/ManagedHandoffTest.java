@@ -1,0 +1,142 @@
+package io.github.rivomesh.platform;
+
+import io.github.rivomesh.Model;
+import java.sql.*;
+import java.time.Instant;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class ManagedHandoffTest {
+    private GlobalTaskStoreTest fixture;
+    private JdbcControlStore aNodes,bNodes;
+    private AgentDirectory aAgents,bAgents;
+    private GlobalTaskViews views;
+    private DurableCommands commands;
+    private GlobalTaskPlane a,b;
+    private ControlStore.Lease aLease,bLease;
+    private ClusterConfig bConfig;
+    private String revision;
+    private final String candidateDirectory=UUID.randomUUID().toString();
+    private static final String YAML="""
+            formatVersion: 3
+            pipelineId: orders
+            source:
+              password: private-source-password
+            journal:
+              mode: EXTERNAL
+              product: POSTGRESQL
+              password: private-journal-password
+            targets:
+            - product: POSTGRESQL
+            """;
+
+    @BeforeEach void open()throws Exception{
+        fixture=new GlobalTaskStoreTest();fixture.initialize();
+        ClusterConfig config=fixture.config.cluster;
+        bConfig=Model.JSON.readValue(Model.JSON.writeValueAsBytes(config),ClusterConfig.class);bConfig.nodeId="b";
+        aNodes=new JdbcControlStore(config);bNodes=new JdbcControlStore(bConfig);
+        aAgents=new AgentDirectory(config,fixture.access,fixture.a);bAgents=new AgentDirectory(bConfig,fixture.access,fixture.b);
+        aLease=aNodes.register(ControlStoreTest.node("a"),List.of());aAgents.register(aLease,fixture.directory);
+        bLease=bNodes.register(ControlStoreTest.node("b"),List.of());bAgents.register(bLease,candidateDirectory);
+        commands=new DurableCommands(config,fixture.access,fixture.a,40);
+        views=new GlobalTaskViews(config,fixture.a,aAgents,300000);
+        a=entry(config,fixture.a,aAgents,commands,views);
+        b=entryB();
+        GlobalTaskStore.Record task=fixture.a.create("orders","a",fixture.directory,YAML,"create_managed_orders",fixture.admin);
+        revision=task.revision;
+        fixture.a.service((c,actors)->{fixture.a.applied(c,task,task.configurationVersion);return null;});
+        publish("STOPPED","UNCLAIMED","GTID-history");
+    }
+
+    @AfterEach void close(){
+        if(aNodes!=null)aNodes.close();
+        if(bNodes!=null)bNodes.close();
+    }
+
+    private GlobalTaskPlane entryB()throws Exception{
+        return entry(bConfig,fixture.b,bAgents,new DurableCommands(bConfig,fixture.access,fixture.b,40),
+                new GlobalTaskViews(bConfig,fixture.b,bAgents,300000));
+    }
+
+    private GlobalTaskPlane entry(ClusterConfig config,GlobalTaskStore store,AgentDirectory agents,
+                                  DurableCommands commands,GlobalTaskViews views)throws Exception{
+        ManagedHandoff handoff=new ManagedHandoff(config,fixture.access,store,commands,agents,views);
+        return new GlobalTaskPlane(store,commands,agents,views,new OwnerQueries(config,store,agents,10,30000),
+                config.nodeId,false,handoff);
+    }
+
+    private void publish(String worker,String lease,String checkpoint)throws Exception{
+        Map<String,Object> status=Map.of("phase","STREAMING","run_state","RUNNING","hasOpenGaps",false,
+                "table_count",1,"epoch",9,"captured_sequence","2","normalized_sequence","2",
+                "sourcePosition",Map.of("gtidSet",checkpoint));
+        views.publish(aLease,fixture.directory,List.of(Map.of("id","orders","desired",worker,"workerState",worker,
+                "statusAvailable",true,"captureLeaseState",lease,"observedAt",Instant.now().toString(),"status",status)));
+    }
+
+    private TaskRequest assess(String id,String previous){
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_ASSESS,"orders");
+        request.ownerNodeId="b";request.revision=revision;request.requestId=id;request.reference=previous;return request;
+    }
+
+    private Map<String,Object> latest(GlobalTaskPlane plane,AccessControl.Principal actor)throws Exception{
+        return plane.invoke(TaskRequest.of(TaskRequest.Kind.HANDOFF_LATEST,"orders"),actor);
+    }
+
+    @Test void oneReceiptAcrossEntriesDoesNotChangeOwnerOrExposePrivateEvidence()throws Exception{
+        TaskRequest request=assess("handoff_first_request",null);
+        Map<String,Object> observed=a.invoke(request,fixture.admin);
+        assertEquals("EVIDENCE_REQUIRED",observed.get("state"));
+        assertEquals(false,observed.get("executionAuthorized"));
+        assertEquals(20,observed.get("candidateTaskCapacity"));
+        assertEquals(observed,latest(entryB(),fixture.admin));
+        assertEquals(observed,b.invoke(request,fixture.admin));
+        assertFalse(Model.JSON.writeValueAsString(observed).contains("private-"));
+        assertFalse(Model.JSON.writeValueAsString(observed).contains("GTID-history"));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+        try(Connection c=fixture.connection();Statement s=c.createStatement();ResultSet r=s.executeQuery(
+                "SELECT COUNT(*) FROM rivomesh_control.rmc_audit_event WHERE payload LIKE '%MANAGED_HANDOFF_ASSESSED%'")){
+            r.next();assertEquals(1,r.getInt(1));
+        }
+    }
+
+    @Test void changedObservationCandidateLeaseOrRevisionInvalidatesTheRecordedAssessment()throws Exception{
+        a.invoke(assess("handoff_first_request",null),fixture.admin);
+        publish("RUNNING","CLAIMED","next-GTID");
+        assertEquals("STALE",latest(b,fixture.admin).get("state"));
+        assertEquals("HANDOFF_ASSESSMENT_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->b.invoke(assess("handoff_second_request",null),fixture.admin)).getMessage());
+        Map<String,Object> refreshed=b.invoke(assess("handoff_second_request","handoff_first_request"),fixture.admin);
+        assertEquals("BLOCKED",refreshed.get("state"));
+        assertTrue(((List<?>)refreshed.get("blockers")).contains("ORIGINAL_WORKER_NOT_DRAINED"));
+        bNodes.stopped(bLease);
+        ControlStore.Lease next=bNodes.register(ControlStoreTest.node("b"),List.of());
+        bAgents.register(next,candidateDirectory);
+        assertEquals("STALE",latest(a,fixture.admin).get("state"));
+        fixture.a.update("orders",revision,YAML,"handoff_revision_change",fixture.admin);
+        assertEquals("REVISION_CHANGED",assertThrows(TaskService.Conflict.class,()->a.invoke(
+                assess("handoff_third_request","handoff_second_request"),fixture.admin)).getMessage());
+    }
+
+    @Test void deniesScopedCandidateAndMarksCapacityAndPendingCommands()throws Exception{
+        String accounts=fixture.access.accounts().revision;
+        String token="scoped-handoff-admin-token-32-characters";
+        fixture.access.mutate("CREATE",null,Model.JSON.readTree("{\"expectedRevision\":\""+accounts
+                +"\",\"id\":\"origin-only\",\"role\":\"OPERATOR\",\"enabled\":true,\"nodeIds\":[\"a\"],"
+                +"\"taskIds\":[\"orders\"],\"token\":\""+token+"\"}"),"create_handoff_scoped",fixture.admin);
+        AccessControl.Principal scoped=AccountDirectory.authenticate(fixture.access.accounts(),"Bearer "+token);
+        AccessControl.Principal admin=AccountDirectory.authenticate(fixture.access.accounts(),"Bearer "+GlobalTaskStoreTest.TOKEN);
+        assertThrows(SecurityException.class,()->a.invoke(assess("handoff_scoped_request",null),scoped));
+        TaskRequest stop=TaskRequest.of(TaskRequest.Kind.ACTION,"orders");
+        stop.action="STOP";stop.revision=revision;stop.requestId="handoff_pending_stop";
+        commands.enqueue(stop,admin);revision=fixture.a.get("orders",admin).revision;
+        ControlStore.Node restricted=ControlStoreTest.node("b");restricted.incarnation=bLease.incarnation;
+        restricted.taskCapacity=1;bNodes.heartbeat(bLease,restricted,List.of());
+        fixture.b.create("occupied","b",candidateDirectory,YAML,"create_occupied_slot",admin);
+        Map<String,Object> observed=a.invoke(assess("handoff_admin_request",null),admin);
+        assertTrue(((List<?>)observed.get("blockers")).containsAll(
+                List.of("CANDIDATE_TASK_CAPACITY_UNAVAILABLE","TASK_COMMANDS_UNRESOLVED")));
+        assertThrows(SecurityException.class,()->latest(b,scoped));
+    }
+}
