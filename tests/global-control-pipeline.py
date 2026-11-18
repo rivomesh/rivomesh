@@ -27,6 +27,8 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='mysql:8.4', help='MySQL source fixture image or pinned digest')
 parser.add_argument('--source-expected-version', help='Set the source type and optional version check in the fixture task')
+parser.add_argument('--mysql-async-failover', action='store_true',
+                    help='Promote a caught-up MySQL 8.4 replica externally and verify automatic cross-target continuation')
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
@@ -71,6 +73,14 @@ parser.add_argument('--browser', type=Path, help='Use a real Chrome executable t
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.mysql_async_failover and (not args.separate_execution or any((
+        args.task_authority, args.command_routing, args.automatic_placement, args.runtime_image, args.runtime_jdk,
+        args.rolling_restart, args.task_views, args.mysql_delivery_timing, args.source_diagnostics,
+        args.failure_diagnostics, args.snapshot_diagnostics, args.compensation, args.correction,
+        args.handoff_assessment, args.managed_failure_review, args.managed_commit, args.managed_binlog_evidence,
+        args.recovery_jobs))
+        or (args.source_expected_version and not re.fullmatch(r'8\.4(?:\.\d+)?', args.source_expected_version))):
+    parser.error('--mysql-async-failover requires the separate Agent profile and a MySQL 8.4 source')
 if args.browser and (not args.correction or not args.separate_execution
                      or not os.access(args.browser.resolve(), os.X_OK)
                      or any((args.recovery_jobs, args.automatic_placement, args.task_views, args.compensation,
@@ -167,6 +177,8 @@ output.mkdir(parents=True, exist_ok=True)
 project = 'rivomesh-global-cdc-' + uuid.uuid4().hex[:10]
 env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secrets.token_urlsafe(24),
            RM_GC_DATA=secrets.token_urlsafe(24), RM_GC_KEY=base64.b64encode(secrets.token_bytes(32)).decode(), RM_GC_STORE_URL='jdbc:postgresql://postgres:5432/sync_test')
+if args.mysql_async_failover:
+    env.update({key:secrets.token_urlsafe(24) for key in ('RM_GC_HA_ADMIN','RM_GC_HA_CAPTURE','RM_GC_HA_REPLICATION')})
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
 review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
@@ -186,6 +198,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'controlProduct': args.control_product,
             'taskAuthority': args.task_authority,
             'commandRouting': args.command_routing,
+            'mysqlAsyncFailover': args.mysql_async_failover,
             'automaticPlacement': args.automatic_placement,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
@@ -248,6 +261,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         'postgres': {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'sync_test'}}}
     if args.separate_execution:
         services['store'] = {'image': 'mysql:8.4', 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_CONTROL}', 'MYSQL_ROOT_HOST': '%', 'MYSQL_DATABASE': 'rivomesh_control'}} if args.control_product == 'MYSQL' else {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'rivomesh_control'}}
+    if args.mysql_async_failover:
+        services['mysql']['environment']['MYSQL_ROOT_PASSWORD'] = '${RM_GC_HA_ADMIN}'
+        services['mysql-replica'] = deepcopy(services['mysql'])
+        services['mysql-replica']['command'][0] = '--server-id=2'
     if args.task_authority:
         services['mysql-target']['command'] += ['--log-bin=mysql-bin', '--binlog-format=ROW',
                                                 '--binlog-row-image=FULL', '--gtid-mode=ON',
@@ -324,7 +341,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if service == 'postgres' or service == 'store' and args.control_product == 'POSTGRESQL':
             result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'sync_test' if service == 'postgres' else 'rivomesh_control', '-A', '-t', '-F', '|', '-c', statement)
         else:
-            result = compose('exec', '-T', '-e', 'MYSQL_PWD=' + env['RM_GC_CONTROL' if service == 'store' else 'RM_GC_DATA'], service, 'mysql', '-h127.0.0.1', '-uroot', '-N', '-B', '-e', statement)
+            password_key = 'RM_GC_CONTROL' if service == 'store' else 'RM_GC_DATA'
+            if args.mysql_async_failover and service in ('mysql','mysql-replica'):
+                password_key = 'RM_GC_HA_ADMIN'
+            result = compose('exec', '-T', '-e', 'MYSQL_PWD=' + env[password_key],
+                             service, 'mysql', '-h127.0.0.1', '-uroot', '-N', '-B', '-e', statement)
         return result.stdout.strip().replace('\t', '|')
 
     bases = {}
@@ -556,18 +577,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         passed(name + ': post-commit Agent loss and controller loss preserve one native receipt and the same cross-entry result')
         return original, accepted
 
-    def equal_rows():
+    def equal_rows(source='mysql'):
         for service, prefix in [('postgres', 'rm_pg'), ('mysql-target', 'rm_my')]:
-            assert sql(service, 'SELECT id,note,derived FROM ' + prefix + '_sales.items ORDER BY id') == sql('mysql', 'SELECT id,note,derived FROM sales.items ORDER BY id')
-            assert sql(service, 'SELECT value,COUNT(*) FROM ' + prefix + '_sales.duplicates GROUP BY value ORDER BY value') == sql('mysql', 'SELECT value,COUNT(*) FROM sales.duplicates GROUP BY value ORDER BY value')
-            assert sql(service, 'SELECT id,amount FROM ' + prefix + '_billing.ledger ORDER BY id') == sql('mysql', 'SELECT id,amount FROM billing.ledger ORDER BY id')
+            assert sql(service, 'SELECT id,note,derived FROM ' + prefix + '_sales.items ORDER BY id') == sql(source, 'SELECT id,note,derived FROM sales.items ORDER BY id')
+            assert sql(service, 'SELECT value,COUNT(*) FROM ' + prefix + '_sales.duplicates GROUP BY value ORDER BY value') == sql(source, 'SELECT value,COUNT(*) FROM sales.duplicates GROUP BY value ORDER BY value')
+            assert sql(service, 'SELECT id,amount FROM ' + prefix + '_billing.ledger ORDER BY id') == sql(source, 'SELECT id,amount FROM billing.ledger ORDER BY id')
             expr = "payload->>'n'" if service == 'postgres' else "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.n'))"
-            assert sql(service, 'SELECT id,' + expr + ' FROM ' + prefix + '_sales.items ORDER BY id') == sql('mysql', "SELECT id,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.n')) FROM sales.items ORDER BY id")
+            assert sql(service, 'SELECT id,' + expr + ' FROM ' + prefix + '_sales.items ORDER BY id') == sql(source, "SELECT id,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.n')) FROM sales.items ORDER BY id")
         return True
 
-    def rows_match():
+    def rows_match(source='mysql'):
         try:
-            return equal_rows()
+            return equal_rows(source)
         except AssertionError:
             diagnostics['rowMismatch'] = True
             return False
@@ -931,6 +952,139 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert sql('store', "SELECT COUNT(*) FROM global_control.rmc_command WHERE cluster_id='global-cdc' "
                                 "AND request_id='" + request_id + "'") == '1'
         passed('A new owner generation binds the exact request and local revision; without its receipt both Controllers expose UNKNOWN and identical replay preserves the outcome')
+
+    def gtid_literal(value):
+        assert re.fullmatch(r'[0-9a-f:,-]+', value)
+        return "'" + value + "'"
+
+    def configure_mysql_replica():
+        assert manifest['sourceVersion'].startswith('8.4.')
+        assert sql('mysql-replica', 'SELECT VERSION()') == manifest['sourceVersion']
+        for service in ('mysql','mysql-replica'):
+            sql(service, "SET SESSION sql_log_bin=0; "
+                         "CREATE USER 'fixture_capture'@'%' IDENTIFIED BY '" + env['RM_GC_HA_CAPTURE'] + "'; "
+                         "GRANT SELECT,RELOAD,REPLICATION SLAVE,REPLICATION CLIENT,LOCK TABLES ON *.* TO 'fixture_capture'@'%'")
+        sql('mysql', "SET SESSION sql_log_bin=0; "
+                     "CREATE USER 'fixture_replication'@'%' IDENTIFIED BY '" + env['RM_GC_HA_REPLICATION'] + "'; "
+                     "GRANT REPLICATION SLAVE ON *.* TO 'fixture_replication'@'%'")
+        # Both servers are fresh fixtures with identical bootstrap users and no business data.
+        baseline = sql('mysql', 'SELECT @@GLOBAL.gtid_executed')
+        sql('mysql-replica', 'RESET BINARY LOGS AND GTIDS')
+        if baseline:
+            sql('mysql-replica', 'SET GLOBAL gtid_purged=' + gtid_literal(baseline))
+        sql('mysql-replica', "CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql',SOURCE_USER='fixture_replication',"
+                             "SOURCE_PASSWORD='" + env['RM_GC_HA_REPLICATION'] + "',SOURCE_AUTO_POSITION=1,"
+                             "GET_SOURCE_PUBLIC_KEY=1,SOURCE_CONNECT_RETRY=1; SET GLOBAL super_read_only=ON; START REPLICA")
+        denied = compose('exec','-T','-e','MYSQL_PWD='+env['RM_GC_HA_CAPTURE'],'mysql-replica',
+                         'mysql','-h127.0.0.1','-ufixture_capture','-e','SET GLOBAL read_only=@@GLOBAL.read_only',
+                         check=False)
+        assert denied.returncode != 0 and 'ERROR 1227' in denied.stderr
+        passed('The GTID replica starts read-only and MySQL denies promotion privileges to the Rivomesh capture account')
+
+    def run_mysql_async_failover():
+        def snapshots():
+            return {
+                'journal': sql('postgres', "SELECT table_id,snapshot_id,row_count,run_state FROM ha_journal.rm3_snapshot "
+                                           "WHERE pipeline_id='global_cdc' AND snapshot_scope='source' ORDER BY table_id"),
+                'pg': sql('postgres', "SELECT table_id,snapshot_id,row_count,snapshot_state FROM rm_pg_meta.rm3_sink_table "
+                                      "WHERE pipeline_id='global_cdc' ORDER BY table_id"),
+                'my': sql('mysql-target', "SELECT table_id,snapshot_id,row_count,snapshot_state FROM rm_my_meta.rm3_sink_table "
+                                          "WHERE pipeline_id='global_cdc' ORDER BY table_id"),
+            }
+
+        def cut(server_uuid):
+            generation, epoch, sequence = sql('postgres', "SELECT generation,epoch,next_seq-1 FROM ha_journal.rm3_job "
+                                                         "WHERE pipeline_id='global_cdc'").split('|')
+            receipts = {}
+            for target, service in (('pg','postgres'),('my','mysql-target')):
+                target_generation, cursor, transaction = sql(service, f"SELECT generation,stream_seq,transaction_id "
+                    f"FROM rm_{target}_meta.rm3_sink_job WHERE pipeline_id='global_cdc' AND subscription_id='{target}'").split('|')
+                if target_generation != generation or cursor != sequence:
+                    return None
+                receipts[target] = {'sequence':int(cursor),'transactionId':transaction}
+            projections = []
+            for node in ('node-a','node-b'):
+                view = task(node)
+                status = view.get('status', {})
+                source = status.get('sourcePosition', {}).get('payload', {})
+                acks = {sub['id']:sub['safeCoveredSequence'] for sub in status.get('subscriptions', [])}
+                if source.get('serverUuid') != server_uuid or status.get('captured_sequence') != sequence or acks != {
+                        'pg':sequence,'my':sequence}:
+                    return None
+                projections.append((view['revision'],view['activeConfigurationVersion'],source))
+            if projections[0] != projections[1]:
+                return None
+            revision, version, source = projections[0]
+            return {'generation':generation,'epoch':int(epoch),'sequence':int(sequence),'source':source,
+                    'revision':revision,'configurationVersion':version,'targets':receipts}
+
+        primary = sql('mysql','SELECT @@GLOBAL.server_uuid')
+        replica = sql('mysql-replica','SELECT @@GLOBAL.server_uuid')
+        assert primary != replica
+        before = wait(lambda: cut(primary), 'same original positions and native target receipts before failover')
+        original_snapshots = snapshots()
+        assert all(len(rows.splitlines()) == 3 for rows in original_snapshots.values())
+        primary_set = sql('mysql','SELECT @@GLOBAL.gtid_executed')
+        assert sql('mysql-replica', 'SELECT WAIT_FOR_EXECUTED_GTID_SET(' + gtid_literal(primary_set) + ',20)') == '0'
+        assert sql('mysql-replica', 'SELECT @@GLOBAL.read_only,@@GLOBAL.super_read_only') == '1|1'
+        assert sql('mysql-replica', 'SELECT GTID_SUBSET(' + gtid_literal(before['source']['gtidSet'])
+                                   + ',@@GLOBAL.gtid_executed)') == '1'
+        passed('The original source UUID, GTID, snapshot and both target receipts agree before the replica is eligible')
+
+        compose('kill','-s','SIGKILL','mysql')
+        endpoint = route + '/diagnostics?limit=25'
+        wait(lambda: all(any(event.get('phase')=='SOURCE_CONNECT' and event.get('event')=='CAPTURE_FAILURE'
+                             for event in http(node, endpoint)['events']) for node in ('node-a','node-b')),
+             'both Controllers observe the missing writable source', seconds=75)
+        io_error = wait(lambda: int(sql('mysql-replica',
+            "SELECT LAST_ERROR_NUMBER FROM performance_schema.replication_connection_status WHERE CHANNEL_NAME=''") or '0'),
+            'MySQL replica records the original source receiver error', seconds=45)
+        log = home / owner_node / 'controller' / 'logs' / 'global_cdc.log'
+        wait(lambda: 'PIPELINE_DIAGNOSTIC SOURCE_CONNECT SOURCE_REPLICATION_ERROR' in log.read_text(errors='replace'),
+             'capture reports the replica receiver error', seconds=45)
+        assert sql('mysql-replica', 'SELECT @@GLOBAL.read_only,@@GLOBAL.super_read_only') == '1|1'
+        offline = wait(lambda: cut(primary), 'both Controllers retain the durable cut during the outage')
+        assert all(offline[key] == before[key] for key in before if key != 'epoch')
+        assert snapshots() == original_snapshots
+        passed('A primary SIGKILL leaves both controllers waiting, the replica read-only and capture/target positions unchanged')
+
+        # Only the fixture's separate source administrator executes this runbook.
+        sql('mysql-replica', 'STOP REPLICA; RESET REPLICA ALL; SET GLOBAL super_read_only=OFF; SET GLOBAL read_only=OFF')
+        assert sql('mysql-replica', 'SELECT @@GLOBAL.read_only,@@GLOBAL.super_read_only') == '0|0'
+        assert not sql('mysql-replica','SHOW REPLICA STATUS')
+        promoted_set = sql('mysql-replica','SELECT @@GLOBAL.gtid_executed')
+        sql('mysql-replica', """START TRANSACTION;
+            UPDATE sales.items SET note='promoted writer',payload=JSON_OBJECT('n',18446744073709551615) WHERE id=1;
+            DELETE FROM sales.items WHERE id=3;
+            INSERT INTO sales.items(id,note,payload) VALUES(51,'new source row',JSON_OBJECT('n',51));
+            UPDATE sales.duplicates SET value=9 WHERE value=7 LIMIT 1;
+            INSERT INTO billing.ledger VALUES(2,456.0123);
+            COMMIT""")
+        promoted_transaction = sql('mysql-replica', 'SELECT GTID_SUBTRACT(@@GLOBAL.gtid_executed,'
+                                   + gtid_literal(promoted_set) + ')')
+        assert re.fullmatch(re.escape(replica) + r':\d+', promoted_transaction)
+        wait(lambda: rows_match('mysql-replica'), 'both SQL targets exactly match promoted source rows')
+        keyless_source = sql('mysql-replica', "SELECT value,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.n')),COUNT(*) "
+                             "FROM sales.duplicates GROUP BY 1,2 ORDER BY 1,2")
+        assert sql('postgres', "SELECT value,payload->>'n',COUNT(*) FROM rm_pg_sales.duplicates "
+                   "GROUP BY 1,2 ORDER BY 1,2") == keyless_source
+        assert sql('mysql-target', "SELECT value,JSON_UNQUOTE(JSON_EXTRACT(payload,'$.n')),COUNT(*) "
+                   "FROM rm_my_sales.duplicates GROUP BY 1,2 ORDER BY 1,2") == keyless_source
+        after = wait(lambda: cut(replica), 'same new GTID and receipts through both Controllers')
+        assert sql('mysql-replica', 'SELECT GTID_SUBSET(' + gtid_literal(before['source']['gtidSet']) + ','
+                                   + gtid_literal(after['source']['gtidSet']) + ')') == '1'
+        assert sql('mysql-replica', 'SELECT GTID_SUBSET(' + gtid_literal(promoted_transaction) + ','
+                                   + gtid_literal(after['source']['gtidSet']) + ')') == '1'
+        assert after['generation'] == before['generation']
+        assert after['configurationVersion'] == before['configurationVersion']
+        assert after['revision'] == before['revision'] and after['sequence'] > before['sequence']
+        assert set(receipt['transactionId'] for receipt in after['targets'].values()) == {promoted_transaction}
+        assert snapshots() == original_snapshots
+        manifest['sourceFailover'] = {'before':before,'duringOutage':offline,'after':after,
+                                      'replicaReceiverErrorNumber':io_error,'sourceErrorCode':'SOURCE_REPLICATION_ERROR',
+                                      'snapshotMetadata':original_snapshots,'promotedTransaction':promoted_transaction}
+        manifest['runtimeProcesses'] = observe_jvms()
+        passed('After external promotion both SQL destinations commit the promoted GTID and match all rows without a configuration change or resnapshot')
 
     def run_rolling_restart():
         rolls = manifest['runtimeRollout'] = {}
@@ -1417,6 +1571,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
 
     try:
         databases = ('mysql', 'mysql-target', 'postgres', 'store') if args.separate_execution else ('mysql', 'mysql-target', 'postgres')
+        if args.mysql_async_failover:
+            databases += ('mysql-replica',)
         compose('up', '-d', *databases)
         for service in databases:
             wait(lambda s=service: sql(s, 'SELECT 1') == '1', service + ' SQL ready')
@@ -1424,6 +1580,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         manifest['sourceServerProfile'] = sql('mysql','SELECT @@global.gtid_mode,@@global.binlog_format,@@global.binlog_row_image')
         manifest['sourceImageId'] = subprocess.check_output(['docker','image','inspect','--format','{{.Id}}',args.source_image],text=True).strip()
         assert manifest['sourceServerProfile'] == 'ON|ROW|FULL'
+        if args.mysql_async_failover:
+            configure_mysql_replica()
         # The business role is distinct from controller credentials and is allowed into Worker configuration.
         sql('postgres', "CREATE ROLE sync_target LOGIN PASSWORD '" + env['RM_GC_DATA'] + "'; GRANT CREATE ON DATABASE sync_test TO sync_target")
         sql('mysql', "CREATE DATABASE sales; CREATE DATABASE billing; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,note VARCHAR(50),payload JSON,derived BIGINT GENERATED ALWAYS AS(id*2) VIRTUAL); INSERT INTO sales.items(id,note,payload) VALUES(1,'before',JSON_OBJECT('n',1)),(2,'second',JSON_OBJECT('n',2)); CREATE TABLE sales.duplicates(value INT,payload JSON); INSERT INTO sales.duplicates VALUES(7,JSON_OBJECT('n',7)),(7,JSON_OBJECT('n',7)); CREATE TABLE billing.ledger(id BIGINT PRIMARY KEY,amount DECIMAL(20,4)); INSERT INTO billing.ledger VALUES(1,123.4567)")
@@ -1450,6 +1608,14 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     'journal': {'mode': 'LOCAL'}, 'targets': []}
         if args.source_expected_version:
             document['source'].update(type='MYSQL', expectedVersion=args.source_expected_version)
+        if args.mysql_async_failover:
+            document['source'].update(type='MYSQL', topology='ASYNC',
+                                      expectedVersion=args.source_expected_version or manifest['sourceVersion'],
+                                      username='fixture_capture', password=env['RM_GC_HA_CAPTURE'],
+                                      nodes=[{'host':host,'port':3306} for host in ('mysql','mysql-replica')])
+            document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'ha_journal',
+                                 'url':'jdbc:postgresql://postgres:5432/sync_test','username':'sync_target',
+                                 'password':env['RM_GC_DATA']}
         if args.handoff_assessment:
             document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'transfer_journal',
                                  'url':'jdbc:postgresql://postgres:5432/sync_test','username':'sync_target',
@@ -1508,6 +1674,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.mysql_async_failover:
+            run_mysql_async_failover()
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_MYSQL_ASYNC_FAILOVER_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.task_authority:
             run_task_authority(document)
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
@@ -2036,7 +2208,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             logs = compose('logs', '--no-color', '--tail', '60', node, check=False)
             diagnostics[node] = logs.stdout + logs.stderr
         safe = json.dumps(diagnostics, indent=2)
-        for key in ('RM_GC_TOKEN', 'RM_GC_CONTROL', 'RM_GC_DATA', 'RM_GC_KEY', 'RM_GC_OPERATOR', 'RM_GC_VIEWER'):
+        for key in ('RM_GC_TOKEN', 'RM_GC_CONTROL', 'RM_GC_DATA', 'RM_GC_KEY', 'RM_GC_OPERATOR', 'RM_GC_VIEWER',
+                    'RM_GC_HA_ADMIN','RM_GC_HA_CAPTURE','RM_GC_HA_REPLICATION'):
             if key in env:
                 safe = safe.replace(env[key], '[REDACTED]')
         (output / 'diagnostics-redacted.json').write_text(safe + '\n')

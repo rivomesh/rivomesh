@@ -5486,5 +5486,169 @@
       "artifactSha256": "57d5286f1477a8d4f1548bcaccd7efca0745296e140ac695036f0b733de4eb14",
       "focusedJavaTests": 30
     }
+  },
+  "java21Mysql84AsyncFailover": {
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <candidate jar> --output <directory>",
+    "native": {
+      "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+      "status": "PASS",
+      "checks": [
+        "The GTID replica starts read-only and MySQL denies promotion privileges to the Rivomesh capture account",
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "The original source UUID, GTID, snapshot and both target receipts agree before the replica is eligible",
+        "A primary SIGKILL leaves both controllers waiting, the replica read-only and capture/target positions unchanged",
+        "After external promotion both SQL destinations commit the promoted GTID and match all rows without a configuration change or resnapshot"
+      ],
+      "harnessSourceSha256": "d9a38256f4743e69f3233f2caf315c921efee1a17f5f0eb2c049ad257951f1aa",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "mysqlAsyncFailover": true,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "receiptLookup": false,
+      "handoffCustody": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "secretAudit": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "sourceFailover": {
+        "before": {
+          "generation": "1c430485-a6a9-42a2-9246-025c0d11c124",
+          "epoch": 1,
+          "sequence": 1,
+          "source": {
+            "file": "mysql-bin.000003",
+            "gtidSet": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:1-14",
+            "offset": "3213",
+            "serverUuid": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd"
+          },
+          "revision": "aee5a877-5004-49bd-b0d9-b84860d21254",
+          "configurationVersion": "5a2e0314-5538-41e1-a8b7-2ee1e655a8ac",
+          "targets": {
+            "pg": {
+              "sequence": 1,
+              "transactionId": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:14"
+            },
+            "my": {
+              "sequence": 1,
+              "transactionId": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:14"
+            }
+          }
+        },
+        "duringOutage": {
+          "generation": "1c430485-a6a9-42a2-9246-025c0d11c124",
+          "epoch": 1,
+          "sequence": 1,
+          "source": {
+            "file": "mysql-bin.000003",
+            "gtidSet": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:1-14",
+            "offset": "3213",
+            "serverUuid": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd"
+          },
+          "revision": "aee5a877-5004-49bd-b0d9-b84860d21254",
+          "configurationVersion": "5a2e0314-5538-41e1-a8b7-2ee1e655a8ac",
+          "targets": {
+            "pg": {
+              "sequence": 1,
+              "transactionId": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:14"
+            },
+            "my": {
+              "sequence": 1,
+              "transactionId": "c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:14"
+            }
+          }
+        },
+        "after": {
+          "generation": "1c430485-a6a9-42a2-9246-025c0d11c124",
+          "epoch": 2,
+          "sequence": 2,
+          "source": {
+            "file": "mysql-bin.000001",
+            "gtidSet": "bef9605a-e33f-11f1-82db-9ab48984743c:1-1,c02f82f9-e33f-11f1-ace2-529ea5e3a5cd:1-14",
+            "offset": "4154",
+            "serverUuid": "bef9605a-e33f-11f1-82db-9ab48984743c"
+          },
+          "revision": "aee5a877-5004-49bd-b0d9-b84860d21254",
+          "configurationVersion": "5a2e0314-5538-41e1-a8b7-2ee1e655a8ac",
+          "targets": {
+            "pg": {
+              "sequence": 2,
+              "transactionId": "bef9605a-e33f-11f1-82db-9ab48984743c:1"
+            },
+            "my": {
+              "sequence": 2,
+              "transactionId": "bef9605a-e33f-11f1-82db-9ab48984743c:1"
+            }
+          }
+        },
+        "replicaReceiverErrorNumber": 2003,
+        "sourceErrorCode": "SOURCE_REPLICATION_ERROR",
+        "snapshotMetadata": {
+          "journal": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|1d749b57-3e9d-4f72-8c0d-35f83df8e6cc|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|05ef3dc3-3bbd-43c3-95ae-23e4b142286c|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|b4d77765-08ad-4eeb-9be9-8eb343153af2|2|COMPLETE",
+          "pg": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|1d749b57-3e9d-4f72-8c0d-35f83df8e6cc|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|05ef3dc3-3bbd-43c3-95ae-23e4b142286c|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|b4d77765-08ad-4eeb-9be9-8eb343153af2|2|COMPLETE",
+          "my": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|1d749b57-3e9d-4f72-8c0d-35f83df8e6cc|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|05ef3dc3-3bbd-43c3-95ae-23e4b142286c|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|b4d77765-08ad-4eeb-9be9-8eb343153af2|2|COMPLETE"
+        },
+        "promotedTransaction": "bef9605a-e33f-11f1-82db-9ab48984743c:1"
+      },
+      "runtimeProcesses": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        }
+      ],
+      "cleanupExitCode": 0
+    },
+    "stagedHarnessSha256": "a4f6d477f468300a8de86e5b10a383e9810bbaca9af5288402fb7bd089c9f8d6"
   }
 }

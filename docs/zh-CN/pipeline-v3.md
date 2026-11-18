@@ -70,6 +70,12 @@ MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿
 
 [MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
 
+### MySQL 8.4 主库故障后自动续传
+
+设置 `source.topology: ASYNC`，在 `source.nodes` 中配置同一 GTID 复制拓扑的主库与备库。由数据库高可用服务隔离故障主库，提升已追平的备库。Rivomesh 核验新主可用的 GTID 历史并从持久断点恢复连接。备库仍为只读或复制出现 I/O 错误时，排查数据库拓扑并保留原日志和目标断点。
+
+Java 21 实库档案使用 MySQL 8.4.13 异步 GTID 主备、外部 PostgreSQL 日志、两个管理入口和 PostgreSQL、MySQL 目标。强杀原主后，两入口显示采集中断，两个目标断点保持原值。外部流程完成提升后，Rivomesh 把新主的 GTID 自动投递到两个目标，并复用配置修订、日志代次和快照 ID。复现命令为 `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <发布包> --output target/mysql-async-proof`。[验收归档](../verification/README.md)
+
 ## 使用 PostgreSQL 日志接管独立 Worker
 
 新建独立 MySQL 同步任务时，将 `journal.mode` 设为 `EXTERNAL`，`journal.product` 设为 `POSTGRESQL`，并为 `journal.writerAssignment` 生成新的 UUID。该流程支持最多八个 PostgreSQL/MySQL 目标和 256 张源表。两个 Worker 都应能连接原日志库、目标元数据和源日志。单独生成的校验报告保存在自己的私有目录中。

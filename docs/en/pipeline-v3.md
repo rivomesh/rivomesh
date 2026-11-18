@@ -70,6 +70,12 @@ Use `tests/mysql84-profile-run.sh` to reproduce the admission and live refusal c
 
 [MySQL GTID format](https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-concepts.html) · [Binary log options](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html)
 
+### Automatic continuation after MySQL 8.4 primary failure
+
+Set `source.topology: ASYNC` and supply the primary and replica as candidate `source.nodes` within one GTID replication topology. The external database HA service fences the failed primary and promotes a caught-up replica. Rivomesh verifies the promoted source's available GTID history and reconnects from the saved position. If the replica is still read-only or replication has an I/O error, investigate the topology while retaining the journal and target checkpoints.
+
+The Java 21 native profile used MySQL 8.4.13 asynchronous GTID replication, an external PostgreSQL journal, two management entries and PostgreSQL and MySQL destinations. After the old primary was killed, both entries showed the capture interruption and the two target checkpoints held. External promotion returned a writable source. Rivomesh delivered the new primary's GTID to both destinations with the original configuration revision, journal generation and snapshot IDs. Reproduce with `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <release jar> --output target/mysql-async-proof`. [Verification archive](../verification/README.md)
+
 ## Standalone writer transfer with a PostgreSQL journal
 
 For a new standalone MySQL pipeline, set `journal.mode: EXTERNAL`, `journal.product: POSTGRESQL` and `journal.writerAssignment` to a fresh UUID. Use up to eight PostgreSQL/MySQL targets and 256 source tables. Keep the journal, target metadata and source logs accessible on both Workers, and reserve an independent private directory for any report files you generate separately.

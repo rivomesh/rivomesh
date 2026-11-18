@@ -1139,8 +1139,8 @@
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "同一 Temurin 21 候选已通过四个 MySQL 版本的单机全量及增量、PostgreSQL 17 同步槽切主、18 生成列与 Oracle 26ai 单 PDB 原位恢复。MySQL 其他拓扑、更多目标、TLS 和恢复组合待补验。",
-        "en": "One Temurin 21 candidate passed standalone snapshot and CDC on four MySQL versions, PostgreSQL 17 synchronized-slot promotion, PostgreSQL 18 generated columns, and Oracle 26ai single-PDB resume. Other MySQL topologies, targets, TLS and recovery combinations remain."
+        "zh-CN": "Java 21 已通过四个 MySQL 版本的独立全量增量、MySQL 8.4.13 异步 GTID 切主及双 SQL 目标续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB 核心档案。更多拓扑、目标、TLS 和恢复组合待验。",
+        "en": "Java 21 passed four single-primary MySQL releases, MySQL 8.4.13 async GTID primary failover with two SQL destinations, PostgreSQL 17/18 and single-PDB Oracle profiles. More topologies, destinations, TLS and recovery combinations remain."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",
@@ -1156,7 +1156,8 @@
         "SO-07"
       ],
       "evidence": [
-        "docs/zh-CN/performance.md"
+        "docs/zh-CN/performance.md",
+        "tests/global-control-pipeline.py"
       ]
     },
     {
