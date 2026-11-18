@@ -45,6 +45,18 @@ If the command returns `ADOPTION_COMMIT_UNKNOWN`, keep the freeze and use the id
 
 After a confirmed receipt, the maintenance operator can remove the source write fence and run `resume-pipeline` with `resumeErrorGeneration`, then start the ordinary worker. Keep target application writers stopped during sync. Retain the source binlog covering the approved cut until the worker catches up. Application write handover and failback remain separate operations.
 
+## Record application writer readiness
+
+Use `prepare-target-writer` while the single-table adoption is still paused at its original baseline. Keep the original MySQL source physically connected and durably frozen, and keep the application and Rivomesh writers stopped under exclusive administration of both databases. Provide the original adoption digest, request UUID and actor, plus the PostgreSQL writer login, a new request UUID and the reviewing operator. The target administration account needs to lock `pg_authid`, `pg_auth_members` and the event trigger catalog. [PostgreSQL privileges](https://www.postgresql.org/docs/17/ddl-priv.html)
+
+```sh
+java -jar rivomesh.jar prepare-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <writer-role> <review-request> <review-actor> --acknowledge-exclusive-freeze
+```
+
+The dedicated PostgreSQL login needs `CONNECT`, schema `USAGE` and table `SELECT`. Admission requires the role to be disconnected, have no role memberships and hold no table or column write privileges. Other grants that introduce a parallel writer, writable views accessible to this login, and executable user-defined `SECURITY DEFINER` routines also stop the review. Privileged administrators must keep exclusive control of schema, role and application-routing changes during the maintenance window.
+
+`TARGET_WRITER_READINESS_RECORDED` identifies a native receipt recording the exact adoption, source cut, target rows and authority evidence, role identity and review approval. On `WRITER_READINESS_COMMIT_UNKNOWN`, repeat the original request while the source is still frozen and its cut can be verified. Replay checks the live row state, authority and cut again. Keep the receipt with the original migration plan. Writer activation and failback require their own approval and write-history check.
+
 ## Review downgraded UNIQUE indexes before handover
 
 For an already managed PostgreSQL target, establish and complete a [common-cut report](reconciliation-workflow.md) for the destination, and keep the pipeline paused. Suspend business writes and DDL on the target, then run the review with the same task configuration and report ID.

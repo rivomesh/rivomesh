@@ -45,6 +45,18 @@ java -jar rivomesh.jar adopt-existing config/task.yml postgres <sourceTable> <re
 
 确认回执后，运维人员可以解除源库写入冻结，使用 `resumeErrorGeneration` 执行 `resume-pipeline`，再启动常规同步进程。同步期间继续停止目标端应用写入。保留覆盖批准位点的源端 binlog，直到进程追平。应用写入交接和回切仍需独立执行。
 
+## 记录应用写入角色的就绪状态
+
+仅在单表接管仍处于原始暂停基线时运行 `prepare-target-writer`。保持 MySQL 原实例可访问且处于持久化冻结状态，由运维人员独占管理两端数据库，并停止应用写入和 Rivomesh 进程。提供原接管摘要、请求 UUID 和操作人，以及 PostgreSQL 写入登录角色、新的审查请求 UUID 和审查人。目标运维账号需有权锁定 `pg_authid`、`pg_auth_members` 和事件触发器目录。[PostgreSQL 权限](https://www.postgresql.org/docs/17/ddl-priv.html)
+
+```sh
+java -jar rivomesh.jar prepare-target-writer config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <writer-role> <review-request> <review-actor> --acknowledge-exclusive-freeze
+```
+
+专用 PostgreSQL 登录角色需有数据库 `CONNECT`、schema `USAGE` 和表 `SELECT`。准入要求该角色无连接、无角色成员关系、无表级和列级写权限。其他并行写入授权、该角色能写入的视图，以及该角色有权执行的用户定义 `SECURITY DEFINER` 例程都会拒绝审查。维护期间由特权运维人员独占管理 schema、角色和应用路由。
+
+`TARGET_WRITER_READINESS_RECORDED` 返回原生回执，记录精确的接管基线、源端位点、目标数据与权限证据、角色身份和审查审批。遇到 `WRITER_READINESS_COMMIT_UNKNOWN` 时，保持源库冻结并能核验其位点，使用原请求重试。重放会重新核对现场数据、权限和位点。将回执与原迁移计划一起保留。启用应用写入与回切需另行审批并核对写入记录。
+
 ## 写入交接前检查降级的 UNIQUE 索引
 
 对于已有同步任务管理的 PostgreSQL 目标，先为该目标生成[共同校验点报告](reconciliation-workflow.md)并完成源目标比较。任务保持暂停，同时停止目标业务写入及 DDL。使用相同任务配置及该报告 ID 运行检查。

@@ -26,6 +26,7 @@ public final class PostgresExistingAdoption implements AutoCloseable {
     private final PostgresAdoptionRead read;
     private final String targetSchema;
     private Approval lockedApproval;
+    private Replay checkedReplay;
 
     public record Approval(String table, String planSha256, String requestId, String actor) {
         public Approval {
@@ -125,7 +126,18 @@ public final class PostgresExistingAdoption implements AutoCloseable {
         if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true))) {
             throw failure("ADOPTION_BOOTSTRAP_CATALOG_CHANGED");
         }
-        return new Replay(receipt, table);
+        checkedReplay = new Replay(receipt, table);
+        return checkedReplay;
+    }
+
+    public PostgresWriterReadiness.Outcome prepareWriter(PostgresWriterReadiness.Approval approval,
+                                                         SourceFence sourceFence) throws Exception {
+        requireLock();
+        if (checkedReplay == null) throw failure("WRITER_READINESS_ADOPTED_CUT_REQUIRED");
+        return PostgresWriterReadiness.record(connection, settings, targetSchema, checkedReplay.receipt, approval, () -> {
+            sourceFence.verify();
+            read.verify();
+        });
     }
 
     public Receipt install(TableSchema table, SourcePosition cut, Map<String,Object> plan, String digest,

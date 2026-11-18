@@ -28,6 +28,7 @@ def main():
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument('--only-adoption-plan', action='store_true', help='Verify the frozen existing-target admission plan')
     profile.add_argument('--only-adoption-execution', action='store_true', help='Verify atomic adoption and first native CDC')
+    profile.add_argument('--only-writer-readiness', action='store_true', help='Verify a durable business writer readiness receipt')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -45,7 +46,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('ADOPTION_EXECUTION' if args.only_adoption_execution else
+    profile_name = ('WRITER_READINESS' if args.only_writer_readiness else
+                    'ADOPTION_EXECUTION' if args.only_adoption_execution else
                     'ADOPTION_PLAN' if args.only_adoption_plan else
                     'UNIQUE_RESTORE_EXECUTION' if args.only_restore_execution else
                     'UNIQUE_RESTORE_PLAN' if args.only_restoration_plan else
@@ -249,6 +251,9 @@ def main():
             if args.only_adoption_execution:
                 verify_adoption_execution(plan_config, approved, unchanged_target, target_contents, original_contents)
                 return
+            if args.only_writer_readiness:
+                verify_writer_readiness(approved, target_contents, original_contents)
+                return
 
             postgres("UPDATE review.items SET name='tail' WHERE id=2")
             refused('ADOPTION_PLAN_ROWS_DIFFER', '--expect-sha256', approved)
@@ -420,6 +425,85 @@ def main():
                 subprocess.run(['docker', 'stop', '-t', '5', worker], capture_output=True, timeout=30, check=False)
             refused(adopt(check=False), 'ADOPTION_BOOTSTRAP_MOVED')
             passed('The ordinary worker resumes the adopted position and applies first MySQL insert, update and delete without recopying')
+
+        def verify_writer_readiness(approved, target_contents, original_contents):
+            adoption_request = str(uuid.uuid4())
+            request = str(uuid.uuid4())
+            adoption_actor = 'fixture-adopter'
+            acknowledgement = '--acknowledge-exclusive-freeze'
+            adopt = compose('run', '--rm', '-T', 'runner', 'adopt-existing', '/fixture/adoption-plan.yml',
+                            'pg', 'items', approved, adoption_request, adoption_actor, acknowledgement)
+            assert json.loads(adopt.stdout)['acknowledged']
+            baseline = postgres('SELECT run_state,epoch,next_seq,normalized_seq,captured FROM planned_journal.rm3_job')
+
+            def prepare(role='readiness_writer', actor='fixture-readiness-operator', confirmation=acknowledgement, check=True):
+                return compose('run', '--rm', '-T', 'runner', 'prepare-target-writer', '/fixture/adoption-plan.yml',
+                               'pg', 'items', approved, adoption_request, adoption_actor, role, request, actor,
+                               confirmation, check=check)
+
+            def refused(code, **options):
+                attempt = prepare(check=False, **options)
+                assert attempt.returncode != 0 and not attempt.stdout.strip()
+                assert code in attempt.stderr, (code, re.findall(r'\b(?:WRITER_READINESS|ADOPTION|SQL)_[A-Z0-9_]+', attempt.stderr))
+
+            def checkpoint_unchanged():
+                assert postgres('SELECT run_state,epoch,next_seq,normalized_seq,captured FROM planned_journal.rm3_job') == baseline
+                assert postgres(target_contents) == original_contents
+
+            refused('WRITER_READINESS_EXCLUSIVE_FREEZE_ACK_REQUIRED', confirmation='--no-acknowledgement')
+            refused('WRITER_READINESS_ROLE_UNSAFE', role='postgres')
+            postgres('CREATE ROLE readiness_writer LOGIN NOINHERIT; CREATE ROLE readiness_group NOLOGIN; '
+                     'GRANT USAGE ON SCHEMA review TO readiness_writer; GRANT SELECT ON review.items TO readiness_writer')
+            postgres('GRANT readiness_group TO readiness_writer')
+            refused('WRITER_READINESS_ROLE_UNSAFE')
+            postgres('REVOKE readiness_group FROM readiness_writer')
+            postgres('GRANT UPDATE(name) ON review.items TO readiness_writer')
+            refused('WRITER_READINESS_TARGET_WRITE_PRIVILEGE_PRESENT')
+            postgres('REVOKE UPDATE(name) ON review.items FROM readiness_writer; GRANT DELETE ON review.items TO PUBLIC')
+            refused('WRITER_READINESS_TARGET_WRITE_PRIVILEGE_PRESENT')
+            postgres('REVOKE DELETE ON review.items FROM PUBLIC')
+            assert postgres("SELECT to_regclass('planned_sink.rm3_sink_writer_ready') IS NULL") == 't'
+            checkpoint_unchanged()
+            passed('Readiness refuses owner and member roles, missing acknowledgment, column writers and PUBLIC writes')
+
+            postgres('CREATE FUNCTION review.hidden() RETURNS integer SECURITY DEFINER LANGUAGE sql AS $$ SELECT 1 $$')
+            refused('WRITER_READINESS_INDIRECT_WRITE_PATH')
+            postgres('DROP FUNCTION review.hidden()')
+            postgres('CREATE VIEW review.write_through AS SELECT * FROM review.items; '
+                     'GRANT UPDATE ON review.write_through TO readiness_writer')
+            refused('WRITER_READINESS_INDIRECT_WRITE_PATH')
+            postgres('DROP VIEW review.write_through')
+            with sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'readiness_writer', '-d', 'preview') as active:
+                assert exchange_sql(active, "SELECT 'CONNECTED';") == 'CONNECTED'
+                refused('WRITER_READINESS_ROLE_CONNECTED')
+            assert postgres("SELECT to_regclass('planned_sink.rm3_sink_writer_ready') IS NULL") == 't'
+            passed('Readiness refuses indirect view writes, definer execution and connected dedicated writer sessions')
+
+            original = prepare()
+            assert 'sensitive-row-value' not in original.stdout
+            confirmed = json.loads(original.stdout)
+            assert confirmed['status'] == 'TARGET_WRITER_READINESS_RECORDED' and confirmed['acknowledged'] and not confirmed['replayed']
+            assert re.fullmatch('[a-f0-9]{64}', confirmed['receipt']['evidenceSha256'])
+            assert re.fullmatch('[a-f0-9]{64}', confirmed['receiptSha256'])
+            assert postgres('SELECT count(*) FROM planned_sink.rm3_sink_writer_ready') == '1'
+            assert postgres("SELECT has_any_column_privilege('readiness_writer','review.items','INSERT,UPDATE') OR "
+                            "has_table_privilege('readiness_writer','review.items','DELETE,TRUNCATE')") == 'f'
+            compose('restart', 'target')
+            compose('up', '-d', '--wait', '--wait-timeout', '140', 'target')
+            replay = json.loads(prepare().stdout)
+            assert replay['replayed'] and replay['receipt'] == confirmed['receipt'] and replay['receiptSha256'] == confirmed['receiptSha256']
+            refused('WRITER_READINESS_APPROVAL_CONFLICT', actor='different-reviewer')
+            checkpoint_unchanged()
+            passed('The durable receipt resolves to the exact same approval after PostgreSQL restart with target authority still read only')
+
+            mysql('SET GLOBAL super_read_only=OFF')
+            refused('ADOPTION_PLAN_SOURCE_NOT_FROZEN')
+            mysql('SET GLOBAL super_read_only=ON')
+            postgres('GRANT SELECT ON review.items TO readiness_group')
+            refused('WRITER_READINESS_EVIDENCE_CHANGED')
+            assert postgres('SELECT count(*) FROM planned_sink.rm3_sink_writer_ready') == '1'
+            checkpoint_unchanged()
+            passed('Replay checks the live source freeze and refuses changed authority evidence without rewriting the receipt')
 
         def constraint_review():
             target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
@@ -780,7 +864,7 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_adoption_plan or args.only_adoption_execution:
+            if args.only_adoption_plan or args.only_adoption_execution or args.only_writer_readiness:
                 adoption_plan()
                 report['status'] = 'PASS'
                 return

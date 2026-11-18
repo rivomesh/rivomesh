@@ -6,6 +6,7 @@ import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.JdbcSink;
 import io.github.rivomesh.cdc.PostgresAdoptionRead;
 import io.github.rivomesh.cdc.PostgresExistingAdoption;
+import io.github.rivomesh.cdc.PostgresWriterReadiness;
 import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.TargetProduct;
 
@@ -52,11 +53,7 @@ final class PipelineAdoptionPlan {
             bootstrap.lock(approval);
             PostgresExistingAdoption.Replay replay = bootstrap.replay();
             if (replay != null) {
-                PipelineAdoptionPreview.RowComparison rows = comparison(replay.table());
-                bootstrap.observation().scan(replay.table(), MAX_ROW_BYTES, rows::source);
-                if (rows.sourceRows() != replay.receipt().rows() || !rows.sourceDigest().equals(replay.receipt().rowsSha256())) {
-                    throw failure("ADOPTION_BOOTSTRAP_ROWS_CHANGED");
-                }
+                verifyTargetRows(bootstrap, replay);
                 receipt = replay.receipt();
                 replayed = true;
             } else {
@@ -71,6 +68,49 @@ final class PipelineAdoptionPlan {
         }
         return Map.of("status", "EXISTING_TARGET_ADOPTED", "acknowledged", true, "replayed", replayed,
                 "resumeErrorGeneration", 1, "receipt", receipt);
+    }
+
+    static Map<String,Object> prepareWriter(PipelineConfig config, String targetId,
+                                            PostgresExistingAdoption.Approval adoption,
+                                            PostgresWriterReadiness.Approval approval, boolean exclusiveFreeze) throws Exception {
+        if (!exclusiveFreeze) throw failure("WRITER_READINESS_EXCLUSIVE_FREEZE_ACK_REQUIRED");
+        PipelineConfig.Target target = profile(config, targetId);
+        PostgresWriterReadiness.Outcome outcome = null;
+        try (JdbcJournal journal = new JdbcJournal(config.existingJournalSettings());
+             PostgresExistingAdoption bootstrap = JdbcSink.adoptionBootstrap(
+                     config.targetSettings(target, "writer-readiness"), journal, MAX_MILLIS)) {
+            bootstrap.lock(adoption);
+            PostgresExistingAdoption.Replay replay = bootstrap.replay();
+            if (replay == null) throw failure("WRITER_READINESS_ADOPTED_CUT_REQUIRED");
+            try (MysqlUniqueFreeze source = MysqlUniqueFreeze.current(config, MAX_MILLIS)) {
+                source.verifyDurable();
+                TableSchema table = source.singleTable(config.databases.getFirst());
+                if (!replay.receipt().sourceSha256().equals(Codec.sha256(Codec.encode(source.boundary())))
+                        || !replay.receipt().schemaSha256().equals(Codec.sha256(Codec.encode(table)))) {
+                    throw failure("WRITER_READINESS_SOURCE_CUT_CHANGED");
+                }
+                PipelineAdoptionPreview.RowComparison rows = comparison(table);
+                source.scanRows(table, MAX_ROW_BYTES, MAX_ROWS, rows::source);
+                if (rows.sourceRows() != replay.receipt().rows() || !rows.sourceDigest().equals(replay.receipt().rowsSha256())) {
+                    throw failure("WRITER_READINESS_SOURCE_ROWS_CHANGED");
+                }
+                verifyTargetRows(bootstrap, replay);
+                outcome = bootstrap.prepareWriter(approval, () -> verifyExecutionFreeze(source));
+            }
+        } catch (Exception error) {
+            if (outcome == null) throw sanitized(error);
+        }
+        return Map.of("status", "TARGET_WRITER_READINESS_RECORDED", "acknowledged", true,
+                "replayed", outcome.replayed(), "receipt", outcome.receipt(),
+                "receiptSha256", Codec.sha256(Codec.encode(outcome.receipt())));
+    }
+
+    private static void verifyTargetRows(PostgresExistingAdoption bootstrap, PostgresExistingAdoption.Replay replay) throws Exception {
+        PipelineAdoptionPreview.RowComparison rows = comparison(replay.table());
+        bootstrap.observation().scan(replay.table(), MAX_ROW_BYTES, rows::source);
+        if (rows.sourceRows() != replay.receipt().rows() || !rows.sourceDigest().equals(replay.receipt().rowsSha256())) {
+            throw failure("ADOPTION_BOOTSTRAP_ROWS_CHANGED");
+        }
     }
 
     private static PipelineConfig.Target profile(PipelineConfig config, String targetId) {

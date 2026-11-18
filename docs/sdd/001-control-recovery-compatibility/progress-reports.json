@@ -71,7 +71,8 @@
     "CP-04 opt-in managed writer enrollment and same-PostgreSQL transaction witness published. Twenty native integration cases and 58 exact Java built against the current app scope.",
     "JV-03 external Dameng JDBC profile published: 12 native tests on Java 21 verify exact external driver origins, actual vendor errors and numeric precision, target reconnect via the original address, Worker restart and independent repair.",
     "CP-04/LG-05 real MySQL raw capture evidence now independently verified by the candidate Agent. Fifteen native cases and 82 integrated Java. Exact new capture limit replayed the original GTID to both SQL targets at the original generation, and original control/writer stayed active.",
-    "JV-02 six-case native group recheck validated the same reachable former-primary address on the actual released JDBC path after restart. Original UUID and both read-only flags were checked before the admission typed refusal."
+    "JV-02 six-case native group recheck validated the same reachable former-primary address on the actual released JDBC path after restart. Original UUID and both read-only flags were checked before the admission typed refusal.",
+    "LG-02 existing PostgreSQL target writer readiness published: six native checks and 68 integrated Java. Durable receipt survives PostgreSQL restart and refuses source thaw, target authorization drift and a parallel direct or indirect writer."
   ],
   "lastScheduledReportAt": "2026-11-18T22:58:16+08:00",
   "lastVerifiedReactor": {

@@ -8235,5 +8235,32 @@
     },
     "scope": "Bounded stopped-cut read-only candidate proof. A native MySQL 8.4.13 GTID exceeded the fixture limit; original bytes and receipt were authenticated. A reviewed limit change let the same GTID reach both destinations without a gap. Both Agents verified protected custody independently of report custody, keeping the original key and execution owner.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-raw-custody --source-expected-version 8.4.13 --artifact <candidate jar> --output target/raw-candidate-custody"
+  },
+  "existingPostgresTargetWriterReadiness": {
+    "native": {
+      "artifactSha256": "132db52244df5fa4cdbc0403961c738daad766341ce15465c06f858cc72baaaf",
+      "checks": [
+        "An unfrozen or runtime-only MySQL source cannot produce an adoption plan",
+        "Matching native rows and exact types produce a repeatable plan digest with no data or metadata writes",
+        "Readiness refuses owner and member roles, missing acknowledgment, column writers and PUBLIC writes",
+        "Readiness refuses indirect view writes, definer execution and connected dedicated writer sessions",
+        "The durable receipt resolves to the exact same approval after PostgreSQL restart with target authority still read only",
+        "Replay checks the live source freeze and refuses changed authority evidence without rewriting the receipt"
+      ],
+      "status": "PASS",
+      "profile": "WRITER_READINESS",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "nativeJavaFocusedTests": 67,
+    "fixtureSha256": "1715ec65cbc088abdaa10a9b4c5dd6fb91bacb63bb64ba08b8b3dc6a83f83da7",
+    "integratedArtifact": {
+      "artifactSha256": "b5e543895f8a4423dbd34cf2eea866e14857794f59092cdc5736dd040f349a9f",
+      "verifiedAppTree": "ebca1ab786fa18b164f2f5f6a3e300ef7f45f77a",
+      "javaFocusedTests": 68
+    },
+    "scope": "Exact previously adopted PostgreSQL table, unchanged MySQL freeze, original paused journal cut and protected target rows. Role must be disconnected and lack existing direct/indirect writer authority. Durable receipt only: business grants and authority do not change.",
+    "priorFixture": "First positive admission encountered native pg_settings UPDATE privilege for PUBLIC. The subsequent implementation exempts that exact built-in view and checked rejection of direct and indirect business writer paths."
   }
 }
