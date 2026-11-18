@@ -1,6 +1,6 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.37 · 2026-11-18 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.37 · 2026-11-18 · 实施中
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
@@ -16,13 +16,13 @@ RM-SDD-001 · v0.37 · 2026-11-18 · 实施中：推进事务跳过与缺口
 |---|---|---|
 | 1 多节点统一控制 | CP-01～CP-07 | 5 |
 | 2 登录保持 | SE-01～SE-05 | 0 |
-| 3 跳过与补数据 | RC-01～RC-10 | 5 |
-| 4 源版本/PG/Oracle | SO-01～SO-07 | 7 |
-| 5 Java 21 运行基线 | JV-01～JV-04 | 4 |
-| 6 完整文档 | DO-01～DO-05 | 5 |
-| 既有范围合并保留 | LG-01～LG-10 | 10 |
+| 3 跳过与补数据 | RC-01～RC-10 | 1 |
+| 4 源版本/PG/Oracle | SO-01～SO-07 | 2 |
+| 5 Java 21 运行基线 | JV-01～JV-04 | 2 |
+| 6 完整文档 | DO-01～DO-05 | 0 |
+| 既有范围合并保留 | LG-01～LG-10 | 9 |
 
-共 48 项，19 项完成，25 项部分完成，4 项未实现。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
+共 48 项。PARTIAL 的验收边界和剩余条件见逐项记录。[任务状态和验收条件](requirements.json)
 
 ## 2. 用户已明确的需求，不再当作可选项
 
@@ -58,10 +58,10 @@ RM-SDD-001 · v0.37 · 2026-11-18 · 实施中：推进事务跳过与缺口
 |---|---|---|
 | 重试 | 重新执行原事务 | 不改原事件；不确定提交先核对目标回执 |
 | 共同校验点修复（已有） | 在共同历史点修复差异 | 完成后仍暂停；历史报告不改写为MATCH |
-| 失败事务补偿（待做） | 恢复受影响身份的事务前状态，再允许重放 | 保留原事务、无主键ROW_ID、主键移动及重复变更顺序；补偿不提前算原事务成功 |
-| 手工补数据（待做） | 审阅的类型化目标数据补丁 | 默认只写目标；前后状态/行数可审阅；漂移、依赖和权限不符拒绝 |
+| 失败事务补偿 | 恢复受影响身份的事务前状态，再允许重放 | 保留原事务、无主键 ROW_ID、主键移动及重复变更顺序。重放后另行确认原事务 |
+| 手工补数据 | 审阅的类型化目标数据补丁 | 默认只写目标，可审阅前后状态和行数。漂移、依赖或权限不符时拒绝 |
 | 目标事务跳过（限定档案已完成） | 对指定目标不应用一整个已知事务 | 生成SKIP凭据和一致性缺口，安全覆盖进度可前进，但不得伪装为已应用 |
-| 采集范围隔离/排除（待做） | 针对采集/解码未完成处的独立缺口计划 | 影响全部相关订阅；必须证明范围边界、留存原日志；无法证明则拒绝并引导日志恢复/合格源/新基线 |
+| 采集事务排除（限定档案已完成） | 授权排除一笔边界和原始字节均可证明的 MySQL 8.4 有主键事务 | 保留原日志和目标确认位置，记录影响订阅和缺口。无法证明时拒绝，评估原日志、合格源或新基线 |
 
 “类似MySQL从库操作”指操作体验和可恢复性，不是照搬数据库服务器命令。MySQL官方也区分GTID与非GTID的跳过方式，参见[事务跳过](https://dev.mysql.com/doc/refman/8.4/en/replication-administration-skip.html)。Rivomesh是异构同步服务，应使用自己的可审计回执和缺口协议，不向源库注入空事务、不直接修改源 `gtid_executed`，也不把 `sql_replica_skip_counter` 当作跨产品通用实现。
 
@@ -73,14 +73,11 @@ RM-SDD-001 · v0.37 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 | 源 | 现状 | 未完成要求 |
 |---|---|---|
-| MySQL5.7 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR | 实际日志缺失保留断点 | 限定档案通过 |
-| MySQL8.0 | 8.0.46历史V2/HA等证据 | 当前发布V3和新增恢复能力补验 |
-| MySQL8.2 | 8.2.0 的 Java 8 V3 三种拓扑实库通过 | Java 21 其余组合由 JV-02 跟踪 |
-| MySQL8.4 | 代表性V3/恢复已验收 | 扩展认证、日志特性、拓扑、目标和JDK矩阵 |
-| PostgreSQL | SOURCE目录为PLANNED | 一致性快照/LSN/逻辑槽、事务和源切换；PG目标支持不算源支持 |
-| Oracle | SOURCE目录为PLANNED | 路线、版本、权限及分发条件；SCN/redo/归档、事务、类型及恢复 |
+| MySQL 5.7.44、8.0.46、8.2.0、8.4.13 | Temurin 21 单机到 MySQL 与 PostgreSQL，历史档案覆盖异步主从与单主组复制 | Temurin 21 的其他源拓扑、目标、TLS 和恢复组合 |
+| PostgreSQL 17.12、18.7 | 17.12 同步槽切主并拒绝旧时间线，18.7 存储型生成列与缺槽保护 | 更多类型、DDL、多目标共同校验点 |
+| Oracle 26ai | 单 PDB Flashback、单线程归档 LogMiner 长事务和原 SCN 恢复 | LOB、JSON、生成列、RAC、切主和其他目标 |
 
-PG使用复制槽导出快照与流位置衔接；槽恢复可能重发，因此需去重。主备续传能力与确切版本及槽同步条件有关，不能泛化到全部版本。[PG逻辑解码](https://www.postgresql.org/docs/18/logicaldecoding-explanation.html)、[PG故障切换](https://www.postgresql.org/docs/18/logical-replication-failover.html)。Oracle方案须区分源数据库及incarnation，不能只存一个数字SCN，见[Oracle19 LogMiner会话字段](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html)。以上为设计依据，不是新增连接器已经实现。
+PostgreSQL 使用复制槽导出快照对齐流位置，并按提交坐标处理重送。主备续传依赖确切版本、时间线与槽同步条件。Oracle 按 DBID、incarnation、PDB GUID 和 SCN 核对来源。参见[当前兼容矩阵](../../zh-CN/compatibility.md)、[PostgreSQL 故障切换](https://www.postgresql.org/docs/18/logical-replication-failover.html)与[Oracle LogMiner 会话字段](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html)。
 
 实库验收记录包 SHA、实际 Temurin 21 版本、架构、驱动、源和目标版本、日志、权限/TLS 与负载。每个批准的源档案核对全量、增量、重启和内容一致性。历史验收保存在验证记录，当前待办按 Java 21 上的连接器与恢复组合推进。
 

@@ -2,18 +2,22 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T15:56:52+08:00",
-  "nextReportAt": "2026-11-18T16:56:52+08:00",
+  "lastReportAt": "2026-11-18T16:57:32+08:00",
+  "nextReportAt": "2026-11-18T17:57:32+08:00",
   "completedSincePrevious": [
-    "RC-04 final candidate passed thirteen isolated native MySQL checks, seven Chrome checks and 119 DOM tests. The stalled-capture checkpoint stayed unchanged after managed retention, aborted staging cleanup, Agent restart and a purged source log.",
-    "LG-06 accepted. Helm and native YAML each passed six live checks, including a distinct replacement JAR, unchanged CSI claim/volume handle and original snapshot, newer lease, and automatic CDC after moving to a second node.",
-    "RC-04 accepted a bounded MySQL 8.4 keyed source transaction. The same candidate passed 14 native approval cases and 14 native log-purge cases, seven Chrome cases, 35 focused Java tests and 120 DOM tests. Separate scope remains for keyless and target reconciliation.",
-    "Temurin 21 is the single release build and runtime. The Java 21 reactor passed 503 tests with 32 optional skips, and real Controller/Agent rollout and target continuation passed eight native cases.",
-    "Branded console and compact mobile navigation passed seven live Chrome cases, 121 DOM tests and 25 configuration examples. A valid cookie survives reload and retries after a temporary lookup failure.",
-    "The real Temurin 21 Dockerfile image ran nonroot and passed 19 native MySQL/SQL/control/recovery checks. Its exact embedded JAR also passed seven Chrome cases. Helm and checked-in Kubernetes YAML are under live verification on the same image."
+    "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed.",
+    "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests.",
+    "CP-04 initial placement raced two Controllers for the last slot with both native control databases. Each profile passed seven cases on one artifact; global UI passed 123 DOM tests. Running-task handoff has a bilingual SDD design.",
+    "JV-02 revalidated 48 native checks on one Temurin 21 candidate: five on each of four standalone MySQL versions, seven on PostgreSQL 17 promotion and old-route refusal, eight on PostgreSQL 18 generated columns and missing slot, and 13 on Oracle 26ai single-PDB archived CDC."
   ],
   "inProgress": [
-    "CP-04 shared-journal Agent transfer and stale-execution admission."
+    "CP-04 implemented a bounded external-journal writer transfer and stale-writer fencing. Native standalone validation is queued. Managed Agent authority transfer is still open.",
+    "CP-06 per-destination fault and retry history is in the integrated candidate. Native cross-entry, authorization and outage validation is queued.",
+    "SO-07 constrained Oracle textual JSON is in the integrated candidate. A native Oracle 26ai run is active.",
+    "LG-02 read-only nonempty PostgreSQL adoption preview is in development. Initialization and cutover are separate.",
+    "LG-07 repeated hardware benchmark now checks final key boundaries before hashing. The initial 12 trials had one premature visibility check and require rerun.",
+    "LG-09 recovery browser flow and the dedicated public-site design sync are in independent development. Real Chrome verification is active.",
+    "LG-10 fail-closed distribution inventory and optional separately supplied MySQL JDBC packaging are in development."
   ],
   "reportContents": [
     "Current totals",
@@ -23,15 +27,15 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 28,
-    "PARTIAL": 20,
+    "DONE": 29,
+    "PARTIAL": 19,
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "a8274ef98587aa8c8307908f22789e2d266b4c18",
-    "f909910edda2aecfb02ca97dcef429591fbb73af",
-    "0895d95ed9f56cd6b1eb46ddfab971a8ee1bcbe8",
-    "4a775eb9b688249ccfacae1692cb3e645201e435"
+    "02d4fd4338a4abda63951523f3071db3d7bd7e6a",
+    "b83c79c88ca8b72e0b74eed32e80dbb5a759f69a",
+    "e36dab718f32a475fd2d91727546bb22efb80456",
+    "00a32e2ceb0408ab0c3937e4f66ab20eed634589"
   ],
   "currentSdd": {
     "DONE": 29,
@@ -39,16 +43,11 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue managed Agent relocation and remaining compatibility profiles.",
-    "Extend LG-09 report discovery, retention and real browser recovery workflows."
+    "Serially verify Oracle JSON, standalone writer fencing, target diagnostics, and browser-driven recovery against frozen releases.",
+    "Rerun the hardware matrix after correcting the visibility check. Verify the external JDBC packaging and scoped destination-adoption preview."
   ],
-  "currentCandidateArtifact": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
-  "currentCandidateScope": "Temurin 21 new-task Agent placement with PostgreSQL and MySQL capacity races",
+  "currentCandidateArtifact": "186cddb562acb16d913670dee1564d0d4f2942ba7978b0ccd531ed7056fc622c",
+  "currentCandidateScope": "Temurin 21 parallel development candidate with 46 focused Java tests; native Oracle, handoff, diagnostics and real browser verification active or queued",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": [
-    "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed.",
-    "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests.",
-    "CP-04 initial placement raced two Controllers for the last slot with both native control databases. Each profile passed seven cases on one artifact; global UI passed 123 DOM tests. Running-task handoff has a bilingual SDD design.",
-    "JV-02 revalidated 48 native checks on one Temurin 21 candidate: five on each of four standalone MySQL versions, seven on PostgreSQL 17 promotion and old-route refusal, eight on PostgreSQL 18 generated columns and missing slot, and 13 on Oracle 26ai single-PDB archived CDC."
-  ]
+  "newSinceLastReport": []
 }

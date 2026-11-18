@@ -1,6 +1,6 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.37 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.37 · 2026-11-18 · IMPLEMENTING
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
@@ -16,13 +16,13 @@ Maintain the current first-release specification and [verification baseline](../
 |---|---|---|
 | 1 Unified cluster control | CP-01–CP-07 | 5 |
 | 2 Persistent login | SE-01–SE-05 | 0 |
-| 3 Skip and corrective data | RC-01–RC-10 | 5 |
-| 4 Source versions/PG/Oracle | SO-01–SO-07 | 7 |
-| 5 Java 21 runtime | JV-01–JV-04 | 4 |
-| 6 Complete docs | DO-01–DO-05 | 5 |
-| Preserved previous scope | LG-01–LG-10 | 10 |
+| 3 Skip and corrective data | RC-01–RC-10 | 1 |
+| 4 Source versions/PG/Oracle | SO-01–SO-07 | 2 |
+| 5 Java 21 runtime | JV-01–JV-04 | 2 |
+| 6 Complete docs | DO-01–DO-05 | 0 |
+| Preserved previous scope | LG-01–LG-10 | 9 |
 
-The 48 requirements include 19 completed, 25 partial and 4 new items. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
+Each of the 48 records specifies the verified scope and remaining criteria. [Requirement status](requirements.json)
 
 ## Confirmed scope
 
@@ -50,10 +50,10 @@ Restore session/grants before loading tasks;controllers share authority. Logout,
 |---|---|---|
 | Retry | Replay the original transaction | Resolve uncertain commit before more writes |
 | Existing COMMON_CUT repair | Correct historical differences | Remain paused;old report retains differences |
-| Pending failed-transaction compensation | Restore initial affected identity state | Preserve original event,occurrence IDs,PK moves and ordering;do not prematurely count source transaction as applied |
-| Pending manual patch | Reviewed typed destination edits | No implicit source writes;review before/after/counts and refuse drift/dependency violations |
+| Failed-transaction compensation | Restore initial affected identity state | Preserve the original event, occurrence IDs, primary-key moves and ordering. Confirm the original transaction after replay |
+| Manual correction | Reviewed typed destination edits | Restrict edits to the target by default. Review before and after state and row counts. Refuse drift, dependency or permission violations |
 | Bounded destination skip | Omit one complete known transaction for selected targets | Native SKIP receipt plus gap ledger;coverage may advance while applied progress remains honest |
-| Pending capture-range quarantine/exclusion | Separate plan before complete event formation | Identify every affected subscriber and retain raw logs;unprovable boundaries are refused with log/valid-source/rebaseline recovery alternatives |
+| Bounded source exclusion | Authorize exclusion of one MySQL 8.4 keyed transaction with provable boundaries and original bytes | Retain source logs and target acknowledgments. Record affected subscriptions and the gap. If evidence is missing, evaluate original log recovery, an eligible source or a new baseline |
 
 Replica-like operation is a UX/recovery requirement,not a command-copy requirement. MySQL differentiates GTID and non-GTID skipping:[official guidance](https://dev.mysql.com/doc/refman/8.4/en/replication-administration-skip.html). Rivomesh needs its own audited heterogeneous receipt/gap protocol,not source empty-transaction injection,gtid_executed editing or a universal sql_replica_skip_counter wrapper.
 
@@ -65,14 +65,11 @@ A proposed gap record links source/range,transaction/raw/normalized hashes,targe
 
 | Source | Existing scope | Remaining |
 |---|---|---|
-| MySQL5.7 | 5.7.44 Java 8 V3 standalone, GTID async and MGR | Native source binlog gap retained the last checkpoint | PASS (bounded) |
-| MySQL8.0 | Historical8.0.46 V2/HA | Current V3/new recovery acceptance |
-| MySQL8.2 | Java 8 V3 passes three native 8.2.0 topologies | JV-02 tracks remaining Java 21 combinations |
-| MySQL8.4 | Representative V3/recovery | Broader auth/log/topology/target/JDK matrix |
-| PostgreSQL | PLANNED source | Snapshot/LSN/slot,transactions,promotion;PG sink support is unrelated |
-| Oracle | PLANNED source | Capture route/version/grants/distribution,SCN/redo/archive,types and recovery |
+| MySQL 5.7.44, 8.0.46, 8.2.0, 8.4.13 | Temurin 21 standalone to MySQL and PostgreSQL. Earlier evidence covers asynchronous promotion and single-primary Group Replication | Additional topologies, targets, TLS and recovery on Temurin 21 |
+| PostgreSQL 17.12 and 18.7 | Synchronized-slot promotion and old-timeline refusal on 17.12. Stored generated columns and missing-slot protection on 18.7 | Additional types, DDL and common-cut verification across targets |
+| Oracle 26ai | Single-PDB Flashback, single-thread archived LogMiner long transactions and original-SCN recovery | LOB, JSON, generated columns, RAC, promotion and additional targets |
 
-PG slot snapshot export binds baseline/stream position;recovery can resend events and needs dedup. Promotion depends on exact version and slot conditions:[logical decoding](https://www.postgresql.org/docs/18/logicaldecoding-explanation.html),[failover](https://www.postgresql.org/docs/18/logical-replication-failover.html). Oracle identity/incarnation cannot be reduced to one SCN number:[Oracle19 LogMiner fields](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html). These are design references,not implemented source claims.
+PostgreSQL uses an exported slot snapshot and commit coordinates for stream handoff and duplicate handling. Promotion depends on the tested version, timeline and slot synchronization. Oracle verifies source identity using DBID, incarnation, PDB GUID and SCN. [Current compatibility matrix](../../en/compatibility.md) · [PostgreSQL failover](https://www.postgresql.org/docs/18/logical-replication-failover.html) · [Oracle LogMiner session fields](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/DBA_LOGMNR_SESSION.html)
 
 Native verification records the artifact SHA, actual Temurin 21 release, architecture, driver, source, destination, journal, auth/TLS and workload. Every approved source profile verifies snapshot, CDC, restart and content. The evidence archive retains earlier results. Current acceptance expands connector and recovery profiles on Java 21.
 
