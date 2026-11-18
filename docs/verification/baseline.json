@@ -462,6 +462,20 @@
         "profile": "Temurin 21, ten distributed native checks, 28 focused Java, 13 Chrome and 131 DOM; native PostgreSQL/MySQL timestamp and legacy UNKNOWN profiles",
         "criteriaSha256": "2937d196c6ef1f4d90ddfbe06b746329d59a4685660099c058a1b721a9c91a3b"
       }
+    },
+    {
+      "id": "CP-05",
+      "title": {
+        "zh-CN": "共享权限、审计和密钥引用",
+        "en": "Shared authorization,audit and secret references"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "ba12f19fbc4657f8f2470d2dda4de9d70d14c709b6d6c7b063844469ad05acab",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21 on separate Controllers and Agent, 13 native checks per PostgreSQL/MySQL control store with real Chrome on both entries; per-task secret allowlist and audit correlation",
+        "criteriaSha256": "882f0a2e936a006112db41ac6445af8a081b70172ffa4db75f0d3dcd174bdf70"
+      }
     }
   ],
   "productProfiles": [
@@ -5905,5 +5919,161 @@
     },
     "physicalRedisEntries": 11,
     "cleanupExitCode": 0
+  },
+  "sharedAuditAndAgentSecretScopes": {
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --secret-audit --secret-browser <Chrome binary> --control-product <POSTGRESQL|MYSQL> --artifact <candidate jar> --output <directory>",
+    "controlStores": {
+      "POSTGRESQL": {
+        "artifactSha256": "ba12f19fbc4657f8f2470d2dda4de9d70d14c709b6d6c7b063844469ad05acab",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "Actual Worker receives just its used approved reference and both Controllers render opaque credential fields",
+          "Owner refuses both another task credential reference and promotion of a credential into a public identity field",
+          "Revoking the task grant at A immediately rejects a new command submitted at B",
+          "Remote validation pauses CDC and exposes shared report identities, differences and authorized row values",
+          "After Agent restart both management entries discover the durable report and its metadata only",
+          "Cross-entry reviewed repair approval restores both targets and leaves replication paused",
+          "Explicit resume after reviewed repair continues original binlog progress",
+          "Both audit exports join the real repair request, task, owner and plan without values or credentials",
+          "Real Chrome renders both Controller configuration and audit views without original references or values"
+        ],
+        "harnessSourceSha256": "6a25ccfa6af6c385949c6d7bb4b0bf054125e11e10abc57ed3abf5ccb66b630e",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "POSTGRESQL",
+        "taskAuthority": false,
+        "commandRouting": false,
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "handoffProbe": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "secretAudit": true,
+        "mysqlDeliveryTiming": false,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:8.4",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "sourceVersion": "8.4.13",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "secretAuditBrowser": {
+          "status": "PASS",
+          "version": "Chrome/157.0.8103.79",
+          "checks": [
+            "node-a renders empty password inputs, opaque retain references and redacted audit",
+            "node-b renders empty password inputs, opaque retain references and redacted audit"
+          ],
+          "sourceSha256": {
+            "browser-secret-audit.mjs": "7bc9b21781823a2c218d369c24dee2f7b703988cd1209af8b66ab76be7f1a84b",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "cleanupExitCode": 0
+      },
+      "MYSQL": {
+        "artifactSha256": "ba12f19fbc4657f8f2470d2dda4de9d70d14c709b6d6c7b063844469ad05acab",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "Actual Worker receives just its used approved reference and both Controllers render opaque credential fields",
+          "Owner refuses both another task credential reference and promotion of a credential into a public identity field",
+          "Revoking the task grant at A immediately rejects a new command submitted at B",
+          "Remote validation pauses CDC and exposes shared report identities, differences and authorized row values",
+          "After Agent restart both management entries discover the durable report and its metadata only",
+          "Cross-entry reviewed repair approval restores both targets and leaves replication paused",
+          "Explicit resume after reviewed repair continues original binlog progress",
+          "Both audit exports join the real repair request, task, owner and plan without values or credentials",
+          "Real Chrome renders both Controller configuration and audit views without original references or values"
+        ],
+        "harnessSourceSha256": "6a25ccfa6af6c385949c6d7bb4b0bf054125e11e10abc57ed3abf5ccb66b630e",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "MYSQL",
+        "taskAuthority": false,
+        "commandRouting": false,
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "handoffProbe": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "secretAudit": true,
+        "mysqlDeliveryTiming": false,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:8.4",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "sourceVersion": "8.4.13",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "secretAuditBrowser": {
+          "status": "PASS",
+          "version": "Chrome/157.0.8103.79",
+          "checks": [
+            "node-a renders empty password inputs, opaque retain references and redacted audit",
+            "node-b renders empty password inputs, opaque retain references and redacted audit"
+          ],
+          "sourceSha256": {
+            "browser-secret-audit.mjs": "7bc9b21781823a2c218d369c24dee2f7b703988cd1209af8b66ab76be7f1a84b",
+            "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+          }
+        },
+        "cleanupExitCode": 0
+      }
+    },
+    "nativeCandidateJavaTests": 49,
+    "nativeCandidateFocusedDomTests": 23,
+    "stagedIntegration": {
+      "artifactSha256": "fd0077cab4c5a0e88e1cff4f63320452459617c82bab548c7441623e99948d6c",
+      "focusedJavaTests": 54,
+      "domTests": 134
+    }
+  },
+  "freshFirstReleaseReactor": {
+    "sourceCommit": "4e86f79b1cf93306d485171dc1acf4911010c281",
+    "artifactSha256": "9a58c7f72c0789ac329c21c6c664f95d733b394bb8d5f5cf125dd11b7241b684",
+    "temurin": "21.0.13+9",
+    "appTests": {
+      "passed": 526,
+      "skippedExternalProfiles": 32,
+      "failed": 0
+    },
+    "isolatedTransportTests": {
+      "passed": 2,
+      "failed": 0
+    }
   }
 }

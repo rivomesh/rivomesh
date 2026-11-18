@@ -28,6 +28,7 @@ public final class PlatformConfig {
     public int auditMaxEvents = 1000000;
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
+    public Map<String,List<String>> workerSecretReferences;
     public ClusterConfig cluster;
     public Sessions sessions = new Sessions();
     public static final class Sessions {
@@ -64,6 +65,7 @@ public final class PlatformConfig {
     }
     public void validate() throws Exception {
         validateAccess();
+        WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");
         sessions.validate();
         if(cluster!=null)cluster.validate();

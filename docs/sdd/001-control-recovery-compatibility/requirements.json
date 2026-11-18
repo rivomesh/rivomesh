@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.55",
+  "version": "0.56",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -162,14 +162,14 @@
       "id": "CP-05",
       "epic": "CLUSTER",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "共享权限、审计和密钥引用",
         "en": "Shared authorization,audit and secret references"
       },
       "gap": {
-        "zh-CN": "共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。",
-        "en": "Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open."
+        "zh-CN": "PostgreSQL 和 MySQL 控制库实测跨入口撤权、按请求/任务/Agent/计划追踪及真实浏览器脱敏。执行 Agent 启用任务凭据授权后，Worker 仅得到所需且授权的引用。",
+        "en": "Both control stores verified cross-entry revocation, audit correlation by request/task/Agent/plan and real browser redaction. The optional Agent-level policy passes only task-authorized and actually used references to each Worker."
       },
       "acceptance": {
         "zh-CN": "从A撤销权限后B拒绝新命令；同一远端操作可按请求ID/任务/节点/计划追踪；界面不返回密钥，节点仅获得授权任务必需的密钥引用。",
@@ -183,8 +183,18 @@
         "docs/zh-CN/account-management.md",
         "docs/zh-CN/security-audit.md",
         "sync-app/src/main/java/io/github/rivomesh/platform/SharedAccessStore.java",
-        "docs/verification/README.md"
-      ]
+        "docs/verification/README.md",
+        "sync-app/src/main/java/io/github/rivomesh/platform/WorkerSecretReferences.java",
+        "tests/global-control-pipeline.py",
+        "tests/ui/browser-secret-audit.mjs",
+        "docs/zh-CN/shared-access.md"
+      ],
+      "verification": {
+        "artifactSha256": "ba12f19fbc4657f8f2470d2dda4de9d70d14c709b6d6c7b063844469ad05acab",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21 on separate Controllers and Agent, 13 native checks per PostgreSQL/MySQL control store with real Chrome on both entries; per-task secret allowlist and audit correlation",
+        "criteriaSha256": "882f0a2e936a006112db41ac6445af8a081b70172ffa4db75f0d3dcd174bdf70"
+      }
     },
     {
       "id": "CP-06",

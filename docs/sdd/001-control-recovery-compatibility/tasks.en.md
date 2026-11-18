@@ -18,7 +18,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 - [ ] T-CP-04 · Failover,fencing and placement · P0 · Depends on: CP-03, JV-01, LG-05
   Deliver: Power loss,partition and stale-node return never permit dual writers;unconfirmed stops remain unknown/fenced;placement respects JDK,adapter,storage reachability and quotas;drain/move preserves progress.
   Acceptance: AC-CP-04
-- [ ] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
+- [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
   Acceptance: AC-CP-05
 - [x] T-CP-06 · Cluster logs,metrics and diagnostics · P1 · Depends on: CP-01, CP-03, CP-05

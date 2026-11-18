@@ -34,11 +34,20 @@ public interface TaskWorker {
         private static final String DIAGNOSTIC_PREFIX="PIPELINE_DIAGNOSTIC ";
         private static final Pattern DIAGNOSTIC=Pattern.compile("([A-Z_]{1,32}) ([A-Z][A-Z0-9_]{1,127})");
         public Jvm(Path config, Path log, int heapMiB) throws Exception {this(config,log,heapMiB,Collections.emptySet());}
-        Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames)throws Exception{this(config,log,heapMiB,protectedNames,System.getenv(),"io.github.rivomesh.Main");}
+        Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames)throws Exception{this(config,log,heapMiB,protectedNames,null);}
+        Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,List<String>> grants)throws Exception{
+            this(config,log,heapMiB,protectedNames,grants,System.getenv(),"io.github.rivomesh.Main");
+        }
         Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,String> parent,String main)throws Exception{
+            this(config,log,heapMiB,protectedNames,null,parent,main);
+        }
+        Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,List<String>> grants,
+            Map<String,String> parent,String main)throws Exception{
             String cp = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
             ProcessBuilder builder=new ProcessBuilder(Paths.get(System.getProperty("java.home"),"bin","java").toString(),"-Xmx"+heapMiB+"m","-cp",cp,main,"run",config.toAbsolutePath().toString()).redirectErrorStream(true);
-            Map<String,String> environment=environment(parent,new String(PrivateFiles.read(config,1024*1024),StandardCharsets.UTF_8),protectedNames);builder.environment().clear();builder.environment().putAll(environment);process=builder.start();
+            String definition=new String(PrivateFiles.read(config,1024*1024),StandardCharsets.UTF_8);
+            Map<String,String> environment=environment(parent,definition,protectedNames,grants);
+            builder.environment().clear();builder.environment().putAll(environment);process=builder.start();
             output = new Thread(() -> {
                 try (InputStream in = process.getInputStream()) {
                     byte[] buffer = new byte[8192]; int n;
@@ -91,12 +100,15 @@ public interface TaskWorker {
             try{WorkerDiagnostics.append(log,event,phase);}
             catch(IOException unavailable){/* Preserve the existing private raw log and let the worker continue. */}
         }
-        static Map<String,String> environment(Map<String,String> parent,String yaml,Set<String> protectedNames){
+        static Map<String,String> environment(Map<String,String> parent,String yaml,Set<String> protectedNames)
+                throws IOException{return environment(parent,yaml,protectedNames,null);}
+        static Map<String,String> environment(Map<String,String> parent,String yaml,Set<String> protectedNames,
+                                              Map<String,List<String>> grants)throws IOException{
             Map<String,String> result=new LinkedHashMap<>();for(String key:Arrays.asList("PATH","HOME","LANG","LC_ALL","LC_CTYPE","TZ","TMPDIR","TEMP","TMP","SystemRoot","WINDIR"))if(parent.containsKey(key)&&!protectedNames.contains(key))result.put(key,parent.get(key));
-            Matcher references=Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}").matcher(yaml);
-            while(references.find()){
-                String key=references.group(1);if(protectedNames.contains(key)||key.equals("RIVOMESH_TOKEN")||key.equals("RIVOMESH_PREVIEW_TOKEN")||key.startsWith("RIVOMESH_CONTROL_"))throw new IllegalArgumentException("WORKER_ENVIRONMENT_DENIED");
+            for(String key:WorkerSecretReferences.permitted(yaml,grants)){
+                if(WorkerSecretReferences.protectedName(key,protectedNames))throw new IllegalArgumentException("WORKER_ENVIRONMENT_DENIED");
                 if(parent.containsKey(key))result.put(key,parent.get(key));
+                else if(grants!=null)throw new IllegalArgumentException("WORKER_SECRET_REFERENCE_UNSET");
             }return result;
         }
         public boolean alive() { return process.isAlive(); }

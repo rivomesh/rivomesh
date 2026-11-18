@@ -55,6 +55,8 @@ parser.add_argument('--failure-diagnostics', action='store_true', help='Check ph
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--task-views', action='store_true', help='Check task filters, target backlog and diagnostics with native SQL faults')
+parser.add_argument('--secret-audit', action='store_true', help='Verify scoped Worker references, cross-entry revocation and native repair audit')
+parser.add_argument('--secret-browser', type=Path, help='Verify both live configuration and audit views in Chrome during --secret-audit')
 parser.add_argument('--mysql-delivery-timing', action='store_true', help='Compare MySQL 8.4 samples to native binlog bytes or confirm MySQL 5.7 unknown timing')
 parser.add_argument('--managed-binlog-evidence', action='store_true', help='Retain and replay source evidence through both management entries')
 parser.add_argument('--approved-binlog-exclusion', action='store_true', help='Approve a verified keyed MySQL source gap and resume without fabricating destination ACKs')
@@ -112,6 +114,18 @@ if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
     parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
+if args.secret_audit and (not args.separate_execution or any((args.task_authority,args.command_routing,
+        args.automatic_placement,args.task_views,args.browser,args.runtime_image,args.mysql_delivery_timing,
+        args.handoff_custody,args.receipt_lookup,args.mysql_async_failover,
+        args.source_diagnostics,args.failure_diagnostics,args.rolling_restart,args.runtime_jdk))):
+    parser.error('--secret-audit requires the separate Agent baseline')
+if args.secret_browser and (not args.secret_audit or not os.access(args.secret_browser.resolve(), os.X_OK)):
+    parser.error('--secret-browser requires --secret-audit and an executable Chrome path')
+if args.mysql_delivery_timing and (not args.separate_execution
+        or not re.fullmatch(r'(8\.4|5\.7)(?:\.[0-9]{1,3})?',args.source_expected_version or '')
+        or any((args.task_views,args.browser,args.automatic_placement,args.rolling_restart,
+                args.runtime_jdk,args.source_diagnostics,args.failure_diagnostics,args.snapshot_diagnostics))):
+    parser.error('--mysql-delivery-timing requires the separate Agent baseline with a pinned 8.4 or 5.7 source')
 if args.mysql_delivery_timing and (not args.separate_execution
         or not re.fullmatch(r'(8\.4|5\.7)(?:\.[0-9]{1,3})?',args.source_expected_version or '')
         or any((args.task_views,args.browser,args.automatic_placement,args.rolling_restart,
@@ -185,9 +199,13 @@ if args.mysql_async_failover:
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
 review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
-                       args.managed_binlog_evidence, args.task_views, args.handoff_assessment, args.command_routing))
+                       args.managed_binlog_evidence, args.task_views, args.handoff_assessment, args.command_routing,
+                       args.secret_audit))
 if review_accounts:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
+if args.secret_audit:
+    env.update(RM_GC_OWN_TASK=env['RM_GC_DATA'], RM_GC_OTHER_TASK=secrets.token_urlsafe(24),
+               RM_GC_UNUSED_TASK=secrets.token_urlsafe(24))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 execution_agents = (owner_node,'node-worker-alt') if args.automatic_placement else (owner_node,) if args.separate_execution else ()
 members = ('node-a','node-b',*execution_agents)
@@ -224,6 +242,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedBinlogEvidence': args.managed_binlog_evidence,
             'approvedBinlogExclusion': args.approved_binlog_exclusion,
             'taskViews': args.task_views,
+            'secretAudit': args.secret_audit,
             'mysqlDeliveryTiming': args.mysql_delivery_timing,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
@@ -297,6 +316,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['cluster'].update({'separateExecution': True, 'role': 'AGENT' if node in execution_agents else 'CONTROLLER', 'url': '${RM_GC_STORE_URL}', 'driver': 'com.mysql.cj.jdbc.Driver' if args.control_product == 'MYSQL' else 'org.postgresql.Driver', 'username': 'root' if args.control_product == 'MYSQL' else 'postgres'})
         if args.handoff_custody and node in execution_agents:
             config['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared' if node==owner_node else '/fixture/handoff-disjoint'
+        if args.secret_audit and node==owner_node:
+            config['workerSecretReferences']={'global_cdc':['RM_GC_OWN_TASK','RM_GC_UNUSED_TASK'],
+                                              'other_task':['RM_GC_OTHER_TASK']}
         if args.runtime_image:
             config.update({'tasksDirectory': '/app/data/tasks', 'dataDirectory': '/app/data/controller'})
         (home / (node + '.json')).write_text(json.dumps(config))
@@ -309,6 +331,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                               'target':'/operator/mysql-connector-j.jar','read_only':True})
         if review_accounts:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
+        if args.secret_audit and node==owner_node:
+            services[node]['environment'].update({name:'${'+name+'}' for name in
+                ('RM_GC_OWN_TASK','RM_GC_OTHER_TASK','RM_GC_UNUSED_TASK')})
         if args.handoff_probe and node in execution_agents:
             services[node]['environment']['RM_GC_HANDOFF_PG']='${RM_GC_DATA}' if node==owner_node else '${RM_GC_CONTROL}'
         if args.runtime_image:
@@ -600,6 +625,101 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         except subprocess.CalledProcessError as failure:
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
+
+    def run_secret_audit():
+        names=compose('exec','-T',owner_node,'sh','-ec',r'''
+            for command in /proc/[0-9]*/cmdline; do
+                if tr '\000' '\n' < "$command" 2>/dev/null | grep -qx io.github.rivomesh.Main &&
+                   tr '\000' '\n' < "$command" 2>/dev/null | grep -qx run; then
+                    tr '\000' '\n' < "${command%/cmdline}/environ" | cut -d= -f1 | grep '^RM_GC_'
+                fi
+            done
+        ''').stdout.splitlines()
+        assert names==['RM_GC_OWN_TASK']
+        private=[env[name] for name in ('RM_GC_DATA','RM_GC_CONTROL','RM_GC_TOKEN','RM_GC_KEY',
+                                        'RM_GC_OTHER_TASK','RM_GC_UNUSED_TASK')]
+        configurations=[http(node,route+'/configuration') for node in ('node-a','node-b')]
+        assert configurations[0]==configurations[1]
+        rendered=json.dumps(configurations[0])
+        assert all(value not in rendered for value in private+['RM_GC_OWN_TASK','RM_GC_OTHER_TASK','RM_GC_UNUSED_TASK'])
+        config=configurations[0]['config']
+        for credentials in [config['source'],*config['targets']]:
+            assert set(credentials['password'])=={'$rivomeshSecret'}
+        passed('Actual Worker receives just its used approved reference and both Controllers render opaque credential fields')
+
+        for field in ('password','nodeId'):
+            draft=json.loads(json.dumps(config))
+            if field=='password':
+                draft['source']['password']='${RM_GC_OTHER_TASK}'
+            else:
+                draft['nodeId']='${RM_GC_OWN_TASK}'
+            denial=http('node-b',route+'/configuration/validate',
+                        {'config':draft,'expectedRevision':configurations[0]['revision']},expected=409)
+            assert denial['code']=='WORKER_SECRET_REFERENCE_DENIED'
+            assert all(value not in json.dumps(denial) for value in private)
+        passed('Owner refuses both another task credential reference and promotion of a credential into a public identity field')
+
+        operator='/api/accounts/review-operator'
+        def grants(tasks):
+            body={'expectedRevision':http('node-a','/api/accounts')['revision'],'role':'OPERATOR',
+                  'enabled':True,'nodeIds':[owner_node],'taskIds':tasks}
+            http('node-a',operator,body,method='PUT')
+
+        grants(['global_cdc'])
+        allowed='cp05_allowed_'+uuid.uuid4().hex
+        check={'action':'CHECK','expectedRevision':task('node-b')['revision']}
+        http('node-b',route+'/actions',check,request=allowed,expected=202,token=env['RM_GC_OPERATOR'])
+        wait(lambda:outcome(allowed,'node-a'),'scoped operator command before revocation')
+        grants([])
+        refused='cp05_refused_'+uuid.uuid4().hex
+        check['expectedRevision']=task('node-b')['revision']
+        http('node-b',route+'/actions',check,request=refused,expected=(403,404),token=env['RM_GC_OPERATOR'])
+        assert not any(entry['id']==refused for entry in task('node-b')['operations'])
+        passed('Revoking the task grant at A immediately rejects a new command submitted at B')
+
+        run_validation_repair()
+        repair=next(op for op in task()['operations'] if op['action']=='REPAIR_EXECUTE' and op['status']=='SUCCEEDED')
+        plan=repair['repair']['planId']
+        request_hash=hashlib.sha256(repair['id'].encode()).hexdigest()
+        def correlated(node):
+            page=http(node,'/api/audit/export?limit=1000')
+            entries=[entry for entry in page['events'] if entry.get('clientRequestHash')==request_hash
+                     and entry.get('taskId')=='global_cdc']
+            if not any(entry['kind']=='GLOBAL_COMMAND_OUTCOME' and entry.get('subjectId')==owner_node
+                       and entry['status']=='SUCCEEDED' for entry in entries):
+                return None
+            if not any(entry['kind']=='OPERATION_COMMITTED' and entry.get('subjectId')==plan
+                       and entry['status']=='SUCCEEDED' for entry in entries):
+                return None
+            assert any(entry['kind']=='GLOBAL_COMMAND_ACCEPTED' for entry in entries)
+            assert all(value not in json.dumps(page) for value in private)
+            return page['storeId'],sorted(entry['id'] for entry in entries)
+
+        assert wait(lambda:correlated('node-a'),'request, task, owner and repair plan join in shared audit') \
+            ==wait(lambda:correlated('node-b'),'second Controller sees the same retained audit events')
+        passed('Both audit exports join the real repair request, task, owner and plan without values or credentials')
+
+        if args.secret_browser:
+            browser_test=ROOT/'tests/ui/browser-secret-audit.mjs'
+            sources=(browser_test,browser_test.with_name('chromium.mjs'))
+            hashes={path.name:hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
+            inputs=dict(entries=[(node,bases[node]) for node in ('node-a','node-b')],
+                        taskId='global_cdc',token=env['RM_GC_TOKEN'],
+                        privateText=private+['RM_GC_OWN_TASK','RM_GC_OTHER_TASK','RM_GC_UNUSED_TASK'])
+            result=subprocess.run(['node',str(browser_test),str(args.secret_browser.resolve())],
+                                  input=json.dumps(inputs),text=True,capture_output=True,timeout=150)
+            if result.returncode:
+                details=result.stderr
+                for value in private:
+                    details=details.replace(value,'[REDACTED]')
+                (output/'chrome-secret-audit-redacted.log').write_text(details)
+                raise AssertionError('Chrome secret audit failed, inspect the redacted browser log')
+            evidence=json.loads(result.stdout)
+            assert evidence['status']=='PASS' and len(evidence['checks'])==2
+            assert all(hashlib.sha256(path.read_bytes()).hexdigest()==hashes[path.name] for path in sources)
+            evidence['sourceSha256']=hashes
+            manifest['secretAuditBrowser']=evidence
+            passed('Real Chrome renders both Controller configuration and audit views without original references or values')
 
     def run_mysql_delivery_timing():
         def original_timestamp():
@@ -1658,6 +1778,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             document['targets'].append({'id': target, 'product': product, 'url': url, 'username': username, 'password': env['RM_GC_DATA'], 'metadataSchema': 'rm_' + target + '_meta', 'mappings': {'sales': 'rm_' + target + '_sales', 'billing': 'rm_' + target + '_billing'}})
         if args.handoff_probe:
             document['targets'][0]['password']='${RM_GC_HANDOFF_PG}'
+        if args.secret_audit:
+            for credentials in (document['source'],*document['targets']):
+                credentials['password']='${RM_GC_OWN_TASK}'
         created = 'gc_create_' + uuid.uuid4().hex
         body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement else {'ownerNodeId':owner_node})}
         http('node-a','/api/tasks',body,request=created,expected=202)
@@ -1713,6 +1836,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
             manifest['status'] = 'PASS'
             print('GLOBAL_CONTROL_MYSQL_ASYNC_FAILOVER_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
+        if args.secret_audit:
+            run_secret_audit()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            manifest['status']='PASS'
+            print('GLOBAL_CONTROL_SECRET_AUDIT_ACCEPTED artifact='+digest)
             raise SystemExit(0)
         if args.task_authority:
             run_task_authority(document)

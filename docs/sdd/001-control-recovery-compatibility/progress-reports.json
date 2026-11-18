@@ -57,8 +57,8 @@
     "6e3d7405aab5c5dda4f09ffbcb96a3159df46a9a"
   ],
   "currentSdd": {
-    "DONE": 33,
-    "PARTIAL": 15,
+    "DONE": 34,
+    "PARTIAL": 14,
     "NEW": 0
   },
   "nextTasks": [
@@ -66,13 +66,15 @@
     "Run historical receipt lookup, least-secret audit, MySQL 8.4 failover and Redis native fixtures as prepared.",
     "Advance bounded report retention and managed Agent custody/assignment fences."
   ],
-  "currentCandidateArtifact": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
-  "currentCandidateScope": "Temurin 21 staged normal package for bounded diagnostics, 28 Java, 131 DOM, 13 Chrome, and ten distributed native checks",
+  "currentCandidateArtifact": "fd0077cab4c5a0e88e1cff4f63320452459617c82bab548c7441623e99948d6c",
+  "currentCandidateScope": "Integrated Temurin 21 authorization, audit and Agent secret-reference package, 54 Java and 134 DOM",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
     "CP-04/LG-05 published shared validation report custody. Both control stores passed 12 native cases and the integrated artifact passed 30 Java tests. Candidate isolated-mount refusal and exact original bytes verified.",
     "JV-02 MySQL 8.4.13 live async GTID failover passed eight checks on exact Java 21. Both PostgreSQL and MySQL moved from receipt sequence 1 to 2 after external promotion, with exact data and original snapshots.",
     "LG-09 historical repair/correction request lookup published with 21 native checks including ten real Chrome cases. Both older receipts stayed available after 21 subsequent controls and Agent loss.",
-    "LG-04 Redis Streams 7.4.2 passed six native checks for original-AOF promotion, one required replica fsync, stable event replay, durable consumer takeover and cold restart."
+    "LG-04 Redis Streams 7.4.2 passed six native checks for original-AOF promotion, one required replica fsync, stable event replay, durable consumer takeover and cold restart.",
+    "CP-05 completed. Both control stores passed 13 native cases with real Chrome, cross-entry authorization revocation and exact audit correlation. Agent-level task grants limit each Worker to its used credential references.",
+    "A clean Temurin 21 reactor from published 4e86f79 passed 526 application and two isolated transport tests with 32 optional profile skips."
   ]
 }

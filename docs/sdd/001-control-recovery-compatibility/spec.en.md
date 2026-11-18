@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,33 DONE, 15 PARTIAL and 0 NEW, with 15 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,34 DONE, 14 PARTIAL and 0 NEW, with 14 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -14,7 +14,7 @@ Implementation:48requirements,33 DONE, 15 PARTIAL and 0 NEW, with 15 open. RC-01
 | CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
 | CP-03 | P0 / DONE | Durable cross-node command routing | Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair. |
 | CP-04 | P0 / PARTIAL | Failover,fencing and placement | Candidate journal/source/target checks and exact completed-report custody on an opt-in shared mount passed across both control stores. Operation receipts, failure/source evidence and fenced placement commit remain. |
-| CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
+| CP-05 | P0 / DONE | Shared authorization,audit and secret references | Both control stores verified cross-entry revocation, audit correlation by request/task/Agent/plan and real browser redaction. The optional Agent-level policy passes only task-authorized and actually used references to each Worker. |
 | CP-06 | P1 / DONE | Cluster logs,metrics and diagnostics | Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
 
@@ -97,7 +97,7 @@ Implementation:48requirements,33 DONE, 15 PARTIAL and 0 NEW, with 15 open. RC-01
 | CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
 | CP-03 | P0 / DONE | Durable cross-node command routing | Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair. |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
-| CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
+| CP-05 | P0 / DONE | Shared authorization,audit and secret references | Both control stores verified cross-entry revocation, audit correlation by request/task/Agent/plan and real browser redaction. The optional Agent-level policy passes only task-authorized and actually used references to each Worker. |
 | CP-06 | P1 / DONE | Cluster logs,metrics and diagnostics | Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown. |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |

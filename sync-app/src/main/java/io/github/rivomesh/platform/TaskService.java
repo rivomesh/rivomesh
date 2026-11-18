@@ -114,7 +114,9 @@ public final class TaskService implements AutoCloseable {
     private Registry registry;
     private final AccountDirectory.State configuredAccounts;
 
-    public TaskService(PlatformConfig c) throws Exception { this(c,new TaskBackend.Database(),(path,log,heap)->new TaskWorker.Jvm(path,log,heap,c.protectedEnvironment)); }
+    public TaskService(PlatformConfig c) throws Exception {
+        this(c,new TaskBackend.Database(),(path,log,heap)->new TaskWorker.Jvm(path,log,heap,c.protectedEnvironment,c.workerSecretReferences));
+    }
     public TaskService(PlatformConfig c,TaskBackend backend,TaskWorker.Factory workers) throws Exception {
         this(c,backend,workers,true);
     }
@@ -208,7 +210,7 @@ public final class TaskService implements AutoCloseable {
             if (Files.isSymbolicLink(path) || !Files.isRegularFile(path)) throw new Conflict("CONFIG_NOT_REGULAR");
             if (Files.size(path)>1024*1024) throw new Conflict("CONFIG_TOO_LARGE");
             byte[] yaml=PrivateFiles.read(path,1024*1024);
-            TaskDefinition task=TaskDefinition.parse(new String(yaml,StandardCharsets.UTF_8),path.toAbsolutePath().getParent(),Paths.get(config.dataDirectory)); validateTask(task,null);
+            TaskDefinition task=parseTask(new String(yaml,StandardCharsets.UTF_8),path.toAbsolutePath().getParent()); validateTask(task,null);
             Control state=registry.tasks.get(task.jobId);
             if (state==null) { state=new Control();state.desired=config.autoStart?"RUNNING":"STOPPED";registry.tasks.put(task.jobId,state); }
             if (state.fingerprint!=null && !state.fingerprint.equals(task.fingerprint())) throw new Conflict("CONFIG_IDENTITY_CHANGED");
@@ -225,10 +227,20 @@ public final class TaskService implements AutoCloseable {
     }
     private void project(Entry entry){try{byte[] bytes=entry.config.workerYaml.getBytes(StandardCharsets.UTF_8);PrivateFiles.write(entry.configurationFile,bytes);Path snapshot=workerDirectory.resolve(entry.config.jobId+".yml");if(!snapshot.equals(entry.path))PrivateFiles.write(snapshot,bytes);entry.projectionPending=false;}catch(IOException failure){entry.projectionPending=true;}}
     private void loadManaged(String id,Control state,Path file){
-        try{if(state.configurationHash==null||!state.configurationHash.matches("[a-f0-9]{64}"))throw new IOException("CONFIG_VERSION_CORRUPT");ConfigurationVersions.Stored stored=versions.read(id,state.configurationVersion,state.configurationHash);TaskDefinition task=TaskDefinition.parse(stored.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));if(!id.equals(task.jobId)||state.fingerprint==null||!state.fingerprint.equals(task.fingerprint()))throw new Conflict("CONFIG_IDENTITY_CHANGED");if(!Arrays.asList("STOPPED","RUNNING","PAUSED").contains(state.desired)||state.operations==null||state.revision==null)throw new Conflict("CONTROL_STATE_INVALID");validateTask(task,null);Entry entry=new Entry(stored.document,file,task);entries.put(id,entry);project(entry);}catch(Exception failure){Map<String,String> row=new LinkedHashMap<>();row.put("file",file.getFileName().toString());row.put("code",safeCode(failure));invalid.add(row);}
+        try{if(state.configurationHash==null||!state.configurationHash.matches("[a-f0-9]{64}"))throw new IOException("CONFIG_VERSION_CORRUPT");ConfigurationVersions.Stored stored=versions.read(id,state.configurationVersion,state.configurationHash);TaskDefinition task=parseTask(stored.yaml);if(!id.equals(task.jobId)||state.fingerprint==null||!state.fingerprint.equals(task.fingerprint()))throw new Conflict("CONFIG_IDENTITY_CHANGED");if(!Arrays.asList("STOPPED","RUNNING","PAUSED").contains(state.desired)||state.operations==null||state.revision==null)throw new Conflict("CONTROL_STATE_INVALID");validateTask(task,null);Entry entry=new Entry(stored.document,file,task);entries.put(id,entry);project(entry);}catch(Exception failure){Map<String,String> row=new LinkedHashMap<>();row.put("file",file.getFileName().toString());row.put("code",safeCode(failure));invalid.add(row);}
+    }
+    private TaskDefinition parseTask(String yaml)throws Exception{
+        return parseTask(yaml,Paths.get(config.tasksDirectory));
+    }
+    private TaskDefinition parseTask(String yaml,Path directory)throws Exception{
+        try{TaskWorker.Jvm.environment(System.getenv(),yaml,config.protectedEnvironment,config.workerSecretReferences);}
+        catch(IllegalArgumentException denied){
+            String code=denied.getMessage();
+            throw new Conflict(code!=null&&code.matches("WORKER_SECRET_[A-Z_]{1,50}")?code:"WORKER_ENVIRONMENT_DENIED");
+        }
+        return TaskDefinition.parse(yaml,directory,Paths.get(config.dataDirectory));
     }
     private void validateTask(TaskDefinition task,String replacing) throws Exception {
-        try{TaskWorker.Jvm.environment(System.getenv(),task.workerYaml,config.protectedEnvironment);}catch(IllegalArgumentException denied){throw new Conflict("WORKER_ENVIRONMENT_DENIED");}
         task.validate();
         if (!task.jobId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) throw new Conflict("TASK_ID_INVALID");
         if (entries.size()>=config.maxTasks && replacing==null) throw new Conflict("TASK_LIMIT");
@@ -362,8 +374,7 @@ public final class TaskService implements AutoCloseable {
     }
     synchronized TaskDefinition ownerResources(TaskRequest request)throws Exception{
         String yaml;if(request.kind==TaskRequest.Kind.CREATE)yaml=request.yaml;else if(request.kind==TaskRequest.Kind.CONFIG_UPDATE)yaml=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).writeValueAsString(request.document);else return null;
-        try{TaskWorker.Jvm.environment(System.getenv(),yaml,config.protectedEnvironment);}catch(IllegalArgumentException denied){throw new Conflict("WORKER_ENVIRONMENT_DENIED");}
-        TaskDefinition definition=TaskDefinition.parse(yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));definition.validate();return definition;
+        TaskDefinition definition=parseTask(yaml);definition.validate();return definition;
     }
     synchronized OwnerReceipt ownerReceipt(TaskRequest supplied,String actorId,String actorRole)throws Exception{
         ensureOpen();TaskRequest request=supplied.snapshot();Receipt receipt=registry.requests.get(request.requestId);if(receipt==null)return null;
@@ -391,7 +402,7 @@ public final class TaskService implements AutoCloseable {
         ensureOpen();requestId(request);
         String signature=digest("CREATE\n"+yaml);Receipt previous=replay(request,signature,actor);
         if(previous!=null&&entries.containsKey(previous.taskId))return view(previous.taskId);
-        TaskDefinition task=TaskDefinition.parse(yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));validateTask(task,null);
+        TaskDefinition task=parseTask(yaml);validateTask(task,null);
         Path path=Paths.get(config.tasksDirectory).resolve(task.jobId+".yml").toAbsolutePath();
         if(Files.exists(path))throw new Conflict("CONFIG_FILE_EXISTS");
         Control state=new Control();state.fingerprint=task.fingerprint();if(actor!=null){state.createdBy=actor.id;state.createdRole=actor.role.name();state.createdAt=Instant.now().toString();}
@@ -403,7 +414,7 @@ public final class TaskService implements AutoCloseable {
     private com.fasterxml.jackson.databind.JsonNode document(TaskDefinition task)throws Exception{return new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).readTree(task.workerYaml);}
     synchronized Map<String,Object> configuration(String id)throws Exception{Entry entry=require(id);Control state=registry.tasks.get(id);Map<String,Object> result=new LinkedHashMap<>();result.put("revision",state.revision);result.put("configurationVersion",state.configurationVersion);result.put("config",documents.redact(document(entry.config),id,state.revision));return result;}
     private TaskDefinition candidate(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision)throws Exception{
-        Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");com.fasterxml.jackson.databind.JsonNode restored=documents.restore(supplied,document(entry.config),id,revision);String yaml=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).writeValueAsString(restored);TaskDefinition candidate=TaskDefinition.parse(yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return candidate;
+        Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");com.fasterxml.jackson.databind.JsonNode restored=documents.restore(supplied,document(entry.config),id,revision);String yaml=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).writeValueAsString(restored);TaskDefinition candidate=parseTask(yaml);if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return candidate;
     }
     private Map<String,Object> comparison(Entry entry,TaskDefinition next)throws Exception{Map<String,Object> result=new LinkedHashMap<>();boolean identity=!entry.config.fingerprint().equals(next.fingerprint()),storage=!entry.config.stateIdentity().equals(next.stateIdentity());result.put("migrationRequired",identity||storage);result.put("stateStoreChanged",storage);result.put("changedPaths",ConfigurationDocuments.changes(document(entry.config),document(next)));return result;}
     synchronized Map<String,Object> previewConfiguration(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision)throws Exception{ensureOpen();TaskDefinition next=candidate(id,supplied,revision);return comparison(require(id),next);}
@@ -426,10 +437,10 @@ public final class TaskService implements AutoCloseable {
         for(int i=0;stored!=null&&i<20;i++){if(!seen.add(stored.version.id))throw new IOException("CONFIG_VERSION_CORRUPT");ConfigurationVersions.Version v=stored.version;Map<String,Object> item=new LinkedHashMap<>();item.put("version",v.id);item.put("reference",reference(id,state,stored));item.put("createdAt",v.createdAt);item.put("action",v.action);item.put("actorId",v.actorId);item.put("actorRole",v.actorRole);items.add(item);stored=v.parent==null?null:versions.read(id,v.parent,v.parentHash);}
         if(stored!=null)result.put("nextCursor",reference(id,state,stored));return result;
     }
-    synchronized Map<String,Object> previewRestoreConfiguration(String id,String selected,String revision)throws Exception{ensureOpen();Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");ConfigurationVersions.Stored stored=resolveReference(id,state,selected);TaskDefinition candidate=TaskDefinition.parse(stored.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));validateTask(candidate,id);return comparison(entry,candidate);}
+    synchronized Map<String,Object> previewRestoreConfiguration(String id,String selected,String revision)throws Exception{ensureOpen();Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");ConfigurationVersions.Stored stored=resolveReference(id,state,selected);TaskDefinition candidate=parseTask(stored.yaml);validateTask(candidate,id);return comparison(entry,candidate);}
     synchronized Map<String,Object> restoreConfiguration(String id,String selected,String revision,String request,AccessControl.Principal actor)throws Exception{
         currentActor(actor);
-        ensureOpen();requestId(request);String signature=restoreSignature(id,revision,selected);if(replay(request,signature,actor)!=null)return view(id);Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");ConfigurationVersions.Stored stored=resolveReference(id,state,selected);TaskDefinition candidate=TaskDefinition.parse(stored.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return commitConfiguration(id,candidate,revision,request,signature,actor,"RESTORE_CONFIG");
+        ensureOpen();requestId(request);String signature=restoreSignature(id,revision,selected);if(replay(request,signature,actor)!=null)return view(id);Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");ConfigurationVersions.Stored stored=resolveReference(id,state,selected);TaskDefinition candidate=parseTask(stored.yaml);if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return commitConfiguration(id,candidate,revision,request,signature,actor,"RESTORE_CONFIG");
     }
     private static String recoveryCancelSignature(TaskRequest request)throws Exception{
         return digest("RECOVERY_CANCEL\n"+request.taskId+"\n"+request.revision+"\n"+request.reference);
@@ -897,7 +908,7 @@ public final class TaskService implements AutoCloseable {
         if(request.kind!=TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE||request.yaml==null||request.handoffCut==null)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         try{
-            TaskDefinition definition=TaskDefinition.parse(request.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));
+            TaskDefinition definition=parseTask(request.yaml);
             if(!request.taskId.equals(definition.jobId)||definition.pipeline==null)
                 throw new Conflict("HANDOFF_CONFIGURATION_CHANGED");
             return Map.of("state","VERIFIED","cut",definition.pipeline.verifyHandoffCut(request.handoffCut));

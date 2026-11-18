@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.56 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，33项DONE、15项PARTIAL、0项NEW，余15项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，34项DONE、14项PARTIAL、0项NEW，余14项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -14,7 +14,7 @@ RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
 | CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
 | CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 双入口评估、候选 Agent 对原日志/源/目标的验证，以及可选共享挂载中已完成报告的字节级核验已实测。操作回执、故障/源证据和安全的归属提交待验。 |
-| CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
+| CP-05 | P0 / DONE | 共享权限、审计和密钥引用 | PostgreSQL 和 MySQL 控制库实测跨入口撤权、按请求/任务/Agent/计划追踪及真实浏览器脱敏。执行 Agent 启用任务凭据授权后，Worker 仅得到所需且授权的引用。 |
 | CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
 
@@ -97,7 +97,7 @@ RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
 | CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
-| CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
+| CP-05 | P0 / DONE | 共享权限、审计和密钥引用 | PostgreSQL 和 MySQL 控制库实测跨入口撤权、按请求/任务/Agent/计划追踪及真实浏览器脱敏。执行 Agent 启用任务凭据授权后，Worker 仅得到所需且授权的引用。 |
 | CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
