@@ -94,6 +94,8 @@ def profile(options, mode, record):
     namespace = f'rivomesh-proof-{mode}-{secrets.token_hex(4)}'
     cluster = ['kubectl', '--context', options.context]
     client = [*cluster, '-n', namespace]
+    worker = options.worker_outage_node
+    storage_class = namespace + '-storage' if worker else options.storage_class
     token = secrets.token_urlsafe(32)
     password = secrets.token_hex(24)
     route = '/api/tasks/csi_test'
@@ -135,7 +137,7 @@ def profile(options, mode, record):
             command('helm', '--kube-context', options.context, '-n', namespace,
                     'upgrade', '--install', 'rivomesh', str(CHART),
                     '--set-string', f'image.repository={repository},image.tag={tag},'
-                                    f'persistence.storageClass={options.storage_class},persistence.size=1Gi',
+                                    f'persistence.storageClass={storage_class},persistence.size=1Gi',
                     '--set', f'controllerHeapMiB={heap}')
         else:
             with tempfile.TemporaryDirectory(prefix='rivomesh-native-') as directory:
@@ -149,8 +151,10 @@ def profile(options, mode, record):
                          'env': [{'name': 'JAVA_TOOL_OPTIONS', 'value': f'-Xmx{heap}m'}]}
                     ]}}}
                 }
+                if worker:
+                    deployment['spec']['template']['spec']['nodeSelector'] = {'kubernetes.io/hostname': worker}
                 claim = resource('PersistentVolumeClaim', 'rivomesh-data',
-                                 spec={'storageClassName': options.storage_class,
+                                 spec={'storageClassName': storage_class,
                                        'resources': {'requests': {'storage': '1Gi'}}})
                 for name, settings in (('deployment', deployment), ('claim', claim)):
                     (folder / (name + '.json')).write_text(json.dumps(settings))
@@ -189,6 +193,11 @@ def profile(options, mode, record):
     def snapshot():
         return sql('sync_test', 'SELECT snapshot_id FROM sync_meta.rm3_sink_table')
 
+    def node_ready():
+        node = json.loads(command(*cluster, 'get', 'node', worker, '-o', 'json'))
+        return any(row['type'] == 'Ready' and row['status'] == 'True'
+                   for row in node['status']['conditions'])
+
     def caught_up(base):
         status = view(base)['status']
         if status.get('run_state') in ('ERROR', 'PAUSED'):
@@ -199,6 +208,12 @@ def profile(options, mode, record):
 
     command(*cluster, 'create', 'namespace', namespace)
     try:
+        if worker:
+            storage = json.loads(command(*cluster, 'get', 'sc', options.storage_class, '-o', 'json'))
+            apply({'apiVersion': 'storage.k8s.io/v1', 'kind': 'StorageClass',
+                   'metadata': {'name': storage_class}, 'reclaimPolicy': 'Delete',
+                   'provisioner': storage['provisioner'], 'parameters': storage.get('parameters', {}),
+                   'volumeBindingMode': 'WaitForFirstConsumer'})
         secret(token)
         apply(resource('Secret', 'pg-fixture', type='Opaque', stringData={'password': password}))
         apply(resource('Service', 'pg-fixture', spec={'selector': {'app': 'pg-fixture'},
@@ -210,6 +225,12 @@ def profile(options, mode, record):
                 'secretKeyRef': {'name': 'pg-fixture', 'key': 'password'}
             }}]}]})
         database['metadata']['labels'] = {'app': 'pg-fixture'}
+        if worker:
+            planes = command(*cluster, 'get', 'nodes', '-l', 'node-role.kubernetes.io/control-plane', '-o', 'name')
+            (plane,) = planes.splitlines()
+            database['spec']['nodeSelector'] = {'kubernetes.io/hostname': plane.split('/', 1)[1]}
+            database['spec']['tolerations'] = [{'key': 'node-role.kubernetes.io/control-plane',
+                                                'operator': 'Exists', 'effect': 'NoSchedule'}]
         apply(database)
         wait(lambda: kube('exec', 'pg-fixture', '--', 'pg_isready', '-h', '127.0.0.1'),
              'PostgreSQL fixture')
@@ -265,6 +286,34 @@ def profile(options, mode, record):
             wait(lambda: request(base, '/api/session', rotated), 'rotated API token')
             request(base, '/api/session', token, expected=401)
         observe('Secret rotation rejects the old token after Pod replacement')
+
+        if worker:
+            token = rotated
+            app = pod()
+            assert app['spec']['nodeName'] == worker and node_ready()
+            with forward(client, app['metadata']['name']) as base:
+                wait(lambda: request(base, '/api/session', token), 'console before node outage')
+                before = wait(lambda: view(base)['status'].get('capture_lsn') and view(base)['status'],
+                              'original durable position')
+            cluster_manager = ['minikube', '-p', options.context, 'node']
+            command(*cluster_manager, 'stop', worker)
+            try:
+                wait(lambda: not node_ready(), 'worker node becomes unavailable')
+                sql('postgres', "UPDATE sales.items SET label='worker offline' WHERE id=1")
+                assert sql('sync_test', 'SELECT label FROM copy_sales.items') == 'offline'
+                assert volume() == first
+            finally:
+                command(*cluster_manager, 'start', worker)
+            wait(node_ready, 'original worker rejoins', timeout=180)
+            wait(lambda: sql('sync_test', 'SELECT label FROM copy_sales.items') == 'worker offline',
+                 'CDC resumes after physical worker restart', timeout=180)
+            assert volume() == first and snapshot() == initial
+            with forward(client, pod()['metadata']['name']) as base:
+                wait(lambda: request(base, '/api/session', token), 'console after node restart')
+                resumed = wait(lambda: view(base)['status'].get('epoch', -1) > before['epoch']
+                               and view(base)['status'], 'lease epoch advances')
+                assert resumed['capture_lsn'] != before['capture_lsn']
+            observe('worker-node outage retains the local CSI volume and CDC resumes under a newer lease')
         record['status'] = 'PASS'
     except Exception as failure:
         details = [str(failure)]
@@ -282,7 +331,11 @@ def profile(options, mode, record):
         (options.output / (mode + '-failure.log')).write_text(diagnostic + '\n')
         raise
     finally:
-        kube('delete', 'namespace', namespace, '--timeout=180s')
+        try:
+            kube('delete', 'namespace', namespace, '--timeout=180s')
+        finally:
+            if worker:
+                command(*cluster, 'delete', 'sc', storage_class, '--ignore-not-found')
 
 
 def main():
@@ -291,14 +344,23 @@ def main():
     parser.add_argument('--image', default='rivomesh:0.1.0-SNAPSHOT')
     parser.add_argument('--storage-class', default='csi-hostpath-sc')
     parser.add_argument('--csi-driver', default='hostpath.csi.k8s.io')
+    parser.add_argument('--worker-outage-node', help='Also stop and restart a worker in the named disposable Minikube profile')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
+    if options.worker_outage_node:
+        kube = ['kubectl', '--context', options.context]
+        worker = json.loads(command(*kube, 'get', 'node', options.worker_outage_node, '-o', 'json'))
+        if 'node-role.kubernetes.io/control-plane' in worker['metadata'].get('labels', {}):
+            parser.error('The outage node must be a worker')
+        profile_nodes = command('minikube', '-p', options.context, 'node', 'list')
+        if options.worker_outage_node not in {line.split()[0] for line in profile_nodes.splitlines() if line.strip()}:
+            parser.error('The outage node must belong to the explicitly selected Minikube profile')
     version = json.loads(command('kubectl', '--context', options.context, 'version', '-o', 'json'))
     report = {'serverVersion': version['serverVersion']['gitVersion'], 'storageClass': options.storage_class,
               'csiDriver': options.csi_driver, 'image': options.image, 'profiles': {}}
     options.output.mkdir(parents=True, exist_ok=True)
     try:
-        for mode in ('helm', 'native'):
+        for mode in ('native',) if options.worker_outage_node else ('helm', 'native'):
             record = {'checks': [], 'status': 'FAIL'}
             report['profiles'][mode] = record
             profile(options, mode, record)

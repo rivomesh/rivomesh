@@ -1105,6 +1105,26 @@
         }
       }
     },
-    "reproduce": "python3 tests/kubernetes-csi-runtime.py --context <disposable context> --image <loaded candidate> --output target/kubernetes-proof"
+    "reproduce": "python3 tests/kubernetes-csi-runtime.py --context <disposable context> --image <loaded candidate> --output target/kubernetes-proof",
+    "workerOutage": {
+      "serverVersion": "v1.31.0",
+      "storageClass": "csi-hostpath-sc",
+      "csiDriver": "hostpath.csi.k8s.io",
+      "image": "rivomesh:local-csi-explicit-lsn",
+      "profiles": {
+        "native": {
+          "checks": [
+            "cookie login survives refresh and SQL snapshot writes to a dynamically provisioned RWO CSI volume",
+            "scale to zero and back remounts the same CSI volume and resumes without resnapshot",
+            "configuration rollout preserves the task and CSI claim",
+            "Secret rotation rejects the old token after Pod replacement",
+            "worker-node outage retains the local CSI volume and CDC resumes under a newer lease"
+          ],
+          "status": "PASS",
+          "node": "rivomesh-sdd-m02",
+          "containerImageID": "docker://sha256:8dbfef96508e5cfc32827c6ef074d3de2cb60506fe1979ae429641484db2333b"
+        }
+      }
+    }
   }
 }

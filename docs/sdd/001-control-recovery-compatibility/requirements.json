@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.20",
+  "version": "0.21",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1428,8 +1428,8 @@
         "en": "Live K8s/CSI and node-fault acceptance"
       },
       "gap": {
-        "zh-CN": "双节点 Kubernetes v1.31.0 已验证 Helm 与原生 YAML 的 CSI 挂载、缩到 0 后续传、配置替换与 Secret 轮换。跨节点 CSI 重挂和旧 owner 隔离待验收。",
-        "en": "Helm and native YAML passed two-node Kubernetes v1.31.0 RWO CSI remount, scale/restart, configuration rollout and Secret rotation. Cross-node CSI and stale-owner fencing remain."
+        "zh-CN": "已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。",
+        "en": "Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain."
       },
       "acceptance": {
         "zh-CN": "在真实集群验证升级、扩缩、Pod/节点故障、RWO/CSI挂载重连、Secret轮换及旧owner隔离，发布实际配置和证据。",

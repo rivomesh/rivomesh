@@ -143,7 +143,7 @@ Linux 可在现有服务命令/环境中指定该配置；Docker、原生 Kubern
 
 Helm 角色配置：预先建立 Secret `rivomesh-accounts`，分别提供不同的 `admin-token`、`operator-token`、`viewer-token` 键，执行 `helm upgrade --install rivomesh deploy/helm/rivomesh -n rivomesh -f deploy/helm/rivomesh/values-rbac.yaml`。手动 YAML 使用 `deploy/kubernetes/rivomesh-rbac.yaml` 替代默认清单；同一资源选择一种管理方式/配置。两份原生文件均由 Chart 渲染并检查一致性。自定义用户格式为 `auth.users: [{id, role, secretRef: {name, key}}]`，`auth.legacyTokenEnabled: false` 关闭共享入口，至少保留一位 ADMIN。重复 ID/Secret 键、非法角色和令牌明文 `token` 字段在渲染时拒绝；不同 Secret 键内容恰好相同则由应用启动检查拒绝。
 
-Secret 环境值在进程启动时读取。仅修改 Kubernetes Secret 不会轮换运行中的管理服务，修改后需执行受控滚动重启；角色/配置变化会改变部署的配置校验和。ConfigMap 和原生 YAML 均不写 Secret 内容。下文列出的滚动更新和 Secret 轮换已通过双节点实测。
+Secret 环境值在进程启动时读取。仅修改 Kubernetes Secret 不会轮换运行中的管理服务，修改后需执行受控滚动重启；角色/配置变化会改变部署的配置校验和。ConfigMap 和原生 YAML 均不写 Secret 内容。配置滚动更新和 Secret 轮换已通过双节点实测。
 
 通过 HTTP 新建的配置记录 `createdBy`、`createdRole`、`createdAt`；任务操作记录认证得到的 `actorId`、`actorRole` 及异步结果，管理进程重启后仍保留。身份由服务端填写，请求正文里的身份字段不能冒名覆盖。新幂等回执将请求标识绑定身份/角色，同身份重放仍幂等，其他身份重放返回 `REQUEST_IDENTITY_CHANGED`。旧版无归属回执保持兼容；历史记录、直接文件/内部 API 变更不会被猜测归属。
 
@@ -175,3 +175,5 @@ python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
 ```
 
 见[复验记录](../verification/README.md#lg-06-live-kubernetes-rwo-csi)。
+
+附加节点故障档案在隔离的 Minikube 集群停止一个 worker，数据库保留在控制节点。原 worker 恢复后，任务挂载同一个卷并以更高日志租约继续增量。追加 `--worker-outage-node <测试 worker>` 可运行原生 YAML 故障档案。

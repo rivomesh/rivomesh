@@ -175,3 +175,5 @@ python3 tests/kubernetes-csi-runtime.py --context rivomesh-test \
 ```
 
 See the [verification record](../verification/README.md#lg-06-live-kubernetes-rwo-csi).
+
+The worker-outage profile stops a worker in a disposable Minikube cluster while the database remains on the control plane. CDC resumes with the same volume and a newer lease when the worker returns. Add `--worker-outage-node <test worker>` to run the native YAML outage profile.

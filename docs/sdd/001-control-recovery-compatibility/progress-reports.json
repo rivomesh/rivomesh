@@ -11,7 +11,6 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "LG-06 worker-node outage and recovery, plus external-volume and old-owner fencing follow-up.",
     "SO-07 Oracle Free ARM64 native source probe and SCN flashback."
   ],
   "reportContents": [
@@ -43,7 +42,8 @@
     "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
     "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback.",
     "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation.",
-    "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence."
+    "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence.",
+    "LG-06 native worker outage passed. PostgreSQL stayed online on the control plane; the recovered worker reused its CSI volume and resumed under a new lease."
   ],
   "nextTasks": [
     "Verify both Kubernetes deployment formats and recovery on CSI.",

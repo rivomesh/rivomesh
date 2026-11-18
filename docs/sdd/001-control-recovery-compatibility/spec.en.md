@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.20 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.21 · 2026-11-18 · IMPLEMENTING
 
 Implementation:48requirements,21 DONE, 25 PARTIAL and 2 NEW, with 27 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
@@ -83,7 +83,7 @@ Implementation:48requirements,21 DONE, 25 PARTIAL and 2 NEW, with 27 open. RC-01
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Initial materialization/recovery exists;cluster/security/capacity/JDK/new recovery profiles remain open. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Initial transports exist for all confirmed queues;complete cluster/TLS/capacity coverage is open. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
-| LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Helm and native v1.31.0 RWO CSI, scale/remount, rollout and Secret rotation passed. Cross-node CSI and old-owner fencing remain. |
+| LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain. |
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | Small benchmark tools exist;large-transaction/catalog/cache/capacity standards remain incomplete. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Summaries/details/DOM/HTTP exist;full catalogs,cleanup,visual/accessibility evidence do not. |
