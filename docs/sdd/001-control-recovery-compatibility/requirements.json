@@ -1641,8 +1641,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。",
-        "en": "Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility."
+        "zh-CN": "已有对象白名单和 UNIQUE/GSI 转换。当前本地日志的冷备恢复、错配目标拒绝和原事件损坏保护通过 Java 21 档案。更多动态 DDL、复杂类型及真实产品协调备份待验。",
+        "en": "Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified current local cold restore, mismatched target refusal and corrupt event protection. Broader DDL, types and product-specific coordinated backups remain."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1654,7 +1654,8 @@
       "evidence": [
         "docs/zh-CN/pipeline-v3.md",
         "docs/zh-CN/rename-migration.md",
-        "docs/zh-CN/first-release.md"
+        "docs/zh-CN/first-release.md",
+        "tests/local-state-restore.py"
       ]
     },
     {

@@ -6192,5 +6192,27 @@
       "focusedJavaTests": 48,
       "domTests": 135
     }
+  },
+  "coordinatedLocalStateRestore": {
+    "reproduce": "python3 tests/local-state-restore.py --artifact <candidate jar> --java-home <jdk 21 directory> --output <directory>",
+    "native": {
+      "corruptError": "JOURNAL_CHECKSUM_MISMATCH",
+      "generation": "33a6276a-cfe7-415b-a196-d91d51aede03",
+      "journal": "LOCAL H2",
+      "mixedTimeError": "SINK_JOURNAL_CHECKPOINT_DIVERGED",
+      "resumedSequence": 3,
+      "savedSequence": 1,
+      "snapshot": "5ba4e479-5f59-4e4c-ad56-347e8ccaef64",
+      "source": "synthetic MySQL GTIDs",
+      "status": "PASS",
+      "target": "H2 JDBC test adapter",
+      "artifactSha256": "daa2daab521d7dc050eb55e1fdd4111bd43fc4b543f8fcb11cfcdd5f9cbe12d2",
+      "java": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "cleanup": true
+    },
+    "fileSha256": {
+      "tests/local-state-restore.py": "d3aa15edc035701a711ad9b5d17ddca65d128311e2b17d25f4221af6354d3a9b",
+      "tests/roles/LocalStateRestoreAcceptance.java": "282bec7a3e5c92257481ee3f4210ac21fd6a51b824d170d0ae35fb3d692bc913"
+    }
   }
 }
