@@ -31,7 +31,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-SO-01 | SO-01 | Each task declares source type,identity,namespace and version;GTID,LSN and SCN are not interchangeable;UI/preflight follow real capabilities and reject unsupported profiles. | NOT_RUN |
 | AC-SO-02 | SO-02 | Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence. | NOT_RUN |
 | AC-SO-03 | SO-03 | Reverify current-release multi-database fan-out,types/generated columns,transactions,ASYNC/MGR,recovery/manual operations with explicit patch/topology scope. | NOT_RUN |
-| AC-SO-04 | SO-04 | Provide reproducible8.2 environment,version/auth/status/binlog handling and a complete first sync/recovery matrix;string matching/JDBC connectivity alone is insufficient. | NOT_RUN |
+| AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance. | NOT_RUN |
 | AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | NOT_RUN |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | NOT_RUN |
@@ -73,7 +73,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 |---|---|---|---|
 | MySQL5.7 | Basic historical5.7.44 | Dedicated source-version evidence missing | PARTIAL |
 | MySQL8.0 | Historical8.0.46 V2/HA | Dedicated source-version evidence missing | PARTIAL;current V3/recovery needed |
-| MySQL8.2 | No dedicated complete evidence found | Same | NEW |
+| MySQL8.2 | V3 standalone, GTID async and single-primary MGR passed | Tracked in JV-02 | DONE (bounded profile) |
 | MySQL8.4 | Current representative SQL/repair paths | Older one-table SQL benchmark only | PARTIAL |
 | PostgreSQL source | Not implemented | Not implemented | NEW;sink evidence is unrelated |
 | Oracle source | Not implemented | Not implemented | NEW |

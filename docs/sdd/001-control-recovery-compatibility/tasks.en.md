@@ -92,7 +92,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-03 · MySQL8.0 current V3 acceptance · P1 · Depends on: SO-01
   Deliver: Reverify current-release multi-database fan-out,types/generated columns,transactions,ASYNC/MGR,recovery/manual operations with explicit patch/topology scope.
   Acceptance: AC-SO-03
-- [ ] T-SO-04 · MySQL8.2 compatibility and acceptance · P1 · Depends on: SO-01
+- [x] T-SO-04 · MySQL8.2 compatibility and acceptance · P1 · Depends on: SO-01
   Deliver: Provide reproducible8.2 environment,version/auth/status/binlog handling and a complete first sync/recovery matrix;string matching/JDBC connectivity alone is insufficient.
   Acceptance: AC-SO-04
 - [ ] T-SO-05 · MySQL8.4 expanded compatibility · P1 · Depends on: SO-01

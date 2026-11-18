@@ -163,6 +163,19 @@
         "archive": "docs/verification/README.md",
         "profile": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store."
       }
+    },
+    {
+      "id": "SO-04",
+      "title": {
+        "zh-CN": "MySQL 8.2 新增兼容与验收",
+        "en": "MySQL8.2 compatibility and acceptance"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829",
+        "archive": "docs/verification/README.md",
+        "profile": "MySQL 8.2.0 ARM64 with GTID, ROW and FULL. Java 8 V3 reactor passed 56 tests. Frozen package passed native async promotion and single-primary MGR election on PostgreSQL and openGauss targets."
+      }
     }
   ],
   "productProfiles": [
@@ -536,5 +549,17 @@
       "PARTIAL": 31,
       "NEW": 5
     }
+  },
+  "mysql82Source": {
+    "image": "mysql:8.2.0",
+    "imageIndexDigest": "sha256:212fe73edca5df6ff14826d5eb975c914bfb91f82a2e923f9050568f99525da1",
+    "architecture": "arm64",
+    "sourceConfiguration": "GTID ON, ROW, FULL",
+    "java": 8,
+    "standaloneMavenTestsPassed": 56,
+    "asyncArtifactTestsPassed": 1,
+    "groupArtifactTestsPassed": 1,
+    "haArtifactSha256": "cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829",
+    "runner": "tests/matrix.sh --v3 8.2.0"
   }
 }

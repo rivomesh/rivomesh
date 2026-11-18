@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.10 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**13 DONE、30 PARTIAL、5 NEW，35 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。下一项为分布式恢复作业。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**14 DONE、30 PARTIAL、4 NEW，34 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。下一项为分布式恢复作业。
 
 ## 1. 当前基线
 
@@ -22,7 +22,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 | 6 完整文档 | DO-01～DO-05 | 5 |
 | 既有范围合并保留 | LG-01～LG-10 | 10 |
 
-共48项：13项DONE，余35项为5项NEW、30项PARTIAL。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
+共 48 项，14 项完成，30 项部分完成，4 项未实现。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
 
 ## 2. 用户已明确的需求，不再当作可选项
 
@@ -75,7 +75,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 |---|---|---|
 | MySQL5.7 | 5.7.44基础链路证据 | 当前V3对象/恢复/HA及运行时档案补齐 |
 | MySQL8.0 | 8.0.46历史V2/HA等证据 | 当前发布V3和新增恢复能力补验 |
-| MySQL8.2 | 未发现专项完整证据 | 新增版本档案、实现差异和实测 |
+| MySQL8.2 | 8.2.0 的 Java 8 V3 三种拓扑实库通过 | 其他 JDK 由 JV-02 跟踪 |
 | MySQL8.4 | 代表性V3/恢复已验收 | 扩展认证、日志特性、拓扑、目标和JDK矩阵 |
 | PostgreSQL | SOURCE目录为PLANNED | 一致性快照/LSN/逻辑槽、事务和源切换；PG目标支持不算源支持 |
 | Oracle | SOURCE目录为PLANNED | 路线、版本、权限及分发条件；SCN/redo/归档、事务、类型及恢复 |

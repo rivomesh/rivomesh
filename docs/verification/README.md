@@ -39,3 +39,9 @@ Coverage includes explicit SKIP;the contiguous SQL applied prefix stops before t
 RC-06 补偿候选包 `d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3` 通过 32 项 Java 定向检查、104 项 DOM、PostgreSQL 17 和 MySQL 8.4 各 4 项原生检查，以及 18 项真实 CDC 检查。真实链路使用 MySQL 8.4 双库源、PostgreSQL 控制库、原 Agent 与 LOCAL/H2 日志。跨入口补偿 PostgreSQL 目标的主键冲突，恢复了三张表的四个受影响标识，再由正常 CDC 重放。MySQL 是健康对照订阅，MySQL 目标的补偿结论来自原生检查。
 
 RC-07 手工修正候选包 `33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25` 通过 39 项 Java 定向检查、107 项 DOM、PostgreSQL 17 和 MySQL 8.4 各 4 项原生检查及 18 项真实 CDC 检查。真实链路使用两个管理入口、原 Agent、LOCAL/H2 日志和 PostgreSQL 控制库。用原始 JSON 批次补回目标缺失行，按 ROW_ID 修改无主键行并删除多余行。管理员审批后显式恢复并重放原事务。任务记录只带范围和摘要。
+
+### SO-04 · MySQL 8.2.0
+
+Java 8 的 V3 反应堆测试通过 56 项，包括多库全量与增量、无主键、JSON、生成列、LOCAL 和外部日志及原事务恢复。冻结包 `cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829` 另通过两项原生 HA 检查。GTID 主从提升后从已有断点继续，单主组复制在全量中途选主后只重取未完成快照。验证源为 ARM64 的 `mysql:8.2.0`，启用 GTID、ROW binlog 和 FULL 行镜像。
+
+The Java 8 reactor passed 56 V3 tests. The frozen package passed one native async promotion scenario and one native single-primary group election scenario. The HA profiles used PostgreSQL and openGauss targets. Reproduce all three source profiles with `tests/matrix.sh --v3 8.2.0`. JV-02 tracks the other JDK combinations.

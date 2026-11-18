@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
+RM-SDD-001 · v0.10 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,13DONE,30PARTIAL,5NEW;35open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08 bounded profiles are accepted;automatic takeover, recovery jobs and complete matrices remain tracked.
+Implementation:48requirements,14 DONE, 30 PARTIAL and 4 NEW, with 34 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/SO-04 bounded profiles are accepted;automatic takeover, recovery jobs and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -50,7 +50,7 @@ Implementation:48requirements,13DONE,30PARTIAL,5NEW;35open. RC-02/RC-05/RC-03/RC
 | SO-01 | P0 / PARTIAL | Source protocol and capability configuration | Neutral events/positions exist but factories/UI remain MySQL-oriented. |
 | SO-02 | P1 / PARTIAL | MySQL5.7 supported profile | 5.7.44 basic evidence does not cover the required current-platform object/recovery/runtime matrix. |
 | SO-03 | P1 / PARTIAL | MySQL8.0 current V3 acceptance | Historical8.0.46 V2/HA evidence is not current full V3 acceptance. |
-| SO-04 | P1 / NEW | MySQL8.2 compatibility and acceptance | No dedicated complete8.2 native evidence found;8.0/8.4 cannot substitute. |
+| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
 | SO-05 | P1 / PARTIAL | MySQL8.4 expanded compatibility | Representative8.4 V3/recovery evidence is not every log/auth/topology/destination combination. |
 | SO-06 | P1 / NEW | PostgreSQL source adapter | Catalog says PLANNED;a PG sink driver is not a PG source. |
 | SO-07 | P1 / NEW | Oracle source adapter | Catalog says PLANNED;no native snapshot/CDC implementation. |
@@ -118,7 +118,7 @@ Implementation:48requirements,13DONE,30PARTIAL,5NEW;35open. RC-02/RC-05/RC-03/RC
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-02 | [validation.md](../../../docs/validation.md) / [mysql57-run.sh](../../../tests/mysql57-run.sh) |
 | SO-03 | [validation.md](../../../docs/validation.md) / [matrix.sh](../../../tests/matrix.sh) |
-| SO-04 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [matrix.sh](../../../tests/matrix.sh) |
+| SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
 | SO-05 | [validation.md](../../../docs/validation.md) / [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |

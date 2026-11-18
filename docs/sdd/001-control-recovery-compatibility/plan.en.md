@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.10 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **13 DONE,30 PARTIAL,5 NEW;35 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery jobs are next.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **14 DONE, 30 PARTIAL and 4 NEW, with 34 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery jobs are next.
 
 ## Current baseline
 
@@ -22,7 +22,7 @@ Maintain the current first-release specification and [verification baseline](../
 | 6 Complete docs | DO-01–DO-05 | 5 |
 | Preserved previous scope | LG-01–LG-10 | 10 |
 
-Currentv0.9:48items total,13DONE,5NEW and30PARTIAL;35remain open. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
+The 48 requirements include 14 completed, 30 partial and 4 new items. PARTIAL means foundations exist but the whole requirement is incomplete,not that accepted features must be rebuilt.
 
 ## Confirmed scope
 
@@ -67,7 +67,7 @@ A proposed gap record links source/range,transaction/raw/normalized hashes,targe
 |---|---|---|
 | MySQL5.7 | Basic5.7.44 evidence | Current V3 objects/recovery/HA/runtime profile |
 | MySQL8.0 | Historical8.0.46 V2/HA | Current V3/new recovery acceptance |
-| MySQL8.2 | No dedicated complete evidence found | New profile,compatibility differences and native tests |
+| MySQL8.2 | Java 8 V3 passes three native 8.2.0 topologies | JV-02 covers other JDKs |
 | MySQL8.4 | Representative V3/recovery | Broader auth/log/topology/target/JDK matrix |
 | PostgreSQL | PLANNED source | Snapshot/LSN/slot,transactions,promotion;PG sink support is unrelated |
 | Oracle | PLANNED source | Capture route/version/grants/distribution,SCN/redo/archive,types and recovery |

@@ -1,7 +1,7 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.9",
-  "date": "2026-11-17",
+  "version": "0.10",
+  "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
   "baseline": {
@@ -855,14 +855,14 @@
       "id": "SO-04",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "NEW",
+      "status": "DONE",
       "title": {
         "zh-CN": "MySQL 8.2 新增兼容与验收",
         "en": "MySQL8.2 compatibility and acceptance"
       },
       "gap": {
-        "zh-CN": "未发现8.2专用完整真实验收记录，不能用8.0/8.4代替。",
-        "en": "No dedicated complete8.2 native evidence found;8.0/8.4 cannot substitute."
+        "zh-CN": "MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。",
+        "en": "MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs."
       },
       "acceptance": {
         "zh-CN": "提供可复现8.2夹具/真实环境、版本探测、连接认证、状态命令、binlog事件和首个完整同步/恢复矩阵；不能只增加版本字符串或通过JDBC连接。",
@@ -873,8 +873,18 @@
       ],
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
-        "tests/matrix.sh"
-      ]
+        "tests/matrix.sh",
+        "tests/v3-ha-run.sh",
+        "tests/v3-group-run.sh",
+        "docs/verification/README.md",
+        "docs/zh-CN/pipeline-v3.md",
+        "docs/en/pipeline-v3.md"
+      ],
+      "verification": {
+        "artifactSha256": "cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829",
+        "archive": "docs/verification/README.md",
+        "profile": "MySQL 8.2.0 ARM64 with GTID, ROW and FULL. Java 8 V3 reactor passed 56 tests. Frozen package passed native async promotion and single-primary MGR election on PostgreSQL and openGauss targets."
+      }
     },
     {
       "id": "SO-05",

@@ -56,6 +56,10 @@ If one transaction and workspace exceed the entire quota, `TRANSACTION_EXCEEDS_J
 
 `EXTERNAL` supports PostgreSQL, openGauss or a separate MySQL instance. Workers share journal instance/namespace/pipelineId and target configuration, with distinct nodeIds. Database-clock leases and epochs fence ownership. MySQL storage must use InnoDB and retain acknowledged commits across restart. External HA systems promote/fence database nodes; Rivomesh does not promote them. V3 worker-crash recovery, MySQL 8.4 async promotion and MGR election during snapshot passed; other versions/soak matrices still need acceptance. V2 results do not prove all V3 variants.
 
+### MySQL 8.2.0 source regression
+
+Run `tests/matrix.sh --v3 8.2.0` for the V3 standalone, GTID async and single-primary group replication suites. The tests use Docker Compose, the `mysql:8.2.0` source image and reports under `target/matrix-v3/8.2.0/`. The source uses GTID, ROW binlog and FULL row images. In the async suite, the fixture promotes a caught-up replica and Rivomesh validates the required history before resuming from the original position.
+
 ## Troubleshooting and FAQ
 
 - **SQL errors:** only that subscriber pauses with an error generation. Repair privileges/schema/data, then resume the original transaction using the current generation from `status`. Resume never skips data or edits GTIDs.

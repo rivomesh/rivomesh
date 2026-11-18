@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
+RM-SDD-001 · v0.10 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，13项DONE、30项PARTIAL、5项NEW，余35项未闭环。RC-02、RC-05、RC-03、RC-06、RC-07 和 RC-08 限定档案已验收；自动接管、恢复作业和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，14项DONE、30项PARTIAL、4项NEW，余34项未闭环。RC-02、RC-05、RC-03、RC-06、RC-07、RC-08 和 SO-04 限定档案已验收；自动接管、恢复作业和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -50,7 +50,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | SO-01 | P0 / PARTIAL | 多源协议与能力配置 | 事件/位置SPI已有，真实源工厂与向导仍以MySQL为主。 |
 | SO-02 | P1 / PARTIAL | MySQL 5.7 完整支持档案 | 有5.7.44基础链路记录，未覆盖当前平台全部必要对象、恢复和运行时组合。 |
 | SO-03 | P1 / PARTIAL | MySQL 8.0 当前V3能力补验 | 有8.0.46历史V2/HA记录，不能直接作为当前V3全功能验收。 |
-| SO-04 | P1 / NEW | MySQL 8.2 新增兼容与验收 | 未发现8.2专用完整真实验收记录，不能用8.0/8.4代替。 |
+| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-05 | P1 / PARTIAL | MySQL 8.4 扩展兼容与回归 | 8.4已有代表性V3/恢复证据，但不是所有日志特性、认证、拓扑和目标组合。 |
 | SO-06 | P1 / NEW | PostgreSQL 源适配器 | 能力目录仅PLANNED，PG目标驱动不等于PG源。 |
 | SO-07 | P1 / NEW | Oracle 源适配器 | 能力目录仅PLANNED，尚无原生全量/增量实现。 |
@@ -118,7 +118,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-02 | [validation.md](../../../docs/validation.md) / [mysql57-run.sh](../../../tests/mysql57-run.sh) |
 | SO-03 | [validation.md](../../../docs/validation.md) / [matrix.sh](../../../tests/matrix.sh) |
-| SO-04 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [matrix.sh](../../../tests/matrix.sh) |
+| SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-05 | [validation.md](../../../docs/validation.md) / [pipeline-v3.md](../../../docs/zh-CN/pipeline-v3.md) |
 | SO-06 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |
 | SO-07 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) |

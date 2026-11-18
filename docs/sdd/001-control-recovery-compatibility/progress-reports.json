@@ -10,7 +10,7 @@
     "Four native correction contracts per PostgreSQL/MySQL and real CDC cross-entry import/approval/replay passed"
   ],
   "inProgress": [
-    "RC-09 durable distributed recovery jobs"
+    "RC-09 cross-node cancellation and recovery of the original approved request. Java and DOM passed. Native commit boundary acceptance is running."
   ],
   "reportContents": [
     "Current totals",
@@ -28,14 +28,20 @@
     "8db3b27e08f83b0e4ac0eae12cc99d084854c3bb"
   ],
   "currentSdd": {
-    "DONE": 13,
+    "DONE": 14,
     "PARTIAL": 30,
-    "NEW": 5
+    "NEW": 4
   },
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "RC-09 exact-parent cancellation, read-only native receipt resolution and bilingual operator workflow implemented.",
+    "RC-09 42 focused Java and 108 DOM tests passed. Offline queue cancellation confirmed in a real CDC fixture.",
+    "SO-04 accepted on MySQL 8.2.0 ARM64 with 56 V3 tests, real GTID promotion, and real MGR election."
+  ],
   "nextTasks": [
-    "RC-09 distributed cancellation and crash recovery",
-    "Consolidate V2/V3 execution branches"
+    "RC-09 complete real CDC pre- and post-commit process interruption and publish.",
+    "RC-01 durable source, decode and journal failure phases.",
+    "JV-01 controller, Agent and Worker on five JDKs.",
+    "Consolidate V2/V3 execution branches."
   ],
   "currentCandidateArtifact": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
   "currentCandidateScope": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store.",

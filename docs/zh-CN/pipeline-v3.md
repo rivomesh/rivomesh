@@ -56,6 +56,10 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar run config/pipeline-v3
 
 `EXTERNAL` 可用 PostgreSQL、openGauss 或独立 MySQL。所有 Worker 使用相同日志实例/namespace/pipelineId 和目标配置，不同 nodeId；数据库时钟租约与 epoch 管理所有权。MySQL 日志需 InnoDB，服务重启不可丢失已确认提交。源与目标数据库的提升/隔离由外部高可用系统负责，Rivomesh 不提升数据库主库。V3 已通过 Worker 强制终止恢复、8.4 普通主从提升及 MGR 全量中途选主测试；其他版本/长稳矩阵仍需补验，不能直接套用 v2 的测试结论。
 
+### MySQL 8.2.0 源端回归
+
+运行 `tests/matrix.sh --v3 8.2.0`，逐一测试 V3 单机、GTID 主从和单主组复制。测试要求 Docker Compose，源镜像为 `mysql:8.2.0`，报告保存在 `target/matrix-v3/8.2.0/`。源端使用 GTID、ROW binlog 和 FULL 行镜像。主从场景由夹具提升追平的副本，Rivomesh 校验所需历史并从原位置续传。
+
 ## 错误与恢复 FAQ
 
 - **目标 SQL 错误**：该订阅进入 PAUSED，保存错误版本。修复目标权限、结构或数据原因后，使用 `status` 返回的 `errorGeneration` 恢复原事务。默认恢复不跳过、不修改 GTID。
