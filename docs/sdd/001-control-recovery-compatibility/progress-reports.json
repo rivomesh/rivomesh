@@ -2,21 +2,18 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T13:54:31+08:00",
-  "nextReportAt": "2026-11-18T14:54:31+08:00",
+  "lastReportAt": "2026-11-18T14:56:44+08:00",
+  "nextReportAt": "2026-11-18T15:56:44+08:00",
   "completedSincePrevious": [
-    "CP-06 and LG-09. Seven native cross-entry checks and five Chrome checks passed on one frozen artifact. The diagnostic page persisted across Agent restart without exposing business values or credentials.",
-    "LG-01 and LG-03 OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and the full mixed restart/SQL recovery fixture. Full Java regression passed 501 cases plus 32 skips.",
-    "SO-07 Oracle 26ai passed nine native checks for typed complete transactions and distinct commit SCN/XIDs after archive rotation.",
-    "SO-07 Oracle 26ai to PostgreSQL V3 passed 13 native checks, including a transaction spanning the snapshot, archive rotation, SIGKILL/resume and DDL refusal at the original SCN.",
-    "DO-05 accepted. One frozen candidate passed 25 configuration examples, five real Chrome checks, seven native CDC checks and eight live Helm/native Kubernetes checks. A different Chrome candidate was rejected.",
-    "CP-04 and LG-06. Two native Kubernetes Worker nodes with one PostgreSQL journal passed three checks. Freezing the owner switched epoch 1 to 2 and the resumed Worker remained fenced.",
-    "LG-04 NATS JetStream 2.11.8 three native replicas passed six checks: client TLS trust, hostname refusal, actual leader loss, no confirmed publication without quorum, and stable-ID retry after restoration.",
-    "JV-04 started and passed eight native mixed-JDK checks. Controllers 8/21 and Agent/Worker 11 ran together, Controller 25 replaced 8 with CDC live, then Agent/Worker 17 resumed from the original directory and GTID after a controlled stop.",
-    "SO-01 accepted. PostgreSQL and Oracle V3 source wizards, explicit target restrictions and source-specific configuration guards. Seven Chrome checks against the live API, 115 DOM, 23 focused Java and 25 configuration examples passed; PostgreSQL and Oracle native regressions passed seven and thirteen."
+    "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks.",
+    "CP-06 both entries passed task/owner filtering and exact per-target backlog during a real PostgreSQL constraint failure, while MySQL kept up. Same candidate passed 7 native, 7 Chrome, 503 Java (32 skipped) and 118 DOM cases.",
+    "RC-04 retained the exact native MySQL binlog bytes in one atomic private archive tied to the original checkpoint. Eleven native checks cover independent file SHA matching, repeat idempotence and retained bytes after purging source logs.",
+    "LG-06: Helm and native YAML each passed five live Kubernetes checks. Both moved the same RWO NFS CSI claim to the other node, preserved the initial snapshot and automatically resumed CDC at epoch 4.",
+    "RC-04: Managed archive replay passed thirteen native checks on the preceding candidate. The final candidate needs a repeat after a transient control-store 503."
   ],
   "inProgress": [
-    "RC-04 managed source evidence and approved isolation/exclusion.",
+    "RC-04 managed archive recheck and source quarantine/exclusion.",
+    "LG-06 live application image replacement on the same RWO CSI claim.",
     "CP-04 managed Agent relocation and execution admission."
   ],
   "reportContents": [
@@ -32,14 +29,10 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "8a777924fd0b67fb38538dbca67239e0c996f86f",
-    "dccd365cb4d070382b68c378695ab416af941b27",
-    "990867531a77d4df5e0f55c960b156f324a9e8f0",
-    "da30f6051dc0e8fca0f4fc0e787ea9ce1cdb68bf",
-    "47fcd2259f0c8e3fd898094f0967e182c90f8b63",
-    "c4cb73acc6566c4822dec54eebf695d8474fcf02",
-    "556608b043fe80bc27dc4fcbf85ccbc627e6e56f",
-    "0c46148d6c702047e8ebd4ffc21e07ca1639a3c5"
+    "8ae510d24e915ec8d723f3a157a57e63164e1bc7",
+    "2b8ecaff7c7a130bd8c3a9ccfda70cc5230e9b02",
+    "fbdffa4390e9b3470eec1bee7245c6485885f27a",
+    "a8458cbd69a5259068be979adc3c8665449281ea"
   ],
   "currentSdd": {
     "DONE": 26,
@@ -47,16 +40,12 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Run native positive and negative capture-header review cases, then build the preserved source-range and approval workflow.",
-    "Continue managed Agent relocation with durable owner/epoch guards and real external-log acceptance.",
-    "Extend remaining target cluster, recovery and deployment matrix cases."
+    "Finish managed archive recheck and design preserved source-range approval.",
+    "Verify application image replacement on live Kubernetes using the original volume.",
+    "Continue managed Agent relocation and remaining compatibility profiles."
   ],
   "currentCandidateArtifact": "b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32",
   "currentCandidateScope": "MySQL 8.4 exact wire frame CRC32 and private durable source evidence archival",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": [
-    "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks.",
-    "CP-06 both entries passed task/owner filtering and exact per-target backlog during a real PostgreSQL constraint failure, while MySQL kept up. Same candidate passed 7 native, 7 Chrome, 503 Java (32 skipped) and 118 DOM cases.",
-    "RC-04 retained the exact native MySQL binlog bytes in one atomic private archive tied to the original checkpoint. Eleven native checks cover independent file SHA matching, repeat idempotence and retained bytes after purging source logs."
-  ]
+  "newSinceLastReport": []
 }
