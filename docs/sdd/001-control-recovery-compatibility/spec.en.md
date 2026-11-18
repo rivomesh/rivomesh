@@ -78,9 +78,9 @@ Implementation:48requirements,24 DONE, 23 PARTIAL and 1 NEW, with 24 open. RC-01
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| LG-01 | P1 / PARTIAL | Domestic transactional database matrix | Initial openGauss/DM/Kingbase/GBase8c profiles exist;distributed GaussDB,complete OceanBase recovery and GBase8a/8s remain open. |
+| LG-01 | P1 / PARTIAL | Domestic transactional database matrix | OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain. |
 | LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Initial destinations must be empty;repair completion is not cutover. |
-| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Initial materialization/recovery exists;cluster/security/capacity/JDK/new recovery profiles remain open. |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Initial transports exist for all confirmed queues;complete cluster/TLS/capacity coverage is open. |
 | LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local/external journals exist;authority/reports/sessions/control-store relocation and HA boundaries are not unified. |
 | LG-06 | P1 / PARTIAL | Live K8s/CSI and node-fault acceptance | Live Helm/native deployment, config and Secret changes, and a physical worker outage passed on Kubernetes. Same-node CSI reuse and a new lease were verified. Cross-node CSI and stale-owner fencing remain. |

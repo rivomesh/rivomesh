@@ -31,4 +31,4 @@ while kill -0 "$test_pid" 2>/dev/null; do
     sleep 1
 done
 wait "$test_pid"
-python3 "$test_dir/verify-artifact.py"
+python3 "$test_dir/verify-artifact.py" "${RIVOMESH_TEST_ARTIFACT:-sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar}"

@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Actual MySQL source, PostgreSQL/OceanBase targets, journal and fat-JAR worker processes. */
 public final class OceanBasePipelineAcceptance {
-    static final String JAR="/project/sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar";
+    static final String JAR=System.getenv().getOrDefault("RIVOMESH_TEST_ARTIFACT","sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar");
     final Path directory=Paths.get(System.getenv("RIVOMESH_OB_DIR"));
     final String id="ob_"+UUID.randomUUID().toString().replace("-","").substring(0,20);
     final PipelineConfig config=new PipelineConfig();

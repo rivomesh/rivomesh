@@ -1297,7 +1297,7 @@
         "tests/sdd-check.py"
       ],
       "verification": {
-        "artifactSha256": "00f118ef3c6e37194925adf6e39e4e4fcdcbe9fcd77b7d40457c7b2b6b73dfc3",
+        "artifactSha256": "d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
@@ -1343,8 +1343,8 @@
         "en": "Domestic transactional database matrix"
       },
       "gap": {
-        "zh-CN": "openGauss/达梦/金仓/GBase8c为首批档案；分布式GaussDB、OceanBase完整恢复及GBase8a/8s等未完成。",
-        "en": "Initial openGauss/DM/Kingbase/GBase8c profiles exist;distributed GaussDB,complete OceanBase recovery and GBase8a/8s remain open."
+        "zh-CN": "OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。",
+        "en": "OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain."
       },
       "acceptance": {
         "zh-CN": "按产品/版本/模式/分布键/索引/驱动/JDK记录完整同步恢复及补偿/跳过能力；商业分布式实机单独验收，不能以PG协议连通替代。",
@@ -1355,7 +1355,8 @@
       ],
       "evidence": [
         "docs/zh-CN/implementation-status.md",
-        "docs/zh-CN/gaussdb-index-policy.md"
+        "docs/zh-CN/gaussdb-index-policy.md",
+        "docs/verification/baseline.json"
       ]
     },
     {
@@ -1394,8 +1395,8 @@
         "en": "ClickHouse/Doris/Hive production profiles"
       },
       "gap": {
-        "zh-CN": "首批物化/恢复已有证据，集群/TLS/权限/容量/全部JDK和新恢复语义未完成。",
-        "en": "Initial materialization/recovery exists;cluster/security/capacity/JDK/new recovery profiles remain open."
+        "zh-CN": "首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。",
+        "en": "Bounded materialization and recovery profiles include OceanBase MySQL tenant outage catch-up, independent SQL repair and missing-table isolation. Clusters, TLS, capacity and remaining JDK combinations need verification."
       },
       "acceptance": {
         "zh-CN": "各产品按真实可见水位、去重/批次回执验证重启、旧备份、集群故障和缺口；不能承诺普通SQL跨表事务语义。",
@@ -1407,7 +1408,8 @@
       "evidence": [
         "docs/zh-CN/clickhouse-v3.md",
         "docs/zh-CN/doris-v3.md",
-        "docs/zh-CN/hive-v3.md"
+        "docs/zh-CN/hive-v3.md",
+        "docs/verification/baseline.json"
       ]
     },
     {

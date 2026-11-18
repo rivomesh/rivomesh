@@ -313,7 +313,7 @@
       },
       "status": "DONE",
       "verification": {
-        "artifactSha256": "00f118ef3c6e37194925adf6e39e4e4fcdcbe9fcd77b7d40457c7b2b6b73dfc3",
+        "artifactSha256": "d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
@@ -1817,5 +1817,33 @@
       ],
       "browser": "Chrome/157.0.8103.79"
     }
+  },
+  "oceanbaseMysqlTenantRecovery": {
+    "artifactSha256": "58cc370518c0f92271f39fafab02b8c508beb59bf736bdb797eb3a8add050ff4",
+    "status": "PASS",
+    "source": "MySQL 8.4.13",
+    "otherTarget": "PostgreSQL 17.12",
+    "target": "OceanBase CE 4.3.5.6",
+    "tenant": "MYSQL",
+    "architecture": "arm64",
+    "java": 8,
+    "imageId": "sha256:2484b44dc1955c9b5ead18c7aa1ca6e0cd5da900743c7297c6fca91fa0c44ec7",
+    "image": "oceanbase/oceanbase-ce@sha256:31086a6900c21c479c2bcd942b6a28c53b17a51f4e9b9eb8eafcc596adfcd2e3",
+    "resources": {
+      "containerMemory": "10g",
+      "obMemoryLimit": "8G",
+      "tenantMemory": "3G",
+      "cpus": 6
+    },
+    "cleanupExitCode": 0,
+    "fullJavaVerify": {
+      "enumerated": 533,
+      "passed": 501,
+      "skipped": 32
+    },
+    "checks": [
+      "OCEANBASE_NATIVE_CONTRACT_ACCEPTED: strong reads, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen",
+      "OCEANBASE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+OceanBase4.3.5 MySQL tenant, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, target outage with independent SQL progress/catchup, worker SIGKILL resume, independent SQL error rollback/repair/retry, persistent pause, missing-table isolation and transactional fences"
+    ]
   }
 }

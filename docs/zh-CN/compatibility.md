@@ -12,7 +12,7 @@
 | `MYSQL` 8.0.46 | Java 8。单机、GTID 主从提升和单主组复制。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
 | `MYSQL` 8.2.0 | Java 8。单机、GTID 主从提升和单主组复制。 | [版本专项命令](pipeline-v3.md) |
 | `MYSQL` 8.4.13 | Java 8。三种拓扑以及 binlog 准入检查。下方进程矩阵另含五种 JDK 的单机档案。 | [8.4 binlog 档案](pipeline-v3.md) |
-| `POSTGRESQL` 17.12 | 实验性单主源。五种 JDK 分别通过 7 项 PostgreSQL 到 PostgreSQL 实库验证。切主和共同点对账待验证。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
+| `POSTGRESQL` 17.12 | 实验性单主源。五种 JDK 分别通过 7 项 PostgreSQL 到 PostgreSQL 实库验证。Java 8 已通过同步槽切主，PostgreSQL 共同点对账待验证。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | 实验性单主源，发布存储型生成列并物化为目标普通列。 | [源指南与发布](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Java 8，单独提供 Oracle JDBC 驱动。实测 SCN Flashback 和单线程归档 redo 解码。自动投递和 RAC 待实现。 | [预检权限与恢复](oracle-source.md)、[预检样例](../../config/oracle-source-probe.yml) |
 
@@ -26,7 +26,7 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 | `GAUSS` | openGauss 7.0.0-RC3 事务档案已实测。商用分布式 GaussDB 的约束、GSI 和部署验收待完成。 | [高斯索引策略与接管](gaussdb-index-policy.md) |
 | `DM`、`KINGBASE`、`GBASE_8C` | 首批 Java 8 事务档案。确切版本、模式、驱动、类型转换和恢复范围见各产品手册。 | [达梦](dm-v3.md)、[金仓](kingbase-v3.md)、[GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`、`GBASE_8S` | 独立产品，规划中。 | [实施状态](implementation-status.md) |
-| `OCEANBASE` | MySQL 模式租户事务 JDBC 实验实现。实库验收及 Oracle 模式待完成。 | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | CE 4.3.5.6 MySQL 租户在 Java 8 已通过原生事务、全量、增量、重启和 SQL 恢复。Oracle 模式和集群待完成。 | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`、`DORIS`、`HIVE` | 首批实库分析档案，采用版本化物化与回执。数据可见性和重放规则按引擎区分。 | [ClickHouse](clickhouse-v3.md)、[Doris](doris-v3.md)、[Hive](hive-v3.md) |
 | `KAFKA`、`PULSAR`、`RABBITMQ`、`ROCKETMQ`、`ACTIVEMQ_CLASSIC`、`ACTIVEMQ_ARTEMIS`、`REDIS_STREAMS`、`NATS_JETSTREAM` | 限定 broker 档案，确认式至少一次投递。消费端按稳定事件 ID 去重，独立记录业务消费进度。 | [消息目标](messaging-v3.md)、[ActiveMQ Classic](classic-v3.md) |
 

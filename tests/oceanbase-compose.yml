@@ -1,13 +1,13 @@
 services:
   oceanbase:
     image: oceanbase/oceanbase-ce:4.3.5.6-106000012026040916
-    mem_limit: 6g
+    mem_limit: ${RIVOMESH_OB_CONTAINER_MEMORY:-10g}
     cpus: 6
     environment:
       MODE: mini
-      OB_MEMORY_LIMIT: 5G
+      OB_MEMORY_LIMIT: ${RIVOMESH_OB_MEMORY_LIMIT:-8G}
       OB_SYSTEM_MEMORY: 1G
-      OB_TENANT_MEMORY_SIZE: 2G
+      OB_TENANT_MEMORY_SIZE: ${RIVOMESH_OB_TENANT_MEMORY:-3G}
       OB_TENANT_LOG_DISK_SIZE: 2G
       OB_TENANT_MIN_CPU: 1
       OB_DATAFILE_SIZE: 2G
@@ -45,6 +45,7 @@ services:
     environment:
       MAVEN_OPTS: -Xmx768m
       RIVOMESH_OB_DIR: ${RIVOMESH_OB_DIR:-/project/target/oceanbase-manual}
+      RIVOMESH_TEST_ARTIFACT: ${RIVOMESH_TEST_ARTIFACT:-sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar}
     volumes:
       - ..:/project
       - ${SYNC_MAVEN_CACHE:-maven-cache}:/root/.m2/repository

@@ -78,9 +78,9 @@ RM-SDD-001 · v0.29 · 2026-11-18 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | openGauss/达梦/金仓/GBase8c为首批档案；分布式GaussDB、OceanBase完整恢复及GBase8a/8s等未完成。 |
+| LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
 | LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 当前首用目标要求为空，修复成功也不是业务切换完成。 |
-| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化/恢复已有证据，集群/TLS/权限/容量/全部JDK和新恢复语义未完成。 |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | 首批物化及恢复档案已验证，含 OceanBase 单节点 MySQL 租户停机追平、两目标独立 SQL 修复和缺表隔离。集群、TLS、容量与完整 JDK 矩阵待验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | Kafka/Pulsar/RabbitMQ/RocketMQ/Classic/Artemis/Redis Streams/NATS JetStream已有首批传输，完整集群/TLS/容量仍缺。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 已有本地/外部日志，但本地权威文件、报告、会话、控制元数据的迁移/HA边界不统一。 |
 | LG-06 | P1 / PARTIAL | 真实K8s/CSI与节点故障验收 | 已通过双节点 Kubernetes 的 Helm/原生 YAML、配置与 Secret 替换和 worker 停机恢复。节点本地 CSI 同卷、新租约及原断点续传已实测。跨节点 CSI 和旧 owner 隔离待验收。 |

@@ -12,7 +12,7 @@ Choose a profile by source version and topology, target product and mode, then J
 | `MYSQL` 8.0.46 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Pipeline configuration](pipeline-v3.md), [recovery runbook](reconciliation-workflow.md) |
 | `MYSQL` 8.2.0 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Version-specific test commands](pipeline-v3.md#mysql-820-source-regression) |
 | `MYSQL` 8.4.13 | Java 8. All three topologies and admission checks. The process matrix below covers standalone on five JDKs. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
-| `POSTGRESQL` 17.12 | Experimental single-primary source. Seven native PostgreSQL-to-PostgreSQL checks on each of the five JDKs. Promotion and PostgreSQL common-cut verification are pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
+| `POSTGRESQL` 17.12 | Experimental single-primary source. Seven native PostgreSQL-to-PostgreSQL checks on each of the five JDKs. The synchronized-slot promotion profile passed on Java 8. PostgreSQL common-cut verification is pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Experimental single primary with stored generated columns published and materialized as ordinary target columns. | [Source guide and publication](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Java 8 with a separately supplied Oracle JDBC driver. Native SCN Flashback and single-thread archived redo decode. Scheduled delivery and RAC remain pending. | [Probe privileges and recovery](oracle-source.md), [probe example](../../config/oracle-source-probe.yml) |
 
@@ -26,7 +26,7 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 | `GAUSS` | openGauss 7.0.0-RC3 native transactional profile. Commercial distributed GaussDB constraints, GSI behavior and deployment acceptance are pending. | [Gauss index policy and takeover](gaussdb-index-policy.md) |
 | `DM`, `KINGBASE`, `GBASE_8C` | Initial Java 8 native transactional profiles. Consult each guide for the exact server mode, driver, field conversions and recovery checks. | [DM](dm-v3.md), [Kingbase](kingbase-v3.md), [GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`, `GBASE_8S` | Planned separate products. | [Product status](implementation-status.md) |
-| `OCEANBASE` | Experimental transactional JDBC implementation for MySQL-mode tenants. Native acceptance and Oracle mode remain pending. | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | CE 4.3.5.6 MySQL-mode native transactions, snapshot, CDC, restart and SQL recovery passed on Java 8. Oracle mode and clusters remain pending. | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`, `DORIS`, `HIVE` | First native analytical profiles. Versioned materialization and receipts, with visibility and replay rules defined per engine. | [ClickHouse](clickhouse-v3.md), [Doris](doris-v3.md), [Hive](hive-v3.md) |
 | `KAFKA`, `PULSAR`, `RABBITMQ`, `ROCKETMQ`, `ACTIVEMQ_CLASSIC`, `ACTIVEMQ_ARTEMIS`, `REDIS_STREAMS`, `NATS_JETSTREAM` | Bounded broker profiles with confirmed at-least-once publishing. Deduplicate stable event IDs and track consumer completion separately. | [Messaging](messaging-v3.md), [ActiveMQ Classic](classic-v3.md) |
 

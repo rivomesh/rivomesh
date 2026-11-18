@@ -142,7 +142,7 @@ Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` pass
 
 ## Bilingual connector and API compatibility reference
 
-Combined reference SHA-256 `00f118ef3c6e37194925adf6e39e4e4fcdcbe9fcd77b7d40457c7b2b6b73dfc3`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
+Combined reference SHA-256 `d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
 
 ## PostgreSQL 18 stored generated columns
 
@@ -159,3 +159,7 @@ Artifact `49ed903ee7a7d75f57908c05a96990fe790af785a1015550cf1f8501cf5d717b` pass
 ## Worker diagnostic events and Chrome smoke
 
 Artifact `3355bdc100775f7ce813a61309a1306ab6a03cd4a7078d6a68ba1784065777d9` passed 24 Java tests, 112 DOM tests and seven native MySQL/PostgreSQL checks across two controllers and a separate Agent. After a real incomplete-binlog-image fault and Agent restart, both entries returned the same page for an anchored cursor with only typed events, timestamps and phases. VIEWER and invalid-page requests were rejected. Chrome 157 exercised keyboard login, cookie reload, the accessible diagnostic dialog, a 390px viewport and actual sign-out. Wide, mobile and diagnostic screenshots were reviewed. [Manifests](baseline.json)
+
+## OceanBase MySQL tenant recovery
+
+Artifact `58cc370518c0f92271f39fafab02b8c508beb59bf736bdb797eb3a8add050ff4` passed 501 Java tests with 32 optional cases skipped. The actual OceanBase CE 4.3.5.6 ARM64 fixture passed native transactional/checkpoint rollback, epoch and reopen checks with Java 8. In mixed MySQL 8.4.13 to PostgreSQL 17.12 and OceanBase delivery, it passed snapshot and CDC including generated and keyless rows, target restart and catch-up, Worker SIGKILL, independent SQL constraint recovery, persistent failure generation and missing-target-table isolation. The fixture cleaned up its own containers and volumes. [Reproduction](../en/oceanbase-v3.md) · [Manifest](baseline.json)
