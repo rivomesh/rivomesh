@@ -23,7 +23,7 @@ public final class KafkaMessagePublisher implements ConfirmedPublisher {
         try{producer=new KafkaProducer<>(properties);}catch(Exception failure){admin.close(Duration.ZERO);throw failure;}
     }
     private static String quote(String text){return "\""+text.replace("\\","\\\\").replace("\"","\\\"")+"\"";}
-    static Properties properties(PipelineConfig.Target target)throws Exception{
+    static Properties connectionProperties(PipelineConfig.Target target)throws Exception{
         PipelineConfig.Messaging settings=target.messaging;Properties p=new Properties();List<String> addresses=new ArrayList<>();List<String> urls=new ArrayList<>();urls.add(target.url);urls.addAll(settings.endpoints);
         for(String url:urls){URI uri=new URI(url);addresses.add(uri.getHost()+":"+(uri.getPort()<0?9092:uri.getPort()));}
         p.setProperty("bootstrap.servers",String.join(",",addresses));p.setProperty("client.id","rivomesh-"+target.id);p.setProperty("security.protocol",settings.securityProtocol);
@@ -31,7 +31,10 @@ public final class KafkaMessagePublisher implements ConfirmedPublisher {
             p.setProperty("sasl.mechanism",settings.saslMechanism);String module=settings.saslMechanism.equals("PLAIN")?"org.apache.kafka.common.security.plain.PlainLoginModule":"org.apache.kafka.common.security.scram.ScramLoginModule";
             p.setProperty("sasl.jaas.config",module+" required username="+quote(target.username)+" password="+quote(target.password)+";");
         }
-        p.setProperty("request.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("default.api.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("socket.connection.setup.timeout.ms",Integer.toString(settings.connectTimeoutMillis));p.setProperty("socket.connection.setup.timeout.max.ms",Integer.toString(settings.connectTimeoutMillis*2));
+        p.setProperty("request.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("default.api.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("socket.connection.setup.timeout.ms",Integer.toString(settings.connectTimeoutMillis));p.setProperty("socket.connection.setup.timeout.max.ms",Integer.toString(settings.connectTimeoutMillis*2));return p;
+    }
+    static Properties properties(PipelineConfig.Target target)throws Exception{
+        PipelineConfig.Messaging settings=target.messaging;Properties p=connectionProperties(target);
         p.setProperty("key.serializer","org.apache.kafka.common.serialization.StringSerializer");p.setProperty("value.serializer","org.apache.kafka.common.serialization.ByteArraySerializer");p.setProperty("acks","all");p.setProperty("enable.idempotence","true");p.setProperty("max.in.flight.requests.per.connection","1");p.setProperty("retries",Integer.toString(Integer.MAX_VALUE));p.setProperty("delivery.timeout.ms",Integer.toString(Math.max(30000,settings.requestTimeoutMillis*3)));p.setProperty("max.block.ms",Integer.toString(settings.connectTimeoutMillis));p.setProperty("linger.ms","2");p.setProperty("buffer.memory",Integer.toString(Math.max(4*1024*1024,settings.maxMessageBytes*2)));p.setProperty("max.request.size",Integer.toString(settings.maxMessageBytes+4096));return p;
     }
     private <T>T await(Future<T> result)throws Exception{try{return result.get(target.messaging.requestTimeoutMillis,TimeUnit.MILLISECONDS);}catch(Exception e){throw failure(e);}}

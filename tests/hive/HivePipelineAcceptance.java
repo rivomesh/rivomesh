@@ -28,6 +28,52 @@ public final class HivePipelineAcceptance {
     long pgCount(String table)throws Exception{try(Connection connection=postgres();Statement sql=connection.createStatement();ResultSet rows=sql.executeQuery("SELECT count(*) FROM "+Sql.pg(id+"_pg")+"."+Sql.pg(table))){rows.next();return rows.getLong(1);}}
     long hiveCount(String table)throws Exception{PipelineConfig.Target target=config.targets.get(0);try(HiveSqlClient sql=new HiveSqlClient(target.url,target.username,target.password,300,4*1024*1024,16*1024*1024)){return Long.parseLong(sql.query("SELECT count(*) AS n FROM "+HiveRows.q(id+"_copy")+"."+HiveRows.q(table)).get(0).get("n"));}}
     Journal.Subscription subscription(JdbcJournal journal,String id)throws Exception{return journal.subscriptions().stream().filter(item->item.id.equals(id)).findFirst().get();}
+
+    String nativeReceipt(JdbcPublicationStore store)throws Exception{
+        String progress=store.progress();
+        require(progress!=null&&progress.matches("HIVE_RECEIPT_V1:[a-f0-9]{32}:[a-f0-9]{64}:[a-f0-9]{64}"),
+                "Original Hive progress has no receipt identity");
+        return progress;
+    }
+
+    String verifyNativeReceipts(String generation,String... receipts)throws Exception{
+        PipelineConfig.Target target=config.targets.get(0);
+        String root=HiveRows.q(target.metadataSchema)+"."+HiveRows.q("rm3_hive_"+Codec.sha256(id+":hive").substring(0,48));
+        String owner="rivomesh:"+Codec.sha256(id+":hive:"+generation)+":"+config.fingerprint();
+        Map<String,String> expected=new LinkedHashMap<>();
+        String resource=receipts[0].split(":")[1];
+        for(String receipt:receipts){
+            String[] fields=receipt.split(":");
+            require(resource.equals(fields[1])&&expected.put(fields[2],fields[3])==null,
+                    "Hive receipts do not identify distinct batches on the original resource");
+        }
+        List<String> ids=new ArrayList<>();
+        for(String receipt:expected.keySet())ids.add("'"+receipt+"'");
+        try(HiveSqlClient sql=new HiveSqlClient(target.url,target.username,target.password,300,4*1024*1024,16*1024*1024)){
+            Map<String,String> properties=new HashMap<>();
+            for(Map<String,String> row:sql.query("SHOW TBLPROPERTIES "+root))
+                properties.put(row.get("prpt_name"),row.get("prpt_value"));
+            require(owner.equals(properties.get("rivomesh.owner"))&&resource.equals(properties.get("rivomesh.resource"))
+                    &&"true".equals(properties.get("transactional"))&&"default".equals(properties.get("transactional_properties")),
+                    "Hive native table ownership or ACID resource changed");
+            Set<String> found=new HashSet<>();
+            for(Map<String,String> row:sql.query("SELECT id,hash,payload FROM "+root+
+                    " WHERE kind='RECEIPT' AND id IN ("+String.join(",",ids)+")")){
+                String id=row.get("id"),hash=row.get("hash");
+                require(hash!=null&&hash.equals(expected.get(id))&&"".equals(row.get("payload")),
+                        "Exact Hive native batch receipt changed");
+                found.add(id);
+            }
+            require(found.equals(expected.keySet()),"Hive native batch receipt is missing");
+            for(Map<String,String> row:sql.query("DESCRIBE FORMATTED "+root)){
+                String key=row.get("col_name"),location=row.get("data_type");
+                if(key!=null&&"Location:".equals(key.trim())&&location!=null&&!location.isBlank())
+                    return Codec.sha256(owner+"\n"+resource+"\n"+location.trim());
+            }
+            throw new AssertionError("Hive metadata warehouse location is missing");
+        }
+    }
+
     void phase(String phase)throws Exception{System.out.println("HIVE_PIPELINE_PHASE: "+phase);Files.write(directory.resolve(phase+".request"),new byte[]{1});await(()->Files.exists(directory.resolve(phase+".done")));}
     void start()throws Exception{worker=new ProcessBuilder("java","-Xmx256m","-jar",JAR,"run",configuration.toString()).redirectErrorStream(true).redirectOutput(directory.resolve("worker-"+(++starts)+".log").toFile()).start();}
     void kill()throws Exception{if(worker!=null){worker.destroyForcibly();require(worker.waitFor(20,TimeUnit.SECONDS),"Worker SIGKILL was not confirmed");worker=null;}}
@@ -52,11 +98,52 @@ public final class HivePipelineAcceptance {
             for(Object entry:plans){Map<?,?> item=(Map<?,?>)entry;HiveIndexPlan plan=(HiveIndexPlan)item.get("plan");for(HiveIndexPlan.Decision decision:plan.decisions)if(decision.sourceUnique&&!decision.sourceName.equals("PRIMARY")){require("OMIT_BY_ACKNOWLEDGEMENT".equals(decision.action),"Native source UNIQUE reported a fake target index");reviewedUnique=true;}if(String.valueOf(item.get("table")).endsWith(".items"))require("STRING".equals(((Map<?,?>)item.get("columnStorage")).get("amount")),"Wide source decimal plan lost storage disclosure");}
             require(reviewedUnique,"Actual MySQL UNIQUE was not discovered/reviewed");
             try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
+                JdbcPublicationStore publication=new JdbcPublicationStore(journal,"hive",null);
                 start();await(()->pgCount("items")==1&&hiveCount("items")==1&&hiveCount("duplicates")==2);verifyTypes();System.out.println("HIVE_PIPELINE_SNAPSHOT_ACCEPTED");String generation=(String)journal.status().get("generation"),snapshot=journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId;
                 source("UPDATE "+items+" SET id=3,base_value=9 WHERE id=1");source("DELETE FROM "+duplicates+" LIMIT 1");await(()->pgCount("duplicates")==1&&hiveCount("duplicates")==1);await(()->subscription(journal,"hive").acknowledged==((Number)journal.status().get("lastSequence")).longValue());
-                System.out.println("HIVE_PIPELINE_CDC_ACCEPTED");phase("stop");insert(4);await(()->pgCount("items")==2&&subscription(journal,"postgres").acknowledged>subscription(journal,"hive").acknowledged);phase("start");await(()->hiveCount("items")==2&&subscription(journal,"hive").acknowledged==subscription(journal,"postgres").acknowledged);
-                System.out.println("HIVE_PIPELINE_OUTAGE_RECOVERY_ACCEPTED");kill();insert(5);start();await(()->pgCount("items")==3&&hiveCount("items")==3);require(generation.equals(journal.status().get("generation"))&&snapshot.equals(journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId),"Worker restart repeated/reset snapshot identity");
-                System.out.println("HIVE_PIPELINE_WORKER_RESTART_ACCEPTED");pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items ADD CONSTRAINT block_next CHECK(id<6)");insert(6);await(()->"PAUSED".equals(subscription(journal,"postgres").state)&&hiveCount("items")==4);require(pgCount("items")==3,"Failed SQL transaction was committed");long error=subscription(journal,"postgres").errorGeneration;pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items DROP CONSTRAINT block_next");command("resume",configuration.toString(),"postgres",Long.toString(error));await(()->pgCount("items")==4&&subscription(journal,"postgres").acknowledged==subscription(journal,"hive").acknowledged);
+                String original=nativeReceipt(publication),ownership=verifyNativeReceipts(generation,original);
+                long originalSequence=subscription(journal,"hive").acknowledged;
+                System.out.println("HIVE_PIPELINE_CDC_ACCEPTED");
+                phase("stop");insert(4);
+                await(()->pgCount("items")==2&&subscription(journal,"postgres").acknowledged>subscription(journal,"hive").acknowledged);
+                require(originalSequence==subscription(journal,"hive").acknowledged&&original.equals(nativeReceipt(publication)),
+                        "Hive advanced its receipt during the outage");
+                phase("start");
+                await(()->hiveCount("items")==2&&subscription(journal,"hive").acknowledged==subscription(journal,"postgres").acknowledged);
+                String caughtUp=nativeReceipt(publication);
+                require(ownership.equals(verifyNativeReceipts(generation,original,caughtUp)),
+                        "Hive catch-up replaced native batch history or ownership");
+                System.out.println("HIVE_PIPELINE_OUTAGE_RECOVERY_ACCEPTED");
+                kill();insert(5);start();
+                await(()->pgCount("items")==3&&hiveCount("items")==3
+                        &&subscription(journal,"hive").acknowledged==subscription(journal,"postgres").acknowledged
+                        &&!caughtUp.equals(nativeReceipt(publication)));
+                require(generation.equals(journal.status().get("generation"))&&snapshot.equals(journal.snapshot("source",TableSchema.identity(id,"","items")).snapshotId),"Worker restart repeated/reset snapshot identity");
+                String restarted=nativeReceipt(publication);
+                require(ownership.equals(verifyNativeReceipts(generation,original,caughtUp,restarted)),
+                        "Worker restart replaced native Hive batch history or ownership");
+                System.out.println("HIVE_PIPELINE_WORKER_RESTART_ACCEPTED");
+                pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items ADD CONSTRAINT block_next CHECK(id<6)");insert(6);
+                await(()->"PAUSED".equals(subscription(journal,"postgres").state)&&hiveCount("items")==4
+                        &&subscription(journal,"hive").acknowledged>subscription(journal,"postgres").acknowledged);
+                require(pgCount("items")==3,"Failed SQL transaction was committed");
+                String siblingPaused=nativeReceipt(publication);
+                long error=subscription(journal,"postgres").errorGeneration;
+                pg("ALTER TABLE "+Sql.pg(id+"_pg")+".items DROP CONSTRAINT block_next");
+                command("resume",configuration.toString(),"postgres",Long.toString(error));
+                await(()->pgCount("items")==4&&subscription(journal,"postgres").acknowledged==subscription(journal,"hive").acknowledged);
+                require(siblingPaused.equals(nativeReceipt(publication))
+                        &&ownership.equals(verifyNativeReceipts(generation,original,caughtUp,restarted,siblingPaused)),
+                        "SQL sibling retry changed Hive publication progress or native history");
+                Map<String,String> receipts=new LinkedHashMap<>();
+                receipts.put("nativeOwnerResourceAndLocationSha256",ownership);
+                receipts.put("snapshotId",snapshot);
+                receipts.put("original",original);
+                receipts.put("afterTargetRestart",caughtUp);
+                receipts.put("afterWorkerRestart",restarted);
+                receipts.put("duringSqlSiblingPause",siblingPaused);
+                new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("receipts.json").toFile(),receipts);
+                System.out.println("HIVE_RECEIPTS_ACCEPTED: exact batches survive Hive and Worker restart under the original native owner, resource and warehouse location");
                 PipelineConfig.Target target=config.targets.get(0);try(HiveSqlClient sql=new HiveSqlClient(target.url,target.username,target.password,300,4*1024*1024,16*1024*1024)){sql.execute("DROP VIEW "+HiveRows.q(id+"_copy")+".items");}insert(7);await(()->pgCount("items")==5&&"PAUSED".equals(subscription(journal,"hive").state));require("HIVE_TABLE_MISSING_REBUILD_REQUIRED".equals(subscription(journal,"hive").errorCode),"Missing view did not isolate its target");Map<String,Object> paused=PipelineControls.pause(config);Map<?,?> fences=(Map<?,?>)paused.get("targetFences");require("FENCED".equals(fences.get("postgres"))&&String.valueOf(fences.get("hive")).startsWith("UNCONFIRMED"),"Pause overstated the materialized fence");
             }
             System.out.println("HIVE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Hive4.0.1, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, Hive outage with independent SQL progress/catchup, worker SIGKILL resume, SQL error repair/retry while Hive continues, missing-view isolation and honest pause fences");

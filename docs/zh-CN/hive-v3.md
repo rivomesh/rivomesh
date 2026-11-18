@@ -79,3 +79,9 @@ Journal 按目标 ACK 回收不等于 Hive 历史自动清理。历史、墓碑�
 联合夹具实测出现：明细查询有3行，但缓存的COUNT返回0；新会话仅关闭查询结果缓存后COUNT返回3，且统计优化仍开启。这是该配置的实际观测，不推断所有Hive版本都有同一问题。首个支持配置要求服务端默认和所有读取会话 `hive.query.results.cache.enabled=false`，同步账号会话也必须关闭；预检查及写入前校验会以 `HIVE_QUERY_CACHE_DISABLED_REQUIRED` 拒绝开启的设置，不会静默修改全局配置。
 
 只在同步连接关闭缓存不能保护其他业务读者。不要在应用连接上重新开启，或把旧缓存结果解释为数据丢失后手工补写。修复服务端及读者设置后再检查/恢复；表中数据、任务身份和断点无需因此重置。首轮默认缓存联合用例已因该问题中止，不计为完整恢复通过；关闭缓存的新配置已通过独立物化/重启/旧备份拒绝及冻结发布包的完整联合链路，见[证据](../verification/README.md)。
+
+## Java 21 停机与批次验证
+
+ARM64 夹具从 MySQL 8.4.13 同步到 PostgreSQL 17.12 和 HiveServer2 4.0.1。Hive 停机期间 PostgreSQL 继续同步，Hive 保留 Journal 确认位点和精确批次回执。HiveServer2 和 Worker 重启后，夹具直接从 Hive 核对原回执和后续回执，并确认元数据所有者、资源 UUID 和仓库位置一致。Worker 重启复用原快照。修复 PostgreSQL 约束错误后，单独重放该订阅不会改变 Hive 回执。
+
+构建 Java 21 JAR 和测试类后，运行 `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh`。本场景使用单个 HiveServer2、嵌入式 Derby Metastore 和本地仓库数据卷。外置 Metastore、分布式存储及服务故障切换需单独验收。[Hive 事务](https://hive.apache.org/docs/latest/user/hive-transactions/) · [验收记录](../verification/README.md)

@@ -118,6 +118,7 @@ def main():
     parser.add_argument('--artifact',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--java-home',type=Path,default=os.environ.get('JAVA_HOME'))
+    parser.add_argument('--only-recovery-review',action='store_true')
     args = parser.parse_args()
     artifact,output = args.artifact.resolve(),args.output.resolve()
     for path in (artifact,output):
@@ -166,6 +167,21 @@ def main():
             report['javaVersion'] = next(line.strip() for line in version.stderr.splitlines()
                                          if line.strip().startswith('openjdk version '))
             assert report['javaVersion'].startswith('openjdk version "21.')
+            if args.only_recovery_review:
+                review = phase('recovery-review',set(BROKERS))
+                assert review['review']['status']=='PRECEDING_KAFKA_RECEIPTS_VERIFIED'
+                assert review['review']['acknowledgedSequence']=='1' and review['review']['failedSequence']=='2'
+                assert len(review['review']['nativeReceipts'])==2
+                assert review['brokerEndBefore']==review['brokerEndAfterReview']
+                assert review['consumerOffsetBefore']==review['consumerOffsetAfterReview']
+                passed('The read-only command verifies both preceding native COMMIT receipts with no offset or checkpoint mutation')
+                assert review['partialFailureCode']=='KAFKA_RECOVERY_PUBLICATION_UNCERTAIN'
+                assert review['journalAcknowledged']==review['publicationAcknowledged']==1
+                assert review['peerAcknowledged']==2 and review['peerEndBefore']==review['peerEndAfter']
+                passed('A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints')
+                assert sha256(artifact)==report['artifactSha256']
+                report['status'] = 'PASS'
+                return
             initial = phase('initial',set(BROKERS))
             assert initial['publicationReceipt']['sequence']==initial['journalAcknowledged']==1
             assert initial['storedOffsetBefore']==0 and initial['storedOffsetAfter']==len(initial['records'])==7

@@ -7834,5 +7834,123 @@
     ],
     "reproduce": "python3 tests/mysql-group-failover-native.py --artifact <release jar> --java <Java 21 executable> --output target/mysql-group-failover-proof",
     "scope": "MySQL three-member single-primary Group Replication, two mapped database schemas, exact original Worker, external PostgreSQL journal and PostgreSQL business destination. Native failure uses SIGKILL and native group election. A fenced former primary is read-only before and after rejoin."
+  },
+  "hiveJava21NativeReceiptRecovery": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+      "sourceBuildTree": "42e2a7401f0675e2c98c3acf868ae0d51c6f0c8d",
+      "fixtureSha256": "1eae31581e0e25b828813ee3758e5521d621c6887ec0a256d60a1f36d90e3c6a",
+      "composeSha256": "386a45dd3bdc6b8dd686d3823446cd806130753832a7a62dd5624a0ff0dd0139",
+      "hiveSiteSha256": "01b1ba5d11237919719c949fdb9b6bb98bf8fd4d15f5ff028a67642e344fdcfa",
+      "nativeLogSha256": "e1630e932768c9ad683e7efaf931c72234b621b05bbd8ab7448486fea8d3794e",
+      "nativeReceiptEvidenceSha256": "64833e56a59e3eaafaac37c17ea0f08971402da7e67879394469bd4391c6a35d",
+      "fixtureProject": "rivomesh-hive-pipeline-86375",
+      "runtimeVersion": "Temurin 21.0.12.1+1",
+      "architecture": "arm64",
+      "sourceVersion": "MySQL 8.4.13",
+      "sqlTargetVersion": "PostgreSQL 17.12",
+      "analyticTargetVersion": "HiveServer2 4.0.1 with embedded Derby Metastore and local warehouse",
+      "imageIds": {
+        "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4",
+        "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "apache/hive:4.0.1": "sha256:e0e865f33ecfbaeba4a96b3f15ab67aa4dd2602102962aa3dcca082879c68367"
+      },
+      "receiptStages": [
+        "original",
+        "afterTargetRestart",
+        "afterWorkerRestart",
+        "duringSqlSiblingPause"
+      ],
+      "checks": [
+        "HIVE_PIPELINE_SNAPSHOT_ACCEPTED",
+        "HIVE_PIPELINE_CDC_ACCEPTED",
+        "HIVE_PIPELINE_OUTAGE_RECOVERY_ACCEPTED",
+        "HIVE_PIPELINE_WORKER_RESTART_ACCEPTED",
+        "HIVE_RECEIPTS_ACCEPTED: exact batches survive Hive and Worker restart under the original native owner, resource and warehouse location",
+        "HIVE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Hive4.0.1, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, Hive outage with independent SQL progress/catchup, worker SIGKILL resume, SQL error repair/retry while Hive continues, missing-view isolation and honest pause fences"
+      ],
+      "cleanupExitCode": 0,
+      "remainingFixtureContainers": 0,
+      "remainingFixtureNetworks": 0,
+      "remainingFixtureVolumes": 0
+    },
+    "scope": "Single HiveServer2 4.0.1 with embedded Derby Metastore and local warehouse; actual MySQL capture, durable receipt and original resource and peer PostgreSQL independence. External Metastore, distributed storage, HA, TLS and capacity require separate profiles.",
+    "reproduce": "RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh"
+  },
+  "kafkaNativePrecedingReceiptReview": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "f30a038dd9dee55de64de300e5e62a079af53a8837427f62c9cfb3f1a297327e",
+      "harnessSha256": "6aab954bdf85fc2c4a31bfa697790c22938f13fca552218a7dde25f5b55bda03",
+      "acceptanceSourceSha256": "61476ae77e651e632d50df87ecae271abd0a0bc05289e4e247e370f8c7ba34e4",
+      "checks": [
+        "The read-only command verifies both preceding native COMMIT receipts with no offset or checkpoint mutation",
+        "A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints"
+      ],
+      "phases": {
+        "recovery-review": {
+          "brokerEndAfterReview": 9,
+          "brokerEndBefore": 9,
+          "cluster": {
+            "clusterId": "2NWAiCyh4QntOz_YEwwEDw",
+            "topicId": "P-AiO14CSKucC7WWYCmveA",
+            "leader": 1,
+            "isr": [
+              1,
+              2,
+              4
+            ],
+            "metadataLeader": 1,
+            "metadataHighWatermark": 46
+          },
+          "consumerOffsetAfterReview": 1,
+          "consumerOffsetBefore": 1,
+          "journalAcknowledged": 1,
+          "partialFailureCode": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "peerAcknowledged": 2,
+          "peerEndAfter": 14,
+          "peerEndBefore": 14,
+          "publicationAcknowledged": 1,
+          "review": {
+            "acknowledgedSequence": "1",
+            "epoch": "2",
+            "errorGeneration": "1",
+            "failedSequence": "2",
+            "nativeReceipts": [
+              {
+                "namespace": "catalog",
+                "offset": "7",
+                "payloadSha256": "daa592d01e0b388d79df4e4e91c764f04c4bb768a7cf29fe41baf8c825624bcc"
+              },
+              {
+                "namespace": "orders",
+                "offset": "8",
+                "payloadSha256": "2b8cdb46039da84aa9bb5ca94ce21bc631756921e6e907cec69478f456b98589"
+              }
+            ],
+            "observedAt": "2026-11-18T14:46:11.760171264Z",
+            "observedTopicIdentitySha256": "95019681dfb3492265515c0c0f63c16c2e7d87f265147678017c2e08be5a1c38",
+            "status": "PRECEDING_KAFKA_RECEIPTS_VERIFIED",
+            "target": "kafka"
+          }
+        }
+      },
+      "images": {
+        "apache/kafka:3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+        "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+      },
+      "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "cleanupExitCode": 0
+    },
+    "nativeJavaFocusedTests": 45,
+    "integratedArtifact": {
+      "artifactSha256": "62f4a8cd9ce2488812e3732d888e837503bbe769b37558b78cbc31791e587ff7",
+      "verifiedScopedTree": "5a323054b46e56b94fd22f79044cad9585efcb92",
+      "javaFocusedTests": 49
+    },
+    "scope": "Read-only verification of preceding Kafka native COMMITs for two namespaces in an RF3 topic on a four-broker Kafka 3.9.2 KRaft fixture. Business publisher and independent peer checkpoints are unchanged by the review.",
+    "reproduce": "python3 tests/kafka-cluster-run.py --artifact <candidate jar> --only-recovery-review --output target/kafka-recovery-review"
   }
 }

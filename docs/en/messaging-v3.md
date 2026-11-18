@@ -42,6 +42,18 @@ The [Kafka native fixture](../../tests/kafka-cluster-run.py) uses Apache Kafka 3
 
 In the five-check Temurin 21 run, the partition elected a new leader after SIGKILL. With one replica in sync, Kafka still committed a metadata change while the publication receipt stayed at sequence 2. After the broker restarted, the publisher delivered the same retained transaction at sequence 3. The consumer reopened its offset at 7, staged six pending records, and committed 13. A fresh consumer then found no pending records and all 13 original event bodies remained readable.
 
+#### Review the preceding Kafka receipts
+
+When Kafka is paused on a complete incremental apply failure, pause the entire pipeline and use the target error generation.
+
+```bash
+java -jar rivomesh.jar review-kafka-recovery config.yml kafka 1
+```
+
+`PRECEDING_KAFKA_RECEIPTS_VERIFIED` reports the native offset and bytes digest of each mapped namespace's preceding `COMMIT` for the acknowledged sequence. The command reads at most the last 512 partition offsets with a group-less, read-committed consumer. It checks the bound cluster and the observed topic identity, rejects a moving partition view and rechecks the journal after the broker read. Missing evidence or a later visible `BEGIN`/`COMMIT` fails admission. The observed topic UUID describes this read. The journal's existing transport binding records the cluster only.
+
+The result is recovery evidence for the preceding acknowledged transaction. A journal pause leaves any outstanding Kafka producer unconfirmed. A durable Kafka gap notice would require a separate, reviewed operation and broker fencing. This command leaves the original event, broker records, consumer offsets and journal acknowledgment in place. The focused native profile is `tests/kafka-cluster-run.py --only-recovery-review`.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof

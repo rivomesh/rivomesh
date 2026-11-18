@@ -852,8 +852,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "已实测缺口原事件保留、配额背压和回收。界面逐目标显示恢复能力，ClickHouse 可只读核对原生回执，半批或回执变动会拒绝。分析和消息目标缺口通知、补偿协议待验。",
-        "en": "Exact gap event retention, backpressure and guarded collection passed. The UI shows per-target recovery support. ClickHouse read-only native receipt review refuses partial or changed records. Analytical and broker-native gap and compensation protocols remain."
+        "zh-CN": "已实测缺口原事件保留、背压及回收，界面逐目标展示恢复能力。ClickHouse 和 Kafka 能只读核对原生前序回执，并拒绝回执变化或后续批次不明。缺口通知、补偿协议待验。",
+        "en": "Native retention, backpressure and reclamation protect gap events. Target-specific modes are displayed. ClickHouse and Kafka can review preceding native receipts and refuse changed or uncertain successor batches. Gap notifications and compensation protocols remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -869,7 +869,8 @@
         "docs/zh-CN/messaging-v3.md",
         "tests/skip-recovery-native.py",
         "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/ClickHouseRecoveryReview.java"
+        "sync-app/src/main/java/io/github/rivomesh/cdc/ClickHouseRecoveryReview.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaRecoveryReview.java"
       ]
     },
     {
@@ -1498,8 +1499,8 @@
         "en": "ClickHouse/Doris/Hive production profiles"
       },
       "gap": {
-        "zh-CN": "ClickHouse、Doris、Hive 已有初步档案。Java 21 实测 Doris 4.1.3 单 FE/BE 的停机追平、原回执和独立 PostgreSQL 故障重放。其他生产集群、TLS 和容量待验。",
-        "en": "ClickHouse, Doris and Hive have initial profiles. Java 21 verified native Doris 4.1.3 single FE/BE outage catch-up, original receipts and independent PostgreSQL recovery. Other clustered, TLS and capacity profiles remain."
+        "zh-CN": "ClickHouse 已有实库档案。Java 21 实测 Doris 4.1.3 和 Hive 4.0.1 停机追平、原回执保留和 PostgreSQL 对照故障重放。Hive 外置 Metastore、分布式存储及其他生产集群、TLS、容量待验。",
+        "en": "ClickHouse has native evidence. Java 21 verified Doris 4.1.3 and Hive 4.0.1 outage catch-up, original receipt retention and isolated PostgreSQL fault replay. External Hive Metastore, distributed storage, further production clusters, TLS and capacity remain."
       },
       "acceptance": {
         "zh-CN": "各产品按真实可见水位、去重/批次回执验证重启、旧备份、集群故障和缺口；不能承诺普通SQL跨表事务语义。",
@@ -1512,7 +1513,8 @@
         "docs/zh-CN/clickhouse-v3.md",
         "docs/zh-CN/doris-v3.md",
         "docs/zh-CN/hive-v3.md",
-        "docs/verification/baseline.json"
+        "docs/verification/baseline.json",
+        "tests/hive/HivePipelineAcceptance.java"
       ]
     },
     {

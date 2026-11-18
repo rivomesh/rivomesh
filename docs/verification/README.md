@@ -437,3 +437,11 @@ Artifact `ce7af9356aed6cd316bf803bd0e38c9babd75c0ab52e9ea2f0ee69ac20ae2976` pass
 ### MySQL 8.4 single-primary group election and automatic continuation
 
 Temurin 21 artifact `b4dd675432e35dccd84cb47db6ed039d91310085625eff432c39dcbadd6f277f` passed six native MySQL 8.4.13 and PostgreSQL 17.12 cases. After SIGKILL of the original group primary, a surviving majority elected a different writable member. The same Worker advanced the durable sequence, journal ACK and destination receipts from 1 to 2 to 3, with exact GTIDs and row checks across two mapped databases. The journal generation and both original snapshots stayed stable. MySQL refused writes on the restarted former primary and source preflight refused that stale member. The former primary rejoined and caught up as a read-only secondary while the Worker continued on the elected primary. [Group recovery operations](../en/pipeline-v3.md#mysql-84-single-primary-group-replication-recovery) · [Manifests](baseline.json)
+
+### Hive 4.0.1 recovery with original native receipt identity
+
+Artifact `08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34` passed six native markers on Temurin 21 with MySQL 8.4.13, Hive 4.0.1 and PostgreSQL 17.12. PostgreSQL continued while Hive was stopped. Hive and Worker restart preserved the original snapshot and four exact batch receipts, including their Metastore owner, resource and warehouse location. The SQL sibling's separate failure and replay kept the Hive receipts intact. Removing the Hive business view left an explicit fence. The profile uses one HiveServer2, embedded Derby and a local warehouse. [Hive operations](../en/hive-v3.md) · [Manifests](baseline.json)
+
+### Kafka native review of preceding COMMIT receipts
+
+Artifact `f30a038dd9dee55de64de300e5e62a079af53a8837427f62c9cfb3f1a297327e` passed two native review checks and 45 Java tests. Four Kafka 3.9.2 KRaft brokers preserved both namespace COMMIT offsets and hashes in repeated read-only reviews. A later partial BEGIN produced an uncertain-publication refusal. Failed target ACK remained 1, healthy peer ACK remained 2, and no consumer offset moved. The integrated artifact `62f4a8cd9ce2488812e3732d888e837503bbe769b37558b78cbc31791e587ff7` passed 49 Java tests. [Kafka receipt review](../en/messaging-v3.md) · [Manifests](baseline.json)

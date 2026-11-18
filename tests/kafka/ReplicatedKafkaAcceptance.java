@@ -1,11 +1,13 @@
 package io.github.rivomesh.acceptance;
 
 import io.github.rivomesh.PipelineConfig;
+import io.github.rivomesh.PipelineControls;
 import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Cell;
 import io.github.rivomesh.cdc.Change;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.ConfirmedPublisher;
 import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.JdbcPublicationStore;
 import io.github.rivomesh.cdc.Journal;
@@ -13,6 +15,7 @@ import io.github.rivomesh.cdc.MessageEvent;
 import io.github.rivomesh.cdc.MessagePublishers;
 import io.github.rivomesh.cdc.MessageSink;
 import io.github.rivomesh.cdc.SourceTransaction;
+import io.github.rivomesh.cdc.SubscriberFailure;
 import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.TargetProduct;
 import org.apache.kafka.clients.admin.Admin;
@@ -26,6 +29,7 @@ import org.apache.kafka.common.errors.RetriableException;
 
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -49,6 +53,7 @@ public final class ReplicatedKafkaAcceptance {
     private static final String PIPELINE = "kafka-cluster";
     private static final String SUBSCRIPTION = "kafka";
     private static final String TOPIC = "rivomesh-events";
+    private static final String PEER_TOPIC = "rivomesh-recovery-peer";
     private static final String GENERATION = "fixture-generation";
     private static final String UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private static final String FINGERPRINT = Codec.sha256("rivomesh-kafka-cluster-fixture");
@@ -76,7 +81,8 @@ public final class ReplicatedKafkaAcceptance {
 
         try (Admin admin = Admin.create(client())) {
             await(() -> ids(get(admin.describeCluster().nodes())), active::equals);
-            if ("initial".equals(phase)) createTopic(admin);
+            if ("initial".equals(phase) || "recovery-review".equals(phase)) createTopic(admin, TOPIC, MAX_MESSAGE_BYTES);
+            if ("recovery-review".equals(phase)) createTopic(admin, PEER_TOPIC, 2 * MAX_MESSAGE_BYTES);
             State state = await(() -> state(admin), value -> value.isr.equals(expectedIsr)
                     && active.contains(value.leader) && value.metadataLeader <= 3
                     && active.contains(value.metadataLeader));
@@ -96,9 +102,10 @@ public final class ReplicatedKafkaAcceptance {
             case "elected" -> publish(home, phase, 2, report);
             case "below-isr", "restored" -> publish(home, phase, 3, report);
             case "offsets" -> { }
+            case "recovery-review" -> reviewPredecessor(home, report);
             default -> throw new IllegalArgumentException("Unknown fixture phase");
         }
-        if (!"below-isr".equals(phase)) consume(home, phase, report);
+        if (!"below-isr".equals(phase) && !"recovery-review".equals(phase)) consume(home, phase, report);
         System.out.println(Codec.encode(report));
     }
 
@@ -110,11 +117,11 @@ public final class ReplicatedKafkaAcceptance {
         return properties;
     }
 
-    private static void createTopic(Admin admin) throws Exception {
+    private static void createTopic(Admin admin, String name, int maximumBytes) throws Exception {
         Map<String, String> settings = Map.of("cleanup.policy", "delete", "retention.ms", "-1", "retention.bytes", "-1",
                 "min.insync.replicas", "2", "unclean.leader.election.enable", "false",
-                "max.message.bytes", Integer.toString(MAX_MESSAGE_BYTES + 4096));
-        get(admin.createTopics(List.of(new NewTopic(TOPIC, Map.of(0, PLACEMENT)).configs(settings))).all());
+                "max.message.bytes", Integer.toString(maximumBytes + 4096));
+        get(admin.createTopics(List.of(new NewTopic(name, Map.of(0, PLACEMENT)).configs(settings))).all());
     }
 
     private static State state(Admin admin) throws Exception {
@@ -193,11 +200,7 @@ public final class ReplicatedKafkaAcceptance {
         return tx;
     }
 
-    private static void publish(Path home, String phase, int sequence, Map<String, Object> report) throws Exception {
-        JdbcJournal.Settings jdbc = new JdbcJournal.Settings();
-        jdbc.pipelineId = PIPELINE;
-        jdbc.driver = "org.h2.Driver";
-        jdbc.url = "jdbc:h2:file:" + home.resolve("publication") + ";WRITE_DELAY=0";
+    private static PipelineConfig.Target configuredTarget() {
         PipelineConfig.Target target = new PipelineConfig.Target();
         target.id = SUBSCRIPTION;
         target.url = "kafka://" + BOOTSTRAP.getFirst();
@@ -211,6 +214,15 @@ public final class ReplicatedKafkaAcceptance {
         target.messaging.replicas = 3;
         target.messaging.maxMessageBytes = MAX_MESSAGE_BYTES;
         target.messaging.requestTimeoutMillis = 5000;
+        return target;
+    }
+
+    private static void publish(Path home, String phase, int sequence, Map<String, Object> report) throws Exception {
+        JdbcJournal.Settings jdbc = new JdbcJournal.Settings();
+        jdbc.pipelineId = PIPELINE;
+        jdbc.driver = "org.h2.Driver";
+        jdbc.url = "jdbc:h2:file:" + home.resolve("publication") + ";WRITE_DELAY=0";
+        PipelineConfig.Target target=configuredTarget();
 
         try (JdbcJournal journal = new JdbcJournal(jdbc)) {
             journal.initialize(FINGERPRINT, GENERATION, List.of(SUBSCRIPTION));
@@ -222,16 +234,7 @@ public final class ReplicatedKafkaAcceptance {
                 var before = sink.activate(lease.epoch);
                 require(before.sequence == sequence - 1, "Publication checkpoint did not reopen at the prior sequence");
                 if (sequence == 1) {
-                    journal.saveSchema(lease, TABLE);
-                    var snapshot = journal.beginSnapshot(lease, "source", TABLE, position(0));
-                    journal.appendSnapshot(lease, snapshot, 0, List.of(List.of(Cell.value("1"), Cell.value("snapshot"))));
-                    journal.finishSnapshot(lease, snapshot);
-                    snapshot = journal.snapshot("source", TABLE.id);
-                    sink.prepare(lease.epoch, TABLE);
-                    sink.beginSnapshot(lease.epoch, TABLE, snapshot);
-                    sink.snapshotPart(lease.epoch, TABLE, snapshot.snapshotId,
-                            journal.snapshotParts("source", TABLE.id, snapshot.snapshotId, 0, 1).getFirst());
-                    sink.finishSnapshot(lease.epoch, TABLE, snapshot);
+                    prepareSnapshot(journal, sink, lease);
                 } else {
                     sink.prepare(lease.epoch, TABLE);
                 }
@@ -266,6 +269,159 @@ public final class ReplicatedKafkaAcceptance {
             } finally {
                 journal.release(lease);
             }
+        }
+    }
+
+    private static void prepareSnapshot(JdbcJournal journal, MessageSink sink, Journal.Lease lease) throws Exception {
+        journal.saveSchema(lease, TABLE);
+        var snapshot = journal.beginSnapshot(lease, "source", TABLE, position(0));
+        journal.appendSnapshot(lease, snapshot, 0, List.of(List.of(Cell.value("1"), Cell.value("snapshot"))));
+        journal.finishSnapshot(lease, snapshot);
+        deliverSnapshot(journal,sink,lease);
+    }
+
+    private static void deliverSnapshot(JdbcJournal journal, MessageSink sink, Journal.Lease lease) throws Exception {
+        var snapshot = journal.snapshot("source", TABLE.id);
+        sink.prepare(lease.epoch, TABLE);
+        sink.beginSnapshot(lease.epoch, TABLE, snapshot);
+        sink.snapshotPart(lease.epoch, TABLE, snapshot.snapshotId,
+                journal.snapshotParts("source", TABLE.id, snapshot.snapshotId, 0, 1).getFirst());
+        sink.finishSnapshot(lease.epoch, TABLE, snapshot);
+    }
+
+    private record Cli(int status,String body) {}
+    private static Cli reviewCommand(Path home, Path configuration, long errorGeneration) throws Exception {
+        Path stdout = home.resolve("review.out"), stderr = home.resolve("review.err");
+        Process cli = new ProcessBuilder(System.getProperty("java.home") + "/bin/java", "-Xmx128m", "-jar", "/app/rivomesh.jar",
+                "review-kafka-recovery", configuration.toString(), SUBSCRIPTION, Long.toString(errorGeneration))
+                .redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
+        try {
+            require(cli.waitFor(40, TimeUnit.SECONDS), "The read-only CLI did not return in its expected time");
+            return new Cli(cli.exitValue(), Files.readString(cli.exitValue() == 0 ? stdout : stderr));
+        } finally { if (cli.isAlive()) cli.destroyForcibly(); }
+    }
+
+    private static void reviewPredecessor(Path home, Map<String,Object> report) throws Exception {
+        PipelineConfig config = new PipelineConfig();
+        config.pipelineId = PIPELINE;
+        config.source.username = "fixture";
+        config.source.clusterId = "fixture-source";
+        config.databases = List.of("sales", "inventory");
+        config.journal.path = home.resolve("review-journal").toString();
+        PipelineConfig.Target target = configuredTarget();
+        target.mappings.put("inventory", "catalog");
+        config.targets.add(target);
+        PipelineConfig.Target peer = configuredTarget();
+        peer.id="kafka-peer";peer.messaging.topic=PEER_TOPIC;peer.messaging.maxMessageBytes=2*MAX_MESSAGE_BYTES;
+        peer.mappings.put("inventory","catalog");
+        config.targets.add(peer);
+        config.validate();config.prepareLocalDirectory();
+        Path configuration = home.resolve("review.json");
+        Files.writeString(configuration, Codec.encode(config));
+        try (JdbcJournal journal = new JdbcJournal(config.journalSettings())) {
+            journal.initialize(config.fingerprint(), GENERATION, config.subscribers());
+            Journal.Lease lease = journal.claim("fixture-review", 120000);
+            JdbcPublicationStore store = new JdbcPublicationStore(journal, SUBSCRIPTION, lease);
+            JdbcPublicationStore peerStore = new JdbcPublicationStore(journal, peer.id, lease);
+            SourceTransaction failed = transaction(2);
+            Change failedRow=failed.changes.getFirst();
+            failedRow.after=List.of(failedRow.after.getFirst(),Cell.value("x".repeat(MAX_MESSAGE_BYTES + 1000)));
+            try (MessageSink sink = new MessageSink(SUBSCRIPTION, target.mappings, store,
+                    () -> MessagePublishers.open(target, MessagePublishers.binding(PIPELINE, SUBSCRIPTION, GENERATION)),
+                    MAX_MESSAGE_BYTES);
+                 MessageSink peerSink = new MessageSink(peer.id,peer.mappings,peerStore,
+                    () -> MessagePublishers.open(peer,MessagePublishers.binding(PIPELINE,peer.id,GENERATION)),
+                    peer.messaging.maxMessageBytes)) {
+                sink.activate(lease.epoch);
+                peerSink.activate(lease.epoch);
+                prepareSnapshot(journal, sink, lease);
+                deliverSnapshot(journal,peerSink,lease);
+                journal.append(lease, transaction(1));
+                SourceTransaction first = journal.normalize(lease, journal.read(SUBSCRIPTION, 1).getFirst(),
+                        Map.of(TABLE.id,TABLE), Map.of(TABLE.id,position(0)), (position, table) -> false);
+                sink.apply(lease.epoch, 1, first);
+                journal.acknowledge(lease, SUBSCRIPTION, 1);
+                peerSink.apply(lease.epoch,1,first);
+                journal.acknowledge(lease,peer.id,1);
+                journal.append(lease, failed);
+                SourceTransaction normalized = journal.normalize(lease, journal.read(SUBSCRIPTION, 1).getFirst(),
+                        Map.of(TABLE.id,TABLE), Map.of(TABLE.id,position(0)), (position, table) -> false);
+                try {
+                    sink.apply(lease.epoch, 2, normalized);
+                    throw new AssertionError("Oversize payload was sent");
+                } catch (IllegalStateException expected) {
+                    require("MESSAGE_TOO_LARGE".equals(expected.getMessage()), "Unexpected publication error");
+                }
+                SubscriberFailure diagnostic=new SubscriberFailure();
+                diagnostic.phase=SubscriberFailure.Phase.TARGET_APPLY;
+                diagnostic.sequence=2;diagnostic.transactionId=failed.id;
+                diagnostic.projectedHash=Codec.sha256(Codec.encode(normalized));
+                journal.pauseFailure(lease, SUBSCRIPTION, "MESSAGE_TOO_LARGE", diagnostic);
+                peerSink.apply(lease.epoch,2,normalized);
+                journal.acknowledge(lease,peer.id,2);
+                require(peerSink.checkpoint().sequence==2&&diagnostic.projectedHash.equals(peerSink.checkpoint().transactionHash),
+                        "Healthy peer lost the original failed transaction");
+            }
+            long errorGeneration = journal.subscriptions().getFirst().errorGeneration;
+            require(reviewCommand(home,configuration,errorGeneration).body().contains("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED"),
+                    "Running pipeline incorrectly admitted");
+            PipelineControls.pause(config);
+            Journal.FailureReview before=journal.inspectFailure(SUBSCRIPTION,errorGeneration,4*1024*1024);
+            require(Codec.sha256(Codec.encode(failed)).equals(before.rawHash),"Original failed payload missing");
+            Properties properties=client();
+            properties.setProperty("group.id","retained-offset-review-fixture");
+            properties.setProperty("enable.auto.commit","false");
+            properties.setProperty("key.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
+            properties.setProperty("value.deserializer","org.apache.kafka.common.serialization.ByteArrayDeserializer");
+            try (KafkaConsumer<String,byte[]> consumer=new KafkaConsumer<>(properties)) {
+                consumer.assign(PARTITIONS);
+                long brokerEnd=consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION);
+                TopicPartition peerPartition=new TopicPartition(PEER_TOPIC,0);
+                long peerEnd=consumer.endOffsets(Set.of(peerPartition),API_TIMEOUT).get(peerPartition);
+                report.put("peerEndBefore",peerEnd);
+                List<Delivery> records=read(consumer,0,brokerEnd);
+                consumer.commitSync(Map.of(PARTITION,new OffsetAndMetadata(1)),API_TIMEOUT);
+                report.put("brokerEndBefore",brokerEnd);
+                report.put("consumerOffsetBefore",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());
+                Cli verified=reviewCommand(home,configuration,errorGeneration);
+                require(verified.status()==0,"Native predecessor review was rejected: "+verified.body());
+                var proof=Codec.JSON.readTree(verified.body());
+                require("PRECEDING_KAFKA_RECEIPTS_VERIFIED".equals(proof.path("status").asText()),"Wrong proof outcome");
+                for(var receipt:proof.path("nativeReceipts")){
+                    Delivery nativeRecord=records.get(Integer.parseInt(receipt.path("offset").asText()));
+                    require((receipt.path("namespace").asText()+".__transactions").equals(nativeRecord.channel)
+                            && Codec.sha256(Base64.getDecoder().decode(nativeRecord.bodyBase64)).equals(receipt.path("payloadSha256").asText()),
+                            "Native predecessor receipt did not return its exact offset and bytes digest");
+                }
+                report.put("review",proof);
+                Cli replay=reviewCommand(home,configuration,errorGeneration);
+                require(replay.status()==0&&proof.path("nativeReceipts").equals(Codec.JSON.readTree(replay.body()).path("nativeReceipts")),
+                        "Repeated review changed the native receipt evidence");
+                report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));
+                report.put("consumerOffsetAfterReview",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());
+                require(records.equals(read(consumer,0,brokerEnd)),"Review altered native data");
+
+                MessageEvent begin=new MessageEvent();begin.kind="BEGIN";begin.pipelineId=PIPELINE;begin.subscriptionId=SUBSCRIPTION;
+                begin.generation=GENERATION;begin.namespace="orders";begin.transactionId=failed.id;begin.position=failed.position;
+                begin.sequence=2;begin.id=PIPELINE+"/"+GENERATION+"/"+Codec.sha256(SUBSCRIPTION+":tx:"+failed.id+":orders:BEGIN");
+                ConfirmedPublisher.Message message=new ConfirmedPublisher.Message();message.id=begin.id;message.key=failed.id;
+                message.destination="orders.__transactions";message.body=Codec.encode(begin).getBytes(StandardCharsets.UTF_8);
+                message.headers.put("rivomesh_kind","BEGIN");message.headers.put("rivomesh_event_id",begin.id);
+                try (ConfirmedPublisher publisher=MessagePublishers.open(target,MessagePublishers.binding(PIPELINE,SUBSCRIPTION,GENERATION))) {
+                    publisher.require(Set.of(message.destination));publisher.publish(List.of(message));
+                }
+                Cli partial=reviewCommand(home,configuration,errorGeneration);
+                require(partial.status()!=0&&partial.body().contains("KAFKA_RECOVERY_PUBLICATION_UNCERTAIN"),"Partial native publication was not refused");
+                require(consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION)==brokerEnd+1
+                        &&consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset()==1,"Review mutated broker offsets");
+                report.put("peerEndAfter",consumer.endOffsets(Set.of(peerPartition),API_TIMEOUT).get(peerPartition));
+                report.put("partialFailureCode","KAFKA_RECOVERY_PUBLICATION_UNCERTAIN");
+            }
+            Journal.FailureReview after=journal.inspectFailure(SUBSCRIPTION,errorGeneration,4*1024*1024);
+            require(before.rawHash.equals(after.rawHash)&&before.normalizedHash.equals(after.normalizedHash),"Review changed original event bytes");
+            report.put("journalAcknowledged",after.subscription.acknowledged);
+            report.put("publicationAcknowledged",store.checkpoint().sequence);
+            report.put("peerAcknowledged",journal.subscriptions().stream().filter(sub -> peer.id.equals(sub.id)).findFirst().orElseThrow().acknowledged);
         }
     }
 

@@ -40,6 +40,18 @@ Kafka 所有 Broker 必须关闭 `auto.create.topics.enable`；服务可用 Admi
 
 [Kafka 实库夹具](../../tests/kafka-cluster-run.py) 使用 Apache Kafka 3.9.2、三副本单分区 Topic、三个 KRaft 投票节点和一个独立 Broker 来验证数据 ISR 不足的情况。夹具将确定性源事务写入持久 JDBC 日志，使用 Rivomesh 发布包中的传输实现与原生消费组提交。它验收保留原数据卷时的进程故障。源库实库 CDC、TLS、Controller 多数派丢失、存储丢失和吞吐容量需分别验收。
 
+#### 核对失败事务之前的 Kafka 回执
+
+Kafka 因完整增量事务应用失败而暂停后，先暂停整个任务，将目标错误代次传入只读核对命令。
+
+```bash
+java -jar rivomesh.jar review-kafka-recovery config.yml kafka 1
+```
+
+`PRECEDING_KAFKA_RECEIPTS_VERIFIED` 返回前一笔已确认事务在每个映射命名空间的原生 `COMMIT` 位点和字节摘要。命令使用无消费组的只读已提交消费者，最多检查最后 512 个分区位点，核对已绑定集群、本次读取的 Topic 身份和稳定分区范围，并在结束时重读日志。缺少回执，或看到后续事务的 `BEGIN`/`COMMIT` 时拒绝核对成功。返回的 Topic UUID 摘要对应这次读取，原日志的传输绑定保存的是 Kafka 集群身份。
+
+核对结果用于审阅前一笔已确认事务的回执。日志暂停后，仍需核实可能在途的 Kafka 生产者。发布持久缺口通知需要独立审批操作及 Broker 围栏。此命令保留原事件、Broker 记录、消费位点和日志确认。可用 `tests/kafka-cluster-run.py --only-recovery-review` 复现实库核对。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh
