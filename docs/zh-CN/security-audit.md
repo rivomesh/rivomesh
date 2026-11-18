@@ -38,6 +38,25 @@ python3 tools/audit-export.py --verify-page /private/rivomesh-audit-page.json
 
 完整导出使用固定截止序号，逐页校验序号/链/审计库身份/末尾哈希，流式写入0600文件，最后写COMPLETE标记，再发布正式文件。内存随页大小有界，不随总历史增长。禁止覆盖已有文件及跟随HTTP重定向。中断或保留窗口过期时保留 `.partial`，不生成成功文件；重新导出到新文件。导出期间产生的新审计事件不属于该固定窗口。单页校验成功且 `continuation` 非空只证明该页有效，不证明全部历史已导出。
 
+## 用独立保存的检查点核验审计链
+
+从可信的管理员导出提取已校验的审计库标识、末尾序号和 SHA-256 链摘要。检查点只记录这三项和格式版本。工具校验完整 JSONL 导出后，才创建新的私有检查点文件。
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit.jsonl \
+  --anchor-out /private/rivomesh-head.json
+```
+
+把检查点交给独立的审计保管人员，或存入带保留策略和独立权限的外部档案库。选择能让相邻导出窗口重叠的频率。有新增事件或从备份恢复后，从独立档案库取回旧检查点，核对新的审计导出。
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
+  --against-anchor /independent/rivomesh-head.json \
+  --anchor-out /private/rivomesh-head-later.json
+```
+
+`AUDIT_ANCHOR_MATCHED` 表示同一审计库的导出与可信的序号及摘要一致。该检查点可以对应一个导出事件，也可以正好位于第一条事件之前。校验成功后独立保存新的检查点。末尾回退返回 `AUDIT_ANCHOR_TAIL_ROLLBACK`，历史被改写返回 `AUDIT_ANCHOR_HASH_MISMATCH`，审计库改变返回 `AUDIT_ANCHOR_STORE_CHANGED`。保留窗口越过可信检查点时返回 `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW`，需要用独立留存的中间导出核对连续性。
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`：ADMIN查询，返回events、next、storeId及链边界。
@@ -47,6 +66,6 @@ python3 tools/audit-export.py --verify-page /private/rivomesh-audit-page.json
 
 ## 安全及验收边界
 
-链和本地注册表可检测普通损坏、缺行和新空库替换，不能抵御可同时重写全部文件、重算整条链或协调回退所有备份的系统管理员。外部不可变存储/签名锚点、跨控制器聚合、账号管理及其审计仍待完成；精确任务授权见[授权手册](task-authorization.md)。请将导出及其截止哈希保存到独立受控位置；本功能不等于外部不可变合规审计系统。实际验证范围见[验证记录](../validation.md)。
+本地链和注册表可检测普通损坏、缺行和新空库替换。离线核验依赖旧检查点的独立保管。签名校验和定期写入外部不可变存储仍待实现。精确任务授权见[授权手册](task-authorization.md)，实际验证范围见[验收记录](../verification/README.md)。
 
-本地账号变更记录 ACCOUNT_COMMITTED，包含目标账号 subjectId 与目录版本；界面显示“任务 / 账号”。账号变更与审计待写记录原子保存，目录版本另有持久锚点，审计保留清理不删除该锚点；旧载荷导出保留原字节/哈希，见[账号管理](account-management.md)。外部不可变锚点仍待完成。
+本地账号变更记录 ACCOUNT_COMMITTED，包含目标账号 subjectId 与目录版本；界面显示“任务 / 账号”。账号变更与审计待写记录原子保存，目录版本另有持久锚点，审计保留清理不删除该锚点；旧载荷导出保留原字节/哈希，见[账号管理](account-management.md)。

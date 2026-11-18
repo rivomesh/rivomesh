@@ -3361,5 +3361,20 @@
       "cleanupExitCode": 0
     },
     "domPassedWithNamedRecoveryDialog": 125
+  },
+  "offlineAuditCheckpoint": {
+    "host": {
+      "status": "PASS",
+      "artifactSha256": "186cddb562acb16d913670dee1564d0d4f2942ba7978b0ccd531ed7056fc622c",
+      "auditToolSha256": "06f3c47d0337d9e292c4d93fa4519d3b12909d31b60f9acff7addb00bac6846d",
+      "checks": [
+        "Actual Temurin 21 audit export produces private checkpoint without administrative credential",
+        "SIGKILL and restart retain the audit-store identity and extend the independently checkpointed chain",
+        "A genuinely earlier consistent audit export is rejected against the latest trusted checkpoint"
+      ],
+      "earlierExportEvents": 4,
+      "laterExportEvents": 9
+    },
+    "pythonUnitPassed": 11
   }
 }

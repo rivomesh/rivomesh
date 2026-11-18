@@ -4,6 +4,8 @@ import importlib.util
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -62,6 +64,17 @@ class ExportTest(unittest.TestCase):
     def run_export(self):
         return audit.export(self.base, self.output, "administrator-private-token-value", 2)
 
+    def saved_window(self, path, after, through, store="store-1", events=None):
+        events = self.events if events is None else events
+        previous = events[after - 1]["hash"] if after else "0" * 64
+        tail = events[through - 1]["hash"] if through else "0" * 64
+        records = [{"type": "HEADER", "version": 1, "storeId": store,
+                    "anchorSequence": after, "anchorHash": previous, "after": after,
+                    "previousHash": previous, "through": through, "throughHash": tail}]
+        records.extend({"type": "EVENT", "event": event} for event in events[after:through])
+        records.append({"type": "COMPLETE", "events": through - after, "through": through, "hash": tail})
+        path.write_text("".join(json.dumps(item) + "\n" for item in records), encoding="utf-8")
+
     def test_streams_fixed_window_and_publishes_private_completed_file(self):
         self.assertEqual(3, self.run_export())
         records = [json.loads(line) for line in self.output.read_text().splitlines()]
@@ -74,12 +87,77 @@ class ExportTest(unittest.TestCase):
     def test_saved_export_rejects_missing_completion_and_appended_records(self):
         self.run_export()
         content = self.output.read_text()
+        head = self.output.with_name("head.json")
         self.output.write_text(content[:content.rfind('{"type":"COMPLETE"')])
         with self.assertRaises(ValueError):
-            audit.verify_export(self.output)
+            audit.verify_export(self.output, anchor_out=head)
+        self.assertFalse(head.exists())
         self.output.write_text(content + '{"type":"EVENT"}\n')
         with self.assertRaises(ValueError):
             audit.verify_export(self.output)
+
+    def test_anchor_record_from_export_is_private_and_append_rechecks_earlier_tail(self):
+        self.run_export()
+        earlier = self.output.with_name("earlier.jsonl")
+        trusted = self.output.with_name("trusted.json")
+        updated = self.output.with_name("updated.json")
+        self.saved_window(earlier, 0, 1)
+        self.assertEqual(1, audit.verify_export(earlier, anchor_out=trusted))
+        self.assertEqual({"formatVersion": 1, "storeId": "store-1", "sequence": 1, "hash": self.events[0]["hash"]},
+                         json.loads(trusted.read_text()))
+        self.assertEqual(0o600, trusted.stat().st_mode & 0o777)
+        result = subprocess.run([sys.executable, audit.__file__, "--verify", str(self.output),
+                                 "--against-anchor", str(trusted), "--anchor-out", str(updated)],
+                                check=True, text=True, capture_output=True)
+        self.assertIn("AUDIT_ANCHOR_MATCHED", result.stdout)
+        self.assertIn("AUDIT_ANCHOR_WRITTEN", result.stdout)
+        self.assertEqual(self.events[-1]["hash"], json.loads(updated.read_text())["hash"])
+        with self.assertRaisesRegex(audit.AuditAnchorError, "AUDIT_ANCHOR_OUTPUT_EXISTS"):
+            audit.verify_export(self.output, against_anchor=trusted, anchor_out=trusted)
+        self.assertEqual(self.events[0]["hash"], json.loads(trusted.read_text())["hash"])
+
+    def test_anchor_checks_window_retention_rollback_and_store_identity(self):
+        self.run_export()
+        trusted = self.output.with_name("trusted.json")
+        earlier = self.output.with_name("earlier.jsonl")
+        self.saved_window(earlier, 0, 2)
+        audit.verify_export(earlier, anchor_out=trusted)
+        for after, through, store, error in ((0, 1, "store-1", "AUDIT_ANCHOR_TAIL_ROLLBACK"),
+                                              (3, 3, "store-1", "AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW"),
+                                              (0, 3, "another-store", "AUDIT_ANCHOR_STORE_CHANGED")):
+            with self.subTest(after=after, through=through, store=store):
+                self.saved_window(earlier, after, through, store)
+                self.assertEqual(through - after, audit.verify_export(earlier))
+                with self.assertRaisesRegex(audit.AuditAnchorError, error):
+                    audit.verify_export(earlier, against_anchor=trusted)
+        self.saved_window(earlier, 2, 3)
+        self.assertEqual(1, audit.verify_export(earlier, against_anchor=trusted))
+
+    def test_recomputed_chain_cannot_replace_an_independently_anchored_tail(self):
+        self.run_export()
+        trusted = self.output.with_name("prior-head.json")
+        audit.verify_export(self.output, anchor_out=trusted)
+        rewritten = copy.deepcopy(self.events)
+        rewritten[0]["actorId"] = "rewritten"
+        previous = "0" * 64
+        for event in rewritten:
+            payload = {key: value for key, value in event.items() if key not in ("previousHash", "hash")}
+            encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            current = audit.digest(str(event["sequence"]) + "\n" + previous + "\n" + encoded)
+            event.update(previousHash=previous, hash=current)
+            previous = current
+        self.saved_window(self.output, 0, 3, events=rewritten)
+        self.assertEqual(3, audit.verify_export(self.output))
+        with self.assertRaisesRegex(audit.AuditAnchorError, "AUDIT_ANCHOR_HASH_MISMATCH"):
+            audit.verify_export(self.output, against_anchor=trusted)
+
+    def test_duplicate_and_oversized_anchor_records_refused(self):
+        self.run_export()
+        trusted = self.output.with_name("trusted.json")
+        for content in ('{"storeId":"other","storeId":"store-1"}', " " * 4096 + "{}"):
+            trusted.write_text(content, encoding="utf-8")
+            with self.assertRaisesRegex(audit.AuditAnchorError, "AUDIT_ANCHOR_INVALID"):
+                audit.verify_export(self.output, against_anchor=trusted)
 
     def test_content_change_does_not_publish_completed_file(self):
         self.pages[1]["events"][0]["actorId"] = "other-actor"

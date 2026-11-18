@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.39",
+  "version": "0.40",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1645,8 +1645,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "贡献指南、CycloneDX SBOM 与厂商二进制审查已建立。依赖分发结论、项目 LICENSE/NOTICE、外部身份和审计锚点仍待完成。",
-        "en": "Contribution guide, CycloneDX SBOM and packaged vendor inventory are in place. Distribution review, project LICENSE/NOTICE, external identity and audit anchors remain."
+        "zh-CN": "已建立贡献指南、CycloneDX SBOM、厂商二进制清点与离线审计链锚点。实测旧链回退拒绝与同库重启延续。依赖分发结论、项目 LICENSE/NOTICE、外部身份和自动外部留存仍待完成。",
+        "en": "Contribution guide, CycloneDX SBOM, vendor binary inventory and offline audit checkpoints exist. Earlier valid export rollback and same-store restart were tested. Distribution review, project LICENSE/NOTICE, external identity and automatic external custody remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",
@@ -1662,7 +1662,9 @@
         "CONTRIBUTING.md",
         "docs/en/release-inventory.md",
         "docs/zh-CN/release-inventory.md",
-        "tests/release-inventory.py"
+        "tests/release-inventory.py",
+        "tools/audit-export.py",
+        "tests/audit-export-test.py"
       ]
     }
   ],

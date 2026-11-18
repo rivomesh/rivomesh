@@ -38,6 +38,25 @@ python3 tools/audit-export.py --verify-page /private/rivomesh-audit-page.json
 
 The full exporter fixes one tail, verifies sequence/chain/store identity/tail hash page by page, streams to a 0600 file, writes COMPLETE, then publishes the final filename. Memory is bounded by page size. Existing outputs are never overwritten and HTTP redirects are refused. Failures/expired retention leave `.partial`, without a successful final file; export to a new path. Events generated during export lie beyond its fixed tail. Successful single-page verification with non-null `continuation` proves that page, not full-history completeness.
 
+## Verify against an independently retained checkpoint
+
+From a trusted administrative export, record the verified audit-store ID, last sequence and SHA-256 chain hash. The checkpoint file contains these four fields including the format version. The command writes a new private file after validating the complete JSONL export.
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit.jsonl \
+  --anchor-out /private/rivomesh-head.json
+```
+
+Place the checkpoint with a separately controlled audit custodian or in an external archive with retention and access controls. Choose an export cadence that keeps consecutive exported windows overlapping. To verify an export taken after new activity or backup recovery, supply the earlier checkpoint from that independent archive.
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
+  --against-anchor /independent/rivomesh-head.json \
+  --anchor-out /private/rivomesh-head-later.json
+```
+
+`AUDIT_ANCHOR_MATCHED` confirms that the export contains the trusted sequence and hash for the same store. It can match either an exported event or the boundary immediately before the first event. Retain the newer checkpoint separately after a successful verification. The tool reports `AUDIT_ANCHOR_TAIL_ROLLBACK` for an older tail, `AUDIT_ANCHOR_HASH_MISMATCH` for changed history, or `AUDIT_ANCHOR_STORE_CHANGED` for a different store. If retention advances beyond the trusted sequence, `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW` requires an independently retained intermediate export to establish continuity.
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`: ADMIN pages, events/next/storeId and integrity boundaries.
@@ -47,6 +66,6 @@ Only those three nonnegative integer query parameters are accepted; limit is 1â€
 
 ## Security and acceptance boundaries
 
-The local chain/registry detects ordinary corruption, missing rows and new empty-store replacement. It cannot resist an administrator rewriting all files/recomputing the chain or coherently rolling back every backup. External immutable/signature anchors, cross-controller aggregation, account management and its audit remain required work; exact task grants are documented in the [authorization handbook](task-authorization.md). Keep exported tails/hashes in independent controlled custody. This is not an external immutable compliance audit service. See [validation](validation.md) for tested profiles.
+The local chain and registry detect ordinary corruption, missing rows and replacement by an empty store. The offline comparison's trust comes from the earlier checkpoint and its independent custody. Signature verification and automatically writing checkpoints to an immutable external store remain separate work. See the [authorization handbook](task-authorization.md) for task grants and [verification](../verification/README.md) for tested profiles.
 
-Local account changes record ACCOUNT_COMMITTED with subjectId and directory version; the UI shows the affected task/account. Directory mutation and audit outbox are saved together, with a separate durable version anchor unaffected by event retention. Legacy export payload/hash bytes are preserved; see [accounts](account-management.md). External immutable anchoring remains pending.
+Local account changes record ACCOUNT_COMMITTED with subjectId and directory version; the UI shows the affected task/account. Directory mutation and audit outbox are saved together, with a separate durable version anchor unaffected by event retention. Legacy export payload/hash bytes are preserved; see [accounts](account-management.md).
