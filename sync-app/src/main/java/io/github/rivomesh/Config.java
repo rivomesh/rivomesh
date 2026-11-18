@@ -1,5 +1,7 @@
 package io.github.rivomesh;
 
+import java.sql.Connection;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +31,8 @@ public final class Config {
         public String expectedVersion;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public PostgresqlSource postgresql;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public OracleSource oracle;
         public String host = "127.0.0.1";
         public int port = 3306;
         public String database;
@@ -48,6 +52,24 @@ public final class Config {
         public String url,publication;
         public String slotPrefix="rivomesh";
         public boolean failoverSlot;
+    }
+
+    public static final class OracleSource {
+        public OracleEndpoint root,pdb;
+        public java.util.List<String> tables=new java.util.ArrayList<>();
+        public long archivePollMillis=2000;
+    }
+
+    public static final class OracleEndpoint {
+        public String url,username,password;
+
+        Connection connect()throws Exception{
+            String endpoint=env(url),user=env(username);
+            if(endpoint==null||!endpoint.startsWith("jdbc:oracle:thin:@//"))
+                throw new IllegalArgumentException("ORACLE_THIN_SERVICE_URL_REQUIRED");
+            if(user==null||user.trim().isEmpty())throw new IllegalArgumentException("ORACLE_USER_REQUIRED");
+            return JdbcConnections.open("oracle.jdbc.OracleDriver",endpoint,user,env(password));
+        }
     }
 
     public static final class Endpoint {

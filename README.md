@@ -21,7 +21,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | SDD规格、任务、验收 | [规格](docs/sdd/001-control-recovery-compatibility/spec.md) | [Specification](docs/sdd/001-control-recovery-compatibility/spec.en.md) |
 | UI/Linux/Docker/Helm/Kubernetes | [控制台与部署](docs/zh-CN/console-and-deployment.md) | [Console/deployment](docs/en/console-and-deployment.md) |
 | PostgreSQL 17 实验性源 | [配置与恢复](docs/zh-CN/postgresql-source.md) | [Configuration and recovery](docs/en/postgresql-source.md) |
-| Oracle 26ai 源预检 | [SCN 快照预检](docs/zh-CN/oracle-source.md) | [SCN snapshot preflight](docs/en/oracle-source.md) |
+| Oracle 26ai 实验性归档源 | [SCN 快照、增量和恢复](docs/zh-CN/oracle-source.md) | [SCN snapshot, archive CDC and recovery](docs/en/oracle-source.md) |
 | 连接器、Java 和 API 档案 | [兼容矩阵](docs/zh-CN/compatibility.md) | [Compatibility](docs/en/compatibility.md) |
 | 同步、映射、索引与恢复 | [同步手册](docs/zh-CN/pipeline-v3.md) | [Pipelines](docs/en/pipeline-v3.md) |
 | 多节点与持久命令 | [全局控制](docs/zh-CN/global-control.md) | [Global control](docs/en/global-control.md) |

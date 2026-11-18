@@ -11,6 +11,7 @@ final class PipelineSources {
         switch(config.effectiveSourceType()){
             case "MYSQL":config.legacy().validate();break;
             case "POSTGRESQL":PostgresqlCdcSource.validate(config);break;
+            case "ORACLE":OracleCdcSource.validate(config);break;
             default:throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
         }
     }
@@ -19,6 +20,7 @@ final class PipelineSources {
         switch(config.effectiveSourceType()){
             case "MYSQL":return new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),generation);
             case "POSTGRESQL":return new PostgresqlCdcSource(config,generation);
+            case "ORACLE":return new OracleCdcSource(config,generation);
             default:throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
         }
     }

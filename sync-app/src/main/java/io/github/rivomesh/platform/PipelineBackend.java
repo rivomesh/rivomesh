@@ -32,6 +32,7 @@ final class PipelineBackend {
                 status.put("sourcePosition",position);
                 if("MYSQL".equals(position.getSourceType()))status.put("capture_gtid",position.getPayload().get("gtidSet"));
                 if("POSTGRESQL".equals(position.getSourceType()))status.put("capture_lsn",position.getPayload().get("lsn"));
+                if("ORACLE".equals(position.getSourceType()))status.put("capture_scn",position.getPayload().get("scn"));
             }
             status.put("subscriptions",subscriptions);status.put("maxBytes",c.journal.maxBytes);return status;
         }catch(IllegalStateException e){if("JOURNAL_NOT_INITIALIZED".equals(e.getMessage()))return Collections.emptyMap();throw e;}

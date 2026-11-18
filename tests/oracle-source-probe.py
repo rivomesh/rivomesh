@@ -7,9 +7,13 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
+import socket
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
 
 
 def execute(*args, stdin=None, env=None, timeout=120, checked=True):
@@ -26,6 +30,174 @@ def required(check, description, timeout=240):
     raise AssertionError(description + ' timed out')
 
 
+def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
+    target = oracle + '-pg'
+    env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    platform = None
+    long_transaction = None
+    output = options.output
+    program = (options.java, '-cp', str(options.artifact.resolve()) + os.pathsep
+               + str(options.jdbc_driver.resolve()), 'io.github.rivomesh.Main')
+
+    def target_sql(statement, checked=True):
+        return execute('docker','exec',target,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
+                       '-At','-c',statement,checked=checked).stdout.strip()
+
+    def stop_platform(force=False):
+        nonlocal platform
+        if platform is None:
+            return
+        if platform.poll() is None:
+            os.killpg(platform.pid,signal.SIGKILL if force else signal.SIGTERM)
+            try:
+                platform.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                os.killpg(platform.pid,signal.SIGKILL)
+                platform.wait(timeout=10)
+        platform = None
+
+    def start_platform(config, filename):
+        nonlocal platform
+        with (output/filename).open('w') as logs:
+            platform = subprocess.Popen((*program,'serve',str(config)),env=env,stdout=logs,
+                                        stderr=subprocess.STDOUT,start_new_session=True)
+
+    def api(path, payload=None):
+        headers = {'Authorization':'Bearer '+env['RM_ORACLE_TEST_TOKEN']}
+        if payload is not None:
+            headers.update({'Content-Type':'application/json','X-Request-ID':'oracle_'+secrets.token_hex(12)})
+        request = urllib.request.Request(base+path,headers=headers,
+                                         data=json.dumps(payload).encode() if payload is not None else None)
+        try:
+            with opener.open(request,timeout=10) as response:
+                return json.load(response)
+        except (OSError,urllib.error.URLError):
+            return {}
+
+    def progress():
+        return api('/api/tasks/oracle_native').get('status',{})
+
+    def row_note():
+        return target_sql('SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=1',checked=False)
+
+    def rotate():
+        sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+
+    started=False
+    try:
+        execute('docker','run','--rm','-d','--name',target,
+                '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::5432',
+                '-e','POSTGRES_PASSWORD','-e','POSTGRES_DB=sync_test','postgres:17.12',env=env)
+        started=True
+        required(lambda:target_sql('SELECT 1',checked=False)=='1','PostgreSQL ready',60)
+        target_port=execute('docker','port',target,'5432/tcp').stdout.strip().rsplit(':',1)[1]
+        sql("""GRANT SELECT ON sys.v_$transaction TO C##RIVO_PROBE;
+            GRANT SELECT ON sys.v_$pdb_incarnation TO C##RIVO_PROBE;""")
+        with tempfile.TemporaryDirectory(prefix='rivomesh-oracle-pipeline-') as tmp:
+            folder=Path(tmp).resolve()
+            tasks=folder/'tasks'
+            tasks.mkdir()
+
+            def endpoint(url):
+                return {'url':url,'username':'C##RIVO_PROBE','password':'${RIVOMESH_ORACLE_PROBE_PASSWORD}'}
+
+            pipeline={
+                'formatVersion':3,'pipelineId':'oracle_native','nodeId':'oracle-agent','databases':['RIVO_APP'],
+                'source':{'type':'ORACLE','clusterId':'oracle-native','database':'FREEPDB1',
+                          'expectedVersion':'23.26','topology':'SINGLE',
+                          'oracle':{'root':endpoint(root_service),'pdb':endpoint(pdb_service),
+                                    'tables':['RIVO_APP.RIVO_ORDERS','RIVO_APP.RIVO_KEYLESS'],
+                                    'archivePollMillis':500}},
+                'targets':[{'id':'pg','product':'POSTGRESQL',
+                            'url':f'jdbc:postgresql://127.0.0.1:{target_port}/sync_test?connectTimeout=3',
+                            'username':'postgres','password':'${POSTGRES_PASSWORD}','mappings':{'RIVO_APP':'copy_app'},
+                            'metadataSchema':'copy_meta'}],
+                'chunkSize':2,'heartbeatMillis':500,'leaseMillis':5000,'pollIntervalMillis':150,
+            }
+            task_file=tasks/'oracle_native.yml'
+            task_file.write_text(json.dumps(pipeline))
+            checked=execute(*program,'check',str(task_file),env=env)
+            assert json.loads(checked.stdout)['sourceTables']==2
+
+            # Keep DML started before the snapshot open through the first archive rotation.
+            long_transaction=subprocess.Popen(('docker','exec','-i',oracle,'sqlplus','-L','-s','/','as','sysdba'),
+                                              stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                                              stderr=subprocess.STDOUT,text=True)
+            long_transaction.stdin.write("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n"
+                                         "ALTER SESSION SET CONTAINER=FREEPDB1;\n"
+                                         "UPDATE rivo_app.rivo_orders SET note='long transaction' WHERE id=1;\n")
+            long_transaction.stdin.flush()
+            active_query=("SELECT MIN(start_scn) FROM v$transaction "
+                          "WHERE con_id=(SELECT con_id FROM v$pdbs WHERE name='FREEPDB1');")
+            before=required(lambda:sql(active_query).stdout.strip() or None,'Oracle transaction active',30)
+            assert before.isdecimal()
+
+            with socket.create_server(('127.0.0.1',0)) as reservation:
+                bind_port=reservation.getsockname()[1]
+            base='http://127.0.0.1:'+str(bind_port)
+            config=folder/'platform.json'
+            config.write_text(json.dumps({'bind':'127.0.0.1','port':bind_port,'tasksDirectory':str(tasks),
+                                          'dataDirectory':str(folder/'state'),'autoStart':True,
+                                          'authToken':'${RM_ORACLE_TEST_TOKEN}','pollMillis':250,
+                                          'sessions':{'secureCookie':False},'workerHeapMiB':256}))
+            try:
+                start_platform(config,'worker-platform.log')
+                required(lambda:row_note()=='after' and progress().get('capture_scn'),'native Oracle snapshot',90)
+                snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+                assert len(snapshots.splitlines())==2
+                assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
+                checkpoint=progress()['sourcePosition']['payload']
+                assert int(checkpoint['archiveStartScn'])<=int(before)<int(checkpoint['scn'])
+                assert len(checkpoint['pdbIncarnation'].split(':'))==2
+                observed('Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor')
+
+                rotate()
+                required(lambda:int(progress().get('capture_scn','0'))>int(checkpoint['scn']),
+                         'archive-only progress while the Oracle transaction remains open',45)
+                assert row_note()=='after'
+                out,_=long_transaction.communicate("COMMIT;\nEXIT\n",timeout=30)
+                assert long_transaction.returncode==0,out
+                long_transaction=None
+                rotate()
+                required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
+                observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
+
+                stop_platform(force=True)
+                sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                    INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
+                    DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
+                    COMMIT;""")
+                rotate()
+                required_sql='SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=4'
+                start_platform(config,'worker-restart.log')
+                required(lambda:target_sql(required_sql)=='offline'
+                         and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='0',
+                         'Oracle archive catch-up after SIGKILL',75)
+                assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+                observed('Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots')
+
+                durable=progress()['capture_scn']
+                sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
+                rotate()
+                result=required(lambda:(p if (p:=progress()).get('error_code')=='ORACLE_REDO_DDL_REQUIRES_PLAN' else None),
+                                'Oracle DDL accepted as a typed refusal',60)
+                assert result['capture_scn']==durable and result['error_stage']=='DDL'
+                observed('Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase')
+            finally:
+                stop_platform()
+                for path in (folder/'state'/'logs').glob('*.log'):
+                    log=path.read_text(errors='replace')
+                    for name in ('RIVOMESH_ORACLE_PROBE_PASSWORD','POSTGRES_PASSWORD','RM_ORACLE_TEST_TOKEN'):
+                        log=log.replace(env[name],'[REDACTED]')
+                    (output/(path.stem+'-redacted.log')).write_text(log)
+    finally:
+        if long_transaction is not None and long_transaction.poll() is None:
+            long_transaction.communicate('ROLLBACK;\nEXIT\n',timeout=30)
+        if started:
+            execute('docker','stop','--time','30',target)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--artifact', required=True, type=Path)
@@ -34,8 +206,11 @@ def main():
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
+    parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
+    if options.pipeline and not options.logminer:
+        parser.error('--pipeline requires --logminer')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -209,7 +384,7 @@ def main():
                 assert len(typed['contentSha256'])==64
                 last=typed['lastCommit']
                 assert last['sourceId']==anchor['sourceId'] and last['sourceType']=='ORACLE'
-                for field in ('databaseId','resetlogsScn','pdbGuid'):
+                for field in ('databaseId','resetlogsScn','pdbGuid','pdbUid'):
                     assert last['payload'][field]==anchor['payload'][field]
                 assert last['payload']['scn']==updates[0][1] and last['payload']['xid']==updates[0][2]
                 replayed = json.loads(execute(*program, env=environment).stdout)['archiveWindow']['decoded']
@@ -233,6 +408,8 @@ def main():
                 assert extended['lastCommit']['payload']['xid']!=last['payload']['xid']
                 assert extended['contentSha256']!=typed['contentSha256']
                 observed('After archive rotation, a second complete commit has a distinct typed SCN and XID')
+        if options.pipeline:
+            pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
         report['status'] = 'PASS'
     except Exception as failure:
         detail = str(failure)

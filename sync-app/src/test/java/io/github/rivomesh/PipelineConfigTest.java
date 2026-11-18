@@ -41,7 +41,7 @@ class PipelineConfigTest {
         assertEquals("SOURCE_TYPE_CONFLICT",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
         config.sourceType=null;
         config.source.type="ORACLE";
-        assertEquals("SOURCE_ADAPTER_UNAVAILABLE",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        assertEquals("ORACLE_SOURCE_CONFIG_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
     }
     @Test void passwordsAndTuningCanRotateWhileSemanticChangesRequireAMigration(){PipelineConfig c=config();c.validate();String fingerprint=c.fingerprint();c.source.password="rotated";c.targets.get(0).password="rotated-too";c.chunkSize=200;c.nodeId="another-node";c.journal.maxBytes*=2;assertEquals(fingerprint,c.fingerprint());c.targets.get(0).mappings.put("orders","renamed");assertNotEquals(fingerprint,c.fingerprint());}
     @Test void sourceMappingsCannotCollideOrDisappear(){PipelineConfig c=config();c.targets.get(0).mappings.put("inventory","orders");assertThrows(IllegalArgumentException.class,c::validate);c.targets.get(0).mappings.remove("inventory");assertThrows(IllegalArgumentException.class,c::validate);}

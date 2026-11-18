@@ -29,15 +29,7 @@ final class OracleArchiveWindow {
         if(start.compareTo(end)>=0||end.compareTo(scn(currentScn))>0)
             throw new IllegalArgumentException("ORACLE_ARCHIVE_WINDOW_INVALID");
         Coverage result=new Coverage(start,end);
-        int thread;
-        try(Statement query=root.createStatement()){
-            query.setQueryTimeout(20);
-            try(ResultSet rows=query.executeQuery("SELECT thread# FROM v$thread WHERE enabled<>'DISABLED'")){
-                if(!rows.next())throw new IllegalStateException("ORACLE_SINGLE_REDO_THREAD_REQUIRED");
-                thread=rows.getInt(1);
-                if(thread<1||rows.next())throw new IllegalStateException("ORACLE_SINGLE_REDO_THREAD_REQUIRED");
-            }
-        }
+        int thread=thread(root);
         BigInteger covered=start;
         long archives=0;
         try(PreparedStatement query=root.prepareStatement("SELECT first_change#,next_change#,name "
@@ -75,7 +67,33 @@ final class OracleArchiveWindow {
         return result;
     }
 
-    private static BigInteger scn(String value){
+    static BigInteger latestEnd(Connection root,String incarnationScn)throws Exception{
+        try(PreparedStatement query=root.prepareStatement("SELECT MAX(next_change#) FROM v$archived_log WHERE thread#=? "
+                +"AND resetlogs_change#=? AND archived='YES'")){
+            query.setQueryTimeout(20);
+            query.setInt(1,thread(root));
+            query.setBigDecimal(2,new BigDecimal(scn(incarnationScn)));
+            try(ResultSet row=query.executeQuery()){
+                if(!row.next()||row.getString(1)==null)return BigInteger.ZERO;
+                return scn(row.getString(1));
+            }
+        }
+    }
+
+    private static int thread(Connection root)throws Exception{
+        int thread;
+        try(Statement query=root.createStatement()){
+            query.setQueryTimeout(20);
+            try(ResultSet rows=query.executeQuery("SELECT thread# FROM v$thread WHERE enabled<>'DISABLED'")){
+                if(!rows.next())throw new IllegalStateException("ORACLE_SINGLE_REDO_THREAD_REQUIRED");
+                thread=rows.getInt(1);
+                if(thread<1||rows.next())throw new IllegalStateException("ORACLE_SINGLE_REDO_THREAD_REQUIRED");
+            }
+        }
+        return thread;
+    }
+
+    static BigInteger scn(String value){
         if(value==null||!value.matches("0|[1-9][0-9]{0,19}"))
             throw new IllegalArgumentException("ORACLE_ARCHIVE_SCN_INVALID");
         return new BigInteger(value);

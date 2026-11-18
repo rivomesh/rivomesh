@@ -1,8 +1,8 @@
-# Oracle source preflight
+# Oracle source, archived capture and preflight
 
 [中文](../zh-CN/oracle-source.md)
 
-The first Oracle 26ai profile verifies one writable CDB/PDB, archive mode, force/minimal supplemental logging, source identity and Flashback read access. The native test used Oracle Free 23.26.4.0.0 on ARM64 with Java 8 and Oracle JDBC 23.26.4.0.0. SO-07 tracks continuous capture, durable checkpoints, destination delivery, RAC and failover.
+The first Oracle 26ai profile verifies one writable CDB/PDB, archive mode, force/minimal supplemental logging, source identity and Flashback read access. The native test used Oracle Free 23.26.4.0.0 on ARM64 with Java 8 and Oracle JDBC 23.26.4.0.0. The archived-capture profile below adds durable SCN recovery to PostgreSQL. SO-07 tracks the remaining versions, types, RAC and failover.
 
 1. Provide an Oracle JDBC JAR compatible with your Java runtime alongside the Rivomesh JAR. [Oracle JDBC compatibility](https://docs.oracle.com/en/database/oracle/oracle-database/26/jjdbc/JDBC-getting-started.html)
 2. Give the CDB-root account read access to `V_$DATABASE`, `V_$INSTANCE` and the selected PDB in `V_$PDBS`. Configure its `CONTAINER_DATA` visibility for that PDB. Give the PDB account read access to its `V_$PDBS` identity and `SELECT` and `FLASHBACK` on the declared tables. [Oracle container data privileges](https://docs.oracle.com/en/database/oracle/oracle-database/26/dbseg/managing-commonly-and-locally-granted-privileges.html)
@@ -16,10 +16,27 @@ The report includes DBID, the resetlogs SCN, PDB GUID and a common snapshot SCN.
 
 The [native fixture](../../tests/oracle-source-probe.py) verifies keyed and keyless tables, a historical update/delete and rejection of the root service supplied as the PDB.
 
-Add `--logminer` for the native archive verification. One commit XID contains an update and keyless delete with redo and undo SQL, and the committed-only result excludes a rolled-back insert. The streaming adapter still needs durable checkpoints and normalized transaction delivery. [Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
+Add `--logminer` for the native archive verification. One commit XID contains an update and keyless delete with redo and undo SQL, and the committed-only result excludes a rolled-back insert. [Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
 
 Add `archiveWindow.startScn` and `archiveWindow.endScnExclusive` as decimal strings to validate a selected archived interval. The root account needs read access to `V_$THREAD` and `V_$ARCHIVED_LOG`. The check covers the current resetlogs incarnation and one redo thread. `CATALOG_CONTIGUOUS` reports uninterrupted catalog coverage. `ORACLE_ARCHIVE_LOG_GAP` indicates that the archive catalog does not cover the entire interval. Retain the original interval and verify physical files with LogMiner before a recovery.
 
 Set `archiveWindow.decodeCommitted: true` to read the registered archive files with LogMiner. The CDB-root account additionally needs `LOGMINING`, `EXECUTE` on `SYS.DBMS_LOGMNR` and access to `SYS.V_$LOGMNR_CONTENTS`. The report includes the committed transaction count, operation counts and SHA-256 of typed changes. The probe reads the generated redo and undo statements as data. It accepts complete images for supported `NUMBER(p,s)` and `VARCHAR2` columns, and refuses crossing transactions, split redo statements, missing supplemental images and unsupported operations or types. Enable appropriate supplemental logging on each table before recording the interval.
 
 The decoded output includes the last typed commit coordinate with commit SCN and XID. Replay groups complete transactions with per-transaction event ordinals. It refuses an ambiguous sequence if different XIDs share a commit SCN. The native fixture also rotates an initially unarchived suffix and verifies a second distinct commit coordinate.
+
+## V3 Oracle to PostgreSQL
+
+Use [the V3 example](../../config/oracle-source-v3.yml) with `source.type: ORACLE`. The first experimental profile uses Oracle 26ai Free 23.26.4.0.0 on ARM64 and PostgreSQL 17.12. Declare uppercase source owners and tables, owner-to-destination schemas and one writable PDB. The root account additionally needs read access to `V_$TRANSACTION` and `V_$PDB_INCARNATION`, plus the archive and LogMiner permissions above. Use all-column supplemental logging for each selected table. The PDB account reads the selected tables, their metadata and the common Flashback SCN.
+
+```sh
+java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main check config/oracle-source-v3.yml
+java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-source-v3.yml
+```
+
+For the UI, use the same classpath with `serve` and import the V3 task. The supervised Worker inherits the driver from that classpath. The Oracle driver is supplied separately. Supported source values are bounded `NUMBER(p,s)` and `VARCHAR2`; keyed and keyless rows are covered. The snapshot uses one SCN per capture start. An interrupted unfinished snapshot can restart from a new Flashback view while completed snapshots remain reusable.
+
+Capture polls closed archive segments. The durable coordinate binds CDB DBID and resetlogs, PDB GUID, UID and incarnation, captured SCN and the retained archive floor. A transaction already open at the snapshot can hold that floor back. When its commit lands in a closed archive, the complete transaction enters the journal. The floor advances only after coverage passes the SCN of a later active-transaction sample. Retain archives starting from the reported floor. Verify archive rotation and retention under the real workload.
+
+A missing archive, unsupported record, ambiguous ordering or unreviewed DDL stops capture with the previous durable position. Use the capture review and preserve the source and journal. Source promotion, RAC, online-redo capture, LOB/JSON, generated columns, partial rollback and further target profiles require separate acceptance. [Oracle active transactions](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB incarnation](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+
+Run `tests/oracle-source-probe.py --logminer --pipeline` with the frozen JAR and Oracle JDBC arguments to reproduce the temporary real databases and actual SIGKILL/restart. [Evidence](../verification/README.md#oracle-archived-cdc-and-restart)

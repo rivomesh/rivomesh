@@ -34,12 +34,12 @@ final class OracleArchiveRead {
     static Map<String,Object> inspect(Connection root,String pdb,OracleArchiveWindow.Coverage range,
                                      Map<String,TableSchema> tables,SourcePosition anchor)throws Exception{
         Preview preview=new Preview();
-        visit(root,pdb,range,tables,anchor,"oracle-preview",MAX_PREVIEW_ROWS,preview::record);
+        visit(root,pdb,range,tables,anchor,null,"oracle-preview",MAX_PREVIEW_ROWS,preview::record);
         return preview.result();
     }
 
     static void visit(Connection root,String pdb,OracleArchiveWindow.Coverage range,Map<String,TableSchema> tables,
-                      SourcePosition anchor,String generation,int maxTransactionRows,Receiver receiver)throws Exception{
+                      SourcePosition anchor,BigInteger after,String generation,int maxTransactionRows,Receiver receiver)throws Exception{
         if(tables.isEmpty()||tables.size()>200)throw invalid("ORACLE_ARCHIVE_TABLE_LIMIT");
         if(maxTransactionRows<1)throw invalid("ORACLE_ARCHIVE_ROW_LIMIT");
         if(range.files.isEmpty())throw invalid("ORACLE_ARCHIVE_LOG_GAP");
@@ -63,24 +63,31 @@ final class OracleArchiveRead {
         try(CallableStatement end=root.prepareCall("BEGIN DBMS_LOGMNR.END_LOGMNR; END;")){
             end.setQueryTimeout(QUERY_SECONDS);
             try(AutoCloseable cleanup=()->end.execute()){
-                read(root,pdb,range,tables,anchor,generation,maxTransactionRows,receiver);
+                read(root,pdb,range,tables,anchor,after,generation,maxTransactionRows,receiver);
             }
         }
     }
 
     private static void read(Connection root,String pdb,OracleArchiveWindow.Coverage range,
-                             Map<String,TableSchema> tables,SourcePosition anchor,String generation,
+                             Map<String,TableSchema> tables,SourcePosition anchor,BigInteger after,String generation,
                              int maxTransactionRows,Receiver receiver)throws Exception{
         String scope=String.join(" OR ",Collections.nCopies(tables.size(),"(seg_owner=? AND table_name=?)"));
-        String sql="SELECT operation,seg_owner,table_name,start_scn,commit_scn,RAWTOHEX(xid),csf,status,sql_redo,sql_undo "
-                +"FROM v$logmnr_contents WHERE operation='MISSING_SCN' OR (src_con_name=? AND ("+scope+")) "
-                +"ORDER BY CASE WHEN operation='MISSING_SCN' THEN 0 ELSE 1 END,commit_scn,RAWTOHEX(xid),scn,rs_id,ssn";
+        String sql="SELECT operation,seg_owner,table_name,start_scn,commit_scn,RAWTOHEX(xid),csf,status,sql_redo,sql_undo,rollback,RAWTOHEX(src_con_guid),src_con_uid "
+                +"FROM v$logmnr_contents WHERE operation='MISSING_SCN' OR ((src_con_name=? OR RAWTOHEX(src_con_guid)=? OR src_con_uid=?) AND ("
+                +(after==null?scope:"(operation='DDL' AND scn>?) OR (commit_scn>? AND ("+scope+"))") +")) "
+                +"ORDER BY CASE WHEN operation IN ('MISSING_SCN','DDL') THEN 0 ELSE 1 END,commit_scn,RAWTOHEX(xid),scn,rs_id,ssn";
         Commit group=null;
         try(PreparedStatement query=root.prepareStatement(sql)){
             query.setQueryTimeout(QUERY_SECONDS);
             query.setFetchSize(32);
             query.setString(1,pdb);
-            int index=2;
+            query.setString(2,anchor.getPayload().get("pdbGuid"));
+            query.setBigDecimal(3,new BigDecimal(anchor.getPayload().get("pdbUid")));
+            int index=4;
+            if(after!=null){
+                query.setBigDecimal(index++,new BigDecimal(after));
+                query.setBigDecimal(index++,new BigDecimal(after));
+            }
             for(TableSchema table:tables.values()){
                 query.setString(index++,table.database);
                 query.setString(index++,table.name);
@@ -89,9 +96,12 @@ final class OracleArchiveRead {
                 while(rows.next()){
                     String operation=rows.getString(1);
                     if("MISSING_SCN".equals(operation))throw invalid("ORACLE_ARCHIVE_LOG_GAP");
+                    if("DDL".equals(operation))throw invalid("ORACLE_REDO_DDL_REQUIRES_PLAN");
+                    requirePdb(anchor,rows.getString(12),rows.getString(13));
                     if(!Arrays.asList("INSERT","UPDATE","DELETE").contains(operation))
                         throw invalid("ORACLE_REDO_OPERATION_UNSUPPORTED");
                     if(rows.getInt(7)!=0||rows.getInt(8)!=0)throw invalid("ORACLE_REDO_ROW_UNSUPPORTED");
+                    if(rows.getInt(11)!=0)throw invalid("ORACLE_REDO_PARTIAL_ROLLBACK_UNSUPPORTED");
                     BigInteger start=scn(rows.getString(4)),commit=scn(rows.getString(5));
                     if(start.compareTo(range.start)<0||commit.compareTo(range.end)>=0||commit.compareTo(start)<0)
                         throw invalid("ORACLE_ARCHIVE_TRANSACTION_CROSSES_RANGE");
@@ -106,7 +116,10 @@ final class OracleArchiveRead {
                     if(group.changes.size()>=maxTransactionRows)throw invalid("TRANSACTION_ROW_LIMIT");
                     TableSchema table=tables.get(rows.getString(2)+"."+rows.getString(3));
                     if(table==null)throw invalid("ORACLE_REDO_TABLE_OR_OPERATION_MISMATCH");
-                    Change event=OracleRedoDml.decode(table,operation,rows.getString(9),rows.getString(10));
+                    String redo=rows.getString(9),undo=rows.getString(10);
+                    group.textBytes=Math.addExact(group.textBytes,3L*((redo==null?0:redo.length())+(undo==null?0:undo.length())));
+                    if(group.textBytes>16L*1024*1024)throw invalid("ORACLE_TRANSACTION_BYTE_LIMIT");
+                    Change event=OracleRedoDml.decode(table,operation,redo,undo);
                     event.eventId=group.id+":"+group.changes.size();
                     group.changes.add(event);
                 }
@@ -119,6 +132,7 @@ final class OracleArchiveRead {
         final BigInteger start,commit;
         final String xid,id;
         final List<Change> changes=new ArrayList<>();
+        long textBytes;
 
         Commit(BigInteger start,BigInteger commit,String xid){
             this.start=start;this.commit=commit;this.xid=xid;
@@ -168,6 +182,15 @@ final class OracleArchiveRead {
             if(lastCommit!=null)report.put("lastCommit",lastCommit);
             return report;
         }
+    }
+
+    private static void requirePdb(SourcePosition anchor,String guid,String uid){
+        boolean guidPresent=guid!=null&&!guid.matches("0{32}");
+        boolean uidPresent=uid!=null&&!"0".equals(uid);
+        if(!guidPresent&&!uidPresent
+                ||guidPresent&&!anchor.getPayload().get("pdbGuid").equals(guid)
+                ||uidPresent&&!anchor.getPayload().get("pdbUid").equals(uid))
+            throw invalid("ORACLE_REDO_PDB_IDENTITY_CHANGED");
     }
 
     private static BigInteger scn(String value){

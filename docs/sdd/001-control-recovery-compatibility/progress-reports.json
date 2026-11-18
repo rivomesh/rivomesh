@@ -21,7 +21,6 @@
     "Removed 2.71 GiB of superseded temporary binaries and synthetic benchmark data, preserving verification reports."
   ],
   "inProgress": [
-    "SO-07 Oracle archive transaction stream and durable checkpoint handoff.",
     "CP-04 automatic execution handoff and stale owner fencing."
   ],
   "reportContents": [
@@ -66,6 +65,7 @@
   "newSinceLastReport": [
     "CP-06 and LG-09. Seven native cross-entry checks and five Chrome checks passed on one frozen artifact. The diagnostic page persisted across Agent restart without exposing business values or credentials.",
     "LG-01 and LG-03 OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and the full mixed restart/SQL recovery fixture. Full Java regression passed 501 cases plus 32 skips.",
-    "SO-07 Oracle 26ai passed nine native checks for typed complete transactions and distinct commit SCN/XIDs after archive rotation."
+    "SO-07 Oracle 26ai passed nine native checks for typed complete transactions and distinct commit SCN/XIDs after archive rotation.",
+    "SO-07 Oracle 26ai to PostgreSQL V3 passed 13 native checks, including a transaction spanning the snapshot, archive rotation, SIGKILL/resume and DDL refusal at the original SCN."
   ]
 }

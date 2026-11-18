@@ -14,7 +14,7 @@ Choose a profile by source version and topology, target product and mode, then J
 | `MYSQL` 8.4.13 | Java 8. All three topologies and admission checks. The process matrix below covers standalone on five JDKs. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
 | `POSTGRESQL` 17.12 | Experimental single-primary source. Seven native PostgreSQL-to-PostgreSQL checks on each of the five JDKs. The synchronized-slot promotion profile passed on Java 8. PostgreSQL common-cut verification is pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Experimental single primary with stored generated columns published and materialized as ordinary target columns. | [Source guide and publication](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8 with a separately supplied Oracle JDBC driver. Native SCN Flashback and single-thread archived redo decode. Scheduled delivery and RAC remain pending. | [Probe privileges and recovery](oracle-source.md), [probe example](../../config/oracle-source-probe.yml) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8 with a separately supplied Oracle JDBC driver. Single-PDB Flashback and single-thread archived CDC to PostgreSQL. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
 
 MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses the logical source ID plus system ID, timeline, slot and LSN. The Oracle probe uses DBID, resetlogs SCN, PDB GUID and SCN. `SourcePosition.formatVersion` is currently 1 and is interpreted by `sourceType`. Compare coordinates within the original authority and protocol. The [multi-database sample](../../config/pipeline-v3.yml) uses `formatVersion: 3`, `source.clusterId`, `databases` and an explicit `mappings` object per target. Use independent configurations for separate MySQL clusters.
 
@@ -40,7 +40,7 @@ The current wizard capability endpoint is `GET /api/capabilities`. For each plan
 | PostgreSQL 17.12 single primary → PostgreSQL 17.12 | 7 cases | 7 cases | 7 cases | 7 cases | 7 cases |
 | PostgreSQL 18.7 single primary → PostgreSQL 17.12, including stored generated columns | 8 cases | 8 cases | 8 cases | 8 cases | 8 cases |
 | MySQL 5.7.44 / 8.0.46 / 8.2.0 native source release profiles | Bounded native fixtures | Pending | Pending | Pending | Pending |
-| Oracle 26ai → destination | Source-only probe | Pending | Pending | Pending | Pending |
+| Oracle 26ai → PostgreSQL 17.12 | Bounded archive CDC and restart | Pending | Pending | Pending | Pending |
 | Additional target products and topologies | Product-specific evidence above | Pending | Pending | Pending | Pending |
 
 The first three rows use `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [manifests](../verification/baseline.json). For an unlisted combination, run the matching source, destination, storage and recovery fixtures with the selected JDK. [Reproduction commands](performance.md)

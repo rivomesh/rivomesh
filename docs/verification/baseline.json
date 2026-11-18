@@ -313,7 +313,7 @@
       },
       "status": "DONE",
       "verification": {
-        "artifactSha256": "d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb",
+        "artifactSha256": "2c0f5f83a185d98def0b12ac6068727981a3341cd1fd6b78480bd239d2999587",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
@@ -1860,6 +1860,29 @@
       "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
       "An unarchived part of the requested SCN window is refused",
       "After archive rotation, a second complete commit has a distinct typed SCN and XID"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0
+  },
+  "oracleArchivedCdc": {
+    "artifactSha256": "9b555ae4a107fb34cba96c3f4b392f136ed290b6a2aac2e3b0c3fa3cc7ace029",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
     ],
     "status": "PASS",
     "sourceVersion": "23.26.4.0.0",

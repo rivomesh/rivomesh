@@ -14,7 +14,7 @@
 | `MYSQL` 8.4.13 | Java 8。三种拓扑以及 binlog 准入检查。下方进程矩阵另含五种 JDK 的单机档案。 | [8.4 binlog 档案](pipeline-v3.md) |
 | `POSTGRESQL` 17.12 | 实验性单主源。五种 JDK 分别通过 7 项 PostgreSQL 到 PostgreSQL 实库验证。Java 8 已通过同步槽切主，PostgreSQL 共同点对账待验证。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | 实验性单主源，发布存储型生成列并物化为目标普通列。 | [源指南与发布](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8，单独提供 Oracle JDBC 驱动。实测 SCN Flashback 和单线程归档 redo 解码。自动投递和 RAC 待实现。 | [预检权限与恢复](oracle-source.md)、[预检样例](../../config/oracle-source-probe.yml) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8，单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
 
 MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐标使用逻辑源 ID、system ID、timeline、slot 和 LSN。Oracle 预检使用 DBID、resetlogs SCN、PDB GUID 和 SCN。`SourcePosition.formatVersion` 当前为 1，由 `sourceType` 对应的适配器解释。在同一来源身份和协议内比较坐标。[多库样例](../../config/pipeline-v3.yml)使用 `formatVersion: 3`、`source.clusterId`、`databases` 以及每个目标的显式 `mappings`。独立 MySQL 集群分别使用独立配置。
 
@@ -40,7 +40,7 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 | PostgreSQL 17.12 单主 → PostgreSQL 17.12 | 7 项 | 7 项 | 7 项 | 7 项 | 7 项 |
 | PostgreSQL 18.7 单主 → PostgreSQL 17.12，包含存储型生成列 | 8 项 | 8 项 | 8 项 | 8 项 | 8 项 |
 | MySQL 5.7.44 / 8.0.46 / 8.2.0 原生源档案 | 限定实库 | 待验收 | 待验收 | 待验收 | 待验收 |
-| Oracle 26ai → 目标 | 仅源端预检 | 待验收 | 待验收 | 待验收 | 待验收 |
+| Oracle 26ai → PostgreSQL 17.12 | 限定归档增量和恢复 | 待验收 | 待验收 | 待验收 | 待验收 |
 | 其他目标和拓扑 | 上表各产品实测范围 | 待验收 | 待验收 | 待验收 | 待验收 |
 
 前三行对应[实测记录](../verification/baseline.json)里的 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix` 和 `postgresqlStoredGenerated`。其他组合按实际 JDK 运行对应源、目标、存储和恢复测试。[复现命令](performance.md)

@@ -142,7 +142,7 @@ Artifact `c2459566253bee13e7435565d05bac136118703b13314cf6ebffdc190dead410` pass
 
 ## Bilingual connector and API compatibility reference
 
-Combined reference SHA-256 `d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
+Combined reference SHA-256 `2c0f5f83a185d98def0b12ac6068727981a3341cd1fd6b78480bd239d2999587`. Both languages index the configured source, destination and five-JDK profiles, typed positions, access rules, request and plan identities and upgrade boundaries. The documentation check resolved relative links in all 124 Markdown files and verified the shared connector and endpoint inventory. [English reference](../en/compatibility.md) · [中文](../zh-CN/compatibility.md)
 
 ## PostgreSQL 18 stored generated columns
 
@@ -167,3 +167,7 @@ Artifact `58cc370518c0f92271f39fafab02b8c508beb59bf736bdb797eb3a8add050ff4` pass
 ## Oracle typed commit ordering
 
 Artifact `e6186b17a8b357db1b1a577aa7f1372b1f19241509f17c2a5b8ceafcd6f33f52` passed nine Oracle Free 26ai Java 8 checks. LogMiner changes are grouped into complete source transactions with repeatable per-transaction event IDs. The scoped probe retained the original authority and emitted typed SCN/XID commit coordinates. After rotating the archive, the second transaction appeared as a distinct later coordinate. [Manifest](baseline.json)
+
+## Oracle archived CDC and restart
+
+Artifact `9b555ae4a107fb34cba96c3f4b392f136ed290b6a2aac2e3b0c3fa3cc7ace029` passed 13 native Oracle 26ai checks and emitted a durable SCN to a PostgreSQL 17.12 destination. The root and PDB were independently authenticated. The Worker held the archive floor for a transaction open before Flashback, delivered it after commit and rotation, reused both snapshots after process SIGKILL, and refused an unsupported DDL before advancing the saved SCN. The profile used Java 8 with an external Oracle driver, one archive thread and LOCAL storage. [Guide and reproduction](../en/oracle-source.md) · [Manifest](baseline.json)

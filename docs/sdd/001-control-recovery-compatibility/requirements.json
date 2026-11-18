@@ -826,8 +826,8 @@
         "en": "Source protocol and capability configuration"
       },
       "gap": {
-        "zh-CN": "采集、预检与校验统一使用源适配器入口。MySQL 和 PostgreSQL 已有带类型的源配置和原生采集档案。Oracle SCN 预检已通过，增量接入和通用能力配置待完成。",
-        "en": "Capture, preflight and validation share the source adapter entry point. MySQL and PostgreSQL have typed source profiles and native capture. Oracle SCN preflight passes; Oracle CDC and common capabilities remain."
+        "zh-CN": "MySQL、PostgreSQL 与 Oracle 使用同一 V3 源适配器入口，保留各自坐标和版本。跨引擎能力探测、完整配置向导待完成。",
+        "en": "MySQL, PostgreSQL and Oracle share the V3 adapter entry point with engine-specific coordinates and versions. Full capability discovery and wizard coverage remain."
       },
       "acceptance": {
         "zh-CN": "每任务显式source.type、逻辑源身份、命名空间和版本配置；MySQL GTID、PG LSN、Oracle SCN不能互相比较；向导/预检按实际能力启用，未支持配置明确拒绝。",
@@ -839,7 +839,9 @@
         "sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java",
         "sync-app/src/main/java/io/github/rivomesh/PipelineSources.java",
         "sync-app/src/main/java/io/github/rivomesh/PipelineConfig.java",
-        "docs/verification/README.md"
+        "docs/verification/README.md",
+        "config/oracle-source-v3.yml",
+        "sync-app/src/main/java/io/github/rivomesh/OracleCdcSource.java"
       ]
     },
     {
@@ -1019,8 +1021,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 已实测 SCN 快照、单线程归档覆盖、提交事务的有类型变更解码和重复读取内容校验。自动投递、持久断点与 RAC 待实现。",
-        "en": "Oracle 26ai passed SCN flashback, single-thread archive coverage and typed decoding with identical committed content on replay. Automatic delivery, durable checkpoints and RAC remain."
+        "zh-CN": "Oracle 26ai 单 PDB、归档 LogMiner 到 PostgreSQL 实测支持长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。",
+        "en": "Oracle 26ai archived LogMiner to PostgreSQL passed single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1037,7 +1039,9 @@
         "tests/oracle-source-probe.py",
         "docs/verification/baseline.json",
         "sync-app/src/main/java/io/github/rivomesh/OracleArchiveWindow.java",
-        "sync-app/src/main/java/io/github/rivomesh/OracleArchiveRead.java"
+        "sync-app/src/main/java/io/github/rivomesh/OracleArchiveRead.java",
+        "config/oracle-source-v3.yml",
+        "sync-app/src/main/java/io/github/rivomesh/OracleCdcSource.java"
       ]
     },
     {
@@ -1297,7 +1301,7 @@
         "tests/sdd-check.py"
       ],
       "verification": {
-        "artifactSha256": "d60726b34f494c21bddda515b133a3c2059ab5c4d0d5fe10cfa3ee6a44fbadbb",
+        "artifactSha256": "2c0f5f83a185d98def0b12ac6068727981a3341cd1fd6b78480bd239d2999587",
         "artifactKind": "bilingual compatibility and API reference",
         "archive": "docs/verification/README.md",
         "criteriaSha256": "d75a02cda63905aadcea73f859aa282611bc2e8e7124b69d78158d7fc0cad0b2",
