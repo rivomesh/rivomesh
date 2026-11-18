@@ -121,7 +121,9 @@ class ManagedHandoffTest {
                 var archive=new SharedHandoffEvidence.Archive("a".repeat(64),10,1,0,1);
                 return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
                         "shareableReports",Map.of("state","ARCHIVED","archive",archive),
-                        "historicalFailureEvidence",Map.of("state","ARCHIVED","archive",archive));
+                        "historicalFailureEvidence",Map.of("state","ARCHIVED","archive",archive),
+                        "rawCaptureEvidence",Map.of("state","ARCHIVED","archive",
+                                new SharedHandoffEvidence.Archive("b".repeat(64),30,0,0,0,1)));
             });
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
             String archive=bQueries.pending(bLease,candidateDirectory,10).getFirst();
@@ -134,11 +136,24 @@ class ManagedHandoffTest {
                 assertNull(request.yaml);
                 return Map.of("state","VERIFIED");
             });
+            PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            String rawArchive=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            bQueries.serve(rawArchive,bLease,candidateDirectory,(request,actor)->{
+                assertEquals(TaskRequest.Kind.HANDOFF_CUSTODY_PROBE,request.kind);
+                assertEquals(candidateDirectory,request.handoffEvidenceScope.candidateDirectory());
+                assertEquals("b".repeat(64),request.handoffArchive.sha256());
+                assertEquals(1,request.handoffArchive.rawCaptures());
+                assertEquals(0,request.handoffArchive.failureRecords());
+                assertNull(request.yaml);
+                return Map.of("state","REFUSED","code","HANDOFF_ARCHIVE_MISSING");
+            });
             Map<String,Object> certified=result.get(10,TimeUnit.SECONDS);
             assertEquals(List.of("ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED"),certified.get("blockers"));
             assertEquals(false,certified.get("executionAuthorized"));
             assertEquals(Map.of("state","VERIFIED"),((Map<?,?>)certified.get("probe")).get("sharedReportCustody"));
             assertEquals(Map.of("state","VERIFIED"),((Map<?,?>)certified.get("probe")).get("sharedFailureEvidenceCustody"));
+            assertEquals(Map.of("state","REFUSED","code","HANDOFF_ARCHIVE_MISSING"),
+                    ((Map<?,?>)certified.get("probe")).get("sharedRawCaptureCustody"));
             assertEquals(certified,latest(entryB(),fixture.admin));
             assertFalse(Model.JSON.writeValueAsString(certified).contains("private-"));
             assertEquals("a",fixture.b.get("orders",fixture.admin).owner);

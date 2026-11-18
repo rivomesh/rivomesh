@@ -19,7 +19,9 @@ final class ManagedHandoff {
     }
     private record OriginalCut(String leaseState,String journalEpoch,String sequence,String checkpointHash){}
     private record ProbeResult(long checkedAt,Map<String,Object> candidate,Map<String,Object> originalEvidence,
-                               Map<String,Object> sharedReportCustody){}
+                               Map<String,Object> sharedReportCustody,
+                               @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                               Map<String,Object> sharedRawCaptureCustody){}
     record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
                       JournalWriterAssignment.ExpectedCut cut){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
@@ -118,10 +120,11 @@ final class ManagedHandoff {
         Map<String,Object> candidate=transport.await(calls.candidate(),actor);
         Map<String,Object> evidence=transport.await(calls.originalEvidence(),actor);
         Map<String,Object> custody=verifySharedEvidence(request,actor,transport,evidence);
+        Map<String,Object> rawCustody=verifyArchive(request,actor,transport,evidence.get("rawCaptureEvidence"),true);
         return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
             Assessment a=probeAssessment(c,task,current,request.reference);
             long now=db.now(c);
-            ProbeResult result=new ProbeResult(now,candidate,evidence,custody);
+            ProbeResult result=new ProbeResult(now,candidate,evidence,custody,rawCustody);
             Assessment proved=new Assessment(a.version,a.task,a.request,a.replaces,a.revision,a.activeVersion,a.original,
                     a.candidate,a.taskSlots,a.workerSlots,a.assigned,a.actor,a.actorRevision,a.assessedAt,a.originalCut,a.blockers,result);
             save(c,proved,false,current,"MANAGED_HANDOFF_PROBED");
@@ -132,12 +135,19 @@ final class ManagedHandoff {
     private Map<String,Object> verifySharedEvidence(TaskRequest request,AccessControl.Principal actor,
                                                    OwnerQueries transport,Map<String,Object> evidence)throws Exception{
         for(String category:List.of("shareableReports","closedReceipts","historicalFailureEvidence")){
-            if(!(evidence.get(category) instanceof Map<?,?> artifact)||!"ARCHIVED".equals(artifact.get("state")))continue;
-            SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(artifact.get("archive"),SharedHandoffEvidence.Archive.class);
-            if(descriptor==null)throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
-            return transport.await(transport.submitHandoffCustody(request,actor,descriptor),actor);
+            Map<String,Object> proof=verifyArchive(request,actor,transport,evidence.get(category),false);
+            if(proof!=null)return proof;
         }
         return null;
+    }
+
+    private Map<String,Object> verifyArchive(TaskRequest request,AccessControl.Principal actor,OwnerQueries transport,
+                                            Object artifact,boolean rawCapture)throws Exception{
+        if(!(artifact instanceof Map<?,?> response)||!"ARCHIVED".equals(response.get("state")))return null;
+        SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(response.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(descriptor==null||(descriptor.rawCaptures()>0)!=rawCapture)
+            throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+        return transport.await(transport.submitHandoffCustody(request,actor,descriptor),actor);
     }
 
     ProbeRoute probeRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
@@ -352,6 +362,7 @@ final class ManagedHandoff {
                 if(a.probe.originalEvidence.get("historicalFailureEvidence") instanceof Map<?,?> failures&&"ARCHIVED".equals(failures.get("state")))
                     probe.put("sharedFailureEvidenceCustody",a.probe.sharedReportCustody);
             }
+            if(a.probe.sharedRawCaptureCustody!=null)probe.put("sharedRawCaptureCustody",a.probe.sharedRawCaptureCustody);
             result.put("probe",probe);
             HandoffPreparations.Evidence prepared=applicable?preparationEvidence(a,now):null;
             if(prepared!=null)result.put("preparationEvidenceSha256",prepared.proof());

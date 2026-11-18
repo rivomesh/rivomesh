@@ -26,7 +26,7 @@ import java.util.stream.Stream;
 
 /** Publishes explicitly requested raw evidence in an operator-owned private POSIX directory. */
 final class MysqlContentArchive {
-    private static final int MAX_FILE=8*1024*1024;
+    static final int MAX_FILE=8*1024*1024;
     private static final long MAX_DIRECTORY=256L*1024*1024;
     private static final Set<PosixFilePermission> DIRECTORY_MODE=PosixFilePermissions.fromString("rwx------");
     private static final Set<PosixFilePermission> FILE_MODE=PosixFilePermissions.fromString("rw-------");

@@ -14,7 +14,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class CaptureArchiveReceiptTest {
+public class CaptureArchiveReceiptTest {
     @TempDir Path temporary;
     private Path archive;
     private CaptureArchiveReceipt.Owner owner;
@@ -29,11 +29,19 @@ class CaptureArchiveReceiptTest {
         reference=capture.file().substring(0,64);
     }
 
-    private Map<String,Object> report(CaptureArchiveReceipt.Capture context,byte[] frames){
+    private static Map<String,Object> report(CaptureArchiveReceipt.Capture context,byte[] frames){
         return Map.of("taskId",context.owner().task(),"checkpointHash",context.checkpointHash(),
                 "errorGeneration",context.errorGeneration(),"nextTransactionContents",
                 Map.of("boundaryHash",context.boundaryHash(),"bytes",Integer.toString(frames.length),
                         "contentSha256",Codec.sha256(frames)));
+    }
+
+    public static String retainFixture(Path archive,CaptureArchiveReceipt.Owner owner)throws IOException{
+        MysqlContentArchive.directory(archive,true);
+        var capture=new CaptureArchiveReceipt.Capture(owner,Codec.sha256("configuration"),"generation",
+                Codec.sha256("checkpoint"),1,Codec.sha256("boundary"));
+        byte[] frames={4,5,6};
+        return MysqlContentArchive.retain(archive,report(capture,frames),frames,capture.file().substring(0,64),capture).get("file");
     }
 
     private Map<String,String> retain(byte[] frames,CaptureArchiveReceipt.Capture attested)throws IOException{
@@ -85,6 +93,8 @@ class CaptureArchiveReceiptTest {
                 Files.readAllBytes(archive.resolve(capture.file()))));
         assertFalse(Files.exists(archive.resolve(".capture-key")));
         assertFalse(Files.exists(CaptureArchiveReceipt.path(archive,capture.file())));
+        assertEquals("MYSQL_BINLOG_EVIDENCE_ATTESTATION_MISSING",assertThrows(IOException.class,
+                ()->CaptureArchiveReceipt.copyAuthenticated(archive,owner,2,8192,(name,witness,bytes)->fail())).getMessage());
     }
 
     @Test void prepublishedReceiptPinsAnInterruptedCaptureAndKeyCannotBeReseeded()throws Exception{

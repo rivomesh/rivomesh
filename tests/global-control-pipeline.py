@@ -43,6 +43,8 @@ parser.add_argument('--handoff-probe', action='store_true',
                     help='Read-only candidate and original Agent probe under the current assessment')
 parser.add_argument('--handoff-custody', action='store_true',
                     help='Prove exact completed-report custody using separate then shared private mounts')
+parser.add_argument('--handoff-raw-custody', action='store_true',
+                    help='Recover a native MySQL row-limit failure, then verify original raw archive custody')
 parser.add_argument('--handoff-failure-custody', action='store_true',
                     help='Verify custody of a real retained failure record and its authority without a key export')
 parser.add_argument('--handoff-closed-receipts', action='store_true',
@@ -130,6 +132,9 @@ if args.handoff_probe and not args.handoff_assessment:
     parser.error('--handoff-probe requires --handoff-assessment')
 if args.handoff_custody and not args.handoff_probe:
     parser.error('--handoff-custody requires --handoff-probe')
+if args.handoff_raw_custody and (not args.handoff_custody
+        or not re.fullmatch(r'8\.4(?:\.\d+)?', args.source_expected_version or '')):
+    parser.error('--handoff-raw-custody requires --handoff-custody and a pinned MySQL 8.4 source')
 if args.handoff_failure_custody and not args.handoff_custody:
     parser.error('--handoff-failure-custody requires --handoff-custody')
 if args.handoff_closed_receipts and not args.handoff_custody:
@@ -257,6 +262,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
             'handoffFailureCustody': args.handoff_failure_custody,
+            'handoffRawCustody': args.handoff_raw_custody,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
             'handoffManagedWriter': args.handoff_managed_writer,
@@ -479,7 +485,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             try:
                 handoff_probe = path.endswith('/handoff/probe') and (
                     args.handoff_preparation or args.handoff_preparation_browser or args.handoff_failure_custody)
-                probe_timeout = 65 if handoff_probe else 20
+                if args.handoff_raw_custody and path.endswith('/handoff/probe'):
+                    probe_timeout = 95
+                else:
+                    probe_timeout = 65 if handoff_probe else 20
                 response = urllib.request.urlopen(call, timeout=probe_timeout)
             except urllib.error.HTTPError as error:
                 response = error
@@ -1513,6 +1522,82 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert current['capture_gtid']==checkpoint and not current.get('hasSourceExclusions')
                 passed('A previously retained archive cannot authorize an unverifiable source range after native log purge')
 
+    def retain_and_recover_handoff_capture():
+        checkpoint=task()['status']['capture_gtid']
+        identity_sql='SELECT generation,fingerprint FROM transfer_journal.rm3_job'
+        snapshot_sql=('SELECT snapshot_scope,table_id,snapshot_id FROM transfer_journal.rm3_snapshot '
+                      'ORDER BY snapshot_scope,table_id')
+        original_identity=sql('postgres',identity_sql)
+        snapshots=sql('postgres',snapshot_sql)
+        assert original_identity and snapshots
+
+        # The capture worker starts with a budget of eight rows. MySQL records a regular
+        # full-image, nine-row transaction that remains replayable after raising that budget.
+        values=','.join("(%d,'private raw handoff fixture',JSON_OBJECT('n',%d))"%(i,i) for i in range(201,210))
+        sql('mysql','INSERT INTO sales.items(id,note,payload) VALUES '+values)
+        def limited():
+            statuses=[task(node).get('status') or {} for node in ('node-a','node-b')]
+            if all(status.get('run_state')=='ERROR' and status.get('error_stage')=='SOURCE_DECODE'
+                   and status.get('error_code')=='TRANSACTION_ROW_LIMIT' for status in statuses):
+                return statuses[0]
+        failed=wait(limited,'real complete transaction reaches the configured capture row limit')
+        assert failed['capture_gtid']==checkpoint and not failed.get('hasOpenGaps')
+        wait(lambda:task().get('captureLeaseState') in ('UNCLAIMED','EXPIRED'),'faulted source releases capture lease')
+
+        recovery=http('node-b',route+'/capture-recovery')
+        header=recovery['nextTransactionHeaders']
+        assert header['tables']==['sales.items'] and header['scope']=='BINLOG_HEADERS_ONLY'
+        retained,_=action('CAPTURE_RETAIN',node='node-b',errorCount=failed['error_count'],boundaryHash=header['boundaryHash'])
+        wait(lambda:(operation(retained).get('result') or {}).get('retainedEvidence'),'owner publishes a raw capture receipt')
+        result=operation(retained)['result']
+        original=home/owner_node/'controller'/'capture-evidence'/'global_cdc'
+        file=result['retainedEvidence']['file']
+        assert re.fullmatch(r'[a-f0-9]{64}\.json',file)
+        content=(original/file).read_bytes()
+        witness=(original/('.capture-receipt-'+file)).read_bytes()
+        assert hashlib.sha256(content).hexdigest()==result['retainedEvidence']['archiveSha256']
+        start,end=int(header['startOffset']),int(header['endOffset'])
+        assert re.fullmatch(r'mysql-bin\.\d+',header['logFile']) and 0<end-start<4*1024*1024
+        raw=subprocess.run(['docker','compose','-p',project,'-f',str(composition),'exec','-T','mysql','dd',
+                            'if=/var/lib/mysql/'+header['logFile'],'bs=1','skip='+str(start),'count='+str(end-start)],
+                           env=env,cwd=ROOT,capture_output=True,check=True,timeout=30).stdout
+        assert len(raw)==end-start and base64.b64decode(json.loads(content)['base64Frames'])==raw
+        binding=json.loads(witness)['binding']
+        assert binding['sha256']==hashlib.sha256(content).hexdigest()
+        assert binding['capture']['fingerprint']==original_identity.split('|')[1]
+        assert binding['capture']['generation']==original_identity.split('|')[0]
+        assert binding['capture']['checkpointHash']==recovery['checkpointHash']
+
+        action('STOP',node='node-a')
+        wait(lambda:task().get('workerState')=='STOPPED','original task stops before changing row budget')
+        current=http('node-b',route+'/configuration')
+        assert current['config']['maxTransactionRows']==8
+        updated=dict(current['config'],maxTransactionRows=32)
+        body={'config':updated,'expectedRevision':current['revision']}
+        preview=http('node-a',route+'/configuration/validate',body)
+        assert preview['migrationRequired'] is False and preview['stateStoreChanged'] is False
+        assert preview['changedPaths']==['/maxTransactionRows']
+        edit='gc_capture_row_budget_'+uuid.uuid4().hex
+        http('node-b',route+'/configuration',body,method='PUT',request=edit,expected=202)
+        wait(lambda:outcome(edit,'node-a'),'row budget is approved and active')
+        def active_unchanged():
+            entries=[task(node) for node in ('node-a','node-b')]
+            return all(not entry.get('configurationPending') and (entry.get('status') or {}).get('capture_gtid')==checkpoint
+                       for entry in entries)
+        wait(active_unchanged,'both entries project active configuration while preserving the exact captured checkpoint')
+        action('RESUME',node='node-b',errorCount=failed['error_count'])
+        wait(rows_match,'the same native commit reaches both targets after raising the limit')
+        def resumed():
+            current=task()['status']
+            return current if current.get('phase')=='STREAMING' and current.get('run_state')=='RUNNING' else None
+        recovered=wait(resumed,'capture returns to streaming')
+        assert not recovered.get('hasOpenGaps') and not recovered.get('hasSourceExclusions')
+        assert sql('mysql',"SELECT GTID_SUBTRACT('%s','%s')"%(recovered['capture_gtid'],checkpoint))==header['transactionId']
+        assert sql('postgres',identity_sql)==original_identity and sql('postgres',snapshot_sql)==snapshots
+        assert sql('mysql','SELECT COUNT(*) FROM sales.items WHERE id BETWEEN 201 AND 209')=='9'
+        passed('The original Agent retains real binlog bytes and replays the same GTID after a reviewed budget increase without a gap or new generation')
+        return original,file,content,witness
+
     def run_capture_exclusion(retention, checkpoint, archive, original_bytes):
         plan = retention['exclusionPlan']
         assert plan['affectedSubscriptions'] == {'pg':['sales.items'], 'my':['sales.items']}
@@ -1960,6 +2045,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     'journal': {'mode': 'LOCAL'}, 'targets': []}
         if args.source_expected_version:
             document['source'].update(type='MYSQL', expectedVersion=args.source_expected_version)
+        if args.handoff_raw_custody:
+            document['maxTransactionRows']=8
         if args.mysql_async_failover:
             document['source'].update(type='MYSQL', topology='ASYNC',
                                       expectedVersion=args.source_expected_version or manifest['sourceVersion'],
@@ -2078,6 +2165,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             candidate='node-worker-alt'
             wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING' for n in ('node-a','node-b')),
                  'both entries see the original drained data stream')
+            if args.handoff_raw_custody:
+                raw_origin,raw_file,raw_bytes,raw_witness=retain_and_recover_handoff_capture()
             if args.handoff_custody:
                 validation,_=action('VALIDATE',validation={'targets':['pg','my'],'gateMillis':15000,
                                                            'sourceMillis':60000,'targetMillis':30000})
@@ -2185,6 +2274,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     assert bad['probe']['originalEvidence']['shareableReports']['state']=='ARCHIVED'
                     assert bad['probe']['sharedReportCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
                     passed('Candidate with a disjoint private mount cannot claim custody of the original completed report')
+                    if args.handoff_raw_custody:
+                        assert bad['probe']['originalEvidence']['rawCaptureEvidence']['state']=='ARCHIVED'
+                        assert bad['probe']['sharedRawCaptureCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
+                        passed('Candidate lacking the shared raw archive refuses custody even when the signed original still exists')
                     if args.handoff_failure_custody:
                         assert bad['probe']['originalEvidence']['historicalFailureEvidence']['state']=='ARCHIVED'
                         assert bad['probe']['sharedFailureEvidenceCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
@@ -2231,7 +2324,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     import zipfile
                     custody=proof['sharedReportCustody']
                     assert custody['state']=='VERIFIED' and custody['archive']['reports']==1
-                    archive,=list((home/'handoff-shared').glob('handoff-*.zip'))
+                    archive,=(path for path in (home/'handoff-shared').glob('handoff-*.zip')
+                              if re.fullmatch(r'handoff-[a-f0-9]{64}\.zip',path.name))
                     assert archive.stat().st_size==custody['archive']['bytes']
                     assert hashlib.sha256(archive.read_bytes()).hexdigest()==custody['archive']['sha256']
                     with zipfile.ZipFile(archive) as files:
@@ -2240,6 +2334,24 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     assert 'rows.mv.db' not in json.dumps(good)
                     assert not good['executionAuthorized']
                     passed('Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain')
+                    if args.handoff_raw_custody:
+                        raw_result=proof['sharedRawCaptureCustody']
+                        assert raw_result['state']=='VERIFIED' and raw_result['archive']['rawCaptures']==1
+                        assert raw_result['archive']!=custody['archive'] and raw_result['archive']['reports']==0
+                        raw_zip,=list((home/'handoff-shared').glob('handoff-capture-*.zip'))
+                        assert raw_zip.stat().st_size==raw_result['archive']['bytes']
+                        assert hashlib.sha256(raw_zip.read_bytes()).hexdigest()==raw_result['archive']['sha256']
+                        assert raw_result['archive']==proof['originalEvidence']['rawCaptureEvidence']['archive']
+                        with zipfile.ZipFile(raw_zip) as files:
+                            assert set(files.namelist())=={'scope.json','capture/'+raw_file,'capture-receipts/'+raw_file}
+                            assert files.read('capture/'+raw_file)==raw_bytes
+                            assert files.read('capture-receipts/'+raw_file)==raw_witness
+                        assert (raw_origin/raw_file).read_bytes()==raw_bytes
+                        assert (raw_origin/('.capture-receipt-'+raw_file)).read_bytes()==raw_witness
+                        assert (raw_origin/'.capture-key').stat().st_size==32
+                        assert raw_file not in json.dumps(good) and 'private raw handoff fixture' not in json.dumps(good)
+                        assert not good['executionAuthorized'] and data_cut()==original_cut
+                        passed('Candidate verifies the exact native raw archive and authenticated witness, with original ownership, key and cut preserved')
                     if args.handoff_failure_custody:
                         failures=proof['sharedFailureEvidenceCustody']
                         assert failures['state']=='VERIFIED' and failures['archive']==custody['archive']

@@ -1,5 +1,7 @@
 package io.github.rivomesh.platform;
 
+import io.github.rivomesh.CaptureArchiveReceipt;
+import io.github.rivomesh.CaptureArchiveReceiptTest;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.Journal;
@@ -14,7 +16,9 @@ import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.*;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -119,6 +123,59 @@ class SharedHandoffEvidenceTest {
         assertEquals("HANDOFF_ORIGINAL_FAILURE_EVIDENCE_UNVERIFIED",assertThrows(TaskService.Conflict.class,
                 ()->SharedHandoffEvidence.export(shared,scope,reports,List.of(),inputs)).getMessage());
         assertFalse(Files.exists(original.resolve("evidence.key")));
+    }
+
+    @Test void candidateVerifiesSeparateRawArchiveDigestAndExactPerFileReceiptWithoutKey()throws Exception{
+        var sourceOwner=new CaptureArchiveReceipt.Owner("task","origin",UUID.randomUUID().toString());
+        scope=new SharedHandoffEvidence.Scope(scope.cluster(),scope.task(),scope.assessment(),scope.revision(),
+                scope.configuration(),sourceOwner.directory(),scope.candidateDirectory());
+        Path source=temporary.toRealPath().resolve("raw-capture");
+        String file=CaptureArchiveReceiptTest.retainFixture(source,sourceOwner);
+        byte[] original=Files.readAllBytes(source.resolve(file));
+        report("COMPLETE");
+        var reportProof=SharedHandoffEvidence.export(shared,scope,reports,List.of());
+        var descriptor=SharedHandoffEvidence.exportCapture(shared,scope,source,sourceOwner);
+        assertEquals(1,descriptor.rawCaptures());
+        assertEquals(0,descriptor.reports());
+        assertThrows(TaskService.Conflict.class,()->new SharedHandoffEvidence.Archive(
+                descriptor.sha256(),descriptor.bytes(),1,0,0,1));
+
+        Path independent=Files.createDirectory(temporary.toRealPath().resolve("candidate"),
+                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+        assertEquals("HANDOFF_ARCHIVE_MISSING",assertThrows(TaskService.Conflict.class,
+                ()->SharedHandoffEvidence.verify(independent,scope,descriptor)).getMessage());
+        Path exported;
+        try(DirectoryStream<Path> files=Files.newDirectoryStream(shared,"handoff-capture-*.zip")){
+            exported=files.iterator().next();
+        }
+        Path copied=Files.copy(exported,independent.resolve(exported.getFileName()));
+        SharedHandoffEvidence.verify(independent,scope,descriptor);
+        try(ZipFile zip=new ZipFile(exported.toFile());
+            ZipOutputStream rewritten=new ZipOutputStream(Files.newOutputStream(copied))){
+            String capture="capture/"+file,witness="capture-receipts/"+file;
+            assertEquals(Set.of("scope.json",witness,capture),
+                    new HashSet<>(zip.stream().map(ZipEntry::getName).toList()));
+            assertArrayEquals(original,zip.getInputStream(zip.getEntry(capture)).readAllBytes());
+            for(String name:List.of("scope.json",witness,capture)){
+                byte[] bytes=zip.getInputStream(zip.getEntry(name)).readAllBytes();
+                if(name.equals(capture))bytes[bytes.length-1]^=1;
+                rewritten.putNextEntry(new ZipEntry(name));
+                rewritten.write(bytes);
+                rewritten.closeEntry();
+            }
+        }
+        assertEquals("HANDOFF_ARCHIVE_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->SharedHandoffEvidence.verify(independent,scope,descriptor)).getMessage());
+        var changed=new SharedHandoffEvidence.Archive(Codec.sha256(Files.readAllBytes(copied)),Files.size(copied),0,0,0,1);
+        assertEquals("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID",assertThrows(TaskService.Conflict.class,
+                ()->SharedHandoffEvidence.verify(independent,scope,changed)).getMessage());
+        assertArrayEquals(original,Files.readAllBytes(source.resolve(file)));
+        assertEquals(32,Files.size(source.resolve(".capture-key")));
+        Files.delete(source.resolve(".capture-receipt-"+file));
+        assertEquals("HANDOFF_ORIGINAL_RAW_CAPTURE_UNVERIFIED",assertThrows(TaskService.Conflict.class,
+                ()->SharedHandoffEvidence.exportCapture(shared,scope,source,sourceOwner)).getMessage());
+        SharedHandoffEvidence.verify(shared,scope,reportProof);
+        SharedHandoffEvidence.verify(shared,scope,descriptor);
     }
 
     @Test void copiesOnlyCompletedReportsAndRetainsTheExactOriginalBytes()throws Exception{

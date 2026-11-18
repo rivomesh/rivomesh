@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.rivomesh.CaptureArchiveReceipt;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.recovery.FailureEvidence;
@@ -22,8 +23,10 @@ final class SharedHandoffEvidence {
     static final int MAX_RECEIPTS=64;
     private static final int MAX_RECEIPT_BYTES=128*1024;
     private static final long MAX_BYTES=64L*1024*1024;
-    private static final int MAX_FAILURE_RECORDS=64,MAX_FAILURE_RECORD_BYTES=8*1024*1024;
-    private static final String FAILURES="failure-evidence/";
+    private static final int MAX_FAILURE_RECORDS=64,MAX_FAILURE_RECORD_BYTES=8*1024*1024,MAX_RAW_CAPTURES=64;
+    private static final String FAILURES="failure-evidence/",CAPTURES="capture/",CAPTURE_RECEIPTS="capture-receipts/";
+    private record ByteProof(String sha256,long bytes){}
+    @FunctionalInterface private interface ArchiveWriter {Archive write(Path stage,long deadline)throws Exception;}
     record Failures(Path directory,FailureEvidence.Scope scope){}
     private record Counts(int reports,int failures){}
     record Scope(String cluster,String task,String assessment,String revision,String configuration,
@@ -45,13 +48,19 @@ final class SharedHandoffEvidence {
             receipts=List.copyOf(receipts);
         }
     }
-    record Archive(String sha256,long bytes,int reports,int closedReceipts,int failureRecords){
-        Archive(String sha256,long bytes,int reports,int closedReceipts){this(sha256,bytes,reports,closedReceipts,0);}
+    record Archive(String sha256,long bytes,int reports,int closedReceipts,int failureRecords,
+                   @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+                   int rawCaptures){
+        Archive(String sha256,long bytes,int reports,int closedReceipts){this(sha256,bytes,reports,closedReceipts,0,0);}
+        Archive(String sha256,long bytes,int reports,int closedReceipts,int failureRecords){
+            this(sha256,bytes,reports,closedReceipts,failureRecords,0);
+        }
         Archive{
             if(sha256==null||!sha256.matches("[0-9a-f]{64}")||bytes<1||bytes>MAX_BYTES+1024*1024
                     ||reports<0||reports>MAX_REPORTS||closedReceipts<0||closedReceipts>MAX_RECEIPTS
                     ||failureRecords<0||failureRecords>MAX_FAILURE_RECORDS
-                    ||reports+closedReceipts+failureRecords==0)throw refusal("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+                    ||rawCaptures<0||rawCaptures>MAX_RAW_CAPTURES||rawCaptures>0&&reports+closedReceipts+failureRecords>0
+                    ||reports+closedReceipts+failureRecords+rawCaptures==0)throw refusal("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
         }
     }
     private SharedHandoffEvidence(){}
@@ -64,7 +73,35 @@ final class SharedHandoffEvidence {
         if(failures!=null&&(!scope.task().equals(failures.scope().taskId)
                 ||!scope.originalDirectory().equals(failures.scope().ownerDirectoryId)))
             throw refusal("HANDOFF_ARCHIVE_SCOPE_CHANGED");
-        Path root=privateRoot(configured),destination=archive(root,scope);
+        return publish(configured,scope,false,(stage,deadline)->{
+            Counts counts=write(stage,scope,reports,receipts,failures,deadline);
+            if(counts.reports()==0&&counts.failures()==0&&receipts.isEmpty())throw refusal("HANDOFF_NO_SHAREABLE_REPORTS");
+            return new Archive(hash(stage,deadline),Files.size(stage),counts.reports(),receipts.size(),counts.failures());
+        });
+    }
+
+    static Archive exportCapture(Path configured,Scope scope,Path source,CaptureArchiveReceipt.Owner owner)throws Exception{
+        if(!scope.task().equals(owner.task())||!scope.originalDirectory().equals(owner.directory()))
+            throw refusal("HANDOFF_ARCHIVE_SCOPE_CHANGED");
+        return publish(configured,scope,true,(stage,deadline)->{
+            int count;
+            try(ZipOutputStream out=new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(stage)))){
+                startArchive(out,scope,deadline);
+                try{
+                    count=CaptureArchiveReceipt.copyAuthenticated(source,owner,MAX_RAW_CAPTURES,MAX_BYTES,(file,receipt,raw)->{
+                        entry(out,CAPTURE_RECEIPTS+file,new ByteArrayInputStream(receipt),receipt.length,deadline);
+                        entry(out,CAPTURES+file,new ByteArrayInputStream(raw),raw.length,deadline);
+                    });
+                }catch(TaskService.Conflict failure){throw failure;}
+                catch(IOException unavailable){throw refusal("HANDOFF_ORIGINAL_RAW_CAPTURE_UNVERIFIED");}
+            }
+            if(count==0)throw refusal("HANDOFF_NO_AUTHENTICATED_RAW_CAPTURE");
+            return new Archive(hash(stage,deadline),Files.size(stage),0,0,0,count);
+        });
+    }
+
+    private static Archive publish(Path configured,Scope scope,boolean capture,ArchiveWriter writer)throws Exception{
+        Path root=privateRoot(configured),destination=archive(root,scope,capture);
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);
         Path lockPath=root.resolve(destination.getFileName()+".lock");
         try(FileChannel channel=FileChannel.open(lockPath,StandardOpenOption.CREATE,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS)){
@@ -82,9 +119,7 @@ final class SharedHandoffEvidence {
                 Path stage=Files.createTempFile(root,destination.getFileName()+".",".tmp");
                 try{
                     PrivateFiles.ownerOnly(stage);
-                    Counts counts=write(stage,scope,reports,receipts,failures,deadline);
-                    if(counts.reports()==0&&counts.failures()==0&&receipts.isEmpty())throw refusal("HANDOFF_NO_SHAREABLE_REPORTS");
-                    Archive proof=new Archive(hash(stage,deadline),Files.size(stage),counts.reports(),receipts.size(),counts.failures());
+                    Archive proof=writer.write(stage,deadline);
                     try(FileChannel file=FileChannel.open(stage,StandardOpenOption.WRITE)){file.force(true);}
                     Files.move(stage,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
                     try(FileChannel directory=FileChannel.open(root,StandardOpenOption.READ)){directory.force(true);}
@@ -96,7 +131,7 @@ final class SharedHandoffEvidence {
     }
 
     static void verify(Path configured,Scope expected,Archive proof)throws Exception{
-        Path original=archive(privateRoot(configured),expected);
+        Path original=archive(privateRoot(configured),expected,proof.rawCaptures()>0);
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);
         if(!Files.isRegularFile(original,LinkOption.NOFOLLOW_LINKS))
             throw refusal("HANDOFF_ARCHIVE_MISSING");
@@ -123,8 +158,33 @@ final class SharedHandoffEvidence {
                         throw refusal("HANDOFF_CLOSED_RECEIPT_INVALID");
                 }
                 if(proof.failureRecords()>0)verifyFailureEntries(zip,proof.failureRecords(),deadline);
+                if(proof.rawCaptures()>0)verifyCaptureEntries(zip,expected,proof.rawCaptures(),deadline);
             }
         }
+    }
+
+    private static void verifyCaptureEntries(ZipInputStream zip,Scope scope,int count,long deadline)throws Exception{
+        String previous="";
+        for(int i=0;i<count;i++){
+            checkDeadline(deadline);
+            ZipEntry witness=zip.getNextEntry();
+            String name=witness==null?"":witness.getName();
+            if(!name.matches(CAPTURE_RECEIPTS+"[a-f0-9]{64}\\.json")||name.compareTo(previous)<=0)
+                throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");
+            String file=name.substring(CAPTURE_RECEIPTS.length());
+            CaptureArchiveReceipt.ArchivedFile descriptor;
+            try{
+                descriptor=CaptureArchiveReceipt.describeArchivedFile(zip.readNBytes(CaptureArchiveReceipt.MAX_BYTES+1),
+                        scope.task(),scope.originalDirectory(),file);
+            }catch(IOException changed){throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");}
+            ZipEntry raw=zip.getNextEntry();
+            if(raw==null||!(CAPTURES+file).equals(raw.getName()))throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");
+            ByteProof digest=digest(zip,descriptor.bytes(),deadline);
+            if(digest.bytes()!=descriptor.bytes()||!digest.sha256().equals(descriptor.sha256()))
+                throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");
+            previous=name;
+        }
+        if(zip.getNextEntry()!=null)throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");
     }
 
     private static void verifyFailureEntries(ZipInputStream zip,int count,long deadline)throws IOException{
@@ -174,8 +234,7 @@ final class SharedHandoffEvidence {
         long remaining=MAX_BYTES;
         int archived=0,failureRecords=0;
         try(ZipOutputStream out=new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(stage)))){
-            out.setLevel(0);
-            entry(out,"scope.json",new ByteArrayInputStream(Model.JSON.writeValueAsBytes(scope)),4096,deadline);
+            startArchive(out,scope,deadline);
             if(!receipts.isEmpty())entry(out,"closed-receipts.json",new ByteArrayInputStream(Model.JSON.writeValueAsBytes(receipts)),
                     MAX_RECEIPT_BYTES,deadline);
             if(failures!=null){
@@ -223,6 +282,11 @@ final class SharedHandoffEvidence {
             return bytes;
         }
     }
+    private static void startArchive(ZipOutputStream out,Scope scope,long deadline)throws IOException{
+        out.setLevel(0);
+        entry(out,"scope.json",new ByteArrayInputStream(Model.JSON.writeValueAsBytes(scope)),4096,deadline);
+    }
+
     private static long entry(ZipOutputStream destination,String name,InputStream input,long limit,long deadline)throws IOException{
         ZipEntry entry=new ZipEntry(name);entry.setTime(0);destination.putNextEntry(entry);
         long bytes=0;byte[] buffer=new byte[64*1024];
@@ -240,17 +304,26 @@ final class SharedHandoffEvidence {
         }
     }
     private static String hash(InputStream input,long deadline)throws Exception{
+        return digest(input,MAX_BYTES+1024*1024,deadline).sha256();
+    }
+    private static ByteProof digest(InputStream input,long limit,long deadline)throws Exception{
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
         long bytes=0;byte[] buffer=new byte[64*1024];
         for(int n;(n=input.read(buffer))!=-1;){
             checkDeadline(deadline);
-            bytes+=n;if(bytes>MAX_BYTES+1024*1024)throw refusal("HANDOFF_ARCHIVE_LIMIT_EXCEEDED");
+            bytes+=n;if(bytes>limit)throw refusal("HANDOFF_ARCHIVE_LIMIT_EXCEEDED");
             digest.update(buffer,0,n);
         }
-        return HexFormat.of().formatHex(digest.digest());
+        return new ByteProof(HexFormat.of().formatHex(digest.digest()),bytes);
     }
-    private static Path archive(Path root,Scope scope){
-        return root.resolve("handoff-"+Codec.sha256(Codec.encode(List.of(scope.cluster,scope.task,scope.originalDirectory)))+".zip");
+    private static Path archive(Path root,Scope scope,boolean capture){
+        String prefix=capture?"handoff-capture-":"handoff-";
+        return root.resolve(prefix+Codec.sha256(Codec.encode(List.of(scope.cluster,scope.task,scope.originalDirectory)))+".zip");
+    }
+    static Path stagingSource(Path configured,Scope scope)throws IOException{
+        Path file=archive(privateRoot(configured),scope,false);
+        if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_ARCHIVE_MISSING");
+        return file;
     }
     private static Path privateRoot(Path root)throws IOException{
         if(root==null)throw refusal("HANDOFF_ARCHIVE_DISABLED");

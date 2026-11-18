@@ -73,11 +73,13 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 使用原生 Kubernetes YAML 时，在两个 Agent Deployment 中挂载同一份已有 PVC 到 `/app/handoff-evidence`，各自的状态 PVC 继续挂载到 `/app/data`。此档案省略 `spec.template.spec.securityContext.fsGroup`，在两个 Agent ConfigMap 配置 `cluster.handoffEvidenceRoot: /app/handoff-evidence`。存储权限准备完成后滚动更新 Agent。
 
-原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告，报告与历史故障证据共用 64 MiB 数据上限，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。MySQL binlog 原始证据与修复计划由原 Agent 的私有目录保管。核验保留原任务归属，返回 `executionAuthorized: false`。
+原 Agent 在每份已完成报告的文件锁下，按原字节导出 `rows.mv.db` 和 `summary.json`。每次最多处理 32 份报告，报告与历史故障证据共用 64 MiB 数据上限，写完后才替换该原任务的上一份导出。候选 Agent 核对归档摘要、评估 ID、任务修订和两端目录身份。`probe.sharedReportCustody` 返回核验结果、大小和摘要，报告数据保留在受保护的挂载上。原始归档、签名密钥与修复计划由原 Agent 的私有目录保管。核验保留原任务归属，返回 `executionAuthorized: false`。
 
 同一次核验可用 `probe.sharedReceiptCustody` 查看已结束的操作回执。原 Agent 会将已认证的全局命令与本地请求签名、操作者和执行结果核对，只归档匹配的已结束回执。候选 Agent 独立核对共享归档的原字节。该流程覆盖单任务最多 64 条全局命令。回执缺失、已清理、内容不匹配或操作未结束时，保留未核验状态。接口返回数量和摘要。回执导入与执行接管需单独核验。
 
 `probe.sharedFailureEvidenceCustody` 显示最多 64 条历史故障记录的保管核验结果。原 Agent 在存储锁内核对权威记录的任务及节点作用域，并验证每条保留记录的 HMAC 和内容摘要。归档保存权威记录和故障记录的原始字节，签名密钥由原 Agent 保管。候选 Agent 根据已认证的原 Agent 返回值核对归档摘要、评估作用域以及条目数量和格式。权威记录缺失、原始内容变更或存储锁被占用时，原 Agent 拒绝发布本次归档。接口显示数量、大小和摘要。使用历史记录执行恢复仍需原有授权和密钥。
+
+`probe.sharedRawCaptureCustody` 通过独立的私有 ZIP 核验已认证的 MySQL binlog 归档。原 Agent 在归档锁内验证每个文件的 HMAC 回执，并核对准确文件名、大小、摘要和原持有方，然后导出完整原文件与回执。候选 Agent 从已认证的 Agent 通道取得绑定评估范围的 ZIP 摘要，再核对 ZIP 与每个文件的摘要及大小。单任务最多纳入 64 份原始归档，共用独立的 64 MiB 上限。存在未认证的旧文件、回执缺失或内容变更时，源证据核验拒绝，校验报告 ZIP 可继续核验。原 Agent 使用本地私有密钥证明真实性。管理接口只显示核验状态、数量、大小与摘要。该 ZIP 用于核验，写入接管需另行隔离与批准。
 
 两端 Agent 验证原任务已停止、精确切点和闭合回执后，评估接口返回 `preparationEvidenceSha256`。若原 Agent 有校验报告目录，还须完成报告托管核验。管理员可以向 `POST /api/tasks/{task}/handoff/preparation` 提交 `X-Request-ID`，请求体包含 `expectedAssessment`、`expectedRevision` 和 `expectedEvidenceSha256`。同一路径的 `GET` 可查询最新准备记录、到期时间和原、候选 Agent 身份。
 

@@ -919,6 +919,7 @@ public final class TaskService implements AutoCloseable {
         Map<String,Object> originalEvidence=null;
         SharedHandoffEvidence.ReceiptPlan closedReceipts=null;
         SharedHandoffEvidence.Failures failureArchive=null;
+        CaptureArchiveReceipt.Owner rawCaptureOwner=null;
         synchronized(this){
             ensureOpen();currentActor(actor);
             if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
@@ -941,6 +942,7 @@ public final class TaskService implements AutoCloseable {
                     if(!"ABSENT".equals(inventory.get("failureEvidence")))
                         failureArchive=new SharedHandoffEvidence.Failures(failureEvidenceDirectory(request.taskId),
                                 failureEvidenceScope(request.taskId));
+                    if(!"ABSENT".equals(inventory.get("sourceEvidence")))rawCaptureOwner=captureReceiptOwner(request.taskId);
                 }
             }else{
                 if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
@@ -962,6 +964,13 @@ public final class TaskService implements AutoCloseable {
                     if(!closedReceipts.receipts().isEmpty())originalEvidence.put("closedReceipts",archiveRefusal(failed));
                     if(failureArchive!=null)originalEvidence.put("historicalFailureEvidence",archiveRefusal(failed));
                 }
+            }
+            if(rawCaptureOwner!=null){
+                try{
+                    SharedHandoffEvidence.Archive archive=SharedHandoffEvidence.exportCapture(archiveRoot,
+                            request.handoffEvidenceScope,captureEvidenceDirectory(request.taskId),rawCaptureOwner);
+                    originalEvidence.put("rawCaptureEvidence",Map.of("state","ARCHIVED","archive",archive));
+                }catch(Exception failed){originalEvidence.put("rawCaptureEvidence",archiveRefusal(failed));}
             }
             return originalEvidence;
         }
