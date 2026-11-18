@@ -75,7 +75,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Track skipped transactions/ranges,destinations,reason,actor,hashes and original evidence;separate applied progress,safe coverage and running-with-gaps;only verification evidence closes a gap and accepted loss is not equality.
   Acceptance: AC-RC-08
   Accepted first SQL profile:verification,cross-entry commands,cancellation and honest progress;see [design](design-gap-verification.en.md) and [verification](../../verification/README.md). Other target protocols remain RC-10.
-- [ ] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
+- [x] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
   Deliver: Remote plans,approval,cancellation,receipts and evidence locations are traceable;controller/agent kill recovers the same request with idempotent commits/rollback;skip is not cutover approval.
   Acceptance: AC-RC-09
 - [ ] T-RC-10 · Destination-specific recovery and retention · P1 · Depends on: RC-08, LG-03, LG-04
@@ -180,4 +180,4 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 | RC-08 | Distinct safe coverage,contiguous application and broker semantics | DONE |
 | RC-06 | Before-image reconstruction, atomic target writes, cross-entry approval, and console | Java, DOM, both native target profiles and real CDC passed |
 | RC-07 | Typed entry, JSON import, before/after approval and atomic batches | Bounded SQL profile passed |
-| RC-09 | Distributed recovery jobs and commit-boundary tests | NEXT |
+| RC-09 | Cross-entry cancellation and original-request recovery | Passed with a native PostgreSQL destination |

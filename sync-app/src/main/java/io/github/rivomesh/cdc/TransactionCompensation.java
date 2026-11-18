@@ -5,6 +5,7 @@ import io.github.rivomesh.recovery.FailureEvidence;
 import io.github.rivomesh.recovery.FailureEvidenceStore;
 import java.sql.Connection;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /** Restore reviewed identities to the state before the next unapplied source transaction. */
 public final class TransactionCompensation {
@@ -17,6 +18,24 @@ public final class TransactionCompensation {
 
     public static Map<String,Object> run(PipelineConfig config, FailureEvidenceStore.Envelope retained,
             CorrectionBatch correction, String approvedHash, String operation, String actor, String reason) throws Exception {
+        return run(config,retained,correction,approvedHash,operation,actor,reason,()->false);
+    }
+
+    public static Map<String,Object> run(PipelineConfig config, FailureEvidenceStore.Envelope retained,
+            CorrectionBatch correction, String approvedHash, String operation, String actor, String reason,
+            BooleanSupplier cancelled) throws Exception {
+        return run(config,retained,correction,approvedHash,operation,actor,reason,false,cancelled);
+    }
+
+    /** Resolve the original write without ever applying the approved change. */
+    public static Map<String,Object> receipt(PipelineConfig config, FailureEvidenceStore.Envelope retained,
+            CorrectionBatch correction, String approvedHash, String operation, String actor, String reason) throws Exception {
+        return run(config,retained,correction,approvedHash,operation,actor,reason,true,()->false);
+    }
+
+    private static Map<String,Object> run(PipelineConfig config, FailureEvidenceStore.Envelope retained,
+            CorrectionBatch correction, String approvedHash, String operation, String actor, String reason,
+            boolean receiptOnly, BooleanSupplier cancelled) throws Exception {
         configTargetCheck(config, retained.value.review);
         PipelineConfig.Target target = config.targets.stream()
                 .filter(candidate -> candidate.id.equals(retained.value.review.subscription.id)).findFirst()
@@ -26,7 +45,7 @@ public final class TransactionCompensation {
         try (JdbcJournal journal = new JdbcJournal(config.existingJournalSettings())) {
             journal.verifyIdentity(config.fingerprint(), config.subscribers());
             return run(journal, config.targetSettings(target, retained.value.review.generation),
-                    retained, correction, approvedHash, operation, actor, reason);
+                    retained, correction, approvedHash, operation, actor, reason,receiptOnly,cancelled);
         }
     }
 
@@ -42,6 +61,12 @@ public final class TransactionCompensation {
 
     static Map<String,Object> run(JdbcJournal journal, JdbcSink.Settings target, FailureEvidenceStore.Envelope retained,
             CorrectionBatch correction, String approvedHash, String operation, String actor, String reason) throws Exception {
+        return run(journal,target,retained,correction,approvedHash,operation,actor,reason,false,()->false);
+    }
+
+    private static Map<String,Object> run(JdbcJournal journal, JdbcSink.Settings target, FailureEvidenceStore.Envelope retained,
+            CorrectionBatch correction, String approvedHash, String operation, String actor, String reason,
+            boolean receiptOnly, BooleanSupplier cancelled) throws Exception {
         FailureEvidence evidence = retained.value;
         evidence.validate();
         Journal.FailureReview review = evidence.review;
@@ -70,8 +95,10 @@ public final class TransactionCompensation {
         }
         if (requestHash != null) try (JdbcSink sink = JdbcSink.existing(target)) {
             Map<String,Object> already = sink.compensationReceipt(operation, requestHash);
-            if (already != null) return already;
+            if (already != null || receiptOnly) return already;
         }
+        if (receiptOnly) throw new IllegalArgumentException("COMPENSATION_APPROVAL_INVALID");
+        if (cancelled.getAsBoolean()) throw refused("RECOVERY_CANCELLED");
         try (Connection source = journal.connect()) {
             Map<String,Object> job;
             try (RepairConnectionGuard wait = new RepairConnectionGuard(source, 30000)) {
@@ -83,8 +110,9 @@ public final class TransactionCompensation {
                         .inspect(source, target.id, review.subscription.errorGeneration, 4L * 1024 * 1024));
                 wait.verify();
             }
+            if (cancelled.getAsBoolean()) throw refused("RECOVERY_CANCELLED");
             try (JdbcSink sink = JdbcSink.existing(target)) {
-                return sink.compensation(rows, retained, correction!=null, approvedHash, operation, requestHash, actor, reason, checkpoint -> {
+                return sink.compensation(rows, retained, correction!=null, approvedHash, operation, requestHash, actor, reason, cancelled, checkpoint -> {
                     if (checkpoint.skipOperation != null) JdbcSkipJournal.verifyCheckpoint(journal, source, job, target.id, checkpoint);
                     return null;
                 });

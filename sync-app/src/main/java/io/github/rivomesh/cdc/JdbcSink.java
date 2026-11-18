@@ -41,7 +41,7 @@ public final class JdbcSink implements SinkAdapter {
         anchor=connect();String product=anchor.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
         if(!(s.product.mysqlDialect()&&(product.contains("mysql")||product.contains("oceanbase"))||s.product==TargetProduct.POSTGRESQL&&product.contains("postgresql")
                 ||s.product==TargetProduct.GAUSS&&(product.contains("gauss")||product.contains("postgresql"))||s.product==TargetProduct.GBASE_8C&&product.equals("gbase8c")||s.product==TargetProduct.KINGBASE&&product.contains("kingbase")||s.product==TargetProduct.DM&&product.equals("dm dbms")||s.product==TargetProduct.H2&&product.contains("h2"))){anchor.close();throw new IllegalArgumentException("SINK_PRODUCT_MISMATCH");}
-        try{if(initialize)initialize();skipAware=skipColumns(anchor,incompleteRecovery)==2;if(!initialize)try(RepairConnectionGuard guard=new RepairConnectionGuard(anchor,30000)){validateMetadata(anchor);anchor.setAutoCommit(false);locked(anchor,null);guard.verify();anchor.rollback();}}catch(Exception e){anchor.close();throw e;}
+        try{if(initialize)initialize();skipAware=skipColumns(anchor,incompleteRecovery)==2;if(!initialize)try(RepairConnectionGuard guard=new RepairConnectionGuard(anchor,30000)){validateMetadata(anchor);anchor.setAutoCommit(false);boundRecoveryLocks(anchor);locked(anchor,null);guard.verify();anchor.rollback();}}catch(Exception e){anchor.close();throw e;}
     }
     private Connection connect()throws SQLException{
         Connection c=JdbcConnections.open(settings.driver,settings.url,settings.username,settings.password);
@@ -271,10 +271,24 @@ public final class JdbcSink implements SinkAdapter {
         }
     }
 
+    private void boundRecoveryLocks(Connection c)throws SQLException {
+        // A disconnected JDBC client can leave a backend waiting on a lock.
+        // Let the engine release its transaction before the client-side guard expires.
+        try(Statement statement=c.createStatement()){
+            if(settings.product==TargetProduct.POSTGRESQL){
+                statement.execute("SET LOCAL lock_timeout = '20s'");
+            }else if(settings.product==TargetProduct.MYSQL){
+                statement.execute("SET SESSION innodb_lock_wait_timeout = 20");
+                statement.execute("SET SESSION lock_wait_timeout = 20");
+            }
+        }
+    }
+
     Map<String,Object> compensationReceipt(String operation, String requestHash)throws Exception {
         try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000)) {
             if (!compensationStorageExists(c)) return null;
             c.setAutoCommit(false);
+            boundRecoveryLocks(c);
             locked(c, null);
             Map<String,Object> receipt = compensationReceipt(c, operation, requestHash);
             guard.verify();
@@ -329,13 +343,16 @@ public final class JdbcSink implements SinkAdapter {
 
     Map<String,Object> compensation(Collection<CompensationRows.Row> rows,
             io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained, boolean correction, String approvedHash,
-            String operation, String requestHash, String actor, String reason, CheckpointAction<Void> check)throws Exception {
+            String operation, String requestHash, String actor, String reason,
+            java.util.function.BooleanSupplier cancelled, CheckpointAction<Void> check)throws Exception {
         repairProduct();
+        if(cancelled.getAsBoolean())throw new IllegalStateException("RECOVERY_CANCELLED");
         if (approvedHash != null) prepareCompensationStorage();
         Journal.FailureReview review = retained.value.review;
-        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000)) {
+        try (Connection c = connect(); RepairConnectionGuard guard = new RepairConnectionGuard(c, 30000,cancelled)) {
             if (mysql()) c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             c.setAutoCommit(false);
+            boundRecoveryLocks(c);
             Checkpoint checkpoint = locked(c, null);
             if (approvedHash != null) {
                 Map<String,Object> prior = compensationReceipt(c, operation, requestHash);

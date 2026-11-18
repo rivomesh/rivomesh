@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.10",
+  "version": "0.11",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -727,14 +727,14 @@
       "id": "RC-09",
       "epic": "RECOVERY",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "补偿作业的跨节点持久化和恢复",
         "en": "Durable distributed recovery jobs"
       },
       "gap": {
-        "zh-CN": "已支持跨节点计划、审批、证据与目标凭据。补偿和手工修正的跨节点取消与提交边界强杀恢复仍待验收。",
-        "en": "Cross-node planning, approval, evidence and destination receipts are available. Cancellation and process termination at compensation/correction commit boundaries remain open."
+        "zh-CN": "首批 SQL 档案通过跨节点计划、审批、取消与原请求恢复。真实提交边界测试以 PostgreSQL 17 为恢复目标。",
+        "en": "The bounded SQL profile passes cross-entry planning, approval, cancellation and original-request recovery. Native commit-boundary tests use PostgreSQL 17 as the recovery destination."
       },
       "acceptance": {
         "zh-CN": "远端目标的计划、批准、取消、凭据和原始数据位置可追踪；控制/执行节点强杀后以同一请求恢复；已提交不重复、未提交回滚；跳过后不自动宣称业务接管完成。",
@@ -748,8 +748,17 @@
       ],
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
-        "docs/verification/README.md"
-      ]
+        "docs/verification/README.md",
+        "tests/global-control-pipeline.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/DurableCommands.java",
+        "docs/zh-CN/transaction-compensation.md",
+        "docs/en/transaction-compensation.md"
+      ],
+      "verification": {
+        "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL."
+      }
     },
     {
       "id": "RC-10",

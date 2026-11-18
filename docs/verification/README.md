@@ -45,3 +45,9 @@ RC-07 手工修正候选包 `33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7
 Java 8 的 V3 反应堆测试通过 56 项，包括多库全量与增量、无主键、JSON、生成列、LOCAL 和外部日志及原事务恢复。冻结包 `cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829` 另通过两项原生 HA 检查。GTID 主从提升后从已有断点继续，单主组复制在全量中途选主后只重取未完成快照。验证源为 ARM64 的 `mysql:8.2.0`，启用 GTID、ROW binlog 和 FULL 行镜像。
 
 The Java 8 reactor passed 56 V3 tests. The frozen package passed one native async promotion scenario and one native single-primary group election scenario. The HA profiles used PostgreSQL and openGauss targets. Reproduce all three source profiles with `tests/matrix.sh --v3 8.2.0`. JV-02 tracks the other JDK combinations.
+
+### RC-09 · 跨节点恢复作业 / Distributed recovery jobs
+
+候选包 `c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3` 通过 42 项 Java 检查、108 项界面检查、4 项 PostgreSQL 原生补偿、4 项 MySQL 原生修正和 14 项真实 CDC 检查。两个控制器以原请求 ID 取消排队和运行中的作业。补偿及手工修正均在等待目标 SQL 锁时强杀 Agent，验证无部分写入，以原请求继续。目标提交后、Agent 写入本地结果前再强杀 Agent，并关闭原管理入口。重启后由仍在线的入口读取同一原生回执，目标保持暂停，日志 ACK 不动。
+
+Real CDC used MySQL 8.4 source and healthy peer, PostgreSQL 17 recovery destination and control storage, Java 8, and the original Agent with a LOCAL/H2 journal. PostgreSQL compensation and MySQL correction separately passed four native checks each. The process fault fixture is test-only.

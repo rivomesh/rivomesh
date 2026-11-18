@@ -55,6 +55,28 @@ export function registerRecoveryTests({setup,flush,login}){
  test('language switching updates skip approval inside an already open evidence dialog',async()=>{
   const ui=fixture();try{await openReview(ui);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/按完整事务跳过/);ui.d.getElementById('language').click();assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/Skip a complete transaction/);assert.match(ui.d.querySelector('.recovery-skip-approval').textContent,/accept the resulting data gap/);}finally{ui.dom.window.close();}
  });
+ test('cross-node cancellation binds the request and hides unavailable or completed controls',async()=>{
+  for(const options of [{},{role:'OPERATOR'},{enabled:false}]){
+   const ui=fixture(options);
+   const original={id:'correction_original_123',action:'CORRECTION_EXECUTE',status:'ACCEPTED'};
+   ui.task.operations.push(original,{id:'completed_plan_123',action:'COMPENSATION_PLAN',status:'SUCCEEDED'});
+   try{
+    await login(ui);
+    const selector='[data-recovery-action="RECOVERY_CANCEL"]',button=ui.d.querySelector(selector);
+    if(options.role||options.enabled===false){assert.equal(button,null);continue;}
+    assert.equal(ui.d.querySelectorAll(selector).length,1);
+    ui.task.revision='current-shared-revision';
+    button.click();await flush();
+    const [call]=ui.calls.filter(value=>value.path.endsWith('/actions'));
+    assert.ok(call.headers['X-Request-ID']);
+    assert.deepEqual(JSON.parse(call.body),{action:'RECOVERY_CANCEL',expectedRevision:'current-shared-revision',
+     subscriptionId:null,errorCount:-1,parentRequestId:original.id});
+    ui.task.operations.push({id:'cancellation_123',action:'RECOVERY_CANCEL',status:'PENDING',parentRequestId:original.id});
+    await ui.w.RivomeshConfiguration.refresh();
+    assert.ok(ui.d.querySelector(selector).disabled);
+   }finally{ui.dom.window.close();}
+  }
+ });
  test('compensation preview and approval bind failure evidence and current task revision',async()=>{
   const ui=fixture();try{
    await openReview(ui);

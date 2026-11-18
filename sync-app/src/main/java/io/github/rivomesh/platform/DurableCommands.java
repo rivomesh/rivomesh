@@ -89,12 +89,12 @@ final class DurableCommands {
         if(executionRoles)db.requireExecutionRole(c,task.owner);
         long acceptedCount=root(c);authorize(request,actor);if(read(c,request.requestId)!=null)throw new TaskService.Conflict("REQUEST_ID_REUSED");
         if(request.kind==TaskRequest.Kind.ACTION)try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("task_request")+" WHERE cluster_id=? AND request_id=?",cluster,request.requestId);ResultSet r=p.executeQuery()){if(r.next())throw new TaskService.Conflict("REQUEST_ID_REUSED");}
-        boolean cancellation=request.kind==TaskRequest.Kind.ACTION&&Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL","GAP_VERIFY_CANCEL").contains(request.action);Stored parent=null;
+        boolean cancellation=request.recoveryCancel()||request.kind==TaskRequest.Kind.ACTION&&Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL","GAP_VERIFY_CANCEL").contains(request.action);Stored parent=null;
         try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("command")+" WHERE cluster_id=? AND task_id=? AND phase IN ('PENDING','DISPATCHED','ACCEPTED','UNKNOWN') ORDER BY priority,created_at,request_id",cluster,task.id);ResultSet rows=p.executeQuery()){
             while(rows.next()){
                 Stored candidate=read(c,rows.getString(1));if(!cancellation)throw new TaskService.Conflict("OPERATION_PENDING");
                 if(candidate.priority==0)throw new TaskService.Conflict("CANCEL_ALREADY_REQUESTED");
-                boolean matching=candidate.request.kind==TaskRequest.Kind.ACTION&&("VALIDATE_CANCEL".equals(request.action)?Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(candidate.request.action):"GAP_VERIFY_CANCEL".equals(request.action)?Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(candidate.request.action):Arrays.asList("REPAIR_PLAN","REPAIR_EXECUTE").contains(candidate.request.action));if(matching)parent=candidate;
+                if(candidate.request.kind==TaskRequest.Kind.ACTION&&matchesCancellation(request,candidate))parent=candidate;
             }
         }
         if(cancellation&&parent==null)throw new TaskService.Conflict("CANCEL_SCOPE_CHANGED");
@@ -103,6 +103,16 @@ final class DurableCommands {
         db.update(c,"INSERT INTO "+db.table("command")+" (cluster_id,request_id,task_id,owner_id,phase,priority,created_at,envelope) VALUES (?,?,?,?,?,?,?,?)",cluster,command.id,command.task,command.owner,command.phase,command.priority,command.createdAt,cipher.seal("command/"+command.id,Model.JSON.writeValueAsString(command)));
         long nextCount=Math.addExact(acceptedCount,1);db.update(c,"UPDATE "+db.table("command_root")+" SET accepted_count=?,state_hash=? WHERE cluster_id=?",nextCount,stateHash(nextCount),cluster);
         AuditStore.Event event=new AuditStore.Event();event.kind="GLOBAL_COMMAND_ACCEPTED";event.taskId=task.id;event.action=request.action==null?request.kind.name():request.action;event.actorId=actor.id;event.actorRole=actor.role.name();event.clientRequestHash=AuditStore.hash(command.id);event.status="PENDING";access.append(c,event);return command;
+    }
+    private static boolean matchesCancellation(TaskRequest request,Stored parent){
+        String action=parent.request.action;
+        switch(request.action){
+            case "VALIDATE_CANCEL":return Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(action);
+            case "REPAIR_CANCEL":return Arrays.asList("REPAIR_PLAN","REPAIR_EXECUTE").contains(action);
+            case "GAP_VERIFY_CANCEL":return Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);
+            case "RECOVERY_CANCEL":return request.reference.equals(parent.id)&&TaskRequest.cancellableRecovery(action);
+            default:return false;
+        }
     }
     Map<String,Object> enqueue(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.kind!=TaskRequest.Kind.ACTION)throw new IllegalArgumentException("COMMAND_ACTION_REQUIRED");
@@ -199,7 +209,7 @@ final class DurableCommands {
         if(!lease.nodeId.equals(command.owner)||!directory.equals(command.directory)||command.dispatchEpoch!=lease.epoch||!Objects.equals(command.dispatchIncarnation,lease.incarnation)||dispatch.command.dispatchEpoch!=lease.epoch||!Objects.equals(dispatch.command.dispatchIncarnation,lease.incarnation))throw new ControlStore.Fenced();return command;
     }
     void complete(Dispatch dispatch,String phase,String code,AgentDirectory agents,ControlStore.Lease lease,String directory)throws Exception{
-        if(!Arrays.asList("DISPATCHED","ACCEPTED","UNKNOWN","SUCCEEDED","FAILED","REJECTED").contains(phase)||code==null||!code.matches("[A-Z0-9_]{1,120}"))throw new IllegalArgumentException("COMMAND_OUTCOME_INVALID");
+        if(!Arrays.asList("DISPATCHED","ACCEPTED","UNKNOWN","SUCCEEDED","FAILED","REJECTED","CANCELLED").contains(phase)||code==null||!code.matches("[A-Z0-9_]{1,120}"))throw new IllegalArgumentException("COMMAND_OUTCOME_INVALID");
         tasks.service((c,accounts)->{
             agents.require(c,lease,directory);root(c);Stored command=dispatched(c,dispatch,lease,directory);
             if(terminal(command.phase)){if(!command.phase.equals(phase)||!Objects.equals(command.code,code))throw new TaskService.Conflict("COMMAND_OUTCOME_CHANGED");return null;}

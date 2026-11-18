@@ -29,7 +29,8 @@ parser.add_argument('--managed-commit', action='store_true', help='Protocol6 man
 parser.add_argument('--managed-skip', action='store_true', help='Protocol7 complete-transaction skip and lost source-ACK recovery with durable gaps')
 parser.add_argument('--compensation', action='store_true', help='Exercise real CDC before-image compensation across two management entries')
 parser.add_argument('--correction', action='store_true', help='Check administrator typed correction and JSON import against a real failed CDC transaction')
-parser.add_argument('--test-classes', type=Path, help='Frozen test-only lost-ACK injector;required for --managed-commit')
+parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
+parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
 if args.control_product == 'MYSQL' and not args.separate_execution:
     parser.error('MySQL control-store business acceptance requires --separate-execution')
@@ -47,6 +48,11 @@ if args.managed_commit and not (args.checkpoint_inspection and args.test_classes
     parser.error('--managed-commit requires --checkpoint-inspection and --test-classes')
 if args.managed_skip and not args.managed_commit:
     parser.error('--managed-skip requires --managed-commit and its original evidence/fixture dependencies')
+if args.recovery_jobs and not (args.separate_execution and (args.compensation or args.correction)
+                               and not any((args.runtime_image, args.failure_diagnostics, args.snapshot_diagnostics,
+                                            args.managed_failure_review, args.managed_commit))
+                               and args.test_classes and args.test_classes.resolve().is_dir()):
+    parser.error('--recovery-jobs requires --separate-execution, --compensation or --correction, and --test-classes')
 jar = args.artifact.resolve()
 digest = hashlib.sha256(jar.read_bytes()).hexdigest()
 output = args.output.resolve()
@@ -77,6 +83,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'managedSkip': args.managed_skip,
             'compensation': args.compensation,
             'correction': args.correction,
+            'recoveryJobs': args.recovery_jobs,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
 def passed(name):
     checks.append(name)
@@ -139,13 +146,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             volumes[node + '-data'] = {}
             services[node]['image'] = args.runtime_image
             services[node]['volumes'] = [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture:ro', node + '-data:/app/data']
-    if args.managed_commit:
+    if args.managed_commit or args.recovery_jobs:
         classes=args.test_classes.resolve();classes.relative_to(ROOT)
         services[owner_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
         test_hash=hashlib.sha256()
         for entry in sorted(classes.rglob('*')):
             if entry.is_file():test_hash.update(str(entry.relative_to(classes)).encode()+b'\0'+entry.read_bytes())
         manifest['testClassesSha256']=test_hash.hexdigest()
+    if args.recovery_jobs:
+        services[owner_node]['entrypoint'] = [
+            'java', '-Xmx512m', '-cp', '/app/rivomesh.jar:/fixture-tests',
+            'io.github.rivomesh.platform.RecoveryAgentFixture',
+            '/fixture/' + owner_node + '.json', '/fixture/kill-after-recovery-commit']
     composition = home / 'compose.json'
     composition.write_text(json.dumps({'services': services, 'volumes': volumes}))
 
@@ -182,7 +194,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             response = error
         with response:
             value = json.loads(response.read())
-            assert response.status == expected, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
+            allowed = expected if isinstance(expected, tuple) else (expected,)
+            assert response.status in allowed, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
             return value
 
     route = '/api/tasks/global_cdc'
@@ -209,6 +222,120 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             wait(lambda: outcome(request, node), name)
         return request, accepted
 
+    def terminate_owner():
+        compose('kill', '-s', 'SIGKILL', owner_node)
+        wait(lambda: task().get('ownerState') != 'HEALTHY', 'owner offline before replay')
+
+    def restart_owner():
+        compose('up', '-d', owner_node)
+        address(owner_node)
+        wait(lambda: http(owner_node, '/readyz')['status'] == 'UP', 'original Agent ready after recovery fault')
+
+    def recovery_write(name, original_ack, unchanged, **options):
+        if not args.recovery_jobs:
+            return action(name, node='node-a', **options)
+
+        command = ['docker', 'compose', '-p', project, '-f', str(composition), 'exec', '-T', 'postgres',
+                   'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'sync_test',
+                   '-c', "SET application_name='rm_fixture_recovery_lock'; BEGIN; "
+                         "LOCK TABLE rm_pg_sales.items IN SHARE MODE; SELECT pg_sleep(120); COMMIT"]
+        blocked = " FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE 'LOCK TABLE %SHARE ROW EXCLUSIVE MODE%' "
+        marker = home / 'kill-after-recovery-commit'
+        metadata = 'rm_pg_meta.rm3_sink_compensation'
+
+        def receipt(request):
+            return sql('postgres', f"SELECT payload_hash FROM {metadata} WHERE operation_id='{request}'")
+
+        def block_target():
+            process = subprocess.Popen(command, env=env, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            wait(lambda: sql('postgres', "SELECT COUNT(*) FROM pg_stat_activity WHERE "
+                       "application_name='rm_fixture_recovery_lock' AND wait_event='PgSleep'") == '1',
+                 'fixture holds target table lock')
+            return process
+
+        def release_target(process):
+            try:
+                sql('postgres', "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name='rm_fixture_recovery_lock'")
+            finally:
+                process.wait(timeout=10)
+
+        def check_paused():
+            def paused():
+                observed = task()
+                sub = next((item for item in observed.get('status',{}).get('subscriptions',[]) if item['id'] == 'pg'), None)
+                return observed['desired'] == 'PAUSED' and sub and sub['acknowledged'] == original_ack
+            wait(paused, 'Agent publishes the original pause and ACK after recovery')
+
+        # While the Agent is offline the command store can cancel a queued request without touching business rows.
+        terminate_owner()
+        queued, _ = action(name, node='node-a', complete=False, **options)
+        cancel_queued, _ = action('RECOVERY_CANCEL', node='node-b', complete=False, parentRequestId=queued)
+        restart_owner()
+        wait(lambda: outcome(cancel_queued) and operation(queued)['status'] == 'CANCELLED', 'queued cancellation after restart')
+        assert operation(queued)['code'] == 'CANCELLED_BEFORE_DISPATCH' and unchanged()
+        check_paused()
+        passed(name + ': offline request cancelled by either controller before dispatch')
+
+        # Prove that a running write is interrupted and resolved read-only with neither a receipt nor a row mutation.
+        runner = block_target()
+        try:
+            stopped, _ = action(name, node='node-a', complete=False, **options)
+            wait(lambda: sql('postgres', 'SELECT COUNT(*)' + blocked) == '1', 'running recovery waits on real business lock')
+            invalid = dict(action='RECOVERY_CANCEL', expectedRevision=task()['revision'], parentRequestId=queued)
+            assert http('node-b', route+'/actions', invalid, expected=409)['code'] == 'CANCEL_SCOPE_CHANGED'
+            invalid['parentRequestId'] = stopped
+            assert http('node-b', route+'/actions', invalid, expected=403, token=env['RM_GC_OPERATOR'])['code'] == 'FORBIDDEN'
+            cancel_running, _ = action('RECOVERY_CANCEL', node='node-b', parentRequestId=stopped)
+            wait(lambda: operation(stopped)['status'] == 'CANCELLED', 'running recovery cancellation resolved', seconds=60)
+            assert runner.poll() is None, 'native lock wait expired before the held business lock was released'
+            assert operation(cancel_running)['parentRequestId'] == stopped
+            assert operation(stopped)['code'] == 'RECOVERY_CANCELLED' and not receipt(stopped) and unchanged()
+            check_paused()
+            passed(name + ': another controller cancels blocked SQL under the exact original request; target and ACK unchanged')
+        finally:
+            release_target(runner)
+
+        # Leave the same request pending after a pre-commit SIGKILL, then crash the retry just after its native commit.
+        runner = block_target()
+        original = 'gc_recover_' + uuid.uuid4().hex
+        body = dict(action=name, expectedRevision=task()['revision'], **options)
+        try:
+            accepted = http('node-a', route+'/actions', body, request=original, expected=202)
+            wait(lambda: sql('postgres', 'SELECT COUNT(*)' + blocked) == '1', 'original write reaches pre-commit lock')
+            terminate_owner()
+            assert not receipt(original) and unchanged()
+            wait(lambda: operation(original)['status'] == 'PENDING', 'original request retained after pre-commit kill')
+            passed(name + ': pre-commit SIGKILL keeps exactly the original request pending without a partial commit')
+            marker.write_text(original+'\n')
+        finally:
+            release_target(runner)
+
+        compose('up', '-d', owner_node)
+        wait(lambda: not marker.exists() and receipt(original), 'original write commits and the fixture halts the Agent')
+        wait(lambda: 'Exited (137)' in compose('ps', '-a', owner_node).stdout, 'Agent exits before local owner receipt')
+        native = receipt(original)
+        controller = json.loads((home / owner_node / 'controller' / 'controller.json').read_text())
+        owner_operation = next(op for op in controller['tasks']['global_cdc']['operations'] if op['id'] == original)
+        assert owner_operation['status'] == 'PENDING'
+        assert not unchanged()
+        compose('kill', '-s', 'SIGKILL', 'node-a')
+        restart_owner()
+        wait(lambda: outcome(original, 'node-b'), 'surviving controller observes original replay receipt')
+        def visible_receipt():
+            settled = next(op for op in task('node-b')['operations'] if op['id'] == original)
+            return settled.get('result') if settled.get('result', {}).get('operation') == original else None
+        settled = wait(visible_receipt, 'original native result published through the surviving controller')
+        assert receipt(original) == native
+        assert sql('postgres', f"SELECT COUNT(*) FROM {metadata} WHERE operation_id='{original}'") == '1'
+        http('node-b', route+'/actions', body, request=original, expected=202)
+        assert visible_receipt() == settled
+        compose('up', '-d', 'node-a')
+        address('node-a')
+        wait(lambda: outcome(original), 'original management entry sees the same result after restart')
+        check_paused()
+        passed(name + ': post-commit Agent loss and controller loss preserve one native receipt and the same cross-entry result')
+        return original, accepted
+
     def equal_rows():
         for service, prefix in [('postgres', 'rm_pg'), ('mysql-target', 'rm_my')]:
             assert sql(service, 'SELECT id,note,derived FROM ' + prefix + '_sales.items ORDER BY id') == sql('mysql', 'SELECT id,note,derived FROM sales.items ORDER BY id')
@@ -227,6 +354,126 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         except subprocess.CalledProcessError as failure:
             diagnostics['sqlError'] = failure.stderr[-1500:]
             return False
+
+    def run_recovery_cases():
+        if args.compensation:
+            baseline_note = sql('mysql', 'SELECT note FROM sales.items WHERE id=1')
+            baseline_amount = sql('mysql', 'SELECT amount FROM billing.ledger WHERE id=1')
+            sql('postgres', """INSERT INTO rm_pg_sales.items(id,note,payload,derived) VALUES(97,'conflicting key','{"n":97}',194);
+                    UPDATE rm_pg_sales.items SET note='destination drift' WHERE id=1;
+                    UPDATE rm_pg_billing.ledger SET amount=999 WHERE id=1;
+                    UPDATE rm_pg_sales.duplicates SET value=90 WHERE value=7""")
+            sql('mysql', """START TRANSACTION;
+                UPDATE sales.items SET note='before primary-key move',payload=JSON_OBJECT('n',12) WHERE id=1;
+                UPDATE sales.items SET id=97,note='after primary-key move' WHERE id=1;
+                UPDATE sales.duplicates SET value=98 WHERE value=7 LIMIT 1;
+                UPDATE billing.ledger SET amount=987.65 WHERE id=1;
+                COMMIT""")
+
+            def compensation_failure():
+                sub = next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
+                return sub if sub.get('state')=='PAUSED' and sub.get('failurePhase')=='TARGET_APPLY' else None
+
+            sub = wait(compensation_failure, 'duplicate-key transaction fails atomically on PostgreSQL')
+            wait(lambda:sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=97')=='after primary-key move','healthy peer applies the original transaction')
+            action('PAUSE', node='node-b')
+            options = dict(subscriptionId='pg',errorCount=sub['errorGeneration'])
+            evidence_request,_ = action('FAILURE_REVIEW',node='node-a',**options)
+            evidence = operation(evidence_request)
+            scope = dict(evidenceId=evidence['failureEvidenceId'],evidenceHash=evidence['result']['hash'])
+            plan_request,_ = action('COMPENSATION_PLAN',node='node-b',compensation=scope,**options)
+            wait(lambda:operation(plan_request).get('result',{}).get('hash'),'owner preview visible across entries')
+            plan = operation(plan_request)['result']
+            assert plan['code']=='COMPENSATION_PLAN_READY' and len(plan['tables'])==3
+            assert sum(t['identities'] for t in plan['tables'].values())==4
+            assert sum(t['deletes'] for t in plan['tables'].values())==4
+            assert sum(t['inserts'] for t in plan['tables'].values())==3
+            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=97')=='conflicting key'
+            approved = dict(scope,approvedHash=plan['hash'],reason='Restore four reviewed identities before replaying the original cross-database transaction')
+            revision = task()['revision']
+            replay = dict(action='COMPENSATION_EXECUTE',expectedRevision=revision,compensation=approved,**options)
+            assert http('node-a',route+'/actions',replay,request='denied_compensation',expected=403,token=env['RM_GC_OPERATOR'])['code']=='FORBIDDEN'
+            applied,_ = recovery_write('COMPENSATION_EXECUTE', sub['acknowledged'],
+                                       lambda: sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=97')=='conflicting key',
+                                       compensation=approved,**options)
+            wait(lambda:operation(applied).get('result',{}).get('hash'),'owner compensation receipt visible across entries')
+            receipt = operation(applied)['result']
+            assert receipt['code']=='COMPENSATION_COMPLETED'
+            assert task()['desired']=='PAUSED' and compensation_failure()['acknowledged']==sub['acknowledged']
+            if args.recovery_jobs:
+                # The helper already retries the original body. This deliberately uses the revision before cancellation.
+                assert http('node-b',route+'/actions',replay,request=applied,expected=409)['code']=='REQUEST_ID_REUSED'
+            else:
+                http('node-b',route+'/actions',replay,request=applied,expected=202)
+            assert operation(applied)['result']==receipt
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=97')=='0'
+            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=1')==baseline_note
+            assert sql('postgres','SELECT amount FROM rm_pg_billing.ledger WHERE id=1')==baseline_amount
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.duplicates WHERE value=7')=='1'
+            action('RESUME_TARGET',**options)
+            action('RESUME',errorCount=task()['status']['error_count'])
+            wait(rows_match,'original cross-database transaction replays after compensation')
+            passed('Cross-entry compensation restores keyed/keyless before-images and original primary key,retains pause/ACK,then normal CDC reproduces the original transaction')
+        if args.correction:
+            if args.compensation:
+                sql('mysql', "INSERT INTO sales.duplicates VALUES(7,JSON_OBJECT('n',7))")
+            sql('mysql', """INSERT INTO sales.items(id,note,payload)
+                VALUES(98,'reviewed pre-image',JSON_OBJECT('n',18446744073709551615))""")
+            wait(rows_match,'baseline for manual correction')
+            occurrence=sql('postgres','SELECT _rivomesh_row_id FROM rm_pg_sales.duplicates WHERE value=7')
+            assert len(occurrence)==64
+            sql('postgres', """DELETE FROM rm_pg_sales.items WHERE id=98;
+                INSERT INTO rm_pg_sales.items(id,note,derived) VALUES(99,'private extra row',198);
+                UPDATE rm_pg_sales.duplicates SET value=96 WHERE value=7""")
+            sql('mysql', """START TRANSACTION;
+                UPDATE sales.items SET note='original replay' WHERE id=98;
+                UPDATE sales.duplicates SET value=97 WHERE value=7 LIMIT 1;
+                COMMIT""")
+
+            def manual_failure():
+                subscriber=next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
+                return subscriber if subscriber.get('state')=='PAUSED' and subscriber.get('failurePhase')=='TARGET_APPLY' else None
+
+            failed=wait(manual_failure,'the original transaction fails on a missing target row')
+            wait(lambda:sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=98')=='original replay','healthy target delivers the original transaction')
+            action('PAUSE')
+            options=dict(subscriptionId='pg',errorCount=failed['errorGeneration'])
+            reviewed,_=action('FAILURE_REVIEW',node='node-a',**options)
+            wait(lambda:operation(reviewed).get('result',{}).get('hash'),'restored evidence visible on both controllers')
+            evidence=operation(reviewed)
+            scope=dict(evidenceId=evidence['failureEvidenceId'],evidenceHash=evidence['result']['hash'])
+            request=lambda value:dict(expectedRevision=task()['revision'],correction=value,**options)
+            assert http('node-a',route+'/corrections/schema',request(scope),expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
+            schema=http('node-b',route+'/corrections/schema',request(scope))
+            ids={item['name']:item['id'] for item in schema['tables']}
+            edits=[
+                dict(tableId=ids['sales.items'],action='INSERT',values=dict(id='98',note='reviewed pre-image',payload='{"n":18446744073709551615}',derived='196')),
+                dict(tableId=ids['sales.items'],action='DELETE',key=dict(id='99')),
+                dict(tableId=ids['sales.duplicates'],action='UPDATE',rowId=occurrence,values=dict(value='7')),
+            ]
+            malformed=dict(scope,importJson='{"edits":[],"edits":[]}')
+            assert http('node-a',route+'/corrections/preview',request(malformed),expected=409)['code']=='CORRECTION_IMPORT_INVALID'
+            patch=dict(scope,importJson=json.dumps(dict(edits=edits)))
+            preview=http('node-b',route+'/corrections/preview',request(patch))
+            assert preview['code']=='CORRECTION_PLAN_READY' and len(preview['rows'])==3
+            assert any(row['before'] and row['before'].get('note')=='private extra row' for row in preview['rows'])
+            assert any(row['after'] and '18446744073709551615' in (row['after'].get('payload') or '') for row in preview['rows'])
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0'
+            approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
+            applied,accepted=recovery_write('CORRECTION_EXECUTE', failed['acknowledged'],
+                                             lambda: sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0',
+                                             correction=approved,**options)
+            assert 'reviewed pre-image' not in json.dumps(accepted)
+            wait(lambda:operation(applied).get('result',{}).get('code')=='CORRECTION_COMPLETED','target receipt visible through both entries')
+            assert 'reviewed pre-image' not in json.dumps(operation(applied))
+            assert task()['desired']=='PAUSED' and manual_failure()['acknowledged']==failed['acknowledged']
+            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=98')=='reviewed pre-image'
+            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=99')=='0'
+            assert sql('postgres',"SELECT value FROM rm_pg_sales.duplicates WHERE _rivomesh_row_id='"+occurrence+"'")=='7'
+            action('RESUME_TARGET',**options)
+            action('RESUME',errorCount=task()['status']['error_count'])
+            wait(rows_match,'full source and target equality after correction and normal CDC replay')
+            passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
 
     try:
         databases = ('mysql', 'mysql-target', 'postgres', 'store') if args.separate_execution else ('mysql', 'mysql-target', 'postgres')
@@ -298,6 +545,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.recovery_jobs:
+            run_recovery_cases()
+            action('STOP')
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_RECOVERY_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.separate_execution:
             original_workers = worker_pids()
             assert len(original_workers) == 1
@@ -332,7 +586,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert worker_pids() == original_workers
             compose('start', 'store')
             wait(lambda: sql('store', 'SELECT 1') == '1', 'control store restart')
-            wait(lambda: task().get('ownerState') == 'HEALTHY', 'Agent renews registration after store outage')
+            wait(lambda: http('node-a', route, expected=(200, 503)).get('ownerState') == 'HEALTHY',
+                 'Agent renews registration after store outage')
             assert worker_pids() == original_workers
             passed('LOCAL journal CDC retains the same Worker during control-store outage; management refuses control and recovers after lease expiry')
         sql('postgres', 'ALTER TABLE rm_pg_sales.items ADD CONSTRAINT gc_block CHECK(id<>9)')
@@ -620,114 +875,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert all(row['verificationId']==review_request for row in after)
             passed('Cross-entry reviewed gap verification freshly scans two affected tables,atomically records both gaps and preserves SKIP history and the whole-task pause')
 
-        if args.compensation:
-            baseline_note = sql('mysql', 'SELECT note FROM sales.items WHERE id=1')
-            baseline_amount = sql('mysql', 'SELECT amount FROM billing.ledger WHERE id=1')
-            sql('postgres', """INSERT INTO rm_pg_sales.items(id,note,payload,derived) VALUES(97,'conflicting key','{"n":97}',194);
-                    UPDATE rm_pg_sales.items SET note='destination drift' WHERE id=1;
-                    UPDATE rm_pg_billing.ledger SET amount=999 WHERE id=1;
-                    UPDATE rm_pg_sales.duplicates SET value=90 WHERE value=7""")
-            sql('mysql', """START TRANSACTION;
-                UPDATE sales.items SET note='before primary-key move',payload=JSON_OBJECT('n',12) WHERE id=1;
-                UPDATE sales.items SET id=97,note='after primary-key move' WHERE id=1;
-                UPDATE sales.duplicates SET value=98 WHERE value=7 LIMIT 1;
-                UPDATE billing.ledger SET amount=987.65 WHERE id=1;
-                COMMIT""")
-
-            def compensation_failure():
-                sub = next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
-                return sub if sub.get('state')=='PAUSED' and sub.get('failurePhase')=='TARGET_APPLY' else None
-
-            sub = wait(compensation_failure, 'duplicate-key transaction fails atomically on PostgreSQL')
-            wait(lambda:sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=97')=='after primary-key move','healthy peer applies the original transaction')
-            action('PAUSE', node='node-b')
-            options = dict(subscriptionId='pg',errorCount=sub['errorGeneration'])
-            evidence_request,_ = action('FAILURE_REVIEW',node='node-a',**options)
-            evidence = operation(evidence_request)
-            scope = dict(evidenceId=evidence['failureEvidenceId'],evidenceHash=evidence['result']['hash'])
-            plan_request,_ = action('COMPENSATION_PLAN',node='node-b',compensation=scope,**options)
-            wait(lambda:operation(plan_request).get('result',{}).get('hash'),'owner preview visible across entries')
-            plan = operation(plan_request)['result']
-            assert plan['code']=='COMPENSATION_PLAN_READY' and len(plan['tables'])==3
-            assert sum(t['identities'] for t in plan['tables'].values())==4
-            assert sum(t['deletes'] for t in plan['tables'].values())==4
-            assert sum(t['inserts'] for t in plan['tables'].values())==3
-            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=97')=='conflicting key'
-            approved = dict(scope,approvedHash=plan['hash'],reason='Restore four reviewed identities before replaying the original cross-database transaction')
-            revision = task()['revision']
-            replay = dict(action='COMPENSATION_EXECUTE',expectedRevision=revision,compensation=approved,**options)
-            assert http('node-a',route+'/actions',replay,request='denied_compensation',expected=403,token=env['RM_GC_OPERATOR'])['code']=='FORBIDDEN'
-            applied,_ = action('COMPENSATION_EXECUTE',node='node-a',compensation=approved,**options)
-            wait(lambda:operation(applied).get('result',{}).get('hash'),'owner compensation receipt visible across entries')
-            receipt = operation(applied)['result']
-            assert receipt['code']=='COMPENSATION_COMPLETED'
-            assert task()['desired']=='PAUSED' and compensation_failure()['acknowledged']==sub['acknowledged']
-            http('node-b',route+'/actions',replay,request=applied,expected=202)
-            assert operation(applied)['result']==receipt
-            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=97')=='0'
-            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=1')==baseline_note
-            assert sql('postgres','SELECT amount FROM rm_pg_billing.ledger WHERE id=1')==baseline_amount
-            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.duplicates WHERE value=7')=='1'
-            action('RESUME_TARGET',**options)
-            action('RESUME',errorCount=task()['status']['error_count'])
-            wait(rows_match,'original cross-database transaction replays after compensation')
-            passed('Cross-entry compensation restores keyed/keyless before-images and original primary key,retains pause/ACK,then normal CDC reproduces the original transaction')
-        if args.correction:
-            sql('mysql', """INSERT INTO sales.items(id,note,payload)
-                VALUES(98,'reviewed pre-image',JSON_OBJECT('n',18446744073709551615))""")
-            wait(rows_match,'baseline for manual correction')
-            occurrence=sql('postgres','SELECT _rivomesh_row_id FROM rm_pg_sales.duplicates WHERE value=7')
-            assert len(occurrence)==64
-            sql('postgres', """DELETE FROM rm_pg_sales.items WHERE id=98;
-                INSERT INTO rm_pg_sales.items(id,note,derived) VALUES(99,'private extra row',198);
-                UPDATE rm_pg_sales.duplicates SET value=96 WHERE value=7""")
-            sql('mysql', """START TRANSACTION;
-                UPDATE sales.items SET note='original replay' WHERE id=98;
-                UPDATE sales.duplicates SET value=97 WHERE value=7 LIMIT 1;
-                COMMIT""")
-
-            def manual_failure():
-                subscriber=next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
-                return subscriber if subscriber.get('state')=='PAUSED' and subscriber.get('failurePhase')=='TARGET_APPLY' else None
-
-            failed=wait(manual_failure,'the original transaction fails on a missing target row')
-            wait(lambda:sql('mysql-target','SELECT note FROM rm_my_sales.items WHERE id=98')=='original replay','healthy target delivers the original transaction')
-            action('PAUSE')
-            options=dict(subscriptionId='pg',errorCount=failed['errorGeneration'])
-            reviewed,_=action('FAILURE_REVIEW',node='node-a',**options)
-            wait(lambda:operation(reviewed).get('result',{}).get('hash'),'restored evidence visible on both controllers')
-            evidence=operation(reviewed)
-            scope=dict(evidenceId=evidence['failureEvidenceId'],evidenceHash=evidence['result']['hash'])
-            request=lambda value:dict(expectedRevision=task()['revision'],correction=value,**options)
-            assert http('node-a',route+'/corrections/schema',request(scope),expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
-            schema=http('node-b',route+'/corrections/schema',request(scope))
-            ids={item['name']:item['id'] for item in schema['tables']}
-            edits=[
-                dict(tableId=ids['sales.items'],action='INSERT',values=dict(id='98',note='reviewed pre-image',payload='{"n":18446744073709551615}',derived='196')),
-                dict(tableId=ids['sales.items'],action='DELETE',key=dict(id='99')),
-                dict(tableId=ids['sales.duplicates'],action='UPDATE',rowId=occurrence,values=dict(value='7')),
-            ]
-            malformed=dict(scope,importJson='{"edits":[],"edits":[]}')
-            assert http('node-a',route+'/corrections/preview',request(malformed),expected=409)['code']=='CORRECTION_IMPORT_INVALID'
-            patch=dict(scope,importJson=json.dumps(dict(edits=edits)))
-            preview=http('node-b',route+'/corrections/preview',request(patch))
-            assert preview['code']=='CORRECTION_PLAN_READY' and len(preview['rows'])==3
-            assert any(row['before'] and row['before'].get('note')=='private extra row' for row in preview['rows'])
-            assert any(row['after'] and '18446744073709551615' in (row['after'].get('payload') or '') for row in preview['rows'])
-            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=98')=='0'
-            approved=dict(patch,approvedHash=preview['hash'],reason='Restore the reviewed missing row and correct the exact target occurrences')
-            applied,accepted=action('CORRECTION_EXECUTE',node='node-a',correction=approved,**options)
-            assert 'reviewed pre-image' not in json.dumps(accepted)
-            wait(lambda:operation(applied).get('result',{}).get('code')=='CORRECTION_COMPLETED','target receipt visible through both entries')
-            assert 'reviewed pre-image' not in json.dumps(operation(applied))
-            assert task()['desired']=='PAUSED' and manual_failure()['acknowledged']==failed['acknowledged']
-            assert sql('postgres','SELECT note FROM rm_pg_sales.items WHERE id=98')=='reviewed pre-image'
-            assert sql('postgres','SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=99')=='0'
-            assert sql('postgres',"SELECT value FROM rm_pg_sales.duplicates WHERE _rivomesh_row_id='"+occurrence+"'")=='7'
-            action('RESUME_TARGET',**options)
-            action('RESUME',errorCount=task()['status']['error_count'])
-            wait(rows_match,'full source and target equality after correction and normal CDC replay')
-            passed('Typed JSON import previews and approves exact inserts, updates and deletes across entries, preserves business-value privacy and resumes real CDC')
+        run_recovery_cases()
         action('STOP')
         assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
         manifest['status'] = 'PASS'
@@ -743,8 +891,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             logs = compose('logs', '--no-color', '--tail', '60', node, check=False)
             diagnostics[node] = logs.stdout + logs.stderr
         safe = json.dumps(diagnostics, indent=2)
-        for key in ('RM_GC_TOKEN', 'RM_GC_CONTROL', 'RM_GC_DATA', 'RM_GC_KEY'):
-            safe = safe.replace(env[key], '[REDACTED]')
+        for key in ('RM_GC_TOKEN', 'RM_GC_CONTROL', 'RM_GC_DATA', 'RM_GC_KEY', 'RM_GC_OPERATOR', 'RM_GC_VIEWER'):
+            if key in env:
+                safe = safe.replace(env[key], '[REDACTED]')
         (output / 'diagnostics-redacted.json').write_text(safe + '\n')
         # Never archive raw configuration, passwords or unredacted controller logs.
         raise

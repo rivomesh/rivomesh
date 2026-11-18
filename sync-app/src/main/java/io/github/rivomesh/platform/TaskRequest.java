@@ -59,7 +59,9 @@ final class TaskRequest {
             if(kind==Kind.GAPS)try{if(!cursor.matches("0|[1-9][0-9]{0,18}")||Long.parseLong(cursor)<0)throw new IllegalArgumentException();}catch(RuntimeException invalid){throw new IllegalArgumentException("GAP_CURSOR_INVALID");}
         }
         if(commitRecovery()){if(commit==null)throw new IllegalArgumentException("FAILURE_ACK_REQUEST_INVALID");commit.validate();}else if(commit!=null)throw new IllegalArgumentException("FAILURE_ACK_ACTION_REQUIRED");
-        if(kind==Kind.ACTION&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(recoveryCancel()&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)))
+            throw new IllegalArgumentException("RECOVERY_CANCEL_REQUEST_INVALID");
+        if(kind==Kind.ACTION&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
     boolean skipAction(){return kind==Kind.ACTION&&Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);}
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
@@ -68,7 +70,9 @@ final class TaskRequest {
     boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||correctionRead();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}
-    boolean skipRecovery(){return correctionRead()||correctionAction()||compensationAction()||kind==Kind.ACTION&&"GAP_VERIFY_CANCEL".equals(action)||gapAction()||kind==Kind.GAP_VERIFICATION||skipAction()||kind==Kind.SKIP_PLAN||kind==Kind.SKIP_PLANS||kind==Kind.GAPS;}
+    boolean recoveryCancel(){return kind==Kind.ACTION&&"RECOVERY_CANCEL".equals(action);}
+    static boolean cancellableRecovery(String action){return CompensationRequest.handles(action)||"CORRECTION_EXECUTE".equals(action);}
+    boolean skipRecovery(){return recoveryCancel()||correctionRead()||correctionAction()||compensationAction()||kind==Kind.ACTION&&"GAP_VERIFY_CANCEL".equals(action)||gapAction()||kind==Kind.GAP_VERIFICATION||skipAction()||kind==Kind.SKIP_PLAN||kind==Kind.SKIP_PLANS||kind==Kind.GAPS;}
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
     boolean failureReview(){return kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}

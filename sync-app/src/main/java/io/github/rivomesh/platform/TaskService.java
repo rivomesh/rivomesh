@@ -78,6 +78,7 @@ public final class TaskService implements AutoCloseable {
         volatile String observedAt, problem, workerState="STOPPED";
         volatile boolean statusAvailable;
         volatile int exits; volatile long retryAt;
+        long recoveryReceiptRetryAt;
         boolean permit;
         Entry(Path path,Path configurationFile,TaskDefinition config) { this.path=path;this.configurationFile=configurationFile; this.config=config; }
     }
@@ -90,7 +91,8 @@ public final class TaskService implements AutoCloseable {
     private final ConfigurationDocuments documents=new ConfigurationDocuments();
     private final TaskWorker.Factory workers;
     private final Map<String,Entry> entries=new LinkedHashMap<>();
-    private final Map<String,Thread> validationThreads=new ConcurrentHashMap<>();
+    private final Map<String,Thread> operationThreads=new ConcurrentHashMap<>();
+    private final Map<String,AtomicBoolean> recoveryCancellations=new HashMap<>();
     private final Set<String> ownerRequests=new HashSet<>();
     private final Set<String> ownerStartBlocks=new HashSet<>();
     private final List<Map<String,String>> invalid=new ArrayList<>();
@@ -247,7 +249,7 @@ public final class TaskService implements AutoCloseable {
                 else if(operation.gapPlanId!=null){event.subjectId=operation.gapPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.skipPlanId!=null){event.subjectId=operation.skipPlanId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
                 else if(operation.failureEvidenceId!=null){event.subjectId=operation.failureEvidenceId;if(operation.result.get("hash") instanceof String)event.operationHash=(String)operation.result.get("hash");}
-                else if(Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL","GAP_VERIFY_CANCEL").contains(operation.action))event.subjectId=(String)operation.result.get("subjectId");
+                else if(Arrays.asList("VALIDATE_CANCEL","REPAIR_CANCEL","GAP_VERIFY_CANCEL","RECOVERY_CANCEL").contains(operation.action))event.subjectId=(String)operation.result.get("subjectId");
             }
         }
         writeRegistry(next);
@@ -362,7 +364,7 @@ public final class TaskService implements AutoCloseable {
             case CREATE:signature=digest("CREATE\n"+request.yaml);break;
             case CONFIG_UPDATE:signature=configurationSignature(request.taskId,request.revision,request.document);break;
             case RESTORE:signature=restoreSignature(request.taskId,request.revision,request.reference);break;
-            case ACTION:signature=actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction);break;
+            case ACTION:signature=request.recoveryCancel()?recoveryCancelSignature(request):actionSignature(request.taskId,request.action,request.revision,request.errorCount,request.subscriptionId,request.validation,request.repair,request.commit,request.skip,request.gap,request.compensation,request.correction);break;
             default:throw new IllegalArgumentException("OWNER_MUTATION_REQUIRED");
         }
         if(!Objects.equals(signature,receipt.signature)||!Objects.equals(request.taskId,receipt.taskId)||!Objects.equals(actorId,receipt.actorId)||!Objects.equals(actorRole,receipt.actorRole))throw new Conflict("OWNER_RECEIPT_MISMATCH");
@@ -420,6 +422,45 @@ public final class TaskService implements AutoCloseable {
     synchronized Map<String,Object> restoreConfiguration(String id,String selected,String revision,String request,AccessControl.Principal actor)throws Exception{
         currentActor(actor);
         ensureOpen();requestId(request);String signature=restoreSignature(id,revision,selected);if(replay(request,signature,actor)!=null)return view(id);Entry entry=require(id);Control state=registry.tasks.get(id);if(!state.revision.equals(revision))throw new Conflict("REVISION_CHANGED");ConfigurationVersions.Stored stored=resolveReference(id,state,selected);TaskDefinition candidate=TaskDefinition.parse(stored.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));if(!id.equals(candidate.jobId))throw new Conflict("CONFIG_TASK_ID_CHANGED");validateTask(candidate,id);return commitConfiguration(id,candidate,revision,request,signature,actor,"RESTORE_CONFIG");
+    }
+    private static String recoveryCancelSignature(TaskRequest request)throws Exception{
+        return digest("RECOVERY_CANCEL\n"+request.taskId+"\n"+request.revision+"\n"+request.reference);
+    }
+    synchronized Map<String,Object> cancelRecovery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        ensureOpen();
+        TaskRequest request=supplied.snapshot();
+        if(!request.recoveryCancel())throw new IllegalArgumentException("ACTION_INVALID");
+        currentActor(actor);
+        if(actor==null||!actor.administers()||!actor.task(request.taskId))throw new SecurityException("FORBIDDEN");
+        if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");
+        String signature=recoveryCancelSignature(request);
+        if(replay(request.requestId,signature,actor)!=null)return view(request.taskId);
+        require(request.taskId);
+        Registry next=copy();
+        Control task=next.tasks.get(request.taskId);
+        if(!task.revision.equals(request.revision))throw new Conflict("REVISION_CHANGED");
+        Operation parent=task.operations.stream().filter(op->request.reference.equals(op.id)&&TaskRequest.cancellableRecovery(op.action))
+                .findFirst().orElseThrow(()->new Conflict("CANCEL_SCOPE_CHANGED"));
+        if(parent.cancelRequested)throw new Conflict("CANCEL_ALREADY_REQUESTED");
+        boolean running="PENDING".equals(parent.status);
+        parent.cancelRequested=running;
+        Operation cancel=new Operation();
+        cancel.id=request.requestId;
+        cancel.action=request.action;
+        cancel.status="SUCCEEDED";
+        cancel.code=running?"RECOVERY_CANCEL_REQUESTED":"PARENT_ALREADY_TERMINAL";
+        cancel.actorId=actor.id;
+        cancel.actorRole=actor.role.name();
+        cancel.finishedAt=Instant.now().toString();
+        cancel.result.put("subjectId",parent.id);
+        task.operations.add(cancel);
+        while(task.operations.size()>40)task.operations.remove(0);
+        task.revision=UUID.randomUUID().toString();
+        receipt(next,request.requestId,request.taskId,signature,actor);
+        persist(next);
+        AtomicBoolean cancellation=recoveryCancellations.get(request.taskId);
+        if(running&&cancellation!=null)cancellation.set(true);
+        return view(request.taskId);
     }
     public synchronized Map<String,Object> command(String id,String action,String revision,String request,long errorCount) throws Exception {
         return command(id,action,revision,request,errorCount,null);
@@ -493,15 +534,15 @@ public final class TaskService implements AutoCloseable {
         if(!current.revision.equals(revision))throw new Conflict("REVISION_CHANGED");
         if("GAP_VERIFY_CANCEL".equals(action)){
             Registry next=copy();Control state=next.tasks.get(id);Operation pending=state.operations.stream().filter(o->"PENDING".equals(o.status)&&o.gap!=null).findFirst().orElseThrow(()->new Conflict("GAP_VERIFICATION_NOT_RUNNING"));if(pending.cancelRequested)throw new Conflict("GAP_VERIFICATION_CANCEL_ALREADY_REQUESTED");pending.cancelRequested=true;state.revision=UUID.randomUUID().toString();
-            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="GAP_VERIFICATION_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("subjectId",pending.gapPlanId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=validationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
+            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="GAP_VERIFICATION_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("subjectId",pending.gapPlanId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=operationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
         }
         if("REPAIR_CANCEL".equals(action)){
             Registry next=copy();Control state=next.tasks.get(id);Operation pending=state.operations.stream().filter(o->"PENDING".equals(o.status)&&o.repair!=null).findFirst().orElseThrow(()->new Conflict("REPAIR_NOT_RUNNING"));if(pending.cancelRequested)throw new Conflict("REPAIR_CANCEL_ALREADY_REQUESTED");pending.cancelRequested=true;state.revision=UUID.randomUUID().toString();
-            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="REPAIR_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("subjectId",pending.repair.planId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=validationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
+            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="REPAIR_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("subjectId",pending.repair.planId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=operationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
         }
         if("VALIDATE_CANCEL".equals(action)){
             Registry next=copy();Control state=next.tasks.get(id);Operation pending=state.operations.stream().filter(o->"PENDING".equals(o.status)&&o.validation!=null).findFirst().orElseThrow(()->new Conflict("VALIDATION_NOT_RUNNING"));if(pending.cancelRequested)throw new Conflict("VALIDATION_CANCEL_ALREADY_REQUESTED");pending.cancelRequested=true;state.revision=UUID.randomUUID().toString();
-            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="VALIDATION_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("reportId",pending.validation.reportId);cancel.result.put("subjectId",pending.validation.reportId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=validationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
+            Operation cancel=new Operation();cancel.id=request;cancel.action=action;cancel.status="SUCCEEDED";cancel.code="VALIDATION_CANCEL_REQUESTED";cancel.finishedAt=Instant.now().toString();cancel.actorId=actor.id;cancel.actorRole=actor.role.name();cancel.result.put("reportId",pending.validation.reportId);cancel.result.put("subjectId",pending.validation.reportId);state.operations.add(cancel);receipt(next,request,id,signature,actor);persist(next);Thread thread=operationThreads.get(id);if(thread!=null)thread.interrupt();return view(id);
         }
         if(current.operations.stream().anyMatch(o -> "PENDING".equals(o.status)))throw new Conflict("OPERATION_PENDING");
         if(validating){
@@ -550,27 +591,44 @@ public final class TaskService implements AutoCloseable {
     }
     private void reconcile(String id,Entry entry) throws Exception {
         // Paused/status/CLI access must not repeatedly replace H2 AUTO_SERVER endpoints.
+        synchronized(this){if(closed)return;}
         entry.config.holdExistingLocalJournal();
         if(entry.projectionPending)project(entry);
         Operation pending;String desired;
         synchronized(this){Control c=registry.tasks.get(id);desired=c.desired;pending=c.operations.stream().filter(o -> "PENDING".equals(o.status)).findFirst().orElse(null);}
         if(pending!=null) {
             String code="OK";Map<String,Object> result=new LinkedHashMap<>();Exception failure=null;
+            boolean cancellableRecovery=TaskRequest.cancellableRecovery(pending.action);
+            boolean recoveryCancelled=false;
+            AtomicBoolean cancellation=new AtomicBoolean();
+            if(cancellableRecovery){
+                synchronized(this){
+                    if(closed)return;
+                    recoveryCancelled=registry.tasks.get(id).operations.stream()
+                            .anyMatch(op->pending.id.equals(op.id)&&op.cancelRequested);
+                    if(recoveryCancelled&&System.currentTimeMillis()<entry.recoveryReceiptRetryAt)return;
+                    recoveryCancellations.put(id,cancellation);
+                }
+            }
             try {
-                switch(pending.action) {
+                if(recoveryCancelled){
+                    result="COMPENSATION_PLAN".equals(pending.action)?null:backend.recoveryReceipt(entry.config,
+                            failureEvidenceDirectory(id),failureEvidenceScope(id),pending);
+                    code=result==null?"RECOVERY_CANCELLED":String.valueOf(result.get("code"));
+                }else switch(pending.action) {
                     case "CHECK":result=backend.check(entry.config);break;
                     case "VALIDATE":case "VALIDATE_RETRY":
-                        synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("VALIDATION_CANCELLED");validationThreads.put(id,Thread.currentThread());}
+                        synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("VALIDATION_CANCELLED");operationThreads.put(id,Thread.currentThread());}
                         if(pending.validation==null)throw new Conflict("VALIDATION_OPTIONS_REQUIRED");
                         if("VALIDATE".equals(pending.action)&&!Files.exists(reports(id).resolve(pending.validation.reportId))&&(entry.worker==null||!entry.worker.alive()))throw new Conflict("VALIDATION_WORKER_REQUIRED");
                         result=backend.validateRows(entry.config,reports(id),pending.validation,"VALIDATE_RETRY".equals(pending.action));code=String.valueOf(result.get("code"));break;
                     case "REPAIR_PLAN":case "REPAIR_EXECUTE":
-                        synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("REPAIR_CANCELLED");validationThreads.put(id,Thread.currentThread());}
+                        synchronized(this){if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("REPAIR_CANCELLED");operationThreads.put(id,Thread.currentThread());}
                         if(pending.repair==null||pending.actorId==null)throw new Conflict("REPAIR_OPTIONS_REQUIRED");
                         result=backend.repair(entry.config,reports(id),pending.repair,"REPAIR_EXECUTE".equals(pending.action),pending.actorId,pending.id,pending.createdAt);code=String.valueOf(result.get("code"));break;
                     case "GAP_VERIFY_PLAN":case "GAP_VERIFY_EXECUTE":
                         if(pending.gap==null||pending.actorId==null||pending.gapPlanId==null)throw new Conflict("GAP_VERIFICATION_REQUEST_INVALID");
-                        synchronized(this){AccountDirectory.State access=accounts();AccountDirectory.User user=access.users.get(pending.actorId);if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new SecurityException("FORBIDDEN");if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT");validationThreads.put(id,Thread.currentThread());}
+                        synchronized(this){AccountDirectory.State access=accounts();AccountDirectory.User user=access.users.get(pending.actorId);if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new SecurityException("FORBIDDEN");if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");if(registry.tasks.get(id).operations.stream().anyMatch(o->o.id.equals(pending.id)&&o.cancelRequested))throw new Conflict("GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT");operationThreads.put(id,Thread.currentThread());}
                         result=backend.gapVerification(entry.config,reports(id),pending.gap,"GAP_VERIFY_EXECUTE".equals(pending.action),pending.id,pending.actorId,pending.createdAt,pending.subscriptionId,pending.errorCount);code=String.valueOf(result.get("code"));break;
                     case "SKIP_TRANSACTION":case "SKIP_RETRY":case "SKIP_RECOVER":case "SKIP_CANCEL":
                         if(pending.skip==null||pending.actorId==null||pending.skipPlanId==null)throw new Conflict("SKIP_REQUEST_INVALID");
@@ -586,7 +644,7 @@ public final class TaskService implements AutoCloseable {
                             if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");
                         }
                         result=backend.correction(entry.config,failureEvidenceDirectory(id),failureEvidenceScope(id),
-                                pending.correction,false,pending.id,pending.actorId,pending.subscriptionId,pending.errorCount);
+                                pending.correction,false,pending.id,pending.actorId,pending.subscriptionId,pending.errorCount,cancellation::get);
                         code=String.valueOf(result.get("code"));break;
                     case "COMPENSATION_PLAN":case "COMPENSATION_EXECUTE":
                         if (pending.compensation==null||pending.actorId==null) throw new Conflict("COMPENSATION_APPROVAL_INVALID");
@@ -597,7 +655,7 @@ public final class TaskService implements AutoCloseable {
                                 throw new SecurityException("FORBIDDEN");
                             if (!skipRecoveryEnabled()) throw new Conflict("SKIP_DISABLED");
                         }
-                        result=backend.compensate(entry.config,failureEvidenceDirectory(id),failureEvidenceScope(id),pending.action,pending.compensation,pending.id,pending.actorId,pending.subscriptionId,pending.errorCount);
+                        result=backend.compensate(entry.config,failureEvidenceDirectory(id),failureEvidenceScope(id),pending.action,pending.compensation,pending.id,pending.actorId,pending.subscriptionId,pending.errorCount,cancellation::get);
                         code=String.valueOf(result.get("code"));break;
                     case "CONFIRM_COMMIT":
                         if(pending.commit==null||pending.actorId==null)throw new Conflict("FAILURE_ACK_REQUEST_INVALID");
@@ -620,12 +678,33 @@ public final class TaskService implements AutoCloseable {
                     default:throw new Conflict("ACTION_INVALID");
                 }
             }catch(Exception e){failure=e;code=safeCode(e);}
-            finally{if(pending.validation!=null||pending.repair!=null||pending.gap!=null){validationThreads.remove(id,Thread.currentThread());Thread.interrupted();}}
+            finally{if(pending.validation!=null||pending.repair!=null||pending.gap!=null){operationThreads.remove(id,Thread.currentThread());Thread.interrupted();}}
             synchronized(this) {
-                Registry next=copy();Control state=next.tasks.get(id);
+                if(cancellableRecovery){
+                    recoveryCancellations.remove(id);
+                    if(closed&&failure!=null)return;
+                }
+                Registry next=copy();
+                Control state=next.tasks.get(id);
                 Operation op=state.operations.stream().filter(o -> o.id.equals(pending.id)).findFirst().get();
-                op.status=failure==null?"SUCCEEDED":"FAILED";op.correction=null;op.code=code;op.result=result;op.finishedAt=Instant.now().toString();
-                if(op.cancelRequested){op.status="FAILED";op.code=op.gap!=null?"GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":op.repair==null?"VALIDATION_CANCELLED":"REPAIR_CANCELLED";}
+                if(cancellableRecovery&&op.cancelRequested&&failure!=null){
+                    if(recoveryCancelled)entry.recoveryReceiptRetryAt=System.currentTimeMillis()+5000;
+                    if(!"RECOVERY_CANCEL_RESOLVING".equals(op.code)){
+                        op.code="RECOVERY_CANCEL_RESOLVING";
+                        persist(next);
+                    }
+                    return;
+                }
+                op.status=failure==null?"SUCCEEDED":"FAILED";op.correction=null;op.code=code;
+                op.result=result==null?new LinkedHashMap<>():result;op.finishedAt=Instant.now().toString();
+                if(cancellableRecovery){
+                    entry.recoveryReceiptRetryAt=0;
+                    if(op.cancelRequested&&(result==null||"COMPENSATION_PLAN".equals(op.action))){
+                        op.status="CANCELLED";
+                        op.code="RECOVERY_CANCELLED";
+                        op.result=new LinkedHashMap<>();
+                    }
+                }else if(op.cancelRequested){op.status="FAILED";op.code=op.gap!=null?"GAP_VERIFICATION_CANCELLED_CHECK_RECEIPT":op.repair==null?"VALIDATION_CANCELLED":"REPAIR_CANCELLED";}
                 if(Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_EXECUTE").contains(op.action))state.desired="PAUSED";
                 if(failure==null&&Arrays.asList("START","RESUME").contains(op.action))state.desired="RUNNING";
                 if(failure==null&&"RESUME_TARGET".equals(op.action)&&"RUNNING".equals(result.get("pipelineState"))&&!"PAUSED".equals(state.desired))state.desired="RUNNING";
@@ -739,7 +818,7 @@ public final class TaskService implements AutoCloseable {
         Map<String,Object> result;
         try{
             result=backend.correction(definition,failureEvidenceDirectory(id),scope,request.correction,
-                    schema,null,actor.id,request.subscriptionId,request.errorCount);
+                    schema,null,actor.id,request.subscriptionId,request.errorCount,()->false);
         }catch(IllegalArgumentException|IllegalStateException failure){
             String safe=safeCode(failure);
             if(safe.startsWith("CORRECTION_")||safe.startsWith("COMPENSATION_")||safe.startsWith("FAILURE_")
@@ -807,9 +886,17 @@ public final class TaskService implements AutoCloseable {
         return error instanceof IllegalArgumentException?"CONFIG_INVALID":error instanceof IOException?"STORAGE_ERROR":"CONTROL_FAILED";
     }
     @Override public void close() throws Exception {
-        synchronized(this){if(closed)return;closed=true;}
+        boolean recovering;
+        synchronized(this){
+            if(closed)return;
+            closed=true;
+            recovering=!recoveryCancellations.isEmpty();
+            recoveryCancellations.values().forEach(cancellation->cancellation.set(true));
+        }
         for(Entry e:entries.values())synchronized(e){if(e.worker!=null)e.worker.requestStop();}
-        scheduler.shutdownNow();controls.shutdown();validations.shutdownNow();
+        scheduler.shutdownNow();controls.shutdown();
+        // The recovery thread holds a journal fence, possibly on an embedded H2 FileChannel.
+        if(recovering)validations.shutdown();else validations.shutdownNow();
         boolean terminated=controls.awaitTermination(20,TimeUnit.SECONDS);
         if(!terminated){controls.shutdownNow();terminated=controls.awaitTermination(10,TimeUnit.SECONDS);}
         terminated=validations.awaitTermination(10,TimeUnit.SECONDS)&&terminated;

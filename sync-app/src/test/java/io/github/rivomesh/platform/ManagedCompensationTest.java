@@ -25,7 +25,7 @@ class ManagedCompensationTest {
         }
         ManagedGapVerificationTest.Backend owner=new ManagedGapVerificationTest.Backend(){
             @Override public Map<String,Object> compensate(TaskDefinition task,Path directory,FailureEvidence.Scope scope,
-                    String action,CompensationRequest request,String operation,String actor,String subscription,long generation){
+                    String action,CompensationRequest request,String operation,String actor,String subscription,long generation,java.util.function.BooleanSupplier cancelled){
                 assertEquals("pg",subscription);
                 assertEquals(1,generation);
                 assertEquals("b",scope.ownerNodeId);

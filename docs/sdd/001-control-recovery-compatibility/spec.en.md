@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.10 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.11 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,14 DONE, 30 PARTIAL and 4 NEW, with 34 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/SO-04 bounded profiles are accepted;automatic takeover, recovery jobs and complete matrices remain tracked.
+Implementation:48requirements,15 DONE, 29 PARTIAL and 4 NEW, with 33 open. RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-04 bounded profiles are accepted. Automatic takeover, failure diagnostics and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -40,7 +40,7 @@ Implementation:48requirements,14 DONE, 30 PARTIAL and 4 NEW, with 34 open. RC-02
 | RC-06 | P0 / DONE | Failed-transaction before-image compensation | The bounded SQL profile passed. Administrators review table scope and mutation counts across entries, restore the before-images and explicitly resume the original transaction. PostgreSQL passes real CDC and MySQL passes native contracts. RC-10 tracks other destinations. |
 | RC-07 | P0 / DONE | Guided manual corrective data entry | The bounded SQL profile passed. Typed entry and JSON import support administrator review of before/after values, exact identities, atomic batches and resumption of the original transaction. PostgreSQL passes real CDC and MySQL passes native checks. RC-10 tracks other destinations. |
 | RC-08 | P0 / DONE | Consistency-gap ledger and honest watermarks | First SQL profile accepted:durable gaps,reviewed plans,cross-entry approval/cancellation,fresh full-table scans,atomic receipts and distinct safe coverage/contiguous application. Verification preserves SKIP and the original applied prefix without resuming. Other target protocols remain RC-10/LG-03/LG-04. |
-| RC-09 | P0 / PARTIAL | Durable distributed recovery jobs | Cross-node planning, approval, evidence and destination receipts are available. Cancellation and process termination at compensation/correction commit boundaries remain open. |
+| RC-09 | P0 / DONE | Durable distributed recovery jobs | The bounded SQL profile passes cross-entry planning, approval, cancellation and original-request recovery. Native commit-boundary tests use PostgreSQL 17 as the recovery destination. |
 | RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | SQL,analytical and queue consistency protocols differ. |
 
 ## Source compatibility

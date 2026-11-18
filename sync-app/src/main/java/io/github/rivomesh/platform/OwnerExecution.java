@@ -89,7 +89,7 @@ final class OwnerExecution {
     private static String safe(String value,String fallback){return value!=null&&value.matches("[A-Z0-9_]{1,120}")?value:fallback;}
     private void finish(DurableCommands.Dispatch dispatch,String phase,String code,ControlStore.Lease lease)throws Exception{
         commands.complete(dispatch,phase,safe(code,"OWNER_OPERATION_RESULT"),agents,lease,directory);
-        if(Arrays.asList("ACCEPTED","SUCCEEDED","FAILED","REJECTED").contains(phase))releaseStartupStop(dispatch.command.id);
+        if(Arrays.asList("ACCEPTED","SUCCEEDED","FAILED","REJECTED","CANCELLED").contains(phase))releaseStartupStop(dispatch.command.id);
         if(Arrays.asList("SUCCEEDED","FAILED","REJECTED").contains(phase))tasks.releaseOwnerRequest(dispatch.command.id);
     }
 }

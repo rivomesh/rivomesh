@@ -3,6 +3,7 @@ package io.github.rivomesh.platform;
 import io.github.rivomesh.*;
 import java.sql.*;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /** Database controls share the existing transactional lease/fencing protocol. */
 public interface TaskBackend {
@@ -47,37 +48,48 @@ public interface TaskBackend {
     }
     default Map<String,Object> correction(TaskDefinition task,java.nio.file.Path directory,
             io.github.rivomesh.recovery.FailureEvidence.Scope scope,CorrectionRequest request,boolean schema,
-            String operation,String actor,String subscription,long generation)throws Exception {
+            String operation,String actor,String subscription,long generation,BooleanSupplier cancelled)throws Exception {
         request.validate(schema,operation!=null);
         if(task.pipeline==null)throw new IllegalArgumentException("CORRECTION_V3_REQUIRED");
+        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=reviewedRecoveryEvidence(
+                directory,scope,request.evidenceId,request.evidenceHash,subscription,generation,"CORRECTION_EVIDENCE_SCOPE_CHANGED");
+        if(schema)return io.github.rivomesh.cdc.TransactionCompensation.correctionTables(task.pipeline,retained);
+        return io.github.rivomesh.cdc.TransactionCompensation.run(task.pipeline,retained,request.resolvedBatch(),
+                request.approvedHash,operation,actor,request.reason,cancelled);
+    }
+    default Map<String,Object> compensate(TaskDefinition task,java.nio.file.Path directory,
+            io.github.rivomesh.recovery.FailureEvidence.Scope scope,String action,CompensationRequest request,
+            String operation,String actor,String subscription,long generation,BooleanSupplier cancelled)throws Exception {
+        request.validate(action);
+        if (task.pipeline==null) throw new IllegalArgumentException("COMPENSATION_V3_REQUIRED");
+        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=reviewedRecoveryEvidence(
+                directory,scope,request.evidenceId,request.evidenceHash,subscription,generation,"COMPENSATION_EVIDENCE_SCOPE_CHANGED");
+        return io.github.rivomesh.cdc.TransactionCompensation.run(task.pipeline,retained,null,request.approvedHash,operation,actor,request.reason,cancelled);
+    }
+    default Map<String,Object> recoveryReceipt(TaskDefinition task,java.nio.file.Path directory,
+            io.github.rivomesh.recovery.FailureEvidence.Scope scope,TaskService.Operation operation)throws Exception {
+        CorrectionRequest correction=operation.correction;
+        CompensationRequest compensation=operation.compensation;
+        String evidence=correction!=null?correction.evidenceId:compensation.evidenceId;
+        String hash=correction!=null?correction.evidenceHash:compensation.evidenceHash;
+        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=reviewedRecoveryEvidence(directory,scope,
+                evidence,hash,operation.subscriptionId,operation.errorCount,"RECOVERY_EVIDENCE_SCOPE_CHANGED");
+        return io.github.rivomesh.cdc.TransactionCompensation.receipt(task.pipeline,retained,
+                correction==null?null:correction.resolvedBatch(),correction!=null?correction.approvedHash:compensation.approvedHash,
+                operation.id,operation.actorId,correction!=null?correction.reason:compensation.reason);
+    }
+    static io.github.rivomesh.recovery.FailureEvidenceStore.Envelope reviewedRecoveryEvidence(
+            java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,
+            String evidence,String hash,String subscription,long generation,String scopeCode)throws Exception {
         if(!java.nio.file.Files.exists(directory.resolve("authority.json"),java.nio.file.LinkOption.NOFOLLOW_LINKS))
             throw new IllegalStateException("FAILURE_EVIDENCE_NOT_FOUND");
         io.github.rivomesh.recovery.FailureEvidenceStore store=new io.github.rivomesh.recovery.FailureEvidenceStore(
                 directory,scope,new io.github.rivomesh.recovery.FailureEvidenceStore.Limits());
-        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=store.load(request.evidenceId);
-        if(!retained.hash.equals(request.evidenceHash))throw new IllegalStateException("FAILURE_EVIDENCE_CONTENT_CHANGED");
+        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=store.load(evidence);
+        if(!retained.hash.equals(hash))throw new IllegalStateException("FAILURE_EVIDENCE_CONTENT_CHANGED");
         if(!Objects.equals(subscription,retained.value.review.subscription.id)
-                ||generation!=retained.value.review.subscription.errorGeneration)
-            throw new IllegalStateException("CORRECTION_EVIDENCE_SCOPE_CHANGED");
-        if(schema)return io.github.rivomesh.cdc.TransactionCompensation.correctionTables(task.pipeline,retained);
-        return io.github.rivomesh.cdc.TransactionCompensation.run(task.pipeline,retained,request.resolvedBatch(),
-                request.approvedHash,operation,actor,request.reason);
-    }
-    default Map<String,Object> compensate(TaskDefinition task,java.nio.file.Path directory,
-            io.github.rivomesh.recovery.FailureEvidence.Scope scope,String action,CompensationRequest request,
-            String operation,String actor,String subscription,long generation)throws Exception {
-        request.validate(action);
-        if (task.pipeline==null) throw new IllegalArgumentException("COMPENSATION_V3_REQUIRED");
-        if (!java.nio.file.Files.exists(directory.resolve("authority.json"),java.nio.file.LinkOption.NOFOLLOW_LINKS))
-            throw new IllegalStateException("FAILURE_EVIDENCE_NOT_FOUND");
-        io.github.rivomesh.recovery.FailureEvidenceStore store=new io.github.rivomesh.recovery.FailureEvidenceStore(
-                directory,scope,new io.github.rivomesh.recovery.FailureEvidenceStore.Limits());
-        io.github.rivomesh.recovery.FailureEvidenceStore.Envelope retained=store.load(request.evidenceId);
-        if (!retained.hash.equals(request.evidenceHash)) throw new IllegalStateException("FAILURE_EVIDENCE_CONTENT_CHANGED");
-        if (!Objects.equals(subscription,retained.value.review.subscription.id)
-                ||generation!=retained.value.review.subscription.errorGeneration)
-            throw new IllegalStateException("COMPENSATION_EVIDENCE_SCOPE_CHANGED");
-        return io.github.rivomesh.cdc.TransactionCompensation.run(task.pipeline,retained,request.approvedHash,operation,actor,request.reason);
+                ||generation!=retained.value.review.subscription.errorGeneration)throw new IllegalStateException(scopeCode);
+        return retained;
     }
     default Map<String,Object> skip(TaskDefinition task,java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,String action,SkipRequest request,String operation,String actor,String subscription,long generation)throws Exception{
         request.validate(action);if(task.pipeline==null)throw new IllegalArgumentException("SKIP_V3_REQUIRED");
