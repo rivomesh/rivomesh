@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.21",
+  "version": "0.22",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -823,8 +823,8 @@
         "en": "Source protocol and capability configuration"
       },
       "gap": {
-        "zh-CN": "采集、预检与校验统一使用源适配器入口。MySQL 已支持明确的源类型、逻辑身份、数据库范围和可选版本约束。PostgreSQL 与 Oracle 的真实连接和事件协议待实现。",
-        "en": "Capture, preflight and reconciliation use one source adapter entry point. MySQL supports explicit type, logical identity, database scope and version constraints. PostgreSQL and Oracle connection and capture protocols remain open."
+        "zh-CN": "采集、预检与校验统一使用源适配器入口。MySQL 和 PostgreSQL 已有带类型的源配置和原生采集档案。Oracle SCN 预检已通过，增量接入和通用能力配置待完成。",
+        "en": "Capture, preflight and validation share the source adapter entry point. MySQL and PostgreSQL have typed source profiles and native capture. Oracle SCN preflight passes; Oracle CDC and common capabilities remain."
       },
       "acceptance": {
         "zh-CN": "每任务显式source.type、逻辑源身份、命名空间和版本配置；MySQL GTID、PG LSN、Oracle SCN不能互相比较；向导/预检按实际能力启用，未支持配置明确拒绝。",
@@ -1010,14 +1010,14 @@
       "id": "SO-07",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "NEW",
+      "status": "PARTIAL",
       "title": {
         "zh-CN": "Oracle 源适配器",
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "能力目录仅PLANNED，尚无原生全量/增量实现。",
-        "en": "Catalog says PLANNED;no native snapshot/CDC implementation."
+        "zh-CN": "Oracle 26ai 23.26.4.0.0 的 CDB/PDB 身份、SCN Flashback、主键/无主键读取和误连拒绝已实测。LogMiner 增量、重启和 RAC 待实现。",
+        "en": "Native Oracle 26ai 23.26.4.0.0 CDB/PDB identity, SCN flashback, keyed/keyless reads and wrong-service refusal pass. LogMiner CDC, restart and RAC remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1027,7 +1027,12 @@
         "SO-01"
       ],
       "evidence": [
-        "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
+        "config/oracle-source-probe.yml",
+        "docs/en/oracle-source.md",
+        "docs/zh-CN/oracle-source.md",
+        "tests/oracle-source-probe.py",
+        "docs/verification/baseline.json"
       ]
     },
     {

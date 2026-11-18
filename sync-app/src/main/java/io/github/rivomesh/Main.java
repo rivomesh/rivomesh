@@ -7,6 +7,10 @@ public final class Main {
     private Main() {}
     public static void main(String[] args) throws Exception {
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        if(args.length==2&&args[0].equals("probe-oracle")){
+            System.out.println(Model.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(OracleSourceProbe.inspect(Paths.get(args[1]))));
+            return;
+        }
         if(args.length==3&&args[0].equals("recover-access")){io.github.rivomesh.platform.TaskService.recoverAccess(io.github.rivomesh.platform.PlatformConfig.load(Paths.get(args[1])),args[2]);System.out.println("ACCESS_RECOVERED_OFFLINE_NO_WORKERS_STARTED");return;}
         if(args.length>=2&&!args[0].equals("serve")&&!args[0].equals("agent")&&PipelineConfig.isV3(Paths.get(args[1]))){PipelineMain.execute(args);return;}
         if (args.length == 2 && (args[0].equals("serve")||args[0].equals("agent"))) {

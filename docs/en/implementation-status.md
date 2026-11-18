@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **21 DONE, 25 PARTIAL and 2 NEW, with 27 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **21 DONE, 26 PARTIAL and 1 NEW, with 27 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -34,6 +34,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 |---|---|
 | Replication | MySQL multi-database mappings/fan-out,table creation,chunked snapshot-to-stream,durable progress,keyless/JSON/supported generated columns |
 | PostgreSQL source | 17.12 single-primary experimental profile covering pgoutput, JSONB, keyless rows, LSN restart and missing-slot refusal. See the [operator guide](postgresql-source.md) |
+| Oracle source | CDB/PDB identity, SCN and Flashback read admission tested on 26ai Free. CDC remains open. See the [preflight guide](oracle-source.md). |
 | Capture recovery | Console and CLI provide read-only admission, affected subscriptions and checkpoint review. Range quarantine remains open. See the [operator guide](capture-recovery.md) |
 | Management | Bilingual wizard,configuration revisions,isolated Workers,durable cross-entry commands,accounts/grants/audit |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |

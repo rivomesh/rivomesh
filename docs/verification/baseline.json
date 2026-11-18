@@ -1126,5 +1126,21 @@
         }
       }
     }
+  },
+  "oracleSourceProbe": {
+    "scope": "Oracle Free ARM64, Java 8, external ojdbc8 23.26.4.0.0, writable CDB and one PDB. Read-only preflight using scoped account.",
+    "artifactSha256": "4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0,
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact <candidate jar> --jdbc-driver <ojdbc8.jar> --output target/oracle-proof"
   }
 }

@@ -11,7 +11,8 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "SO-07 Oracle Free ARM64 native source probe and SCN flashback."
+    "SO-07 native LogMiner redo and transaction semantics.",
+    "CP-04 fixed-owner scheduling and explicit safe relocation work."
   ],
   "reportContents": [
     "Current totals",
@@ -33,8 +34,8 @@
   ],
   "currentSdd": {
     "DONE": 21,
-    "PARTIAL": 25,
-    "NEW": 2
+    "PARTIAL": 26,
+    "NEW": 1
   },
   "newSinceLastReport": [
     "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
@@ -43,11 +44,12 @@
     "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback.",
     "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation.",
     "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence.",
-    "LG-06 native worker outage passed. PostgreSQL stayed online on the control plane; the recovered worker reused its CSI volume and resumed under a new lease."
+    "LG-06 native worker outage passed. PostgreSQL stayed online on the control plane; the recovered worker reused its CSI volume and resumed under a new lease.",
+    "SO-07 advanced to PARTIAL. Oracle 26ai ARM64 completed four SCN Flashback and source authority checks using an external Java 8 driver."
   ],
   "nextTasks": [
-    "Verify both Kubernetes deployment formats and recovery on CSI.",
-    "Continue source range recovery and Oracle source work."
+    "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",
+    "Continue safe cross-Agent relocation and capture-range review."
   ],
   "currentCandidateArtifact": "ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66",
   "currentCandidateScope": "Java 8 PostgreSQL 17.12 source with explicit durable feedback and seven native checks. MySQL 8.4 cross-entry capture recovery review, six native checks. 42 targeted Java and 110 UI checks.",

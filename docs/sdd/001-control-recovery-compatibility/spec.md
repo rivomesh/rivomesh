@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.21 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.22 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，21项DONE、25项PARTIAL、2项NEW，余27项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，21项DONE、26项PARTIAL、1项NEW，余27项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -47,13 +47,13 @@ RM-SDD-001 · v0.21 · 2026-11-18 · IMPLEMENTING
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
-| SO-01 | P0 / PARTIAL | 多源协议与能力配置 | 采集、预检与校验统一使用源适配器入口。MySQL 已支持明确的源类型、逻辑身份、数据库范围和可选版本约束。PostgreSQL 与 Oracle 的真实连接和事件协议待实现。 |
+| SO-01 | P0 / PARTIAL | 多源协议与能力配置 | 采集、预检与校验统一使用源适配器入口。MySQL 和 PostgreSQL 已有带类型的源配置和原生采集档案。Oracle SCN 预检已通过，增量接入和通用能力配置待完成。 |
 | SO-02 | P1 / DONE | MySQL 5.7 完整支持档案 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR 和未采集 binlog 缺失已实测。 |
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | 17.12 单主已实测快照、增量、续传与槽丢失。跨时间线切换及共同点未验收。 |
-| SO-07 | P1 / NEW | Oracle 源适配器 | 能力目录仅PLANNED，尚无原生全量/增量实现。 |
+| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 23.26.4.0.0 的 CDB/PDB 身份、SCN Flashback、主键/无主键读取和误连拒绝已实测。LogMiner 增量、重启和 RAC 待实现。 |
 
 ## Java运行时兼容
 

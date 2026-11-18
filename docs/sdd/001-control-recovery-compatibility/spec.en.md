@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.21 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.22 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,21 DONE, 25 PARTIAL and 2 NEW, with 27 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
+Implementation:48requirements,21 DONE, 26 PARTIAL and 1 NEW, with 27 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -47,13 +47,13 @@ Implementation:48requirements,21 DONE, 25 PARTIAL and 2 NEW, with 27 open. RC-01
 
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
-| SO-01 | P0 / PARTIAL | Source protocol and capability configuration | Capture, preflight and reconciliation use one source adapter entry point. MySQL supports explicit type, logical identity, database scope and version constraints. PostgreSQL and Oracle connection and capture protocols remain open. |
+| SO-01 | P0 / PARTIAL | Source protocol and capability configuration | Capture, preflight and validation share the source adapter entry point. MySQL and PostgreSQL have typed source profiles and native capture. Oracle SCN preflight passes; Oracle CDC and common capabilities remain. |
 | SO-02 | P1 / DONE | MySQL5.7 supported profile | 5.7.44 Java 8 V3 standalone, GTID async, MGR, and native binlog-loss refusal passed. |
 | SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 covers the other JDKs. |
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 covers the other JDKs. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
 | SO-06 | P1 / PARTIAL | PostgreSQL source adapter | 17.12 single-primary snapshot, CDC, LSN restart and slot-loss refusal passed. Promotion and common-cut validation remain. |
-| SO-07 | P1 / NEW | Oracle source adapter | Catalog says PLANNED;no native snapshot/CDC implementation. |
+| SO-07 | P1 / PARTIAL | Oracle source adapter | Native Oracle 26ai 23.26.4.0.0 CDB/PDB identity, SCN flashback, keyed/keyless reads and wrong-service refusal pass. LogMiner CDC, restart and RAC remain. |
 
 ## Java runtime compatibility
 
