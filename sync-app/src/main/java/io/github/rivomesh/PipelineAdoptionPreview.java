@@ -3,6 +3,7 @@ package io.github.rivomesh;
 import io.github.rivomesh.cdc.Cell;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.JdbcSink;
+import io.github.rivomesh.cdc.IndexPolicy;
 import io.github.rivomesh.cdc.PostgresAdoptionRead;
 import io.github.rivomesh.cdc.RowValues;
 import io.github.rivomesh.cdc.SourceAdapter;
@@ -64,6 +65,8 @@ final class PipelineAdoptionPreview {
                     values.put("sourceSchema", table.database);
                     values.put("targetSchema", target.mappings.get(table.database));
                     values.put("table", table.name);
+                    List<IndexPolicy.Decision> indexPlan = IndexPolicy.plan(table, target.product, target.uniquePolicy);
+                    if (!indexPlan.isEmpty()) values.put("indexPlan", indexPlan);
                     String blocker = owned ? "ADOPTION_TARGET_CHECKPOINT_EXISTS" : destination.blocker(table);
                     if (blocker != null) {
                         blocked = true;

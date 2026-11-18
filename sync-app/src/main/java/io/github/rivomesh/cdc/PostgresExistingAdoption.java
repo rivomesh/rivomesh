@@ -74,7 +74,7 @@ public final class PostgresExistingAdoption implements AutoCloseable {
         }
     }
 
-    public record Replay(Receipt receipt, TableSchema table) {}
+    public record Replay(Receipt receipt, TableSchema table, PostgresAdoptedUnique.Receipt restoredUnique) {}
 
     @FunctionalInterface
     public interface SourceFence { void verify() throws Exception; }
@@ -116,21 +116,9 @@ public final class PostgresExistingAdoption implements AutoCloseable {
 
     Replay replay(BaselinePhase phase, String verifiedWriterTrigger) throws Exception {
         Approval approval = requireLock();
-        if (!existsRelation(settings.metadataSchema, RECEIPT)) return null;
+        Receipt receipt = findReceipt(connection, settings);
+        if (receipt == null) return null;
         lockMetadata(settings.metadataSchema, RECEIPT);
-        Receipt receipt;
-        try (PreparedStatement sql = connection.prepareStatement("SELECT receipt_sha256,receipt FROM " + receiptTable()
-                + " WHERE pipeline_id=? AND subscription_id=?")) {
-            sql.setString(1, settings.pipelineId);
-            sql.setString(2, settings.id);
-            try (ResultSet rows = sql.executeQuery()) {
-                if (!rows.next()) throw failure("ADOPTION_RECEIPT_MISSING");
-                String hash = rows.getString(1);
-                String body = JdbcGapVerificationLedger.bounded(rows.getCharacterStream(2), 16 * 1024);
-                if (!Codec.sha256(body).equals(hash) || rows.next()) throw failure("ADOPTION_RECEIPT_CHANGED");
-                receipt = Codec.decode(body, Receipt.class);
-            }
-        }
         if (!approval.equals(receipt.approval) || !settings.pipelineId.equals(receipt.pipelineId)
                 || !settings.id.equals(receipt.targetId) || !settings.fingerprint.equals(receipt.fingerprint)) {
             throw failure("ADOPTION_APPROVAL_CONFLICT");
@@ -142,19 +130,56 @@ public final class PostgresExistingAdoption implements AutoCloseable {
             lockMetadata(journal.settings.namespace, "rm3_" + name);
         }
         TableSchema table = requireBaseline(receipt, phase);
+        PostgresAdoptedUnique.Receipt restored = PostgresAdoptedUnique.verifyExisting(connection, settings, targetSchema, table, receipt);
         read.pin(List.of(table));
-        if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true, verifiedWriterTrigger))) {
+        if (!receipt.catalogSha256.equals(read.planEvidence(table, journal.settings.namespace, true, verifiedWriterTrigger, restored))) {
             throw failure("ADOPTION_BOOTSTRAP_CATALOG_CHANGED");
         }
-        checkedReplay = new Replay(receipt, table);
+        checkedReplay = new Replay(receipt, table, restored);
         return checkedReplay;
+    }
+
+    static Receipt findReceipt(Connection connection, JdbcSink.Settings settings) throws Exception {
+        if (!existsRelation(connection, settings.metadataSchema, RECEIPT)) return null;
+        String relation = qualify(settings.metadataSchema, RECEIPT);
+        try (Statement sql = connection.createStatement()) { sql.execute("LOCK TABLE ONLY " + relation + " IN ACCESS SHARE MODE"); }
+        if (!existsRelation(connection, settings.metadataSchema, RECEIPT)) throw failure("ADOPTION_RECEIPT_CHANGED");
+        try (PreparedStatement sql = connection.prepareStatement("SELECT receipt_sha256,receipt FROM " + relation
+                + " WHERE pipeline_id=? AND subscription_id=?")) {
+            sql.setString(1, settings.pipelineId);
+            sql.setString(2, settings.id);
+            try (ResultSet rows = sql.executeQuery()) {
+                if (!rows.next()) throw failure("ADOPTION_RECEIPT_MISSING");
+                String hash = rows.getString(1);
+                String body = JdbcGapVerificationLedger.bounded(rows.getCharacterStream(2), 16 * 1024);
+                if (!Codec.sha256(body).equals(hash) || rows.next()) throw failure("ADOPTION_RECEIPT_CHANGED");
+                return Codec.decode(body, Receipt.class);
+            }
+        }
+    }
+
+    public PostgresAdoptedUnique.Outcome restoreUnique(PostgresAdoptedUnique.Approval approval,
+                                                       SourceFence sourceFence) throws Exception {
+        requireLock();
+        if (checkedReplay == null) throw failure("ADOPTED_UNIQUE_CUT_REQUIRED");
+        return PostgresAdoptedUnique.install(connection, settings, targetSchema, checkedReplay, approval, restored -> {
+            if (!checkedReplay.receipt.catalogSha256.equals(read.planEvidence(checkedReplay.table,
+                    journal.settings.namespace, true, null, restored))) {
+                throw failure("ADOPTION_BOOTSTRAP_CATALOG_CHANGED");
+            }
+            sourceFence.verify();
+            read.verify();
+        });
     }
 
     public PostgresWriterReadiness.Outcome prepareWriter(PostgresWriterReadiness.Approval approval,
                                                          SourceFence sourceFence) throws Exception {
         requireLock();
         if (checkedReplay == null) throw failure("WRITER_READINESS_ADOPTED_CUT_REQUIRED");
-        return PostgresWriterReadiness.record(connection, settings, targetSchema, checkedReplay.receipt, approval, () -> {
+        if (checkedReplay.restoredUnique == null && PostgresAdoptedUnique.candidate(checkedReplay.table, settings.uniquePolicy) != null) {
+            throw failure("ADOPTED_UNIQUE_RESTORE_REQUIRED");
+        }
+        return PostgresWriterReadiness.record(connection, settings, targetSchema, checkedReplay, approval, () -> {
             sourceFence.verify();
             read.verify();
         });
@@ -311,7 +336,7 @@ public final class PostgresExistingAdoption implements AutoCloseable {
         }
     }
 
-    private boolean existsRelation(String schema, String relation) throws SQLException {
+    private static boolean existsRelation(Connection connection, String schema, String relation) throws SQLException {
         try (PreparedStatement sql = connection.prepareStatement("""
                 SELECT r.relkind='r' AND r.relpersistence='p' AND NOT r.relrowsecurity AND NOT r.relispartition
                        AND NOT r.relhassubclass AND NOT r.relhasrules
@@ -331,11 +356,11 @@ public final class PostgresExistingAdoption implements AutoCloseable {
     }
 
     private void lockMetadata(String schema, String relation) throws SQLException {
-        if (!existsRelation(schema, relation)) throw failure("ADOPTION_METADATA_MISSING");
+        if (!existsRelation(connection, schema, relation)) throw failure("ADOPTION_METADATA_MISSING");
         try (Statement sql = connection.createStatement()) {
             sql.execute("LOCK TABLE ONLY " + qualify(schema, relation) + " IN SHARE ROW EXCLUSIVE MODE");
         }
-        if (!existsRelation(schema, relation)) throw failure("ADOPTION_METADATA_MISSING");
+        if (!existsRelation(connection, schema, relation)) throw failure("ADOPTION_METADATA_MISSING");
     }
 
     private Approval requireLock() {

@@ -14,6 +14,11 @@ final class PostgresUniqueRestoreEvidence {
 
     static String observe(Connection c, String schema, TableSchema table, IndexPolicy.Decision plan,
                           String constraint) throws Exception {
+        return observe(c, schema, table, plan, constraint, false);
+    }
+
+    static String observe(Connection c, String schema, TableSchema table, IndexPolicy.Decision plan,
+                          String constraint, boolean restored) throws Exception {
         List<String> identity = serverIdentity(c);
         String indexOid;
         String indexSql = """
@@ -39,7 +44,8 @@ final class PostgresUniqueRestoreEvidence {
                 if (!r.next() || r.getInt(5) != plan.columns.size() || r.getInt(5) != r.getInt(6) || !r.getBoolean(7)) {
                     throw new IllegalStateException("UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED");
                 }
-                if (r.getBoolean(8)) throw new IllegalStateException("UNIQUE_RESTORE_NAME_IN_USE");
+                if (r.getBoolean(8) != restored) throw new IllegalStateException(restored
+                        ? "UNIQUE_RESTORE_NATIVE_CONSTRAINT_CHANGED" : "UNIQUE_RESTORE_NAME_IN_USE");
                 indexOid = r.getString(3);
                 for (int i = 1; i <= 4; i++) identity.add(r.getString(i));
             }

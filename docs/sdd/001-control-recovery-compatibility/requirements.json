@@ -1,7 +1,7 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.57",
-  "date": "2026-11-18",
+  "version": "0.58",
+  "date": "2026-11-19",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
   "baseline": {
@@ -1466,14 +1466,14 @@
       "id": "LG-02",
       "epic": "CARRYOVER",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "非空接管、约束恢复、切换回切",
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "限定非空 PostgreSQL 单表原子接管、源切点续传、业务授权与首次写入前回切已实测。写后或崩溃证据不全会拒绝回切。UNIQUE 恢复已有独立档案，同一采集切点联验约束恢复及其他产品待验。",
-        "en": "One existing PostgreSQL table passed atomic adoption, exact-cut continuation, real writer grants and pre-write failback. Committed writes or uncertain crash history refuse failback. UNIQUE restoration has independent native evidence; the combined same-cut constraint/transition workflow and additional products remain."
+        "zh-CN": "限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。更广产品及写后逆向迁移分别跟踪。",
+        "en": "Bounded single-table PostgreSQL profile accepted. At one frozen MySQL cut the fixture reviewed differences, adopted, restored an approved BIGINT UNIQUE, transferred business writes, performed pre-write failback and reused the original snapshot. Broader products and post-write reverse migration are separate."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",
@@ -1494,8 +1494,15 @@
         "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresExistingAdoption.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresWriterReadiness.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresWriterHandoff.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresTargetWriteWitness.java"
-      ]
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresTargetWriteWitness.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresAdoptedUnique.java"
+      ],
+      "verification": {
+        "artifactSha256": "10d0fde41214d6ef5919dde2b9078a071e3b3113112af9e1afbb308433f3d48f",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, standalone MySQL 8.4.13 and one keyed existing PostgreSQL 17.12 table with one signed BIGINT business UNIQUE. Reviewed difference, downgraded ordinary index, same frozen cut adoption and attested restoration, role switch and pre-write failback, and original snapshot CDC continuation. Multi-target and post-write reverse replication are separate.",
+        "criteriaSha256": "59f53a3f6c2a0081684ff7db3faafb8b34d49bd3f76160413347b2fd2a179935"
+      }
     },
     {
       "id": "LG-03",

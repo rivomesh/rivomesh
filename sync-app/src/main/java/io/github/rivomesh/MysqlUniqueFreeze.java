@@ -173,7 +173,7 @@ final class MysqlUniqueFreeze implements AutoCloseable {
         TableSchema table = MysqlCdcSource.describe(connection, database, name, sqlMode);
         try (PreparedStatement query = connection.prepareStatement("""
                 SELECT EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
-                               WHERE BINARY TABLE_SCHEMA=? AND BINARY TABLE_NAME=? AND CONSTRAINT_TYPE<>'PRIMARY KEY')
+                               WHERE BINARY TABLE_SCHEMA=? AND BINARY TABLE_NAME=? AND CONSTRAINT_TYPE NOT IN ('PRIMARY KEY','UNIQUE'))
                     OR EXISTS(SELECT 1 FROM information_schema.KEY_COLUMN_USAGE
                                WHERE BINARY REFERENCED_TABLE_SCHEMA=? AND BINARY REFERENCED_TABLE_NAME=?)
                     OR EXISTS(SELECT 1 FROM information_schema.TRIGGERS

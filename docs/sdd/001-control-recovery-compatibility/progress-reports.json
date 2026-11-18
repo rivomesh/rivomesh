@@ -2,33 +2,32 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T22:58:57+08:00",
-  "nextReportAt": "2026-11-18T23:58:16+08:00",
+  "lastReportAt": "2026-11-19T00:46:00+08:00",
+  "nextReportAt": "2026-11-19T00:58:16+08:00",
   "completedSincePrevious": [
-    "LG-09 completed. Exact audited reclaim/restore passed 18 native cases, eight real Chrome, 47 Java and 136 DOM. Report bytes were recovered after Agent restart and replay did not remove them again.",
-    "Removed 287 expired or generated target files totaling 18,066,734,774 logical bytes. Target measured 28 GiB before cleanup and 11 GiB afterward; source, vendor installers, manifests and active candidates were preserved.",
-    "CP-04 staged handoff capacity reservation published: both native stores 16 each, 18 native including four real Chrome, and a merged 69 Java/140 DOM. Task owner and all positions were preserved.",
-    "LG-02 exact frozen-source existing PostgreSQL adoption plan published; seven native and 64 Java checks include stable digest replay plus content/schema/ownership drift refusal.",
-    "SO-06 civil PostgreSQL DATE to native PostgreSQL/MySQL passed nine actual cases and 43 integrated Java. Preserved original slots and snapshots; infinity refused before checkpoint.",
-    "LG-03 exact Java 21 native Doris 4.1.3 single-FE/BE pipeline and receipt checks passed. Doris catch-up used original native metadata tablets and the PostgreSQL sibling advanced independently.",
-    "CP-04/LG-05 failure evidence custody published. Each control store passed 15 native cases including signed evidence bytes, shared/disjoint mount, replay and unchanged positions with no key export.",
-    "LG-10/JV-03 optional five-driver external package published. Three variants and exact runtime admission verified. Merged package gates passed plus 84 Java.",
-    "LG-05 optional Helm shared handoff evidence claim on two Agents, each with independent preprovisioned private PVC. Positive render, invalid role/claim guards, unchanged default/native templates, Compose interpolation and bilingual manual instructions verified.",
-    "LG-02 real existing-target atomic bootstrap published. Eight native cases verify cut and receipt, post-DDL source-loss rollback, lost ACK reconciliation after restart, and original-snapshot insert/update/delete with zero copy parts. Integrated app 62 Java.",
-    "CP-04/LG-05 original Agent binlog archives have an authenticated checkpoint binding. Fourteen native MySQL 8.4.13 cases recover exact retained bytes after purge and Agent restart; source exclusion remains separately gated. Integrated 28 Java.",
-    "JV-02 native three-member MySQL 8.4.13 single-primary group election preserved the same Worker, journal generation, two original snapshots and exact positions. Six original checks. Fixed address confirmation is still needed for the reachable stale endpoint clause.",
-    "LG-03 Java 21 Hive 4.0.1 and a PostgreSQL sibling passed six original native checks. Hive and Worker restart preserved original Metastore owner, resource, location and four exact receipts.",
-    "RC-10 Kafka read-only preceding receipt review passed two native KRaft checks on RF3. Exact COMMITs in two namespaces, stable consumer and journal ACK positions and partial BEGIN refusal. Integrated 49 Java.",
-    "Cleared 54 additional unused transport artifact files from finished reactors, freeing 849,373,476 logical bytes."
+    "CP-04 opt-in managed writer enrollment and same-PostgreSQL transaction witness published. Twenty native integration cases and 58 exact Java built against the current app scope.",
+    "JV-03 external Dameng JDBC profile published: 12 native tests on Java 21 verify exact external driver origins, actual vendor errors and numeric precision, target reconnect via the original address, Worker restart and independent repair.",
+    "CP-04/LG-05 real MySQL raw capture evidence now independently verified by the candidate Agent. Fifteen native cases and 82 integrated Java. Exact new capture limit replayed the original GTID to both SQL targets at the original generation, and original control/writer stayed active.",
+    "JV-02 six-case native group recheck validated the same reachable former-primary address on the actual released JDBC path after restart. Original UUID and both read-only flags were checked before the admission typed refusal.",
+    "LG-02 existing PostgreSQL target writer readiness published: six native checks and 68 integrated Java. Durable receipt survives PostgreSQL restart and refuses source thaw, target authorization drift and a parallel direct or indirect writer.",
+    "SO-06 PostgreSQL civil and UTC microsecond timestamps to PostgreSQL and MySQL passed nine native cases, 55 original and 57 latest focused Java tests. An intermediate full reactor passed 559 Java app and two isolated transport tests with 34 optional integration skips.",
+    "CP-04 same-store internal writer+placement commit published. Five native PostgreSQL transactional checks with synthetic readiness, 61 latest scoped Java. Verified old live lease refusal, full rollback, new epoch and old owner fencing. Public execute and real candidate installation remain.",
+    "CP-04/LG-05 candidate report and receipt staging published: 19 native checks plus 30 original focused Java. Exact staged copies survive Controller replay with parked shared ZIP. Ordinary CLI and registry remain fenced.",
+    "RC-10 managed Kafka receipt review published after two real Kafka KRaft checks through both management entries, owner-offline receipt lookup, exact offsets and unchanged ACKs. Combined publish package passes 72 focused Java, one optional external database case skipped, 141 DOM and binary gates.",
+    "LG-02 real dedicated PostgreSQL business writer grant and pre-write failback published: seven native checks, 68 Java. Ordinary replication resume is fenced, lost grant ACK resolves, committed writes and crash uncertainty refuse failback. Same-cut downgraded UNIQUE restore plus transition remains.",
+    "The same-cut LG-02 chain passed four exact native cases and 68 focused Java. Formal closure was in staging at report time.",
+    "LG-08 MySQL DDL schema comparison passed eight native cases and 37 Java. Native evidence is ready for publication.",
+    "A normal exact 18d7a77 packaging reactor passed 567 enabled app/transport tests with 35 optional profiles skipped.",
+    "Removed 105 additional disposable outputs totaling 7,368,753,643 logical bytes; test fixtures and protected archives were preserved.",
+    "The 23:58 report was delivered after the host wall clock advanced directly from 23:42 to 00:44."
   ],
   "inProgress": [
-    "CP-04 managed writer enrollment: 20 native PostgreSQL-control cases and 58 latest integrated Java passed. Exact publication preparation active. Actual controlled multi-Agent writer/placement transfer remains pending.",
-    "CP-04/LG-05 candidate authenticated raw custody: 53 exact Java pass. Native row-limit recovery replayed the original GTID to both targets with the original journal generation and snapshots, and no open gaps. Candidate separate/same evidence mount checks are running.",
-    "CP-04 candidate private staging: 27 exact Java and one shared-control route check complete. Native two-entry Agent authentication and private import in progress.",
-    "LG-02 existing target business writer readiness: corrected scoped exact build has 67 tests and awaits native retry. Existing target bootstrap is already published. Write activation requires an atomic durable witness and ordinary resume interlock.",
-    "JV-03 Dameng optional JDBC classpath admission, native missing-table classification and transaction/precision checks passed in fixture. Full repeat is running with a stable external address to verify reconnect.",
-    "SO-06 civil and UTC microsecond timestamps passed 55 exact Java cases; two-target native scenario prepared and queued.",
-    "RC-10 managed Kafka administrative read-only receipt action is in implementation, building on native standalone read-only proof."
+    "CP-04 actual conditional managed transfer: original retirement, sealed STOPPED configuration and native successor admission integration underway.",
+    "LG-05 original raw ZIP is independently stageable offline; integrate proof-backed private configuration and receipt installation.",
+    "LG-08 MySQL current-vs-historical DDL comparison ready to publish after exact application merge.",
+    "LG-03 external Hive PostgreSQL Metastore pipeline is running. Dedicated catalog and stock schema validation confirmed.",
+    "CP-04 management UI private report staging: 144 DOM, 14 real standalone and six focused Chrome passed; exact native two-entry retry waiting for host resources.",
+    "RC-10 candidate Kafka control-topic notice has offline tests and pending isolated KRaft evidence."
   ],
   "reportContents": [
     "Current totals",
@@ -43,47 +42,41 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "d3b8f9581e96437d43463ce81923d4923cede5e7",
-    "db397aad06a2a96d14b861188982f46e9d2a6f05",
-    "f65e4e90afb60d44811f698527a6ceb611e24eea",
-    "0ab6aee6448c783a8cb9ea05c664c75b671a9532",
-    "68b8f12c79a1b88abb8b7b314cf56bff7c423276",
-    "a43a7d89cf681a33df2ae3a3e00cddf814d6fecd",
-    "0dafb9757786c16a80595a18415b7e1fe45b46da",
-    "75d3af3e8b4d84244d1650d76c15c5763b5742c2",
-    "86ec552a5caa373705581a5d8f6f744e6fd1700d",
-    "7dfb73604148ac234ff78ac087b7d4ac2d8edfe0"
+    "18d7a77044dd88bc38d75b2dd4b8a7d56d53b240",
+    "28284caeeaafe898a80256a5576c7c17434db882",
+    "439cd29faa1257c99aeb2f14d10f6a08962d9cf0",
+    "521a501fb03b2c42d6bc54b21c55f1f3f696286a",
+    "07c1ed069a935e1e9bbe7c9ff235c25ea7251d29",
+    "b47eb368f75a22fd56582d5958b808607d85302f",
+    "d2d2559c28869a8a3e16b6fcc5fdee0983028534",
+    "b9744231f0b8c2d19d70754587706e0b1cf8a4e0",
+    "85c586d96f3a9442d55b826e4e64eb76f7e6564d"
   ],
   "currentSdd": {
-    "DONE": 35,
-    "PARTIAL": 13,
+    "DONE": 36,
+    "PARTIAL": 12,
     "NEW": 0
   },
   "nextTasks": [
-    "Publish integrated managed writer enrollment and complete candidate custody and private staging acceptance.",
-    "Exercise original-writer retirement and atomic same-store writer/placement fencing.",
-    "Finish native Dameng and reachable stale-source checks, existing-target writer readiness and timestamp delivery."
+    "Publish native schema drift observation.",
+    "Exercise private actual cross-Agent installation and old owner retirement.",
+    "Finish Hive external Metastore, scope UI native revalidation and Kafka notice native proof."
   ],
-  "currentCandidateArtifact": "62f4a8cd9ce2488812e3732d888e837503bbe769b37558b78cbc31791e587ff7",
-  "currentCandidateScope": "Kafka native preceding receipt review integrated normal package, 49 targeted Java. Independent frozen candidate passed two KRaft checks.",
+  "currentCandidateArtifact": "10d0fde41214d6ef5919dde2b9078a071e3b3113112af9e1afbb308433f3d48f",
+  "currentCandidateScope": "Temurin 21, standalone MySQL 8.4.13 and one keyed existing PostgreSQL 17.12 table with one signed BIGINT business UNIQUE. Reviewed difference, downgraded ordinary index, same frozen cut adoption and attested restoration, role switch and pre-write failback, and original snapshot CDC continuation. Multi-target and post-write reverse replication are separate.",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
-    "CP-04 opt-in managed writer enrollment and same-PostgreSQL transaction witness published. Twenty native integration cases and 58 exact Java built against the current app scope.",
-    "JV-03 external Dameng JDBC profile published: 12 native tests on Java 21 verify exact external driver origins, actual vendor errors and numeric precision, target reconnect via the original address, Worker restart and independent repair.",
-    "CP-04/LG-05 real MySQL raw capture evidence now independently verified by the candidate Agent. Fifteen native cases and 82 integrated Java. Exact new capture limit replayed the original GTID to both SQL targets at the original generation, and original control/writer stayed active.",
-    "JV-02 six-case native group recheck validated the same reachable former-primary address on the actual released JDBC path after restart. Original UUID and both read-only flags were checked before the admission typed refusal.",
-    "LG-02 existing PostgreSQL target writer readiness published: six native checks and 68 integrated Java. Durable receipt survives PostgreSQL restart and refuses source thaw, target authorization drift and a parallel direct or indirect writer.",
-    "SO-06 PostgreSQL civil and UTC microsecond timestamps to PostgreSQL and MySQL passed nine native cases, 55 original and 57 latest focused Java tests. An intermediate full reactor passed 559 Java app and two isolated transport tests with 34 optional integration skips.",
-    "CP-04 same-store internal writer+placement commit published. Five native PostgreSQL transactional checks with synthetic readiness, 61 latest scoped Java. Verified old live lease refusal, full rollback, new epoch and old owner fencing. Public execute and real candidate installation remain.",
-    "CP-04/LG-05 candidate report and receipt staging published: 19 native checks plus 30 original focused Java. Exact staged copies survive Controller replay with parked shared ZIP. Ordinary CLI and registry remain fenced.",
-    "RC-10 managed Kafka receipt review published after two real Kafka KRaft checks through both management entries, owner-offline receipt lookup, exact offsets and unchanged ACKs. Combined publish package passes 72 focused Java, one optional external database case skipped, 141 DOM and binary gates.",
-    "LG-02 real dedicated PostgreSQL business writer grant and pre-write failback published: seven native checks, 68 Java. Ordinary replication resume is fenced, lost grant ACK resolves, committed writes and crash uncertainty refuse failback. Same-cut downgraded UNIQUE restore plus transition remains."
+    "LG-02 moved to DONE in SDD v0.58. One frozen MySQL cut binds approved PostgreSQL UNIQUE restoration, real writer grants, pre-write failback and continued CDC from the original snapshot."
   ],
-  "lastScheduledReportAt": "2026-11-18T22:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-18T23:58:16+08:00",
   "lastVerifiedReactor": {
-    "commit": "7e0c763",
-    "artifactSha256": "ae816db9fde2c322ecea5a3629a3d6651aedd79b971a66aa788309a3a9cb3ee7",
-    "javaTestsPassed": 543,
-    "optionalSkips": 33
+    "commit": "18d7a77",
+    "artifactSha256": "934d37fad4df87aa94588012d1953d692281d696432098911a8124ff7bf3745f",
+    "verifiedAppTree": "30cfd027470bc70d738c509e48957c408604cdcd",
+    "javaTestsPassed": 567,
+    "optionalSkips": 35,
+    "appTestsPassed": 565,
+    "isolatedTransportTestsPassed": 2,
+    "earlierInvocation": "The test-only Maven reactor did not package relocated vendor driver classes. A clean normal package lifecycle on the 18d7a77 application passed the driver coexistence check and all enabled tests."
   }
 }

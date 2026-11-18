@@ -22,7 +22,7 @@ java -jar rivomesh.jar preview-adoption config/task.yml postgres
 
 MySQL 运维人员需启用并持久化 `read_only` 和 `super_read_only`，同时保持 `persisted_globals_load` 开启。MySQL 账号需要看见全部表和相关元数据，并有全局读锁及复制状态查询权限。有入站复制或组复制成员时会拒绝计划。命令在原物理会话取得有截止时间的全局读锁，比对前后核验源实例身份及精确 binlog 位点。[MySQL FLUSH 语句](https://dev.mysql.com/doc/refman/8.4/en/flush.html)
 
-源表必须以单个有符号 `BIGINT` 列为主键，无二级索引、生成值、非 `NULL` 默认值、触发器或外键。其他列可使用有符号整数、JSON 或最多 4,000 字符的 `utf8mb4_0900_bin` VARCHAR。目标匹配列顺序和可空性，类型对应 `bigint`、`jsonb` 或等宽且显式使用 `pg_catalog."C"` 排序规则的 `varchar`。目标只包含一个索引，对应不可延迟的 `bigint` B-tree 主键。目标账号需有表归属权限、创建 schema 及 schema 内对象的权限，以及调用 `pg_control_system()` 的权限。目标已有 Rivomesh 归属、同步日志、目标元数据、启用的事件触发器或物理表在订阅内时会拒绝计划。
+源表以单个有符号 `BIGINT` 列为主键，可以另有一个业务 UNIQUE，其键为另一个有符号 `BIGINT` 列。此 UNIQUE 需使用 `DOWNGRADE_BUSINESS`，并在规划前建立对应的普通 PostgreSQL B-tree 索引。`preview-adoption` 的 `indexPlan` 列出预期名称。源表只支持普通列及默认值 `NULL`，类型可为有符号整数、JSON 或最多 4,000 字符的 `utf8mb4_0900_bin` VARCHAR。目标匹配列顺序和可空性，类型对应 `bigint`、`jsonb` 或等宽且显式使用 `pg_catalog."C"` 排序规则的 `varchar`。目标账号需有表归属权限、创建 schema 及 schema 内对象的权限，以及调用 `pg_control_system()` 的权限。外键、触发器、额外索引或约束、已有 Rivomesh 元数据以及目标表已加入订阅时会拒绝计划。
 
 ```sh
 java -jar rivomesh.jar plan-adoption config/task.yml postgres
@@ -44,6 +44,16 @@ java -jar rivomesh.jar adopt-existing config/task.yml postgres <sourceTable> <re
 收到 `ADOPTION_COMMIT_UNKNOWN` 时，保持冻结，使用完全相同的审批参数重试以确认原生回执。重放会核验暂停的基线、目标物理表、数据行、归属及两端断点。请求变化、元数据不完整或现场漂移时会拒绝。使用私有运维记录保留原计划和回执。任务已经恢复后，使用常规状态和恢复命令。
 
 确认回执后，运维人员可以解除源库写入冻结，使用 `resumeErrorGeneration` 执行 `resume-pipeline`，再启动常规同步进程。同步期间继续停止目标端应用写入。保留覆盖批准位点的源端 binlog，直到进程追平。应用写入交接和回切仍需独立执行。
+
+## 在原接管点恢复已批准的业务 UNIQUE
+
+接管计划包含 `restoreUnique` 时，其 `planSha256` 会绑定预期约束名称、键列以及已有普通索引的物理身份。保持原 MySQL 冻结并保持接管后的任务暂停，提供新的恢复请求 UUID 和操作人执行下列命令。命令重新核验原位点、数据行和目标目录，在同一 PostgreSQL 事务中添加不可延迟的 `UNIQUE NULLS DISTINCT` 并记录原生回执。保留原普通索引。经批准的恢复回执会纳入该表的写入就绪证据。
+
+```sh
+java -jar rivomesh.jar restore-adopted-unique config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <restoration-request> <actor> --acknowledge-exclusive-freeze
+```
+
+收到 `ADOPTED_UNIQUE_COMMIT_UNKNOWN` 时，保持冻结并重试相同请求。`prepare-target-writer` 会核对已审批的恢复回执、原生约束和普通索引。通过手工 DDL 创建同名约束仍缺少恢复回执。首次业务写入前回切后，约束继续生效，常规 CDC 会校验其原生证明后接续同步。
 
 ## 记录应用写入角色的就绪状态
 

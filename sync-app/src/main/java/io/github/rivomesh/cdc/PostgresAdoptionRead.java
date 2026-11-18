@@ -107,10 +107,10 @@ public final class PostgresAdoptionRead implements AutoCloseable {
     }
 
     public String blocker(TableSchema table) throws Exception {
-        return blocker(table, false, null);
+        return blocker(table, false, null, null);
     }
 
-    private String blocker(TableSchema table, boolean adopted, String verifiedWriterTrigger) throws Exception {
+    private String blocker(TableSchema table, boolean adopted, String verifiedWriterTrigger, String restoredConstraint) throws Exception {
         if (!snapshot) throw new IllegalStateException("ADOPTION_VIEW_NOT_PINNED");
         verify();
         if (table.primaryKey.isEmpty()) return "ADOPTION_SOURCE_PRIMARY_KEY_REQUIRED";
@@ -158,9 +158,11 @@ public final class PostgresAdoptionRead implements AutoCloseable {
                 || exists("SELECT 1 FROM pg_catalog.pg_rewrite WHERE ev_class=?::oid", oid)) {
             return "ADOPTION_TARGET_TRIGGERS_OR_RULES_REQUIRE_PLAN";
         }
-        if (exists("SELECT 1 FROM pg_catalog.pg_constraint WHERE (conrelid=?::oid AND contype<>'p')"
-                + " OR confrelid=?::oid", oid, oid)
-                || exists("SELECT 1 FROM pg_catalog.pg_index WHERE indrelid=?::oid AND indisunique AND NOT indisprimary", oid)) {
+        if (exists("SELECT 1 FROM pg_catalog.pg_constraint WHERE (conrelid=?::oid AND contype<>'p' AND conname::text IS DISTINCT FROM ?)"
+                + " OR confrelid=?::oid", oid, restoredConstraint, oid)
+                || exists("SELECT 1 FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class k ON k.oid=i.indexrelid"
+                + " WHERE i.indrelid=?::oid AND i.indisunique AND NOT i.indisprimary AND k.relname::text IS DISTINCT FROM ?",
+                oid, restoredConstraint)) {
             return "ADOPTION_TARGET_CONSTRAINTS_REQUIRE_PLAN";
         }
         try {
@@ -214,15 +216,21 @@ public final class PostgresAdoptionRead implements AutoCloseable {
         return planEvidence(table, journalNamespace, false);
     }
 
-    String planEvidence(TableSchema table, String journalNamespace, boolean adopted) throws Exception {
-        return planEvidence(table, journalNamespace, adopted, null);
+    public PostgresAdoptedUnique.Proposal proposedUnique(TableSchema table) {
+        return PostgresAdoptedUnique.proposal(PostgresAdoptedUnique.candidate(table, settings.uniquePolicy));
     }
 
-    String planEvidence(TableSchema table, String journalNamespace, boolean adopted, String verifiedWriterTrigger) throws Exception {
-        String blocker = blocker(table, adopted, verifiedWriterTrigger);
+    String planEvidence(TableSchema table, String journalNamespace, boolean adopted) throws Exception {
+        return planEvidence(table, journalNamespace, adopted, null, null);
+    }
+
+    String planEvidence(TableSchema table, String journalNamespace, boolean adopted, String verifiedWriterTrigger,
+                         PostgresAdoptedUnique.Receipt restored) throws Exception {
+        IndexPolicy.Decision candidate = PostgresAdoptedUnique.candidate(table, settings.uniquePolicy);
+        String blocker = blocker(table, adopted, verifiedWriterTrigger, restored == null ? null : restored.proposal().constraint());
         if (blocker != null) throw new IllegalStateException(blocker);
         String evidence = PostgresAdoptionCatalog.inspect(connection, destination(table), table,
-                settings.metadataSchema, journalNamespace, adopted);
+                settings.metadataSchema, journalNamespace, adopted, candidate, restored != null);
         verify();
         return evidence;
     }

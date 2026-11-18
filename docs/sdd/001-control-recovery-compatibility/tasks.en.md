@@ -140,7 +140,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-01 · Domestic transactional database matrix · P1 · Depends on: JV-01
   Deliver: Record sync/recovery/manual capabilities by product,version,mode,distribution/index/driver/JDK;commercial distributed hardware is separately accepted,not inferred from PG protocol connectivity.
   Acceptance: AC-LG-01
-- [ ] T-LG-02 · Nonempty adoption,constraints,cutover/failback · P1 · Depends on: RC-09, SO-01
+- [x] T-LG-02 · Nonempty adoption,constraints,cutover/failback · P1 · Depends on: RC-09, SO-01
   Deliver: Implement adoption/difference planning,constraint restoration,final source cut,write handoff and failback conditions;dual-write/bidirectional conflict policy is separately specified.
   Acceptance: AC-LG-02
 - [ ] T-LG-03 · ClickHouse/Doris/Hive production profiles · P1 · Depends on: JV-01

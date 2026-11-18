@@ -1,5 +1,6 @@
 package io.github.rivomesh.cdc;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.rivomesh.Sql;
 import io.github.rivomesh.recovery.FailureEvidence;
 
@@ -32,17 +33,18 @@ public final class PostgresWriterReadiness {
     }
 
     public record Evidence(String adoptionSha256, String sourceCutSha256, String targetCatalogSha256,
-                           String targetRowsSha256, String roleOid, String authoritySha256) {}
+                           String targetRowsSha256, String roleOid, String authoritySha256,
+                           @JsonInclude(JsonInclude.Include.NON_NULL) String restoredUniqueSha256) {}
 
     public record Receipt(Approval approval, Evidence evidence, String evidenceSha256, String recordedAt) {}
 
     public record Outcome(Receipt receipt, boolean replayed) {}
 
     static Outcome record(Connection c, JdbcSink.Settings settings, String targetSchema,
-                          PostgresExistingAdoption.Receipt adoption, Approval approval,
+                          PostgresExistingAdoption.Replay baseline, Approval approval,
                           PostgresExistingAdoption.SourceFence verify) throws Exception {
         lockAuthority(c, "WRITER_READINESS");
-        Evidence evidence = evidence(c, targetSchema, adoption, approval);
+        Evidence evidence = evidence(c, targetSchema, baseline, approval);
         String digest = Codec.sha256(Codec.encode(evidence));
         String relation = relation(settings);
         if (!ledger(c, settings.metadataSchema)) {
@@ -67,7 +69,7 @@ public final class PostgresWriterReadiness {
                 throw failure("WRITER_READINESS_RECEIPT_CHANGED");
             }
         }
-        if (!evidence.equals(evidence(c, targetSchema, adoption, approval))) throw failure("WRITER_READINESS_EVIDENCE_CHANGED");
+        if (!evidence.equals(evidence(c, targetSchema, baseline, approval))) throw failure("WRITER_READINESS_EVIDENCE_CHANGED");
         verify.verify();
         if (replayed) {
             c.rollback();
@@ -111,8 +113,9 @@ public final class PostgresWriterReadiness {
         return Sql.pg(settings.metadataSchema) + "." + Sql.pg(NAME);
     }
 
-    static Evidence evidence(Connection c, String schema, PostgresExistingAdoption.Receipt adoption,
+    static Evidence evidence(Connection c, String schema, PostgresExistingAdoption.Replay baseline,
                              Approval approval) throws Exception {
+        PostgresExistingAdoption.Receipt adoption = baseline.receipt();
         try (Statement statistics = c.createStatement()) {
             statistics.execute("SELECT pg_stat_clear_snapshot()");
         }
@@ -164,9 +167,13 @@ public final class PostgresWriterReadiness {
                 String authority = Codec.sha256(Codec.encode(List.of(row.getString(1), row.getString(2), row.getString(3),
                         row.getString(4), row.getString(11), row.getString(12), row.getString(13))));
                 return new Evidence(Codec.sha256(Codec.encode(adoption)), adoption.sourceSha256(), adoption.catalogSha256(),
-                        adoption.rowsSha256(), row.getString(1), authority);
+                        adoption.rowsSha256(), row.getString(1), authority, restoredUniqueHash(baseline));
             }
         }
+    }
+
+    static String restoredUniqueHash(PostgresExistingAdoption.Replay baseline) {
+        return baseline.restoredUnique() == null ? null : Codec.sha256(Codec.encode(baseline.restoredUnique()));
     }
 
     private static Receipt find(Connection c, String relation, JdbcSink.Settings settings) throws Exception {

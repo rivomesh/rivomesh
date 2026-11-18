@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 
-Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,36 DONE, 12 PARTIAL and 0 NEW, with 12 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -13,7 +13,7 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | CP-01 | P0 / DONE | Global node registry and state | Shared registry passes PostgreSQL/MySQL two-node,kill/rejoin and storage-outage acceptance;global task authority/commands remain CP-02/03. |
 | CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
 | CP-03 | P0 / DONE | Durable cross-node command routing | Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair. |
-| CP-04 | P0 / PARTIAL | Failover,fencing and placement | Both entries verified assessment, reservations, original cuts, reports, closed receipts and historical failure custody. Raw source event custody, dual fences, actual placement and automatic takeover remain. |
+| CP-04 | P0 / PARTIAL | Failover,fencing and placement | Native tests verified same-store internal writer transfer, old lease refusal and rollback, plus candidate private staging of reports and receipts. Configuration installation, operator transition and automatic failover remain. |
 | CP-05 | P0 / DONE | Shared authorization,audit and secret references | Both control stores verified cross-entry revocation, audit correlation by request/task/Agent/plan and real browser redaction. The optional Agent-level policy passes only task-authorized and actually used references to each Worker. |
 | CP-06 | P1 / DONE | Cluster logs,metrics and diagnostics | Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
@@ -41,7 +41,7 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | RC-07 | P0 / DONE | Guided manual corrective data entry | The bounded SQL profile passed. Typed entry and JSON import support administrator review of before/after values, exact identities, atomic batches and resumption of the original transaction. PostgreSQL passes real CDC and MySQL passes native checks. RC-10 tracks other destinations. |
 | RC-08 | P0 / DONE | Consistency-gap ledger and honest watermarks | First SQL profile accepted:durable gaps,reviewed plans,cross-entry approval/cancellation,fresh full-table scans,atomic receipts and distinct safe coverage/contiguous application. Verification preserves SKIP and the original applied prefix without resuming. Other target protocols remain RC-10/LG-03/LG-04. |
 | RC-09 | P0 / DONE | Durable distributed recovery jobs | The bounded SQL profile passes cross-entry planning, approval, cancellation and original-request recovery. Native commit-boundary tests use PostgreSQL 17 as the recovery destination. |
-| RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | Exact gap event retention, backpressure and guarded collection passed. The UI shows per-target recovery support. ClickHouse read-only native receipt review refuses partial or changed records. Analytical and broker-native gap and compensation protocols remain. |
+| RC-10 | P1 / PARTIAL | Destination-specific recovery and retention | Native event retention, ClickHouse preceding receipts, Kafka management review and durable receipts are verified. Message notices and cross-adapter compensation remain. |
 
 ## Source compatibility
 
@@ -52,7 +52,7 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | SO-03 | P1 / DONE | MySQL8.0 current V3 acceptance | MySQL 8.0.46 V3 standalone, GTID async, single-primary MGR and distributed compensation/correction are accepted. JV-02 tracks remaining Java 21 combinations. |
 | SO-04 | P1 / DONE | MySQL8.2 compatibility and acceptance | MySQL 8.2.0 Java 8 V3 standalone, GTID async and single-primary MGR are accepted. JV-02 tracks remaining Java 21 combinations. |
 | SO-05 | P1 / DONE | MySQL8.4 expanded compatibility | MySQL 8.4.13 V3 topologies and GTID/ROW/FULL admission and refusal are accepted. Additional destination combinations are tracked separately. |
-| SO-06 | P1 / PARTIAL | PostgreSQL source adapter | Temurin 21 verified PostgreSQL 17.12 logical failover slots, UUID and civil DATE (DATE uses PostgreSQL and MySQL targets), and PostgreSQL 18.7 stored generated columns. More types, DDL and common cuts remain. |
+| SO-06 | P1 / PARTIAL | PostgreSQL source adapter | Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE and microsecond timestamp recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain. |
 | SO-07 | P1 / PARTIAL | Oracle source adapter | Temurin 21 verified Oracle 26ai single-PDB long transactions, archived SCN restart, strict text JSON and civil DATE to PostgreSQL. Native binary JSON, LOB, generated columns and RAC failover remain. |
 
 ## Java runtime compatibility
@@ -60,8 +60,8 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
-| JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 passed four single-primary MySQL releases, MySQL 8.4.13 async GTID primary failover with two SQL destinations, PostgreSQL 17/18 and single-PDB Oracle profiles. More topologies, destinations, TLS and recovery combinations remain. |
-| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified native MySQL/PostgreSQL TLS/reconnect and JDBC externalization for MySQL and four vendors with exact classpath admission. Further vendor endpoints, TLS and recovery profiles remain. |
+| JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 verified four standalone MySQL versions, MySQL 8.4.13 async GTID promotion with two destinations, automatic three-node single-primary group failover, PostgreSQL 17/18 and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain. |
+| JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified native MySQL/PostgreSQL TLS and reconnect, plus external Dameng JDBC class origin, native precision, SQL diagnostics, reconnect and repair. MySQL and four vendor JDBC packages have verified external classpath admission. Other vendor endpoints, TLS and cluster profiles remain. |
 | JV-04 | P1 / DONE | Java 21 deployment and rolling replacement | Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence. |
 
 ## Complete documentation
@@ -79,10 +79,10 @@ Implementation:48requirements,35 DONE, 13 PARTIAL and 0 NEW, with 13 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | Domestic transactional database matrix | OceanBase CE 4.3.5.6 MySQL tenant passed native transactions and mixed restart recovery. Distributed GaussDB, OceanBase Oracle mode and GBase 8a/8s remain. |
-| LG-02 | P1 / PARTIAL | Nonempty adoption,constraints,cutover/failback | Native bounded single-table PostgreSQL adoption, frozen-cut continuation and actual UNIQUE restore passed. Broader products and scopes, business writer cutover and failback remain. |
-| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | ClickHouse, Doris and Hive have initial profiles. Java 21 verified native Doris 4.1.3 single FE/BE outage catch-up, original receipts and independent PostgreSQL recovery. Other clustered, TLS and capacity profiles remain. |
+| LG-02 | P1 / DONE | Nonempty adoption,constraints,cutover/failback | Bounded single-table PostgreSQL profile accepted. At one frozen MySQL cut the fixture reviewed differences, adopted, restored an approved BIGINT UNIQUE, transferred business writes, performed pre-write failback and reused the original snapshot. Broader products and post-write reverse migration are separate. |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive production profiles | ClickHouse has native evidence. Java 21 verified Doris 4.1.3 and Hive 4.0.1 outage catch-up, original receipt retention and isolated PostgreSQL fault replay. External Hive Metastore, distributed storage, further production clusters, TLS and capacity remain. |
 | LG-04 | P1 / PARTIAL | Queue cluster and recovery profiles | Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain. |
-| LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Local and external journals are available. Two Agents verified shared report, closed receipt and historical failure custody with original keys retained. Original source events and actual transfer remain. |
+| LG-05 | P0 / PARTIAL | Optional storage and cross-node reachability | Optional local and external journals and dual-Agent evidence custody are verified. Candidate staging retains exact private report and receipt bytes; original signing keys stay at source. Complete state transfer and broader products remain. |
 | LG-06 | P1 / DONE | Live K8s/CSI and node-fault acceptance | Live ARM64 accepted Helm and native YAML image replacement, same-claim RWO CSI relocation and automatic CDC. Separate native cases cover physical worker loss, Secret rotation, external-journal takeover and stale Writer fencing. |
 | LG-07 | P1 / DONE | Large catalogs,transactions and hardware standards | The bounded Temurin 21 resource profile is accepted, with 12 hardware trials, 256 mapped databases, a transaction over 8 MiB and slow-target backpressure plus restart recovery through a separate journal. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified coordinated LOCAL journal and PostgreSQL backup/restore, original MySQL 8.4.13 continuation and identity refusal. Broader DDL, types and other products remain. |

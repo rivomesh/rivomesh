@@ -4,6 +4,7 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.JdbcSink;
+import io.github.rivomesh.cdc.PostgresAdoptedUnique;
 import io.github.rivomesh.cdc.PostgresAdoptionRead;
 import io.github.rivomesh.cdc.PostgresExistingAdoption;
 import io.github.rivomesh.cdc.PostgresWriterHandoff;
@@ -92,6 +93,31 @@ final class PipelineAdoptionPlan {
             if (outcome == null) throw sanitized(error);
         }
         return Map.of("status", "TARGET_WRITER_READINESS_RECORDED", "acknowledged", true,
+                "replayed", outcome.replayed(), "receipt", outcome.receipt(),
+                "receiptSha256", Codec.sha256(Codec.encode(outcome.receipt())));
+    }
+
+    static Map<String,Object> restoreUnique(PipelineConfig config, String targetId,
+                                            PostgresExistingAdoption.Approval adoption,
+                                            PostgresAdoptedUnique.Approval approval, boolean exclusiveFreeze) throws Exception {
+        if (!exclusiveFreeze) throw failure("ADOPTED_UNIQUE_EXCLUSIVE_FREEZE_ACK_REQUIRED");
+        PipelineConfig.Target target = profile(config, targetId);
+        PostgresAdoptedUnique.Outcome outcome = null;
+        try (JdbcJournal journal = new JdbcJournal(config.existingJournalSettings());
+             PostgresExistingAdoption bootstrap = JdbcSink.adoptionBootstrap(
+                     config.targetSettings(target, "adopted-unique"), journal, MAX_MILLIS)) {
+            bootstrap.lock(adoption);
+            PostgresExistingAdoption.Replay replay = bootstrap.replay();
+            if (replay == null) throw failure("ADOPTED_UNIQUE_CUT_REQUIRED");
+            try (MysqlUniqueFreeze source = MysqlUniqueFreeze.current(config, MAX_MILLIS)) {
+                verifyFrozenRows(config, replay, source);
+                verifyTargetRows(bootstrap, replay);
+                outcome = bootstrap.restoreUnique(approval, () -> verifyExecutionFreeze(source));
+            }
+        } catch (Exception error) {
+            if (outcome == null) throw sanitized(error);
+        }
+        return Map.of("status", "ADOPTED_UNIQUE_RESTORED", "acknowledged", true,
                 "replayed", outcome.replayed(), "receipt", outcome.receipt(),
                 "receiptSha256", Codec.sha256(Codec.encode(outcome.receipt())));
     }
@@ -205,6 +231,8 @@ final class PipelineAdoptionPlan {
         plan.put("targetCatalogSha256", targetEvidence);
         plan.put("matchedRows", rows.sourceRows());
         plan.put("matchedRowsSha256", rowRoot);
+        PostgresAdoptedUnique.Proposal unique = destination.proposedUnique(table);
+        if (unique != null) plan.put("restoreUnique", unique);
         String digest = Codec.sha256(Codec.encode(plan));
         if (expectedDigest != null && !expectedDigest.equals(digest)) throw failure("ADOPTION_PLAN_CHANGED");
 
@@ -236,8 +264,8 @@ final class PipelineAdoptionPlan {
     }
 
     private static void requireShape(TableSchema table) {
-        if (table.primaryKey.size() != 1 || table.indexes.stream().anyMatch(index -> !index.primary
-                || !"BTREE".equalsIgnoreCase(index.method) || index.descending.stream().anyMatch(Boolean.TRUE::equals))) {
+        if (table.primaryKey.size() != 1 || table.indexes.stream().anyMatch(index -> !"BTREE".equalsIgnoreCase(index.method)
+                || index.descending.stream().anyMatch(Boolean.TRUE::equals))) {
             throw failure("ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED");
         }
         for (TableSchema.Column column : table.columns) {

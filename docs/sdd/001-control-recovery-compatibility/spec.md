@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 
-实施中：48项持续追踪，35项DONE、13项PARTIAL、0项NEW，余13项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，36项DONE、12项PARTIAL、0项NEW，余12项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -13,7 +13,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | CP-01 | P0 / DONE | 统一节点注册与状态 | 共享节点目录已通过PostgreSQL/MySQL双节点、kill/重开及控制库中断验收；任务权威/远端命令仍属CP-02/03。 |
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
 | CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
-| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 双入口评估、槽位预留、原切点、报告、闭合回执及历史故障证据已实测。原始源事件证据、双端写入隔离、实际归属提交及自动接管待验。 |
+| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已实测同库内部写入权原子变更、旧租约拒绝与两端回滚，以及候选 Agent 私有暂存报告回执。候选配置完整安装、运营切换和自动故障接管待验。 |
 | CP-05 | P0 / DONE | 共享权限、审计和密钥引用 | PostgreSQL 和 MySQL 控制库实测跨入口撤权、按请求/任务/Agent/计划追踪及真实浏览器脱敏。执行 Agent 启用任务凭据授权后，Worker 仅得到所需且授权的引用。 |
 | CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
@@ -41,7 +41,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | RC-07 | P0 / DONE | 界面手工补数据与修正 | 首批 SQL 档案通过。逐行录入和 JSON 导入支持管理员审阅前后值、精确行定位、原子批次和原事务恢复。PostgreSQL 通过真实 CDC，MySQL 通过原生检查。其他目标由 RC-10 跟踪。 |
 | RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
 | RC-09 | P0 / DONE | 补偿作业的跨节点持久化和恢复 | 首批 SQL 档案通过跨节点计划、审批、取消与原请求恢复。真实提交边界测试以 PostgreSQL 17 为恢复目标。 |
-| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | 已实测缺口原事件保留、配额背压和回收。界面逐目标显示恢复能力，ClickHouse 可只读核对原生回执，半批或回执变动会拒绝。分析和消息目标缺口通知、补偿协议待验。 |
+| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | 原事件保留与回收、ClickHouse 原生前序回执、Kafka 管理界面核验和持久回执已实测。消息通知及跨适配器补偿待验。 |
 
 ## 源数据库兼容
 
@@ -52,7 +52,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
-| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID，以及 DATE 双目标投递和 18.7 存储型生成列。更多类型、DDL 及多目标共同校验点待验。 |
+| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 和微秒时间戳双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。 |
 
 ## Java运行时兼容
@@ -60,8 +60,8 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已通过四个 MySQL 版本的独立全量增量、MySQL 8.4.13 异步 GTID 切主及双 SQL 目标续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB 核心档案。更多拓扑、目标、TLS 和恢复组合待验。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测 MySQL/PostgreSQL 双端 TLS 与重连，外置 MySQL 和四个厂商 JDBC 的包隔离与外置加载已验。其他厂商实连、TLS 及故障组合待验。 |
+| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动的实连精度、原生 SQL 错误、故障续传和修正。已核对 MySQL 与四个厂商 JDBC 外置加载。其他厂商、TLS 及集群组合待验。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档
@@ -79,10 +79,10 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
-| LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 已实测限定非空 PostgreSQL 单表原子接管、冻结源切点续传及 UNIQUE 实际恢复；广范围目标/产品、业务写入交接与回切待验。 |
-| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris、Hive 已有初步档案。Java 21 实测 Doris 4.1.3 单 FE/BE 的停机追平、原回执和独立 PostgreSQL 故障重放。其他生产集群、TLS 和容量待验。 |
+| LG-02 | P1 / DONE | 非空接管、约束恢复、切换回切 | 限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。更广产品及写后逆向迁移分别跟踪。 |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse 已有实库档案。Java 21 实测 Doris 4.1.3 和 Hive 4.0.1 停机追平、原回执保留和 PostgreSQL 对照故障重放。Hive 外置 Metastore、分布式存储及其他生产集群、TLS、容量待验。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
-| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 本地/外部日志可选，已实测双 Agent 核验共享报告、闭合回执和历史故障证据，原签名密钥保留在原 Agent。原始源事件和实际迁移待验。 |
+| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选本地/外部日志及双 Agent 证据核验已实测。候选私有暂存报告和回执保持原字节，原始证据签名密钥留在原 Agent。完整状态接管及多产品验证待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。 |

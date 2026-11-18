@@ -22,7 +22,7 @@ Use `plan-adoption` after `preview-adoption` finds matching data. This profile c
 
 The source operator must enable and persist `read_only` and `super_read_only` and keep `persisted_globals_load` enabled. The MySQL account must see all tables and related schema metadata and have the grants for the global read lock and replication status checks. The planner refuses inbound replication and group membership. It takes a bounded lock on the original MySQL session and verifies the original physical server and exact binlog boundary before and after comparison. [MySQL FLUSH statement](https://dev.mysql.com/doc/refman/8.4/en/flush.html)
 
-The source has a single signed `BIGINT` primary key and no secondary indexes, generated values, defaults other than `NULL`, triggers or foreign keys. Other columns may be signed integers, JSON or `utf8mb4_0900_bin` VARCHAR up to 4,000 characters. The target must have matching column order and nullability, mapped to `bigint`, `jsonb` and equal-width `varchar` with explicit `pg_catalog."C"` collation. The target has a single index on its nondeferrable `bigint` B-tree primary key. The target role must have ownership authority, schema and database creation privileges and permission to read `pg_control_system()`. Existing Rivomesh ownership, journal state, sink metadata, enabled event triggers and target subscription membership stop the plan.
+The source has a single signed `BIGINT` primary key, with an optional business UNIQUE on one other signed `BIGINT` column. The optional UNIQUE requires `DOWNGRADE_BUSINESS` and its exact ordinary PostgreSQL B-tree index before planning. `preview-adoption` lists the expected ordinary index name under `indexPlan`. The source profile requires ordinary columns with defaults limited to `NULL` and admits signed integers, JSON and `utf8mb4_0900_bin` VARCHAR up to 4,000 characters. Target columns must have matching order and nullability and map to `bigint`, `jsonb` or equal-width `varchar` with explicit `pg_catalog."C"` collation. The target role needs ownership authority, schema and database creation privileges and permission to read `pg_control_system()`. Foreign keys, triggers, other indexes and constraints, existing Rivomesh metadata and target subscription membership stop the plan.
 
 ```sh
 java -jar rivomesh.jar plan-adoption config/task.yml postgres
@@ -44,6 +44,16 @@ The command recomputes the source cut, schema, target native catalog and matchin
 If the command returns `ADOPTION_COMMIT_UNKNOWN`, keep the freeze and use the identical approval to confirm the durable receipt before resuming. A confirmed replay verifies the paused baseline, native table, rows, target ownership and both checkpoints. A changed request, incomplete metadata or drift fails closed. Keep the original review and receipt in the operator's private records. If the job has already resumed, use its normal status and recovery commands.
 
 After a confirmed receipt, the maintenance operator can remove the source write fence and run `resume-pipeline` with `resumeErrorGeneration`, then start the ordinary worker. Keep target application writers stopped during sync. Retain the source binlog covering the approved cut until the worker catches up. Application write handover and failback remain separate operations.
+
+## Restore the approved business UNIQUE at the original adoption cut
+
+When the adoption includes `restoreUnique`, its `planSha256` includes the expected name and key of the new UNIQUE and the physical identity of the existing ordinary index. Keep the original MySQL freeze and the adopted job paused. Run the following command with a new restoration request UUID and operator. The command rechecks the original cut, table rows and native catalog, then adds a nondeferrable `UNIQUE NULLS DISTINCT` and commits one native receipt with the DDL. Keep the existing ordinary index. The approved restoration receipt becomes part of readiness for this table.
+
+```sh
+java -jar rivomesh.jar restore-adopted-unique config/task.yml postgres <sourceTable> <adoption-digest> <adoption-request> <adoption-actor> <restoration-request> <actor> --acknowledge-exclusive-freeze
+```
+
+On `ADOPTED_UNIQUE_COMMIT_UNKNOWN`, keep the freeze and retry the identical request. `prepare-target-writer` checks the approved restoration, including the physical constraint and ordinary index. Building the expected constraint manually does not supply the required receipt. The constraint remains in force after pre-write failback and ordinary CDC accepts it only with matching native proof.
 
 ## Record application writer readiness
 

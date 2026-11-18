@@ -490,6 +490,20 @@
         "profile": "Temurin 21, PostgreSQL shared control, MySQL 8.4.13, 18 native checks with eight real Chrome, 47 Java, 136 DOM, plus earlier history and paging archive",
         "criteriaSha256": "092a53ef037bc983d90841309a0dc9e4b54d3bd42e0843844989d66b91fdb8ed"
       }
+    },
+    {
+      "id": "LG-02",
+      "title": {
+        "zh-CN": "非空接管、约束恢复、切换回切",
+        "en": "Nonempty adoption,constraints,cutover/failback"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "10d0fde41214d6ef5919dde2b9078a071e3b3113112af9e1afbb308433f3d48f",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, standalone MySQL 8.4.13 and one keyed existing PostgreSQL 17.12 table with one signed BIGINT business UNIQUE. Reviewed difference, downgraded ordinary index, same frozen cut adoption and attested restoration, role switch and pre-write failback, and original snapshot CDC continuation. Multi-target and post-write reverse replication are separate.",
+        "criteriaSha256": "59f53a3f6c2a0081684ff7db3faafb8b34d49bd3f76160413347b2fd2a179935"
+      }
     }
   ],
   "productProfiles": [
@@ -8535,5 +8549,35 @@
     },
     "scope": "One previously adopted keyed PostgreSQL table, frozen standalone MySQL source, external colocated PostgreSQL journal, dedicated no-membership target role. Scoped transactional GRANT and journal fence. Failback requires unchanged crash continuity and no committed business operation. Source thaw is an explicit separate operator action.",
     "remaining": "Combined bounded adoption, constraint restoration and writer transition for the same original cut remain pending; the original native restored-constraint profile is independent."
+  },
+  "existingPostgresAdoptedUniqueCutoverChain": {
+    "native": {
+      "artifactSha256": "10d0fde41214d6ef5919dde2b9078a071e3b3113112af9e1afbb308433f3d48f",
+      "checks": [
+        "Existing nonempty difference preview and signed BIGINT ordinary-index plan lead to the same frozen adopted cut",
+        "Unattested native UNIQUE refuses readiness; the exact reviewed restoration is enforced and retains its original ordinary index",
+        "Native index drift is rejected; restored constraint receipt binds the same original cut through writer activation and pre-write failback",
+        "After write-free failback normal CDC continues the original snapshot and keeps the attested UNIQUE in force"
+      ],
+      "status": "PASS",
+      "profile": "ADOPTED_UNIQUE_CHAIN",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "fixtureSha256": "54a7845a3cfbb4efb3da72414995523250cdd26db3a7c4667b92b6633c78c81b",
+    "scopedBuildTree": "921de10eae1bd5812aa6a8a2ffbb4f52c59524a4",
+    "javaFocusedTests": 68,
+    "profile": "Temurin 21, standalone MySQL 8.4.13 and one keyed existing PostgreSQL 17.12 table with one signed BIGINT business UNIQUE. Reviewed difference, downgraded ordinary index, same frozen cut adoption and attested restoration, role switch and pre-write failback, and original snapshot CDC continuation. Multi-target and post-write reverse replication are separate."
+  },
+  "combinedMainReactor20261119": {
+    "commit": "18d7a77",
+    "artifactSha256": "934d37fad4df87aa94588012d1953d692281d696432098911a8124ff7bf3745f",
+    "verifiedAppTree": "30cfd027470bc70d738c509e48957c408604cdcd",
+    "javaTestsPassed": 567,
+    "optionalSkips": 35,
+    "appTestsPassed": 565,
+    "isolatedTransportTestsPassed": 2,
+    "earlierInvocation": "The test-only Maven reactor did not package relocated vendor driver classes. A clean normal package lifecycle on the 18d7a77 application passed the driver coexistence check and all enabled tests."
   }
 }

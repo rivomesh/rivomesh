@@ -30,6 +30,7 @@ def main():
     profile.add_argument('--only-adoption-execution', action='store_true', help='Verify atomic adoption and first native CDC')
     profile.add_argument('--only-writer-readiness', action='store_true', help='Verify a durable business writer readiness receipt')
     profile.add_argument('--only-writer-transition', action='store_true', help='Verify target writer authority and write-free failback')
+    profile.add_argument('--only-adopted-unique-chain', action='store_true', help='Verify adoption, UNIQUE restoration and authority at one cut')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -47,7 +48,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('WRITER_TRANSITION' if args.only_writer_transition else
+    profile_name = ('ADOPTED_UNIQUE_CHAIN' if args.only_adopted_unique_chain else
+                    'WRITER_TRANSITION' if args.only_writer_transition else
                     'WRITER_READINESS' if args.only_writer_readiness else
                     'ADOPTION_EXECUTION' if args.only_adoption_execution else
                     'ADOPTION_PLAN' if args.only_adoption_plan else
@@ -623,6 +625,113 @@ def main():
             assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
             passed('A committed write followed by identical row contents remains witnessed across PostgreSQL restart and blocks failback')
 
+        def same_cut_unique_chain():
+            acknowledgement = '--acknowledge-exclusive-freeze'
+            actor = 'fixture-chain-operator'
+            target = dict(case['targets'][0], username='postgres', metadataSchema='chain_sink', mappings={'sales': 'review'})
+            journal = {'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'url': target['url'],
+                       'username': 'postgres', 'password': '${RM_ADOPTION_PASSWORD}', 'namespace': 'chain_journal'}
+            (directory / 'same-cut.yml').write_text(json.dumps(dict(case, journal=journal, targets=[target])))
+            mysql("""
+                CREATE DATABASE sales CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin;
+                CREATE TABLE sales.items(id BIGINT PRIMARY KEY,business_key BIGINT,name VARCHAR(80),doc JSON,
+                                         UNIQUE KEY uq_business_key(business_key)) ENGINE=InnoDB;
+                INSERT INTO sales.items VALUES (1,100,'sensitive-row-value','{"b":2,"a":1.0}'),(2,NULL,'tail ',NULL),(3,NULL,'other',NULL);
+            """)
+            postgres('''
+                CREATE SCHEMA review;
+                CREATE TABLE review.items(id BIGINT PRIMARY KEY,business_key BIGINT,name VARCHAR(80) COLLATE "C",doc JSONB);
+                INSERT INTO review.items VALUES (1,100,'sensitive-row-value','{"a":1,"b":2.0}'),(2,NULL,'drift',NULL),(3,NULL,'other',NULL);
+            ''')
+
+            def cli(operation, *parameters, check=True):
+                return compose('run', '--rm', '-T', 'runner', operation, '/fixture/same-cut.yml', *parameters, check=check)
+
+            def refused(answer, code):
+                assert answer.returncode != 0 and not answer.stdout.strip()
+                assert code in answer.stderr, (code, re.findall(r'\b(?:ADOPTED|ADOPTION|TARGET_WRITER|SQL)_[A-Z0-9_]+', answer.stderr))
+
+            before = json.loads(cli('preview-adoption', 'pg').stdout)
+            assert before['status'] == 'DIFFERENCES_FOUND' and before['tables'][0]['changed'] == 1
+            ordinary = before['tables'][0]['indexPlan'][0]['targetName']
+            assert re.fullmatch(r'rm_[a-f0-9]+_[a-f0-9]+', ordinary)
+            postgres(f"UPDATE review.items SET name='tail ' WHERE id=2; CREATE INDEX {ordinary} ON review.items(business_key)")
+            physical_index = f"SELECT pg_relation_filenode('review.{ordinary}'::regclass)"
+            original_index = postgres(physical_index)
+            mysql('SET PERSIST read_only=ON; SET PERSIST super_read_only=ON')
+            plan = json.loads(cli('plan-adoption', 'pg').stdout)
+            proposal = plan['plan']['restoreUnique']
+            assert proposal['ordinaryIndex'] == ordinary and proposal['sourceIndex'] == 'uq_business_key'
+            assert proposal['columns'] == ['business_key'] and plan['plan']['matchedRows'] == 3
+            constraint = proposal['constraint']
+            assert re.fullmatch(r'rm_u_[a-f0-9]+_[a-f0-9]+', constraint)
+            adoption = ('pg', 'items', plan['planSha256'], str(uuid.uuid4()), actor)
+            adopted = json.loads(cli('adopt-existing', *adoption, acknowledgement).stdout)
+            assert adopted['acknowledged'] and not adopted['replayed']
+            captured_sql = 'SELECT captured FROM chain_journal.rm3_job'
+            original_cut = postgres(captured_sql)
+            assert adopted['receipt']['sourceSha256'] == plan['plan']['sourcePositionSha256']
+            passed('Existing nonempty difference preview and signed BIGINT ordinary-index plan lead to the same frozen adopted cut')
+
+            postgres('CREATE ROLE chain_writer LOGIN NOINHERIT; GRANT USAGE ON SCHEMA review TO chain_writer; '
+                     'GRANT SELECT ON review.items TO chain_writer')
+            readiness = (*adoption, 'chain_writer', str(uuid.uuid4()), actor, acknowledgement)
+            refused(cli('prepare-target-writer', *readiness, check=False), 'ADOPTED_UNIQUE_RESTORE_REQUIRED')
+            postgres(f'ALTER TABLE review.items ADD CONSTRAINT {constraint} UNIQUE (business_key)')
+            refused(cli('prepare-target-writer', *readiness, check=False), 'ADOPTION_TARGET_CONSTRAINTS_REQUIRE_PLAN')
+            postgres(f'ALTER TABLE review.items DROP CONSTRAINT {constraint}')
+            restore = (*adoption, str(uuid.uuid4()), actor, acknowledgement)
+            restored = json.loads(cli('restore-adopted-unique', *restore).stdout)
+            assert restored['status'] == 'ADOPTED_UNIQUE_RESTORED' and not restored['replayed']
+            assert restored['receipt']['proposal'] == proposal and postgres(physical_index) == original_index
+            replay = json.loads(cli('restore-adopted-unique', *restore).stdout)
+            assert replay['replayed'] and replay['receipt'] == restored['receipt']
+            postgres("""DO $$ BEGIN
+                      BEGIN INSERT INTO review.items(id,business_key) VALUES (99,100);
+                            RAISE EXCEPTION 'restored UNIQUE was not enforced';
+                      EXCEPTION WHEN unique_violation THEN NULL; END;
+                      END $$""")
+            assert postgres('SELECT count(*) FROM review.items') == '3' and postgres(captured_sql) == original_cut
+            passed('Unattested native UNIQUE refuses readiness; the exact reviewed restoration is enforced and retains its original ordinary index')
+
+            postgres(f'ALTER INDEX review.{ordinary} RENAME TO renamed_ordinary_index')
+            refused(cli('prepare-target-writer', *readiness, check=False), 'UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED')
+            postgres(f'ALTER INDEX review.renamed_ordinary_index RENAME TO {ordinary}')
+            prepared = json.loads(cli('prepare-target-writer', *readiness).stdout)
+            assert prepared['receipt']['evidence']['restoredUniqueSha256'] == restored['receiptSha256']
+            assert prepared['receipt']['evidence']['sourceCutSha256'] == plan['plan']['sourcePositionSha256']
+            activation = (*adoption, prepared['receiptSha256'], str(uuid.uuid4()), actor, acknowledgement)
+            first = json.loads(cli('activate-target-writer', *activation).stdout)
+            assert first['status'] == 'TARGET_WRITER_AUTHORIZED' and first['acknowledged']
+            refused(cli('resume-pipeline', '1', check=False), 'TARGET_WRITER_AUTHORITY_ACTIVE')
+            with sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'chain_writer', '-d', 'preview') as app:
+                assert exchange_sql(app, "BEGIN; UPDATE review.items SET business_key=150 WHERE id=1; ROLLBACK; SELECT 'ROLLED_BACK';") == 'ROLLED_BACK'
+            return_args = (*adoption, prepared['receiptSha256'], str(uuid.uuid4()), actor, acknowledgement)
+            returned = json.loads(cli('failback-target-writer', *return_args).stdout)
+            assert returned['status'] == 'TARGET_WRITER_REVOKED' and returned['acknowledged'] and returned['resumeErrorGeneration'] == 2
+            assert postgres(captured_sql) == original_cut and postgres(physical_index) == original_index
+            assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
+            assert postgres(f"SELECT count(*) FROM pg_constraint WHERE conrelid='review.items'::regclass AND conname='{constraint}'") == '1'
+            passed('Native index drift is rejected; restored constraint receipt binds the same original cut through writer activation and pre-write failback')
+
+            mysql('SET PERSIST super_read_only=OFF; SET PERSIST read_only=OFF; UPDATE sales.items SET business_key=105 WHERE id=1')
+            cli('resume-pipeline', str(returned['resumeErrorGeneration']))
+            worker = project + '-same-cut-worker'
+            compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/same-cut.yml')
+            try:
+                wait_for(lambda: postgres('SELECT business_key FROM review.items WHERE id=1') == '105',
+                         'waiting for normal CDC with attested restored UNIQUE', seconds=115)
+                assert postgres('SELECT snapshot_id FROM chain_sink.rm3_sink_table') == adopted['receipt']['snapshot']
+                assert postgres(physical_index) == original_index
+                assert postgres(f"SELECT count(*) FROM pg_constraint WHERE conrelid='review.items'::regclass AND conname='{constraint}'") == '1'
+            except Exception:
+                worker_logs = subprocess.run(['docker', 'logs', '--tail', '80', worker], capture_output=True, text=True, timeout=15, check=False)
+                (output / 'worker-redacted.log').write_text((worker_logs.stdout + worker_logs.stderr).replace(password, '[REDACTED]'))
+                raise
+            finally:
+                subprocess.run(['docker', 'stop', '-t', '5', worker], capture_output=True, timeout=30, check=False)
+            passed('After write-free failback normal CDC continues the original snapshot and keeps the attested UNIQUE in force')
+
         def constraint_review():
             target = dict(case['targets'][0], username='postgres', metadataSchema='unique_meta',
                           mappings={'unique_source': 'unique_copy'})
@@ -982,6 +1091,10 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
+            if args.only_adopted_unique_chain:
+                same_cut_unique_chain()
+                report['status'] = 'PASS'
+                return
             if args.only_adoption_plan or args.only_adoption_execution or args.only_writer_readiness or args.only_writer_transition:
                 adoption_plan()
                 report['status'] = 'PASS'

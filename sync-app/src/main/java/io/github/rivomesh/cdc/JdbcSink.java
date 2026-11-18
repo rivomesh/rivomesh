@@ -649,7 +649,11 @@ public final class JdbcSink implements SinkAdapter {
             }else ddl(c,"CREATE "+(index.unique?"UNIQUE ":"")+"INDEX "+(dm()?q(destination(table))+".":"")+q(index.targetName)+" ON "+table(table)+" ("+index.columns.stream().map(this::q).collect(Collectors.joining(","))+")");
         }
         // Existing unique constraints cannot be silently dropped. Produce a separate migration plan.
-        if(settings.uniquePolicy==UniquePolicy.DOWNGRADE_BUSINESS)for(String name:columns.keySet())if(unique.get(name)&&!columns.get(name).equals(keys(table))&&!columns.get(name).equals(table.identityKey))throw new IllegalStateException("EXISTING_UNIQUE_REQUIRES_PLAN");
+        if(settings.uniquePolicy==UniquePolicy.DOWNGRADE_BUSINESS)for(String name:columns.keySet())if(unique.get(name)&&!columns.get(name).equals(keys(table))&&!columns.get(name).equals(table.identityKey)){
+            String restored=settings.product==TargetProduct.POSTGRESQL
+                    ?PostgresAdoptedUnique.runtimeConstraint(c,settings,destination(table),table):null;
+            if(!name.equals(restored))throw new IllegalStateException("EXISTING_UNIQUE_REQUIRES_PLAN");
+        }
     }
     private void bind(PreparedStatement p,int n,TableSchema.Column col,Cell value)throws Exception{
         if(value==null||!value.present)throw new IllegalArgumentException("ROW_IMAGE_INCOMPLETE");
@@ -918,7 +922,7 @@ public final class JdbcSink implements SinkAdapter {
                 .findFirst().orElseThrow(() -> new IllegalStateException("UNIQUE_RESTORE_INDEX_UNSUPPORTED"));
     }
 
-    private static String constraintName(IndexPolicy.Decision index) {
+    static String constraintName(IndexPolicy.Decision index) {
         return "rm_u_" + index.targetName.substring("rm_".length());
     }
 

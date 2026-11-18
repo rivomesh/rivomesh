@@ -13,7 +13,7 @@ final class PostgresAdoptionCatalog {
     private PostgresAdoptionCatalog() {}
 
     static String inspect(Connection connection, String schema, TableSchema table, String targetMetadata,
-                          String journalNamespace, boolean adopted) throws Exception {
+                          String journalNamespace, boolean adopted, IndexPolicy.Decision candidate, boolean restored) throws Exception {
         List<String> evidence = new ArrayList<>();
         try (PreparedStatement query = connection.prepareStatement("""
                 SELECT current_setting('server_version_num')::int,current_setting('server_encoding'),
@@ -48,7 +48,7 @@ final class PostgresAdoptionCatalog {
                        p.oid::text,i.indexrelid::text,pg_relation_filenode(i.indexrelid)::text,
                        pg_has_role(r.relowner,'USAGE') AND has_schema_privilege(n.oid,'CREATE'),
                        NOT EXISTS(SELECT 1 FROM pg_subscription_rel WHERE srrelid=r.oid),
-                       (SELECT count(*) FROM pg_index other WHERE other.indrelid=r.oid)=1
+                       (SELECT count(*) FROM pg_index other WHERE other.indrelid=r.oid)=?
                   FROM pg_class r JOIN pg_namespace n ON n.oid=r.relnamespace
                   JOIN pg_am heap ON heap.oid=r.relam
                   JOIN pg_constraint p ON p.conrelid=r.oid AND p.contype='p'
@@ -66,9 +66,10 @@ final class PostgresAdoptionCatalog {
                    AND NOT i.indnullsnotdistinct AND i.indnkeyatts=1 AND i.indnatts=1
                    AND i.indpred IS NULL AND i.indexprs IS NULL
                 """)) {
-            query.setString(1, schema);
-            query.setString(2, table.name);
-            query.setString(3, table.primaryKey.getFirst());
+            query.setInt(1, candidate == null ? 1 : restored ? 3 : 2);
+            query.setString(2, schema);
+            query.setString(3, table.name);
+            query.setString(4, table.primaryKey.getFirst());
             try (ResultSet row = query.executeQuery()) {
                 if (!row.next() || !row.getBoolean(11)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_INDEX_MISMATCH");
                 if (!row.getBoolean(9)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_OWNERSHIP_REQUIRED");
@@ -78,6 +79,10 @@ final class PostgresAdoptionCatalog {
             }
         }
         checkColumns(connection, tableOid, table);
+        if (candidate != null) {
+            evidence.add(PostgresUniqueRestoreEvidence.observe(connection, schema, table, candidate,
+                    JdbcSink.constraintName(candidate), restored));
+        }
         return Codec.sha256(Codec.encode(evidence));
     }
 

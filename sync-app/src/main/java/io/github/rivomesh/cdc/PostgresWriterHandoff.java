@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Objects;
 
 /** First writer grant and write-free return for one previously adopted PostgreSQL table. */
 public final class PostgresWriterHandoff {
@@ -93,7 +94,8 @@ public final class PostgresWriterHandoff {
             }
         }
         baseline = adoption.replay(phase, trigger);
-        if (baseline == null || !ready.evidence().adoptionSha256().equals(Codec.sha256(Codec.encode(baseline.receipt())))) {
+        if (baseline == null || !ready.evidence().adoptionSha256().equals(Codec.sha256(Codec.encode(baseline.receipt())))
+                || !Objects.equals(ready.evidence().restoredUniqueSha256(), PostgresWriterReadiness.restoredUniqueHash(baseline))) {
             throw failure("TARGET_WRITER_ADOPTION_CHANGED");
         }
         if (phase != PostgresExistingAdoption.BaselinePhase.TARGET_WRITER) verifyReadiness();
@@ -159,7 +161,7 @@ public final class PostgresWriterHandoff {
     }
 
     private void verifyReadiness() throws Exception {
-        if (!ready.evidence().equals(PostgresWriterReadiness.evidence(connection, schema, baseline.receipt(), ready.approval()))) {
+        if (!ready.evidence().equals(PostgresWriterReadiness.evidence(connection, schema, baseline, ready.approval()))) {
             throw failure("WRITER_READINESS_EVIDENCE_CHANGED");
         }
     }
