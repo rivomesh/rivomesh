@@ -855,6 +855,46 @@ public final class TaskService implements AutoCloseable {
         row.put("operations",operations);return row;
     }
     private Entry require(String id){Entry e=entries.get(id);if(e==null)throw new NoSuchElementException("TASK_NOT_FOUND");return e;}
+    Map<String,Object> handoffProbe(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+            if(request.kind==TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE){
+                Entry entry=require(request.taskId);Control task=registry.tasks.get(request.taskId);
+                if(!"STOPPED".equals(task.desired)||!"STOPPED".equals(entry.workerState)
+                        ||task.operations.stream().anyMatch(op->"PENDING".equals(op.status)))
+                    throw new Conflict("HANDOFF_ORIGINAL_WORKER_CHANGED");
+                Map<String,String> inventory=Map.of(
+                        "validationReports",privateDirectoryState(reports(request.taskId)),
+                        "failureEvidence",privateDirectoryState(failureEvidenceDirectory(request.taskId)),
+                        "sourceEvidence",privateDirectoryState(captureEvidenceDirectory(request.taskId)));
+                long receipts=registry.requests.values().stream().filter(receipt->request.taskId.equals(receipt.taskId)).count();
+                return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
+                        "originInventory",inventory,"retainedReceipts",receipts);
+            }
+            if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+        }
+        if(request.kind!=TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE||request.yaml==null||request.handoffCut==null)
+            throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        try{
+            TaskDefinition definition=TaskDefinition.parse(request.yaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory));
+            if(!request.taskId.equals(definition.jobId)||definition.pipeline==null)
+                throw new Conflict("HANDOFF_CONFIGURATION_CHANGED");
+            return Map.of("state","VERIFIED","cut",definition.pipeline.verifyHandoffCut(request.handoffCut));
+        }catch(io.github.rivomesh.cdc.JdbcJournal.Busy active){
+            return Map.of("state","REFUSED","code","HANDOFF_JOURNAL_LEASE_ACTIVE");
+        }catch(Exception failure){
+            String code=safeCode(failure);
+            if(code==null||!code.matches("(HANDOFF|WRITER_ASSIGNMENT|JOURNAL|SOURCE|SINK)_[A-Z0-9_]{1,90}"))
+                code="HANDOFF_CANDIDATE_ACCESS_UNVERIFIED";
+            return Map.of("state","REFUSED","code",code);
+        }
+    }
+    private static String privateDirectoryState(Path directory){
+        for(Path path=directory;path!=null;path=path.getParent())if(Files.isSymbolicLink(path))return "UNSAFE";
+        if(Files.isDirectory(directory,LinkOption.NOFOLLOW_LINKS))return "PRESENT";
+        return Files.notExists(directory,LinkOption.NOFOLLOW_LINKS)?"ABSENT":"UNKNOWN";
+    }
     synchronized Map<String,Object> workerDiagnostics(String id,String cursor,int limit,String subscription,AccessControl.Principal actor)throws Exception{
         ensureOpen();
         currentActor(actor);

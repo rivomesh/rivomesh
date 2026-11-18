@@ -1,4 +1,5 @@
 import {registerGapVerificationTests} from './gap-verification-cases.mjs';
+import {registerHandoffTests} from './handoff-cases.mjs';
 import {registerRecoveryTests} from './recovery-cases.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +14,7 @@ const auditScript=await readFile(new URL('audit.js',root),'utf8');
 const accountsScript=await readFile(new URL('accounts.js',root),'utf8');
 const validationScript=await readFile(new URL('validation.js',root),'utf8');
 const recoveryScript=await readFile(new URL('recovery.js',root),'utf8');
+const handoffScript=await readFile(new URL('handoff.js',root),'utf8');
 const token='test-console-token-at-least-24-bytes';
 const flush=async()=>{for(let i=0;i<4;i++)await new Promise(setImmediate);};
 function setup(initial=[],role='ADMIN',browser={authenticated:false}){
@@ -49,9 +51,10 @@ function setup(initial=[],role='ADMIN',browser={authenticated:false}){
     else data={tasks,invalidConfigs:[]};
     return{ok:true,status:200,json:async()=>data};
   };
-  w.eval(script);w.eval(configurationScript);w.eval(auditScript);w.eval(accountsScript);w.eval(validationScript);w.eval(recoveryScript);return{dom,w,d:w.document,calls,authCalls,browser};
+  w.eval(script);w.eval(configurationScript);w.eval(auditScript);w.eval(accountsScript);w.eval(validationScript);w.eval(recoveryScript);w.eval(handoffScript);return{dom,w,d:w.document,calls,authCalls,browser};
 }
 async function login(ui){await flush();ui.d.getElementById('token').value=token;ui.d.getElementById('login-form').dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();}
+registerHandoffTests({setup,flush,login});
 function detailFixture(role='ADMIN'){
  const task={id:'details',revision:'revision',formatVersion:3,desired:'PAUSED',workerState:'PAUSED',status:{run_state:'PAUSED'},destinations:[],operations:[{id:'check',action:'VALIDATE',status:'SUCCEEDED',code:'VALIDATION_DIFFERENCES',validation:{reportId:'report'}}]},ui=setup([task],role),fallback=ui.w.fetch;
  ui.w.fetch=async(path,options={})=>{

@@ -126,6 +126,8 @@ try{
   await waitFor(()=>evaluate('!!document.querySelector(".task-card") && !document.querySelector("#login-dialog")?.open'),
                 'cookie session restored after reload');
   passed('Actual token sign-in issues a cookie, clears the form, and restores the task after reload');
+  assert(await evaluate('!!window.RivomeshHandoff&&!document.querySelector("[data-handoff-task]")'));
+  passed('Packaged handoff assessment UI loads while its task action remains hidden in standalone mode');
 
   await evaluate('document.querySelector("[data-worker-diagnostics]").focus()');
   await key('Enter',13);

@@ -8,6 +8,7 @@ final class LocalTaskPlane implements TaskControlPlane {
     LocalTaskPlane(TaskService tasks){this.tasks=tasks;}
     public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
+        if(request.handoffRpc())return tasks.handoffProbe(request,actor);
         if(request.readAtRevision())request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
     }
     public Map<String,Object> invoke(TaskRequest supplied,AccessControl.Principal proposed)throws Exception{
@@ -21,7 +22,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
-            case HANDOFF_ASSESS:case HANDOFF_LATEST:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+            case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);
             case CONFIG_HISTORY:return tasks.configurationHistory(r.taskId,r.cursor);

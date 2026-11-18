@@ -70,6 +70,8 @@
     "LG-02 review-unique passed five native cases and two offline admission guards. It detected a native PostgreSQL collation collision despite exact historical row content, retained NULL semantics and made zero business or metadata changes.",
     "LG-07 completed. One Java 21 artifact passed the shared hardware matrix, 256 mappings and large transaction, and real separate-journal quota, backpressure and SIGKILL catch-up to zero pending bytes.",
     "LG-04 exact RabbitMQ 4.1.4 three-member quorum ran six native checks, including independent SQL progress through loss of majority, staggered recovery, 19 deliveries / 18 IDs and manual consumer ACK.",
-    "CP-02 completed. Both native control stores passed ten cases for identical active revisions, concurrent global ID uniqueness, two physical source configurations, and standalone restart of the original task."
+    "CP-02 completed. Both native control stores passed ten cases for identical active revisions, concurrent global ID uniqueness, two physical source configurations, and standalone restart of the original task.",
+    "CP-04 authenticated candidate evidence probe passed ten native checks per control store and 71 focused Java cases; candidate-only credentials, re-enrollment invalidation and original source/journal/target proofs were verified.",
+    "CP-04 console handoff assessment passed 11 native checks including three real Chrome workflows, 13 standalone Chrome and 131 DOM cases."
   ]
 }

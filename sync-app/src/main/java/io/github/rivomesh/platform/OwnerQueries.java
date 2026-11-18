@@ -9,10 +9,14 @@ final class OwnerQueries {
     static final class Entry {
         public int version=1;
         public String id,task,owner,directory,incarnation,actor,actorRevision,phase="PENDING",code;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public String handoffConfiguration;
         public long epoch,expiresAt;
         public TaskRequest request;
         public Map<String,Object> response;
     }
+    record HandoffQueries(String candidate,String originalEvidence){}
+    private record Execution(TaskRequest request,AccessControl.Principal actor){}
     private final GlobalTaskStore tasks;
     private final JdbcControlStore db;
     private final AgentDirectory agents;
@@ -21,10 +25,15 @@ final class OwnerQueries {
     private final int maximum;
     private final long lifetime;
     private final boolean recoveryReview,recoverySkip;
+    private final ManagedHandoff handoff;
 
     OwnerQueries(ClusterConfig config,GlobalTaskStore tasks,AgentDirectory agents,int maximum,long lifetime)throws Exception{
+        this(config,tasks,agents,maximum,lifetime,null);
+    }
+    OwnerQueries(ClusterConfig config,GlobalTaskStore tasks,AgentDirectory agents,int maximum,long lifetime,ManagedHandoff handoff)throws Exception{
         if(maximum<1||maximum>10000||lifetime<1000||lifetime>60000)throw new IllegalArgumentException("OWNER_QUERY_POLICY_INVALID");
         this.tasks=tasks;this.agents=agents;this.maximum=maximum;this.lifetime=lifetime;db=tasks.database();cipher=tasks.commandCipher();cluster=config.id;recoveryReview=config.recoveryReview;recoverySkip=config.recoverySkip;
+        this.handoff=handoff;
         try(Connection c=db.connect()){
             db.bootstrapLock(c);JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("owner_query")+" (cluster_id VARCHAR(128) NOT NULL,query_id VARCHAR(36) NOT NULL,task_id VARCHAR(128) NOT NULL,owner_id VARCHAR(64) NOT NULL,node_epoch BIGINT NOT NULL,phase VARCHAR(16) NOT NULL,expires_at BIGINT NOT NULL,envelope "+(db.mysql()?"LONGTEXT":"TEXT")+" NOT NULL,PRIMARY KEY(cluster_id,query_id))"+(db.mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));
             db.index(c,"owner_query","rmc_owner_query_pending","cluster_id, owner_id, node_epoch, phase, expires_at, query_id");
@@ -49,16 +58,61 @@ final class OwnerQueries {
     }
     String submit(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();readonly(request);if(Model.JSON.writeValueAsBytes(request).length>512*1024)throw new IllegalArgumentException("OWNER_QUERY_REQUEST_LIMIT");
+        if(request.handoffRpc())throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");
         if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
         return tasks.transaction(request.taskId,actor,(c,task,current)->{
             authorize(request,current);if(request.readAtRevision()&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
-            if(!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");long now=db.now(c);
-            db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
-            try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("owner_query")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)>=maximum)throw new TaskService.Conflict("OWNER_QUERY_CAPACITY");}
-            Entry entry=new Entry();entry.id=UUID.randomUUID().toString();entry.task=task.id;entry.owner=task.owner;entry.directory=task.directory;entry.epoch=owner.epoch;entry.incarnation=owner.incarnation;entry.actor=current.id;entry.actorRevision=current.authorizationRevision;entry.request=request;entry.expiresAt=now+lifetime;
-            db.update(c,"INSERT INTO "+db.table("owner_query")+" (cluster_id,query_id,task_id,owner_id,node_epoch,phase,expires_at,envelope) VALUES (?,?,?,?,?,?,?,?)",cluster,entry.id,entry.task,entry.owner,entry.epoch,entry.phase,entry.expiresAt,cipher.seal("owner-query/"+entry.id,Model.JSON.writeValueAsString(entry)));return entry.id;
+            if(!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
+            return insert(c,request,current,owner,reserve(c,1),null);
         });
+    }
+    HandoffQueries submitHandoff(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_PROBE)
+            throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+        return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
+            ManagedHandoff.ProbeRoute route=handoff.probeRoute(c,task,current,request.reference);
+            long now=reserve(c,2);
+            TaskRequest candidate=TaskRequest.of(TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE,task.id);
+            candidate.reference=request.reference;candidate.revision=route.revision();
+            TaskRequest evidence=TaskRequest.of(TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE,task.id);
+            evidence.reference=request.reference;evidence.revision=route.revision();
+            return new HandoffQueries(insert(c,candidate,current,route.candidate(),now,route.activeVersion()),
+                    insert(c,evidence,current,route.original(),now,route.activeVersion()));
+        });
+    }
+    private long reserve(Connection c,int slots)throws SQLException{
+        long now=db.now(c);
+        db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
+        try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("owner_query")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){
+            r.next();if(r.getLong(1)>maximum-slots)throw new TaskService.Conflict("OWNER_QUERY_CAPACITY");
+        }
+        return now;
+    }
+    private String insert(Connection c,TaskRequest request,AccessControl.Principal actor,AgentDirectory.Binding target,
+                          long now,String activeVersion)throws Exception{
+        Entry entry=new Entry();entry.id=UUID.randomUUID().toString();entry.task=request.taskId;
+        entry.owner=target.node;entry.directory=target.directory;entry.epoch=target.epoch;entry.incarnation=target.incarnation;
+        entry.actor=actor.id;entry.actorRevision=actor.authorizationRevision;entry.request=request;entry.expiresAt=now+lifetime;
+        entry.handoffConfiguration=activeVersion;
+        db.update(c,"INSERT INTO "+db.table("owner_query")
+                +" (cluster_id,query_id,task_id,owner_id,node_epoch,phase,expires_at,envelope) VALUES (?,?,?,?,?,?,?,?)",
+                cluster,entry.id,entry.task,entry.owner,entry.epoch,entry.phase,entry.expiresAt,
+                cipher.seal("owner-query/"+entry.id,Model.JSON.writeValueAsString(entry)));
+        return entry.id;
+    }
+    private ManagedHandoff.ProbeRoute verifyHandoff(Connection c,GlobalTaskStore.Record record,
+                                                    AccessControl.Principal actor,Entry entry)throws Exception{
+        if(handoff==null||entry.handoffConfiguration==null)throw new TaskService.Conflict("HANDOFF_REQUEST_INVALID");
+        ManagedHandoff.ProbeRoute route=handoff.probeRoute(c,record,actor,entry.request.reference);
+        if(!route.activeVersion().equals(entry.handoffConfiguration)||!route.revision().equals(entry.request.revision))
+            throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
+        AgentDirectory.Binding target=entry.request.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE?route.candidate():route.original();
+        if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
+                ||!entry.incarnation.equals(target.incarnation)||!"HEALTHY".equals(target.state))
+            throw new TaskService.Conflict("HANDOFF_AGENT_CHANGED");
+        return route;
     }
     private static AccessControl.Principal actor(AccountDirectory.State accounts,Entry entry){
         AccountDirectory.User user=accounts.users.get(entry.actor);if(user==null||!user.enabled||user.deleted||!Objects.equals(accounts.revision,entry.actorRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
@@ -82,8 +136,19 @@ final class OwnerQueries {
         });
         if(entry==null)return;Map<String,Object> response=null;String failure=null;
         try{
-            AccessControl.Principal actor=tasks.service((c,accounts)->{agents.require(c,lease,directory);return actor(accounts,entry);});
-            response=local.ownerQuery(entry.request,actor);if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
+            Execution execution=tasks.service((c,accounts)->{
+                agents.require(c,lease,directory);AccessControl.Principal actor=actor(accounts,entry);
+                if(!entry.request.handoffRpc())return new Execution(entry.request,actor);
+                GlobalTaskStore.Record record=tasks.record(c,entry.task);
+                ManagedHandoff.ProbeRoute route=verifyHandoff(c,record,actor,entry);
+                TaskRequest scoped=entry.request.snapshot();
+                if(scoped.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE){
+                    scoped.yaml=tasks.activeYaml(c,record);
+                    scoped.handoffCut=route.cut();
+                }
+                return new Execution(scoped,actor);
+            });
+            response=local.ownerQuery(execution.request,execution.actor);if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
         }catch(TaskService.Conflict rejected){failure=rejected.getMessage()!=null&&rejected.getMessage().matches("[A-Z0-9_]{1,120}")?rejected.getMessage():"OWNER_QUERY_REJECTED";}
         catch(SecurityException denied){failure="AUTHORIZATION_CHANGED";}
         catch(NoSuchElementException absent){failure="OWNER_DATA_NOT_FOUND";}
@@ -93,7 +158,13 @@ final class OwnerQueries {
             agents.require(c,lease,directory);Entry current=read(c,id);if(!"RUNNING".equals(current.phase))throw new TaskService.Conflict("OWNER_QUERY_PHASE_CHANGED");
             if(current.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
             if(current.request.readAtRevision()&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
-            try{actor(accounts,current);}catch(SecurityException|TaskService.Conflict revoked){current.phase="REJECTED";current.code="AUTHORIZATION_CHANGED";current.response=null;write(c,current);return null;}
+            try{
+                AccessControl.Principal actor=actor(accounts,current);
+                if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
+            }catch(SecurityException|TaskService.Conflict revoked){
+                current.phase="REJECTED";current.code=revoked instanceof SecurityException?"AUTHORIZATION_CHANGED":revoked.getMessage();
+                current.response=null;write(c,current);return null;
+            }
             current.response=body;current.code=code;current.phase=code==null?"SUCCEEDED":"REJECTED";write(c,current);return null;
         });
     }
@@ -102,8 +173,12 @@ final class OwnerQueries {
         return tasks.transaction(task,supplied,(c,record,current)->{
             Entry entry=read(c,id);if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
             if(entry.request.readAtRevision()&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
-            if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
-            if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
+            if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
+            if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
+            else{
+                AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
+                if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
+            }
             Map<String,Object> result=new LinkedHashMap<>();result.put("status",entry.phase);result.put("code",entry.code);if("SUCCEEDED".equals(entry.phase))result.put("result",entry.response);return result;
         });
     }

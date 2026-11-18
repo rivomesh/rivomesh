@@ -53,11 +53,17 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 ### 评估任务迁往另一 Agent
 
+在任务详情选择 **评估 Agent 接管**，从节点目录挑选候选 Agent，再记录评估。窗口展示候选节点的登记状态和回执中的阻断条件。选择 **刷新节点和评估** 可从任一入口读取最新信息。提交结果未知时，**重试同一评估** 会复用原请求 ID 和参数。其他入口已更新评估时，先核对新回执，再决定是否提交新的评估。
+
 管理员可在任一管理入口发送 `POST /api/tasks/{id}/handoff`。请求头填写 `X-Request-ID`，JSON 写入候选 `candidateNodeId` 和任务 `expectedRevision`。通过 `GET /api/tasks/{id}/handoff` 查询最新评估。刷新时使用新的请求 ID，并把当前评估 ID 填入 `expectedAssessment`。原样重试当前请求会返回同一条评估。调用者须有任务和两端 Agent 的授权。
 
 评估绑定任务修订、已生效配置、两端 Agent 注册身份、候选任务容量及来自原 Agent 的采集观察。针对 MySQL 源、PostgreSQL 外部日志和 PostgreSQL/MySQL 目标，检查是否有未结束命令、已完成快照以及各目标追平的共同位点。位点、待处理命令、Agent 注册或容量变化时标为 `STALE`。接口以摘要表示检查点，响应中不含源位点原文、凭据和私有恢复文件。
 
 `EVIDENCE_REQUIRED` 表示管理端检查通过，还需核实候选 Agent 的连接能力及原恢复报告和回执的可达性。`BLOCKED` 会给出 Worker 尚未排空、任务容量耗尽等条件。评估保留原任务归属、Worker、容量和日志状态，返回 `executionAuthorized: false`。
+
+发送 `POST /api/tasks/{id}/handoff/probe`，在 JSON 中写入 `expectedAssessment`。候选 Agent 使用本机连接和密钥环境，核对原日志代次、MySQL GTID 历史，以及 PostgreSQL/MySQL 目标的原生回执。两条只读查询在 30 秒内有效，完成时重新核对任务修订和两端 Agent 注册身份。脱敏结果保存在最新评估中。评估过期或被替换后，需要刷新才能再次核验。
+
+原 Agent 返回私有校验报告、源证据和故障证据目录是否存在，以及保留的操作回执数量。清单保留原 Agent 的资料归属，并返回 `ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN`。候选核验有效期内，连接阻塞项会清除。结果继续返回 `executionAuthorized: false`。
 
 ## 接受、执行和恢复
 

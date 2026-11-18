@@ -1,6 +1,7 @@
 package io.github.rivomesh.cdc;
 
 import io.github.rivomesh.PipelineConfig;
+import io.github.rivomesh.Model;
 import io.github.rivomesh.api.SourcePosition;
 import java.sql.*;
 import java.util.*;
@@ -9,6 +10,14 @@ import java.util.*;
 public final class JournalWriterAssignment {
     public record Placement(String assignment, String node, String previousAssignment, String generation,
                             long epoch, long sequence, String checkpointSha256, String evidenceSha256) {}
+    public record ExpectedCut(long epoch,long sequence,String checkpointSha256){
+        public ExpectedCut{
+            if(epoch<1||sequence<0||checkpointSha256==null||!checkpointSha256.matches("[0-9a-f]{64}"))
+                throw new IllegalArgumentException("HANDOFF_CUT_INVALID");
+        }
+    }
+    public record CutProof(String journalGenerationSha256,String nativeEvidenceSha256,List<String> destinations,
+                           boolean writerPlacementEnrolled){}
     @FunctionalInterface public interface SourceConnection {
         SourceAdapter open(String generation)throws Exception;
     }
@@ -108,18 +117,7 @@ public final class JournalWriterAssignment {
             if(!previous.equals(current.assignment())||!generation.equals(current.generation())
                     ||epoch!=(long)job.get("epoch"))
                 throw new IllegalStateException("WRITER_ASSIGNMENT_CHANGED");
-            if(job.get("owner")!=null&&(long)job.get("lease")>j.now(c))throw new JdbcJournal.Busy();
-            if(!"RUNNING".equals(job.get("state"))||job.get("captured")==null)
-                throw new IllegalStateException("WRITER_ASSIGNMENT_PIPELINE_NOT_READY");
-            if(JdbcJournal.hasTargetGaps((int)job.get("format")))JdbcSkipJournal.requireNoPending(j,c,null);
-            long sequence=(long)job.get("next")-1;
-            if(sequence!=(long)job.get("normalized"))throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_CAUGHT_UP");
-            List<Journal.Subscription> subscriptions=j.subscriptions(c);
-            if(!new TreeSet<>(candidate.subscribers()).equals(new TreeSet<>(subscriptions.stream().map(s->s.id).toList())))
-                throw new IllegalStateException("WRITER_ASSIGNMENT_JOURNAL_CHANGED");
-            for(Journal.Subscription subscription:subscriptions)
-                if(!"RUNNING".equals(subscription.state)||subscription.acknowledged!=sequence)
-                    throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_CAUGHT_UP");
+            long sequence=requireReadyCut(candidate,j,c,job);
 
             String captured=(String)job.get("captured");
             String checkpointHash=Codec.sha256(captured);
@@ -139,6 +137,50 @@ public final class JournalWriterAssignment {
             c.commit();
             return next;
         }
+    }
+
+    /** Checks the exact durable cut through existing metadata, with no placement or data writes. */
+    public static CutProof verifyExistingCut(PipelineConfig candidate,ExpectedCut expected,
+                                             SourceConnection sources)throws Exception{
+        candidate.validate();
+        if(!"EXTERNAL".equals(candidate.journal.mode)||candidate.journal.product!=TargetProduct.POSTGRESQL
+                ||!"MYSQL".equals(candidate.effectiveSourceType())||candidate.targets.size()>8
+                ||candidate.targets.stream().anyMatch(t->t.product!=TargetProduct.POSTGRESQL&&t.product!=TargetProduct.MYSQL))
+            throw new IllegalArgumentException("HANDOFF_JOURNAL_PROFILE_UNSUPPORTED");
+        try(JdbcJournal j=new JdbcJournal(candidate.existingJournalSettings());Connection c=j.connect();
+            RepairConnectionGuard deadline=new RepairConnectionGuard(c,20000)){
+            c.setAutoCommit(false);
+            Map<String,Object> job=j.assignmentLock(c);
+            if(!candidate.fingerprint().equals(job.get("fingerprint"))||expected.epoch()!=(long)job.get("epoch"))
+                throw new IllegalStateException("HANDOFF_ORIGINAL_CUT_CHANGED");
+            long sequence=requireReadyCut(candidate,j,c,job);
+            String captured=(String)job.get("captured");
+            String observed=Codec.sha256(Model.JSON.writeValueAsString(Codec.decode(captured,SourcePosition.class)));
+            if(expected.sequence()!=sequence||!expected.checkpointSha256().equals(observed))
+                throw new IllegalStateException("HANDOFF_ORIGINAL_CUT_CHANGED");
+            String generation=(String)job.get("generation");
+            String nativeEvidence=verifyOriginalCut(candidate,j,c,job,generation,sequence,captured,sources);
+            deadline.verify();
+            c.rollback();
+            return new CutProof(Codec.sha256(generation),nativeEvidence,candidate.subscribers().stream().sorted().toList(),
+                    JdbcJournal.assignedWriter((int)job.get("format")));
+        }
+    }
+
+    private static long requireReadyCut(PipelineConfig candidate,JdbcJournal j,Connection c,Map<String,Object> job)throws Exception{
+        if(job.get("owner")!=null&&(long)job.get("lease")>j.now(c))throw new JdbcJournal.Busy();
+        if(!"RUNNING".equals(job.get("state"))||job.get("captured")==null)
+            throw new IllegalStateException("WRITER_ASSIGNMENT_PIPELINE_NOT_READY");
+        if(JdbcJournal.hasTargetGaps((int)job.get("format")))JdbcSkipJournal.requireNoPending(j,c,null);
+        long sequence=(long)job.get("next")-1;
+        if(sequence!=(long)job.get("normalized"))throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_CAUGHT_UP");
+        List<Journal.Subscription> subscriptions=j.subscriptions(c);
+        if(!new TreeSet<>(candidate.subscribers()).equals(new TreeSet<>(subscriptions.stream().map(s->s.id).toList())))
+            throw new IllegalStateException("WRITER_ASSIGNMENT_JOURNAL_CHANGED");
+        for(Journal.Subscription subscription:subscriptions)
+            if(!"RUNNING".equals(subscription.state)||subscription.acknowledged!=sequence)
+                throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_CAUGHT_UP");
+        return sequence;
     }
 
     private static String verifyOriginalCut(PipelineConfig config,JdbcJournal j,Connection c,Map<String,Object> job,String generation,

@@ -7,8 +7,9 @@ final class GlobalControl implements AutoCloseable {
     GlobalControl(PlatformConfig config,TaskService tasks,NodeDirectory nodes)throws Exception{
         if(config.cluster==null||!config.cluster.sharedTasks)throw new IllegalArgumentException("GLOBAL_TASK_AUTHORITY_REQUIRED");
         SharedAccessStore access=tasks.sharedAccess();String directory=tasks.ownerDirectoryIdentity();GlobalTaskStore store=new GlobalTaskStore(config.cluster,access,config.cluster.taskKey,tasks.globalTaskIdentity(),config.cluster.maximumTasks);
-        AgentDirectory agents=new AgentDirectory(config.cluster,access,store);DurableCommands commands=new DurableCommands(config.cluster,access,store,config.cluster.maximumCommands);GlobalTaskViews views=new GlobalTaskViews(config.cluster,store,agents,Math.min(300000,Math.max(15000,config.cluster.leaseMillis)));OwnerQueries queries=new OwnerQueries(config.cluster,store,agents,1000,30000);
+        AgentDirectory agents=new AgentDirectory(config.cluster,access,store);DurableCommands commands=new DurableCommands(config.cluster,access,store,config.cluster.maximumCommands);GlobalTaskViews views=new GlobalTaskViews(config.cluster,store,agents,Math.min(300000,Math.max(15000,config.cluster.leaseMillis)));
         ManagedHandoff handoff=new ManagedHandoff(config.cluster,access,store,commands,agents,views);
+        OwnerQueries queries=new OwnerQueries(config.cluster,store,agents,1000,30000,handoff);
         if(!config.cluster.executes())store.requireControllerWithoutTasks(config.cluster.nodeId);
         tasks.bindGlobal(store.identity,directory);plane=new GlobalTaskPlane(store,commands,agents,views,queries,config.cluster.nodeId,config.cluster.executes(),handoff);runtime=config.cluster.executes()?new OwnerRuntime(config,tasks,store,commands,agents,views,queries,nodes::currentLease,directory):null;
     }

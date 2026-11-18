@@ -53,7 +53,7 @@ public final class ConsoleServer implements AutoCloseable {
                 String resource=switch(path) {
                     case "/" -> "index.html";
                     case "/app.js","/theme.js","/configuration-editor.js","/accounts.js","/validation.js",
-                         "/recovery.js","/audit.js","/app.css","/brand/favicon.svg","/brand/wordmark.svg",
+                         "/recovery.js","/handoff.js","/audit.js","/app.css","/brand/favicon.svg","/brand/wordmark.svg",
                          "/brand/wordmark-light.svg" -> path.substring(1);
                     default -> null;
                 };
@@ -167,7 +167,14 @@ public final class ConsoleServer implements AutoCloseable {
             }
             if(parts.length==4&&parts[1].equals("api")&&parts[2].equals("tasks")&&method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.VIEW,parts[3],principal));return;}
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("handoff")){
-                if(method.equals("GET")){json(exchange,200,invoke(TaskRequest.Kind.HANDOFF_LATEST,parts[3],principal));return;}
+                if(method.equals("GET")){
+                    try{json(exchange,200,invoke(TaskRequest.Kind.HANDOFF_LATEST,parts[3],principal));}
+                    catch(NoSuchElementException missing){
+                        if(!"HANDOFF_ASSESSMENT_NOT_FOUND".equals(missing.getMessage()))throw missing;
+                        error(exchange,404,"HANDOFF_ASSESSMENT_NOT_FOUND");
+                    }
+                    return;
+                }
                 if(method.equals("POST")){
                     if(!principal.administers())throw new SecurityException("FORBIDDEN");
                     JsonNode input=body(exchange);
@@ -180,6 +187,13 @@ public final class ConsoleServer implements AutoCloseable {
                         throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
                     json(exchange,200,control.invoke(request,principal));return;
                 }
+            }
+            if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("handoff")
+                    &&parts[5].equals("probe")&&method.equals("POST")){
+                if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_PROBE,parts[3]);
+                request.reference=body(exchange).path("expectedAssessment").textValue();
+                json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("diagnostics")&&method.equals("GET")){
                 Map<String,String> query=pageQuery(exchange.getRequestURI().getRawQuery(),512,"DIAGNOSTICS_PAGE_INVALID",

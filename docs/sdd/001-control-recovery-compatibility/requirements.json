@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.53",
+  "version": "0.54",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -126,8 +126,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "已实测自动初分配、独立 Worker 共享日志交接及双入口持久接管评估。候选 Agent 对原证据的访问、全局归属提交和运行任务自动接管仍待实现。",
-        "en": "Native evidence covers initial placement, standalone external-journal handoff and durable dual-entry assessment. Candidate evidence access, global ownership commit and automatic running-task takeover remain."
+        "zh-CN": "双入口评估、候选 Agent 核验原日志/源/目标及界面评估已实测。私有证据移交、全局归属提交和运行任务自动接管仍待实现。",
+        "en": "Both entries verified assessment, candidate journal/source/target probes and console use. Private evidence custody, global ownership commit and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",

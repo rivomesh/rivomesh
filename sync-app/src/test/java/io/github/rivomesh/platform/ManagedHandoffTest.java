@@ -4,6 +4,7 @@ import io.github.rivomesh.Model;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,6 +15,7 @@ class ManagedHandoffTest {
     private GlobalTaskViews views;
     private DurableCommands commands;
     private GlobalTaskPlane a,b;
+    private OwnerQueries aQueries,bQueries;
     private ControlStore.Lease aLease,bLease;
     private ClusterConfig bConfig;
     private String revision;
@@ -62,7 +64,9 @@ class ManagedHandoffTest {
     private GlobalTaskPlane entry(ClusterConfig config,GlobalTaskStore store,AgentDirectory agents,
                                   DurableCommands commands,GlobalTaskViews views)throws Exception{
         ManagedHandoff handoff=new ManagedHandoff(config,fixture.access,store,commands,agents,views);
-        return new GlobalTaskPlane(store,commands,agents,views,new OwnerQueries(config,store,agents,10,30000),
+        OwnerQueries transport=new OwnerQueries(config,store,agents,10,30000,handoff);
+        if(config.nodeId.equals("a"))aQueries=transport;else bQueries=transport;
+        return new GlobalTaskPlane(store,commands,agents,views,transport,
                 config.nodeId,false,handoff);
     }
 
@@ -81,6 +85,55 @@ class ManagedHandoffTest {
 
     private Map<String,Object> latest(GlobalTaskPlane plane,AccessControl.Principal actor)throws Exception{
         return plane.invoke(TaskRequest.of(TaskRequest.Kind.HANDOFF_LATEST,"orders"),actor);
+    }
+
+    private TaskRequest probe(String assessment){
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_PROBE,"orders");
+        request.reference=assessment;return request;
+    }
+
+    @Test void routesTheActiveCutToTheCandidateAndThePrivateInventoryOnlyToTheOriginal()throws Exception{
+        Map<String,Object> initial=a.invoke(assess("handoff_probe_request",null),fixture.admin);
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe((String)initial.get("id")),fixture.admin));
+            PlatformTest.await(()->!aQueries.pending(aLease,fixture.directory,10).isEmpty()
+                    &&!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            String candidate=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            String evidence=aQueries.pending(aLease,fixture.directory,10).getFirst();
+            TaskControlPlane shouldNotRun=(request,actor)->{throw new AssertionError("wrong node ran probe");};
+            assertThrows(ControlStore.Fenced.class,()->aQueries.serve(candidate,aLease,fixture.directory,shouldNotRun));
+            assertThrows(ControlStore.Fenced.class,()->bQueries.serve(evidence,bLease,candidateDirectory,shouldNotRun));
+            bQueries.serve(candidate,bLease,candidateDirectory,(request,actor)->{
+                assertEquals(TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE,request.kind);
+                assertEquals(YAML,request.yaml);
+                assertEquals(9,request.handoffCut.epoch());
+                assertEquals(2,request.handoffCut.sequence());
+                return Map.of("state","VERIFIED");
+            });
+            aQueries.serve(evidence,aLease,fixture.directory,(request,actor)->{
+                assertEquals(TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE,request.kind);
+                assertNull(request.yaml);
+                assertNull(request.handoffCut);
+                return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN");
+            });
+            Map<String,Object> certified=result.get(10,TimeUnit.SECONDS);
+            assertEquals(List.of("ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED"),certified.get("blockers"));
+            assertEquals(false,certified.get("executionAuthorized"));
+            assertEquals(certified,latest(entryB(),fixture.admin));
+            assertFalse(Model.JSON.writeValueAsString(certified).contains("private-"));
+            assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        }
+    }
+
+    @Test void changedTaskRevisionRefusesQueuedProbeBeforeTheCandidateCanReadConfiguration()throws Exception{
+        a.invoke(assess("handoff_probe_request",null),fixture.admin);
+        OwnerQueries.HandoffQueries queued=aQueries.submitHandoff(probe("handoff_probe_request"),fixture.admin);
+        fixture.a.update("orders",revision,YAML,"handoff_probe_revision",fixture.admin);
+        bQueries.serve(queued.candidate(),bLease,candidateDirectory,(request,actor)->{
+            throw new AssertionError("changed revision reached candidate callback");
+        });
+        assertEquals("REVISION_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->aQueries.await(queued.candidate(),fixture.admin)).getMessage());
     }
 
     @Test void oneReceiptAcrossEntriesDoesNotChangeOwnerOrExposePrivateEvidence()throws Exception{

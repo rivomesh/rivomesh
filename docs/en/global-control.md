@@ -53,11 +53,17 @@ The saved task lists its actual owner. A repeat with the same payload and reques
 
 ### Assess transfer to another Agent
 
+In the task details, select **Assess Agent handoff**. Choose a candidate from the node directory and record the assessment. The dialog shows the candidate's registry status and the recorded blockers. Select **Refresh nodes and assessment** to read current information from either entry. If a submission outcome is unknown, **Retry the same assessment** preserves its request ID and inputs. If another entry saved a newer assessment, review that receipt before recording a replacement.
+
 An administrator can record a handoff assessment from either Controller. Send `POST /api/tasks/{id}/handoff` with an `X-Request-ID` and a JSON body containing `candidateNodeId` and the task's `expectedRevision`. `GET /api/tasks/{id}/handoff` reads the current assessment. To refresh it, send a new request ID and set `expectedAssessment` to the current assessment ID. Retrying the current request with its original inputs returns the same assessment. Both Agents and the task must be in the caller's scope.
 
 The assessment binds the task revision and active configuration, the two Agent registrations, candidate task capacity and the original Agent's observed capture position. It checks for outstanding commands and a complete, acknowledged cut on a supported MySQL source with a PostgreSQL external journal and PostgreSQL or MySQL targets. A change in the observed cut, pending work, Agent registration or available capacity marks the assessment `STALE`. Its checkpoint is represented by a digest. The response excludes source positions, credentials and private recovery files.
 
 `EVIDENCE_REQUIRED` means these control-plane checks passed. The candidate must still prove connectivity and access to the original recovery reports and receipts. `BLOCKED` identifies earlier prerequisites such as an active Worker or exhausted task capacity. Assessment leaves the task owner, Worker, capacity reservations and journal unchanged. The response carries `executionAuthorized: false`.
+
+Send `POST /api/tasks/{id}/handoff/probe` with `expectedAssessment` to ask the currently enrolled candidate to verify the original journal generation, MySQL GTID history and native PostgreSQL/MySQL target receipts. The request uses the candidate's own connection settings and secret resolution. The two read-only queries expire within 30 seconds and verify the task revision and both Agent enrollments again on completion. The latest assessment retains the sanitized result. A stale or replaced assessment requires a refresh before probing again.
+
+The original Agent reports presence of its private validation, source and failure evidence directories and its retained operation receipt count. This inventory leaves private custody with the original Agent and reports `ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN`. Successful candidate verification clears the connectivity blocker while fresh. The result still carries `executionAuthorized: false`.
 
 ## Admission and recovery
 

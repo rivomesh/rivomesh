@@ -34,6 +34,9 @@ parser.add_argument('--task-authority', action='store_true',
                     help='Exercise global revisions, unique task IDs, independent sources and standalone control')
 parser.add_argument('--handoff-assessment', action='store_true',
                     help='Persist and refresh a managed handoff assessment through two Controllers and two Agents')
+parser.add_argument('--handoff-probe', action='store_true',
+                    help='Read-only candidate and original Agent probe under the current assessment')
+parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
                     help='Record the Java 21 JVMs used by the live controller, Agent and Worker')
@@ -77,6 +80,11 @@ if args.task_authority and (not args.separate_execution or any((args.automatic_p
     parser.error('--task-authority uses the separate Agent baseline profile')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
+if args.handoff_probe and not args.handoff_assessment:
+    parser.error('--handoff-probe requires --handoff-assessment')
+if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
+                             or not os.access(args.handoff_browser.resolve(), os.X_OK)):
+    parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
 if args.mysql_delivery_timing and (not args.separate_execution
@@ -167,6 +175,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'taskAuthority': args.task_authority,
             'automaticPlacement': args.automatic_placement,
             'handoffAssessment': args.handoff_assessment,
+            'handoffProbe': args.handoff_probe,
             'failureDiagnostics': args.failure_diagnostics,
             'snapshotDiagnostics': args.snapshot_diagnostics,
             'managedFailureReview': args.managed_failure_review,
@@ -260,6 +269,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                               'target':'/operator/mysql-connector-j.jar','read_only':True})
         if review_accounts:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
+        if args.handoff_probe and node in execution_agents:
+            services[node]['environment']['RM_GC_HANDOFF_PG']='${RM_GC_DATA}' if node==owner_node else '${RM_GC_CONTROL}'
         if args.runtime_image:
             volumes[node + '-data'] = {}
             services[node]['image'] = args.runtime_image
@@ -390,10 +401,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         # Only a disposable loopback browser receives the random credential. Keep it out of args and evidence.
         options = dict(first=bases['node-a'], second=bases['node-b'], token=env['RM_GC_TOKEN'],
                        taskId='global_cdc', **state)
-        browser_test = ROOT / 'tests/ui/browser-recovery.mjs'
+        handoff = scenario == 'handoff'
+        browser_test = ROOT / ('tests/ui/browser-handoff.mjs' if handoff else 'tests/ui/browser-recovery.mjs')
         sources = (browser_test, browser_test.with_name('chromium.mjs'))
         hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
-        command = ['node', str(browser_test), str(args.browser.resolve()), scenario]
+        chrome = args.handoff_browser if handoff else args.browser
+        command = ['node', str(browser_test), str(chrome.resolve()), scenario]
         result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
         if result.returncode:
             details = result.stderr.replace(env['RM_GC_TOKEN'], '[REDACTED]')
@@ -403,7 +416,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert evidence['status'] == 'PASS' and evidence['scenario'] == scenario and evidence['checks']
         assert all(hashlib.sha256(path.read_bytes()).hexdigest()==hashes[path.name] for path in sources)
         evidence['sourceSha256'] = hashes
-        manifest.setdefault('browserRecovery', {})[scenario] = evidence
+        if handoff:
+            manifest['browserHandoff'] = evidence
+        else:
+            manifest.setdefault('browserRecovery', {})[scenario] = evidence
         for check in evidence['checks']:
             passed('Chrome: ' + check)
 
@@ -1342,6 +1358,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                  'password':env['RM_GC_DATA']}
         for product, target, url, username in [('POSTGRESQL', 'pg', 'jdbc:postgresql://postgres:5432/sync_test', 'sync_target'), ('MYSQL', 'my', 'jdbc:mysql://mysql-target:3306/?allowPublicKeyRetrieval=true&sslMode=DISABLED', 'root')]:
             document['targets'].append({'id': target, 'product': product, 'url': url, 'username': username, 'password': env['RM_GC_DATA'], 'metadataSchema': 'rm_' + target + '_meta', 'mappings': {'sales': 'rm_' + target + '_sales', 'billing': 'rm_' + target + '_billing'}})
+        if args.handoff_probe:
+            document['targets'][0]['password']='${RM_GC_HANDOFF_PG}'
         created = 'gc_create_' + uuid.uuid4().hex
         body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement else {'ownerNodeId':owner_node})}
         http('node-a','/api/tasks',body,request=created,expected=202)
@@ -1406,7 +1424,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             request='gc_handoff_'+uuid.uuid4().hex
             live_input={'candidateNodeId':candidate,'expectedRevision':task()['revision']}
             http('node-b',endpoint,expected=403,token=env['RM_GC_VIEWER'])
-            http('node-b',endpoint,expected=404)
+            missing=http('node-b',endpoint,expected=404)
+            if args.handoff_browser:
+                assert missing['code']=='HANDOFF_ASSESSMENT_NOT_FOUND'
             live=http('node-a',endpoint,live_input,request=request)
             assert live['state']=='BLOCKED' and not live['executionAuthorized']
             assert 'ORIGINAL_WORKER_NOT_DRAINED' in live['blockers']
@@ -1447,6 +1467,43 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 return value if value.get('id')==stopped['id'] else None
             assert wait(reopened, 'restarted controller reads same assessment')==stopped
             passed('Controller restart retains the assessed placement, original owner and masked cut proof')
+            if args.handoff_probe:
+                def data_cut():
+                    return [sql('postgres','SELECT epoch,next_seq,normalized_seq,captured FROM transfer_journal.rm3_job'),
+                            sql('postgres','SELECT epoch,stream_seq,transaction_hash FROM rm_pg_meta.rm3_sink_job'),
+                            sql('mysql-target','SELECT epoch,stream_seq,transaction_hash FROM rm_my_meta.rm3_sink_job')]
+                original_cut=data_cut()
+                probe_endpoint=endpoint+'/probe'
+                bad=http('node-b',probe_endpoint,{'expectedAssessment':stopped['id']})
+                assert bad['probe']['candidate']['state']=='REFUSED', bad['probe']['candidate'].get('code')
+                assert bad['probe']['originalEvidence']['code']=='ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN'
+                assert bad['probe']['originalEvidence']['retainedReceipts']>0
+                assert not bad['executionAuthorized'] and data_cut()==original_cut
+                passed('Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected')
+                compose('stop','--timeout','8',candidate)
+                wait(lambda: sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                 " AND node_id='node-worker-alt' AND lifecycle='RUNNING' AND lease_until>"+clock)=='0',
+                     'old candidate enrollment ended')
+                services[candidate]['environment']['RM_GC_HANDOFF_PG']='${RM_GC_DATA}'
+                composition.write_text(json.dumps({'services':services,'volumes':volumes}))
+                compose('up','-d','--force-recreate',candidate)
+                address(candidate)
+                wait(lambda:http(candidate,'/readyz',expected=(200,503)).get('status')=='UP',
+                     'corrected candidate enrolled')
+                assert http('node-a',probe_endpoint,{'expectedAssessment':stopped['id']},expected=409)['code']=='HANDOFF_ASSESSMENT_CHANGED'
+                good_plan=http('node-a',endpoint,dict(stopped_input,expectedAssessment=stopped['id']))
+                good=http('node-b',probe_endpoint,{'expectedAssessment':good_plan['id']})
+                proof=good['probe']
+                assert proof['current'] and proof['candidate']['state']=='VERIFIED', proof['candidate'].get('code')
+                cut=proof['candidate']['cut']
+                assert cut['destinations']==['my','pg'] and not cut['writerPlacementEnrolled']
+                assert len(cut['journalGenerationSha256'])==len(cut['nativeEvidenceSha256'])==64
+                assert good['blockers']==['ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED'] and not good['executionAuthorized']
+                assert http('node-a',endpoint)==good and task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                passed('Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data')
+            if args.handoff_browser:
+                browser_check('handoff', owner=owner_node, candidate=candidate, revision=stopped_input['expectedRevision'],
+                              previousReceiptId=stopped['id'])
             manifest['status']='PASS'
             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
             print('GLOBAL_CONTROL_HANDOFF_ASSESSMENT_ACCEPTED artifact='+digest)

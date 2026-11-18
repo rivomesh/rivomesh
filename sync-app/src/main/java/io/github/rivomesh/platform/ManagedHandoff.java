@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.JournalWriterAssignment;
 import java.sql.*;
 import java.time.DateTimeException;
 import java.time.Instant;
@@ -17,9 +18,13 @@ final class ManagedHandoff {
                 &&incarnation.equals(b.incarnation)&&epoch==b.epoch&&state.equals(b.state);}
     }
     private record OriginalCut(String leaseState,String journalEpoch,String sequence,String checkpointHash){}
+    private record ProbeResult(long checkedAt,Map<String,Object> candidate,Map<String,Object> originalEvidence){}
+    record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
+                      JournalWriterAssignment.ExpectedCut cut){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
                               Agent original,Agent candidate,int taskSlots,int workerSlots,long assigned,
-                              String actor,String actorRevision,long assessedAt,OriginalCut originalCut,List<String> blockers){}
+                              String actor,String actorRevision,long assessedAt,OriginalCut originalCut,List<String> blockers,
+                              ProbeResult probe){}
     private static final String CANDIDATE_ACCESS="CANDIDATE_ACCESS_UNVERIFIED";
     private static final String RECOVERY_EVIDENCE="ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED";
     private static final ObjectMapper YAML=new ObjectMapper(new YAMLFactory());
@@ -87,19 +92,55 @@ final class ManagedHandoff {
             blockers.add(RECOVERY_EVIDENCE);
             Assessment next=new Assessment(1,task.id,request.requestId,request.reference,task.revision,task.activeConfigurationVersion,
                     Agent.of(original),Agent.of(candidate.binding()),candidate.taskSlots(),candidate.workerSlots(),
-                    candidate.assignedTasks(),actor.id,actor.authorizationRevision,assessedAt,originalCut,List.copyOf(blockers));
-            String encoded=Model.JSON.writeValueAsString(next);
-            String envelope=cipher.seal(purpose(task.id,next.request),encoded);
-            if(prior==null)db.update(c,"INSERT INTO "+db.table("task_handoff")
-                    +" (cluster_id,task_id,request_id,envelope) VALUES (?,?,?,?)",cluster,task.id,next.request,envelope);
-            else db.update(c,"UPDATE "+db.table("task_handoff")+" SET request_id=?,envelope=? WHERE cluster_id=? AND task_id=?",
-                    next.request,envelope,cluster,task.id);
-            AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_ASSESSED";event.taskId=task.id;
-            event.actorId=actor.id;event.actorRole=actor.role.name();event.subjectId=candidate.binding().node;
-            event.clientRequestHash=AuditStore.hash(request.requestId);event.operationHash=AuditStore.hash(encoded);
-            event.status="COMMITTED";access.append(c,event);
-            return summary(next,false);
+                    candidate.assignedTasks(),actor.id,actor.authorizationRevision,assessedAt,originalCut,List.copyOf(blockers),null);
+            save(c,next,prior==null,actor,"MANAGED_HANDOFF_ASSESSED");
+            return summary(next,false,assessedAt);
         });
+    }
+
+    private void save(Connection c,Assessment assessment,boolean insert,AccessControl.Principal actor,String kind)throws Exception{
+        String encoded=Model.JSON.writeValueAsString(assessment);
+        String envelope=cipher.seal(purpose(assessment.task,assessment.request),encoded);
+        if(insert)db.update(c,"INSERT INTO "+db.table("task_handoff")
+                +" (cluster_id,task_id,request_id,envelope) VALUES (?,?,?,?)",cluster,assessment.task,assessment.request,envelope);
+        else if(db.update(c,"UPDATE "+db.table("task_handoff")+" SET request_id=?,envelope=? WHERE cluster_id=? AND task_id=?",
+                assessment.request,envelope,cluster,assessment.task)!=1)throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
+        AuditStore.Event event=new AuditStore.Event();event.kind=kind;event.taskId=assessment.task;
+        event.actorId=actor.id;event.actorRole=actor.role.name();event.subjectId=assessment.candidate.node;
+        event.clientRequestHash=AuditStore.hash(assessment.request);event.operationHash=AuditStore.hash(encoded);
+        event.status="COMMITTED";access.append(c,event);
+    }
+
+    Map<String,Object> probe(TaskRequest request,AccessControl.Principal actor,OwnerQueries transport)throws Exception{
+        OwnerQueries.HandoffQueries calls=transport.submitHandoff(request,actor);
+        Map<String,Object> candidate=transport.await(calls.candidate(),actor);
+        Map<String,Object> evidence=transport.await(calls.originalEvidence(),actor);
+        return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
+            Assessment a=probeAssessment(c,task,current,request.reference);
+            long now=db.now(c);
+            ProbeResult result=new ProbeResult(now,candidate,evidence);
+            Assessment proved=new Assessment(a.version,a.task,a.request,a.replaces,a.revision,a.activeVersion,a.original,
+                    a.candidate,a.taskSlots,a.workerSlots,a.assigned,a.actor,a.actorRevision,a.assessedAt,a.originalCut,a.blockers,result);
+            save(c,proved,false,current,"MANAGED_HANDOFF_PROBED");
+            return summary(proved,false,now);
+        });
+    }
+
+    ProbeRoute probeRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
+        Assessment a=probeAssessment(c,task,actor,expected);
+        JournalWriterAssignment.ExpectedCut cut=new JournalWriterAssignment.ExpectedCut(
+                Long.parseLong(a.originalCut.journalEpoch),Long.parseLong(a.originalCut.sequence),a.originalCut.checkpointHash);
+        return new ProbeRoute(a.revision,a.activeVersion,agents.owner(c,a.original.node,a.original.directory),
+                agents.owner(c,a.candidate.node,a.candidate.directory),cut);
+    }
+
+    private Assessment probeAssessment(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,String expected)throws Exception{
+        Assessment a=read(c,task.id);
+        if(a==null||!expected.equals(a.request))throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
+        requireGrants(actor,a.original.node,a.candidate.node);
+        if(stale(c,task,actor,a))throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
+        if(a.blockers.size()!=2||a.originalCut==null)throw new TaskService.Conflict("HANDOFF_ASSESSMENT_BLOCKED");
+        return a;
     }
 
     Map<String,Object> latest(String id,AccessControl.Principal supplied)throws Exception{
@@ -133,6 +174,9 @@ final class ManagedHandoff {
     }
 
     private Map<String,Object> view(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
+        return summary(a,stale(c,task,actor,a),db.now(c));
+    }
+    private boolean stale(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
         boolean stale=!task.revision.equals(a.revision)||!Objects.equals(task.activeConfigurationVersion,a.activeVersion)
                 ||!task.owner.equals(a.original.node)||!task.directory.equals(a.original.directory);
         if(!stale){
@@ -148,10 +192,10 @@ final class ManagedHandoff {
                         ||commands.hasUnresolved(c,task.id)!=a.blockers.contains("TASK_COMMANDS_UNRESOLVED");
             }
         }
-        return summary(a,stale);
+        return stale;
     }
 
-    private static Map<String,Object> summary(Assessment a,boolean stale){
+    private Map<String,Object> summary(Assessment a,boolean stale,long now){
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("id",a.request);result.put("taskId",a.task);result.put("taskRevision",a.revision);
         result.put("activeConfigurationVersion",a.activeVersion);
@@ -162,7 +206,14 @@ final class ManagedHandoff {
         result.put("assessedAt",Instant.ofEpochMilli(a.assessedAt).toString());
         result.put("originalCut",a.originalCut);
         result.put("state",stale?"STALE":a.blockers.size()==2?"EVIDENCE_REQUIRED":"BLOCKED");
-        result.put("blockers",a.blockers);result.put("executionAuthorized",false);
+        List<String> blockers=new ArrayList<>(a.blockers);
+        if(a.probe!=null){
+            boolean applicable=!stale&&a.probe.checkedAt>=now-freshness&&a.probe.checkedAt<=now;
+            if(applicable&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
+            result.put("probe",Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
+                    "current",applicable,"candidate",a.probe.candidate,"originalEvidence",a.probe.originalEvidence));
+        }
+        result.put("blockers",blockers);result.put("executionAuthorized",false);
         return result;
     }
 
