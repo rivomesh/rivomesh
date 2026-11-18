@@ -46,16 +46,13 @@ public final class FanoutDispatcher {
                     projected=normalizeProject(sink,records.get(0),diagnostic);diagnostic.phase=SubscriberFailure.Phase.RECONCILE;
                     if(!projected.id.equals(checkpoint.transactionId)||!Codec.sha256(Codec.encode(projected)).equals(checkpoint.transactionHash))throw new IllegalStateException("COMMITTED_SINK_CONTENT_MISMATCH");
                     diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;
-                    acknowledge(sink.id(),checkpoint.sequence,false);start=1;applied++;
+                    acknowledge(sink.id(),checkpoint.sequence);start=1;applied++;
                 }
                 for(int i=start;i<records.size();i++){
                     if(Thread.currentThread().isInterrupted())throw new InterruptedException("SUBSCRIBER_STOPPED");
                     Journal.Record record=records.get(i);projected=null;projected=normalizeProject(sink,record,diagnostic);
                     diagnostic.phase=SubscriberFailure.Phase.TARGET_APPLY;sink.apply(lease.epoch,record.sequence,projected);
-                    diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;
-                    boolean observed=sink.consistency()==SinkAdapter.Consistency.TRANSACTIONAL
-                            &&projected.kind==SourceTransaction.Kind.DATA&&!projected.changes.isEmpty();
-                    acknowledge(sink.id(),record.sequence,observed);applied++;
+                    diagnostic.phase=SubscriberFailure.Phase.JOURNAL_ACK;acknowledge(sink.id(),record.sequence);applied++;
                 }
                 if(sub.errorCode!=null||retryAfter.containsKey(sink.id())){
                     retrying(sink.id(),null);
@@ -98,13 +95,7 @@ public final class FanoutDispatcher {
         public JournalFailure(Phase phase,Exception cause){super(phase,cause);}
     }
     private List<Journal.Record> read(String subscription,int limit)throws Exception{try{return journal.read(subscription,limit);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
-    private void acknowledge(String subscription,long sequence,boolean applied)throws Exception{
-        try{
-            if(applied)journal.acknowledgeApplied(lease,subscription,sequence);
-            else journal.acknowledge(lease,subscription,sequence);
-        }catch(JdbcJournal.Fenced failure){throw failure;}
-        catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_ACK,failure);}
-    }
+    private void acknowledge(String subscription,long sequence)throws Exception{try{journal.acknowledge(lease,subscription,sequence);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_ACK,failure);}}
     private void retrying(String subscription,String code)throws Exception{try{journal.retrying(lease,subscription,code);}catch(JdbcJournal.Fenced failure){throw failure;}catch(Exception failure){throw new JournalFailure(PipelineFailure.Phase.JOURNAL_STORAGE,failure);}}
     public static Transformer sourceTransformer(Transformer transformer){return record->{try{return transformer.normalize(record);}catch(Exception failure){if(failure instanceof JdbcJournal.Fenced)throw failure;throw new NormalizationFailure(failure);}};}
     private static boolean retryable(Exception failure){return io.github.rivomesh.Sql.retryable(failure);}
