@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.54",
+  "version": "0.55",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -86,14 +86,14 @@
       "id": "CP-03",
       "epic": "CLUSTER",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "跨节点持久命令路由",
         "en": "Durable cross-node command routing"
       },
       "gap": {
-        "zh-CN": "公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。",
-        "en": "Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open."
+        "zh-CN": "PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。",
+        "en": "Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair."
       },
       "acceptance": {
         "zh-CN": "任一入口可控制B的任务：创建、检查、启停、暂停/恢复、重试、校验/修复；命令含全局请求ID/修订/owner代次，重复投递只生效一次，202仅表示接受，返回已执行/拒绝/未知结果。",
@@ -109,11 +109,18 @@
         "docs/zh-CN/global-control.md",
         "sync-app/src/main/java/io/github/rivomesh/platform/GlobalControl.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java",
-        "tests/global-control-pipeline.py"
+        "tests/global-control-pipeline.py",
+        "tests/roles/UncertainCommandAcceptance.java"
       ],
       "implementation": {
-        "scope": "Opt-in fixed-owner public global HTTP/UI with shared configuration, commands, queries and startup STOP/PAUSE barrier; migration and complete business acceptance remain open",
+        "scope": "Fixed-owner cross-entry durable command admission, dispatch, outcome reconciliation and proven business operations",
         "design": "docs/sdd/001-control-recovery-compatibility/design-global-control.md"
+      },
+      "verification": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, seven native cases on each control store; cross-entry lifecycle, idempotent replay, pending HTTP 202, REJECTED and UNKNOWN, with archived native retry and repair",
+        "criteriaSha256": "ca5ed7a83da50b1441c2ab1482b2a7ab67699f66f052395118221203addaa9f9"
       }
     },
     {
@@ -182,14 +189,14 @@
       "id": "CP-06",
       "epic": "CLUSTER",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "全局日志、指标与诊断界面",
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "双入口有采集租约、积压和独立目标诊断。已实测 PostgreSQL 和 MySQL 8.4 直接写入的目标提交样本，以及 5.7 未知状态。其他源与协议的时间语义和容量档案仍待验。",
-        "en": "Both entries show capture lease, per-target backlog and fault history. PostgreSQL and MySQL 8.4 direct-origin commit samples passed, including safe MySQL 5.7 unknown timing. Other source and protocol timing and capacity remain."
+        "zh-CN": "实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。",
+        "en": "Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",
@@ -206,8 +213,17 @@
         "tests/global-control-pipeline.py",
         "docs/verification/baseline.json",
         "tests/ui/browser-smoke.mjs",
-        "tests/postgres-source-run.py"
-      ]
+        "tests/postgres-source-run.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/WorkerDiagnostics.java",
+        "docs/zh-CN/global-control.md",
+        "docs/verification/README.md"
+      ],
+      "verification": {
+        "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, ten distributed native checks, 28 focused Java, 13 Chrome and 131 DOM; native PostgreSQL/MySQL timestamp and legacy UNKNOWN profiles",
+        "criteriaSha256": "2937d196c6ef1f4d90ddfbe06b746329d59a4685660099c058a1b721a9c91a3b"
+      }
     },
     {
       "id": "CP-07",

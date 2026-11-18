@@ -6,8 +6,12 @@ import io.github.rivomesh.cdc.JdbcSink;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.*;
 import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -212,6 +216,29 @@ class PlatformTest {
             assertEquals("DESTINATION_OVERLAP",assertThrows(TaskService.Conflict.class,()->service.create(value,"create_overlap")).getMessage());
         }
     }
+    @Test void diagnosticBurstReturnsRetryAfterAndLeavesTaskStatusAvailable()throws Exception{
+        PlatformConfig c=config();
+        try(TaskService service=new TaskService(c,new Backend(),new Workers());
+            ConsoleServer server=new ConsoleServer(c,service);
+            HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()){
+            service.create(Model.JSON.writeValueAsString(task("diagnostic_limit")),"create_diag_limit");
+            server.start();
+            String base="http://127.0.0.1:"+server.port();
+            HttpRequest request=HttpRequest.newBuilder(URI.create(base+"/api/tasks/diagnostic_limit/diagnostics"))
+                    .header("Authorization","Bearer "+TOKEN).timeout(Duration.ofSeconds(15)).GET().build();
+            List<CompletableFuture<HttpResponse<String>>> reads=new ArrayList<>();
+            for(int i=0;i<64;i++)reads.add(client.sendAsync(request,HttpResponse.BodyHandlers.ofString()));
+            CompletableFuture.allOf(reads.toArray(CompletableFuture[]::new)).get(20,TimeUnit.SECONDS);
+            List<HttpResponse<String>> results=reads.stream().map(CompletableFuture::join).toList();
+            assertTrue(results.stream().anyMatch(response->response.statusCode()==200));
+            HttpResponse<String> limited=results.stream().filter(response->response.statusCode()==429)
+                    .findFirst().orElseThrow();
+            assertEquals("1",limited.headers().firstValue("Retry-After").orElseThrow());
+            assertEquals("DIAGNOSTICS_RATE_LIMITED",Model.JSON.readTree(limited.body()).path("code").asText());
+            assertEquals(200,http(base,"/api/tasks/diagnostic_limit",TOKEN,null,null).status);
+        }
+    }
+
     static final class Response{int status;String text;Response(int status,String text){this.status=status;this.text=text;}}
     static Response http(String base,String path,String token,String body,String request)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(base+path).openConnection();c.setConnectTimeout(3000);c.setReadTimeout(5000);

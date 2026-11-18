@@ -1,8 +1,8 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.54 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 
-实施中：48项持续追踪，31项DONE、17项PARTIAL、0项NEW，余17项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，33项DONE、15项PARTIAL、0项NEW，余15项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -12,10 +12,10 @@ RM-SDD-001 · v0.54 · 2026-11-18 · IMPLEMENTING
 |---|---|---|---|
 | CP-01 | P0 / DONE | 统一节点注册与状态 | 共享节点目录已通过PostgreSQL/MySQL双节点、kill/重开及控制库中断验收；任务权威/远端命令仍属CP-02/03。 |
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
-| CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
+| CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
 | CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 外部日志双节点已验证旧 Worker 隔离。PostgreSQL/MySQL 控制库均实测按授权和剩余任务槽分配新任务。运行任务仍需交接准入、证据可达与自动接管。 |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已验证采集租约、重启后的脱敏分页、按任务/节点过滤及独立目标积压。界面支持目标选择。真实时间延迟、按目标日志及容量档案待验收。 |
+| CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
 
 ## 登录状态保持
@@ -95,10 +95,10 @@ RM-SDD-001 · v0.54 · 2026-11-18 · IMPLEMENTING
 |---|---|
 | CP-01 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [TaskWorker.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskWorker.java) |
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
-| CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
+| CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已验证采集租约、重启后的脱敏分页、按任务/节点过滤及独立目标积压。界面支持目标选择。真实时间延迟、按目标日志及容量档案待验收。 |
+| CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

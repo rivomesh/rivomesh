@@ -94,6 +94,7 @@ public final class TaskService implements AutoCloseable {
     private SharedAccessStore sharedAccess;
     private String auditProblem;
     private final ConfigurationDocuments documents=new ConfigurationDocuments();
+    private final WorkerDiagnostics.ReadBudget diagnosticReads=new WorkerDiagnostics.ReadBudget();
     private final TaskWorker.Factory workers;
     private final Map<String,Entry> entries=new LinkedHashMap<>();
     private final Map<String,Thread> operationThreads=new ConcurrentHashMap<>();
@@ -904,6 +905,7 @@ public final class TaskService implements AutoCloseable {
         if(subscription!=null&&(entry.config.pipeline==null
                 ||entry.config.pipeline.targets.stream().noneMatch(target->subscription.equals(target.id))))
             throw new Conflict("DIAGNOSTICS_TARGET_UNKNOWN");
+        if(!diagnosticReads.take(System.nanoTime()))throw new Conflict("DIAGNOSTICS_RATE_LIMITED");
         Map<String,Object> result=WorkerDiagnostics.page(logDirectory.resolve(id+".log"),cursor,limit,subscription);
         result.put("ownerNodeId",nodeId());
         return result;

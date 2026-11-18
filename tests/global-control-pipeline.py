@@ -32,6 +32,8 @@ parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
 parser.add_argument('--task-authority', action='store_true',
                     help='Exercise global revisions, unique task IDs, independent sources and standalone control')
+parser.add_argument('--command-routing', action='store_true',
+                    help='Check replay, refusal and explicit UNKNOWN through both live Controllers')
 parser.add_argument('--handoff-assessment', action='store_true',
                     help='Persist and refresh a managed handoff assessment through two Controllers and two Agents')
 parser.add_argument('--handoff-probe', action='store_true',
@@ -78,6 +80,12 @@ if args.task_authority and (not args.separate_execution or any((args.automatic_p
         args.runtime_jdk, args.rolling_restart, args.task_views, args.mysql_delivery_timing,
         args.source_diagnostics, args.failure_diagnostics, args.snapshot_diagnostics, args.compensation, args.correction))):
     parser.error('--task-authority uses the separate Agent baseline profile')
+if args.command_routing and (not args.separate_execution or not args.test_classes
+        or not args.test_classes.is_dir() or any((
+        args.task_authority, args.automatic_placement, args.runtime_image, args.runtime_jdk, args.rolling_restart,
+        args.task_views, args.mysql_delivery_timing, args.source_diagnostics, args.failure_diagnostics,
+        args.snapshot_diagnostics, args.compensation, args.correction))):
+    parser.error('--command-routing requires --separate-execution and compiled fault fixture --test-classes')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.handoff_probe and not args.handoff_assessment:
@@ -158,7 +166,7 @@ env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secr
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
 review_accounts = any((args.managed_failure_review, args.compensation, args.correction, args.worker_diagnostics,
-                       args.managed_binlog_evidence, args.task_views, args.handoff_assessment))
+                       args.managed_binlog_evidence, args.task_views, args.handoff_assessment, args.command_routing))
 if review_accounts:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
@@ -173,6 +181,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'executionProfile': 'SEPARATE_AGENT' if args.separate_execution else 'COMBINED',
             'controlProduct': args.control_product,
             'taskAuthority': args.task_authority,
+            'commandRouting': args.command_routing,
             'automaticPlacement': args.automatic_placement,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
@@ -282,7 +291,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         (home / 'standalone.json').write_text(json.dumps(local))
         services['standalone'] = dict(services['node-a'], environment={'RM_GC_TOKEN': '${RM_GC_TOKEN}'},
                                       entrypoint=['java', '-Xmx384m', *launch, 'serve', '/fixture/standalone.json'])
-    if args.managed_commit or args.recovery_jobs:
+    if args.managed_commit or args.recovery_jobs or args.command_routing:
         classes=args.test_classes.resolve();classes.relative_to(ROOT)
         services[owner_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
         test_hash=hashlib.sha256()
@@ -833,6 +842,85 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert stable_global == http('node-a', primary_url) == http('node-b', primary_url)
         action('STOP', node='standalone')
         passed('A standalone JVM independently creates the same ID and reloads its own runnable configuration after SIGKILL')
+
+    def run_command_routing():
+        actions = route + '/actions'
+
+        def shared_receipt(request, delivery):
+            receipts = [next((entry for entry in task(node)['operations'] if entry['id'] == request), {})
+                        for node in ('node-a', 'node-b')]
+            if any(entry.get('deliveryStatus') != delivery for entry in receipts):
+                return None
+            fields = ('id', 'ownerNodeId', 'revision', 'status', 'deliveryStatus', 'code')
+            values = [{key: item.get(key) for key in fields} for item in receipts]
+            assert values[0] == values[1] and values[0]['ownerNodeId'] == owner_node
+            return values[0]
+
+        manifest['controlServerVersion'] = sql('store', 'SELECT VERSION()')
+        pause_id = 'native_pause_' + uuid.uuid4().hex
+        pause = {'action':'PAUSE','expectedRevision':task('node-b')['revision']}
+        http('node-b', actions, pause, request=pause_id, expected=202)
+        paused = wait(lambda: shared_receipt(pause_id, 'SUCCEEDED'), 'original pause settled at both Controllers')
+        assert task('node-a')['desired'] == task('node-b')['desired'] == 'PAUSED'
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(43,'paused on B',JSON_OBJECT('n',43))")
+        assert sql('postgres', 'SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=43') == '0'
+        action('RESUME', errorCount=task()['status']['error_count'])
+        wait(rows_match, 'resume through A applies the held source transaction')
+        http('node-a', actions, pause, request=pause_id, expected=202)
+        assert shared_receipt(pause_id, 'SUCCEEDED') == paused
+        assert task('node-a')['desired'] == task('node-b')['desired'] == 'RUNNING'
+        assert http('node-a', actions, dict(pause, action='CHECK'), request=pause_id,
+                    expected=409)['code'] == 'REQUEST_ID_REUSED'
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(44,'after original replay',JSON_OBJECT('n',44))")
+        wait(rows_match, 'CDC continues after replay of the old pause')
+        passed('Pause through B and resume through A affect native CDC; replay of the original pause keeps its receipt and never pauses again')
+
+        action('STOP')
+        operator = '/api/accounts/review-operator'
+        accounts = '/api/accounts'
+        http('node-b', operator, {'expectedRevision':http('node-b', accounts)['revision'],'role':'OPERATOR',
+                                 'enabled':True,'nodeIds':[owner_node],'taskIds':['global_cdc']}, method='PUT')
+        terminate_owner()
+        rejected_id = 'native_revoked_' + uuid.uuid4().hex
+        check = {'action':'CHECK','expectedRevision':task('node-a')['revision']}
+        accepted = http('node-a', actions, check, request=rejected_id, expected=202, token=env['RM_GC_OPERATOR'])
+        pending = next(entry for entry in accepted['operations'] if entry['id'] == rejected_id)
+        assert pending['status'] == pending['deliveryStatus'] == 'PENDING'
+        assert shared_receipt(rejected_id, 'PENDING')
+        http('node-b', operator, {'expectedRevision':http('node-b', accounts)['revision']}, method='DELETE')
+        restart_owner()
+        rejected = wait(lambda: shared_receipt(rejected_id, 'REJECTED'), 'same admitted command gets rejected')
+        assert rejected['status'] == 'REJECTED' and rejected['code'] == 'AUTHORIZATION_CHANGED'
+        assert rejected['revision'] == pending['revision']
+        passed('HTTP 202 records a pending original request while the Agent is offline; authorization revocation resolves it as REJECTED after rejoin')
+
+        previous_epoch = next(node['epoch'] for node in http('node-b', '/api/nodes')['nodes'] if node['id'] == owner_node)
+        terminate_owner()
+        uncertain_id = 'native_uncertain_' + uuid.uuid4().hex
+        check = {'action':'CHECK','expectedRevision':task('node-b')['revision']}
+        http('node-b', actions, check, request=uncertain_id, expected=202)
+        accepted = shared_receipt(uncertain_id, 'PENDING')
+        assert accepted and accepted['status'] == 'PENDING'
+        injected = compose('run', '--rm', '-T', '--no-deps', '--entrypoint', 'java', owner_node,
+                           '-Xmx256m', '-cp', '/app/rivomesh.jar:/fixture-tests',
+                           'io.github.rivomesh.platform.UncertainCommandAcceptance',
+                           '/fixture/' + owner_node + '.json', uncertain_id, check['expectedRevision'], str(previous_epoch),
+                           check=False)
+        assert injected.returncode == 0, next((line for line in injected.stderr.splitlines()
+                   if re.fullmatch(r'.*(?:TEST_[A-Z_]+|(?:ControlStore|TaskService)\$[A-Za-z]+).*',line)),
+                   'Unknown command fault injector failed')[:250]
+        epoch = re.search(r'(?m)^COMMAND_UNKNOWN_OWNER_EPOCH=(\d+)$', injected.stdout)
+        assert epoch and int(epoch[1]) > previous_epoch
+        manifest['commandOwnerEpochs'] = {'previous':previous_epoch,'unknownDispatch':int(epoch[1])}
+        unknown = wait(lambda: shared_receipt(uncertain_id, 'UNKNOWN'), 'explicit unknown from both Controllers')
+        assert unknown['status'] == 'PENDING' and unknown['code'] == 'REVISION_CHANGED'
+        assert unknown['revision'] == accepted['revision']
+        http('node-a', actions, check, request=uncertain_id, expected=202)
+        assert shared_receipt(uncertain_id, 'UNKNOWN') == unknown
+        for request_id in (pause_id, rejected_id, uncertain_id):
+            assert sql('store', "SELECT COUNT(*) FROM global_control.rmc_command WHERE cluster_id='global-cdc' "
+                                "AND request_id='" + request_id + "'") == '1'
+        passed('A new owner generation binds the exact request and local revision; without its receipt both Controllers expose UNKNOWN and identical replay preserves the outcome')
 
     def run_rolling_restart():
         rolls = manifest['runtimeRollout'] = {}
@@ -1415,6 +1503,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
             manifest['status'] = 'PASS'
             print('GLOBAL_CONTROL_TASK_AUTHORITY_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
+        if args.command_routing:
+            run_command_routing()
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_COMMAND_ROUTING_ACCEPTED artifact=' + digest)
             raise SystemExit(0)
         if args.handoff_assessment:
             endpoint=route+'/handoff'

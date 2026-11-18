@@ -20,10 +20,29 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class WorkerDiagnostics {
+    /** One read budget per execution Agent, shared by its management entry points. */
+    static final class ReadBudget {
+        private static final long INTERVAL=TimeUnit.MILLISECONDS.toNanos(125);
+        private static final long MAX_WAIT=(16-1)*INTERVAL;
+        private long availableAfter;
+        private boolean started;
+
+        boolean take(long now){
+            if(!started||now-availableAfter>=0){
+                availableAfter=now;
+                started=true;
+            }
+            if(availableAfter-now>MAX_WAIT)return false;
+            availableAfter+=INTERVAL;
+            return true;
+        }
+    }
+
     enum Event {
         CAPTURE_READY, CAPTURE_FAILURE, RETRY, BACKPRESSURE, BACKPRESSURE_CLEARED,
         TARGET_PAUSED, TARGET_RETRYING, TARGET_RETRY_CLEARED;

@@ -262,7 +262,12 @@ public final class ConsoleServer implements AutoCloseable {
             error(exchange,404,"NOT_FOUND");
         }catch(ControlStore.Unavailable e){error(exchange,503,"CONTROL_STORE_UNAVAILABLE");}
         catch(AuditStore.Unavailable e){exchange.getResponseHeaders().remove("Set-Cookie");rawJson(exchange,503,Collections.singletonMap("code","AUDIT_UNAVAILABLE"));}
-        catch(TaskService.Conflict e){error(exchange,409,e.getMessage());}
+        catch(TaskService.Conflict e){
+            if("DIAGNOSTICS_RATE_LIMITED".equals(e.getMessage())){
+                exchange.getResponseHeaders().set("Retry-After","1");
+                error(exchange,429,e.getMessage());
+            }else error(exchange,409,e.getMessage());
+        }
         catch(NoSuchElementException e){error(exchange,404,exchange.getRequestURI().getPath().startsWith("/api/accounts")?"ACCOUNT_NOT_FOUND":"TASK_NOT_FOUND");}
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
         catch(IllegalArgumentException e){

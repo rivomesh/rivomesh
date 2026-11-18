@@ -1,8 +1,8 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.54 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.55 · 2026-11-18 · IMPLEMENTING
 
-Implementation:48requirements,31 DONE, 17 PARTIAL and 0 NEW, with 17 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
+Implementation:48requirements,33 DONE, 15 PARTIAL and 0 NEW, with 15 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
 [Baseline/decisions](plan.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](spec.md)
 
@@ -12,10 +12,10 @@ Implementation:48requirements,31 DONE, 17 PARTIAL and 0 NEW, with 17 open. RC-01
 |---|---|---|---|
 | CP-01 | P0 / DONE | Global node registry and state | Shared registry passes PostgreSQL/MySQL two-node,kill/rejoin and storage-outage acceptance;global task authority/commands remain CP-02/03. |
 | CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
-| CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
+| CP-03 | P0 / DONE | Durable cross-node command routing | Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair. |
 | CP-04 | P0 / PARTIAL | Failover,fencing and placement | External-journal stale Worker fencing passed. PostgreSQL and MySQL control stores verified initial Agent assignment by grants and capacity. Active Agent handoff, evidence availability and automatic takeover remain. |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain. |
+| CP-06 | P1 / DONE | Cluster logs,metrics and diagnostics | Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown. |
 | CP-07 | P0 / DONE | Control-plane HA and worker independence | Protocol4 separated profile accepted on PG/MySQL control stores,all-controller loss/pending-command recovery,store outage,same-Worker continuation and nonroot runtime;default combined remains coupled and failover/other storage-adapter profiles are separate. |
 
 ## Persistent login
@@ -95,10 +95,10 @@ Implementation:48requirements,31 DONE, 17 PARTIAL and 0 NEW, with 17 open. RC-01
 |---|---|
 | CP-01 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [TaskWorker.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskWorker.java) |
 | CP-02 | P0 / DONE | Global task/configuration authority | Both control stores verified cross-entry configuration revisions, global task-ID uniqueness, physical source/configuration isolation and standalone restart with the original task. |
-| CP-03 | P0 / PARTIAL | Durable cross-node command routing | Public durable commands,offline STOP,actual multi-target validation/repair and original UNKNOWN upgrade recovery accepted;complete cancellation/fault/migration/capacity matrices remain open. |
+| CP-03 | P0 / DONE | Durable cross-node command routing | Seven native checks per control store covered cross-entry lifecycle, replay, pending HTTP 202, rejection on revocation, and UNKNOWN across Agent generations. Prior native evidence covers target retry, validation and repair. |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | Shared authorization,audit and secret references | Shared accounts/grants/hash-chained audit and Worker environment filtering exist; complete remote correlation, least-secret references and process/filesystem isolation remain open. |
-| CP-06 | P1 / PARTIAL | Cluster logs,metrics and diagnostics | Both entries passed lease views, redacted diagnostics across restart, exact task/owner filters and separate destination backlogs. The UI filters destinations. Wall-clock lag, per-destination logs and capacity remain. |
+| CP-06 | P1 / DONE | Cluster logs,metrics and diagnostics | Distributed diagnostics verified node/task/destination scope, paging, restart, redaction and bounded reads. Native PostgreSQL and direct-origin MySQL 8.4 expose verified commit lag. Unavailable timing is explicitly unknown. |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

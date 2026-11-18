@@ -4,7 +4,7 @@ RM-SDD-001 · v0.54 · 2026-11-18 · IMPLEMENTING
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **31 DONE, 17 PARTIAL and 0 NEW, with 17 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and Temurin 21 process and source/target diagnostic profiles passed bounded acceptance.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **33 DONE, 15 PARTIAL and 0 NEW, with 15 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and Temurin 21 process and source/target diagnostic profiles passed bounded acceptance.
 
 ## Current baseline
 
@@ -14,7 +14,7 @@ Maintain the current first-release specification and [verification baseline](../
 
 | User item | SDD range | Incomplete items |
 |---|---|---|
-| 1 Unified cluster control | CP-01–CP-07 | 4 |
+| 1 Unified cluster control | CP-01–CP-07 | 2 |
 | 2 Persistent login | SE-01–SE-05 | 0 |
 | 3 Skip and corrective data | RC-01–RC-10 | 1 |
 | 4 Source versions/PG/Oracle | SO-01–SO-07 | 2 |

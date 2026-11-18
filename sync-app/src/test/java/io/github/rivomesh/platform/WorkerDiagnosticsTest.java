@@ -10,11 +10,27 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class WorkerDiagnosticsTest {
     @TempDir Path directory;
+
+    @Test void rateBudgetCapsBurstsAndRefillsAtTheOwner(){
+        WorkerDiagnostics.ReadBudget budget=new WorkerDiagnostics.ReadBudget();
+        long start=-10_000_000L;
+        for(int request=0;request<16;request++)assertTrue(budget.take(start));
+        assertFalse(budget.take(start));
+        assertFalse(budget.take(start+TimeUnit.MILLISECONDS.toNanos(124)));
+        long refilled=start+TimeUnit.MILLISECONDS.toNanos(125);
+        assertTrue(budget.take(refilled));
+        assertFalse(budget.take(refilled));
+        long later=start+TimeUnit.SECONDS.toNanos(10);
+        for(int request=0;request<16;request++)assertTrue(budget.take(later));
+        assertFalse(budget.take(later));
+        assertTrue(new WorkerDiagnostics.ReadBudget().take(start));
+    }
 
     @Test void pagesOnlyStructuredEventsAndKeepsAnAnchorAcrossNewEvents()throws Exception{
         Path log=directory.resolve("job.log");

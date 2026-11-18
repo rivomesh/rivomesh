@@ -12,7 +12,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 - [x] T-CP-02 · Global task/configuration authority · P0 · Depends on: CP-01
   Deliver: A task created/edited through A appears at B with the same global revision;IDs are unique within a cluster;independent sources remain isolated and standalone mode remains usable.
   Acceptance: AC-CP-02
-- [ ] T-CP-03 · Durable cross-node command routing · P0 · Depends on: CP-02
+- [x] T-CP-03 · Durable cross-node command routing · P0 · Depends on: CP-02
   Deliver: Any entry controls tasks on B;typed commands cover create/check/lifecycle/retry/validation/repair and carry request ID,revision and owner generation;duplicate delivery is idempotent and acceptance is distinct from execution.
   Acceptance: AC-CP-03
 - [ ] T-CP-04 · Failover,fencing and placement · P0 · Depends on: CP-03, JV-01, LG-05
@@ -21,7 +21,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 - [ ] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
   Acceptance: AC-CP-05
-- [ ] T-CP-06 · Cluster logs,metrics and diagnostics · P1 · Depends on: CP-01, CP-03, CP-05
+- [x] T-CP-06 · Cluster logs,metrics and diagnostics · P1 · Depends on: CP-01, CP-03, CP-05
   Deliver: UI filters node/task/destination status,lag,backlog,logs and errors with observation timestamps and bounded redacted log access.
   Acceptance: AC-CP-06
 - [x] T-CP-07 · Control-plane HA and worker independence · P0 · Depends on: CP-03, CP-05, SE-04

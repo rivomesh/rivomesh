@@ -39,6 +39,8 @@ helm upgrade --install rivomesh-global-b deploy/helm/rivomesh --namespace rivome
 
 管理员可在 **诊断记录** 中从 **采集端** 切换到单个目标。接口为 `GET /api/tasks/orders/diagnostics?subscriptionId=warehouse&limit=20`。记录包括目标故障暂停、重试及重试结束的观察时间。采集和目标事件分开保存在执行 Agent 的私有日志目录内。同一任务的目标共用两段各 64 KiB 的滚动文件，频繁故障时早期记录可能轮换。使用 `after` 翻页时保持相同目标。记录已脱敏，只包含事件类型及元数据。重试结束表示 Worker 已观察到恢复，可用目标确认序号及待确认数量判断投递进度。
 
+同一 Agent 的管理入口共用诊断读取额度，每秒 8 页，允许突发读取 16 页。每页最多 25 条。收到 HTTP 429 和 `DIAGNOSTICS_RATE_LIMITED` 时，等待 `Retry-After` 指示的时间，再使用原游标重试。任务状态和控制命令有各自的请求路径。
+
 PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTiming` 展示各目标最近一次可核验的提交到确认延迟。它以逻辑复制协议的源提交时间为起点，以 Worker 收到目标提交成功响应为终点，包含通信耗时。源库和 Worker 应同步时钟。终点早于起点时，接口返回 `CLOCK_SKEW`，不提供耗时。两个时间均为 UTC，毫秒数及日志序号使用十进制字符串。[PostgreSQL 逻辑复制消息格式](https://www.postgresql.org/docs/17/protocol-logicalrep-message-formats.html)
 
 每个样本对应一笔已确认事务。任务暂停、重试或有积压时，界面标记为历史样本。首次采样前，以及推进确认序号时没有直接观察到目标提交响应的情况，状态为 `UNKNOWN`。空投递、快照、屏障、跳过和提交结果核对不会产生样本。可根据运行状态、积压数和连续投递序号判断当前进度。Worker 重启或原日志记录已回收后，仍可读取最近确认序号对应的样本。

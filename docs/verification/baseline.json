@@ -434,6 +434,34 @@
         "profile": "Temurin 21, ten native cases each on PostgreSQL 17.12 and MySQL 8.4.13 control stores; concurrent ID admission, same revision, independent sources, standalone SIGKILL continuation",
         "criteriaSha256": "c7cc22900d998798fee7f94ab4bd957139bc7e3ff168201b7a5ac2993be8acba"
       }
+    },
+    {
+      "id": "CP-03",
+      "title": {
+        "zh-CN": "跨节点持久命令路由",
+        "en": "Durable cross-node command routing"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, seven native cases on each control store; cross-entry lifecycle, idempotent replay, pending HTTP 202, REJECTED and UNKNOWN, with archived native retry and repair",
+        "criteriaSha256": "ca5ed7a83da50b1441c2ab1482b2a7ab67699f66f052395118221203addaa9f9"
+      }
+    },
+    {
+      "id": "CP-06",
+      "title": {
+        "zh-CN": "全局日志、指标与诊断界面",
+        "en": "Cluster logs,metrics and diagnostics"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, ten distributed native checks, 28 focused Java, 13 Chrome and 131 DOM; native PostgreSQL/MySQL timestamp and legacy UNKNOWN profiles",
+        "criteriaSha256": "2937d196c6ef1f4d90ddfbe06b746329d59a4685660099c058a1b721a9c91a3b"
+      }
     }
   ],
   "productProfiles": [
@@ -4945,5 +4973,199 @@
       "browser": "Chrome/157.0.8103.79"
     },
     "domPassed": 131
+  },
+  "crossEntryCommandOutcomes": {
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --command-routing --control-product <POSTGRESQL|MYSQL> --artifact <candidate jar> --test-classes <compiled fixture> --output <directory>",
+    "controlStores": {
+      "POSTGRESQL": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "Pause through B and resume through A affect native CDC; replay of the original pause keeps its receipt and never pauses again",
+          "HTTP 202 records a pending original request while the Agent is offline; authorization revocation resolves it as REJECTED after rejoin",
+          "A new owner generation binds the exact request and local revision; without its receipt both Controllers expose UNKNOWN and identical replay preserves the outcome"
+        ],
+        "harnessSourceSha256": "27a2b1a1e3796085e2b2bff996f020eb8bc01ac4e394e1a6f13817488fb0f7aa",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "POSTGRESQL",
+        "taskAuthority": false,
+        "commandRouting": true,
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "handoffProbe": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "mysqlDeliveryTiming": false,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:8.4",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "testClassesSha256": "68c8a782fce655ac31abf641731b3a04b680d899059074568035392c3ec45abf",
+        "sourceVersion": "8.4.13",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "controlServerVersion": "PostgreSQL 17.12 (Debian 17.12-1.pgdg13+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+        "commandOwnerEpochs": {
+          "previous": 2,
+          "unknownDispatch": 3
+        },
+        "cleanupExitCode": 0
+      },
+      "MYSQL": {
+        "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+        "status": "PASS",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "Pause through B and resume through A affect native CDC; replay of the original pause keeps its receipt and never pauses again",
+          "HTTP 202 records a pending original request while the Agent is offline; authorization revocation resolves it as REJECTED after rejoin",
+          "A new owner generation binds the exact request and local revision; without its receipt both Controllers expose UNKNOWN and identical replay preserves the outcome"
+        ],
+        "harnessSourceSha256": "27a2b1a1e3796085e2b2bff996f020eb8bc01ac4e394e1a6f13817488fb0f7aa",
+        "executionProfile": "SEPARATE_AGENT",
+        "controlProduct": "MYSQL",
+        "taskAuthority": false,
+        "commandRouting": true,
+        "automaticPlacement": false,
+        "handoffAssessment": false,
+        "handoffProbe": false,
+        "failureDiagnostics": false,
+        "snapshotDiagnostics": false,
+        "managedFailureReview": false,
+        "checkpointInspection": false,
+        "managedCommit": false,
+        "managedSkip": false,
+        "compensation": false,
+        "correction": false,
+        "recoveryJobs": false,
+        "runtimeJdk": null,
+        "rollingRestart": false,
+        "workerDiagnostics": false,
+        "headerBoundary": false,
+        "verifyBinlogContents": false,
+        "managedBinlogEvidence": false,
+        "approvedBinlogExclusion": false,
+        "taskViews": false,
+        "mysqlDeliveryTiming": false,
+        "sourceDiagnostics": null,
+        "sourceImage": "mysql:8.4",
+        "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+        "testClassesSha256": "68c8a782fce655ac31abf641731b3a04b680d899059074568035392c3ec45abf",
+        "sourceVersion": "8.4.13",
+        "sourceServerProfile": "ON|ROW|FULL",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "controlServerVersion": "8.4.13",
+        "commandOwnerEpochs": {
+          "previous": 2,
+          "unknownDispatch": 3
+        },
+        "cleanupExitCode": 0
+      }
+    },
+    "supportingProfiles": [
+      "reusedPublicGapWorkflow.businessProducts",
+      "retainedReportLookupAndFocus"
+    ]
+  },
+  "boundedGlobalDiagnostics": {
+    "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+    "distributed": {
+      "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Both management entries filter exact task and owner inside the shared pagination query",
+        "Only the SQL-blocked destination has a pending transaction and both management entries agree",
+        "Both entries scope the redacted SQL pause event to PostgreSQL and reject unauthorized or invalid target queries",
+        "Generation-bound resume clears only the repaired destination backlog and all native rows agree",
+        "MySQL target outage produces retry and recovery events while PostgreSQL continues to receive native CDC",
+        "Both management entries recover the same destination diagnostics after Agent restart with independent paging"
+      ],
+      "harnessSourceSha256": "27a2b1a1e3796085e2b2bff996f020eb8bc01ac4e394e1a6f13817488fb0f7aa",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": true,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "cleanupExitCode": 0
+    },
+    "chrome": {
+      "artifactSha256": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+      "status": "PASS",
+      "checks": [
+        "Native Tab navigation stays in the login dialog and Escape keeps login required",
+        "Actual token sign-in issues a cookie, clears the form, and restores the task after reload",
+        "Packaged handoff assessment UI loads while its task action remains hidden in standalone mode",
+        "Diagnostics has an accessible dialog and destination selector, routes target reads, and works through Enter and Escape",
+        "Report lookup retains keyboard focus through polling, has an accessible dialog, validates typed input and closes with Escape",
+        "The workbench opens the real stored validation report catalog and returns to recent jobs",
+        "English workspace stays within the mobile viewport",
+        "PostgreSQL wizard hides MySQL fields, restricts targets and saves a stopped task via the real API",
+        "Oracle wizard fits the mobile viewport and saves separate CDB and PDB credentials through the real API",
+        "Packaged site wordmarks, favicon and palette follow the browser color scheme",
+        "An explicit keyboard-selected appearance survives reload with the authenticated cookie session",
+        "Keyboard skip and current-page navigation work at 320 CSS pixels with no page overflow",
+        "Actual sign-out revokes the browser session"
+      ],
+      "browser": "Chrome/157.0.8103.79"
+    },
+    "javaTests": 28,
+    "domTests": 131,
+    "rateBudget": {
+      "burstPages": 16,
+      "pagesPerSecond": 8,
+      "responseStatus": 429,
+      "retryAfterSeconds": 1,
+      "verification": "Concurrent HTTP calls on a normal standalone console, plus budget tests and independent two-Controller native query coverage"
+    }
   }
 }

@@ -52,16 +52,16 @@
     "a8d76a54a3759cc4c5b7c59d9aea8fe8dd02ab70"
   ],
   "currentSdd": {
-    "DONE": 31,
-    "PARTIAL": 17,
+    "DONE": 33,
+    "PARTIAL": 15,
     "NEW": 0
   },
   "nextTasks": [
     "Complete the serial native browser, MySQL timing, RabbitMQ quorum and constraint review verification queues.",
     "Advance global Agent transfer and capture evidence reachability, then measure sustained slow-target backpressure."
   ],
-  "currentCandidateArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
-  "currentCandidateScope": "Combined Temurin 21 candidate with 61 focused Java and 12 real Chrome checks; native browser and MySQL timing queued or running",
+  "currentCandidateArtifact": "4edb16a83fb1a004dc466712dae89e180d1df40f13e7b1c776fc21e8237f15ab",
+  "currentCandidateScope": "Temurin 21 staged normal package for bounded diagnostics, 28 Java, 131 DOM, 13 Chrome, and ten distributed native checks",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
     "LG-09 historical report lookup and periodic-refresh keyboard focus passed 16 native cases including seven live Chrome interactions, 12 same-artifact standalone Chrome cases, and 127 DOM tests.",
@@ -72,6 +72,8 @@
     "LG-04 exact RabbitMQ 4.1.4 three-member quorum ran six native checks, including independent SQL progress through loss of majority, staggered recovery, 19 deliveries / 18 IDs and manual consumer ACK.",
     "CP-02 completed. Both native control stores passed ten cases for identical active revisions, concurrent global ID uniqueness, two physical source configurations, and standalone restart of the original task.",
     "CP-04 authenticated candidate evidence probe passed ten native checks per control store and 71 focused Java cases; candidate-only credentials, re-enrollment invalidation and original source/journal/target proofs were verified.",
-    "CP-04 console handoff assessment passed 11 native checks including three real Chrome workflows, 13 standalone Chrome and 131 DOM cases."
+    "CP-04 console handoff assessment passed 11 native checks including three real Chrome workflows, 13 standalone Chrome and 131 DOM cases.",
+    "CP-03 completed. Seven native cases on each control store proved cross-entry command lifecycle, idempotent replay, pending 202, REJECTED after revocation and UNKNOWN through a new Agent generation.",
+    "CP-06 completed. Exact Temurin 21 artifact passed ten distributed native checks, 28 Java, 131 DOM and 13 Chrome checks including bounded diagnostic reads and native timing semantics."
   ]
 }
