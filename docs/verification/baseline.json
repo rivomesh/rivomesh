@@ -3055,5 +3055,160 @@
       "cleanupExitCode": 0
     },
     "domPassed": 123
+  },
+  "temurin21SourceProfiles": {
+    "artifactSha256": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+    "nativeChecksPassed": 48,
+    "mysqlStandalone": {
+      "checksPerVersion": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 21"
+      ],
+      "runtimeProcesses": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        }
+      ],
+      "harnessSourceSha256": "c7fa035db46d8c3224729de1b7fabb58844a7b7efa96ca31c2ef39a42b9b1b00",
+      "versions": [
+        {
+          "sourceVersion": "5.7.44-log",
+          "sourceServerProfile": "ON|ROW|FULL",
+          "sourceImage": "mysql:5.7",
+          "sourceImageId": "sha256:5107333e08a87b836d48ff7528b1e84b9c86781cc9f1748bbc1b8c42a870d933",
+          "cleanupExitCode": 0
+        },
+        {
+          "sourceVersion": "8.0.46",
+          "sourceServerProfile": "ON|ROW|FULL",
+          "sourceImage": "mysql:8.0.46",
+          "sourceImageId": "sha256:b7e118f56c5963e079252e0d6e2978c9c010eb7fc7aaaec100e367796b5dd08f",
+          "cleanupExitCode": 0
+        },
+        {
+          "sourceVersion": "8.2.0",
+          "sourceServerProfile": "ON|ROW|FULL",
+          "sourceImage": "mysql:8.2.0",
+          "sourceImageId": "sha256:a76e521c029290a5e42acd182b67a66b8bf1c42045e4a6977ee21e46a5fe6083",
+          "cleanupExitCode": 0
+        },
+        {
+          "sourceVersion": "8.4.13",
+          "sourceServerProfile": "ON|ROW|FULL",
+          "sourceImage": "mysql:8.4",
+          "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+          "cleanupExitCode": 0
+        }
+      ]
+    },
+    "postgresql": {
+      "17.12": {
+        "artifactSha256": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+        "status": "PASS",
+        "checks": [
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot",
+          "Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint"
+        ],
+        "jdk": 21,
+        "runtimeImage": "eclipse-temurin:21-jre-jammy",
+        "sourceImage": "postgres:17.12",
+        "failover": true,
+        "rejectOldPrimary": true,
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "runtimeVersion": "21.0.13",
+        "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "runtimeArchitecture": "arm64",
+        "checkpointBeforePromotion": "0/30185a8",
+        "slotBeforePromotion": "rivomesh_test_2da67702e6ca2b1f",
+        "timelineBeforePromotion": 1,
+        "checkpointAfterPromotion": "0/3018938",
+        "timelineAfterPromotion": 2,
+        "cleanupExitCode": 0
+      },
+      "18.7": {
+        "artifactSha256": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+        "status": "PASS",
+        "checks": [
+          "PostgreSQL 18 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Native stored generated columns materialize keyed and keyless updates, and missing publication coverage is refused",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "The missing slot is refused and the last durable LSN remains available",
+          "Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint"
+        ],
+        "jdk": 21,
+        "runtimeImage": "eclipse-temurin:21-jre-jammy",
+        "sourceImage": "postgres:18",
+        "failover": false,
+        "rejectOldPrimary": false,
+        "sourceVersion": "18.7 (Debian 18.7-1.pgdg13+2)",
+        "sourceImageId": "sha256:4ad5d66c7ff7413c0578fa4a54b9629b804d56ed4802b5d6cb9be5862badd461",
+        "runtimeVersion": "21.0.13",
+        "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "runtimeArchitecture": "arm64",
+        "cleanupExitCode": 0
+      }
+    },
+    "oracle": {
+      "artifactSha256": "cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40",
+      "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+      "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+      "checks": [
+        "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+        "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+        "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+        "A root connection substituted for the PDB is refused before flashback",
+        "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+        "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+        "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+        "An unarchived part of the requested SCN window is refused",
+        "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+        "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+        "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+        "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+        "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+      ],
+      "status": "PASS",
+      "sourceVersion": "23.26.4.0.0",
+      "cleanupExitCode": 0,
+      "runtimeVersion": "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+      "runtimeArchitecture": "arm64"
+    }
   }
 }

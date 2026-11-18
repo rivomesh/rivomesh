@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.36",
+  "version": "0.37",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1016,8 +1016,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "PostgreSQL 17.12 已实测快照及可切换逻辑槽续传，回到旧时间线时拒绝。18.7 已验收存储型生成列；更多类型、DDL 与多目标共同点待验收。",
-        "en": "PostgreSQL 17.12 passed snapshot, failover-slot continuation and old-timeline refusal. 18.7 passed stored generated columns. Broader types, DDL and multi-target common cuts remain."
+        "zh-CN": "Temurin 21 已复验 PostgreSQL 17.12 同步槽切主并拒绝旧时间线，18.7 已验收存储型生成列与槽丢失保护。更多类型、DDL 与多目标共同点待验收。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 synchronized-slot promotion and old-timeline refusal, and 18.7 stored generated columns and missing-slot protection. Broader types, DDL and multi-target common cuts remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1045,8 +1045,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 单 PDB、归档 LogMiner 到 PostgreSQL 实测支持长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。",
-        "en": "Oracle 26ai archived LogMiner to PostgreSQL passed single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain."
+        "zh-CN": "Temurin 21 已复验 Oracle 26ai 单 PDB 归档 LogMiner 到 PostgreSQL，包含长事务、强杀续传、独立 SCN 和 PDB 世代检查。LOB、JSON、生成列、RAC 和切主仍待验收。",
+        "en": "Temurin 21 verified Oracle 26ai archived LogMiner to PostgreSQL with single-PDB long transactions, process-kill restart and SCN/PDB incarnation checks. LOBs, JSON, generated columns, RAC and promotion remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1113,8 +1113,8 @@
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "Java 21 已通过 MySQL 8.4 到 PostgreSQL/MySQL 的全量、增量和原位续传。历史档案含 PostgreSQL 17.12 与 18.7。其余源、目标、TLS 和恢复组合待补验。",
-        "en": "Java 21 passed MySQL 8.4 to PostgreSQL and MySQL snapshots, CDC and original-checkpoint resume. Historical evidence includes PostgreSQL 17.12 and 18.7. Other sources, targets, TLS and recovery combinations remain."
+        "zh-CN": "同一 Temurin 21 候选已通过四个 MySQL 版本的单机全量及增量、PostgreSQL 17 同步槽切主、18 生成列与 Oracle 26ai 单 PDB 原位恢复。MySQL 其他拓扑、更多目标、TLS 和恢复组合待补验。",
+        "en": "One Temurin 21 candidate passed standalone snapshot and CDC on four MySQL versions, PostgreSQL 17 synchronized-slot promotion, PostgreSQL 18 generated columns, and Oracle 26ai single-PDB resume. Other MySQL topologies, targets, TLS and recovery combinations remain."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",

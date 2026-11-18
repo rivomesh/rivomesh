@@ -8,13 +8,13 @@
 
 | 配置 | 实库范围 | 配置与恢复 |
 |---|---|---|
-| `MYSQL` 5.7.44 | Java 8。单机、GTID 主从提升和单主组复制。真实日志缺失时拒绝续传。 | [同步配置](pipeline-v3.md)、[日志缺失恢复](capture-recovery.md) |
-| `MYSQL` 8.0.46 | Java 8。单机、GTID 主从提升和单主组复制。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
-| `MYSQL` 8.2.0 | Java 8。单机、GTID 主从提升和单主组复制。 | [版本专项命令](pipeline-v3.md) |
-| `MYSQL` 8.4.13 | Java 8。三种拓扑以及 binlog 准入检查。历史进程验证含 Java 21 单机档案。 | [8.4 binlog 档案](pipeline-v3.md) |
-| `POSTGRESQL` 17.12 | 实验性单主源。五种 JDK 分别通过 7 项 PostgreSQL 到 PostgreSQL 实库验证。Java 8 已通过同步槽切主，PostgreSQL 共同点对账待验证。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
-| `POSTGRESQL` 18.7 | 实验性单主源，发布存储型生成列并物化为目标普通列。 | [源指南与发布](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8，单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
+| `MYSQL` 5.7.44 | Temurin 21 单机到 MySQL 与 PostgreSQL 的全量及增量。历史档案覆盖 GTID 主从升主、单主组复制和日志缺失拒绝。 | [同步配置](pipeline-v3.md)、[日志缺失恢复](capture-recovery.md) |
+| `MYSQL` 8.0.46 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖 GTID 主从升主和单主组复制。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
+| `MYSQL` 8.2.0 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖 GTID 主从升主和单主组复制。 | [版本专项命令](pipeline-v3.md) |
+| `MYSQL` 8.4.13 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖三种拓扑和 binlog 准入检查。 | [8.4 binlog 档案](pipeline-v3.md) |
+| `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝，共同点对账待验收。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
+| `POSTGRESQL` 18.7 | Temurin 21 实验档案。发布存储型生成列，PostgreSQL 17.12 目标物化为普通列。 | [源指南与发布](postgresql-source.md) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
 
 MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐标使用逻辑源 ID、system ID、timeline、slot 和 LSN。Oracle 预检使用 DBID、resetlogs SCN、PDB GUID 和 SCN。`SourcePosition.formatVersion` 当前为 1，由 `sourceType` 对应的适配器解释。在同一来源身份和协议内比较坐标。[多库样例](../../config/pipeline-v3.yml)使用 `formatVersion: 3`、`source.clusterId`、`databases` 以及每个目标的显式 `mappings`。独立 MySQL 集群分别使用独立配置。
 

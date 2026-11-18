@@ -118,6 +118,13 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
         return compose('exec','-T',service,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-A','-t','-F','|','-c',statement).stdout.strip()
 
+    def source_timeline():
+        identity=compose('exec','-T',live_source,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres',
+                         '-d','dbname=sync_test replication=database','-A','-t','-F','|',
+                         '-c','IDENTIFY_SYSTEM').stdout.strip()
+        system_id,timeline,_,_=identity.split('|')
+        return system_id,int(timeline)
+
     def root_url():
         port=compose('port','runner','8080').stdout.strip().rsplit(':',1)[1]
         return 'http://127.0.0.1:'+port
@@ -269,8 +276,10 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                 """)=='t'
 
             require(synchronized_slot,'logical failover slot synchronized and standby past durable LSN')
+            system_id,original_timeline=source_timeline()
             report['checkpointBeforePromotion']=durable
             report['slotBeforePromotion']=slot
+            report['timelineBeforePromotion']=original_timeline
             compose('kill','-s','SIGKILL','source')
             assert sql('standby','SELECT pg_promote(true,60)')=='t'
             live_source='standby'
@@ -281,10 +290,12 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
                          "INSERT INTO sales.duplicates VALUES(7,'{}')")
             require(lambda:stream_ready() and task()['status']['capture_lsn']!=durable,'automatic promotion continuation')
             assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
-            assert sql('source',"SELECT timeline_id FROM pg_control_checkpoint()")!='1'
+            promoted_system_id,promoted_timeline=source_timeline()
+            assert promoted_system_id==system_id and promoted_timeline>original_timeline
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE failover AND slot_name='"+slot+"'")=='1'
             durable=task()['status']['capture_lsn']
             report['checkpointAfterPromotion']=durable
+            report['timelineAfterPromotion']=promoted_timeline
             passed('After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot')
 
         compose('kill','-s','SIGKILL','runner')
@@ -293,6 +304,7 @@ with tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as tempo
             compose('up','-d','source')
             live_source='source'
             require(lambda:sql('source','SELECT pg_is_in_recovery()')=='f','original server reopens on its branch')
+            assert source_timeline()==(system_id,original_timeline)
             compose('up','-d','runner')
 
             def old_timeline_fault():

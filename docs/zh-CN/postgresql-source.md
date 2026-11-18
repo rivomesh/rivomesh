@@ -25,9 +25,9 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
 
-已在 Java 8、11、17、21、25 上各运行七项实库检查。测试可用 `--jdk` 选择运行时。见[验收记录](../verification/README.md#postgresql-source-runtime-matrix)。
+当前构建与夹具统一使用 Temurin 21。早期多版本测试记录按原候选包留档。[验收记录](../verification/README.md#postgresql-source-runtime-matrix)
 
-PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8、11、17、21、25 各通过八项实库检查，包含有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+PostgreSQL 18.7 到 PostgreSQL 17.12 在 Temurin 21 下通过八项实库检查，覆盖有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
 
 ## 同步槽与备库提升
 
@@ -35,4 +35,4 @@ PostgreSQL 18.7 到 PostgreSQL 17.12 在 Java 8、11、17、21、25 各通过八
 
 数据库高可用服务隔离旧主、提升备库并更新写入口，Rivomesh 通过原入口重新连接。新主需要有相同的 system ID、覆盖原持久 LSN 和快照坐标的时间线历史，以及原 failover 槽。该槽须保有所需 WAL，确认位置不能领先 Rivomesh 日志。检查失败时保留旧 WAL 和日志。下一次切换前准备下一台物理备库。
 
-PostgreSQL 17.12 在 Java 8 下已实测强杀原主、原生备库提升、复用快照继续投递，以及误指回旧主时保留新时间线断点并拒绝续传。测试参数为 `--source-image postgres:17.12 --failover`，追加 `--reject-old-primary` 可复现旧主路由拒绝。负载均衡产品、级联拓扑和其他版本组合单独验收。
+PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复用快照继续投递，以及误指回旧主时保留新时间线断点并拒绝续传。夹具用 `IDENTIFY_SYSTEM` 核对当前活动时间线。测试参数为 `--source-image postgres:17.12 --failover`，追加 `--reject-old-primary` 可复现旧主路由拒绝。负载均衡产品、级联拓扑和其他版本组合单独验收。[流复制协议](https://www.postgresql.org/docs/17/protocol-replication.html)

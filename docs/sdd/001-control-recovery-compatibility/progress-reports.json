@@ -48,6 +48,7 @@
   "newSinceLastReport": [
     "JV-04 accepted. The same Temurin 21.0.13 JAR passed nonroot Linux manual startup, 19 Docker native cases, eight live Helm/native CSI cases, seven Chrome cases and 25 examples. The exact candidate release gate passed.",
     "LG-09 added cross-entry durable report discovery and protected scratch cleanup. One candidate passed 19 native, 8 Chrome, 122 DOM and 35 focused Java tests.",
-    "CP-04 initial placement raced two Controllers for the last slot with both native control databases. Each profile passed seven cases on one artifact; global UI passed 123 DOM tests. Running-task handoff has a bilingual SDD design."
+    "CP-04 initial placement raced two Controllers for the last slot with both native control databases. Each profile passed seven cases on one artifact; global UI passed 123 DOM tests. Running-task handoff has a bilingual SDD design.",
+    "JV-02 revalidated 48 native checks on one Temurin 21 candidate: five on each of four standalone MySQL versions, seven on PostgreSQL 17 promotion and old-route refusal, eight on PostgreSQL 18 generated columns and missing slot, and 13 on Oracle 26ai single-PDB archived CDC."
   ]
 }

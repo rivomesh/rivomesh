@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.36 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.37 · 2026-11-18 · IMPLEMENTING
 
 实施中：48项持续追踪，29项DONE、19项PARTIAL、0项NEW，余19项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 

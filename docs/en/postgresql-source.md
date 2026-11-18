@@ -25,9 +25,9 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 
-Seven native checks passed on each of Java 8, 11, 17, 21 and 25. Use `--jdk` to select the runtime. See the [verification record](../verification/README.md#postgresql-source-runtime-matrix).
+Use Temurin 21 for current builds and fixtures. Earlier cross-runtime results are archived with their exact artifact. [Verification record](../verification/README.md#postgresql-source-runtime-matrix)
 
-PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight checks on each of Java 8, 11, 17, 21 and 25. The added fixture checks stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight Temurin 21 checks. The fixture covers stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
 
 ## Synchronized standby promotion
 
@@ -35,4 +35,4 @@ For a new task, keep one stable PostgreSQL writer endpoint in `source.postgresql
 
 The database HA service fences the previous primary, promotes the standby and routes the writer endpoint. Rivomesh reconnects through that endpoint. The promoted server must have the original system ID, an actual timeline history covering the durable LSN and snapshot coordinates, and the original failover slot. The slot must retain the required WAL and its confirmed LSN must not lead the journal. Retain the journal and old WAL if any of these checks fails. Configure the next physical standby before attempting another promotion.
 
-PostgreSQL 17.12 on Java 8 passed actual primary SIGKILL, native promotion, continued delivery with unchanged snapshot IDs, and refusal of a route back to the original timeline. Select `--source-image postgres:17.12 --failover` in the fixture. Append `--reject-old-primary` to run the divergent-route case. Load balancer products, cascading topologies and further version combinations have separate acceptance.
+PostgreSQL 17.12 on Temurin 21 passed actual primary SIGKILL, native promotion, continued delivery with unchanged snapshot IDs, and refusal of a route back to the original timeline. The fixture checks the active timeline via `IDENTIFY_SYSTEM`. Select `--source-image postgres:17.12 --failover` and append `--reject-old-primary` to run the divergent-route case. Load balancer products, cascading topologies and further version combinations have separate acceptance. [Streaming replication protocol](https://www.postgresql.org/docs/17/protocol-replication.html)

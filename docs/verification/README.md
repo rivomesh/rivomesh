@@ -114,7 +114,7 @@ Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` pass
 
 ## PostgreSQL source runtime matrix
 
-Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` ran seven native PostgreSQL 17.12 source cases on each of Java 8, 11, 17, 21 and 25, a total of 35 successful cases. Runtime versions and image IDs are in the baseline. Run `python3 tests/postgres-source-run.py --jdk <8|11|17|21|25> --artifact <candidate jar> --output target/pg-source-proof` for an individual profile.
+Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` ran seven native PostgreSQL 17.12 source cases on each of Java 8, 11, 17, 21 and 25, a total of 35 historical cases. The baseline records their runtime versions and image IDs. The current fixture runs Temurin 21 with `python3 tests/postgres-source-run.py --artifact <candidate jar> --output target/pg-source-proof`.
 
 The same Oracle 26ai image also passed the native `--logminer` archive check. The source exposes redo/undo SQL, a common commit SCN and XID for keyed update and keyless delete, and excludes the rolled-back insert.
 
@@ -237,3 +237,7 @@ Candidate `480c85fa9a20bb1e6d331a360fdefbf4e1b9a9e768aac5c85d13579e2ef06794` pas
 ### Capacity-bound Agent assignment
 
 Candidate `cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40` passed seven native cases each with PostgreSQL and MySQL control stores. Two Controllers and two registered Agents used Temurin 21. The first automatically assigned task delivered snapshots and native incremental rows to both SQL destinations. Simultaneous creates from the two entries competed for the remaining slot and only one acquired it. Further creates were refused before a new task appeared. The first request replayed its original owner after both Agents filled. Console DOM coverage passed 123 cases, including the single automatic placement payload. [Global control](../en/global-control.md#automatic-assignment-for-new-tasks) · [Handoff design](../sdd/001-control-recovery-compatibility/design-agent-handoff.en.md) · [Manifests](baseline.json)
+
+### Temurin 21 source profile regression
+
+The same artifact passed 48 native checks on Temurin 21.0.13. MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13 each ran five standalone checks with two Controllers, an Agent, a Worker and two SQL destinations, including cross-schema CDC and keyed, keyless, JSON and generated values. PostgreSQL 17.12 passed seven checks including synchronized-slot promotion and old-route refusal. The fixture verifies the active timeline with `IDENTIFY_SYSTEM`, which avoids reading older checkpoint metadata while the post-promotion checkpoint is still running. PostgreSQL 18.7 passed eight checks including stored generated columns and missing-slot protection. Oracle 26ai Free 23.26.4.0.0 passed 13 single-PDB checks including long archive transactions, original-SCN restart and DDL refusal with the external Oracle JDBC driver. [Compatibility](../en/compatibility.md) · [PostgreSQL replication protocol](https://www.postgresql.org/docs/17/protocol-replication.html) · [Manifests](baseline.json)

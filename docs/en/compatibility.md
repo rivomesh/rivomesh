@@ -8,13 +8,13 @@ Choose a profile by source version and topology, target product and mode, then J
 
 | Configuration | Native scope | Configuration and recovery |
 |---|---|---|
-| `MYSQL` 5.7.44 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. Real retained-history loss refused. | [Pipeline configuration](pipeline-v3.md), [missing-log recovery](capture-recovery.md) |
-| `MYSQL` 8.0.46 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Pipeline configuration](pipeline-v3.md), [recovery runbook](reconciliation-workflow.md) |
-| `MYSQL` 8.2.0 | Java 8. Standalone, asynchronous GTID promotion and single-primary Group Replication. | [Version-specific test commands](pipeline-v3.md#mysql-820-source-regression) |
-| `MYSQL` 8.4.13 | Java 8. All three topologies and admission checks. The historical process record includes Java 21 for the standalone source. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
-| `POSTGRESQL` 17.12 | Experimental single-primary source. Seven native PostgreSQL-to-PostgreSQL checks on each of the five JDKs. The synchronized-slot promotion profile passed on Java 8. PostgreSQL common-cut verification is pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
-| `POSTGRESQL` 18.7 | Experimental single primary with stored generated columns published and materialized as ordinary target columns. | [Source guide and publication](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Java 8 with a separately supplied Oracle JDBC driver. Single-PDB Flashback and single-thread archived CDC to PostgreSQL. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
+| `MYSQL` 5.7.44 | Temurin 21 standalone snapshot and CDC to MySQL and PostgreSQL. Earlier archives cover asynchronous GTID promotion, single-primary Group Replication and missing binlog refusal. | [Pipeline configuration](pipeline-v3.md), [missing-log recovery](capture-recovery.md) |
+| `MYSQL` 8.0.46 | Temurin 21 standalone snapshot and CDC to both SQL targets. Earlier archives cover asynchronous GTID promotion and single-primary Group Replication. | [Pipeline configuration](pipeline-v3.md), [recovery runbook](reconciliation-workflow.md) |
+| `MYSQL` 8.2.0 | Temurin 21 standalone snapshot and CDC to both SQL targets. Earlier archives cover asynchronous GTID promotion and single-primary Group Replication. | [Version-specific test commands](pipeline-v3.md#mysql-820-source-regression) |
+| `MYSQL` 8.4.13 | Temurin 21 standalone snapshot and CDC to both SQL targets. Earlier archives cover all three topologies and binlog admission. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
+| `POSTGRESQL` 17.12 | Experimental Temurin 21 profile. Synchronized-slot promotion resumes automatically and an earlier timeline is refused. Common-cut verification is pending. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
+| `POSTGRESQL` 18.7 | Experimental Temurin 21 profile. PostgreSQL 17.12 materializes published stored generated columns as ordinary columns. | [Source guide and publication](postgresql-source.md) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21 with a separately supplied Oracle JDBC driver. Single-PDB Flashback and single-thread archived CDC to PostgreSQL. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
 
 MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses the logical source ID plus system ID, timeline, slot and LSN. The Oracle probe uses DBID, resetlogs SCN, PDB GUID and SCN. `SourcePosition.formatVersion` is currently 1 and is interpreted by `sourceType`. Compare coordinates within the original authority and protocol. The [multi-database sample](../../config/pipeline-v3.yml) uses `formatVersion: 3`, `source.clusterId`, `databases` and an explicit `mappings` object per target. Use independent configurations for separate MySQL clusters.
 
