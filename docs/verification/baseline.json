@@ -7833,7 +7833,8 @@
       ]
     ],
     "reproduce": "python3 tests/mysql-group-failover-native.py --artifact <release jar> --java <Java 21 executable> --output target/mysql-group-failover-proof",
-    "scope": "MySQL three-member single-primary Group Replication, two mapped database schemas, exact original Worker, external PostgreSQL journal and PostgreSQL business destination. Native failure uses SIGKILL and native group election. A fenced former primary is read-only before and after rejoin."
+    "scope": "MySQL three-member single-primary Group Replication, two mapped database schemas, exact original Worker, external PostgreSQL journal and PostgreSQL business destination. Native failure uses SIGKILL and native group election. A fenced former primary is read-only before and after rejoin.",
+    "staleEndpointQualification": "The restarted former primary was reachable and read-only inside Docker. The package refused its previously configured host endpoint with SOURCE_NO_PRIMARY. The first fixture did not assert that Docker kept the same host port across restart. Confirm reachable endpoint refusal with a fixed port. Automatic delivery on the elected member and native SQL error 1290 are verified."
   },
   "hiveJava21NativeReceiptRecovery": {
     "native": {

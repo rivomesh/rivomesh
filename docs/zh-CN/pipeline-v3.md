@@ -82,7 +82,7 @@ Java 21 实库档案使用 MySQL 8.4.13 异步 GTID 主备、外部 PostgreSQL �
 
 设置 `source.topology: GROUP_REPLICATION`，在 `source.nodes` 中配置同一个单主组的成员。MySQL 选举可写主库。Rivomesh 核验候选节点在线、可写且保留所需的 GTID 历史。旧主重启后应保持 MySQL 超级只读，直到重新入组。组复制要求被复制的表具备主键或等效唯一键。[单主模式](https://dev.mysql.com/doc/refman/8.4/en/group-replication-single-primary-mode.html) · [组复制要求](https://dev.mysql.com/doc/refman/8.4/en/group-replication-requirements.html)
 
-Java 21 实库测试使用 MySQL 8.4.13、外部 PostgreSQL 日志和 PostgreSQL 17.12 目标。强杀主库后，MySQL 选出不同 UUID 的主库，同一个 Worker 自动投递后续两个事务。日志代次、两个快照 ID 和目标全表数据均核对一致。旧主以只读方式启动，缺少新主的组 GTID，源端预检拒绝将它作为采集源。旧主作为备库追平后，Worker 继续从已选主库采集。
+Java 21 实库测试使用 MySQL 8.4.13、外部 PostgreSQL 日志和 PostgreSQL 17.12 目标。强杀主库后，MySQL 选出不同 UUID 的主库，同一个 Worker 自动投递后续两个事务。日志代次、两个快照 ID 和目标全表数据均核对一致。旧主以只读方式启动，缺少新主的组 GTID。夹具观测到 MySQL 拒绝写入，发行包也拒绝该配置地址。旧主重启后在原地址仍可达的预检档案需用固定端口复验。旧主作为备库追平后，Worker 继续从已选主库采集。
 
 使用 Java 21 JDK、Docker Compose 和本地 `mysql:8.4`、`postgres:17` 镜像复现。
 
