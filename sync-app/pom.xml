@@ -71,5 +71,37 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <id>external-vendor-jdbc</id>
+      <build>
+        <finalName>${project.artifactId}-${project.version}-external-vendor-jdbc</finalName>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>shade-application</id>
+                <configuration>
+                  <artifactSet>
+                    <excludes>
+                      <exclude>com.mysql:mysql-connector-j</exclude>
+                      <exclude>mysql:mysql-connector-java</exclude>
+                      <exclude>io.github.rivomesh:rivomesh-gaussdb-driver</exclude>
+                      <exclude>gsjdbc4:gsjdbc4</exclude>
+                      <exclude>org.opengauss:opengauss-jdbc</exclude>
+                      <exclude>io.github.rivomesh:rivomesh-gbase8c-driver</exclude>
+                      <exclude>cn.gbase:gbase8c-jdbc</exclude>
+                      <exclude>cn.com.kingbase:kingbase8</exclude>
+                      <exclude>com.dameng:DmJdbcDriver*</exclude>
+                    </excludes>
+                  </artifactSet>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

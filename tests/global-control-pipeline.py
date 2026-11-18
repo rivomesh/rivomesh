@@ -42,6 +42,8 @@ parser.add_argument('--handoff-probe', action='store_true',
                     help='Read-only candidate and original Agent probe under the current assessment')
 parser.add_argument('--handoff-custody', action='store_true',
                     help='Prove exact completed-report custody using separate then shared private mounts')
+parser.add_argument('--handoff-failure-custody', action='store_true',
+                    help='Verify custody of a real retained failure record and its authority without a key export')
 parser.add_argument('--handoff-closed-receipts', action='store_true',
                     help='Verify shared closed operation receipts and refusal when a private original receipt is missing')
 parser.add_argument('--handoff-preparation', action='store_true',
@@ -125,6 +127,8 @@ if args.handoff_probe and not args.handoff_assessment:
     parser.error('--handoff-probe requires --handoff-assessment')
 if args.handoff_custody and not args.handoff_probe:
     parser.error('--handoff-custody requires --handoff-probe')
+if args.handoff_failure_custody and not args.handoff_custody:
+    parser.error('--handoff-failure-custody requires --handoff-custody')
 if args.handoff_closed_receipts and not args.handoff_custody:
     parser.error('--handoff-closed-receipts requires --handoff-custody')
 if args.handoff_preparation and not args.handoff_closed_receipts:
@@ -247,6 +251,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffAssessment': args.handoff_assessment,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
+            'handoffFailureCustody': args.handoff_failure_custody,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
@@ -335,7 +340,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             config['cluster'].update(heartbeatMillis=1000,leaseMillis=15000)
         if args.automatic_placement and node in execution_agents:
             config.update(maxTasks=1,maxRunningTasks=1)
-        if args.managed_failure_review or args.compensation or args.correction:
+        if args.managed_failure_review or args.compensation or args.correction or args.handoff_failure_custody:
             config['cluster']['recoveryReview'] = True
         if review_accounts:
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
@@ -466,7 +471,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         attempts = 5 if args.managed_binlog_evidence and 503 not in allowed else 1
         for attempt in range(attempts):
             try:
-                handoff_probe = path.endswith('/handoff/probe') and (args.handoff_preparation or args.handoff_preparation_browser)
+                handoff_probe = path.endswith('/handoff/probe') and (
+                    args.handoff_preparation or args.handoff_preparation_browser or args.handoff_failure_custody)
                 probe_timeout = 65 if handoff_probe else 20
                 response = urllib.request.urlopen(call, timeout=probe_timeout)
             except urllib.error.HTTPError as error:
@@ -2051,6 +2057,25 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING'
                                  and task(n).get('captureLeaseState')=='CLAIMED' for n in ('node-a','node-b')),
                      'resume after the native completed report')
+            if args.handoff_failure_custody:
+                sql('postgres', "ALTER TABLE rm_pg_sales.items ADD CONSTRAINT handoff_fixture CHECK (id<>173)")
+                sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(173,'custody-private-fixture',JSON_OBJECT('n',173))")
+                def paused_destination():
+                    sub=next(s for s in task()['status']['subscriptions'] if s['id']=='pg')
+                    return sub if sub.get('state')=='PAUSED' and sub.get('failurePhase')=='TARGET_APPLY' else None
+                failed=wait(paused_destination,'native target constraint failure for custody')
+                wait(lambda:sql('mysql-target','SELECT COUNT(*) FROM rm_my_sales.items WHERE id=173')=='1',
+                     'healthy target applies the same native transaction')
+                review,_=action('FAILURE_REVIEW',node='node-b',subscriptionId='pg',errorCount=failed['errorGeneration'])
+                evidence=operation(review)['failureEvidenceId']
+                failure_root=home/owner_node/'controller'/'failure-evidence'/'global_cdc'
+                failure_names=('authority.json',evidence+'.json')
+                failure_bytes={name:(failure_root/name).read_bytes() for name in failure_names}
+                assert b'custody-private-fixture' in failure_bytes[evidence+'.json']
+                sql('postgres','ALTER TABLE rm_pg_sales.items DROP CONSTRAINT handoff_fixture')
+                action('RESUME_TARGET',subscriptionId='pg',errorCount=failed['errorGeneration'])
+                wait(rows_match,'original transaction replays after removing the fixture constraint')
+                passed('A native constraint failure is signed and retained before the original task drains through replay')
             request='gc_handoff_'+uuid.uuid4().hex
             live_input={'candidateNodeId':candidate,'expectedRevision':task()['revision']}
             http('node-b',endpoint,expected=403,token=env['RM_GC_VIEWER'])
@@ -2114,6 +2139,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     assert bad['probe']['originalEvidence']['shareableReports']['state']=='ARCHIVED'
                     assert bad['probe']['sharedReportCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
                     passed('Candidate with a disjoint private mount cannot claim custody of the original completed report')
+                    if args.handoff_failure_custody:
+                        assert bad['probe']['originalEvidence']['historicalFailureEvidence']['state']=='ARCHIVED'
+                        assert bad['probe']['sharedFailureEvidenceCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
+                        passed('A candidate with no archive mount access refuses custody of retained failure evidence')
                 compose('stop','--timeout','8',candidate)
                 wait(lambda: sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                  " AND node_id='node-worker-alt' AND lifecycle='RUNNING' AND lease_until>"+clock)=='0',
@@ -2153,6 +2182,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     assert 'rows.mv.db' not in json.dumps(good)
                     assert not good['executionAuthorized']
                     passed('Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain')
+                    if args.handoff_failure_custody:
+                        failures=proof['sharedFailureEvidenceCustody']
+                        assert failures['state']=='VERIFIED' and failures['archive']==custody['archive']
+                        assert failures['archive']['failureRecords']==1
+                        with zipfile.ZipFile(archive) as files:
+                            entries={name for name in files.namelist() if name.startswith('failure-evidence/')}
+                            assert entries=={'failure-evidence/'+name for name in failure_names}
+                            assert all(files.read('failure-evidence/'+name)==content for name,content in failure_bytes.items())
+                        assert all((failure_root/name).read_bytes()==content for name,content in failure_bytes.items())
+                        assert (failure_root/'evidence.key').stat().st_size==32
+                        assert evidence not in json.dumps(good) and 'custody-private-fixture' not in json.dumps(good)
+                        passed('Candidate verifies exact archived authority and failure record bytes while source key and owner stay private')
                     if args.handoff_closed_receipts:
                         receipts=proof['sharedReceiptCustody']
                         assert receipts['state']=='VERIFIED' and receipts['archive']==custody['archive']

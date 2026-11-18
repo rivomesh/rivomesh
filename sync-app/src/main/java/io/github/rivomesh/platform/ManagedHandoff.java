@@ -131,7 +131,7 @@ final class ManagedHandoff {
 
     private Map<String,Object> verifySharedEvidence(TaskRequest request,AccessControl.Principal actor,
                                                    OwnerQueries transport,Map<String,Object> evidence)throws Exception{
-        for(String category:List.of("shareableReports","closedReceipts")){
+        for(String category:List.of("shareableReports","closedReceipts","historicalFailureEvidence")){
             if(!(evidence.get(category) instanceof Map<?,?> artifact)||!"ARCHIVED".equals(artifact.get("state")))continue;
             SharedHandoffEvidence.Archive descriptor=Model.JSON.convertValue(artifact.get("archive"),SharedHandoffEvidence.Archive.class);
             if(descriptor==null)throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
@@ -326,6 +326,8 @@ final class ManagedHandoff {
                     probe.put("sharedReportCustody",a.probe.sharedReportCustody);
                 if(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> receipts&&"ARCHIVED".equals(receipts.get("state")))
                     probe.put("sharedReceiptCustody",a.probe.sharedReportCustody);
+                if(a.probe.originalEvidence.get("historicalFailureEvidence") instanceof Map<?,?> failures&&"ARCHIVED".equals(failures.get("state")))
+                    probe.put("sharedFailureEvidenceCustody",a.probe.sharedReportCustody);
             }
             result.put("probe",probe);
             HandoffPreparations.Evidence prepared=applicable?preparationEvidence(a,now):null;

@@ -22,8 +22,12 @@ public final class Sql {
         }
     }
     public static String targetErrorCode(SQLException error){
-        // DM reports missing tables as the broad data-exception state22000. Preserve the reason.
-        if(error instanceof dm.jdbc.driver.DMException&&error.getErrorCode()==-2106)return "TARGET_TABLE_MISSING_REBUILD_REQUIRED";
+        // Keep DM's missing-table reason even when the driver is supplied at runtime.
+        if (error.getErrorCode() == -2106) {
+            for (Class<?> type = error.getClass(); type != SQLException.class; type = type.getSuperclass()) {
+                if (type.getName().equals("dm.jdbc.driver.DMException")) return "TARGET_TABLE_MISSING_REBUILD_REQUIRED";
+            }
+        }
         String state=error.getSQLState();return state!=null&&state.matches("[A-Z0-9]{5}")?"SQL_"+state:"TARGET_SQL_ERROR";
     }
     public static boolean retryable(Throwable error) {

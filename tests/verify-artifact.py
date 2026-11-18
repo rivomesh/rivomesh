@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """Check the distributable, not just Maven's intermediate class directories."""
+import argparse
 import io
 import hashlib
 import json
 import os
 import re
 import struct
-import sys
 import zipfile
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-artifact = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("artifact", nargs="?", type=Path, default=root / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar")
+parser.add_argument("--jdbc-profile", choices=("bundled", "external-mysql-jdbc", "external-vendor-jdbc"), default="bundled")
+args = parser.parse_args()
+artifact = args.artifact
+embedded_mysql = args.jdbc_profile == "bundled"
+embedded_vendor = args.jdbc_profile != "external-vendor-jdbc"
 snapshot_sources = None
 if os.environ.get('RIVOMESH_RELEASE_MANIFEST'):
     manifest_path=(root/os.environ['RIVOMESH_RELEASE_MANIFEST']).resolve();manifest_path.relative_to(root)
@@ -64,16 +70,11 @@ with zipfile.ZipFile(artifact) as jar:
         "io/github/rivomesh/cdc/SourceAdapter$ConsistentRead.class",
         "io/github/rivomesh/cdc/KingbaseProfile.class",
         "io/github/rivomesh/cdc/Gbase8cProfile.class",
-        "com/gbase8c/Driver.class",
-        "META-INF/rivomesh-licenses/gbase8c-jdbc.txt",
         "io/github/rivomesh/cdc/DmProfile.class",
         "io/github/rivomesh/cdc/DmStorage.class",
-        "dm/jdbc/driver/DmDriver.class",
-        "com/kingbase8/Driver.class",
         "io/github/rivomesh/platform/AccountDirectory.class",
         "io/github/rivomesh/transport/hive/HiveTransport.class",
         "io/github/rivomesh/cdc/HiveSink.class",
-        "io/github/rivomesh/gaussdb/jdbc/Driver.class",
         "io/github/rivomesh/transport/pulsar/PulsarTransport.class",
         "io/github/rivomesh/transport/rocketmq/RocketTransport.class",
         "io/github/rivomesh/transport/artemis/ArtemisTransport.class",
@@ -95,13 +96,25 @@ with zipfile.ZipFile(artifact) as jar:
     for name in names:
         if (name.startswith("com/gbase8c/") or name.startswith("com/kingbase8/") or name.startswith("dm/jdbc/")) and name.endswith(".class"):
             assert struct.unpack(">H",jar.read(name)[6:8])[0]<=java21_class_major, "Vendor JDBC runtime exceeds Java 21: "+name
-    gbase_vendor=root / "gbase8c-driver/target/vendor/gbase8c-jdbc-3.0.0B02.jar"
-    assert hashlib.sha256(gbase_vendor.read_bytes()).hexdigest()=="fe115f05124f6b9f37e49c829a0def28f7d09a6d871dd62a0c9f856b0aaa7e91", "Wrong GBase 8c SDK"
-    with zipfile.ZipFile(gbase_vendor) as vendor:
-        for entry in vendor.namelist():
-            if entry.startswith("com/gbase8c/") and entry.endswith(".class"):
-                assert jar.read(entry)==vendor.read(entry), "Changed GBase vendor class: "+entry
-        assert jar.read("META-INF/rivomesh-licenses/gbase8c-jdbc.txt")==vendor.read("META-INF/LICENSE"), "Lost GBase license"
+    mysql_driver = "com.mysql.cj.jdbc.Driver"
+    vendor_drivers = ("io.github.rivomesh.gaussdb.jdbc.Driver", "com.kingbase8.Driver",
+                      "com.gbase8c.Driver", "dm.jdbc.driver.DmDriver")
+    for driver in ("org.postgresql.Driver", "org.h2.Driver"):
+        assert driver.replace(".", "/") + ".class" in names, "Missing core JDBC runtime: " + driver
+    assert "com/github/shyiko/mysql/binlog/BinaryLogClient.class" in names, "Missing binlog reader"
+    assert (mysql_driver.replace(".", "/") + ".class" in names) == embedded_mysql
+    for driver in vendor_drivers:
+        assert (driver.replace(".", "/") + ".class" in names) == embedded_vendor, "Wrong vendor JDBC runtime: " + driver
+    for file in ("gaussdb-jdbc.txt", "gbase8c-jdbc.txt"):
+        assert ("META-INF/rivomesh-licenses/" + file in names) == embedded_vendor, "Wrong JDBC notice: " + file
+    if embedded_vendor:
+        gbase_vendor=root / "gbase8c-driver/target/vendor/gbase8c-jdbc-3.0.0B02.jar"
+        assert hashlib.sha256(gbase_vendor.read_bytes()).hexdigest()=="fe115f05124f6b9f37e49c829a0def28f7d09a6d871dd62a0c9f856b0aaa7e91", "Wrong GBase 8c SDK"
+        with zipfile.ZipFile(gbase_vendor) as vendor:
+            for entry in vendor.namelist():
+                if entry.startswith("com/gbase8c/") and entry.endswith(".class"):
+                    assert jar.read(entry)==vendor.read(entry), "Changed GBase vendor class: "+entry
+            assert jar.read("META-INF/rivomesh-licenses/gbase8c-jdbc.txt")==vendor.read("META-INF/LICENSE"), "Lost GBase license"
     sdk=jar.read("rivomesh-sdk/hive-jdbc-4.0.1-standalone.jar")
     assert hashlib.sha256(sdk).hexdigest()=="5d74bb0130aae6a8a2fad9cf5ffa1608974a55f1013464334490f7e06311959e", "Wrong private Hive SDK"
     assert "org/apache/hive/jdbc/HiveDriver.class" not in names, "Hive SDK leaked into the core loader"
@@ -110,6 +123,9 @@ with zipfile.ZipFile(artifact) as jar:
     assert b"atDebug" not in jar.read("org/slf4j/Logger.class"), "Core SLF4J 1.7 API replaced"
     assert "Main-Class: io.github.rivomesh.Main" in jar.read("META-INF/MANIFEST.MF").decode(), "Wrong executable entry point"
     drivers = jar.read("META-INF/services/java.sql.Driver").decode().splitlines()
-    for driver in ("com.mysql.cj.jdbc.Driver", "org.postgresql.Driver", "org.h2.Driver", "io.github.rivomesh.gaussdb.jdbc.Driver", "com.kingbase8.Driver", "com.gbase8c.Driver", "dm.jdbc.driver.DmDriver"):
-        assert driver in drivers, "Missing JDBC service: " + driver
+    for driver in ("org.postgresql.Driver", "org.h2.Driver"):
+        assert driver in drivers, "Missing core JDBC service: " + driver
+    assert (mysql_driver in drivers) == embedded_mysql, "Wrong Connector/J service provider"
+    for driver in vendor_drivers:
+        assert (driver in drivers) == embedded_vendor, "Wrong vendor JDBC service provider: " + driver
 print("ARTIFACT_ACCEPTED:", artifact.name, artifact.stat().st_size, "bytes; SHA-256", hashlib.sha256(artifact.read_bytes()).hexdigest())

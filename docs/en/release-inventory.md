@@ -59,6 +59,44 @@ python3 tests/global-control-pipeline.py --artifact "$candidate" \
   --separate-execution --rolling-restart --control-product MYSQL
 ```
 
+### Candidate with external vendor JDBC drivers
+
+Build the `external-vendor-jdbc` profile on its own. The resulting application JAR keeps the binlog reader, PostgreSQL and H2 drivers. It excludes MySQL Connector/J, the GaussDB and GBase8c wrappers, Kingbase and Dameng JDBC. The separate `external-mysql-jdbc` profile continues to bundle the four target connectors. Maven's build BOM still includes dependencies used to build and test the application, and the reactor may produce driver JARs separately. [Maven Shade artifact selection](https://maven.apache.org/plugins/maven-shade-plugin/examples/includes-excludes.html)
+
+```sh
+mvn -B -s build/settings.xml -Pexternal-vendor-jdbc -pl sync-app -am -DskipTests package
+candidate=sync-app/target/rivomesh-app-0.1.0-SNAPSHOT-external-vendor-jdbc.jar
+python3 tests/verify-artifact.py "$candidate" --jdbc-profile external-vendor-jdbc
+python3 tests/release-inventory.py --artifact "$candidate" \
+  --maven-bom target/rivomesh-cyclonedx.json \
+  --output target/external-vendor-inventory.json --expect-external-vendor-jdbc
+```
+
+The inventory scans the candidate and nested JARs for known classes, JDBC service providers, Maven metadata and identifiable upstream notices. The external profile check covers the binary application candidate. Source archives and deployment images have their own contents and review evidence.
+
+Supply only the driver files needed by a deployment, from locations controlled by the operator. For GaussDB or openGauss, use the project's separately built relocated GaussDB wrapper for the supported profile. Its class name lets it coexist with the bundled PostgreSQL driver. GBase8c can use the verified upstream `gbase8c-jdbc-3.0.0B02.jar`. The existing checked Kingbase and Dameng versions are `kingbase8-9.0.1.jar` and `DmJdbcDriver18-8.1.3.140.jar`.
+
+```sh
+driver_dir=/opt/rivomesh-drivers
+mysql_driver="$driver_dir/mysql-connector-j-8.4.0.jar"
+gauss_driver="$driver_dir/rivomesh-gaussdb-driver-0.1.0-SNAPSHOT.jar"
+gbase_driver="$driver_dir/gbase8c-jdbc-3.0.0B02.jar"
+kingbase_driver="$driver_dir/kingbase8-9.0.1.jar"
+dameng_driver="$driver_dir/DmJdbcDriver18-8.1.3.140.jar"
+classpath="$candidate:$mysql_driver:$gauss_driver:$gbase_driver:$kingbase_driver:$dameng_driver"
+java -cp "$classpath" io.github.rivomesh.Main serve /etc/rivomesh/platform.yml
+```
+
+Use the same launch classpath for the Agent or standalone pipeline. The Agent passes that classpath to its Workers. The offline acceptance checks the exact application JAR with an empty vendor classpath and again with all five operator files. It checks class origins, URL matching, the typed missing-driver error and the Dameng error classification.
+
+```sh
+java -cp "$candidate" tests/roles/ExternalVendorJdbcAcceptance.java
+java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
+  "$mysql_driver" "$gauss_driver" "$gbase_driver" "$kingbase_driver" "$dameng_driver"
+```
+
+### Distribution review record
+
 Run the inventory with `--asf-review target/candidate/distribution-review.json` to check an exact JAR against a completed manual review. Use the following fields in that record.
 
 | Field | Review evidence |

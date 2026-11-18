@@ -26,15 +26,79 @@ public final class FailureEvidenceStore {
     public static final class Envelope {public FailureEvidence value;public String hash,signature;}
     public static final class Authority {public int version=1;public FailureEvidence.Scope scope;public String storeId,signature;}
     private interface Locked<T>{T run(byte[] key)throws Exception;}
+    @FunctionalInterface public interface CustodyCopy {void write(String name,byte[] bytes)throws IOException;}
+    public record CustodyCount(int records,long bytes){}
     private final Path root;
     private final FailureEvidence.Scope scope;
     private final Limits limits;
     public FailureEvidenceStore(Path directory,FailureEvidence.Scope expected,Limits supplied)throws Exception{
+        this(directory,expected,supplied,true);
+    }
+    private FailureEvidenceStore(Path directory,FailureEvidence.Scope expected,Limits supplied,boolean initialize)throws Exception{
         expected.validate();supplied.validate();scope=Codec.decode(Codec.encode(expected),FailureEvidence.Scope.class);limits=Codec.decode(Codec.encode(supplied),Limits.class);
         root=directory.toAbsolutePath().normalize();safePath(root);
+        if(!initialize)return;
         try{Files.createDirectories(root,PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));}
         catch(UnsupportedOperationException unsupported){Files.createDirectories(root);}
         protect(root,true);locked(key->null);
+    }
+    /**
+     * Copies an existing scoped authority and its verified, exact record bytes under the publication lock.
+     * The caller stages the output and publishes it only after this call succeeds. No key or lock bytes are delivered.
+     */
+    public static CustodyCount copyVerified(Path directory,FailureEvidence.Scope expected,int maximumRecords,long maximumBytes,
+                                   CustodyCopy copy)throws Exception{
+        if(maximumRecords<1||maximumRecords>1000||maximumBytes<1)
+            throw fail("FAILURE_EVIDENCE_LIMIT_INVALID");
+        FailureEvidenceStore store=new FailureEvidenceStore(directory,expected,new Limits(),false);
+        if(Files.notExists(store.root,LinkOption.NOFOLLOW_LINKS))return new CustodyCount(0,0);
+        if(!Files.isDirectory(store.root,LinkOption.NOFOLLOW_LINKS))
+            throw fail("FAILURE_EVIDENCE_PATH_INVALID");
+        requirePrivate(store.root);
+        Path lockPath=store.root.resolve("evidence.lock");
+        if(!Files.isRegularFile(lockPath,LinkOption.NOFOLLOW_LINKS))
+            throw fail("FAILURE_EVIDENCE_PATH_INVALID");
+        requirePrivate(lockPath);
+        try(FileChannel channel=FileChannel.open(lockPath,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
+            FileLock lock=tryLock(channel)){
+            return store.copyUnderLock(maximumRecords,maximumBytes,copy);
+        }
+    }
+    private CustodyCount copyUnderLock(int maximumRecords,long maximumBytes,CustodyCopy copy)throws Exception{
+        Path keyFile=root.resolve("evidence.key"),authorityFile=root.resolve("authority.json");
+        requirePrivate(keyFile);
+        requirePrivate(authorityFile);
+        byte[] key=readBytes(keyFile,32);
+        try{
+            byte[] authority=readBytes(authorityFile,4096);
+            if(key.length!=32)throw fail("FAILURE_EVIDENCE_KEY_INVALID");
+            verifyAuthority(authority,key);
+            List<Path> records=new ArrayList<>();
+            try(DirectoryStream<Path> files=Files.newDirectoryStream(root)){
+                for(Path path:files){
+                    String name=path.getFileName().toString();
+                    if(List.of("evidence.key","authority.json","evidence.lock").contains(name))continue;
+                    if(!name.matches("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.json"))
+                        throw fail("FAILURE_EVIDENCE_PATH_INVALID");
+                    if(records.size()>=maximumRecords)throw fail("FAILURE_EVIDENCE_CAPACITY");
+                    records.add(path);
+                }
+            }
+            if(records.isEmpty())return new CustodyCount(0,0);
+            records.sort(Comparator.comparing(Path::getFileName));
+            if(authority.length>maximumBytes)throw fail("FAILURE_EVIDENCE_CAPACITY");
+            long remaining=maximumBytes-authority.length;
+            copy.write("authority.json",authority);
+            for(Path path:records){
+                requirePrivate(path);
+                byte[] bytes=readBytes(path,limits.maximumRecordBytes);
+                if(bytes.length>remaining)throw fail("FAILURE_EVIDENCE_CAPACITY");
+                verifyRecord(path,bytes,key);
+                remaining-=bytes.length;
+                copy.write(path.getFileName().toString(),bytes);
+            }
+            return new CustodyCount(records.size(),maximumBytes-remaining);
+        }finally{Arrays.fill(key,(byte)0);}
     }
     public Envelope retain(FailureEvidence proposed)throws Exception{
         proposed.validate();if(!same(scope,proposed.scope))throw fail("FAILURE_EVIDENCE_OWNER_CHANGED");
@@ -87,10 +151,8 @@ public final class FailureEvidenceStore {
     private <T>T locked(Locked<T> operation)throws Exception{
         safePath(root);Path lockPath=root.resolve("evidence.lock");
         try(FileChannel channel=FileChannel.open(lockPath,StandardOpenOption.CREATE,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS)){
-            protect(lockPath,false);FileLock lock;
-            try{lock=channel.tryLock();}catch(OverlappingFileLockException busy){throw fail("FAILURE_EVIDENCE_BUSY");}
-            if(lock==null)throw fail("FAILURE_EVIDENCE_BUSY");
-            try{
+            protect(lockPath,false);
+            try(FileLock lock=tryLock(channel)){
                 Path keyPath=root.resolve("evidence.key");
                 if(!Files.exists(keyPath,LinkOption.NOFOLLOW_LINKS)){
                     try(Stream<Path> files=Files.list(root)){if(files.anyMatch(p->p.getFileName().toString().endsWith(".json")))throw fail("FAILURE_EVIDENCE_KEY_MISSING");}
@@ -102,24 +164,43 @@ public final class FailureEvidenceStore {
                     try(Stream<Path> files=Files.list(root)){if(files.anyMatch(p->p.getFileName().toString().matches("[0-9a-f-]{36}\\.json")))throw fail("FAILURE_EVIDENCE_AUTHORITY_MISSING");}
                     Authority authority=new Authority();authority.scope=scope;authority.storeId=UUID.randomUUID().toString();authority.signature=sign(key,"authority",authorityHash(authority));publish(authorityPath,encode(authority,4096));
                 }
-                Authority authority=decode(readBytes(authorityPath,4096),Authority.class);
-                if(authority.version!=1||authority.scope==null||!same(scope,authority.scope))throw fail("FAILURE_EVIDENCE_OWNER_CHANGED");
-                FailureEvidence.uuid(authority.storeId);if(!verify(sign(key,"authority",authorityHash(authority)),authority.signature))throw fail("FAILURE_EVIDENCE_SIGNATURE_INVALID");
+                verifyAuthority(readBytes(authorityPath,4096),key);
                 return operation.run(key);
-            }finally{lock.release();}
+            }
         }
+    }
+    private static FileLock tryLock(FileChannel channel)throws IOException{
+        FileLock lock;
+        try{lock=channel.tryLock();}catch(OverlappingFileLockException busy){throw fail("FAILURE_EVIDENCE_BUSY");}
+        if(lock==null)throw fail("FAILURE_EVIDENCE_BUSY");
+        return lock;
+    }
+    private void verifyAuthority(byte[] bytes,byte[] key)throws Exception{
+        Authority authority=decode(bytes,Authority.class);
+        if(authority.version!=1||authority.scope==null||!same(scope,authority.scope))
+            throw fail("FAILURE_EVIDENCE_OWNER_CHANGED");
+        FailureEvidence.uuid(authority.storeId);
+        if(!verify(sign(key,"authority",authorityHash(authority)),authority.signature))
+            throw fail("FAILURE_EVIDENCE_SIGNATURE_INVALID");
     }
     private String authorityHash(Authority authority){return Codec.sha256(Codec.encode(Arrays.asList(authority.version,authority.storeId,authority.scope)));}
     private Path record(String id){FailureEvidence.uuid(id);return root.resolve(id+".json");}
     private Envelope read(Path path,byte[] key)throws Exception{
         if(!Files.exists(path,LinkOption.NOFOLLOW_LINKS))throw fail("FAILURE_EVIDENCE_NOT_FOUND");
-        Envelope envelope=decode(readBytes(path,limits.maximumRecordBytes),Envelope.class);
+        return verifyRecord(path,readBytes(path,limits.maximumRecordBytes),key);
+    }
+    private Envelope verifyRecord(Path path,byte[] bytes,byte[] key)throws Exception{
+        Envelope envelope=decode(bytes,Envelope.class);
         if(envelope.value==null||!FailureEvidence.hash(envelope.hash)||!verify(sign(key,"record",envelope.hash),envelope.signature))throw fail("FAILURE_EVIDENCE_SIGNATURE_INVALID");
         if(!envelope.hash.equals(sha(encode(envelope.value,limits.maximumRecordBytes))))throw fail("FAILURE_EVIDENCE_CONTENT_CHANGED");
         envelope.value.validate();if(!same(scope,envelope.value.scope)||!path.equals(record(envelope.value.id)))throw fail("FAILURE_EVIDENCE_OWNER_CHANGED");return envelope;
     }
     private static boolean same(Object a,Object b){return Codec.encode(a).equals(Codec.encode(b));}
     private static void safePath(Path path)throws Exception{for(Path current=path;current!=null;current=current.getParent())if(Files.isSymbolicLink(current))throw fail("FAILURE_EVIDENCE_PATH_INVALID");}
+    private static void requirePrivate(Path path)throws IOException{
+        if(Files.isSymbolicLink(path)||Files.getPosixFilePermissions(path,LinkOption.NOFOLLOW_LINKS).stream()
+                .anyMatch(mode->!mode.name().startsWith("OWNER_")))throw fail("FAILURE_EVIDENCE_PATH_INVALID");
+    }
     private static void protect(Path path,boolean directory)throws Exception{
         safePath(path);try{Files.setPosixFilePermissions(path,PosixFilePermissions.fromString(directory?"rwx------":"rw-------"));}catch(UnsupportedOperationException ignored){/* Installation ACLs must protect non-POSIX systems. */}
     }

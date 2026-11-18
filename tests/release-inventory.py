@@ -27,6 +27,41 @@ CONNECTOR_J_MARKER = re.compile(
 )
 MYSQL_JDBC_PROVIDERS = {b'com.mysql.cj.jdbc.Driver', b'com.mysql.jdbc.Driver'}
 
+VENDOR_JDBC_MARKERS = {
+    'gaussdb': (
+        re.compile(r'(?:^|/)io/github/rivomesh/gaussdb/jdbc/.+\.class$'
+                   r'|^META-INF/maven/(?:io\.github\.rivomesh/rivomesh-gaussdb-driver'
+                   r'|gsjdbc4/gsjdbc4|org\.opengauss/opengauss-jdbc)/pom\.(?:xml|properties)$'
+                   r'|^META-INF/rivomesh-licenses/gaussdb-jdbc\.txt$'),
+        b'io.github.rivomesh.gaussdb.jdbc.Driver', 'gsjdbc4:gsjdbc4:1.1',
+    ),
+    'gbase8c': (
+        re.compile(r'(?:^|/)com/gbase8c/.+\.class$'
+                   r'|^META-INF/maven/(?:io\.github\.rivomesh/rivomesh-gbase8c-driver'
+                   r'|cn\.gbase/gbase8c-jdbc)/pom\.(?:xml|properties)$'
+                   r'|^META-INF/rivomesh-licenses/gbase8c-jdbc\.txt$'),
+        b'com.gbase8c.Driver', 'GBase8c vendor JDBC 3.0.0B02',
+    ),
+    'kingbase': (
+        re.compile(r'(?:^|/)com/kingbase8/.+\.class$'
+                   r'|^META-INF/maven/cn\.com\.kingbase/kingbase8/pom\.(?:xml|properties)$'
+                   r'|^META-INF/rivomesh-licenses/kingbase-jdbc\.txt$'),
+        b'com.kingbase8.Driver', 'cn.com.kingbase:kingbase8:9.0.1',
+    ),
+    'dameng': (
+        re.compile(r'(?:^|/)dm/jdbc/.+\.class$'
+                   r'|^META-INF/maven/com\.dameng/DmJdbcDriver[^/]*/pom\.(?:xml|properties)$'
+                   r'|^META-INF/rivomesh-licenses/dameng-jdbc\.txt$'),
+        b'dm.jdbc.driver.DmDriver', 'com.dameng:DmJdbcDriver18:8.1.3.140',
+    ),
+}
+JDBC_NOTICE_OWNERS = {
+    '8f1e56c81a8eb0f9eb12efd5b722bf068efb9db8decc85bebe02fb58a0ec7bbf': 'mysql',
+    VENDOR_DRIVERS['gsjdbc4:gsjdbc4:1.1'][2]: 'gaussdb',
+    VENDOR_DRIVERS['GBase8c vendor JDBC 3.0.0B02'][2]: 'gbase8c',
+}
+GAUSSDB_UNRELOCATED_DRIVER_SHA256 = 'c140b8a47715d13a206f9db1d66a58a514745e48c12bd5a5a15c20f33bf2a53c'
+
 
 def stream_digest(source):
     value = sha256()
@@ -73,29 +108,48 @@ def embedded_metadata(artifact):
             if re.search(r'\.(?:jar|so(?:\.\d+)*|dll|dylib|jnilib|a)$', entry, flags=re.IGNORECASE):
                 with archive.open(entry) as content:
                     binaries[entry] = stream_digest(content)
-        mysql_locations = connector_j_locations(archive)
+        jdbc_locations = jdbc_driver_locations(archive)
     vendors = [{'component': component, 'embeddedClass': marker, 'requiredLicenseEntry': license_entry,
                 'licenseMatchesUpstream': notices.get(license_entry) == license_digest}
                for component, (marker, license_entry, license_digest) in VENDOR_DRIVERS.items() if marker in names]
-    return versions, notices, binaries, vendors, mysql_locations
+    return versions, notices, binaries, vendors, jdbc_locations
 
 
-def connector_j_locations(archive, location='JAR'):
-    names = archive.namelist()
+def jdbc_driver_locations(archive, location='JAR'):
+    paths = archive.namelist()
+    names = set(paths)
+    if len(paths) != len(names):
+        raise ValueError('Duplicate JDBC inventory entries in ' + location)
     provider_entry = 'META-INF/services/java.sql.Driver'
-    providers = archive.read(provider_entry).splitlines() if provider_entry in names else []
-    bundled = any(CONNECTOR_J_MARKER.search(name) for name in names)
-    connector_provider = any(line.partition(b'#')[0].strip() in MYSQL_JDBC_PROVIDERS for line in providers)
-    found = [location] if bundled or connector_provider else []
+    providers = (archive.read(provider_entry).splitlines() if provider_entry in names else [])
+    providers = {line.partition(b'#')[0].strip() for line in providers}
+    found = set()
+    if MYSQL_JDBC_PROVIDERS.intersection(providers) or any(CONNECTOR_J_MARKER.search(name) for name in names):
+        found.add('mysql')
+    for driver, (marker, provider, _) in VENDOR_JDBC_MARKERS.items():
+        if provider in providers or any(marker.search(name) for name in names):
+            found.add(driver)
+    # Huawei's unrelocated package uses the standard PostgreSQL class path.
+    postgres_marker = 'org/postgresql/Driver.class'
+    if postgres_marker in names and sha256(archive.read(postgres_marker)).hexdigest() == GAUSSDB_UNRELOCATED_DRIVER_SHA256:
+        found.add('gaussdb')
+    for entry in names:
+        if not entry.endswith('/') and is_license_notice(entry):
+            with archive.open(entry) as content:
+                owner = JDBC_NOTICE_OWNERS.get(stream_digest(content))
+            if owner is not None:
+                found.add(owner)
+    locations = {driver: [location] if driver in found else [] for driver in ('mysql', *VENDOR_JDBC_MARKERS)}
     for name in sorted(entry for entry in names if entry.lower().endswith('.jar')):
         nested_location = location + '!/' + name
         with archive.open(name) as packaged:
             try:
                 with ZipFile(packaged) as nested:
-                    found.extend(connector_j_locations(nested, nested_location))
+                    for driver, matches in jdbc_driver_locations(nested, nested_location).items():
+                        locations[driver].extend(matches)
             except BadZipFile as error:
                 raise ValueError('Cannot inspect embedded JAR: ' + nested_location) from error
-    return found
+    return locations
 
 
 def is_license_notice(entry):
@@ -163,6 +217,8 @@ def main():
     parser.add_argument('--asf-review', type=Path, help='Require an exact-JAR manual ASF distribution review record')
     parser.add_argument('--expect-external-mysql', action='store_true',
                         help='Fail if the JAR or any nested JAR contains Connector/J')
+    parser.add_argument('--expect-external-vendor-jdbc', action='store_true',
+                        help='Require MySQL, GaussDB, GBase8c, Kingbase and Dameng JDBC components to be external')
     args = parser.parse_args()
     inputs = [args.artifact, args.maven_bom]
     if args.asf_review:
@@ -178,7 +234,7 @@ def main():
     dependencies = {coordinate(component): component for component in bom['components']}
     artifact_sha256 = digest(args.artifact)
     try:
-        embedded, notices, binaries, vendors, mysql_locations = embedded_metadata(args.artifact)
+        embedded, notices, binaries, vendors, jdbc_locations = embedded_metadata(args.artifact)
     except (ValueError, BadZipFile) as error:
         parser.error(str(error))
     if digest(args.artifact) != artifact_sha256:
@@ -193,8 +249,11 @@ def main():
         ':'.join(key): declared_terms(dependencies.get(key, {})) for key in sorted(embedded)
         if key[0] != 'io.github.rivomesh'
     }
-    for vendor in vendors:
-        reviews.setdefault(vendor['component'], [])
+    mysql_locations = jdbc_locations.pop('mysql')
+    for driver, matches in jdbc_locations.items():
+        if matches:
+            _, _, component = VENDOR_JDBC_MARKERS[driver]
+            reviews.setdefault(component, declared_terms(dependencies.get(tuple(component.split(':')), {})))
     report = {
         'artifactSha256': artifact_sha256,
         'mavenBomSha256': sha256(bom_data).hexdigest(),
@@ -209,6 +268,7 @@ def main():
         'embeddedLicenseAndNoticeFiles': [{'entry': name, 'sha256': value} for name, value in notices.items()],
         'embeddedBinaryFiles': [{'entry': name, 'sha256': value} for name, value in binaries.items()],
         'mysqlConnectorJLocations': mysql_locations,
+        'vendorJdbcLocations': jdbc_locations,
         'requiredComponentReviews': reviews,
         'asfDistributionReview': {
             'status': 'NOT_RECORDED',
@@ -234,7 +294,12 @@ def main():
         print('ASF_DISTRIBUTION_REVIEW_' + review_status['status'])
     if args.expect_external_mysql:
         print('MYSQL_JDBC_EXTERNAL_CHECK_' + ('FAILED' if mysql_locations else 'PASSED'))
-    return int(review_status['status'] == 'BLOCKED' or (args.expect_external_mysql and bool(mysql_locations)))
+    contains_vendor_jdbc = bool(mysql_locations) or any(jdbc_locations.values())
+    if args.expect_external_vendor_jdbc:
+        print('VENDOR_JDBC_EXTERNAL_CHECK_' + ('FAILED' if contains_vendor_jdbc else 'PASSED'))
+    return int(review_status['status'] == 'BLOCKED'
+               or (args.expect_external_mysql and bool(mysql_locations))
+               or (args.expect_external_vendor_jdbc and contains_vendor_jdbc))
 
 
 if __name__ == '__main__':

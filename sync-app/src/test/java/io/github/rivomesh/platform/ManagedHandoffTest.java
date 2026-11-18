@@ -115,9 +115,10 @@ class ManagedHandoffTest {
                 assertNull(request.yaml);
                 assertNull(request.handoffCut);
                 assertEquals(fixture.directory,request.handoffEvidenceScope.originalDirectory());
+                var archive=new SharedHandoffEvidence.Archive("a".repeat(64),10,1,0,1);
                 return Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
-                        "shareableReports",Map.of("state","ARCHIVED","archive",
-                                new SharedHandoffEvidence.Archive("a".repeat(64),10,1,0)));
+                        "shareableReports",Map.of("state","ARCHIVED","archive",archive),
+                        "historicalFailureEvidence",Map.of("state","ARCHIVED","archive",archive));
             });
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
             String archive=bQueries.pending(bLease,candidateDirectory,10).getFirst();
@@ -126,6 +127,7 @@ class ManagedHandoffTest {
                 assertEquals(candidateDirectory,request.handoffEvidenceScope.candidateDirectory());
                 assertEquals(revision,request.handoffEvidenceScope.revision());
                 assertEquals("a".repeat(64),request.handoffArchive.sha256());
+                assertEquals(1,request.handoffArchive.failureRecords());
                 assertNull(request.yaml);
                 return Map.of("state","VERIFIED");
             });
@@ -133,6 +135,7 @@ class ManagedHandoffTest {
             assertEquals(List.of("ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED"),certified.get("blockers"));
             assertEquals(false,certified.get("executionAuthorized"));
             assertEquals(Map.of("state","VERIFIED"),((Map<?,?>)certified.get("probe")).get("sharedReportCustody"));
+            assertEquals(Map.of("state","VERIFIED"),((Map<?,?>)certified.get("probe")).get("sharedFailureEvidenceCustody"));
             assertEquals(certified,latest(entryB(),fixture.admin));
             assertFalse(Model.JSON.writeValueAsString(certified).contains("private-"));
             assertEquals("a",fixture.b.get("orders",fixture.admin).owner);

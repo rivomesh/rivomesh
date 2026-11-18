@@ -914,6 +914,7 @@ public final class TaskService implements AutoCloseable {
     Map<String,Object> handoffProbe(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> originalEvidence=null;
         SharedHandoffEvidence.ReceiptPlan closedReceipts=null;
+        SharedHandoffEvidence.Failures failureArchive=null;
         synchronized(this){
             ensureOpen();currentActor(actor);
             if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
@@ -933,6 +934,9 @@ public final class TaskService implements AutoCloseable {
                 if(config.cluster.handoffEvidenceRoot!=null){
                     verifyHandoffEvidenceScope(request,true);
                     closedReceipts=collectClosedHandoffReceipts(request.taskId,request.handoffClosedReceipts);
+                    if(!"ABSENT".equals(inventory.get("failureEvidence")))
+                        failureArchive=new SharedHandoffEvidence.Failures(failureEvidenceDirectory(request.taskId),
+                                failureEvidenceScope(request.taskId));
                 }
             }else{
                 if(entries.containsKey(request.taskId))throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
@@ -945,12 +949,14 @@ public final class TaskService implements AutoCloseable {
                 if(closedReceipts.refusal()!=null)originalEvidence.put("closedReceipts",Map.of("state","REFUSED","code",closedReceipts.refusal()));
                 try{
                     SharedHandoffEvidence.Archive archive=SharedHandoffEvidence.export(archiveRoot,request.handoffEvidenceScope,
-                            reports(request.taskId),closedReceipts.receipts());
+                            reports(request.taskId),closedReceipts.receipts(),failureArchive);
                     if(archive.reports()>0)originalEvidence.put("shareableReports",Map.of("state","ARCHIVED","archive",archive));
                     if(archive.closedReceipts()>0)originalEvidence.put("closedReceipts",Map.of("state","ARCHIVED","archive",archive));
+                    if(archive.failureRecords()>0)originalEvidence.put("historicalFailureEvidence",Map.of("state","ARCHIVED","archive",archive));
                 }catch(Exception failed){
                     originalEvidence.put("shareableReports",archiveRefusal(failed));
                     if(!closedReceipts.receipts().isEmpty())originalEvidence.put("closedReceipts",archiveRefusal(failed));
+                    if(failureArchive!=null)originalEvidence.put("historicalFailureEvidence",archiveRefusal(failed));
                 }
             }
             return originalEvidence;

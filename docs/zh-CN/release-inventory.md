@@ -59,6 +59,44 @@ python3 tests/global-control-pipeline.py --artifact "$candidate" \
   --separate-execution --rolling-restart --control-product MYSQL
 ```
 
+### 外置厂商 JDBC 驱动的候选包
+
+单独使用 `external-vendor-jdbc` 构建。应用 JAR 保留 binlog 读取组件、PostgreSQL 和 H2 驱动，排除 MySQL Connector/J、GaussDB 和 GBase8c 驱动模块，以及金仓和达梦 JDBC。独立的 `external-mysql-jdbc` 配置继续内嵌四个目标驱动。Maven 构建 BOM 仍记录构建和测试依赖，Maven 多模块构建也可能单独生成驱动 JAR。[Maven Shade 构件筛选](https://maven.apache.org/plugins/maven-shade-plugin/examples/includes-excludes.html)
+
+```sh
+mvn -B -s build/settings.xml -Pexternal-vendor-jdbc -pl sync-app -am -DskipTests package
+candidate=sync-app/target/rivomesh-app-0.1.0-SNAPSHOT-external-vendor-jdbc.jar
+python3 tests/verify-artifact.py "$candidate" --jdbc-profile external-vendor-jdbc
+python3 tests/release-inventory.py --artifact "$candidate" \
+  --maven-bom target/rivomesh-cyclonedx.json \
+  --output target/external-vendor-inventory.json --expect-external-vendor-jdbc
+```
+
+清单检查候选包及嵌套 JAR 中已知的类、JDBC 服务声明、Maven 元数据和可识别的上游通知。该检查覆盖候选应用二进制包。源码归档和部署镜像分别记录其实际内容及审核证据。
+
+部署方仅提供任务所需的驱动，并自行管理文件路径。GaussDB 或 openGauss 使用项目单独构建的已重定位 GaussDB 驱动模块，允许同一 JVM 加载内嵌的 PostgreSQL 驱动。GBase8c 可使用已核对的原厂 `gbase8c-jdbc-3.0.0B02.jar`。当前验证的金仓和达梦驱动版本为 `kingbase8-9.0.1.jar`、`DmJdbcDriver18-8.1.3.140.jar`。
+
+```sh
+driver_dir=/opt/rivomesh-drivers
+mysql_driver="$driver_dir/mysql-connector-j-8.4.0.jar"
+gauss_driver="$driver_dir/rivomesh-gaussdb-driver-0.1.0-SNAPSHOT.jar"
+gbase_driver="$driver_dir/gbase8c-jdbc-3.0.0B02.jar"
+kingbase_driver="$driver_dir/kingbase8-9.0.1.jar"
+dameng_driver="$driver_dir/DmJdbcDriver18-8.1.3.140.jar"
+classpath="$candidate:$mysql_driver:$gauss_driver:$gbase_driver:$kingbase_driver:$dameng_driver"
+java -cp "$classpath" io.github.rivomesh.Main serve /etc/rivomesh/platform.yml
+```
+
+执行 Agent 或独立流水线使用相同启动 classpath，Agent 将其传给 Worker。离线验收使用同一个应用 JAR，分别验证缺少厂商驱动及提供五个驱动文件时的类来源、URL 匹配、驱动缺失错误和达梦错误分类。
+
+```sh
+java -cp "$candidate" tests/roles/ExternalVendorJdbcAcceptance.java
+java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
+  "$mysql_driver" "$gauss_driver" "$gbase_driver" "$kingbase_driver" "$dameng_driver"
+```
+
+### 分发审核记录
+
 人工审核完成后，运行清单命令并附加 `--asf-review target/candidate/distribution-review.json`。审核记录包含以下字段。
 
 | 字段 | 审核证据 |

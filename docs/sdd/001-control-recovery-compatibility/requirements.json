@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双入口评估、原切点及证据核验、候选槽位预留和释放已实测并可在界面操作。原始源/故障证据、双端 fencing、实际归属提交及自动接管待验。",
-        "en": "Both entries verified assessment, original cut and evidence, including durable candidate capacity reservation and release in real Chrome. Source/failure custody, dual fencing, actual placement commit and automatic takeover remain."
+        "zh-CN": "双入口评估、槽位预留、原切点、报告、闭合回执及历史故障证据已实测。原始源事件证据、双端写入隔离、实际归属提交及自动接管待验。",
+        "en": "Both entries verified assessment, reservations, original cuts, reports, closed receipts and historical failure custody. Raw source event custody, dual fences, actual placement and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -1185,8 +1185,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "Java 21 已实测外置 MySQL JDBC、PostgreSQL 双端 TLS 与 MySQL 源快照/binlog/SQL 目标 TLS 1.3、证书身份拒绝和重连。其余厂商、证书和恢复档案待验。",
-        "en": "Java 21 verified external MySQL JDBC, PostgreSQL endpoint TLS, and MySQL snapshot/binlog/destination TLS 1.3 with certificate identity refusal and reconnect. Further vendors and profiles remain."
+        "zh-CN": "Java 21 已实测 MySQL/PostgreSQL 双端 TLS 与重连，外置 MySQL 和四个厂商 JDBC 的包隔离与外置加载已验。其他厂商实连、TLS 及故障组合待验。",
+        "en": "Java 21 verified native MySQL/PostgreSQL TLS/reconnect and JDBC externalization for MySQL and four vendors with exact classpath admission. Further vendor endpoints, TLS and recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1551,8 +1551,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "本地与外部日志可选。双 Agent 已实测共享挂载的原报告和闭合操作回执逐字节核验。仍需完善原事件、故障证据的可达性与实际迁移。",
-        "en": "Local and external journals are available. Two Agents verified exact report and closed receipt custody on a shared mount. Original events, failure evidence and actual transfer remain."
+        "zh-CN": "本地/外部日志可选，已实测双 Agent 核验共享报告、闭合回执和历史故障证据，原签名密钥保留在原 Agent。原始源事件和实际迁移待验。",
+        "en": "Local and external journals are available. Two Agents verified shared report, closed receipt and historical failure custody with original keys retained. Original source events and actual transfer remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1718,8 +1718,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "已有独立审计锚点和按包核验的分发清点；外置 MySQL JDBC 包已实测滚动恢复，内嵌厂商许可文件已验证。项目授权、LICENSE/NOTICE、外部身份和不可变自动留存仍待完成。",
-        "en": "Offline audit checkpoints and artifact-bound distribution inventory exist. The external MySQL JDBC package passed rolling recovery and retained verified vendor notices. Project rights, LICENSE/NOTICE, external identity and automatic immutable custody remain."
+        "zh-CN": "已有独立审计锚点、SBOM 和可选外置五路 JDBC 包，三种包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。",
+        "en": "Independent audit checkpoints, SBOM inventory and optional five-driver external JDBC package are verified across three variants. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",
@@ -1737,7 +1737,8 @@
         "docs/zh-CN/release-inventory.md",
         "tests/release-inventory.py",
         "tools/audit-export.py",
-        "tests/audit-export-test.py"
+        "tests/audit-export-test.py",
+        "tests/verify-artifact.py"
       ]
     }
   ],

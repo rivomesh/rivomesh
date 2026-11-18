@@ -13,7 +13,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | CP-01 | P0 / DONE | 统一节点注册与状态 | 共享节点目录已通过PostgreSQL/MySQL双节点、kill/重开及控制库中断验收；任务权威/远端命令仍属CP-02/03。 |
 | CP-02 | P0 / DONE | 全局任务、配置与操作权威状态 | PostgreSQL 与 MySQL 双控制库实测跨入口任务修订一致、全局任务 ID 唯一、两个独立源及配置隔离，和单机原任务强杀续传。 |
 | CP-03 | P0 / DONE | 跨节点持久命令路由 | PostgreSQL 与 MySQL 各通过七项实库验收，包括跨入口启停、原请求去重、离线 202、撤权拒绝及跨 Agent 代次的未知结果。既有实库档案覆盖目标重试和校验修复。 |
-| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 双入口评估、原切点及证据核验、候选槽位预留和释放已实测并可在界面操作。原始源/故障证据、双端 fencing、实际归属提交及自动接管待验。 |
+| CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 双入口评估、槽位预留、原切点、报告、闭合回执及历史故障证据已实测。原始源事件证据、双端写入隔离、实际归属提交及自动接管待验。 |
 | CP-05 | P0 / DONE | 共享权限、审计和密钥引用 | PostgreSQL 和 MySQL 控制库实测跨入口撤权、按请求/任务/Agent/计划追踪及真实浏览器脱敏。执行 Agent 启用任务凭据授权后，Worker 仅得到所需且授权的引用。 |
 | CP-06 | P1 / DONE | 全局日志、指标与诊断界面 | 实测双入口按节点、任务、目标诊断和分页、Agent 重启及限流。PostgreSQL 与 MySQL 8.4 直写提供已验证提交延迟，其余不可测时间明确显示未知。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
@@ -61,7 +61,7 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已通过四个 MySQL 版本的独立全量增量、MySQL 8.4.13 异步 GTID 切主及双 SQL 目标续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB 核心档案。更多拓扑、目标、TLS 和恢复组合待验。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测外置 MySQL JDBC、PostgreSQL 双端 TLS 与 MySQL 源快照/binlog/SQL 目标 TLS 1.3、证书身份拒绝和重连。其余厂商、证书和恢复档案待验。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测 MySQL/PostgreSQL 双端 TLS 与重连，外置 MySQL 和四个厂商 JDBC 的包隔离与外置加载已验。其他厂商实连、TLS 及故障组合待验。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档
@@ -82,12 +82,12 @@ RM-SDD-001 · v0.57 · 2026-11-18 · IMPLEMENTING
 | LG-02 | P1 / PARTIAL | 非空接管、约束恢复、切换回切 | 非空目标已实测冻结 MySQL 的精确切点、行、结构及物理归属计划和按摘要复核。限定 UNIQUE 实际恢复已通过。正式接管基线、多目标约束、写入交接和回切待验。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris、Hive 已有初步档案。Java 21 实测 Doris 4.1.3 单 FE/BE 的停机追平、原回执和独立 PostgreSQL 故障重放。其他生产集群、TLS 和容量待验。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
-| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 本地与外部日志可选。双 Agent 已实测共享挂载的原报告和闭合操作回执逐字节核验。仍需完善原事件、故障证据的可达性与实际迁移。 |
+| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 本地/外部日志可选，已实测双 Agent 核验共享报告、闭合回执和历史故障证据，原签名密钥保留在原 Agent。原始源事件和实际迁移待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。 |
 | LG-09 | P1 / DONE | 报告目录、保留清理与真实浏览器验收 | 双入口历史报告/回执、审批、键盘分页、归档和恢复已实测。限定档案回收经停止、保留期、摘要和报告锁检查后只移除已安全归档的重复行文件。 |
-| LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 贡献指南、CycloneDX SBOM 与厂商二进制审查已建立。依赖分发结论、项目 LICENSE/NOTICE、外部身份和审计锚点仍待完成。 |
+| LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 已有独立审计锚点、SBOM 和可选外置五路 JDBC 包，三种包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。 |
 
 ## 现状证据索引
 
