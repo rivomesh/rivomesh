@@ -34,6 +34,19 @@ Kafka 将这些逻辑通道合并写入 `messaging.topic`，用 `rivomesh_channe
 
 Kafka 所有 Broker 必须关闭 `auto.create.topics.enable`；服务可用 Admin API 显式首次建 Topic。否则误删 Topic 可能被生产者的元数据刷新自动建空，掩盖缺失历史。服务检查所有 Broker 的该配置，需相应 DescribeConfigs 权限；Topic 还需 Describe/DescribeConfigs/Write，首次创建需 Create。已有 Topic 的副本、ISR、大小和保留属性不符时阻断，不直接修改。Kafka clusterId 首次绑定到持久日志，重连到不同集群报 `BROKER_IDENTITY_CHANGED`，不能将独立集群当作普通备用地址。
 
+副本数为 3 时，分别核对数据分区的 ISR 和 KRaft Controller 多数派。Rivomesh 的 Topic 要求最小 ISR 为 2，并使用 `acks=all`。两个 Controller 可以提交集群元数据，同一时刻某个 Topic 可能只剩一个同步数据副本。用 `kafka-topics.sh --bootstrap-server <broker>:9092 --describe --topic <topic>` 查看分区 Leader 和 ISR，用 `kafka-metadata-quorum.sh --bootstrap-server <broker>:9092 describe --status` 查看 KRaft 元数据状态。若 `KAFKA_RETRY` 时发布回执停住且 ISR 不足，恢复原 Broker 存储并等待分区恢复 ISR。重投时沿用原事件 ID。[Kafka KRaft 手册](https://kafka.apache.org/39/operations/kraft/) · [Kafka 3.9.2 最小 ISR 语义](https://kafka.apache.org/39/javadoc/constant-values.html#org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
+
+消费者先持久暂存事件字节和 ID，再提交消费组位点。Kafka 提交的值是下一条记录的位点。消费位点与 Rivomesh 发布回执分别记录，重放时按事件 ID 去重。[Kafka 消费位点 API](https://kafka.apache.org/39/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html)
+
+[Kafka 实库夹具](../../tests/kafka-cluster-run.py) 使用 Apache Kafka 3.9.2、三副本单分区 Topic、三个 KRaft 投票节点和一个独立 Broker 来验证数据 ISR 不足的情况。夹具将确定性源事务写入持久 JDBC 日志，使用 Rivomesh 发布包中的传输实现与原生消费组提交。它验收保留原数据卷时的进程故障。源库实库 CDC、TLS、Controller 多数派丢失、存储丢失和吞吐容量需分别验收。
+
+Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
+
+```sh
+python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
+  --java-home "$JAVA_HOME" --output target/kafka-cluster-proof
+```
+
 Rabbit 每个通道对应一个 durable、非独占、非自动删除队列，通过默认交换机直接路由。消息为 persistent，开启 publisher confirms 和 mandatory/return；无路由或 nack 不会推进回执。默认 quorum，可显式选 classic。创建时设置 overflow 为 reject-publish；部署策略不能静默改为丢弃旧消息、过期或将超投递消息丢到无法处理的死信。生产 quorum 应部署多个节点并设置副本数；单节点测试不证明集群多数丢失或机房断电的持久性。
 
 RabbitMQ 三节点部署应在首次建队列前配置 `messaging.queueType: quorum` 和 `messaging.replicas: 3`。一个节点作为 `url`，另外两个放入 `messaging.endpoints`。入口属于同一集群，使用同一虚拟主机和 TLS 模式。副本配置是首次声明的大小，用 `rabbitmqctl list_queues -p / name type durable leader members online` 核对实际成员、在线成员和 Leader。Quorum 队列的发布确认取决于可用多数派。[RabbitMQ Quorum 队列](https://www.rabbitmq.com/docs/4.1/quorum-queues) · [发布确认](https://www.rabbitmq.com/docs/4.1/confirms)

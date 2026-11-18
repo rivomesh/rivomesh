@@ -5167,5 +5167,181 @@
       "retryAfterSeconds": 1,
       "verification": "Concurrent HTTP calls on a normal standalone console, plus budget tests and independent two-Controller native query coverage"
     }
+  },
+  "replicatedKafkaRecovery": {
+    "status": "PASS",
+    "artifactSha256": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
+    "harnessSha256": "078c66743688b266a182c58a97f2eddbeb861d0a93ab5cf2b98dab3e7ff3cc93",
+    "acceptanceSourceSha256": "35354df40d873dfbf494ec7ad0e9815c904b5a28cc55ffdf968460d5483f21cf",
+    "checks": [
+      "Three in-sync topic replicas accept exact source bytes and persist the consumer offset",
+      "Partition leader SIGKILL elects a surviving replica and keeps original offsets and event bodies",
+      "One data replica refuses confirmation while two controllers still commit new cluster metadata",
+      "Restarted publisher reopens the original journal and delivers the retained transaction when ISR recovers",
+      "Reopened consumer uses the committed offset after broker restart and retains original topic history"
+    ],
+    "phases": {
+      "initial": {
+        "cluster": {
+          "clusterId": "i6opffRsdQaUVVO6wD7VVQ",
+          "topicId": "WYGYFtroTxeT8l-dRtCQTg",
+          "leader": 1,
+          "isr": [
+            1,
+            2,
+            4
+          ],
+          "metadataLeader": 3,
+          "metadataHighWatermark": 34
+        },
+        "journalAcknowledged": 1,
+        "publicationReceipt": {
+          "epoch": 1,
+          "sequence": 1,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:101",
+          "transactionHash": "a2ce6f1726d7885bd4b5d24aaab5d74e6d9607c515b1cc22982a2ca3c1f5da79"
+        },
+        "snapshotId": "48c88373-87c9-49e7-a110-4236314ff3e6",
+        "sourceTransactionHash": "a2ce6f1726d7885bd4b5d24aaab5d74e6d9607c515b1cc22982a2ca3c1f5da79",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:101",
+        "stagedOffsets": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "storedOffsetAfter": 7,
+        "storedOffsetBefore": 0
+      },
+      "elected": {
+        "cluster": {
+          "clusterId": "i6opffRsdQaUVVO6wD7VVQ",
+          "topicId": "WYGYFtroTxeT8l-dRtCQTg",
+          "leader": 2,
+          "isr": [
+            2,
+            4
+          ],
+          "metadataLeader": 3,
+          "metadataHighWatermark": 77
+        },
+        "journalAcknowledged": 2,
+        "publicationReceipt": {
+          "epoch": 2,
+          "sequence": 2,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102",
+          "transactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a"
+        },
+        "snapshotId": "48c88373-87c9-49e7-a110-4236314ff3e6",
+        "sourceTransactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102",
+        "stagedOffsets": [
+          7,
+          8,
+          9
+        ],
+        "storedOffsetAfter": 7,
+        "storedOffsetBefore": 7
+      },
+      "below-isr": {
+        "cluster": {
+          "clusterId": "i6opffRsdQaUVVO6wD7VVQ",
+          "topicId": "WYGYFtroTxeT8l-dRtCQTg",
+          "leader": 2,
+          "isr": [
+            2
+          ],
+          "metadataLeader": 3,
+          "metadataHighWatermark": 107
+        },
+        "journalAcknowledged": 2,
+        "metadataProofHighWatermark": 110,
+        "publicationReceipt": {
+          "epoch": 3,
+          "sequence": 2,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:102",
+          "transactionHash": "d04ce917dfc9742de82dfde82c98b9b40361be090d38a194b1cb294ec09fc48a"
+        },
+        "retryCode": "KAFKA_RETRY",
+        "snapshotId": "48c88373-87c9-49e7-a110-4236314ff3e6",
+        "sourceTransactionHash": "8ad728c1455aee39dce127980b3b528182eb9e8205f6302b8a80aaaeb6ce1953",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:103"
+      },
+      "restored": {
+        "cluster": {
+          "clusterId": "i6opffRsdQaUVVO6wD7VVQ",
+          "topicId": "WYGYFtroTxeT8l-dRtCQTg",
+          "leader": 2,
+          "isr": [
+            2,
+            4
+          ],
+          "metadataLeader": 3,
+          "metadataHighWatermark": 144
+        },
+        "journalAcknowledged": 3,
+        "publicationReceipt": {
+          "epoch": 4,
+          "sequence": 3,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:103",
+          "transactionHash": "8ad728c1455aee39dce127980b3b528182eb9e8205f6302b8a80aaaeb6ce1953"
+        },
+        "snapshotId": "48c88373-87c9-49e7-a110-4236314ff3e6",
+        "sourceTransactionHash": "8ad728c1455aee39dce127980b3b528182eb9e8205f6302b8a80aaaeb6ce1953",
+        "sourceTransactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:103",
+        "stagedOffsets": [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "storedOffsetAfter": 13,
+        "storedOffsetBefore": 7
+      },
+      "offsets": {
+        "cluster": {
+          "clusterId": "i6opffRsdQaUVVO6wD7VVQ",
+          "topicId": "WYGYFtroTxeT8l-dRtCQTg",
+          "leader": 2,
+          "isr": [
+            1,
+            2,
+            4
+          ],
+          "metadataLeader": 3,
+          "metadataHighWatermark": 170
+        },
+        "stagedOffsets": [],
+        "storedOffsetAfter": 13,
+        "storedOffsetBefore": 13
+      }
+    },
+    "images": {
+      "apache/kafka:3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+      "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+    },
+    "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "consumerEventIds": {
+      "kafka-cluster/fixture-generation/33b7b0745f72b5b170214a50e089e619df36258725929a434c93e6c391d5bf73": "1c75697a0881f04d548728d9f26aa06e37fe02e935c4919d82a358ee9181a66f",
+      "kafka-cluster/fixture-generation/2bff33056752936213dfb1c293b240b99d137e3e46873e4974cd14dde6b064d3": "56b63707ccd3dd2c16a9cc552a74890d964ae5fac9373d1f05ebd3e30e5c7b5d",
+      "kafka-cluster/fixture-generation/01e57d65b39c4e9ef11aafe2022d2153fb5179d55a8591916b6728f819442056": "549d3d47164bb399e94f73d69774c30904c01c823e209570830cda189988ccf2",
+      "kafka-cluster/fixture-generation/b552f69e3ce79102168dcf295b3377a13236ad195f8e595756678d84f9c86e3a": "c3e8ce7affdeb0a041c0b39a9dfe34fca08d5b3ea8d36b1eb669a8de5ba4df8d",
+      "kafka-cluster/fixture-generation/0424857bd1506e76ae1e7757802c93ef71999aa8f2375b706327d04d8a6f99e4": "1a366a786eccf191d2d3859409407de7c0db53b4ce7c2933bac59b5cece0b84a",
+      "kafka-cluster/fixture-generation/c8425c1dde6833a8e841232f72cd8601f7da90b30f27de7b4c35932c0228dca2": "0c8be7418fe3e576a575341c0432bf3823a78b5f4a00bf9cc4bb36988b9ef68d",
+      "kafka-cluster/fixture-generation/927884245158d56a72dcb3c83a16d48d2e63df8520f20669100fd985d6e393c9": "2eaa3ef2ee1be1992dd6f2eca61f88f0e24d972801e8051b3e60e7438ebac584",
+      "kafka-cluster/fixture-generation/20c06a8b3965b7054cd8630e7a9c2782cd8c89666e065065259b467b6c359210": "7f169bf89ef4c0ac0faaa3a0be1ae0b1817f73defaef56c2e2a4028b3100cf95",
+      "kafka-cluster/fixture-generation/c4942710df0c906234c3cb91f4e788596e90ef4218f9d6356d050198185adb02": "9d37230f09f2fee1465b33810677b18067357fae7e40302872c233e64034200a",
+      "kafka-cluster/fixture-generation/612c7b45df676b80801d47c3a73b5d25f409855dee7f86602ca6f4e0727f6ea6": "9ce94ac8f263b8385a763161181b7fcb9392f5260443b0166b613bb3a6cd4b8c",
+      "kafka-cluster/fixture-generation/6d0d5b03d8abb312845d128a2627f3cd4941c572a25368dafea3115699d8b2bf": "f6e38d7a33e96fa88cd409a358a82005f2dea436aad5cec452e6ddae9ba06940",
+      "kafka-cluster/fixture-generation/e096873a8fcc61c4df93e92695a05513cb1164928ba7788618949d9fe612cb4f": "bff6e62eee580897bf5a8e6aefac2ed226c69fd5c703d658a0fd808133d29bf8",
+      "kafka-cluster/fixture-generation/6d9e0e799e5b95fd410fa5ad732c9a6e10d2dd923e2df7a039fd3a9f2e4697d4": "21d2be6724276463b8c4563d91e022edfd9870ac4cd996870284be1a356a21b4"
+    },
+    "brokerRecordCount": 13,
+    "cleanupExitCode": 0
   }
 }
