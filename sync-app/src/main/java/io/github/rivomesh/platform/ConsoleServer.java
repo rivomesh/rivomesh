@@ -204,6 +204,30 @@ public final class ConsoleServer implements AutoCloseable {
                 request.reference=body(exchange).path("expectedAssessment").textValue();
                 json(exchange,200,control.invoke(request,principal));return;
             }
+            if((parts.length==6||parts.length==7)&&parts[1].equals("api")&&parts[2].equals("tasks")
+                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")){
+                boolean release=parts.length==7&&"release".equals(parts[6]);
+                if(parts.length==6&&method.equals("GET")||method.equals("POST")&&(parts.length==6||release)){
+                    if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                    TaskRequest request=TaskRequest.of(method.equals("GET")?TaskRequest.Kind.HANDOFF_PREPARATION:
+                            release?TaskRequest.Kind.HANDOFF_RELEASE:TaskRequest.Kind.HANDOFF_PREPARE,parts[3]);
+                    if(method.equals("POST")){
+                        JsonNode input=body(exchange);
+                        request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                        request.reference=input.path(release?"expectedPreparation":"expectedAssessment").textValue();
+                        if(!release){
+                            request.identityHash=input.path("expectedEvidenceSha256").textValue();
+                            request.revision=input.path("expectedRevision").textValue();
+                        }
+                    }
+                    try{json(exchange,200,control.invoke(request,principal));}
+                    catch(NoSuchElementException missing){
+                        if(!"HANDOFF_PREPARATION_NOT_FOUND".equals(missing.getMessage()))throw missing;
+                        error(exchange,404,"HANDOFF_PREPARATION_NOT_FOUND");
+                    }
+                    return;
+                }
+            }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("diagnostics")&&method.equals("GET")){
                 Map<String,String> query=pageQuery(exchange.getRequestURI().getRawQuery(),512,"DIAGNOSTICS_PAGE_INVALID",
                         Arrays.asList("after","limit","subscriptionId"));

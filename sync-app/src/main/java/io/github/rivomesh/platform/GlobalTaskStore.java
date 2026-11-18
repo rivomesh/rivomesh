@@ -25,6 +25,7 @@ final class GlobalTaskStore {
     final String identity;
     private final ControlCipher cipher;
     private final int maximum;
+    private final HandoffPreparations preparations;
 
     GlobalTaskStore(ClusterConfig config,SharedAccessStore access,String key,String expected,int maximum)throws Exception{
         if(!access.controls(config)||maximum<1||maximum>200000)throw new IllegalArgumentException("GLOBAL_TASK_POLICY_INVALID");this.access=access;this.maximum=maximum;cluster=config.id;db=new JdbcControlStore(config);
@@ -56,7 +57,7 @@ final class GlobalTaskStore {
             if(proof!=null&&!selectedCipher.matches("root\n"+access.identity+"\n"+maximum+"\n"+sequence,stateHash))throw new TaskService.Conflict("GLOBAL_TASK_ROOT_INVALID");
             try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("task_authority")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)!=sequence)throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");}c.commit();
         }
-        identity=selected;cipher=selectedCipher;
+        identity=selected;cipher=selectedCipher;preparations=new HandoffPreparations(config,db,cipher);
     }
     private void root(Connection c)throws Exception{root(c,true);}
     private void root(Connection c,boolean lock)throws Exception{
@@ -123,7 +124,7 @@ final class GlobalTaskStore {
         String signature=automatic?"CREATE_AUTO\n"+id+"\n"+yaml
                 :"CREATE\n"+id+"\n"+owner+"\n"+directory+"\n"+yaml;
         try(Connection c=db.connect()){
-            if(automatic)c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+            c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);
             if(!actor.task(id)||!actor.administers())throw new SecurityException("FORBIDDEN");
             if(!automatic)scope(actor,id,owner,true);
@@ -136,13 +137,28 @@ final class GlobalTaskStore {
                 AgentDirectory.Binding chosen=agents.allocate(c,actor);
                 owner=chosen.node;directory=chosen.directory;
                 scope(actor,id,owner,true);
-            }
+            }else requireReservedCapacity(c,owner);
             Record record=new Record();record.id=id;record.owner=owner;record.directory=directory;record.yaml=yaml;record.revision=UUID.randomUUID().toString();record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=1;
             try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();record.sequence=r.getLong(1)+1;}
             version(c,record,actor);db.update(c,"INSERT INTO "+db.table("task_authority")+" (cluster_id,task_id,owner_id,directory_id,revision,configuration_version,active_version,configuration_index,record_hash,sequence_no) VALUES (?,?,?,?,?,?,?,?,?,?)",cluster,id,owner,directory,record.revision,record.configurationVersion,null,record.configurationIndex,recordSignature(record),record.sequence);
             db.update(c,"UPDATE "+db.table("task_root")+" SET next_sequence=?,state_hash=? WHERE cluster_id=?",record.sequence,cipher.signature("root\n"+access.identity+"\n"+maximum+"\n"+record.sequence),cluster);db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));
             if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_TASK_CREATED"));c.commit();return record;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
+    }
+    private void requireReservedCapacity(Connection c,String owner)throws Exception{
+        long reserved=preparations.reserved(c,owner);
+        if(reserved==0)return;
+        String sql="SELECT n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")
+                +" t WHERE t.cluster_id=n.cluster_id AND t.owner_id=n.node_id) FROM "+db.table("node")
+                +" n WHERE n.cluster_id=? AND n.node_id=? FOR UPDATE";
+        try(PreparedStatement p=db.prepare(c,sql,cluster,owner);ResultSet row=p.executeQuery()){
+            if(row.next()){
+                ControlStore.Node declared=Model.JSON.readValue(row.getString(1),ControlStore.Node.class);
+                long used=row.getLong(2)+reserved;
+                if(owner.equals(declared.id)&&declared.executes()&&used<declared.taskCapacity&&used<declared.runningCapacity)return;
+            }
+        }
+        throw new TaskService.Conflict("AGENT_HANDOFF_CAPACITY_RESERVED");
     }
     Record update(String id,String revision,String yaml,String request,AccessControl.Principal supplied)throws Exception{return update(id,revision,yaml,request,supplied,null);}
     Record update(String id,String revision,String yaml,String request,AccessControl.Principal supplied,CommitHook hook)throws Exception{
@@ -154,7 +170,7 @@ final class GlobalTaskStore {
         try(Connection c=db.connect()){
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);root(c);Record record=read(c,id);scope(actor,id,record.owner,true);
             if(replay(c,request,signature,id,actor)){configuration(c,record);c.commit();return record;}
-            if(!record.revision.equals(revision))throw new TaskService.Conflict("REVISION_CHANGED");record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
+            if(!record.revision.equals(revision))throw new TaskService.Conflict("REVISION_CHANGED");preparations.requireUnreserved(c,id);record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
             db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,configuration_version=?,configuration_index=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,record.configurationVersion,record.configurationIndex,recordSignature(record),cluster,id);
             db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_CONFIG_COMMITTED"));c.commit();return record;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
@@ -176,7 +192,8 @@ final class GlobalTaskStore {
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);root(c);Record record=read(c,id);scope(actor,id,record.owner,false);T result=work.run(c,record,actor);c.commit();return result;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
-    void advance(Connection c,Record record)throws Exception{record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}
+    HandoffPreparations preparations(){return preparations;}
+    void advance(Connection c,Record record)throws Exception{preparations.requireUnreserved(c,record.id);record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}
     void applied(Connection c,Record record,String version)throws Exception{
         if(!record.configurationVersion.equals(version))throw new TaskService.Conflict("CONFIGURATION_VERSION_CHANGED");configuration(c,record);record.activeConfigurationVersion=version;
         db.update(c,"UPDATE "+db.table("task_authority")+" SET active_version=?,record_hash=? WHERE cluster_id=? AND task_id=?",version,recordSignature(record),cluster,record.id);

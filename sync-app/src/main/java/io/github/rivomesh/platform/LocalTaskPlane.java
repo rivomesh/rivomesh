@@ -23,7 +23,8 @@ final class LocalTaskPlane implements TaskControlPlane {
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
             case RECOVERY_RECEIPT:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
-            case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+            case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:
+            case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);
             case CONFIG_HISTORY:return tasks.configurationHistory(r.taskId,r.cursor);

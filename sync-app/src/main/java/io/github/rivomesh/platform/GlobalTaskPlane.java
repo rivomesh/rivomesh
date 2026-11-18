@@ -34,6 +34,13 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case HANDOFF_PROBE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return handoff.probe(request,actor,queries);
+            case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return switch(request.kind){
+                    case HANDOFF_PREPARE->handoff.prepare(request,actor);
+                    case HANDOFF_RELEASE->handoff.releasePreparation(request,actor);
+                    default->handoff.latestPreparation(request.taskId,actor);
+                };
             case CREATE:{
                 ObjectMapper yaml=new ObjectMapper(new YAMLFactory()).enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);JsonNode document=yaml.readTree(request.yaml);ConfigurationDocuments.validate(document);
                 if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");String id=document.path(document.path("formatVersion").asInt()==3?"pipelineId":"jobId").asText();

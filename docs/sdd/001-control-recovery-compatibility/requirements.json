@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双入口评估与双 Agent 原日志、源、目标、报告及闭合操作回执的核验已通过。候选容量预留、源/故障证据、双端 fencing 和实际归属提交待验。",
-        "en": "Both entries and both Agents verified original journal, source, target, reports and bounded closed receipts. Capacity reservations, source/failure evidence, dual fencing and actual placement commit remain."
+        "zh-CN": "双入口评估、原切点及证据核验、候选槽位预留和释放已实测并可在界面操作。原始源/故障证据、双端 fencing、实际归属提交及自动接管待验。",
+        "en": "Both entries verified assessment, original cut and evidence, including durable candidate capacity reservation and release in real Chrome. Source/failure custody, dual fencing, actual placement commit and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -155,7 +155,8 @@
         "docs/verification/README.md",
         "tests/standalone-writer-handoff.py",
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedHandoff.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
+        "tests/ui/browser-handoff.mjs"
       ]
     },
     {

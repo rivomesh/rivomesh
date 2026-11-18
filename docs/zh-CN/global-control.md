@@ -73,6 +73,12 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 同一次核验可用 `probe.sharedReceiptCustody` 查看已结束的操作回执。原 Agent 会将已认证的全局命令与本地请求签名、操作者和执行结果核对，只归档匹配的已结束回执。候选 Agent 独立核对共享归档的原字节。该流程覆盖单任务最多 64 条全局命令。回执缺失、已清理、内容不匹配或操作未结束时，保留未核验状态。接口返回数量和摘要。回执导入、源证据、故障证据和执行接管仍需单独验收。
 
+两端 Agent 验证原任务已停止、精确切点和闭合回执后，评估接口返回 `preparationEvidenceSha256`。若原 Agent 有校验报告目录，还须完成报告托管核验。管理员可以向 `POST /api/tasks/{task}/handoff/preparation` 提交 `X-Request-ID`，请求体包含 `expectedAssessment`、`expectedRevision` 和 `expectedEvidenceSha256`。同一路径的 `GET` 可查询最新准备记录、到期时间和原、候选 Agent 身份。
+
+准备记录按控制数据库时钟在 15 分钟后到期。到期或解除前，该任务暂停接收新命令和配置修改，候选 Agent 预留一个任务槽和一个 Worker 槽。首版将候选 Agent 的每个已分配任务都计作潜在 Worker，包括已停止的任务。显式和自动分配都计入预留。当前管理员可向 `POST /api/tasks/{task}/handoff/preparation/release` 提交 `X-Request-ID` 和 `expectedPreparation`，立即解除预留并恢复对原任务的操作。相同操作者以相同输入重放已接受请求时，可以读到解除或到期后的记录。准备阶段保留原任务归属和日志写入代次。执行接管还需要通过源端和故障证据核验，并验证数据日志和控制库的写入隔离。
+
+在控制台打开 **评估 Agent 接管**。证据核验通过后，点击 **预留任务槽和 Worker 槽** 并确认。可从任一 Controller 查询同一回执和到期时间。需要继续操作原任务时，先点击 **解除预留**。
+
 ## 接受、执行和恢复
 
 PENDING 表示持久排队；DISPATCHED 表示交给固定 owner，调用前保存原本机请求与原修订；ACCEPTED 表示本机已持久接受；SUCCEEDED/FAILED 来自实际操作回执。UNKNOWN 表示证据不足，不能伪装成功，也不能换新修订重新执行。重启先恢复原回执保护及配置权威校验，再允许本机调度。

@@ -206,4 +206,155 @@ class ManagedHandoffTest {
                 List.of("CANDIDATE_TASK_CAPACITY_UNAVAILABLE","TASK_COMMANDS_UNRESOLVED")));
         assertThrows(SecurityException.class,()->latest(b,scoped));
     }
+    private Map<String,Object> verifiedAssessment(String id,AccessControl.Principal actor)throws Exception{
+        a.invoke(assess(id,null),actor);
+        SharedHandoffEvidence.Archive archive=new SharedHandoffEvidence.Archive("b".repeat(64),20,1,2);
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe(id),actor));
+            PlatformTest.await(()->!aQueries.pending(aLease,fixture.directory,10).isEmpty()
+                    &&!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,
+                    (request,principal)->Map.of("state","VERIFIED"));
+            aQueries.serve(aQueries.pending(aLease,fixture.directory,10).getFirst(),aLease,fixture.directory,
+                    (request,principal)->Map.of("state","REFUSED","originInventory",Map.of("validationReports","PRESENT"),
+                            "closedReceipts",Map.of("state","ARCHIVED","archive",archive),
+                            "shareableReports",Map.of("state","ARCHIVED","archive",archive)));
+            PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,
+                    (request,principal)->Map.of("state","VERIFIED","archive",request.handoffArchive));
+            return result.get(10,TimeUnit.SECONDS);
+        }
+    }
+    private TaskRequest prepare(String id,Map<String,Object> assessment){
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_PREPARE,"orders");
+        request.requestId=id;request.reference=(String)assessment.get("id");request.revision=revision;
+        request.identityHash=(String)assessment.get("preparationEvidenceSha256");return request;
+    }
+    private TaskRequest release(String id,String plan){
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_RELEASE,"orders");
+        request.requestId=id;request.reference=plan;return request;
+    }
+    private TaskRequest currentPreparation(){return TaskRequest.of(TaskRequest.Kind.HANDOFF_PREPARATION,"orders");}
+    private TaskRequest stop(String id){
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.ACTION,"orders");
+        request.requestId=id;request.revision=revision;request.action="STOP";return request;
+    }
+    private AccessControl.Principal currentAdmin()throws Exception{
+        return AccountDirectory.authenticate(fixture.access.accounts(),"Bearer "+GlobalTaskStoreTest.TOKEN);
+    }
+    private void capacity(ControlStore.Lease lease,JdbcControlStore store,int tasks,int workers)throws Exception{
+        ControlStore.Node current=ControlStoreTest.node(lease.nodeId);current.incarnation=lease.incarnation;
+        current.taskCapacity=tasks;current.runningCapacity=workers;store.heartbeat(lease,current,List.of());
+    }
+    private static void conflict(String code,org.junit.jupiter.api.function.Executable operation){
+        assertEquals(code,assertThrows(TaskService.Conflict.class,operation).getMessage());
+    }
+
+    @Test void preparationReservesCapacityAcrossRestartAndReleasePreservesSameRequestReplay()throws Exception{
+        capacity(aLease,aNodes,1,1);capacity(bLease,bNodes,2,1);
+        Map<String,Object> proved=verifiedAssessment("prepare_verified_assessment",fixture.admin);
+        assertEquals(proved,latest(entryB(),fixture.admin));
+        TaskRequest prepare=prepare("prepare_same_request",proved);
+        assertNotNull(prepare.identityHash);
+        String good=prepare.identityHash;prepare.identityHash="a".repeat(64);
+        conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED",()->a.invoke(prepare,fixture.admin));
+        prepare.identityHash=good;
+        Map<String,Object> prepared;
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            var first=executor.submit(()->a.invoke(prepare,fixture.admin));
+            var second=executor.submit(()->b.invoke(prepare,fixture.admin));
+            prepared=first.get(10,TimeUnit.SECONDS);
+            assertEquals(prepared,second.get(10,TimeUnit.SECONDS));
+        }
+        assertEquals("PREPARED",prepared.get("state"));
+        assertEquals(1,prepared.get("reservedTaskSlots"));assertEquals(1,prepared.get("reservedWorkerSlots"));
+        assertEquals(false,prepared.get("executionAuthorized"));
+        assertEquals(prepared,entryB().invoke(currentPreparation(),fixture.admin));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+        assertFalse(Model.JSON.writeValueAsString(prepared).contains(candidateDirectory));
+        conflict("HANDOFF_PREPARATION_ACTIVE",()->commands.enqueue(stop("prepare_frozen_stop"),fixture.admin));
+        conflict("HANDOFF_PREPARATION_ACTIVE",()->fixture.b.update("orders",revision,YAML,"prepare_frozen_edit",fixture.admin));
+        prepare.identityHash="a".repeat(64);
+        conflict("HANDOFF_PREPARATION_REQUEST_REUSED",()->a.invoke(prepare,fixture.admin));prepare.identityHash=good;
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            var automatic=executor.submit(()->conflict("AGENT_PLACEMENT_UNAVAILABLE",()->fixture.a.allocate("automatic","yaml",
+                    "prepare_auto_allocation",fixture.admin,aAgents,null)));
+            var explicit=executor.submit(()->conflict("AGENT_HANDOFF_CAPACITY_RESERVED",()->fixture.b.create("explicit","b",
+                    candidateDirectory,"yaml","prepare_explicit_allocation",fixture.admin)));
+            automatic.get(10,TimeUnit.SECONDS);explicit.get(10,TimeUnit.SECONDS);
+        }
+        conflict("HANDOFF_PREPARATION_CHANGED",()->a.invoke(release("prepare_wrong_release","another_preparation"),fixture.admin));
+        TaskRequest release=release("prepare_release_request",prepare.requestId);
+        Map<String,Object> released=b.invoke(release,fixture.admin);
+        assertEquals("RELEASED",released.get("state"));assertEquals(0,released.get("reservedWorkerSlots"));
+        assertEquals(released,entryB().invoke(release,fixture.admin));
+        assertEquals(released,a.invoke(prepare,fixture.admin));
+        assertEquals("b",fixture.a.allocate("automatic","yaml","prepare_auto_allocation",fixture.admin,aAgents,null).owner);
+        assertEquals("PENDING",commands.enqueue(stop("prepare_unfrozen_stop"),fixture.admin).get("status"));
+        assertEquals(released,a.invoke(prepare,fixture.admin));
+    }
+
+    @Test void preparationAndNewPlacementRaceForOneWorkerSlot()throws Exception{
+        capacity(aLease,aNodes,1,1);capacity(bLease,bNodes,1,1);
+        TaskRequest request=prepare("prepare_allocation_race",verifiedAssessment("prepare_race_assessment",fixture.admin));
+        CountDownLatch start=new CountDownLatch(1);
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            var preparation=executor.submit(()->{
+                start.await();
+                try{return a.invoke(request,fixture.admin).get("state");}catch(TaskService.Conflict conflict){return conflict.getMessage();}
+            });
+            var placement=executor.submit(()->{
+                start.await();
+                try{return fixture.b.allocate("raced","yaml","prepare_raced_new_job",fixture.admin,bAgents,null).owner;}
+                catch(TaskService.Conflict conflict){return conflict.getMessage();}
+            });
+            start.countDown();
+            Object first=preparation.get(10,TimeUnit.SECONDS),second=placement.get(10,TimeUnit.SECONDS);
+            assertTrue("PREPARED".equals(first)&&"AGENT_PLACEMENT_UNAVAILABLE".equals(second)
+                    ||"HANDOFF_ASSESSMENT_CHANGED".equals(first)&&"b".equals(second),()->first+" / "+second);
+            fixture.a.service((c,accounts)->{
+                AgentDirectory.HandoffCapacity capacity=aAgents.handoffCapacity(c,"b");
+                assertEquals(1,capacity.assignedTasks()+capacity.reservedTasks());
+                return null;
+            });
+        }
+    }
+
+    @Test void revokedActorCannotReplayAndAnotherCurrentAdminCanRelease()throws Exception{
+        String token="temporary-preparation-admin-test-token";
+        fixture.access.mutate("CREATE",null,Model.JSON.readTree("{\"expectedRevision\":\""+fixture.access.accounts().revision
+                +"\",\"id\":\"temporary\",\"role\":\"ADMIN\",\"enabled\":true,\"token\":\""+token+"\"}"),"prepare_create_actor",fixture.admin);
+        AccessControl.Principal temporary=AccountDirectory.authenticate(fixture.access.accounts(),"Bearer "+token);
+        Map<String,Object> evidence=verifiedAssessment("prepare_for_temporary_actor",temporary);
+        TaskRequest prepare=prepare("prepare_temporary_request",evidence);
+        a.invoke(prepare,temporary);
+        conflict("HANDOFF_PREPARATION_REQUEST_REUSED",()->b.invoke(prepare,currentAdmin()));
+        fixture.access.mutate("UPDATE","temporary",Model.JSON.readTree("{\"expectedRevision\":\""+fixture.access.accounts().revision
+                +"\",\"role\":\"ADMIN\",\"enabled\":false}"),"prepare_disable_actor",currentAdmin());
+        conflict("AUTHORIZATION_CHANGED",()->a.invoke(prepare,temporary));
+        assertEquals("RELEASED",b.invoke(release("prepare_release_revoked",prepare.requestId),currentAdmin()).get("state"));
+    }
+
+    @Test void candidateReenrollmentRejectsStaleEvidence()throws Exception{
+        Map<String,Object> evidence=verifiedAssessment("prepare_with_bound_candidate",fixture.admin);
+        bNodes.stopped(bLease);bLease=bNodes.register(ControlStoreTest.node("b"),List.of());bAgents.register(bLease,candidateDirectory);
+        conflict("HANDOFF_ASSESSMENT_CHANGED",()->b.invoke(prepare("prepare_stale_candidate",evidence),fixture.admin));
+    }
+
+    @Test void expiryUsesThePersistedDeadlineAndCrossEntryReplaysRemainTerminal()throws Exception{
+        Map<String,Object> evidence=verifiedAssessment("prepare_with_deadline",fixture.admin);
+        TaskRequest prepare=prepare("prepare_expires_request",evidence);
+        Map<String,Object> plan=a.invoke(prepare,fixture.admin);
+        long deadline=Instant.parse((String)plan.get("expiresAt")).toEpochMilli();
+        fixture.b.service((c,accounts)->{
+            assertEquals("PREPARED",fixture.b.preparations().latest(c,"orders",deadline-1).phase());
+            assertEquals("EXPIRED",fixture.b.preparations().latest(c,"orders",deadline).phase());
+            return null;
+        });
+        assertEquals("EXPIRED",entryB().invoke(prepare,fixture.admin).get("state"));
+        conflict("HANDOFF_PREPARATION_CHANGED",()->b.invoke(release("prepare_expired_release",prepare.requestId),fixture.admin));
+        assertEquals("PENDING",commands.enqueue(stop("prepare_expired_stop"),fixture.admin).get("status"));
+    }
+
 }

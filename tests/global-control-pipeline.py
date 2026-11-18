@@ -44,6 +44,10 @@ parser.add_argument('--handoff-custody', action='store_true',
                     help='Prove exact completed-report custody using separate then shared private mounts')
 parser.add_argument('--handoff-closed-receipts', action='store_true',
                     help='Verify shared closed operation receipts and refusal when a private original receipt is missing')
+parser.add_argument('--handoff-preparation', action='store_true',
+                    help='Reserve the candidate and verify durable review release without changing data authority')
+parser.add_argument('--handoff-preparation-browser', type=Path,
+                    help='Exercise preparation and release through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
@@ -123,6 +127,11 @@ if args.handoff_custody and not args.handoff_probe:
     parser.error('--handoff-custody requires --handoff-probe')
 if args.handoff_closed_receipts and not args.handoff_custody:
     parser.error('--handoff-closed-receipts requires --handoff-custody')
+if args.handoff_preparation and not args.handoff_closed_receipts:
+    parser.error('--handoff-preparation requires --handoff-closed-receipts')
+if args.handoff_preparation_browser and (not args.handoff_closed_receipts or args.handoff_preparation
+        or not os.access(args.handoff_preparation_browser.resolve(), os.X_OK)):
+    parser.error('--handoff-preparation-browser requires --handoff-closed-receipts and cannot share --handoff-preparation')
 if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
                              or not os.access(args.handoff_browser.resolve(), os.X_OK)):
     parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
@@ -239,6 +248,8 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffProbe': args.handoff_probe,
             'handoffCustody': args.handoff_custody,
             'handoffClosedReceipts': args.handoff_closed_receipts,
+            'handoffPreparation': args.handoff_preparation,
+            'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'reportArchive': args.report_archive,
@@ -455,7 +466,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         attempts = 5 if args.managed_binlog_evidence and 503 not in allowed else 1
         for attempt in range(attempts):
             try:
-                response = urllib.request.urlopen(call, timeout=20)
+                handoff_probe = path.endswith('/handoff/probe') and (args.handoff_preparation or args.handoff_preparation_browser)
+                probe_timeout = 65 if handoff_probe else 20
+                response = urllib.request.urlopen(call, timeout=probe_timeout)
             except urllib.error.HTTPError as error:
                 response = error
             with response:
@@ -497,11 +510,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         # Only a disposable loopback browser receives the random credential. Keep it out of args and evidence.
         options = dict(first=bases['node-a'], second=bases['node-b'], token=env['RM_GC_TOKEN'],
                        taskId='global_cdc', **state)
-        handoff = scenario == 'handoff'
+        preparation = scenario == 'handoff-preparation'
+        handoff = preparation or scenario == 'handoff'
         browser_test = ROOT / ('tests/ui/browser-handoff.mjs' if handoff else 'tests/ui/browser-recovery.mjs')
         sources = (browser_test, browser_test.with_name('chromium.mjs'))
         hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
-        chrome = args.handoff_browser if handoff else args.browser
+        chrome = args.handoff_preparation_browser if preparation else args.handoff_browser if handoff else args.browser
         command = ['node', str(browser_test), str(chrome.resolve()), scenario]
         result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
         if result.returncode:
@@ -513,7 +527,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert all(hashlib.sha256(path.read_bytes()).hexdigest()==hashes[path.name] for path in sources)
         evidence['sourceSha256'] = hashes
         if handoff:
-            manifest['browserHandoff'] = evidence
+            manifest['browserHandoffPreparation' if preparation else 'browserHandoff'] = evidence
         else:
             manifest.setdefault('browserRecovery', {})[scenario] = evidence
         for check in evidence['checks']:
@@ -2149,6 +2163,53 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert all(set(r)=={'request','signature','actor','role','kind','phase','code'} for r in closed)
                         assert validation not in json.dumps(good)
                         passed('Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records')
+                        if args.handoff_preparation_browser:
+                            expected_revision=task()['revision']
+                            browser_check('handoff-preparation',owner=owner_node,candidate=candidate,
+                                          revision=expected_revision,previousReceiptId=good['id'])
+                            assert task()['ownerNodeId']==owner_node and task()['revision']==expected_revision
+                            assert data_cut()==original_cut
+                        if args.handoff_preparation:
+                            preparation=endpoint+'/preparation'
+                            http('node-a',preparation,expected=404)
+                            prepared_input={'expectedAssessment':good['id'],'expectedRevision':task()['revision'],
+                                            'expectedEvidenceSha256':good['preparationEvidenceSha256']}
+                            preparation_id='gc_prepare_'+uuid.uuid4().hex
+                            http('node-b',preparation,prepared_input,request=preparation_id,expected=403,
+                                 token=env['RM_GC_VIEWER'])
+                            with ThreadPoolExecutor(max_workers=2) as requests:
+                                attempts=[requests.submit(http,node,preparation,prepared_input,request=preparation_id)
+                                          for node in ('node-a','node-b')]
+                                saved=[attempt.result() for attempt in attempts]
+                            assert saved[0]==saved[1] and saved[0]['state']=='PREPARED'
+                            assert saved[0]['reservedTaskSlots']==saved[0]['reservedWorkerSlots']==1
+                            assert not saved[0]['executionAuthorized'] and data_cut()==original_cut
+                            assert task()['ownerNodeId']==owner_node and task()['revision']==prepared_input['expectedRevision']
+                            assert http('node-a',preparation,dict(prepared_input,expectedEvidenceSha256='0'*64),
+                                        request=preparation_id,expected=409)['code']=='HANDOFF_PREPARATION_REQUEST_REUSED'
+                            assert http('node-b',route+'/actions',{'action':'STOP','expectedRevision':task()['revision']},
+                                        expected=409)['code']=='HANDOFF_PREPARATION_ACTIVE'
+                            other=json.loads(json.dumps(document));other['pipelineId']='handoff_reserved_candidate'
+                            assert http('node-a','/api/tasks',{'config':other,'ownerNodeId':candidate},expected=409)['code']=='AGENT_HANDOFF_CAPACITY_RESERVED'
+                            assert http('node-b','/api/tasks',{'config':other,'placement':'AUTO'},expected=409)['code']=='AGENT_PLACEMENT_UNAVAILABLE'
+                            passed('A replay-safe stopped-cut reservation blocks new commands and competing explicit or automatic Agent assignment')
+                            compose('kill','-s','SIGKILL','node-b')
+                            wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                            " AND node_id='node-b' AND lease_until>"+clock)=='0','preparation Controller lease expired')
+                            compose('up','-d','node-b');address('node-b')
+                            restored=wait(lambda: (row if (row:=http('node-b',preparation,expected=(200,503))).get('id')==preparation_id
+                                                  else None), 'restarted Controller reads preparation')
+                            assert restored==saved[0]
+                            release_id='gc_release_'+uuid.uuid4().hex
+                            release={'expectedPreparation':preparation_id}
+                            released=http('node-a',preparation+'/release',release,request=release_id)
+                            assert released==http('node-b',preparation+'/release',release,request=release_id)
+                            assert released['state']=='RELEASED' and released['reservedTaskSlots']==released['reservedWorkerSlots']==0
+                            stopped_after_release,_=action('STOP',node='node-b')
+                            assert operation(stopped_after_release)['status']=='SUCCEEDED'
+                            assert released==http('node-a',preparation,prepared_input,request=preparation_id)
+                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                            passed('Controller restart preserves the reservation and releasing it reopens normal control without moving the old writer')
                         terminate_owner()
                         wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                         " AND node_id='"+owner_node+"' AND lifecycle='RUNNING' AND lease_until>"+clock)=='0',

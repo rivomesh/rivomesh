@@ -73,6 +73,7 @@ final class ManagedHandoff {
                     return view(c,task,actor,prior);
                 }
             }
+            tasks.preparations().requireUnreserved(c,task.id);
             if(!Objects.equals(prior==null?null:prior.request,request.reference))
                 throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
             if(!task.revision.equals(request.revision))throw new TaskService.Conflict("REVISION_CHANGED");
@@ -81,7 +82,7 @@ final class ManagedHandoff {
             AgentDirectory.HandoffCapacity candidate=agents.handoffCapacity(c,request.ownerNodeId);
             List<String> blockers=new ArrayList<>();
             if(!"HEALTHY".equals(candidate.binding().state))blockers.add("CANDIDATE_AGENT_UNAVAILABLE");
-            if(candidate.assignedTasks()>=candidate.taskSlots()||candidate.workerSlots()<1)
+            if(!candidate.roomForPreparation())
                 blockers.add("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
             if(!Objects.equals(task.configurationVersion,task.activeConfigurationVersion))
                 blockers.add("TASK_CONFIGURATION_NOT_APPLIED");
@@ -154,6 +155,7 @@ final class ManagedHandoff {
         Assessment a=read(c,task.id);
         if(a==null||!expected.equals(a.request))throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
         requireGrants(actor,a.original.node,a.candidate.node);
+        tasks.preparations().requireUnreserved(c,task.id);
         if(stale(c,task,actor,a))throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
         if(a.blockers.size()!=2||a.originalCut==null)throw new TaskService.Conflict("HANDOFF_ASSESSMENT_BLOCKED");
         return a;
@@ -167,6 +169,97 @@ final class ManagedHandoff {
             requireGrants(actor,assessment.original.node,assessment.candidate.node);
             return view(c,task,actor,assessment);
         });
+    }
+
+    Map<String,Object> prepare(TaskRequest request,AccessControl.Principal supplied)throws Exception{
+        return tasks.transaction(request.taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            HandoffPreparations plans=tasks.preparations();
+            long now=db.now(c);
+            HandoffPreparations.Plan existing=plans.byRequest(c,request.requestId,now);
+            if(existing!=null){
+                requirePlanGrants(actor,task,existing);
+                HandoffPreparations.Evidence saved=existing.evidence();
+                if(!existing.id().equals(request.requestId)||!existing.actor().equals(actor.id)
+                        ||!saved.assessment().equals(request.reference)||!saved.revision().equals(request.revision)
+                        ||!saved.proof().equals(request.identityHash))throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
+                return HandoffPreparations.summary(existing);
+            }
+            Assessment selected=probeAssessment(c,task,actor,request.reference);
+            if(!task.revision.equals(request.revision))throw new TaskService.Conflict("REVISION_CHANGED");
+            HandoffPreparations.Evidence evidence=preparationEvidence(selected,now);
+            if(evidence==null)throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_REQUIRED");
+            if(!evidence.proof().equals(request.identityHash))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+            if(!agents.handoffCapacity(c,selected.candidate.node).roomForPreparation())
+                throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
+            HandoffPreparations.Plan plan=plans.prepare(c,task,request.requestId,actor,evidence,now);
+            auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARED");
+            return HandoffPreparations.summary(plan);
+        });
+    }
+
+    Map<String,Object> latestPreparation(String id,AccessControl.Principal supplied)throws Exception{
+        return tasks.transaction(id,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            if(!actor.administers())throw new SecurityException("FORBIDDEN");
+            HandoffPreparations.Plan plan=tasks.preparations().latest(c,id,db.now(c));
+            if(plan==null)throw new NoSuchElementException("HANDOFF_PREPARATION_NOT_FOUND");
+            requirePlanGrants(actor,task,plan);
+            return HandoffPreparations.summary(plan);
+        });
+    }
+
+    Map<String,Object> releasePreparation(TaskRequest request,AccessControl.Principal supplied)throws Exception{
+        return tasks.transaction(request.taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            if(!actor.administers())throw new SecurityException("FORBIDDEN");
+            HandoffPreparations plans=tasks.preparations();
+            long now=db.now(c);
+            HandoffPreparations.Plan existing=plans.byRequest(c,request.requestId,now);
+            if(existing!=null){
+                requirePlanGrants(actor,task,existing);
+                if(!request.requestId.equals(existing.releaseId())||!request.reference.equals(existing.id())
+                        ||!actor.id.equals(existing.releasedBy()))throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
+                return HandoffPreparations.summary(existing);
+            }
+            HandoffPreparations.Plan plan=plans.latest(c,task.id,now);
+            if(plan==null)throw new NoSuchElementException("HANDOFF_PREPARATION_NOT_FOUND");
+            requirePlanGrants(actor,task,plan);
+            if(!request.reference.equals(plan.id()))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+            plan=plans.release(c,plan,request.requestId,actor,now);
+            auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARATION_RELEASED");
+            return HandoffPreparations.summary(plan);
+        });
+    }
+
+    private void auditPreparation(Connection c,HandoffPreparations.Plan plan,AccessControl.Principal actor,String request,String kind)throws Exception{
+        AuditStore.Event event=new AuditStore.Event();event.kind=kind;event.taskId=plan.task();event.actorId=actor.id;
+        event.actorRole=actor.role.name();event.subjectId=plan.evidence().candidate().node();
+        event.clientRequestHash=AuditStore.hash(request);event.operationHash=plan.evidence().proof();event.status="COMMITTED";
+        access.append(c,event);
+    }
+    private static void requirePlanGrants(AccessControl.Principal actor,GlobalTaskStore.Record task,HandoffPreparations.Plan plan){
+        if(!task.id.equals(plan.task()))throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
+        requireGrants(actor,plan.evidence().original().node(),plan.evidence().candidate().node());
+    }
+
+    private boolean probeFresh(Assessment a,long now){
+        return a.probe!=null&&a.probe.checkedAt>=now-freshness&&a.probe.checkedAt<=now;
+    }
+    private HandoffPreparations.Evidence preparationEvidence(Assessment a,long now)throws Exception{
+        if(!probeFresh(a,now)||a.originalCut==null||!"VERIFIED".equals(a.probe.candidate.get("state"))
+                ||!(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> originalReceipts)
+                ||!"ARCHIVED".equals(originalReceipts.get("state"))||a.probe.sharedReportCustody==null
+                ||!"VERIFIED".equals(a.probe.sharedReportCustody.get("state")))return null;
+        SharedHandoffEvidence.Archive receipt=Model.JSON.convertValue(originalReceipts.get("archive"),SharedHandoffEvidence.Archive.class);
+        SharedHandoffEvidence.Archive candidate=Model.JSON.convertValue(a.probe.sharedReportCustody.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(receipt==null||!receipt.equals(candidate)||candidate.closedReceipts()==0)return null;
+        if(!(a.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory))return null;
+        if(!"ABSENT".equals(inventory.get("validationReports"))&&!("PRESENT".equals(inventory.get("validationReports"))&&candidate.reports()>0))
+            return null;
+        String proof=AuditStore.hash(Model.JSON.writeValueAsString(a));
+        return new HandoffPreparations.Evidence(a.request,a.revision,a.activeVersion,
+                new HandoffPreparations.Binding(a.original.node,a.original.directory,a.original.incarnation,a.original.epoch),
+                new HandoffPreparations.Binding(a.candidate.node,a.candidate.directory,a.candidate.incarnation,a.candidate.epoch),
+                new HandoffPreparations.JournalCut(a.originalCut.journalEpoch,a.originalCut.sequence,a.originalCut.checkpointHash),
+                proof,candidate.sha256());
     }
 
     private static void requireGrants(AccessControl.Principal actor,String original,String candidate){
@@ -211,7 +304,7 @@ final class ManagedHandoff {
         return stale;
     }
 
-    private Map<String,Object> summary(Assessment a,boolean stale,long now){
+    private Map<String,Object> summary(Assessment a,boolean stale,long now)throws Exception{
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("id",a.request);result.put("taskId",a.task);result.put("taskRevision",a.revision);
         result.put("activeConfigurationVersion",a.activeVersion);
@@ -224,7 +317,7 @@ final class ManagedHandoff {
         result.put("state",stale?"STALE":a.blockers.size()==2?"EVIDENCE_REQUIRED":"BLOCKED");
         List<String> blockers=new ArrayList<>(a.blockers);
         if(a.probe!=null){
-            boolean applicable=!stale&&a.probe.checkedAt>=now-freshness&&a.probe.checkedAt<=now;
+            boolean applicable=!stale&&probeFresh(a,now);
             if(applicable&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
             Map<String,Object> probe=new LinkedHashMap<>(Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
                     "current",applicable,"candidate",a.probe.candidate,"originalEvidence",a.probe.originalEvidence));
@@ -235,6 +328,8 @@ final class ManagedHandoff {
                     probe.put("sharedReceiptCustody",a.probe.sharedReportCustody);
             }
             result.put("probe",probe);
+            HandoffPreparations.Evidence prepared=applicable?preparationEvidence(a,now):null;
+            if(prepared!=null)result.put("preparationEvidenceSha256",prepared.proof());
         }
         result.put("blockers",blockers);result.put("executionAuthorized",false);
         return result;

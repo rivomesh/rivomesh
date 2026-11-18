@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {launchChrome,waitFor} from './chromium.mjs';
 
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&scenario==='handoff');
+assert(binary&&['handoff','handoff-preparation'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const {first,second,taskId,token,owner,candidate,revision,previousReceiptId}=JSON.parse(Buffer.concat(chunks));
@@ -50,6 +50,51 @@ try{
   await key('Enter',13);
   await poll('document.querySelector(".handoff-dialog")?.open','handoff assessment dialog');
  }
+ async function clickByKeyboard(selector){
+  const action='document.querySelector('+quote(selector)+')';
+  await poll(action+'&&!'+action+'.hidden&&!'+action+'.disabled','enabled '+selector);
+  await evaluate(action+'.focus()');await key('Enter',13);
+ }
+ async function preparationFlow(){
+  const reservation='document.querySelector("[data-handoff-preparation]")';
+  const preparedPath='/api/tasks/'+encodeURIComponent(taskId)+'/handoff/preparation';
+  const readPreparation=()=>evaluate(`fetch(${quote(preparedPath)}).then(response=>response.json())`);
+  await clickByKeyboard('[data-handoff-probe]');
+  await poll('document.querySelector("[data-handoff-receipt]")?.textContent.includes("预留所需证据已核验")',
+             'real candidate checkpoint and shared receipt proof');
+  assert(await evaluate(`${reservation}.textContent.includes(${quote(owner)})
+   &&${reservation}.textContent.includes(${quote(candidate)})
+   &&${reservation}.textContent.includes("本任务暂停接收新命令")`));
+  await evaluate(`${reservation}.querySelector("details").open=true`);
+  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
+  checks.push('The keyboard probe verifies the real checkpoint and stored receipts and shows both Agents and the reservation impact');
+
+  await clickByKeyboard('[data-handoff-prepare]');
+  await poll(`${reservation}.textContent.includes("预留中")`,'capacity reserved through the management UI');
+  const plan=await readPreparation();
+  assert.equal(plan.state,'PREPARED');assert.equal(plan.assessmentId,previousReceiptId);
+  assert.equal(plan.taskRevision,revision);assert.equal(plan.originalNodeId,owner);assert.equal(plan.candidateNodeId,candidate);
+  assert.equal(plan.reservedTaskSlots,1);assert.equal(plan.reservedWorkerSlots,1);assert.equal(plan.executionAuthorized,false);
+  assert.equal(await evaluate(`${reservation}.querySelector("time").dateTime`),plan.expiresAt);
+  assert(await evaluate('document.querySelector("[data-handoff-assess]").disabled'));
+  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
+  checks.push('The live reservation keeps the writer unchanged, shows expiry and reserved slots, and fits the narrow viewport');
+
+  await navigate(second,'node-b');await open();
+  await poll(`${reservation}.querySelector("details code")?.textContent===${quote(plan.id)}`,
+             'same preparation receipt through the second management entry');
+  await clickByKeyboard('[data-handoff-release]');
+  await poll(`${reservation}.textContent.includes("已解除")`,'release through the second management entry');
+  const released=await readPreparation();
+  assert.equal(released.id,plan.id);assert.equal(released.state,'RELEASED');
+  assert.equal(released.reservedTaskSlots,0);assert.equal(released.reservedWorkerSlots,0);
+  const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
+    .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
+  assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
+  await key('Escape',27);
+  assert(await evaluate(`!document.querySelector(".handoff-dialog")&&document.activeElement===${launcher}`));
+  checks.push('The second entry releases the same reservation, preserves ownership and revision, and restores focus after Escape');
+ }
 
  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
  await navigate(first,'node-a',true);
@@ -60,25 +105,29 @@ try{
  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
  checks.push('An administrator opens the named assessment dialog by keyboard after actual polling and reads the existing receipt');
 
- const select='document.querySelector(".handoff-dialog select")';
- await poll(`[...${select}.options].some(option=>option.value===${quote(candidate)})`,'candidate from live node directory');
- const ids=await evaluate(`[...${select}.options].map(option=>option.value)`);
- assert(!ids.includes(owner)&&!ids.includes('node-a')&&!ids.includes('node-b'));
- await evaluate(`${select}.value=${quote(candidate)};${select}.dispatchEvent(new Event('change'))`);
- const submit='document.querySelector("[data-handoff-assess]")';
- await poll(`${submit}&&!${submit}.disabled`,'explicit assessment ready');
- await evaluate(`${submit}.focus()`);await key('Enter',13);
- const newId=await poll(`(()=>{const id=${receipt};return id&&id!==${quote(previousReceiptId)}&&id;})()`,'new assessment receipt');
- await poll('document.querySelector("[data-handoff-receipt]")?.textContent.includes("待补证据")','evidence-required status');
- checks.push('Submitting the selected live candidate replaces the known receipt and shows the additional evidence required');
+ if(scenario==='handoff-preparation'){
+  await preparationFlow();
+ }else{
+  const select='document.querySelector(".handoff-dialog select")';
+  await poll(`[...${select}.options].some(option=>option.value===${quote(candidate)})`,'candidate from live node directory');
+  const ids=await evaluate(`[...${select}.options].map(option=>option.value)`);
+  assert(!ids.includes(owner)&&!ids.includes('node-a')&&!ids.includes('node-b'));
+  await evaluate(`${select}.value=${quote(candidate)};${select}.dispatchEvent(new Event('change'))`);
+  const submit='document.querySelector("[data-handoff-assess]")';
+  await poll(`${submit}&&!${submit}.disabled`,'explicit assessment ready');
+  await evaluate(`${submit}.focus()`);await key('Enter',13);
+  const newId=await poll(`(()=>{const id=${receipt};return id&&id!==${quote(previousReceiptId)}&&id;})()`,'new assessment receipt');
+  await poll('document.querySelector("[data-handoff-receipt]")?.textContent.includes("待补证据")','evidence-required status');
+  checks.push('Submitting the selected live candidate replaces the known receipt and shows the additional evidence required');
 
- await navigate(second,'node-b');
- await open();
- await poll(`${receipt}===${quote(newId)}`,'same durable receipt from the second Controller');
- const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
-  .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
- assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
- checks.push('The same cookie sees the updated receipt through the second Controller while the task keeps its original owner and revision');
+  await navigate(second,'node-b');
+  await open();
+  await poll(`${receipt}===${quote(newId)}`,'same durable receipt from the second Controller');
+  const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
+   .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
+  assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
+  checks.push('The same cookie sees the updated receipt through the second Controller while the task keeps its original owner and revision');
+ }
  console.log(JSON.stringify({status:'PASS',scenario,browser:version,checks}));
 }catch(error){
  for(const check of checks)console.error('Completed before failure: '+check);

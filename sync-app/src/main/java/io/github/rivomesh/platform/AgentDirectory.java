@@ -13,7 +13,9 @@ final class AgentDirectory {
     private record Capacity(String node,int maximum,long assigned) {
         double utilization(){return (double)assigned/maximum;}
     }
-    record HandoffCapacity(Binding binding,int taskSlots,int workerSlots,long assignedTasks){}
+    record HandoffCapacity(Binding binding,int taskSlots,int workerSlots,long assignedTasks,long reservedTasks){
+        boolean roomForPreparation(){long used=assignedTasks+reservedTasks;return used<taskSlots&&used<workerSlots;}
+    }
     private final GlobalTaskStore tasks;
     private final SharedAccessStore access;
     private final JdbcControlStore db;
@@ -92,6 +94,7 @@ final class AgentDirectory {
     /** The caller holds the task authority lock through selection and creation. */
     Binding allocate(Connection c,AccessControl.Principal actor)throws Exception{
         List<Capacity> candidates=new ArrayList<>();
+        Map<String,Long> reservations=tasks.preparations().reservations(c);
         String sql="SELECT n.node_id,n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")
                 +" t WHERE t.cluster_id=n.cluster_id AND t.owner_id=n.node_id) AS assigned FROM "+db.table("node")
                 +" n JOIN "+db.table("agent")+" a ON a.cluster_id=n.cluster_id AND a.node_id=n.node_id"
@@ -102,9 +105,11 @@ final class AgentDirectory {
                 String node=rows.getString(1);
                 if(!actor.node(node))continue;
                 ControlStore.Node metadata=io.github.rivomesh.Model.JSON.readValue(rows.getString(2),ControlStore.Node.class);
-                long assigned=rows.getLong(3);
-                if(node.equals(metadata.id)&&metadata.executes()&&metadata.taskCapacity>assigned&&metadata.runningCapacity>0)
-                    candidates.add(new Capacity(node,metadata.taskCapacity,assigned));
+                long reserved=reservations.getOrDefault(node,0L);
+                long used=rows.getLong(3)+reserved;
+                if(node.equals(metadata.id)&&metadata.executes()&&metadata.taskCapacity>used&&metadata.runningCapacity>0
+                        &&(reserved==0||metadata.runningCapacity>used))
+                    candidates.add(new Capacity(node,metadata.taskCapacity,used));
             }
         }
         candidates.sort(Comparator.comparingDouble(Capacity::utilization).thenComparing(Capacity::node));
@@ -130,10 +135,10 @@ final class AgentDirectory {
                 +" t WHERE t.cluster_id=n.cluster_id AND t.owner_id=n.node_id) FROM "+db.table("node")
                 +" n WHERE n.cluster_id=? AND n.node_id=?";
         try(PreparedStatement p=db.prepare(c,sql,cluster,node);ResultSet r=p.executeQuery()){
-            if(!r.next())return new HandoffCapacity(binding,0,0,0);
+            if(!r.next())return new HandoffCapacity(binding,0,0,0,0);
             ControlStore.Node declared=io.github.rivomesh.Model.JSON.readValue(r.getString(1),ControlStore.Node.class);
             if(!node.equals(declared.id)||!declared.executes())throw new TaskService.Conflict("AGENT_RECORD_INVALID");
-            return new HandoffCapacity(binding,declared.taskCapacity,declared.runningCapacity,r.getLong(2));
+            return new HandoffCapacity(binding,declared.taskCapacity,declared.runningCapacity,r.getLong(2),tasks.preparations().reserved(c,node));
         }
     }
     void require(Connection c,ControlStore.Lease lease,String directory)throws Exception{
