@@ -51,7 +51,8 @@
     "NEW": 1
   },
   "newSinceLastReport": [
-    "DO-03 accepted. Bilingual recovery runbook covers source, targets, distributed control, storage, browser sessions and manual repair with scoped operations."
+    "DO-03 accepted. Bilingual recovery runbook covers source, targets, distributed control, storage, browser sessions and manual repair with scoped operations.",
+    "LG-10 contribution guide and actual CycloneDX/JAR inventory published. The run found 175 Maven components, 109 embedded coordinates and two vendored binary markers."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

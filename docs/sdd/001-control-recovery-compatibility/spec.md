@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.25 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.26 · 2026-11-18 · IMPLEMENTING
 
 实施中：48项持续追踪，22项DONE、25项PARTIAL、1项NEW，余26项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
@@ -87,7 +87,7 @@ RM-SDD-001 · v0.25 · 2026-11-18 · IMPLEMENTING
 | LG-07 | P1 / PARTIAL | 海量对象、大事务和硬件性能标准 | 有小规模基准工具，超大事务分片、目录分页、有界缓存与容量标准未完整完成。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 已有白名单对象和UNIQUE/GSI转换；完整动态DDL、复杂类型及备份恢复档案仍缺。首版不支持旧开发候选兼容。 |
 | LG-09 | P1 / PARTIAL | 报告目录、保留清理与真实浏览器验收 | 已有摘要/详情和DOM/HTTP，缺完整目录、scratch清理、视觉与可访问性证据。 |
-| LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 本地账号及链式审计已有；OIDC/目录、外部审计锚点、许可证/NOTICE/SBOM/贡献流程仍缺。 |
+| LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 贡献指南、CycloneDX SBOM 与厂商二进制审查已建立。依赖分发结论、项目 LICENSE/NOTICE、外部身份和审计锚点仍待完成。 |
 
 ## 现状证据索引
 

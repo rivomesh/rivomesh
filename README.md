@@ -33,6 +33,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 故障恢复与切换 | [场景手册](docs/zh-CN/reconciliation-workflow.md) | [Recovery runbook](docs/en/reconciliation-workflow.md) |
 | 对账与管理员修复 | [校验](docs/zh-CN/managed-validation.md)、[修复](docs/zh-CN/managed-repair.md) | [Validation](docs/en/managed-validation.md),[repair](docs/en/managed-repair.md) |
 | 目标产品与能力边界 | [平台方案](docs/zh-CN/platform-design.md) | [Platform design](docs/en/platform-design.md) |
+| 贡献与发布包清单 | [发布审查](docs/zh-CN/release-inventory.md) | [Release inventory](docs/en/release-inventory.md) |
 | 当前验证范围 | [单一验证基线](docs/verification/README.md) | [Verification baseline](docs/verification/README.md) |
 
 目标范围包含MySQL/PostgreSQL、openGauss/分布式GaussDB、达梦/金仓/OceanBase/GBase、ClickHouse/Doris/Hive及Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ/Redis Streams/NATS JetStream。**实现和实测范围按产品档案区分；不能把产品名称、JDBC连通或同协议当成完整支持。** PostgreSQL 17 单主源已有实验档案。Oracle 源及完整集群、JDK、TLS 和性能矩阵仍在实现。

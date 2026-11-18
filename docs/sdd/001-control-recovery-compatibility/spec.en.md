@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.25 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.26 · 2026-11-18 · IMPLEMENTING
 
 Implementation:48requirements,22 DONE, 25 PARTIAL and 1 NEW, with 26 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, source range recovery and complete matrices remain tracked.
 
@@ -87,7 +87,7 @@ Implementation:48requirements,22 DONE, 25 PARTIAL and 1 NEW, with 26 open. RC-01
 | LG-07 | P1 / PARTIAL | Large catalogs,transactions and hardware standards | Small benchmark tools exist;large-transaction/catalog/cache/capacity standards remain incomplete. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Supported objects and UNIQUE/GSI conversion exist;full dynamic DDL,complex types and backup/restore profiles remain open. The first release does not retain prerelease-candidate compatibility. |
 | LG-09 | P1 / PARTIAL | Report retention and real-browser acceptance | Summaries/details/DOM/HTTP exist;full catalogs,cleanup,visual/accessibility evidence do not. |
-| LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Local accounts/hash-chained audit exist;external identity/anchors,licenses/NOTICE/SBOM/contribution workflows remain open. |
+| LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Contribution guide, CycloneDX SBOM and packaged vendor inventory are in place. Distribution review, project LICENSE/NOTICE, external identity and audit anchors remain. |
 
 ## Baseline evidence index
 

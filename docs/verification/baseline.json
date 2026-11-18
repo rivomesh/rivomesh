@@ -1206,5 +1206,26 @@
         "status": "PASS"
       }
     ]
+  },
+  "releaseInventory": {
+    "artifactSha256": "5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8",
+    "mavenBomSha256": "8361ded69144d17b670a3695ecee29bd2e303a1d088a3775e813d69bc84aba44",
+    "cycloneDxVersion": "1.6",
+    "mavenComponentCount": 175,
+    "vendoredBinaryMarkers": [
+      {
+        "component": "gsjdbc4:gsjdbc4:1.1",
+        "embeddedClass": "io/github/rivomesh/gaussdb/jdbc/Driver.class"
+      },
+      {
+        "component": "GBase8c vendor JDBC 3.0.0B02",
+        "embeddedClass": "com/gbase8c/Driver.class",
+        "inputJarSha256": "fe115f05124f6b9f37e49c829a0def28f7d09a6d871dd62a0c9f856b0aaa7e91"
+      }
+    ],
+    "embeddedCoordinates": 109,
+    "outsideMavenBom": 6,
+    "missingDeclaredLicenses": 9,
+    "noticeFiles": 9
   }
 }

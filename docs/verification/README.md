@@ -119,3 +119,7 @@ The same Oracle 26ai image also passed the native `--logminer` archive check. Th
 ## DO-03 bilingual recovery runbook
 
 Artifact SHA-256 `f69e54391a22d1ff4564deb2f272a06d4850c5ea7dfe75f8f86a32601c68ee23` covers the Chinese and English Markdown in that order. Both versions cover promotion, missing logs, target SQL and uncertain commit, node and journal outage, browser state, skips, compensation, correction, and cutover. The scope and relative links were checked against the current operator guides.
+
+## LG-10 release inventory
+
+JAR `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` and CycloneDX BOM `8361ded69144d17b670a3695ecee29bd2e303a1d088a3775e813d69bc84aba44` were compared. The inventory records 175 Maven components, 109 embedded coordinates, six without an aggregate coordinate, nine without declared license metadata, two vendor markers, and nine notice/license file hashes. See the [release inventory guide](../en/release-inventory.md).
