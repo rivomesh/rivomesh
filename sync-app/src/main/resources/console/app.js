@@ -164,8 +164,8 @@ let captureRecoveryDialog;
 function closeCaptureRecovery(){
  if(captureRecoveryDialog){captureRecoveryDialog.remove();captureRecoveryDialog=null;}
 }
-Object.assign(messages.zh,{decodeBoundary:'原生 binlog 事务边界',decodeBoundaryScope:'仅核对到提交标记及受影响表，仍需原始事件内容才能审阅跳过。'});
-Object.assign(messages.en,{decodeBoundary:'Native binlog transaction boundary',decodeBoundaryScope:'The commit marker and affected tables are available. Reviewing a skip still requires the original event contents.'});
+Object.assign(messages.zh,{decodeBoundary:'原生 binlog 事务边界',decodeBoundaryScope:'仅核对到提交标记及受影响表，仍需原始事件内容才能审阅跳过。',retainCapture:'留存原始事务',capture_retain:'留存源证据',CAPTURE_EVIDENCE_RETAINED:'已留存原始源事务',MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE:'原始事务内容暂时无法读取。请核对原 binlog 和采集租约。'});
+Object.assign(messages.en,{decodeBoundary:'Native binlog transaction boundary',decodeBoundaryScope:'The commit marker and affected tables are available. Reviewing a skip still requires the original event contents.',retainCapture:'Retain original transaction',capture_retain:'Retain source evidence',CAPTURE_EVIDENCE_RETAINED:'Original source transaction retained',MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE:'The original transaction is unavailable. Check the source binlog and capture lease.'});
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -187,6 +187,19 @@ async function openCaptureRecovery(task){
    evidence.append(text('strong',t('decodeBoundary')),text('p',t('decodeBoundaryScope')),
     text('p',boundary.transactionId),text('p',`${boundary.logFile} · ${boundary.startOffset}–${boundary.endOffset}`),
     text('p',boundary.tables.join(', ')));
+   if(can('TASK_CONFIG')&&task.captureLeaseState!=='CLAIMED'&&Number.isSafeInteger(report.errorGeneration)
+      &&report.errorGeneration>=0&&/^[a-f0-9]{64}$/.test(boundary.boundaryHash||'')){
+    const retain=text('button',t('retainCapture'),'quiet'),request=requestId();
+    retain.onclick=async()=>{
+     retain.disabled=true;
+     try{
+      await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':request},
+       body:JSON.stringify({action:'CAPTURE_RETAIN',expectedRevision:task.revision,errorCount:report.errorGeneration,boundaryHash:boundary.boundaryHash})});
+      closeCaptureRecovery();notify(t('accepted'));await refresh();
+     }catch(error){notify(error.message);retain.disabled=false;}
+    };
+    evidence.append(retain);
+   }
    content.append(evidence);
   }
   content.append(steps);

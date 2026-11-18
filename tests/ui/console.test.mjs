@@ -94,6 +94,27 @@ test('capture recovery shows native header evidence as text and still requires r
  }finally{ui.dom.window.close();}
 });
 
+test('admin explicitly retains current source bytes with a generation-bound durable request',async()=>{
+ const task={id:'headers',revision:'source-revision',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',captureLeaseState:'EXPIRED',operations:[],destinations:[],
+  status:{run_state:'ERROR',error_stage:'SOURCE_DECODE',error_code:'BINLOG_SCHEMA_WIDTH_CHANGED'}};
+ const ui=setup([task]),fallback=ui.w.fetch;
+ ui.w.fetch=async(path,options)=>{
+  if(path!=='/api/tasks/headers/capture-recovery')return fallback(path,options);
+  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],errorGeneration:4,
+   actions:['PRESERVE_SOURCE_LOGS','REPAIR_CAPTURE_CAUSE'],nextTransactionHeaders:{scope:'BINLOG_HEADERS_ONLY',transactionId:'source-gtid',
+    logFile:'mysql-bin.000042',startOffset:'1024',endOffset:'2048',tables:['sales.items'],boundaryHash:'a'.repeat(64)}})};
+ };
+ try{
+  await login(ui);ui.d.querySelector('.pipeline-failure button').click();await flush();
+  const retain=[...ui.d.querySelectorAll('dialog button')].find(button=>button.textContent==='留存原始事务');assert.ok(retain);
+  assert.equal(ui.calls.filter(call=>call.path.endsWith('/actions')).length,0);
+  retain.click();await flush();
+  const sent=ui.calls.find(call=>call.path.endsWith('/actions'));assert.ok(sent.headers['X-Request-ID']);
+  assert.deepEqual(JSON.parse(sent.body),{action:'CAPTURE_RETAIN',expectedRevision:'source-revision',errorCount:4,boundaryHash:'a'.repeat(64)});
+  assert.equal(ui.d.querySelector('dialog.failure-review-dialog'),null);
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery explains a source gap without offering a target skip',async()=>{
  const task={id:'capture',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_CONNECT',error_code:'SOURCE_LOG_GAP'}};

@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 
 /** Checks source admission at a failed capture checkpoint without changing the journal or source. */
 public final class CaptureRecoveryReview {
@@ -20,6 +21,27 @@ public final class CaptureRecoveryReview {
     public static Map<String,Object> inspect(PipelineConfig config)throws Exception{return inspect(config,false,null);}
 
     static Map<String,Object> inspect(PipelineConfig config,boolean verifyContents,Path archiveDirectory)throws Exception{
+        return inspect(config,verifyContents,archiveDirectory,null);
+    }
+
+    public static Map<String,Object> retain(PipelineConfig config,Path archiveDirectory,long errorGeneration,
+                                             String boundaryHash,Callable<Void> authorize)throws Exception{
+        if(errorGeneration<0||boundaryHash==null||!boundaryHash.matches("[0-9a-f]{64}")||authorize==null)
+            throw new IllegalArgumentException("CAPTURE_EVIDENCE_REQUEST_INVALID");
+        return inspect(config,true,archiveDirectory,new Retention(errorGeneration,boundaryHash,authorize));
+    }
+
+    private static final class Retention {
+        final long errorGeneration;
+        final String boundaryHash;
+        final Callable<Void> authorize;
+        Retention(long errorGeneration,String boundaryHash,Callable<Void> authorize){
+            this.errorGeneration=errorGeneration;this.boundaryHash=boundaryHash;this.authorize=authorize;
+        }
+    }
+
+    private static Map<String,Object> inspect(PipelineConfig config,boolean verifyContents,Path archiveDirectory,
+                                              Retention request)throws Exception{
         try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){
             journal.verifyIdentity(config.fingerprint(),config.subscribers());
             Map<String,Object> before=journal.status();
@@ -31,19 +53,32 @@ public final class CaptureRecoveryReview {
                     ||"CLAIMED".equals(before.get("captureLeaseState"))))
                 throw new IllegalStateException("MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE");
             SourcePosition checkpoint=journal.captured();
+            String checkpointHash=checkpoint==null?null:Codec.sha256(Codec.encode(checkpoint));
+            String reference=null;
+            if(request!=null){
+                request.authorize.call();
+                if(checkpointHash==null||!(before.get("errorGeneration") instanceof Number)
+                        ||((Number)before.get("errorGeneration")).longValue()!=request.errorGeneration)
+                    throw new IllegalStateException("SOURCE_REVIEW_STALE");
+                archiveDirectory=MysqlContentArchive.directory(archiveDirectory,true);
+                reference=Codec.sha256(config.fingerprint()+"\n"+before.get("generation")+"\n"+checkpointHash+"\n"+request.errorGeneration+"\n"+request.boundaryHash);
+                Map<String,Object> existing=MysqlContentArchive.existing(archiveDirectory,reference,config.pipelineId,
+                        checkpointHash,request.boundaryHash,request.errorGeneration);
+                if(existing!=null){
+                    requireUnchanged(journal,before,checkpoint);
+                    request.authorize.call();
+                    return existing;
+                }
+            }
             Map<String,Object> nativeEvidence=new LinkedHashMap<>();
             ByteArrayOutputStream retained=archiveDirectory==null?null:new ByteArrayOutputStream();
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":
-                    probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence,verifyContents,retained);
+                    probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence,verifyContents,retained,request==null?null:request.boundaryHash);
 
             if(verifyContents&&!nativeEvidence.containsKey("nextTransactionContents"))
-                throw new IllegalStateException("MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE: "+admission);
-            Map<String,Object> after=journal.status();
-            for(String key:Arrays.asList("generation","epoch","run_state","errorGeneration","errorCode","lastSequence")){
-                if(!Objects.equals(before.get(key),after.get(key)))
-                    throw new IllegalStateException("SOURCE_REVIEW_STALE");
-            }
-            if(!Objects.equals(checkpoint,journal.captured()))throw new IllegalStateException("SOURCE_REVIEW_STALE");
+                throw new IllegalStateException(request==null?"MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE: "+admission:
+                        "SOURCE_REVIEW_STALE".equals(admission)?admission:"MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE");
+            requireUnchanged(journal,before,checkpoint);
 
             Map<String,Object> report=new LinkedHashMap<>();
             report.put("taskId",config.pipelineId);
@@ -52,20 +87,30 @@ public final class CaptureRecoveryReview {
             report.put("phase",phase);
             report.put("failureCode",before.get("errorCode"));
             report.put("lastCapturedSequence",before.get("lastSequence").toString());
-            if(checkpoint!=null)report.put("checkpointHash",Codec.sha256(Codec.encode(checkpoint)));
+            if(checkpointHash!=null)report.put("checkpointHash",checkpointHash);
             report.put("sourceAdmission",admission);
             report.put("affectedSubscriptions",config.subscribers());
             report.put("scope","UNPROVEN_SOURCE_RANGE");
             report.put("actions",actions(admission,phase));
             report.putAll(nativeEvidence);
-            if(archiveDirectory!=null)report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray()));
+            if(archiveDirectory!=null){
+                if(request!=null)request.authorize.call();
+                report.put("retainedEvidence",MysqlContentArchive.retain(archiveDirectory,report,retained.toByteArray(),reference));
+            }
             return report;
         }
     }
 
+    private static void requireUnchanged(JdbcJournal journal,Map<String,Object> before,SourcePosition checkpoint)throws Exception{
+        Map<String,Object> after=journal.status();
+        for(String key:Arrays.asList("generation","epoch","run_state","errorGeneration","errorCode","lastSequence"))
+            if(!Objects.equals(before.get(key),after.get(key)))throw new IllegalStateException("SOURCE_REVIEW_STALE");
+        if(!Objects.equals(checkpoint,journal.captured()))throw new IllegalStateException("SOURCE_REVIEW_STALE");
+    }
+
     private static String probe(PipelineConfig config,String generation,SourcePosition checkpoint,JdbcJournal journal,
                                 String phase,Map<String,Object> nativeEvidence,boolean verifyContents,
-                                ByteArrayOutputStream retained)throws Exception{
+                                ByteArrayOutputStream retained,String expectedBoundary)throws Exception{
         // Read journal dependencies before the source probe so storage errors cannot look like source failures.
         List<SourcePosition> dependencies=journal.dependencies();
         try(SourceAdapter source=PipelineSources.open(config,generation)){
@@ -74,6 +119,8 @@ public final class CaptureRecoveryReview {
                 try{
                     Map<String,Object> boundary=((MysqlCdcSource)source).inspectDecodeBoundary(checkpoint);
                     if(boundary!=null){
+                        if(expectedBoundary!=null&&!expectedBoundary.equals(boundary.get("boundaryHash")))
+                            return "SOURCE_REVIEW_STALE";
                         nativeEvidence.put("nextTransactionHeaders",boundary);
                         if(verifyContents)nativeEvidence.put("nextTransactionContents",((MysqlCdcSource)source).verifyBinlogContents(checkpoint,boundary,retained));
                     }

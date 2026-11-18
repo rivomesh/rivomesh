@@ -9,8 +9,9 @@ public final class Codec {
     private Codec(){}
     public static String encode(Object value){try{return JSON.writeValueAsString(value);}catch(Exception e){throw new IllegalArgumentException("ENCODING_FAILED",e);}}
     public static <T>T decode(String value,Class<T> type){try{return JSON.readValue(value,type);}catch(Exception e){throw new IllegalArgumentException("DECODING_FAILED",e);}}
-    public static String sha256(String value){
-        try{byte[] bytes=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();for(byte b:bytes)out.append(String.format("%02x",b&255));return out.toString();}
+    public static String sha256(String value){return sha256(value.getBytes(StandardCharsets.UTF_8));}
+    public static String sha256(byte[] value){
+        try{byte[] bytes=MessageDigest.getInstance("SHA-256").digest(value);StringBuilder out=new StringBuilder();for(byte b:bytes)out.append(String.format("%02x",b&255));return out.toString();}
         catch(Exception e){throw new IllegalStateException(e);}
     }
 }

@@ -40,6 +40,8 @@ final class TaskRequest {
         if(kind==Kind.CREATE&&(yaml==null||yaml.getBytes(StandardCharsets.UTF_8).length>1024*1024))throw new IllegalArgumentException("CONFIG_REQUIRED");
         if(kind==Kind.CONFIG_PREVIEW||kind==Kind.CONFIG_UPDATE){if(document==null||!document.isObject())throw new IllegalArgumentException("CONFIG_REQUIRED");ConfigurationDocuments.validate(document);}
         if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit);
+        if(captureRetention()&&(errorCount<0||subscriptionId!=null||reference==null||!reference.matches("[0-9a-f]{64}")))
+            throw new IllegalArgumentException("CAPTURE_EVIDENCE_REQUEST_INVALID");
         if(kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS){
             io.github.rivomesh.recovery.FailureEvidence.uuid(reference);
             if(kind==Kind.FAILURE_EVIDENCE_EVENTS&&(!Arrays.asList("RAW","NORMALIZED").contains(action)||limit<1||limit>100||cursor==null||!cursor.matches("0|[1-9][0-9]{0,6}")))throw new IllegalArgumentException("FAILURE_EVIDENCE_PAGE_INVALID");
@@ -64,7 +66,7 @@ final class TaskRequest {
         if(commitRecovery()){if(commit==null)throw new IllegalArgumentException("FAILURE_ACK_REQUEST_INVALID");commit.validate();}else if(commit!=null)throw new IllegalArgumentException("FAILURE_ACK_ACTION_REQUIRED");
         if(recoveryCancel()&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)))
             throw new IllegalArgumentException("RECOVERY_CANCEL_REQUEST_INVALID");
-        if(kind==Kind.ACTION&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(kind==Kind.ACTION&&!captureRetention()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
     boolean skipAction(){return kind==Kind.ACTION&&Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);}
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
@@ -77,6 +79,7 @@ final class TaskRequest {
     static boolean cancellableRecovery(String action){return CompensationRequest.handles(action)||"CORRECTION_EXECUTE".equals(action);}
     boolean skipRecovery(){return recoveryCancel()||correctionRead()||correctionAction()||compensationAction()||kind==Kind.ACTION&&"GAP_VERIFY_CANCEL".equals(action)||gapAction()||kind==Kind.GAP_VERIFICATION||skipAction()||kind==Kind.SKIP_PLAN||kind==Kind.SKIP_PLANS||kind==Kind.GAPS;}
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
+    boolean captureRetention(){return kind==Kind.ACTION&&"CAPTURE_RETAIN".equals(action);}
     boolean failureReview(){return kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}
 }

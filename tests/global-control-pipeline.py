@@ -32,6 +32,7 @@ parser.add_argument('--failure-diagnostics', action='store_true', help='Check ph
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
 parser.add_argument('--task-views', action='store_true', help='Check global task filters and exact per-target backlog during native SQL failure')
+parser.add_argument('--managed-binlog-evidence', action='store_true', help='Retain and replay source evidence through both management entries')
 parser.add_argument('--verify-binlog-contents', action='store_true', help='Verify the digest of native binlog bytes against the fixture file')
 parser.add_argument('--header-boundary', action='store_true', help='Check native same-file GTID boundary after a row decode fault')
 parser.add_argument('--worker-diagnostics', action='store_true',
@@ -48,6 +49,8 @@ parser.add_argument('--test-classes', type=Path, help='Frozen application test c
 args = parser.parse_args()
 if args.task_views and not args.separate_execution:
     parser.error('--task-views requires --separate-execution')
+if args.managed_binlog_evidence and not args.verify_binlog_contents:
+    parser.error('--managed-binlog-evidence requires --verify-binlog-contents')
 if args.verify_binlog_contents and not args.header_boundary:
     parser.error('--verify-binlog-contents requires --header-boundary')
 if args.header_boundary and args.source_diagnostics != 'decode':
@@ -97,7 +100,7 @@ env = dict(os.environ, RM_GC_TOKEN=secrets.token_urlsafe(32), RM_GC_CONTROL=secr
            RM_GC_DATA=secrets.token_urlsafe(24), RM_GC_KEY=base64.b64encode(secrets.token_bytes(32)).decode(), RM_GC_STORE_URL='jdbc:postgresql://postgres:5432/sync_test')
 if (args.compensation or args.correction) and not args.separate_execution:
     parser.error('--compensation and --correction require --separate-execution')
-if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
+if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
     env.update(RM_GC_OPERATOR=secrets.token_urlsafe(32), RM_GC_VIEWER=secrets.token_urlsafe(32))
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 members = ('node-a', 'node-b', 'node-worker') if args.separate_execution else ('node-a', 'node-b')
@@ -126,6 +129,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'workerDiagnostics': args.worker_diagnostics,
             'headerBoundary': args.header_boundary,
             'verifyBinlogContents': args.verify_binlog_contents,
+            'managedBinlogEvidence': args.managed_binlog_evidence,
             'taskViews': args.task_views,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
@@ -169,9 +173,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               'taskKey': '${RM_GC_KEY}', 'driver': 'org.postgresql.Driver',
                               'url': 'jdbc:postgresql://postgres:5432/sync_test', 'namespace': 'global_control',
                               'username': 'postgres', 'password': '${RM_GC_CONTROL}', 'heartbeatMillis': 300, 'leaseMillis': 5000}}
+        if args.managed_binlog_evidence:
+            config['cluster'].update(heartbeatMillis=1000,leaseMillis=15000)
         if args.managed_failure_review or args.compensation or args.correction:
             config['cluster']['recoveryReview'] = True
-        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
+        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
             config['users'] = [{'id': 'review-operator', 'role': 'OPERATOR', 'token': '${RM_GC_OPERATOR}'}, {'id': 'review-viewer', 'role': 'VIEWER', 'token': '${RM_GC_VIEWER}'}]
         if args.managed_commit or args.compensation or args.correction:
             config['cluster']['recoveryCommit'] = True
@@ -186,7 +192,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                           'environment': {'RM_GC_TOKEN': '${RM_GC_TOKEN}', 'RM_GC_CONTROL': '${RM_GC_CONTROL}', 'RM_GC_KEY': '${RM_GC_KEY}', 'RM_GC_STORE_URL': '${RM_GC_STORE_URL}'},
                           'volumes': [str(jar) + ':/app/rivomesh.jar:ro', str(home) + ':/fixture'],
                           'ports': ['127.0.0.1::8080'], 'stop_grace_period': '30s'}
-        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics:
+        if args.managed_failure_review or args.compensation or args.correction or args.worker_diagnostics or args.managed_binlog_evidence:
             services[node]['environment'].update(RM_GC_OPERATOR='${RM_GC_OPERATOR}', RM_GC_VIEWER='${RM_GC_VIEWER}')
         if args.runtime_image:
             volumes[node + '-data'] = {}
@@ -266,15 +272,20 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if body is not None:
             headers.update({'Content-Type': 'application/json', 'X-Request-ID': request or 'global_cdc_' + uuid.uuid4().hex})
         call = urllib.request.Request(bases[node] + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
-        try:
-            response = urllib.request.urlopen(call, timeout=20)
-        except urllib.error.HTTPError as error:
-            response = error
-        with response:
-            value = json.loads(response.read())
-            allowed = expected if isinstance(expected, tuple) else (expected,)
-            assert response.status in allowed, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
-            return value
+        allowed = expected if isinstance(expected, tuple) else (expected,)
+        attempts = 5 if args.managed_binlog_evidence and 503 not in allowed else 1
+        for attempt in range(attempts):
+            try:
+                response = urllib.request.urlopen(call, timeout=20)
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                value = json.loads(response.read())
+                if response.status==503 and value.get('code')=='AUDIT_UNAVAILABLE' and attempt+1<attempts:
+                    time.sleep(1)
+                    continue
+                assert response.status in allowed, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
+                return value
 
     route = '/api/tasks/global_cdc'
 
@@ -632,8 +643,37 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert base64.b64decode(archive['base64Frames'])==raw
             assert archive['review']['checkpointHash']==reviews[0]['checkpointHash']
             assert json.loads(compose(*archive_command).stdout)['retainedEvidence']==retained['retainedEvidence']
-            assert list(evidence.iterdir())==[saved]
+            assert list(evidence.glob('*.json'))==[saved]
             passed('Retaining twice atomically reuses one private checkpoint-bound archive with exact original bytes')
+        if args.managed_binlog_evidence:
+            command_path=route+'/actions'
+            retain_body={'action':'CAPTURE_RETAIN','expectedRevision':task()['revision'],
+                         'errorCount':reviews[0]['errorGeneration'],'boundaryHash':boundary['boundaryHash']}
+            for credential in ('RM_GC_OPERATOR','RM_GC_VIEWER'):
+                assert http('node-b',command_path,retain_body,request='gc_capture_denied_'+uuid.uuid4().hex,
+                            token=env[credential],expected=403)['code']=='FORBIDDEN'
+            bad = 'gc_capture_bad_'+uuid.uuid4().hex
+            http('node-a',command_path,dict(retain_body,boundaryHash='a'*64),request=bad,expected=202)
+            wait(lambda:operation(bad)['status']=='FAILED','stale capture boundary is refused')
+            assert operation(bad)['code']=='SOURCE_REVIEW_STALE'
+            archive_dir=home/owner_node/'controller'/'capture-evidence'/'global_cdc'
+            abandoned=archive_dir/'.capture-31337.tmp'
+            abandoned.write_bytes(b'synthetic interrupted archive')
+            abandoned.chmod(0o600)
+            managed_id='gc_retain_'+uuid.uuid4().hex
+            retain_body['expectedRevision']=task()['revision']
+            response=http('node-b',command_path,retain_body,request=managed_id,expected=202)
+            assert 'base64Frames' not in json.dumps(response)
+            wait(lambda:outcome(managed_id,'node-a'),'durable capture evidence result')
+            receipt=wait(lambda:operation(managed_id).get('result',{}).get('retainedEvidence'),'capture evidence receipt')
+            assert re.fullmatch(r'[a-f0-9]{64}\.json',receipt['file'])
+            assert not abandoned.exists(), 'abandoned private staging file survived publication'
+            managed=archive_dir/receipt['file']
+            managed_bytes=managed.read_bytes()
+            assert hashlib.sha256(managed_bytes).hexdigest()==receipt['archiveSha256']
+            assert base64.b64decode(json.loads(managed_bytes)['base64Frames'])==raw
+            assert task()['status']['capture_gtid']==checkpoint and 'base64Frames' not in json.dumps(operation(managed_id))
+            passed('Only an administrator can retain the reviewed generation and exact original binlog bytes through another management entry')
         if args.header_boundary:
             sql('mysql', 'FLUSH BINARY LOGS')
             status_command='SHOW BINARY LOG STATUS' if manifest['sourceVersion'].startswith('8.4.') else 'SHOW MASTER STATUS'
@@ -651,6 +691,19 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert 'contentSha256' not in refused.stdout
                 assert saved.read_bytes()==content
                 passed('Content proof refuses the purged transaction and retained evidence remains byte-identical')
+            if args.managed_binlog_evidence:
+                terminate_owner()
+                restart_owner()
+                http('node-a',command_path,retain_body,request=managed_id,expected=202)
+                wait(lambda:outcome(managed_id,'node-b'),'original retained receipt after Agent restart')
+                assert operation(managed_id)['result']['retainedEvidence']==receipt
+                repeated='gc_retain_existing_'+uuid.uuid4().hex
+                http('node-b',command_path,dict(retain_body,expectedRevision=task('node-b')['revision']),request=repeated,expected=202)
+                wait(lambda:outcome(repeated,'node-a'),'retention reuses the native archive after source purge')
+                assert wait(lambda:operation(repeated).get('result',{}).get('retainedEvidence'),'persisted receipt replay')==receipt
+                assert managed.read_bytes()==managed_bytes and task()['status']['capture_gtid']==checkpoint
+                passed('After Agent restart and log purge both a durable request replay and a fresh retention request reuse the original archive')
+
 
 
     def run_recovery_cases():

@@ -36,3 +36,18 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
 ```
 
 留存前在支持硬链接的文件系统创建操作员专用的 `0700` 目录。每份 `0600` 归档保存审阅信息、断点哈希和原始二进制事件。重复保留相同证据会复用按 SHA 命名的文件。原事件包含业务行值，应按证据保留和备份策略保护该目录。两个命令均保留原采集断点。[实库验收](../verification/README.md#retained-mysql-binlog-contents)
+
+### 从管理界面留存
+
+管理员审阅原生事务边界后，可以选择 **留存原始事务**。分离模式下，持久命令由任务所属 Agent 执行，关联审阅的边界哈希、配置修订和采集错误代次。操作回执提供文件名和归档 SHA-256。二进制事件保存在 Agent 私有的 `capture-evidence/<taskId>` 目录，每个任务的归档预算为 256 MiB。采集断点和故障状态维持原值。使用同一请求重试时，各管理入口返回同一回执。
+
+使用 API 时，为 `POST /api/tasks/{id}/actions` 提供 `X-Request-ID` 及审阅时的值。
+
+```json
+{
+  "action": "CAPTURE_RETAIN",
+  "expectedRevision": "<任务修订>",
+  "errorCount": 4,
+  "boundaryHash": "<nextTransactionHeaders.boundaryHash>"
+}
+```

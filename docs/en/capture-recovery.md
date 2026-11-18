@@ -36,3 +36,18 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
 ```
 
 For retention, create the operator-owned directory with `0700` on a filesystem supporting hard links. Each `0600` archive contains the context, checkpoint hash and exact binary frames. Retrying the same retained evidence reuses its SHA-addressed file. Include the directory in your protected evidence retention and backup policy because the binary frames contain row values. Both commands preserve the original journal checkpoint. [Native evidence](../verification/README.md#retained-mysql-binlog-contents)
+
+### Retain from a management entry
+
+An administrator can select **Retain original transaction** after reviewing the native boundary. In a separated cluster the durable command goes to the Agent that owns the task. The command binds the reviewed boundary hash, configuration revision and capture error generation. Inspect the command receipt for the archive file and SHA-256. The binary event contents stay in the Agent's private `capture-evidence/<taskId>` directory, with a 256 MiB per-task archive budget. The original capture position and error remain unchanged. A retry with the same request observes the same receipt across management entries.
+
+For API clients use `POST /api/tasks/{id}/actions` with an `X-Request-ID` and the reviewed values.
+
+```json
+{
+  "action": "CAPTURE_RETAIN",
+  "expectedRevision": "<task revision>",
+  "errorCount": 4,
+  "boundaryHash": "<nextTransactionHeaders.boundaryHash>"
+}
+```

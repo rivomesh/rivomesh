@@ -44,8 +44,10 @@
     "Verify application image replacement on live Kubernetes using the original volume.",
     "Continue managed Agent relocation and remaining compatibility profiles."
   ],
-  "currentCandidateArtifact": "b95d036f0d5f633de1a311581f70ad67c126af0b22b72f26240fa5d6934c6d32",
-  "currentCandidateScope": "MySQL 8.4 exact wire frame CRC32 and private durable source evidence archival",
+  "currentCandidateArtifact": "9cc5da0987cc78609988d7a75d5c3de9ae0129e334d16e8abdf1ba31c6373365",
+  "currentCandidateScope": "MySQL 8.4 managed source evidence retained and replayed from two Controllers on the original owning Agent",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": []
+  "newSinceLastReport": [
+    "RC-04 final candidate passed thirteen isolated native MySQL checks, seven Chrome checks and 119 DOM tests. The stalled-capture checkpoint stayed unchanged after managed retention, aborted staging cleanup, Agent restart and a purged source log."
+  ]
 }

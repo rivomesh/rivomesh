@@ -566,8 +566,8 @@
         "en": "Controlled capture/decode gap recovery"
       },
       "gap": {
-        "zh-CN": "MySQL 8.4 已实测事务边界、原始 binlog 字节校验和私有证据归档，原日志清理后归档仍完整。界面持久命令、隔离与批准排除待实现。",
-        "en": "Native MySQL 8.4 passed transaction boundaries, byte-level verification and private source evidence retention through log purge. Managed retention, quarantine and approved exclusion remain."
+        "zh-CN": "MySQL 8.4 的事务边界、原始字节校验及管理端私有证据留存已实测，Agent 重启及源日志清理后可复用归档。源事务隔离、批准排除及补核待实现。",
+        "en": "Live MySQL 8.4 passed transaction boundaries, byte checks and managed private retention with archive reuse after Agent restart and source purge. Quarantine, approved exclusion and reconciliation remain."
       },
       "acceptance": {
         "zh-CN": "单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。",
