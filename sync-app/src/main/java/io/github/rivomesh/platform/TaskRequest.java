@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,RECOVERY_RECEIPT,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_STAGE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,RECOVERY_RECEIPT,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -36,9 +36,10 @@ final class TaskRequest {
     public SharedHandoffEvidence.Scope handoffEvidenceScope;
     public SharedHandoffEvidence.Archive handoffArchive;
     public SharedHandoffEvidence.ReceiptPlan handoffClosedReceipts;
+    public HandoffStaging.Binding handoffStaging;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
-    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.ACTION;}
+    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_STAGE||kind==Kind.ACTION;}
     boolean admin(){return kind!=Kind.LIST&&kind!=Kind.VIEW&&kind!=Kind.VALIDATION_REPORT&&kind!=Kind.VALIDATION_REPORTS&&(kind!=Kind.ACTION||!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action));}
     void validate(){
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
@@ -60,6 +61,12 @@ final class TaskRequest {
         if((handoffRpc()||kind==Kind.HANDOFF_PROBE)&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
                 ||handoffRpc()&&(revision==null||!revision.matches("[0-9a-f-]{36}"))))
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        if((kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_STAGING_RPC)
+                &&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||revision==null||!revision.matches("[0-9a-f-]{36}")
+                ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")
+                ||requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")||requestId.equals(reference))
+                ||handoffStaging!=null&&kind!=Kind.HANDOFF_STAGING_RPC)
+            throw new IllegalArgumentException("HANDOFF_STAGING_REQUEST_INVALID");
         if(handoffCut!=null&&kind!=Kind.HANDOFF_CANDIDATE_PROBE)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         if(handoffEvidenceScope!=null&&kind!=Kind.HANDOFF_EVIDENCE_PROBE&&kind!=Kind.HANDOFF_CUSTODY_PROBE
@@ -119,8 +126,16 @@ final class TaskRequest {
         if(commitRecovery()){if(commit==null)throw new IllegalArgumentException("FAILURE_ACK_REQUEST_INVALID");commit.validate();}else if(commit!=null)throw new IllegalArgumentException("FAILURE_ACK_ACTION_REQUIRED");
         if(recoveryCancel()&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)))
             throw new IllegalArgumentException("RECOVERY_CANCEL_REQUEST_INVALID");
-        if(kind==Kind.ACTION&&!validationMaintenance()&&!captureRetention()&&!excludesCapture()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(kafkaReview())validateKafkaScope(revision,subscriptionId,errorCount);
+        if(kind==Kind.ACTION&&!validationMaintenance()&&!captureRetention()&&!excludesCapture()&&!recoveryCancel()&&!correctionAction()&&!compensationAction()&&!kafkaReview()&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
     }
+    static final String KAFKA_REVIEW_ACTION="REVIEW_KAFKA_RECEIPTS";
+    static void validateKafkaScope(String revision,String subscription,long generation){
+        if(revision==null||!revision.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
+                ||subscription==null||!subscription.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||generation<0)
+            throw new IllegalArgumentException("KAFKA_RECOVERY_REQUEST_INVALID");
+    }
+    boolean kafkaReview(){return kind==Kind.ACTION&&KAFKA_REVIEW_ACTION.equals(action);}
     boolean reviewValidationRetention(){return kind==Kind.ACTION&&ValidationRetention.ACTION.equals(action);}
     boolean archivesValidation(){return kind==Kind.ACTION&&(ValidationArchive.COPY.equals(action)
             ||ValidationArchive.RESTORE.equals(action)||ValidationArchive.RECLAIM.equals(action));}
@@ -129,7 +144,8 @@ final class TaskRequest {
     private boolean targetForCorrectionInvalid(){return subscriptionId==null||!subscriptionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||errorCount<0||revision==null||revision.isEmpty()||revision.length()>128;}
     boolean correctionAction(){return kind==Kind.ACTION&&"CORRECTION_EXECUTE".equals(action);}
     boolean correctionRead(){return kind==Kind.CORRECTION_SCHEMA||kind==Kind.CORRECTION_PREVIEW;}
-    boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE||kind==Kind.HANDOFF_CUSTODY_PROBE;}
+    boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE
+            ||kind==Kind.HANDOFF_CUSTODY_PROBE||kind==Kind.HANDOFF_STAGING_RPC;}
     boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||correctionRead()||handoffRpc();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}
@@ -139,6 +155,6 @@ final class TaskRequest {
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
     boolean excludesCapture(){return kind==Kind.ACTION&&"CAPTURE_EXCLUDE".equals(action);}
     boolean captureRetention(){return kind==Kind.ACTION&&"CAPTURE_RETAIN".equals(action);}
-    boolean failureReview(){return kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
+    boolean failureReview(){return kafkaReview()||kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}
 }

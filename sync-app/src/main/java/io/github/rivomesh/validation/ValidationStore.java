@@ -16,6 +16,8 @@ import java.util.*;
 
 /** Private disk staging. Source scans are sealed before target scans can produce differences. */
 public final class ValidationStore implements AutoCloseable {
+    private static final String STAGED_DATABASE="rows.staged";
+    public static final String STAGED_ROWS_FILE=STAGED_DATABASE+".mv.db";
     private static final String SOURCE="_source";
     private static final Set<Path> LOCAL_WRITERS=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final class Limits {
@@ -181,6 +183,8 @@ public final class ValidationStore implements AutoCloseable {
         }catch(Exception failure){if(channel!=null)try{channel.close();}catch(Exception close){failure.addSuppressed(close);}LOCAL_WRITERS.remove(directory);throw failure;}
         lockChannel=channel;lock=acquired;
         try{
+            if(Files.exists(directory.resolve(STAGED_ROWS_FILE),LinkOption.NOFOLLOW_LINKS))
+                throw fail("VALIDATION_REPORT_CUSTODY_STAGED");
             if(initial==null&&ValidationArchive.restoringRequired(directory,directory.getFileName().toString()))
                 throw fail("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED");
             try(DirectoryStream<Path> staging=Files.newDirectoryStream(directory,"summary-*.tmp")){
@@ -220,12 +224,27 @@ public final class ValidationStore implements AutoCloseable {
         }
     }
     static Manifest archivedManifest(Path directory)throws Exception{
+        return readStoredManifest(directory,"rows");
+    }
+    private static Manifest readStoredManifest(Path directory,String name)throws Exception{
         if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(ch->ch<32))
             throw fail("VALIDATION_PATH_INVALID");
-        String url="jdbc:h2:file:"+directory.resolve("rows")+";IFEXISTS=TRUE;ACCESS_MODE_DATA=r;DB_CLOSE_ON_EXIT=FALSE;TRACE_LEVEL_FILE=0";
+        String url="jdbc:h2:file:"+directory.resolve(name)+";IFEXISTS=TRUE;ACCESS_MODE_DATA=r;DB_CLOSE_ON_EXIT=FALSE;TRACE_LEVEL_FILE=0";
         try(Connection database=JdbcConnections.open("org.h2.Driver",url,"","")){
             return readManifest(database);
         }
+    }
+    /** Verify a custody copy under its report lock, using the sealed manifest and no row projections. */
+    public static void verifyStagedReport(Path directory,String id,String code)throws Exception{
+        Manifest stored=readStoredManifest(directory,STAGED_DATABASE);
+        if(stored.certificate==null||!id.equals(stored.certificate.id)||!stored.sourceComplete
+                ||!"COMPLETE".equals(stored.state)||!Objects.equals(code,stored.code)
+                ||!Arrays.asList("VALIDATION_MATCH","VALIDATION_DIFFERENCES").contains(stored.code))
+            throw fail("VALIDATION_MANIFEST_CORRUPT");
+        Set<String> covered=new TreeSet<>();
+        for(Set<String> ids:stored.targetTables.values())covered.addAll(ids);
+        if(!covered.equals(stored.completedSourceTables)||!Objects.equals(stored.sourceSeal,sourceSeal(stored)))
+            throw fail("VALIDATION_SOURCE_SEAL_MISMATCH");
     }
     private void save()throws Exception{
         String payload=Codec.encode(manifest);try(PreparedStatement p=db.prepareStatement("MERGE INTO rmv_meta(item_key,payload,content_hash) KEY(item_key) VALUES ('manifest',?,?)")){p.setString(1,payload);p.setString(2,Codec.sha256(payload));p.executeUpdate();}db.commit();pending=0;protect();project();
@@ -289,7 +308,8 @@ public final class ValidationStore implements AutoCloseable {
             }}
         }
     }
-    private String sourceSeal(){
+    private String sourceSeal(){return sourceSeal(manifest);}
+    private static String sourceSeal(Manifest manifest){
         PipelineValidationBarrier.Certificate certificate=Codec.decode(Codec.encode(manifest.certificate),PipelineValidationBarrier.Certificate.class);certificate.selectedTargets=new TreeSet<>(certificate.selectedTargets);
         Map<String,Set<String>> targets=new TreeMap<>();for(Map.Entry<String,Set<String>> entry:manifest.targetTables.entrySet())targets.put(entry.getKey(),new TreeSet<>(entry.getValue()));
         return Codec.sha256(Codec.encode(Arrays.asList(certificate,manifest.schemas,manifest.sourceRoots,targets)));

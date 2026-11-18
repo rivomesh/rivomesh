@@ -52,6 +52,12 @@ java -jar rivomesh.jar review-kafka-recovery config.yml kafka 1
 
 核对结果用于审阅前一笔已确认事务的回执。日志暂停后，仍需核实可能在途的 Kafka 生产者。发布持久缺口通知需要独立审批操作及 Broker 围栏。此命令保留原事件、Broker 记录、消费位点和日志确认。可用 `tests/kafka-cluster-run.py --only-recovery-review` 复现实库核对。
 
+在共享管理模式下，给运行同一发行版本的 Controller 和 Agent 启用 `cluster.recoveryReview`。有权管理该任务及所属 Agent 的管理员可暂停整条任务，然后在暂停的 Kafka 目标上点击 **核对 Kafka 回执**。任务历史会显示完成状态，点击 **查看回执** 可查看位点和摘要。请求离开近期列表或 Agent 离线后，仍可 **按请求 ID 查询回执**。
+
+API 调用方以稳定的 `X-Request-ID` 调用 `POST /api/tasks/<task>/actions`，请求体为 `{"action":"REVIEW_KAFKA_RECEIPTS","expectedRevision":"<当前任务修订号>","subscriptionId":"kafka","errorCount":1}`。HTTP 202 表示控制面已接收请求并等待所属 Agent 处理。轮询 `GET /api/tasks/<task>/recovery-receipts/<request>` 获取结果。成功时 `kafkaReview` 包含观测的任务代次、错误代次、事务序号和摘要。`KAFKA_RECOVERY_PUBLICATION_UNCERTAIN` 表示投递状态无法确认，回执不包含已核对的位点。再次核对请使用新请求 ID 和当前修订号。回执记录的是当时的观测，跳过或重放失败事务需要另行审批。
+
+可用 `tests/kafka-cluster-run.py --only-managed-recovery-review` 在四个真实 KRaft Broker 上验证发行包的 HTTP 管理流程。隔离用例使用两个仅监听环回地址的管理入口和共享 H2 控制库，核验跨入口重试、所属节点离线后查询、拒绝确认部分发布，以及目标进度保持原值。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh

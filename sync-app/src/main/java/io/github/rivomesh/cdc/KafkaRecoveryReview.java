@@ -34,6 +34,7 @@ import java.util.concurrent.TimeoutException;
 
 /** Read-only proof of the acknowledged predecessor in a bounded, unchanged Kafka partition view. */
 public final class KafkaRecoveryReview {
+    public static final String VERIFIED="PRECEDING_KAFKA_RECEIPTS_VERIFIED";
     private static final int MAXIMUM_OFFSETS=512;
     private static final Duration NATIVE_LIMIT=Duration.ofSeconds(10);
     private static final Duration CLOSE_LIMIT=Duration.ofMillis(200);
@@ -43,12 +44,41 @@ public final class KafkaRecoveryReview {
     private record Cut(String generation,long epoch,long acknowledged,long failedSequence,String rawHash,
                        String normalizedHash,String transactionId,String transactionHash,String clusterHash){}
     private record Broker(String clusterId,Uuid topicId){}
-    private record Receipt(String namespace,String offset,String payloadSha256){}
+    public record Receipt(String namespace,String offset,String payloadSha256){
+        public Receipt {
+            if(namespace==null||!namespace.matches("[A-Za-z][A-Za-z0-9_]{0,62}")
+                    ||decimal(offset)<0||!FailureEvidence.hash(payloadSha256))
+                throw rejected("KAFKA_RECOVERY_OBSERVATION_INVALID");
+        }
+    }
+    public record Observation(String status,String target,String observedAt,String epoch,String errorGeneration,
+                              String acknowledgedSequence,String failedSequence,String observedTopicIdentitySha256,
+                              List<Receipt> nativeReceipts){
+        public Observation {
+            if(!VERIFIED.equals(status)||target==null||!target.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+                    ||observedAt==null||observedAt.length()>40||decimal(epoch)<0||decimal(errorGeneration)<0
+                    ||decimal(acknowledgedSequence)<1||decimal(failedSequence)<=decimal(acknowledgedSequence)
+                    ||!FailureEvidence.hash(observedTopicIdentitySha256)||nativeReceipts==null
+                    ||nativeReceipts.isEmpty()||nativeReceipts.size()>MAXIMUM_OFFSETS/2)
+                throw rejected("KAFKA_RECOVERY_OBSERVATION_INVALID");
+            Instant.parse(observedAt);
+            nativeReceipts=List.copyOf(nativeReceipts);
+            Set<String> namespaces=new TreeSet<>(),offsets=new TreeSet<>();
+            for(Receipt receipt:nativeReceipts){
+                if(!namespaces.add(receipt.namespace())||!offsets.add(receipt.offset()))
+                    throw rejected("KAFKA_RECOVERY_OBSERVATION_INVALID");
+            }
+        }
+
+        public boolean matches(String targetId,long expectedErrorGeneration){
+            return target.equals(targetId)&&errorGeneration.equals(Long.toString(expectedErrorGeneration));
+        }
+    }
     private record Proof(String topicIdentitySha256,List<Receipt> receipts){}
 
     private KafkaRecoveryReview(){}
 
-    public static Map<String,Object> inspect(PipelineConfig config,String targetId,long expectedErrorGeneration)throws Exception{
+    public static Observation inspect(PipelineConfig config,String targetId,long expectedErrorGeneration)throws Exception{
         PipelineConfig.Target target=config.targets.stream().filter(item->item.id.equals(targetId)).findFirst()
                 .orElseThrow(()->new IllegalArgumentException("KAFKA_RECOVERY_TARGET_UNKNOWN"));
         if(target.product!=TargetProduct.KAFKA)throw new IllegalArgumentException("KAFKA_RECOVERY_TARGET_UNSUPPORTED");
@@ -57,11 +87,16 @@ public final class KafkaRecoveryReview {
             Cut before=cut(journal,targetId,expectedErrorGeneration);
             Proof proof=nativeProof(target,config.pipelineId,before);
             if(!before.equals(cut(journal,targetId,expectedErrorGeneration)))throw rejected("KAFKA_RECOVERY_CUT_CHANGED");
-            return Map.of("status","PRECEDING_KAFKA_RECEIPTS_VERIFIED","target",targetId,"observedAt",Instant.now().toString(),
-                    "epoch",Long.toString(before.epoch()),"errorGeneration",Long.toString(expectedErrorGeneration),
-                    "acknowledgedSequence",Long.toString(before.acknowledged()),"failedSequence",Long.toString(before.failedSequence()),
-                    "observedTopicIdentitySha256",proof.topicIdentitySha256(),"nativeReceipts",proof.receipts());
+            return new Observation(VERIFIED,targetId,Instant.now().toString(),Long.toString(before.epoch()),
+                    Long.toString(expectedErrorGeneration),Long.toString(before.acknowledged()),Long.toString(before.failedSequence()),
+                    proof.topicIdentitySha256(),proof.receipts());
         }
+    }
+
+    private static long decimal(String value){
+        if(value==null||!value.matches("0|[1-9][0-9]{0,18}"))return -1;
+        try{return Long.parseLong(value);}
+        catch(NumberFormatException outOfRange){return -1;}
     }
 
     private static Cut cut(JdbcJournal journal,String target,long errorGeneration)throws Exception{

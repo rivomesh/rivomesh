@@ -320,7 +320,8 @@ final class SharedHandoffEvidence {
         String prefix=capture?"handoff-capture-":"handoff-";
         return root.resolve(prefix+Codec.sha256(Codec.encode(List.of(scope.cluster,scope.task,scope.originalDirectory)))+".zip");
     }
-    static Path stagingSource(Path configured,Scope scope)throws IOException{
+    static Path stagingSource(Path configured,Scope scope,Archive proof)throws IOException{
+        if(proof.rawCaptures()>0||proof.closedReceipts()==0)throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         Path file=archive(privateRoot(configured),scope,false);
         if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_ARCHIVE_MISSING");
         return file;

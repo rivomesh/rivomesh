@@ -24,6 +24,7 @@ final class ManagedHandoff {
                                Map<String,Object> sharedRawCaptureCustody){}
     record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
                       JournalWriterAssignment.ExpectedCut cut){}
+    record StageRoute(HandoffStaging.Binding binding,AgentDirectory.Binding candidate){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
                               Agent original,Agent candidate,int taskSlots,int workerSlots,long assigned,
                               String actor,String actorRevision,long assessedAt,OriginalCut originalCut,List<String> blockers,
@@ -206,6 +207,36 @@ final class ManagedHandoff {
             auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARED");
             return HandoffPreparations.summary(plan);
         });
+    }
+
+    StageRoute stageRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,TaskRequest request)throws Exception{
+        if(!actor.administers())throw new SecurityException("FORBIDDEN");
+        HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,db.now(c));
+        if(plan==null||!"PREPARED".equals(plan.phase())||!plan.id().equals(request.reference))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        requirePlanGrants(actor,task,plan);
+        HandoffPreparations.Evidence evidence=plan.evidence();
+        if(!evidence.revision().equals(request.revision)||!task.revision.equals(request.revision)
+                ||!Objects.equals(task.activeConfigurationVersion,evidence.configuration())
+                ||!evidence.proof().equals(request.identityHash))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        Assessment assessment=read(c,task.id);
+        if(assessment==null||!evidence.assessment().equals(assessment.request)||assessment.probe==null
+                ||!evidence.proof().equals(AuditStore.hash(Model.JSON.writeValueAsString(assessment)))
+                ||stale(c,task,actor,assessment))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        Map<String,Object> custody=assessment.probe.sharedReportCustody;
+        SharedHandoffEvidence.Archive archive=custody==null?null:
+                Model.JSON.convertValue(custody.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(archive==null||!"VERIFIED".equals(custody.get("state"))||!evidence.custody().equals(archive.sha256()))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        AgentDirectory.Binding candidate=agents.owner(c,evidence.candidate().node(),evidence.candidate().directory());
+        if(!"HEALTHY".equals(candidate.state)||candidate.epoch!=evidence.candidate().epoch()
+                ||!candidate.incarnation.equals(evidence.candidate().incarnation()))
+            throw new TaskService.Conflict("HANDOFF_AGENT_CHANGED");
+        SharedHandoffEvidence.Scope scope=new SharedHandoffEvidence.Scope(cluster,task.id,evidence.assessment(),
+                evidence.revision(),evidence.configuration(),evidence.original().directory(),evidence.candidate().directory());
+        return new StageRoute(new HandoffStaging.Binding(plan.id(),evidence.proof(),evidence.candidate(),scope,archive),candidate);
     }
 
     Map<String,Object> latestPreparation(String id,AccessControl.Principal supplied)throws Exception{

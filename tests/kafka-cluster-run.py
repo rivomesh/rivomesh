@@ -118,7 +118,9 @@ def main():
     parser.add_argument('--artifact',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--java-home',type=Path,default=os.environ.get('JAVA_HOME'))
-    parser.add_argument('--only-recovery-review',action='store_true')
+    recovery = parser.add_mutually_exclusive_group()
+    recovery.add_argument('--only-recovery-review',action='store_true')
+    recovery.add_argument('--only-managed-recovery-review',action='store_true')
     args = parser.parse_args()
     artifact,output = args.artifact.resolve(),args.output.resolve()
     for path in (artifact,output):
@@ -167,14 +169,20 @@ def main():
             report['javaVersion'] = next(line.strip() for line in version.stderr.splitlines()
                                          if line.strip().startswith('openjdk version '))
             assert report['javaVersion'].startswith('openjdk version "21.')
-            if args.only_recovery_review:
-                review = phase('recovery-review',set(BROKERS))
+            if args.only_recovery_review or args.only_managed_recovery_review:
+                review = phase('managed-recovery-review' if args.only_managed_recovery_review else 'recovery-review',
+                               set(BROKERS))
                 assert review['review']['status']=='PRECEDING_KAFKA_RECEIPTS_VERIFIED'
                 assert review['review']['acknowledgedSequence']=='1' and review['review']['failedSequence']=='2'
                 assert len(review['review']['nativeReceipts'])==2
                 assert review['brokerEndBefore']==review['brokerEndAfterReview']
                 assert review['consumerOffsetBefore']==review['consumerOffsetAfterReview']
-                passed('The read-only command verifies both preceding native COMMIT receipts with no offset or checkpoint mutation')
+                if args.only_managed_recovery_review:
+                    assert review['managedOwner']=='owner' and review['managedActor']=='legacy-admin'
+                    assert review['managedReplayedAcrossEntries'] and review['managedHistoricalOwnerOffline']
+                    passed('Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup')
+                else:
+                    passed('The read-only command verifies both preceding native COMMIT receipts with no offset or checkpoint mutation')
                 assert review['partialFailureCode']=='KAFKA_RECOVERY_PUBLICATION_UNCERTAIN'
                 assert review['journalAcknowledged']==review['publicationAcknowledged']==1
                 assert review['peerAcknowledged']==2 and review['peerEndBefore']==review['peerEndAfter']

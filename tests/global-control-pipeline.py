@@ -53,6 +53,8 @@ parser.add_argument('--handoff-preparation', action='store_true',
                     help='Reserve the candidate and verify durable review release without changing data authority')
 parser.add_argument('--handoff-managed-writer', action='store_true',
                     help='Enroll an Agent writer and verify the same PostgreSQL connection can lock the original cut')
+parser.add_argument('--handoff-staging', action='store_true',
+                    help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-preparation-browser', type=Path,
                     help='Exercise preparation and release through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
@@ -143,6 +145,8 @@ if args.handoff_preparation and not args.handoff_closed_receipts:
     parser.error('--handoff-preparation requires --handoff-closed-receipts')
 if args.handoff_managed_writer and (not args.handoff_preparation or args.control_product!='POSTGRESQL' or args.runtime_image):
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
+if args.handoff_staging and not args.handoff_preparation:
+    parser.error('--handoff-staging requires --handoff-preparation')
 if args.handoff_preparation_browser and (not args.handoff_closed_receipts or args.handoff_preparation
         or not os.access(args.handoff_preparation_browser.resolve(), os.X_OK)):
     parser.error('--handoff-preparation-browser requires --handoff-closed-receipts and cannot share --handoff-preparation')
@@ -266,6 +270,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
             'handoffManagedWriter': args.handoff_managed_writer,
+            'handoffStaging': args.handoff_staging,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
@@ -2427,6 +2432,47 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert http('node-a','/api/tasks',{'config':other,'ownerNodeId':candidate},expected=409)['code']=='AGENT_HANDOFF_CAPACITY_RESERVED'
                             assert http('node-b','/api/tasks',{'config':other,'placement':'AUTO'},expected=409)['code']=='AGENT_PLACEMENT_UNAVAILABLE'
                             passed('A replay-safe stopped-cut reservation blocks new commands and competing explicit or automatic Agent assignment')
+                            if args.handoff_staging:
+                                stage_input={'expectedPreparation':preparation_id,'expectedRevision':saved[0]['taskRevision'],
+                                             'expectedEvidenceSha256':saved[0]['evidenceSha256']}
+                                stage_path=preparation+'/stage'
+                                stage_request='gc_stage_'+uuid.uuid4().hex
+                                http('node-b',stage_path,stage_input,request=stage_request,expected=403,token=env['RM_GC_VIEWER'])
+                                assert http('node-b',stage_path,dict(stage_input,expectedEvidenceSha256='0'*64),
+                                            request=stage_request,expected=409)['code']=='HANDOFF_PREPARATION_EVIDENCE_CHANGED'
+                                staged=http('node-b',stage_path,stage_input,request=stage_request)
+                                assert staged['state']=='STAGED' and staged['candidateNodeId']==candidate
+                                assert staged['preparationId']==preparation_id and not staged['executionAuthorized']
+                                assert staged['archiveSha256']==custody['archive']['sha256'] and staged['reports']==1
+                                assert staged['closedReceipts']==len(closed)
+                                candidate_data=home/candidate/'controller'
+                                destination,=[folder for folder in (candidate_data/'handoff-staging').iterdir() if folder.is_dir()]
+                                staged_report=destination/'reports'/report_id
+                                staged_names={'rows.mv.db':'rows.staged.mv.db','summary.json':'summary.staged.json'}
+                                assert all((staged_report/staged_names[name]).read_bytes()==content for name,content in saved_bytes.items())
+                                assert {file.name for file in staged_report.iterdir()}=={'rows.staged.mv.db','summary.staged.json','validation.lock'}
+                                assert json.loads((destination/'closed-receipts.json').read_text())==closed
+                                assert (destination/'evidence.seal').read_text().startswith('v1.')
+                                assert not (candidate_data/'validations'/'global_cdc').exists()
+                                assert 'global_cdc' not in json.loads((candidate_data/'controller.json').read_text())['tasks']
+                                assert data_cut()==original_cut and task()['ownerNodeId']==owner_node
+                                passed('Prepared candidate privately stages exact report and receipt bytes with live ownership, checkpoints and registry untouched')
+                                with open(home/'staging-cli.json','x',opener=lambda path,flags:os.open(path,flags,0o600)) as config_file:
+                                    json.dump(document,config_file)
+                                report_root='/fixture/'+(destination/'reports').relative_to(home).as_posix()
+                                cli=compose('exec','-T',candidate,'java',*launch,'validation-report',
+                                            '/fixture/staging-cli.json',report_root,report_id,check=False)
+                                assert cli.returncode!=0 and 'The validation workspace cannot complete this operation.' in cli.stderr
+                                assert {file.name for file in staged_report.iterdir()}=={'rows.staged.mv.db','summary.staged.json','validation.lock'}
+                                passed('The ordinary validation CLI refuses the candidate custody directory without creating any live report files')
+                                parked=archive.with_name('staging-replay-archive.held')
+                                archive.rename(parked)
+                                try:
+                                    assert http('node-a',stage_path,stage_input,request=stage_request)==staged
+                                finally:
+                                    parked.rename(archive)
+                                assert closed[0]['signature'] not in json.dumps(staged)
+                                passed('The other Controller revalidates the same authenticated staged bytes without re-reading a missing shared file')
                             compose('kill','-s','SIGKILL','node-b')
                             wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                             " AND node_id='node-b' AND lease_until>"+clock)=='0','preparation Controller lease expired')
@@ -2439,6 +2485,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             released=http('node-a',preparation+'/release',release,request=release_id)
                             assert released==http('node-b',preparation+'/release',release,request=release_id)
                             assert released['state']=='RELEASED' and released['reservedTaskSlots']==released['reservedWorkerSlots']==0
+                            if args.handoff_staging:
+                                assert http('node-b',stage_path,stage_input,request=stage_request,expected=409)['code']=='HANDOFF_PREPARATION_CHANGED'
                             stopped_after_release,_=action('STOP',node='node-b')
                             assert operation(stopped_after_release)['status']=='SUCCEEDED'
                             assert released==http('node-a',preparation,prepared_input,request=preparation_id)

@@ -1,5 +1,7 @@
 package io.github.rivomesh.acceptance;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.PipelineControls;
 import io.github.rivomesh.SyncFailure;
@@ -18,6 +20,10 @@ import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.SubscriberFailure;
 import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.TargetProduct;
+import io.github.rivomesh.platform.ClusterConfig;
+import io.github.rivomesh.platform.ConsoleServer;
+import io.github.rivomesh.platform.PlatformConfig;
+import io.github.rivomesh.platform.TaskService;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -28,6 +34,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RetriableException;
 
 import java.io.FileOutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,6 +74,10 @@ public final class ReplicatedKafkaAcceptance {
     private static final int MAX_MESSAGE_BYTES = 65536;
     private static final Duration API_TIMEOUT = Duration.ofSeconds(15);
     private static final TableSchema TABLE = table();
+    private static final String TASK_ROUTE = "/api/tasks/" + PIPELINE;
+    private static final String RECEIPT_ROUTE = TASK_ROUTE + "/recovery-receipts/";
+    private static final String REVIEW_ACTION = "REVIEW_KAFKA_RECEIPTS";
+    private static final String FIXTURE_ADMIN = "fixture-admin-only-for-loopback-kafka-test";
 
     private record State(String clusterId, String topicId, int leader, Set<Integer> isr,
                          int metadataLeader, long metadataHighWatermark) {}
@@ -78,11 +92,12 @@ public final class ReplicatedKafkaAcceptance {
         Set<Integer> expectedIsr = PLACEMENT.stream().filter(active::contains).collect(Collectors.toSet());
         Path home = Path.of(args[2]);
         Map<String, Object> report = new LinkedHashMap<>();
+        boolean review = Set.of("recovery-review","managed-recovery-review").contains(phase);
 
         try (Admin admin = Admin.create(client())) {
             await(() -> ids(get(admin.describeCluster().nodes())), active::equals);
-            if ("initial".equals(phase) || "recovery-review".equals(phase)) createTopic(admin, TOPIC, MAX_MESSAGE_BYTES);
-            if ("recovery-review".equals(phase)) createTopic(admin, PEER_TOPIC, 2 * MAX_MESSAGE_BYTES);
+            if ("initial".equals(phase) || review) createTopic(admin, TOPIC, MAX_MESSAGE_BYTES);
+            if (review) createTopic(admin, PEER_TOPIC, 2 * MAX_MESSAGE_BYTES);
             State state = await(() -> state(admin), value -> value.isr.equals(expectedIsr)
                     && active.contains(value.leader) && value.metadataLeader <= 3
                     && active.contains(value.metadataLeader));
@@ -102,10 +117,10 @@ public final class ReplicatedKafkaAcceptance {
             case "elected" -> publish(home, phase, 2, report);
             case "below-isr", "restored" -> publish(home, phase, 3, report);
             case "offsets" -> { }
-            case "recovery-review" -> reviewPredecessor(home, report);
+            case "recovery-review", "managed-recovery-review" -> reviewPredecessor(home, report,"managed-recovery-review".equals(phase));
             default -> throw new IllegalArgumentException("Unknown fixture phase");
         }
-        if (!"below-isr".equals(phase) && !"recovery-review".equals(phase)) consume(home, phase, report);
+        if (!"below-isr".equals(phase) && !review) consume(home, phase, report);
         System.out.println(Codec.encode(report));
     }
 
@@ -301,13 +316,94 @@ public final class ReplicatedKafkaAcceptance {
         } finally { if (cli.isAlive()) cli.destroyForcibly(); }
     }
 
-    private static void reviewPredecessor(Path home, Map<String,Object> report) throws Exception {
+    private static PlatformConfig management(Path home,String node){
+        PlatformConfig config=new PlatformConfig();
+        config.port=0;config.pollMillis=100;config.authToken=FIXTURE_ADMIN;
+        config.tasksDirectory=home.resolve(node).resolve("tasks").toString();
+        config.dataDirectory=home.resolve(node).resolve("data").toString();
+        ClusterConfig cluster=new ClusterConfig();
+        cluster.id="kafka-native-commands";cluster.nodeId=node;cluster.heartbeatMillis=250;cluster.leaseMillis=5000;
+        cluster.driver="org.h2.Driver";cluster.url="jdbc:h2:mem:kafka-native-command;DB_CLOSE_DELAY=-1";
+        cluster.username="sa";cluster.password="";
+        cluster.sharedAccess=true;cluster.sharedTasks=true;cluster.recoveryReview=true;
+        cluster.taskKey=Base64.getEncoder().encodeToString(new byte[32]);
+        config.cluster=cluster;
+        return config;
+    }
+
+    private static final class ManagedReview {
+        private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        private final ConsoleServer entry,owner;
+
+        ManagedReview(ConsoleServer entry,ConsoleServer owner){this.entry=entry;this.owner=owner;}
+
+        JsonNode request(ConsoleServer server,String route,String id,JsonNode data)throws Exception{
+            HttpRequest.Builder request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+server.port()+route))
+                    .timeout(Duration.ofSeconds(5)).header("Authorization","Bearer "+FIXTURE_ADMIN);
+            if(data!=null)request.header("X-Request-ID",id).header("Content-Type","application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(data.toString()));
+            HttpResponse<String> reply=http.send(request.build(),HttpResponse.BodyHandlers.ofString());
+            require(reply.statusCode()==(data==null?200:202),"Managed HTTP refused "+route+" "+reply.statusCode()+": "+reply.body());
+            return Codec.JSON.readTree(reply.body());
+        }
+
+        JsonNode task()throws Exception{return request(entry,TASK_ROUTE,null,null);}
+
+        JsonNode awaitOperation(String id)throws Exception{
+            return await(this::task,task-> {
+                for(JsonNode operation:task.path("operations"))if(id.equals(operation.path("id").asText())
+                        &&Set.of("SUCCEEDED","REJECTED","FAILED").contains(operation.path("status").asText()))return true;
+                return false;
+            });
+        }
+
+        void create(PipelineConfig config)throws Exception{
+            ObjectNode document=Codec.JSON.valueToTree(config);
+            ((ObjectNode)document.get("journal")).remove("path");
+            ObjectNode create=Codec.JSON.createObjectNode().put("ownerNodeId","owner");
+            create.set("config",document);
+            String id="managed_create_kafka";
+            request(entry,"/api/tasks",id,create);
+            JsonNode task=awaitOperation(id);
+            require("owner".equals(task.path("ownerNodeId").asText())&&!task.path("configurationPending").asBoolean(true),
+                    "Managed Kafka configuration did not reach the assigned owner");
+        }
+
+        ObjectNode action(String action)throws Exception{
+            return Codec.JSON.createObjectNode().put("action",action).put("expectedRevision",task().path("revision").asText());
+        }
+
+        void pause()throws Exception{
+            String id="managed_pause_kafka";
+            request(entry,TASK_ROUTE+"/actions",id,action("PAUSE"));
+            awaitOperation(id);
+            await(this::task,task->"PAUSED".equals(task.path("desired").asText())
+                    &&"PAUSED".equals(task.path("status").path("run_state").asText()));
+        }
+
+        JsonNode review(long generation,String id,boolean replay)throws Exception{
+            ObjectNode body=action(REVIEW_ACTION).put("subscriptionId",SUBSCRIPTION).put("errorCount",generation);
+            request(entry,TASK_ROUTE+"/actions",id,body);
+            JsonNode result=await(()->request(entry,RECEIPT_ROUTE+id,null,null),
+                    receipt->Set.of("SUCCEEDED","FAILED","REJECTED").contains(receipt.path("status").asText()));
+            require("owner".equals(result.path("ownerNodeId").asText())&&"legacy-admin".equals(result.path("actorId").asText())
+                    &&SUBSCRIPTION.equals(result.path("subscriptionId").asText()),"Managed receipt lost its task, actor or owner binding");
+            if(replay){
+                request(owner,TASK_ROUTE+"/actions",id,body);
+                require(result.equals(request(owner,RECEIPT_ROUTE+id,null,null)),
+                        "Identical replay through the second entry changed the historical receipt");
+            }
+            return result;
+        }
+    }
+
+    private static void reviewPredecessor(Path home, Map<String,Object> report,boolean managed) throws Exception {
         PipelineConfig config = new PipelineConfig();
         config.pipelineId = PIPELINE;
         config.source.username = "fixture";
         config.source.clusterId = "fixture-source";
         config.databases = List.of("sales", "inventory");
-        config.journal.path = home.resolve("review-journal").toString();
+        config.journal.path = home.resolve(managed?"owner/data/journals/"+PIPELINE:"review-journal").toString();
         PipelineConfig.Target target = configuredTarget();
         target.mappings.put("inventory", "catalog");
         config.targets.add(target);
@@ -318,6 +414,28 @@ public final class ReplicatedKafkaAcceptance {
         config.validate();config.prepareLocalDirectory();
         Path configuration = home.resolve("review.json");
         Files.writeString(configuration, Codec.encode(config));
+        if(managed){
+            PlatformConfig entryConfig=management(home,"entry"),ownerConfig=management(home,"owner");
+            try(TaskService entryTasks=new TaskService(entryConfig);TaskService ownerTasks=new TaskService(ownerConfig);
+                ConsoleServer entry=new ConsoleServer(entryConfig,entryTasks);ConsoleServer owner=new ConsoleServer(ownerConfig,ownerTasks)){
+                entry.start();owner.start();
+                ManagedReview management=new ManagedReview(entry,owner);
+                management.create(config);
+                String receiptId="managed_verified_kafka";
+                reviewPredecessor(home,configuration,config,management,receiptId,report);
+                owner.close();
+                ownerTasks.close();
+                JsonNode historical=management.request(entry,RECEIPT_ROUTE+receiptId,null,null);
+                require(historical.path("kafkaReview").equals(report.get("review")),
+                        "Historical native proof disappeared when the execution owner went offline");
+                report.put("managedHistoricalOwnerOffline",true);
+            }
+        }else reviewPredecessor(home,configuration,config,null,null,report);
+    }
+
+    private static void reviewPredecessor(Path home,Path configuration,PipelineConfig config,ManagedReview managed,
+                                          String receiptId,Map<String,Object> report)throws Exception{
+        PipelineConfig.Target target=config.targets.getFirst(),peer=config.targets.get(1);
         try (JdbcJournal journal = new JdbcJournal(config.journalSettings())) {
             journal.initialize(config.fingerprint(), GENERATION, config.subscribers());
             Journal.Lease lease = journal.claim("fixture-review", 120000);
@@ -363,9 +481,17 @@ public final class ReplicatedKafkaAcceptance {
                         "Healthy peer lost the original failed transaction");
             }
             long errorGeneration = journal.subscriptions().getFirst().errorGeneration;
-            require(reviewCommand(home,configuration,errorGeneration).body().contains("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED"),
-                    "Running pipeline incorrectly admitted");
-            PipelineControls.pause(config);
+            if(managed==null){
+                require(reviewCommand(home,configuration,errorGeneration).body().contains("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED"),
+                        "Running pipeline incorrectly admitted");
+                PipelineControls.pause(config);
+            }else {
+                JsonNode refused=managed.review(errorGeneration,"managed_refused_running",false);
+                require("REJECTED".equals(refused.path("status").asText())
+                        &&"KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED".equals(refused.path("code").asText())
+                        &&!refused.has("kafkaReview"),"Unpaused managed request produced a verified receipt");
+                managed.pause();
+            }
             Journal.FailureReview before=journal.inspectFailure(SUBSCRIPTION,errorGeneration,4*1024*1024);
             require(Codec.sha256(Codec.encode(failed)).equals(before.rawHash),"Original failed payload missing");
             Properties properties=client();
@@ -383,9 +509,22 @@ public final class ReplicatedKafkaAcceptance {
                 consumer.commitSync(Map.of(PARTITION,new OffsetAndMetadata(1)),API_TIMEOUT);
                 report.put("brokerEndBefore",brokerEnd);
                 report.put("consumerOffsetBefore",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());
-                Cli verified=reviewCommand(home,configuration,errorGeneration);
-                require(verified.status()==0,"Native predecessor review was rejected: "+verified.body());
-                var proof=Codec.JSON.readTree(verified.body());
+                JsonNode proof;
+                if(managed==null){
+                    Cli verified=reviewCommand(home,configuration,errorGeneration);
+                    require(verified.status()==0,"Native predecessor review was rejected: "+verified.body());
+                    proof=Codec.JSON.readTree(verified.body());
+                    Cli replay=reviewCommand(home,configuration,errorGeneration);
+                    require(replay.status()==0&&proof.path("nativeReceipts").equals(Codec.JSON.readTree(replay.body()).path("nativeReceipts")),
+                            "Repeated review changed the native receipt evidence");
+                }else{
+                    JsonNode verified=managed.review(errorGeneration,receiptId,true);
+                    require("SUCCEEDED".equals(verified.path("status").asText()),"Managed native predecessor review rejected: "+verified.path("code").asText());
+                    proof=verified.path("kafkaReview");
+                    report.put("managedActor",verified.path("actorId").asText());
+                    report.put("managedOwner",verified.path("ownerNodeId").asText());
+                    report.put("managedReplayedAcrossEntries",true);
+                }
                 require("PRECEDING_KAFKA_RECEIPTS_VERIFIED".equals(proof.path("status").asText()),"Wrong proof outcome");
                 for(var receipt:proof.path("nativeReceipts")){
                     Delivery nativeRecord=records.get(Integer.parseInt(receipt.path("offset").asText()));
@@ -394,9 +533,6 @@ public final class ReplicatedKafkaAcceptance {
                             "Native predecessor receipt did not return its exact offset and bytes digest");
                 }
                 report.put("review",proof);
-                Cli replay=reviewCommand(home,configuration,errorGeneration);
-                require(replay.status()==0&&proof.path("nativeReceipts").equals(Codec.JSON.readTree(replay.body()).path("nativeReceipts")),
-                        "Repeated review changed the native receipt evidence");
                 report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));
                 report.put("consumerOffsetAfterReview",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());
                 require(records.equals(read(consumer,0,brokerEnd)),"Review altered native data");
@@ -410,8 +546,15 @@ public final class ReplicatedKafkaAcceptance {
                 try (ConfirmedPublisher publisher=MessagePublishers.open(target,MessagePublishers.binding(PIPELINE,SUBSCRIPTION,GENERATION))) {
                     publisher.require(Set.of(message.destination));publisher.publish(List.of(message));
                 }
-                Cli partial=reviewCommand(home,configuration,errorGeneration);
-                require(partial.status()!=0&&partial.body().contains("KAFKA_RECOVERY_PUBLICATION_UNCERTAIN"),"Partial native publication was not refused");
+                if(managed==null){
+                    Cli partial=reviewCommand(home,configuration,errorGeneration);
+                    require(partial.status()!=0&&partial.body().contains("KAFKA_RECOVERY_PUBLICATION_UNCERTAIN"),"Partial native publication was not refused");
+                }else{
+                    JsonNode partial=managed.review(errorGeneration,"managed_partial_kafka",false);
+                    require("FAILED".equals(partial.path("status").asText())
+                            &&"KAFKA_RECOVERY_PUBLICATION_UNCERTAIN".equals(partial.path("code").asText())
+                            &&!partial.has("kafkaReview"),"Managed review verified a partial publication");
+                }
                 require(consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION)==brokerEnd+1
                         &&consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset()==1,"Review mutated broker offsets");
                 report.put("peerEndAfter",consumer.endOffsets(Set.of(peerPartition),API_TIMEOUT).get(peerPartition));

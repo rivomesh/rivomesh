@@ -469,3 +469,11 @@ Artifact `16ebaaea67f73bfb89f1e57921751d8c6ca6d679f9bfdf8d3c8046f0affe5869` pass
 ### Internal atomic writer and placement transfer on shared PostgreSQL
 
 The scoped PostgreSQL 17.12 native test passed five checks with synthetic signed admission. A live old lease refused the transition. An induced failure after the joined writes rolled back writer history, epoch, task configuration, owner and preparation. Commit advanced the writer epoch once across both stores. The old signed configuration was visible only to the original Agent directory. The old assignment failed to reacquire its lease and the successor claimed a newer epoch. The integrated application `902fe9ba792da8073d83a6c7966940597cb1d74305cc57ce20d2a56b4bd81ffa` passed 61 Java tests. The native profile exercises the shared storage transaction. Real candidate configuration installation and public transition have separate gates. [Manifests](baseline.json)
+
+### Candidate private report and receipt staging
+
+Artifact `58298164f4ab3a05ad8fc7e54161a3e0541703f073b8cf9fa331fc82bd18d186` passed 19 native tests and 30 focused Java. The prepared Agent staged exact report and receipt bytes under private names. The existing validation CLI refused the staging directory without creating an ordinary report, and the other Controller revalidated the same stage while the shared archive was unavailable. Restart, release and missing original receipt were checked. Original ownership, registry and source and target cuts stayed stable. [Agent preparation operations](../en/global-control.md) · [Manifests](baseline.json)
+
+### Two-entry Kafka native receipt review
+
+Artifact `6bbdfed85c59d6b4b142144f397df163693e56fdb15ed44518cd9a674ab75d1a` passed two native Kafka KRaft cases and 42 focused Java. The authenticated management action stores a reviewed receipt. The second entry replayed the same operation and could query the protected result after the Agent went offline. Native broker offsets and both subscription acknowledgements stayed stable. A later partial BEGIN refused proof. The combined package `d7a0775b9220ea26d18abe76e697a5e97dc9e83f9c97c740082d40c0e1a837b3` passed artifact checks, 72 focused Java cases and 141 DOM tests. Its optional PostgreSQL-native contract was run independently. [Kafka operations](../en/messaging-v3.md) · [Manifests](baseline.json)

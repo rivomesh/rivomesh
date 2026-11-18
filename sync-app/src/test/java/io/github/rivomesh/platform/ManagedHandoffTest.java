@@ -331,6 +331,37 @@ class ManagedHandoffTest {
         assertEquals(released,a.invoke(prepare,fixture.admin));
     }
 
+    @Test void candidateStagingRequiresAnActiveExactPreparationAtAdmissionAndDispatch()throws Exception{
+        TaskRequest preparation=prepare("stage_prepared_fixture",verifiedAssessment("stage_assessment_fixture",fixture.admin));
+        TaskRequest staging=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,"orders");
+        staging.requestId="stage_candidate_fixture";staging.reference=preparation.requestId;staging.revision=revision;
+        staging.identityHash=preparation.identityHash;
+        conflict("HANDOFF_PREPARATION_CHANGED",()->aQueries.submitHandoffStaging(staging,fixture.admin));
+        Map<String,Object> active=a.invoke(preparation,fixture.admin);
+        assertEquals("PREPARED",active.get("state"));
+        String proof=staging.identityHash;staging.identityHash="0".repeat(64);
+        conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED",()->aQueries.submitHandoffStaging(staging,fixture.admin));
+        staging.identityHash=proof;
+        String query=aQueries.submitHandoffStaging(staging,fixture.admin);
+        assertFalse(aQueries.pending(aLease,fixture.a.get("orders",fixture.admin).directory,10).contains(query));
+        assertTrue(bQueries.pending(bLease,candidateDirectory,10).contains(query));
+        bQueries.serve(query,bLease,candidateDirectory,(request,actor)->{
+            assertEquals(TaskRequest.Kind.HANDOFF_STAGING_RPC,request.kind);
+            assertEquals(preparation.requestId,request.handoffStaging.preparation());
+            assertEquals(proof,request.handoffStaging.evidence());
+            assertEquals(candidateDirectory,request.handoffStaging.candidate().directory());
+            assertEquals(active.get("custodySha256"),request.handoffStaging.archive().sha256());
+            return Map.of("state","STAGED","executionAuthorized",false);
+        });
+        assertEquals(Map.of("state","STAGED","executionAuthorized",false),aQueries.await(query,fixture.admin));
+        assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
+        staging.requestId="stage_after_release_fixture";
+        String pending=bQueries.submitHandoffStaging(staging,fixture.admin);
+        a.invoke(release("stage_release_fixture",preparation.requestId),fixture.admin);
+        bQueries.serve(pending,bLease,candidateDirectory,(request,actor)->fail("Released preparation reached the Agent"));
+        conflict("HANDOFF_PREPARATION_CHANGED",()->bQueries.poll(pending,fixture.admin));
+    }
+
     @Test void preparationAndNewPlacementRaceForOneWorkerSlot()throws Exception{
         capacity(aLease,aNodes,1,1);capacity(bLease,bNodes,1,1);
         TaskRequest request=prepare("prepare_allocation_race",verifiedAssessment("prepare_race_assessment",fixture.admin));

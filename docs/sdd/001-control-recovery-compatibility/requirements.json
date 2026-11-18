@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双 Agent 原始证据核验、同库托管写入者登记已实测。内部 PostgreSQL 事务通过原租约拒绝、两端回滚、原身份隔离与后继高代次验证。实际候选配置安装、操作入口和自动故障接管待验。",
-        "en": "Native dual-Agent raw proof and managed enrollment passed. The internal same-store PostgreSQL transaction verified live lease refusal, joint rollback, former fencing and successor epoch. Real candidate configuration installation, public transition and automatic failure takeover remain."
+        "zh-CN": "已实测同库内部写入权原子变更、旧租约拒绝与两端回滚，以及候选 Agent 私有暂存报告回执。候选配置完整安装、运营切换和自动故障接管待验。",
+        "en": "Native tests verified same-store internal writer transfer, old lease refusal and rollback, plus candidate private staging of reports and receipts. Configuration installation, operator transition and automatic failover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -159,7 +159,8 @@
         "tests/ui/browser-handoff.mjs",
         "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedWriterDeclaration.java",
-        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedWriterTransactionTest.java"
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedWriterTransactionTest.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffStaging.java"
       ]
     },
     {
@@ -854,8 +855,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "已实测缺口原事件保留、背压及回收，界面逐目标展示恢复能力。ClickHouse 和 Kafka 能只读核对原生前序回执，并拒绝回执变化或后续批次不明。缺口通知、补偿协议待验。",
-        "en": "Native retention, backpressure and reclamation protect gap events. Target-specific modes are displayed. ClickHouse and Kafka can review preceding native receipts and refuse changed or uncertain successor batches. Gap notifications and compensation protocols remain."
+        "zh-CN": "原事件保留与回收、ClickHouse 原生前序回执、Kafka 管理界面核验和持久回执已实测。消息通知及跨适配器补偿待验。",
+        "en": "Native event retention, ClickHouse preceding receipts, Kafka management review and durable receipts are verified. Message notices and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -1561,8 +1562,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "本地/外部日志可选。双 Agent 已核验共享报告、闭合回执、历史故障和真实原始 binlog，原签名密钥留在原 Agent。候选状态实际安装、接管及多产品支持待验。",
-        "en": "Local and external journals are optional. Both Agents verified shared reports, closed receipts, historical failures and native binlog bytes, retaining original signing keys. Actual candidate installation, transfer and broader products remain."
+        "zh-CN": "可选本地/外部日志及双 Agent 证据核验已实测。候选私有暂存报告和回执保持原字节，原始证据签名密钥留在原 Agent。完整状态接管及多产品验证待验。",
+        "en": "Optional local and external journals and dual-Agent evidence custody are verified. Candidate staging retains exact private report and receipt bytes; original signing keys stay at source. Complete state transfer and broader products remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1575,7 +1576,8 @@
         "docs/zh-CN/pipeline-v3.md",
         "sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
-        "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java"
+        "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffStaging.java"
       ]
     },
     {

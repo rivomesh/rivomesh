@@ -54,6 +54,12 @@ java -jar rivomesh.jar review-kafka-recovery config.yml kafka 1
 
 The result is recovery evidence for the preceding acknowledged transaction. A journal pause leaves any outstanding Kafka producer unconfirmed. A durable Kafka gap notice would require a separate, reviewed operation and broker fencing. This command leaves the original event, broker records, consumer offsets and journal acknowledgment in place. The focused native profile is `tests/kafka-cluster-run.py --only-recovery-review`.
 
+In shared management, enable `cluster.recoveryReview` on Controllers and Agents running the same release. An administrator with access to the task and its assigned Agent can select **Review Kafka receipts** on a paused Kafka destination after pausing the entire task. The task history shows when the request completes. **View receipt** opens the verified offsets and digests. **Find receipt by request ID** works after the request leaves recent history or the Agent goes offline.
+
+API clients send `POST /api/tasks/<task>/actions` with a stable `X-Request-ID` and a body such as `{"action":"REVIEW_KAFKA_RECEIPTS","expectedRevision":"<current task revision>","subscriptionId":"kafka","errorCount":1}`. HTTP 202 records admission for owner dispatch. Poll `GET /api/tasks/<task>/recovery-receipts/<request>` for the outcome. A successful receipt contains `kafkaReview`, including the observed epoch, error generation, sequence numbers and digests. `KAFKA_RECOVERY_PUBLICATION_UNCERTAIN` leaves the receipt without verified offsets. Use a new request ID and current revision for a fresh observation. A receipt describes its observation time and gives no approval to skip or replay the failed transaction.
+
+Use `tests/kafka-cluster-run.py --only-managed-recovery-review` to exercise the packaged HTTP management flow against four KRaft brokers. The isolated fixture uses two loopback management entries with a shared H2 control store and checks replay through the second entry, lookup with the owner offline, partial-publication rejection and unchanged target progress.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof

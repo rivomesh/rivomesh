@@ -58,7 +58,7 @@ final class OwnerExecution {
                 request=commands.bindLocal(dispatch,tasks.prepareOwnerRequest(dispatch.command.executionTemplate==null?dispatch.command.request:dispatch.command.executionTemplate),agents,lease,directory);
             }
             TaskService.OwnerReceipt receipt=tasks.ownerReceipt(request,dispatch.command.actor,dispatch.command.actorRole);
-            if(receipt!=null){finish(dispatch,receipt.phase,receipt.code,lease);return;}
+            if(receipt!=null){finish(dispatch,receipt,lease);return;}
             if("ACCEPTED".equals(dispatch.command.phase)||"UNKNOWN".equals(dispatch.command.phase)){
                 finish(dispatch,"UNKNOWN","OWNER_ACCEPTANCE_EVIDENCE_REQUIRED",lease);return;
             }
@@ -69,11 +69,11 @@ final class OwnerExecution {
             catch(Exception failure){
                 // A reply can fail after the private controller registry is committed.
                 receipt=tasks.ownerReceipt(request,dispatch.command.actor,dispatch.command.actorRole);
-                if(receipt!=null){finish(dispatch,receipt.phase,receipt.code,lease);return;}throw failure;
+                if(receipt!=null){finish(dispatch,receipt,lease);return;}throw failure;
             }
             receipt=tasks.ownerReceipt(request,dispatch.command.actor,dispatch.command.actorRole);
             if(receipt==null)finish(dispatch,"UNKNOWN","OWNER_ACCEPTANCE_UNCONFIRMED",lease);
-            else finish(dispatch,receipt.phase,receipt.code,lease);
+            else finish(dispatch,receipt,lease);
         }catch(ControlStore.Unavailable|ControlStore.Fenced|ControlStore.Expired unavailable){throw unavailable;}
         catch(SecurityException denied){finish(dispatch,"REJECTED","AUTHORIZATION_CHANGED",lease);}
         catch(TaskService.Conflict conflict){
@@ -89,6 +89,17 @@ final class OwnerExecution {
     private static String safe(String value,String fallback){return value!=null&&value.matches("[A-Z0-9_]{1,120}")?value:fallback;}
     private void finish(DurableCommands.Dispatch dispatch,String phase,String code,ControlStore.Lease lease)throws Exception{
         commands.complete(dispatch,phase,safe(code,"OWNER_OPERATION_RESULT"),agents,lease,directory);
+        releaseCompleted(dispatch,phase);
+    }
+    private void finish(DurableCommands.Dispatch dispatch,TaskService.OwnerReceipt receipt,ControlStore.Lease lease)throws Exception{
+        if(dispatch.command.request.kafkaReview()&&"SUCCEEDED".equals(receipt.phase)&&receipt.kafkaReview==null){
+            finish(dispatch,"UNKNOWN","KAFKA_RECOVERY_OBSERVATION_REQUIRED",lease);
+            return;
+        }
+        commands.complete(dispatch,receipt.phase,safe(receipt.code,"OWNER_OPERATION_RESULT"),receipt.kafkaReview,agents,lease,directory);
+        releaseCompleted(dispatch,receipt.phase);
+    }
+    private void releaseCompleted(DurableCommands.Dispatch dispatch,String phase){
         if(Arrays.asList("ACCEPTED","SUCCEEDED","FAILED","REJECTED","CANCELLED").contains(phase))releaseStartupStop(dispatch.command.id);
         if(Arrays.asList("SUCCEEDED","FAILED","REJECTED").contains(phase))tasks.releaseOwnerRequest(dispatch.command.id);
     }

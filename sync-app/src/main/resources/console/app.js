@@ -787,6 +787,15 @@ function renderSubscriptions(root,task,pending){
   if(sub.errorCode)card.append(text('p',explain(sub.errorCode),sub.state==='PAUSED'?'error':'subtle'));
   if(sub.state==='PAUSED'){
    renderFailureDiagnostic(card,sub);renderFailureActions(card,task,sub,pending);
+   if(destination?.product==='KAFKA'&&task.formatVersion===3&&task.statusAvailable
+    &&task.desired==='PAUSED'&&task.status.run_state==='PAUSED'&&sub.failurePhase==='TARGET_APPLY'
+    &&session?.taskControlScope==='GLOBAL'&&session.recoveryReview&&can('TASK_CONFIG')
+    &&Number.isSafeInteger(sub.errorGeneration)&&sub.errorGeneration>=0){
+    const review=text('button',t('review_kafka_receipts'),'quiet');
+    review.dataset.kafkaReceiptReview=sub.id;review.disabled=pending;
+    review.onclick=()=>{review.disabled=true;command(task,'REVIEW_KAFKA_RECEIPTS',sub);};
+    card.append(review);
+   }
    const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;
    button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);
   }

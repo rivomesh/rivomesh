@@ -2,6 +2,8 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
 import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.cdc.KafkaRecoveryReview;
+import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.validation.ValidationArchive;
 import io.github.rivomesh.validation.ValidationRetention;
 import java.io.*;
@@ -24,6 +26,8 @@ public final class TaskService implements AutoCloseable {
         public long errorCount=-1;
         public String actorId,actorRole;
         public Map<String,Object> result=new LinkedHashMap<>();
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public KafkaRecoveryReview.Observation kafkaReview;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public ValidationRequest validation;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -389,7 +393,11 @@ public final class TaskService implements AutoCloseable {
     private static String restoreSignature(String id,String revision,String reference)throws Exception{return digest("RESTORE_CONFIG\n"+id+"\n"+revision+"\n"+reference);}
     static final class OwnerReceipt {
         final String phase,code;
-        OwnerReceipt(String phase,String code){this.phase=phase;this.code=code;}
+        final KafkaRecoveryReview.Observation kafkaReview;
+        OwnerReceipt(String phase,String code){this(phase,code,null);}
+        OwnerReceipt(String phase,String code,KafkaRecoveryReview.Observation kafkaReview){
+            this.phase=phase;this.code=code;this.kafkaReview=kafkaReview;
+        }
     }
     synchronized void pinOwnerRequest(String id){ensureOpen();requestId(id);if(!ownerRequests.contains(id)&&ownerRequests.size()>=config.maxTasks*2)throw new Conflict("OWNER_RECEIPT_CAPACITY");ownerRequests.add(id);}
     synchronized void releaseOwnerRequest(String id){ownerRequests.remove(id);}
@@ -424,7 +432,9 @@ public final class TaskService implements AutoCloseable {
     private OwnerReceipt ownerOutcome(String task,String request,TaskRequest.Kind kind){
         if(kind==TaskRequest.Kind.CREATE)return new OwnerReceipt("SUCCEEDED","TASK_CREATED");
         if(kind==TaskRequest.Kind.CONFIG_UPDATE||kind==TaskRequest.Kind.RESTORE)return new OwnerReceipt("SUCCEEDED","CONFIG_UPDATED");
-        for(Operation operation:registry.tasks.get(task).operations)if(request.equals(operation.id))return new OwnerReceipt("PENDING".equals(operation.status)?"ACCEPTED":operation.status,operation.code==null?"LOCAL_OPERATION_ACCEPTED":operation.code);
+        for(Operation operation:registry.tasks.get(task).operations)if(request.equals(operation.id))return new OwnerReceipt(
+                "PENDING".equals(operation.status)?"ACCEPTED":operation.status,
+                operation.code==null?"LOCAL_OPERATION_ACCEPTED":operation.code,operation.kafkaReview);
         return new OwnerReceipt("UNKNOWN","OWNER_OPERATION_EVIDENCE_REQUIRED");
     }
     public synchronized Map<String,Object> create(String yaml,String request) throws Exception {
@@ -584,6 +594,13 @@ public final class TaskService implements AutoCloseable {
             captureExclusion.validate();
         }else if(captureExclusion!=null)throw new IllegalArgumentException("CAPTURE_EXCLUSION_ACTION_REQUIRED");
         boolean reviewing="FAILURE_REVIEW".equals(action);
+        boolean kafkaReview=TaskRequest.KAFKA_REVIEW_ACTION.equals(action);
+        if(kafkaReview){
+            if(actor==null||!actor.administers()||!actor.task(id))throw new SecurityException("FORBIDDEN");
+            if(config.cluster==null||!config.cluster.sharedTasks)throw new Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
+            if(!failureReviewEnabled())throw new Conflict("FAILURE_REVIEW_DISABLED");
+            TaskRequest.validateKafkaScope(revision,subscription,errorCount);
+        }
         boolean confirming="CONFIRM_COMMIT".equals(action);
         boolean skipping=Arrays.asList("SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL").contains(action);
         if(skipping){if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");if(actor==null||!actor.administers()||!actor.task(id))throw new SecurityException("FORBIDDEN");if(skip==null)throw new IllegalArgumentException("SKIP_REQUEST_INVALID");skip=Model.JSON.readValue(Model.JSON.writeValueAsBytes(skip),SkipRequest.class);skip.validate(action);}
@@ -596,7 +613,7 @@ public final class TaskService implements AutoCloseable {
         if(repairing){if(repair==null)throw new IllegalArgumentException("REPAIR_OPTIONS_REQUIRED");repair=Model.JSON.readValue(Model.JSON.writeValueAsBytes(repair),RepairRequest.class);repair.validate("REPAIR_EXECUTE".equals(action));}
         else if(repair!=null)throw new IllegalArgumentException("REPAIR_ACTION_REQUIRED");
         boolean validating=Arrays.asList("VALIDATE","VALIDATE_RETRY").contains(action);
-        if(!correcting&&!compensating&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
+        if(!correcting&&!compensating&&!kafkaReview&&!Arrays.asList("START","STOP","PAUSE","RESUME","CHECK","RESUME_TARGET","VALIDATE","VALIDATE_RETRY","VALIDATE_CANCEL","REPAIR_PLAN","REPAIR_EXECUTE","REPAIR_CANCEL","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","GAP_VERIFY_CANCEL").contains(action))throw new IllegalArgumentException("ACTION_INVALID");
         if("VALIDATE_CANCEL".equals(action)&&(actor==null||!actor.administers()||!actor.task(id)))throw new SecurityException("FORBIDDEN");
         if(validating){if(actor==null||!actor.administers()||!actor.task(id))throw new SecurityException("FORBIDDEN");if(validation==null)throw new IllegalArgumentException("VALIDATION_OPTIONS_REQUIRED");validation=Model.JSON.readValue(Model.JSON.writeValueAsBytes(validation),ValidationRequest.class);validation.validate("VALIDATE_RETRY".equals(action));}
         else if(validation!=null)throw new IllegalArgumentException("VALIDATION_ACTION_REQUIRED");
@@ -633,6 +650,11 @@ public final class TaskService implements AutoCloseable {
         if(correcting&&!"PAUSED".equals(current.desired))throw new Conflict("CORRECTION_REQUIRES_PIPELINE_PAUSED");
         if(compensating&&!"PAUSED".equals(current.desired))throw new Conflict("COMPENSATION_REQUIRES_PIPELINE_PAUSED");
         if(gapping&&!"PAUSED".equals(current.desired))throw new Conflict("SKIP_REQUIRES_PIPELINE_PAUSED");
+        if(kafkaReview){
+            if(e.config.pipeline==null||e.config.pipeline.targets.stream().noneMatch(t->t.id.equals(subscription)&&t.product==TargetProduct.KAFKA))
+                throw new Conflict("KAFKA_RECOVERY_TARGET_UNSUPPORTED");
+            if(!"PAUSED".equals(current.desired))throw new Conflict("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED");
+        }
         Registry next=copy();Control state=next.tasks.get(id);state.revision=UUID.randomUUID().toString();
         Operation op=new Operation();op.id=request;op.action=action;op.errorCount=errorCount;op.subscriptionId=subscription;op.validation=validation;op.repair=repair;op.commit=commit;op.skip=skip;op.gap=gap;op.compensation=compensation;op.correction=correction;if(actor!=null){op.actorId=actor.id;op.actorRole=actor.role.name();}state.operations.add(op);
         if(retaining||excluding){
@@ -640,6 +662,7 @@ public final class TaskService implements AutoCloseable {
             op.captureBoundaryHash=captureBoundaryHash;op.captureExclusion=captureExclusion;op.failureActorRevision=accounts().revision;
         }
         if(reviewing){op.failureEvidenceId=UUID.randomUUID().toString();op.failureActorRevision=accounts().revision;op.result.put("configurationRevision",revision);}
+        if(kafkaReview)op.failureActorRevision=accounts().revision;
         if(correcting){op.failureEvidenceId=correction.evidenceId;op.failureActorRevision=accounts().revision;}
         if(compensating){op.failureEvidenceId=compensation.evidenceId;op.failureActorRevision=accounts().revision;}
         if(confirming){op.failureEvidenceId=commit.evidenceId;op.failureActorRevision=accounts().revision;}
@@ -657,7 +680,7 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){if(closed)return;try{flushAudit();}catch(AuditStore.Unavailable ignored){}tasks=new ArrayList<>(entries.entrySet());}
         for(Map.Entry<String,Entry> task:tasks)if(task.getValue().busy.compareAndSet(false,true)) {
             try {
-                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE",ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM).contains(o.action));}
+                boolean validation; synchronized(this){validation=registry.tasks.get(task.getKey()).operations.stream().anyMatch(o->"PENDING".equals(o.status)&&Arrays.asList("VALIDATE","VALIDATE_RETRY","REPAIR_PLAN","REPAIR_EXECUTE","FAILURE_REVIEW","CAPTURE_RETAIN","CAPTURE_EXCLUDE","CONFIRM_COMMIT","SKIP_TRANSACTION","SKIP_RETRY","SKIP_RECOVER","SKIP_CANCEL","GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE","COMPENSATION_PLAN","COMPENSATION_EXECUTE","CORRECTION_EXECUTE",ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM,TaskRequest.KAFKA_REVIEW_ACTION).contains(o.action));}
                 (validation?validations:controls).execute(() -> {
                 try { reconcile(task.getKey(),task.getValue()); }
                 catch(Exception e){task.getValue().problem=safeCode(e);}
@@ -674,6 +697,7 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){Control c=registry.tasks.get(id);desired=c.desired;pending=c.operations.stream().filter(o -> "PENDING".equals(o.status)).findFirst().orElse(null);}
         if(pending!=null) {
             String code="OK";Map<String,Object> result=new LinkedHashMap<>();Exception failure=null;
+            KafkaRecoveryReview.Observation kafkaReview=null;
             boolean cancellableRecovery=TaskRequest.cancellableRecovery(pending.action);
             boolean recoveryCancelled=false;
             AtomicBoolean cancellation=new AtomicBoolean();
@@ -779,6 +803,12 @@ public final class TaskService implements AutoCloseable {
                         if(pending.failureEvidenceId==null||pending.actorId==null)throw new Conflict("FAILURE_REVIEW_OPTIONS_REQUIRED");
                         synchronized(this){AccountDirectory.State access=accounts();AccountDirectory.User user=access.users.get(pending.actorId);if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new SecurityException("FORBIDDEN");}
                         result=backend.reviewFailure(entry.config,failureEvidenceDirectory(id),failureEvidenceScope(id),pending.failureEvidenceId,pending.id,String.valueOf(pending.result.get("configurationRevision")),pending.actorId,pending.subscriptionId,pending.errorCount);code="FAILURE_EVIDENCE_READY";break;
+                    case TaskRequest.KAFKA_REVIEW_ACTION:
+                        synchronized(this){authorizeKafkaReview(id,pending);}
+                        kafkaReview=backend.reviewKafkaReceipts(entry.config,pending.subscriptionId,pending.errorCount);
+                        if(kafkaReview==null||!kafkaReview.matches(pending.subscriptionId,pending.errorCount))
+                            throw new Conflict("KAFKA_RECOVERY_OBSERVATION_INVALID");
+                        code=KafkaRecoveryReview.VERIFIED;break;
                     case "STOP":stop(entry);code="LOCAL_STOPPED";break;
                     case "PAUSE":
                         stop(entry);
@@ -795,6 +825,11 @@ public final class TaskService implements AutoCloseable {
             finally{if(pending.validation!=null||pending.repair!=null||pending.gap!=null){operationThreads.remove(id,Thread.currentThread());Thread.interrupted();}}
             synchronized(this) {
                 if(cancellableRecovery)recoveryCancellations.remove(id);
+                if(TaskRequest.KAFKA_REVIEW_ACTION.equals(pending.action)){
+                    if(closed)return;
+                    if(failure==null)try{authorizeKafkaReview(id,pending);}
+                    catch(Conflict changed){failure=changed;code=changed.getMessage();}
+                }
                 if(closed&&failure!=null&&(cancellableRecovery||Arrays.asList("CAPTURE_RETAIN","CAPTURE_EXCLUDE",
                         ValidationRetention.ACTION,ValidationArchive.COPY,ValidationArchive.RESTORE,ValidationArchive.RECLAIM).contains(pending.action)))return;
                 Registry next=copy();
@@ -809,6 +844,7 @@ public final class TaskService implements AutoCloseable {
                     return;
                 }
                 op.status=failure==null?"SUCCEEDED":"FAILED";op.correction=null;op.code=code;
+                op.kafkaReview=failure==null?kafkaReview:null;
                 op.result=result==null?new LinkedHashMap<>():result;op.finishedAt=Instant.now().toString();
                 if(cancellableRecovery){
                     entry.recoveryReceiptRetryAt=0;
@@ -916,7 +952,7 @@ public final class TaskService implements AutoCloseable {
         // Copy operation views: serialization must never race a later request mutating controller state.
         com.fasterxml.jackson.databind.node.ArrayNode operations=Model.JSON.valueToTree(c.operations);
         for(com.fasterxml.jackson.databind.JsonNode operation:operations)
-            ((com.fasterxml.jackson.databind.node.ObjectNode)operation).remove(List.of("correction","validationRetention","validationArchive"));
+            ((com.fasterxml.jackson.databind.node.ObjectNode)operation).remove(List.of("correction","validationRetention","validationArchive","kafkaReview"));
         TaskWorker.Diagnostic startup=e.workerDiagnostic;
         if(startup!=null&&!e.statusAvailable&&"RUNNING".equals(c.desired)){
             row.put("workerErrorStage",startup.phase.name());
@@ -1005,6 +1041,37 @@ public final class TaskService implements AutoCloseable {
                 code="HANDOFF_CANDIDATE_ACCESS_UNVERIFIED";
             return Map.of("state","REFUSED","code",code);
         }
+    }
+    Map<String,Object> stageHandoffEvidence(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        HandoffStaging.Binding binding=request.handoffStaging;
+        ControlCipher guard;
+        Path shared;
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+            if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()||registry.globalTaskIdentity==null)
+                throw new Conflict("GLOBAL_HANDOFF_REQUIRED");
+            if(binding==null||!request.reference.equals(binding.preparation())||!request.identityHash.equals(binding.evidence())
+                    ||!request.taskId.equals(binding.scope().task())||!request.revision.equals(binding.scope().revision())
+                    ||!config.cluster.id.equals(binding.scope().cluster())||!nodeId().equals(binding.candidate().node())
+                    ||!Objects.equals(registry.ownerDirectoryIdentity,binding.candidate().directory()))
+                throw new Conflict("HANDOFF_STAGING_SCOPE_CHANGED");
+            if(entries.containsKey(request.taskId)||registry.tasks.containsKey(request.taskId)
+                    ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS))
+                throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+            if(config.cluster.handoffEvidenceRoot==null)throw new Conflict("HANDOFF_ARCHIVE_DISABLED");
+            shared=Path.of(config.cluster.handoffEvidenceRoot);
+            guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        }
+        Map<String,Object> staged=HandoffStaging.stage(statePath.getParent(),shared,binding,guard);
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_EVIDENCE_STAGED";
+            event.taskId=request.taskId;event.subjectId=binding.preparation();event.actorId=actor.id;event.actorRole=actor.role.name();
+            event.clientRequestHash=AuditStore.hash(request.requestId);event.operationHash=binding.archive().sha256();
+            event.status="STAGED";appendAudit(event);
+        }
+        return staged;
     }
     private SharedHandoffEvidence.ReceiptPlan collectClosedHandoffReceipts(String task,SharedHandoffEvidence.ReceiptPlan plan){
         if(plan==null)return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
@@ -1251,6 +1318,17 @@ public final class TaskService implements AutoCloseable {
         if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled
                 ||user.deleted||user.role!=PlatformConfig.Role.ADMIN)throw new Conflict("FORBIDDEN");
     }
+    private void authorizeKafkaReview(String task,Operation pending){
+        if(!failureReviewEnabled())throw new Conflict("FAILURE_REVIEW_DISABLED");
+        AccountDirectory.State access=accounts();
+        AccountDirectory.User user=access.users.get(pending.actorId);
+        if(!Objects.equals(pending.failureActorRevision,access.revision)||user==null||!user.enabled||user.deleted
+                ||user.role!=PlatformConfig.Role.ADMIN||user.taskIds!=null&&!user.taskIds.contains(task)
+                ||user.nodeIds!=null&&!user.nodeIds.contains(nodeId()))
+            throw new Conflict("FORBIDDEN");
+        if(!"PAUSED".equals(registry.tasks.get(task).desired))
+            throw new Conflict("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED");
+    }
     private void requireArchiveReclaim(String taskId,String currentRequest){
         if(!config.validationArchiveReclaim)throw new Conflict("VALIDATION_ARCHIVE_RECLAIM_DISABLED");
         Entry entry=require(taskId);
@@ -1317,7 +1395,7 @@ public final class TaskService implements AutoCloseable {
     public static String safeCode(Throwable error) {
         if(error instanceof Conflict)return error.getMessage();
         if(error instanceof SyncFailure)return ((SyncFailure)error).code;
-        if((error instanceof IllegalStateException||error instanceof IllegalArgumentException)&&error.getMessage()!=null&&error.getMessage().matches("(?:VALIDATION|REPAIR|FAILURE|SKIP|SINK|GAP|COMPENSATION|CORRECTION)_[A-Z0-9_]+"))return error.getMessage();
+        if((error instanceof IllegalStateException||error instanceof IllegalArgumentException)&&error.getMessage()!=null&&error.getMessage().matches("(?:VALIDATION|REPAIR|FAILURE|SKIP|SINK|GAP|COMPENSATION|CORRECTION|KAFKA_RECOVERY)_[A-Z0-9_]+"))return error.getMessage();
         if("ERROR_GENERATION_CHANGED".equals(error.getMessage()))return "ERROR_GENERATION_CHANGED";
         String message=error.getMessage();
         if(message!=null&&(error instanceof IllegalStateException||error instanceof IOException)

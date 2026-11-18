@@ -8340,5 +8340,172 @@
       "javaFocusedTests": 61
     },
     "scope": "Internal transfer transaction uses same PostgreSQL connection for exact stopped journal cut, old assignment and epoch CAS, signed global owner retirement and task binding, and completion receipt. Final public configuration staging and real candidate installation require separate acceptance."
+  },
+  "candidatePrivateReportAndReceiptStage": {
+    "native": {
+      "artifactSha256": "58298164f4ab3a05ad8fc7e54161a3e0541703f073b8cf9fa331fc82bd18d186",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+        "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+        "Concurrent refreshes against the same receipt allow exactly one replacement",
+        "Controller restart retains the assessed placement, original owner and masked cut proof",
+        "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+        "Candidate with a disjoint private mount cannot claim custody of the original completed report",
+        "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+        "Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain",
+        "Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records",
+        "A replay-safe stopped-cut reservation blocks new commands and competing explicit or automatic Agent assignment",
+        "Prepared candidate privately stages exact report and receipt bytes with live ownership, checkpoints and registry untouched",
+        "The ordinary validation CLI refuses the candidate custody directory without creating any live report files",
+        "The other Controller revalidates the same authenticated staged bytes without re-reading a missing shared file",
+        "Controller restart preserves the reservation and releasing it reopens normal control without moving the old writer",
+        "Missing private receipt refuses operation custody while intact report custody and writer ownership remain"
+      ],
+      "harnessSourceSha256": "0d2fe891002b88b8225d4e13128b653254e34c92d217286afe291f29cb40751d",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "mysqlAsyncFailover": false,
+      "automaticPlacement": true,
+      "handoffAssessment": true,
+      "handoffProbe": true,
+      "handoffCustody": true,
+      "handoffFailureCustody": false,
+      "handoffRawCustody": false,
+      "handoffClosedReceipts": true,
+      "handoffPreparation": true,
+      "handoffManagedWriter": false,
+      "handoffStaging": true,
+      "handoffPreparationBrowser": false,
+      "receiptLookup": false,
+      "retentionReview": false,
+      "reportArchive": false,
+      "reportReclaim": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": null,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "secretAudit": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "cleanupExitCode": 0
+    },
+    "nativeJavaFocusedTests": 30,
+    "integratedArtifact": {
+      "artifactSha256": "d7a0775b9220ea26d18abe76e697a5e97dc9e83f9c97c740082d40c0e1a837b3",
+      "verifiedScopedTree": "fcbc977f3ebe446d64abf125cd16b4aca3e03e48",
+      "javaFocusedTests": 72,
+      "optionalNativeJavaSkips": 1,
+      "domTests": 141
+    },
+    "scope": "Prepared stopped candidate authenticates and durably stages exact validation reports and closed operations only. Private data is fenced from ordinary CLI/registry. Exact replay across management entries works after shared artifact removal and ownership remains original.",
+    "priorFixture": "The first combined enrollment test triggered transient stale assessment before stage. A narrow retry initially reached staging before a Python CLI setup issue; final fixture fixes only that harness. Final stage scope verified through two Agents without enabling execution.",
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-staging --artifact <candidate jar> --output target/handoff-stage-proof"
+  },
+  "managedReadOnlyKafkaRecoveryReceipt": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "6bbdfed85c59d6b4b142144f397df163693e56fdb15ed44518cd9a674ab75d1a",
+      "harnessSha256": "f313ebc08ebe1ac15a70181b23b35c99ac35c6f2ee95e84ec3860838448f43dc",
+      "acceptanceSourceSha256": "0081e5fa16ebb2a8ddae8cb9decdf9d63d2593b5c31110dce2ce3fe587472903",
+      "checks": [
+        "Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup",
+        "A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints"
+      ],
+      "phases": {
+        "managed-recovery-review": {
+          "brokerEndAfterReview": 9,
+          "brokerEndBefore": 9,
+          "cluster": {
+            "clusterId": "NrCcryVXVC16k7J0Ds7Hcw",
+            "topicId": "y9yqR-SHR1mVoKZDTQTw6g",
+            "leader": 1,
+            "isr": [
+              1,
+              2,
+              4
+            ],
+            "metadataLeader": 2,
+            "metadataHighWatermark": 39
+          },
+          "consumerOffsetAfterReview": 1,
+          "consumerOffsetBefore": 1,
+          "journalAcknowledged": 1,
+          "managedActor": "legacy-admin",
+          "managedHistoricalOwnerOffline": true,
+          "managedOwner": "owner",
+          "managedReplayedAcrossEntries": true,
+          "partialFailureCode": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "peerAcknowledged": 2,
+          "peerEndAfter": 14,
+          "peerEndBefore": 14,
+          "publicationAcknowledged": 1,
+          "review": {
+            "status": "PRECEDING_KAFKA_RECEIPTS_VERIFIED",
+            "target": "kafka",
+            "observedAt": "2026-11-18T15:12:18.233985710Z",
+            "epoch": "2",
+            "errorGeneration": "1",
+            "acknowledgedSequence": "1",
+            "failedSequence": "2",
+            "observedTopicIdentitySha256": "9174b1429ccd305a4906a3a0be5f49928a1d45c366bc297eee0754e31940d3ae",
+            "nativeReceipts": [
+              {
+                "namespace": "catalog",
+                "offset": "7",
+                "payloadSha256": "daa592d01e0b388d79df4e4e91c764f04c4bb768a7cf29fe41baf8c825624bcc"
+              },
+              {
+                "namespace": "orders",
+                "offset": "8",
+                "payloadSha256": "2b8cdb46039da84aa9bb5ca94ce21bc631756921e6e907cec69478f456b98589"
+              }
+            ]
+          }
+        }
+      },
+      "images": {
+        "apache/kafka:3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+        "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+      },
+      "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "cleanupExitCode": 0
+    },
+    "nativeJavaFocusedTests": 42,
+    "individualLatestFocusedTests": 49,
+    "integratedArtifact": {
+      "artifactSha256": "d7a0775b9220ea26d18abe76e697a5e97dc9e83f9c97c740082d40c0e1a837b3",
+      "verifiedScopedTree": "fcbc977f3ebe446d64abf125cd16b4aca3e03e48",
+      "javaFocusedTests": 72,
+      "optionalNativeJavaSkips": 1,
+      "domTests": 141
+    },
+    "scope": "Two real management server entries in an isolated Linux JVM use a shared H2 control store and real four-broker Kafka 3.9.2 KRaft RF3. Only scoped admin can initiate read-only review. Stable request returns checked native receipt after owner service stops, including topic digest and native offsets safely. Failed target, healthy peer, original entries and consumer commit remain unchanged.",
+    "priorFixture": "First corrected artifact reached all managed assertions but incorrectly fell through to an unrelated consumer phase with a different group. The exact final harness starts a fresh named project and restricts it to managed recovery review.",
+    "reproduce": "python3 tests/kafka-cluster-run.py --artifact <candidate jar> --only-managed-recovery-review --output target/kafka-managed-receipt-proof"
   }
 }

@@ -4,7 +4,7 @@ import io.github.rivomesh.Model;
 import java.sql.*;
 import java.util.*;
 
-/** Expiring encrypted read-only RPC. Task mutations use DurableCommands instead. */
+/** Expiring encrypted reads and isolated custody staging. Task mutations use DurableCommands. */
 final class OwnerQueries {
     static final class Entry {
         public int version=1;
@@ -96,6 +96,18 @@ final class OwnerQueries {
             return insert(c,verify,current,route.candidate(),reserve(c,1),route.activeVersion());
         });
     }
+    String submitHandoffStaging(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_STAGE)
+            throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+        return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
+            ManagedHandoff.StageRoute route=handoff.stageRoute(c,task,current,request);
+            TaskRequest scoped=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGING_RPC,task.id);
+            scoped.reference=request.reference;scoped.revision=request.revision;scoped.identityHash=request.identityHash;
+            scoped.requestId=request.requestId;
+            return insert(c,scoped,current,route.candidate(),reserve(c,1),route.binding().scope().configuration());
+        });
+    }
     private long reserve(Connection c,int slots)throws SQLException{
         long now=db.now(c);
         db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
@@ -123,10 +135,22 @@ final class OwnerQueries {
         if(!route.activeVersion().equals(entry.handoffConfiguration)||!route.revision().equals(entry.request.revision))
             throw new TaskService.Conflict("HANDOFF_ASSESSMENT_CHANGED");
         AgentDirectory.Binding target=entry.request.kind==TaskRequest.Kind.HANDOFF_EVIDENCE_PROBE?route.original():route.candidate();
+        requireHandoffAgent(entry,target);
+        return route;
+    }
+    private HandoffStaging.Binding verifyHandoffStaging(Connection c,GlobalTaskStore.Record record,
+                                                       AccessControl.Principal actor,Entry entry)throws Exception{
+        if(handoff==null||entry.handoffConfiguration==null)throw new TaskService.Conflict("HANDOFF_REQUEST_INVALID");
+        ManagedHandoff.StageRoute stage=handoff.stageRoute(c,record,actor,entry.request);
+        if(!entry.handoffConfiguration.equals(stage.binding().scope().configuration()))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        requireHandoffAgent(entry,stage.candidate());
+        return stage.binding();
+    }
+    private static void requireHandoffAgent(Entry entry,AgentDirectory.Binding target){
         if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
                 ||!entry.incarnation.equals(target.incarnation)||!"HEALTHY".equals(target.state))
             throw new TaskService.Conflict("HANDOFF_AGENT_CHANGED");
-        return route;
     }
     private static AccessControl.Principal actor(AccountDirectory.State accounts,Entry entry){
         AccountDirectory.User user=accounts.users.get(entry.actor);if(user==null||!user.enabled||user.deleted||!Objects.equals(accounts.revision,entry.actorRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
@@ -154,8 +178,12 @@ final class OwnerQueries {
                 agents.require(c,lease,directory);AccessControl.Principal actor=actor(accounts,entry);
                 if(!entry.request.handoffRpc())return new Execution(entry.request,actor);
                 GlobalTaskStore.Record record=tasks.record(c,entry.task);
-                ManagedHandoff.ProbeRoute route=verifyHandoff(c,record,actor,entry);
                 TaskRequest scoped=entry.request.snapshot();
+                if(scoped.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC){
+                    scoped.handoffStaging=verifyHandoffStaging(c,record,actor,entry);
+                    return new Execution(scoped,actor);
+                }
+                ManagedHandoff.ProbeRoute route=verifyHandoff(c,record,actor,entry);
                 if(scoped.kind==TaskRequest.Kind.HANDOFF_CANDIDATE_PROBE){
                     scoped.yaml=tasks.activeYaml(c,record);
                     scoped.handoffCut=route.cut();
@@ -180,7 +208,9 @@ final class OwnerQueries {
             if(current.request.readAtRevision()&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
             try{
                 AccessControl.Principal actor=actor(accounts,current);
-                if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
+                if(current.request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)
+                    verifyHandoffStaging(c,tasks.record(c,current.task),actor,current);
+                else if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
             }catch(SecurityException|TaskService.Conflict revoked){
                 current.phase="REJECTED";current.code=revoked instanceof SecurityException?"AUTHORIZATION_CHANGED":revoked.getMessage();
                 current.response=null;write(c,current);return null;
@@ -194,7 +224,8 @@ final class OwnerQueries {
             Entry entry=read(c,id);if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
             if(entry.request.readAtRevision()&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
             if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
-            if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
+            if(entry.request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)verifyHandoffStaging(c,record,current,entry);
+            else if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
             else{
                 AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
                 if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");

@@ -85,6 +85,8 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 准备记录按控制数据库时钟在 15 分钟后到期。到期或解除前，该任务暂停接收新命令和配置修改，候选 Agent 预留一个任务槽和一个 Worker 槽。首版将候选 Agent 的每个已分配任务都计作潜在 Worker，包括已停止的任务。显式和自动分配都计入预留。当前管理员可向 `POST /api/tasks/{task}/handoff/preparation/release` 提交 `X-Request-ID` 和 `expectedPreparation`，立即解除预留并恢复对原任务的操作。相同操作者以相同输入重放已接受请求时，可以读到解除或到期后的记录。准备阶段保留原任务归属和日志写入代次。执行接管还需要通过源端和故障证据核验，并验证数据日志和控制库的写入隔离。
 
+准备记录有效时，管理员可通过 `POST /api/tasks/{task}/handoff/preparation/stage` 暂存已核验的证据。提交 `X-Request-ID`、`expectedPreparation`、`expectedRevision` 和 `expectedEvidenceSha256`。候选 Agent 核对原归档摘要及作用域，在报告锁内验证已完成报告，并将逐文件 SHA-256 写入认证清单。核验后，候选 Agent 在私有状态路径原子发布暂存目录。获授权的请求重放会重新核对已暂存文件。Agent 重新登记、准备记录到期或解除后，需要重新审阅。响应返回数量和 `executionAuthorized: false`。暂存范围是已完成报告和已结束回执。暂存报告使用独立的文件名，常规校验报告读取命令会拒绝打开暂存目录。每个候选 Agent 最多保留 16 个暂存目录，包含中断的暂存。候选 Agent 的任务注册表、原位报告路径及日志写入权保持不变。
+
 对于新建的固定归属 MySQL 任务，如果使用 PostgreSQL 外部日志和 MySQL 或 PostgreSQL 目标，可将 `nodeId` 设置成已登记的原 Agent ID，将 `journal.managedWriter` 设置为 `true`，并将 `journal.writerAssignment` 设置为新增的 UUID。先使用日志库连接配置运行 `java -jar rivomesh.jar init-writer task.yml`，再在指定 Agent 上创建任务。自动分配和普通配置编辑均不能改动该写入绑定。既有未绑定日志需要独立迁移。即使候选配置省略 `managedWriter`，独立 `transfer-writer` 命令也会拒绝移动此日志。
 
 核验通过的准备记录保存原写入分配和该请求的私有后继分配，接口通过 `writerActivation` 返回摘要。控制库和日志库配置同一个 PostgreSQL JDBC 地址，且控制库账号可锁定日志行时，`checkedInControlTransaction` 表示控制事务已核对原日志租约已过期或释放，以及源检查点和所有已确认订阅位置。核对期间，任务和日志写入归属仍由原 Agent 持有。

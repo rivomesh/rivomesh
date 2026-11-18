@@ -221,6 +221,46 @@ test('recovery receipt lookup reads earlier requests for the active task and wit
  }finally{ui.dom.window.close();}
 });
 
+test('Kafka review submits a paused target and opens only the verified native receipt fields',async()=>{
+ const action='REVIEW_KAFKA_RECEIPTS',id='verified_kafka_review',code='PRECEDING_KAFKA_RECEIPTS_VERIFIED';
+ const task={id:'kafka-review',revision:'task-revision',formatVersion:3,workerState:'PAUSED',desired:'PAUSED',statusAvailable:true,
+  status:{run_state:'PAUSED',subscriptions:[{id:'kafka',state:'PAUSED',errorGeneration:17,
+   failurePhase:'TARGET_APPLY',acknowledged:6,failedSequence:7}]},destinations:[{id:'kafka',product:'KAFKA',mappings:{}}],
+  operations:[{id,action,code,status:'SUCCEEDED'}]};
+ const session={authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true};
+ const ui=setup([task],'ADMIN',session),fallback=ui.w.fetch;
+ const submit='/api/tasks/'+task.id+'/actions',lookup='/api/tasks/'+task.id+'/recovery-receipts/'+id;
+ let mismatchedTarget=true;
+ ui.w.fetch=async(path,options)=>{
+  if(path!==lookup)return fallback(path,options);
+  return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,id,action,code,status:'SUCCEEDED',
+   subscriptionId:'kafka',kafkaReview:{status:code,target:mismatchedTarget?'other':'kafka',observedAt:'2026-11-18T09:00:00Z',
+    epoch:'3',errorGeneration:'17',acknowledgedSequence:'6',failedSequence:'7',observedTopicIdentitySha256:'a'.repeat(64),
+    nativeReceipts:[{namespace:'orders',offset:'31',payloadSha256:'b'.repeat(64),body:'hidden raw bytes'}]}})};
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('[data-kafka-receipt-review="kafka"]').click();await flush();
+  const posted=ui.calls.find(call=>call.path===submit);
+  assert.ok(posted.headers['X-Request-ID']);
+  assert.deepEqual(JSON.parse(posted.body),{action,expectedRevision:'task-revision',errorCount:17,subscriptionId:'kafka'});
+  ui.d.querySelector('[data-recovery-receipt-request="'+id+'"]').click();await flush();
+  const dialog=ui.d.querySelector('.recovery-dialog');
+  assert.match(dialog.querySelector('[role=alert]').textContent,/回执与当前请求不符/);
+  mismatchedTarget=false;
+  dialog.querySelector('form').dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+  const result=dialog.querySelector('[data-recovery-receipt-result]');
+  assert.match(result.textContent,/orders · 位点 31/);
+  assert.ok(result.textContent.includes('b'.repeat(64)));
+  assert.ok(!result.textContent.includes('hidden raw bytes'));
+ }finally{ui.dom.window.close();}
+ for(const [role,model] of [['OPERATOR',task],['ADMIN',{...task,desired:'RUNNING'}]]){
+  const blocked=setup([model],role,{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true});
+  try{await login(blocked);assert.equal(blocked.d.querySelector('[data-kafka-receipt-review]'),null);}
+  finally{blocked.dom.window.close();}
+ }
+});
+
 test('retention review shows the existing hold, requires approval, and retries the identical request',async()=>{
  const reportId='a4500000-1223-4abc-8abc-0123456789ab';
  const task={id:'retention-review',revision:'task-revision',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],

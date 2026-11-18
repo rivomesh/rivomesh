@@ -34,6 +34,9 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case HANDOFF_PROBE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return handoff.probe(request,actor,queries);
+            case HANDOFF_STAGE:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return queries.await(queries.submitHandoffStaging(request,actor),actor);
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return switch(request.kind){

@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
+import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.sql.*;
 import java.util.*;
 import java.util.function.BooleanSupplier;
@@ -16,6 +17,9 @@ public interface TaskBackend {
     default void resume(TaskDefinition task,long generation)throws Exception{if(task.pipeline==null)resume(task.legacy,generation);else PipelineBackend.resume(task.pipeline,generation);}
     default Map<String,Object> check(TaskDefinition task)throws Exception{return task.pipeline==null?check(task.legacy):PipelineEngine.check(task.pipeline);}
     default void subscription(TaskDefinition task,String id,String action,long generation)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SUBSCRIPTION_ACTION_INVALID");PipelineBackend.subscription(task.pipeline,id,action,generation);}
+    default KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String subscription,long generation)throws Exception{
+        return KafkaRecoveryReview.inspect(task.pipeline,subscription,generation);
+    }
     default Map<String,Object> reviewFailure(TaskDefinition task,java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,String evidence,String request,String revision,String actor,String subscription,long generation)throws Exception{
         if(task.pipeline==null)throw new IllegalArgumentException("FAILURE_REVIEW_V3_REQUIRED");
         io.github.rivomesh.recovery.FailureEvidenceStore store=new io.github.rivomesh.recovery.FailureEvidenceStore(directory,scope,new io.github.rivomesh.recovery.FailureEvidenceStore.Limits());

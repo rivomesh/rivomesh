@@ -27,7 +27,7 @@ window.RivomeshRecovery=(()=>{
  const receiptId=/^[A-Za-z0-9_-]{8,128}$/;
  const receiptActions=new Set([
   'VALIDATE','VALIDATE_RETRY','VALIDATE_CANCEL','REPAIR_PLAN','REPAIR_EXECUTE','REPAIR_CANCEL',
-  'FAILURE_REVIEW','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
+  'FAILURE_REVIEW','REVIEW_KAFKA_RECEIPTS','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
   'GAP_VERIFY_PLAN','GAP_VERIFY_EXECUTE','GAP_VERIFY_CANCEL','COMPENSATION_PLAN','COMPENSATION_EXECUTE',
   'CORRECTION_EXECUTE','RECOVERY_CANCEL','CAPTURE_RETAIN','CAPTURE_EXCLUDE','VALIDATION_RETENTION_REVIEW',
   'VALIDATION_ARCHIVE_COPY','VALIDATION_ARCHIVE_RESTORE','VALIDATION_ARCHIVE_RECLAIM'
@@ -36,6 +36,26 @@ window.RivomeshRecovery=(()=>{
   &&bridge.session()?.taskControlScope==='GLOBAL'&&can('TASK_CONFIG');
  const receiptFields={reportId:'receiptReport',repairPlanId:'receiptRepairPlan',failureEvidenceId:'receiptEvidence',
   skipPlanId:'receiptSkipPlan',gapPlanId:'receiptGapPlan',archiveId:'receiptArchive'};
+ const sequence=/^(0|[1-9][0-9]{0,18})$/,digest=/^[0-9a-f]{64}$/;
+ function kafkaReceipt(receipt){
+  const proof=receipt.kafkaReview;
+  if(receipt.action!=='REVIEW_KAFKA_RECEIPTS'||receipt.status!=='SUCCEEDED')return null;
+  if(proof?.status!=='PRECEDING_KAFKA_RECEIPTS_VERIFIED'||proof.target!==receipt.subscriptionId
+   ||![proof.epoch,proof.errorGeneration,proof.acknowledgedSequence,proof.failedSequence].every(value=>typeof value==='string'&&sequence.test(value))
+   ||!Number.isFinite(Date.parse(proof.observedAt))||!digest.test(proof.observedTopicIdentitySha256||'')
+   ||!Array.isArray(proof.nativeReceipts)||!proof.nativeReceipts.length||proof.nativeReceipts.length>256
+   ||!proof.nativeReceipts.every(item=>item&&/^[A-Za-z][A-Za-z0-9_]{0,62}$/.test(item.namespace||'')
+    &&typeof item.offset==='string'&&sequence.test(item.offset)&&digest.test(item.payloadSha256||'')))
+   throw new Error(t('receiptMismatch'));
+  const section=text('section'),facts=text('dl'),offsets=text('ul');
+  for(const [key,value] of [
+   ['kafkaReceiptObservedAt',new Date(proof.observedAt).toLocaleString()],['kafkaReceiptEpoch',proof.epoch],
+   ['kafkaReceiptGeneration',proof.errorGeneration],['kafkaReceiptAcknowledged',proof.acknowledgedSequence],
+   ['kafkaReceiptFailed',proof.failedSequence],['kafkaReceiptTopic',proof.observedTopicIdentitySha256]
+  ])facts.append(label('dt',key),text('dd',value));
+  for(const item of proof.nativeReceipts)offsets.append(text('li',item.namespace+' · '+t('kafkaReceiptOffset')+' '+item.offset+' · '+item.payloadSha256));
+  section.append(label('h3','kafkaReceiptTitle'),facts,offsets);return section;
+ }
  function receiptAction(task,operation){
   if(!receiptAllowed(task)||!receiptActions.has(operation.action)||!receiptId.test(operation.id||''))return null;
   const button=label('button','receiptView');button.className='quiet';
@@ -72,6 +92,7 @@ window.RivomeshRecovery=(()=>{
     if(!dialog.current())return;
     if(receipt?.kind!=='CONTROL_OPERATION'||receipt.id!==id||receipt.taskId!==task.id||!receiptActions.has(receipt.action))
      throw new Error(t('receiptMismatch'));
+    const nativeEvidence=kafkaReceipt(receipt);
     const facts=text('dl'),values=[
      ['receiptId',id],['receiptAction',t(receipt.action.toLowerCase())],
      ['ownerNode',receipt.ownerNodeId],['receiptActor',receipt.actorId],['receiptTarget',receipt.subscriptionId],
@@ -84,6 +105,7 @@ window.RivomeshRecovery=(()=>{
     result.append(text('p',t(receipt.status),'badge'));
     if(typeof receipt.code==='string'&&/^[A-Z0-9_]{1,120}$/.test(receipt.code))result.append(text('p',bridge.explain(receipt.code)));
     result.append(facts);
+    if(nativeEvidence)result.append(nativeEvidence);
    }catch(error){if(dialog.current())feedback.textContent=error.message;}
    finally{if(dialog.current())button.disabled=input.disabled=false;}
   };
@@ -453,6 +475,13 @@ window.RivomeshRecovery=(()=>{
   receiptId:'管理请求 ID',receiptAction:'操作',receiptActor:'发起人',receiptTarget:'目标',receiptTime:'提交时间',receiptParent:'关联请求',
   receiptReport:'校验报告',receiptRepairPlan:'修复计划',receiptEvidence:'事务证据',receiptSkipPlan:'跳过计划',
   receiptGapPlan:'缺口核验计划',receiptArchive:'报告归档',receiptInvalid:'请输入有效的管理请求 ID。',receiptMismatch:'返回的回执与当前请求不符。',
+  review_kafka_receipts:'核对 Kafka 回执',kafkaReceiptTitle:'前一笔已确认事务的 Kafka 回执',
+  kafkaReceiptObservedAt:'核对时间',kafkaReceiptEpoch:'任务代次',kafkaReceiptGeneration:'目标错误代次',
+  kafkaReceiptAcknowledged:'已确认事务序号',kafkaReceiptFailed:'失败事务序号',kafkaReceiptTopic:'Topic 身份摘要',kafkaReceiptOffset:'位点',
+  PRECEDING_KAFKA_RECEIPTS_VERIFIED:'已核对前一笔 Kafka 回执。',
+  KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'发现后续事务发布记录，无法确认当前投递状态。',
+  KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE:'找不到前一笔已确认事务的完整 Kafka 回执。',
+  KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED:'请先暂停整条同步任务。',
   RECOVERY_RECEIPT_NOT_FOUND:'当前任务下没有对应的恢复操作回执。'
  },{
   receiptTitle:'Recovery operation receipt',receiptFind:'Find receipt by request ID',receiptView:'View receipt',
@@ -461,6 +490,13 @@ window.RivomeshRecovery=(()=>{
   receiptParent:'Related request',receiptReport:'Validation report',receiptRepairPlan:'Repair plan',receiptEvidence:'Transaction evidence',
   receiptSkipPlan:'Skip plan',receiptGapPlan:'Gap verification plan',receiptArchive:'Report archive',receiptInvalid:'Enter a valid management request ID.',
   receiptMismatch:'The returned receipt does not match the current request.',
+  review_kafka_receipts:'Review Kafka receipts',kafkaReceiptTitle:'Kafka receipts for the preceding acknowledged transaction',
+  kafkaReceiptObservedAt:'Reviewed at',kafkaReceiptEpoch:'Pipeline epoch',kafkaReceiptGeneration:'Destination error generation',
+  kafkaReceiptAcknowledged:'Acknowledged sequence',kafkaReceiptFailed:'Failed sequence',kafkaReceiptTopic:'Topic identity digest',kafkaReceiptOffset:'Offset',
+  PRECEDING_KAFKA_RECEIPTS_VERIFIED:'Verified the preceding Kafka receipts.',
+  KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'A later publication is visible and its delivery state is uncertain.',
+  KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE:'Complete Kafka receipts for the preceding acknowledged transaction are unavailable.',
+  KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED:'Pause the entire pipeline first.',
   RECOVERY_RECEIPT_NOT_FOUND:'No corresponding recovery operation receipt exists for this task.'
  });
  return{render,renderSkipApproval,renderCompensationPreview,renderCorrection,openPlan,openVerificationPlan,openVerificationScope,

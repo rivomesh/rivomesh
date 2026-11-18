@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.time.Instant;
@@ -18,6 +19,8 @@ final class DurableCommands {
         public String dispatchIncarnation;
         public TaskRequest localRequest;
         public TaskRequest executionTemplate;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public KafkaRecoveryReview.Observation kafkaReview;
     }
     static final class Dispatch {
         final Stored command;
@@ -83,7 +86,8 @@ final class DurableCommands {
         if(command.version!=1||!id.equals(command.id)||!Objects.equals(command.task,r.getString("task_id"))
                 ||!Objects.equals(command.owner,r.getString("owner_id"))||!Objects.equals(command.phase,r.getString("phase"))
                 ||command.priority!=r.getInt("priority")||command.createdAt!=r.getLong("created_at")||command.request==null
-                ||!id.equals(command.request.requestId)||!Objects.equals(command.task,command.request.taskId))
+                ||!id.equals(command.request.requestId)||!Objects.equals(command.task,command.request.taskId)
+                ||!validKafkaObservation(command.request,command.phase,command.code,command.kafkaReview))
             throw new TaskService.Conflict("COMMAND_RECORD_INVALID");
         return command;
     }
@@ -217,16 +221,27 @@ final class DurableCommands {
         if(!lease.nodeId.equals(command.owner)||!directory.equals(command.directory)||command.dispatchEpoch!=lease.epoch||!Objects.equals(command.dispatchIncarnation,lease.incarnation)||dispatch.command.dispatchEpoch!=lease.epoch||!Objects.equals(dispatch.command.dispatchIncarnation,lease.incarnation))throw new ControlStore.Fenced();return command;
     }
     void complete(Dispatch dispatch,String phase,String code,AgentDirectory agents,ControlStore.Lease lease,String directory)throws Exception{
+        complete(dispatch,phase,code,null,agents,lease,directory);
+    }
+    void complete(Dispatch dispatch,String phase,String code,KafkaRecoveryReview.Observation kafkaReview,
+                  AgentDirectory agents,ControlStore.Lease lease,String directory)throws Exception{
         if(!Arrays.asList("DISPATCHED","ACCEPTED","UNKNOWN","SUCCEEDED","FAILED","REJECTED","CANCELLED").contains(phase)||code==null||!code.matches("[A-Z0-9_]{1,120}"))throw new IllegalArgumentException("COMMAND_OUTCOME_INVALID");
         tasks.service((c,accounts)->{
             agents.require(c,lease,directory);root(c);Stored command=dispatched(c,dispatch,lease,directory);
-            if(terminal(command.phase)){if(!command.phase.equals(phase)||!Objects.equals(command.code,code))throw new TaskService.Conflict("COMMAND_OUTCOME_CHANGED");return null;}
+            if(!validKafkaObservation(command.request,phase,code,kafkaReview))
+                throw new TaskService.Conflict("KAFKA_RECOVERY_OBSERVATION_INVALID");
+            if(terminal(command.phase)){if(!command.phase.equals(phase)||!Objects.equals(command.code,code)||!Objects.equals(command.kafkaReview,kafkaReview))throw new TaskService.Conflict("COMMAND_OUTCOME_CHANGED");return null;}
             if(("ACCEPTED".equals(command.phase)||"UNKNOWN".equals(command.phase))&&Arrays.asList("DISPATCHED","REJECTED").contains(phase))throw new TaskService.Conflict("COMMAND_PHASE_CHANGED");
             if(command.localRequest==null&&!Arrays.asList("REJECTED","UNKNOWN").contains(phase))throw new TaskService.Conflict("COMMAND_LOCAL_REQUEST_REQUIRED");
             if(command.phase.equals(phase)&&Objects.equals(command.code,code))return null;
             if("SUCCEEDED".equals(phase)&&Arrays.asList(TaskRequest.Kind.CREATE,TaskRequest.Kind.CONFIG_UPDATE,TaskRequest.Kind.RESTORE).contains(command.request.kind))tasks.applied(c,tasks.record(c,command.task),command.configurationVersion);
+            command.kafkaReview=kafkaReview;
             outcome(c,command,phase,code);agents.require(c,lease,directory);return null;
         });
+    }
+    private static boolean validKafkaObservation(TaskRequest request,String phase,String code,KafkaRecoveryReview.Observation observation){
+        if(!request.kafkaReview()||!"SUCCEEDED".equals(phase))return observation==null;
+        return KafkaRecoveryReview.VERIFIED.equals(code)&&observation!=null&&observation.matches(request.subscriptionId,request.errorCount);
     }
     void verifyDispatch(Dispatch dispatch,AgentDirectory agents,ControlStore.Lease lease,String directory)throws Exception{
         tasks.service((c,accounts)->{agents.require(c,lease,directory);root(c);Stored command=dispatched(c,dispatch,lease,directory);if(terminal(command.phase))throw new TaskService.Conflict("COMMAND_PHASE_CHANGED");return null;});
@@ -281,6 +296,7 @@ final class DurableCommands {
                 String target=command.request.subscriptionId;
                 if(target!=null&&target.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))result.put("subscriptionId",target);
                 result.put("references",RecoveryReceipts.references(command.request));
+                if(command.kafkaReview!=null)result.put("kafkaReview",command.kafkaReview);
                 return result;
             }
         });

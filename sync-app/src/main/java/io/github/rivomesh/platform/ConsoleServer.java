@@ -204,6 +204,16 @@ public final class ConsoleServer implements AutoCloseable {
                 request.reference=body(exchange).path("expectedAssessment").textValue();
                 json(exchange,200,control.invoke(request,principal));return;
             }
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")
+                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&parts[6].equals("stage")&&method.equals("POST")){
+                if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                JsonNode input=body(exchange);
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,parts[3]);
+                request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                request.reference=input.path("expectedPreparation").textValue();request.revision=input.path("expectedRevision").textValue();
+                request.identityHash=input.path("expectedEvidenceSha256").textValue();
+                json(exchange,200,control.invoke(request,principal));return;
+            }
             if((parts.length==6||parts.length==7)&&parts[1].equals("api")&&parts[2].equals("tasks")
                     &&parts[4].equals("handoff")&&parts[5].equals("preparation")){
                 boolean release=parts.length==7&&"release".equals(parts[6]);
@@ -327,6 +337,9 @@ public final class ConsoleServer implements AutoCloseable {
                 JsonNode body=body(exchange);
                 String action=body.path("action").asText(""),revision=body.path("expectedRevision").asText("");
                 if(!principal.administers()&&!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action)){error(exchange,403,"FORBIDDEN");return;}
+                if(TaskRequest.KAFKA_REVIEW_ACTION.equals(action)&&(!body.path("subscriptionId").isTextual()
+                        ||!body.path("errorCount").isIntegralNumber()||!body.path("errorCount").canConvertToLong()))
+                    throw new IllegalArgumentException("KAFKA_RECOVERY_REQUEST_INVALID");
                 long generation=body.has("errorCount")&&body.get("errorCount").isIntegralNumber()?body.get("errorCount").asLong():-1;
                 ValidationRequest validation=body.hasNonNull("validation")?Model.JSON.treeToValue(body.get("validation"),ValidationRequest.class):null;
                 if(body.hasNonNull("skip")&&(!body.get("skip").isObject()||!body.get("skip").path("acceptDataLoss").isBoolean()))throw new IllegalArgumentException("SKIP_DATA_LOSS_APPROVAL_REQUIRED");
@@ -346,7 +359,7 @@ public final class ConsoleServer implements AutoCloseable {
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
         catch(IllegalArgumentException e){
             String message=e.getMessage();
-            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("(CORRECTION|HANDOFF)_[A-Z_]+")
+            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("(CORRECTION|HANDOFF|KAFKA_RECOVERY)_[A-Z_]+")
                     ||exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message.matches("ACCOUNT_[A-Z_]+"));
             error(exchange,400,known?message:"REQUEST_INVALID");
         }
