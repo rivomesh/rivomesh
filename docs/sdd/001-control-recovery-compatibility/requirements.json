@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.24",
+  "version": "0.25",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1217,14 +1217,14 @@
       "id": "DO-03",
       "epic": "DOCS",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "恢复场景和FAQ完整手册",
         "en": "Recovery scenarios and FAQ"
       },
       "gap": {
-        "zh-CN": "现有校验/共同点修复FAQ不能覆盖新跳过、补数据与跨节点故障。",
-        "en": "Existing reconciliation FAQ does not cover new skip,patch and distributed faults."
+        "zh-CN": "中英文故障手册覆盖切主、日志丢失、SQL/确认错误、节点、存储、会话、人工恢复与交接，按已有产品档案给出操作和边界。",
+        "en": "The bilingual runbook covers promotion, log loss, SQL/ack, node, storage, sessions, manual recovery and cutover with actions and product boundaries."
       },
       "acceptance": {
         "zh-CN": "逐场景描述现象、原因、界面/API操作、执行前后断点、缺口、幂等/撤销边界；覆盖源切主、日志丢失、SQL错误、确认丢失、节点/存储故障、会话撤销和人工恢复。",
@@ -1236,9 +1236,19 @@
         "SE-05"
       ],
       "evidence": [
-        "docs/zh-CN/managed-repair.md",
-        "docs/recovery.md"
-      ]
+        "docs/zh-CN/reconciliation-workflow.md",
+        "docs/en/reconciliation-workflow.md",
+        "docs/en/capture-recovery.md",
+        "docs/zh-CN/capture-recovery.md",
+        "docs/verification/baseline.json"
+      ],
+      "verification": {
+        "artifactSha256": "f69e54391a22d1ff4564deb2f272a06d4850c5ea7dfe75f8f86a32601c68ee23",
+        "artifactKind": "bilingual operator runbooks",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "1eaff529110a76fe18161ac296d0150b84d909e5d5364d7ee40e5e70ba7ca092",
+        "profile": "Bilingual scenario runbook with UI/API, durable checkpoints, gaps, idempotency, cancellation and approved product boundaries."
+      }
     },
     {
       "id": "DO-04",

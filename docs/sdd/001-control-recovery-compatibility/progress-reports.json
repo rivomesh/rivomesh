@@ -2,43 +2,9 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T10:54:04+08:00",
-  "nextReportAt": "2026-11-18T11:54:04+08:00",
+  "lastReportAt": "2026-11-18T11:54:21+08:00",
+  "nextReportAt": "2026-11-18T12:54:21+08:00",
   "completedSincePrevious": [
-    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
-    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks.",
-    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending.",
-    "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
-  ],
-  "inProgress": [
-    "CP-04 fixed-owner scheduling and explicit safe relocation work.",
-    "CP-06 capture lease and Worker process indicators. Targeted Java and console checks pass; native cross-entry CDC is running.",
-    "SO-07 Oracle typed normalization, archive-loss admission and CDC checkpoint implementation."
-  ],
-  "reportContents": [
-    "Current totals",
-    "New completions since previous report",
-    "In-progress tasks and evidence",
-    "Remaining work and blockers",
-    "Published commits and test results"
-  ],
-  "lastReportedSdd": {
-    "DONE": 19,
-    "PARTIAL": 25,
-    "NEW": 4
-  },
-  "lastReportedPublishedCommits": [
-    "adfe1b78025342e9aa813fce5ff212811601608c",
-    "688e53b75e3b8158f35d27cb71aeb55192524ef2",
-    "0af97fddcafb20d9adccf691b1b2418be90c4949",
-    "0ec162deca1c3f097e74636b36860d58f50c2ea2"
-  ],
-  "currentSdd": {
-    "DONE": 21,
-    "PARTIAL": 26,
-    "NEW": 1
-  },
-  "newSinceLastReport": [
     "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
     "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check.",
     "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
@@ -49,6 +15,43 @@
     "SO-07 advanced to PARTIAL. Oracle 26ai ARM64 completed four SCN Flashback and source authority checks using an external Java 8 driver.",
     "PostgreSQL 17.12 passed 35 native tests across Java 8, 11, 17, 21 and 25 on one frozen artifact.",
     "Native Oracle 26ai archive LogMiner returns retained redo/undo, one commit SCN/XID and excludes rolled-back DML."
+  ],
+  "inProgress": [
+    "Oracle redo normalization, retained archive admission and CDC checkpoints.",
+    "CP-06 two-controller verification of Worker liveness versus journal capture lease.",
+    "LG-07 two 100,000-row performance runs for LOCAL and EXTERNAL journals."
+  ],
+  "reportContents": [
+    "Current totals",
+    "New completions since previous report",
+    "In-progress tasks and evidence",
+    "Remaining work and blockers",
+    "Published commits and test results"
+  ],
+  "lastReportedSdd": {
+    "DONE": 21,
+    "PARTIAL": 26,
+    "NEW": 1
+  },
+  "lastReportedPublishedCommits": [
+    "e665602bd5173545c2781351e389e489f73ee67a",
+    "10fece9bf0d3fabcbb55d9ce5d7b7c8c6e9ebad2",
+    "47c72ca64ae452e975b829919f6e53e7efac4392",
+    "4e1b4d371869c81605cd14ca2c53f83b31274e44",
+    "6871b043b7e5e4d4e40932edf226fa7f79f0463e",
+    "3511035c140e2d6276041bc7b360619c9c6c9b92",
+    "027e83157270b64212770e4c2489e68edebcdca8",
+    "c11850fad9e19157932c3a98ba875a19e6a2a7b6",
+    "1c099b4755957ec5c681bb477bf4a296b0d2782e",
+    "71202816e47a1af17d6b484800b0603a83c5ec93"
+  ],
+  "currentSdd": {
+    "DONE": 22,
+    "PARTIAL": 25,
+    "NEW": 1
+  },
+  "newSinceLastReport": [
+    "DO-03 accepted. Bilingual recovery runbook covers source, targets, distributed control, storage, browser sessions and manual repair with scoped operations."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

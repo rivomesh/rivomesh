@@ -289,6 +289,21 @@
         "profile": "48 bilingual requirements; stable IDs; unique tasks/rows; acyclic dependencies; criteria and archived evidence linked by hash and verified current counts.",
         "criteriaSha256": "9c08c60fba519a64e49a1b4c72e00cfa3f98292db224ffd735ffa77b8746b9a4"
       }
+    },
+    {
+      "id": "DO-03",
+      "title": {
+        "zh-CN": "恢复场景和FAQ完整手册",
+        "en": "Recovery scenarios and FAQ"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "f69e54391a22d1ff4564deb2f272a06d4850c5ea7dfe75f8f86a32601c68ee23",
+        "artifactKind": "bilingual operator runbooks",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "1eaff529110a76fe18161ac296d0150b84d909e5d5364d7ee40e5e70ba7ca092",
+        "profile": "Bilingual scenario runbook with UI/API, durable checkpoints, gaps, idempotency, cancellation and approved product boundaries."
+      }
     }
   ],
   "productProfiles": [

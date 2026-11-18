@@ -126,7 +126,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-DO-02 · Deployment and cluster operations docs · P1 · Depends on: CP-07, SE-04, JV-04, LG-05, LG-06
   Deliver: Provide runnable standalone/cluster examples for four deployment paths with stores,secrets/TLS,enrollment/drain,backup/restore/upgrades and local-storage boundaries;live K8s requires separate evidence.
   Acceptance: AC-DO-02
-- [ ] T-DO-03 · Recovery scenarios and FAQ · P1 · Depends on: RC-09, RC-10, SE-05
+- [x] T-DO-03 · Recovery scenarios and FAQ · P1 · Depends on: RC-09, RC-10, SE-05
   Deliver: Each scenario states symptoms,cause,UI/API steps,positions,gaps,idempotency/undo limits across promotion,log loss,SQL/ack,node/storage,session and manual recovery.
   Acceptance: AC-DO-03
 - [ ] T-DO-04 · Configuration/API/compatibility and upgrade docs · P1 · Depends on: SO-01, JV-02, CP-03
