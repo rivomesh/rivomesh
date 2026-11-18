@@ -69,3 +69,16 @@ Execution cannot select another report,gaps or duration. `GAP_VERIFY_CANCEL` car
 | Accepted loss | Acceptance creates a gap,not equality. Fresh full affected-table comparison must pass before recording verification at a cut. |
 
 Plans,original SKIP history and receipts remain in source-journal metadata. Native target receipts/business data are unchanged. Source transactions persist plans and atomically commit verification receipts with all selected gap links. First-release schemas are created directly without in-place prerelease-candidate migrations.
+
+## Progress semantics
+
+| Field | Meaning |
+|---|---|
+| `captured_sequence` | Captured incremental-log sequence as an exact decimal string |
+| `covered_sequence` | Minimum safe coverage across targets,including explicit skips |
+| `subscriptions[].safeCoveredSequence` | Target acknowledgment coverage |
+| `subscriptions[].contiguousDeliveredSequence` | Contiguous non-skipped prefix,stopping before the first historical SKIP |
+| `subscriptions[].firstSkippedSequence` | First historical skip or null |
+| `subscriptions[].progressSemantics` | SQL_COMMITTED,BROKER_ACCEPTED or MATERIALIZER_ACKNOWLEDGED |
+
+For SQL,the contiguous prefix represents ordered committed projections. Verification never changes SKIP into APPLIED. Broker receipt is not consumer completion;materializer acknowledgment is not visibility on every replica. New progress values are strings beyond JavaScript integer precision. Snapshot completion remains a separate state.

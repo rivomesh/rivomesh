@@ -1,8 +1,8 @@
 # Gap verification: common cut and atomic records
 
-[中文](design-gap-verification.md) · [Tasks](tasks.en.md) · RC-08 PARTIAL
+[中文](design-gap-verification.md) · [Tasks](tasks.en.md) · RC-08 DONE · 限定SQL档案 / bounded SQL profile
 
-Plans,administrator API/UI,cross-node approval and cancellation are integrated. PostgreSQL/MySQL each pass54 native contracts and102 DOM checks pass;27 real-CDC checks pass with each PG/MySQL control store and RC-08 remains open. See the [operator guide and FAQ](../../en/gap-verification.md).
+Plans,administrator API/UI,cross-node approval and cancellation are integrated. PostgreSQL/MySQL each pass58 native contracts and103 DOM checks pass;27 real-CDC checks pass with each PG/MySQL control store and the bounded RC-08 SQL profile is accepted. See the [operator guide and FAQ](../../en/gap-verification.md).
 
 ## Reviewed scope
 
@@ -30,4 +30,6 @@ The first release creates metadata directly,without ALTER/migration support for 
 
 ## Remaining work
 
-Real-CDC cross-entry acceptance passes27 checks per PG/MySQL control store with a PostgreSQL17 business verification target and a healthy MySQL8.4 peer. Other SQL,analytical and messaging protocols remain unverified. Before-image compensation,typed manual correction and complete progress semantics remain tracked by RC-06/07/08/10.
+Real-CDC cross-entry acceptance passes27 checks per PG/MySQL control store with a PostgreSQL17 business verification target and a healthy MySQL8.4 peer. Other SQL,analytical and messaging protocols remain unverified. Before-image compensation,typed manual correction and other target protocols remain tracked by RC-06/07/10.
+
+Incremental progress uses one journal snapshot. Safe coverage includes explicit SKIP;the contiguous non-skipped prefix stops before the first historical skip even after verification. Indexed first-gap lookups avoid scanning payload history. SQL commit,broker receipt and materializer acknowledgment have distinct labels. Displayed sequences are exact decimal strings;baseline snapshot completion is separate.

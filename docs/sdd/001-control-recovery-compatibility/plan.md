@@ -4,7 +4,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**10 DONE、32 PARTIAL、6 NEW，38 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，继续推进缺口验证关闭与补偿。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**11 DONE、31 PARTIAL、6 NEW，37 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，继续推进缺口验证关闭与补偿。
 
 ## 1. 当前基线
 
@@ -16,13 +16,13 @@ RM-SDD-001 · v0.9 · 2026-11-17 · 实施中：推进事务跳过与缺口
 |---|---|---|
 | 1 多节点统一控制 | CP-01～CP-07 | 5 |
 | 2 登录保持 | SE-01～SE-05 | 0 |
-| 3 跳过与补数据 | RC-01～RC-10 | 8 |
+| 3 跳过与补数据 | RC-01～RC-10 | 7 |
 | 4 源版本/PG/Oracle | SO-01～SO-07 | 7 |
 | 5 五个Java版本 | JV-01～JV-04 | 4 |
 | 6 完整文档 | DO-01～DO-05 | 5 |
 | 既有范围合并保留 | LG-01～LG-10 | 10 |
 
-共48项：10项DONE，余38项为6项NEW、32项PARTIAL。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
+共48项：11项DONE，余37项为6项NEW、31项PARTIAL。PARTIAL表示已有基础但本项整体未完成；不是把已验收功能删除重做。
 
 ## 2. 用户已明确的需求，不再当作可选项
 

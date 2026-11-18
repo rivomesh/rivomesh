@@ -2,7 +2,7 @@
 
 RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 
-实施中：48项持续追踪，10项DONE、32项PARTIAL、6项NEW，余38项未闭环。RC-02、RC-05及RC-03限定档案已验收；缺口验证关闭、自动接管、补偿和完整兼容矩阵继续追踪。
+实施中：48项持续追踪，11项DONE、31项PARTIAL、6项NEW，余37项未闭环。RC-02、RC-05、RC-03和RC-08限定档案已验收；自动接管、补偿和完整兼容矩阵继续追踪。
 
 [基线和决策](plan.md) · [任务](tasks.md) · [验收矩阵](acceptance.md) · [English](spec.en.md)
 
@@ -39,7 +39,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | RC-05 | P0 / DONE | 不确定提交与断点核对 | 协议6原Agent/LOCAL日志、PG/MySQL控制库限定档案已验收：全任务暂停、新证据、原生围栏、管理员跨入口确认、ACK/回执原子提交及幂等重试，保持原暂停。跳过、补偿和其他完整矩阵另行追踪。 |
 | RC-06 | P0 / NEW | 失败事务前镜像补偿 | 已有共同校验点修复，尚不能让落后的失败目标回到原事务可重放状态。 |
 | RC-07 | P0 / PARTIAL | 界面手工补数据与修正 | 已有报告驱动修复，不支持独立的失败事务数据补充或用户补丁。 |
-| RC-08 | P0 / PARTIAL | 一致性缺口台账与真实水位 | 缺口台账、公开告警和PG/MySQL核验API/UI已实现；54项原生合同/产品及102项DOM通过，PG/MySQL控制库各27项真实CDC跨入口核验通过。完整应用/覆盖水位及其他目标语义仍未完成。 |
+| RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
 | RC-09 | P0 / PARTIAL | 补偿作业的跨节点持久化和恢复 | 共同点修复已有本地持久操作与凭据，跨节点及新模式还缺实现。 |
 | RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | SQL、分析库、消息队列一致性协议不同，不能复用一个伪事务实现。 |
 
@@ -112,7 +112,7 @@ RM-SDD-001 · v0.9 · 2026-11-17 · IMPLEMENTING
 | RC-05 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [FanoutDispatcher.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/FanoutDispatcher.java) / [README.md](../../../docs/verification/README.md) |
 | RC-06 | [README.md](../../../docs/verification/README.md) / [common-cut-repair.md](../../../docs/zh-CN/common-cut-repair.md) |
 | RC-07 | [README.md](../../../docs/verification/README.md) / [RepairRequest.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/RepairRequest.java) |
-| RC-08 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [reconciliation-workflow.md](../../../docs/zh-CN/reconciliation-workflow.md) |
+| RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
 | RC-09 | [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) / [README.md](../../../docs/verification/README.md) |
 | RC-10 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [messaging-v3.md](../../../docs/zh-CN/messaging-v3.md) |
 | SO-01 | [AdapterCatalog.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java) / [SourceAdapter.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java) |

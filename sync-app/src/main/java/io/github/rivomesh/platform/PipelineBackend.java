@@ -17,8 +17,13 @@ final class PipelineBackend {
                 if("EXTERNAL".equals(c.journal.mode)&&c.journal.product==TargetProduct.MYSQL&&missing.getErrorCode()==1049&&"42000".equals(missing.getSQLState()))return Collections.emptyMap();throw missing;
             }
             Map<String,Object> status=journal.status(),preview=journal.snapshotSummary(100);status.putAll(preview);
-            List<Map<String,Object>> subscriptions=journal.subscriptionDiagnostics();long minimum=((Number)status.get("lastSequence")).longValue();for(Map<String,Object> sub:subscriptions)minimum=Math.min(minimum,((Number)sub.get("acknowledged")).longValue());
-            status.put("pending_transactions",((Number)status.get("lastSequence")).longValue()-minimum);status.put("applied_sequence",minimum);status.put("node_id",status.get("owner"));status.put("error_code",status.get("errorCode"));status.put("error_count",status.get("errorGeneration"));
+            List<Map<String,Object>> subscriptions=journal.subscriptionDiagnostics();Map<String,Object> frame=journal.deliveryProgress();
+            @SuppressWarnings("unchecked")Map<String,Map<String,Object>> progress=(Map<String,Map<String,Object>>)frame.get("subscriptions");long captured=Long.parseLong((String)frame.get("capturedSequence")),minimum=captured;
+            for(Map<String,Object> sub:subscriptions){
+                Map<String,Object> point=progress.get(sub.get("id"));if(point==null)throw new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED");sub.putAll(point);minimum=Math.min(minimum,Long.parseLong((String)point.get("safeCoveredSequence")));
+                PipelineConfig.Target target=c.targets.stream().filter(t->t.id.equals(sub.get("id"))).findFirst().orElseThrow(()->new IllegalStateException("GAP_PROGRESS_SUBSCRIPTION_CHANGED"));sub.put("progressSemantics",target.product.messaging()?"BROKER_ACCEPTED":target.product.materialized()?"MATERIALIZER_ACKNOWLEDGED":"SQL_COMMITTED");
+            }
+            status.put("captured_sequence",Long.toString(captured));status.put("covered_sequence",Long.toString(minimum));status.put("pending_transactions",captured-minimum);status.put("node_id",status.get("owner"));status.put("error_code",status.get("errorCode"));status.put("error_count",status.get("errorGeneration"));
             long totalSnapshots=((Number)preview.get("table_count")).longValue();@SuppressWarnings("unchecked")Map<String,Long> snapshotAcks=(Map<String,Long>)preview.get("snapshotAcknowledgments");boolean targetsReady=true;for(Map<String,Object> sub:subscriptions)if(snapshotAcks.getOrDefault((String)sub.get("id"),0L)<totalSnapshots)targetsReady=false;
             status.put("phase",totalSnapshots==0?"DISCOVERY":!preview.get("table_count").equals(preview.get("completed_tables"))?"SNAPSHOT":!targetsReady?"TARGET_SNAPSHOT":((Number)status.get("pending_transactions")).longValue()>0?"CATCHUP":"STREAMING");
             SourcePosition position=journal.captured();if(position!=null){status.put("sourcePosition",position);status.put("capture_gtid",position.getPayload().get("gtidSet"));}

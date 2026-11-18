@@ -33,4 +33,9 @@ export function registerGapVerificationTests({setup,flush,login}){
   const ui=fixture(),fallback=ui.w.fetch;let release;ui.w.fetch=(path,options={})=>path.includes('/gap-verifications/')?new Promise(resolve=>{release=()=>resolve({ok:true,status:200,json:async()=>ui.response});}):fallback(path,options);
   try{await login(ui);const reading=ui.w.RivomeshRecovery.openVerificationPlan(ui.task,ui.id);await flush();ui.d.getElementById('logout').click();await flush();release();await reading;assert.equal(ui.d.querySelector('.recovery-dialog'),null);assert.equal(ui.d.querySelector('[data-recovery-action]'),null);}finally{ui.dom.window.close();}
  });
+ test('progress keeps exact coverage separate from the applied prefix and broker completion',async()=>{
+  const ui=fixture();ui.task.status.captured_sequence='9007199254740995';ui.task.status.subscriptions=[{id:'pg',state:'RUNNING',safeCoveredSequence:'9007199254740993',contiguousDeliveredSequence:'9',firstSkippedSequence:'10',progressSemantics:'SQL_COMMITTED'},{id:'mq',state:'RUNNING',safeCoveredSequence:'9007199254740994',contiguousDeliveredSequence:'9007199254740994',firstSkippedSequence:null,progressSemantics:'BROKER_ACCEPTED'}];
+  try{await login(ui);const cards=ui.d.querySelectorAll('.subscription-list .subscription-card');assert.match(cards[0].textContent,/安全覆盖序号.*9007199254740993/);assert.match(cards[0].textContent,/连续已应用序号.*9/);assert.match(cards[0].textContent,/首次显式跳过序号.*10/);assert.match(cards[1].textContent,/不代表下游消费者已完成处理/);}finally{ui.dom.window.close();}
+ });
+
 }

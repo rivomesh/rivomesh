@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **10 DONE,32 PARTIAL,6 NEW;38 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **11 DONE,31 PARTIAL,6 NEW;37 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -14,6 +14,7 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-02 | Durable transaction evidence,authorized pagination,historical schemas and images |
 | RC-05 | Native commit verification and acknowledgment recovery without reapplying rows |
 | RC-03 | Complete cross-database skip,native commit/source ACK failure,original-Agent SIGKILL/reopen and cross-entry recovery;pauses/gaps retained |
+| RC-08 | Durable gaps,reviewed verification,cross-entry approval/cancellation and honest incremental progress;bounded SQL profile |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.
 
@@ -41,7 +42,7 @@ The V2/V3 execution branches,wizard and configuration fixtures still share depen
 
 ## Next work
 
-1. Full applied/coverage watermarks,other gap-verification protocols,before-image compensation and typed corrective data entry.
+1. Before-image compensation,typed corrective data entry and other gap-verification protocols.
 2. Automatic Agent relocation,draining,global diagnostics and storage reachability.
 3. PostgreSQL/Oracle sources,MySQL8.2 and complete5.7/8.0/8.4 profiles.
 4. Distributed GaussDB and complete vendor/messaging/analytical production matrices.

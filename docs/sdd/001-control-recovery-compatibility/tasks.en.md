@@ -71,10 +71,10 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-RC-07 · Guided manual corrective data entry · P0 · Depends on: RC-02, RC-05, RC-06
   Deliver: UI offers typed insert/update/delete and import preview;precision,NULL,keys and occurrence IDs are validated;review before/after scope/counts;refuse drift and unsafe keyless bulk edits;no implicit source writes or dependency bypass.
   Acceptance: AC-RC-07
-- [ ] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
+- [x] T-RC-08 · Consistency-gap ledger and honest watermarks · P0 · Depends on: RC-02
   Deliver: Track skipped transactions/ranges,destinations,reason,actor,hashes and original evidence;separate applied progress,safe coverage and running-with-gaps;only verification evidence closes a gap and accepted loss is not equality.
   Acceptance: AC-RC-08
-  Gap records,public warnings and restart recovery pass. Internal fresh scans and atomic verification records follow the [design](design-gap-verification.en.md);API/UI and cross-node approval/cancellation are integrated;real CDC passes on PG/MySQL control;full watermarks and other target semantics remain open.
+  Accepted first SQL profile:verification,cross-entry commands,cancellation and honest progress;see [design](design-gap-verification.en.md) and [verification](../../verification/README.md). Other target protocols remain RC-10.
 - [ ] T-RC-09 · Durable distributed recovery jobs · P0 · Depends on: CP-03, RC-03, RC-06, RC-07
   Deliver: Remote plans,approval,cancellation,receipts and evidence locations are traceable;controller/agent kill recovers the same request with idempotent commits/rollback;skip is not cutover approval.
   Acceptance: AC-RC-09
@@ -167,3 +167,16 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-10 · External identity,immutable audit and Apache preparation · P2 · Depends on: CP-05, SE-05
   Deliver: Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights.
   Acceptance: AC-LG-10
+
+## Recent deliverables (not additional parent requirements)
+
+| Parent | Reviewable delivery | State |
+|---|---|---|
+| RC-08 | Immutable verification scope and plan hash | DONE |
+| RC-08 | Cross-entry ADMIN approval,durable commands and cancellation | DONE |
+| RC-08 | Fresh full affected-table scans against sealed source roots | DONE |
+| RC-08 | Atomic receipts/gap links and idempotent recovery | DONE |
+| RC-08 | Console,authorization,late-response handling and bilingual FAQ | DONE |
+| RC-08 | Distinct safe coverage,contiguous application and broker semantics | DONE |
+| RC-06 | Failed-transaction before-image compensation | NEXT |
+| RC-07 | Typed corrective input | DEPENDS_ON_RC06 |

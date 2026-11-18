@@ -28,6 +28,10 @@ The cleaned baseline removes automatic control-mode migration and historical bin
 - 102项DOM重新运行通过，覆盖计划范围、摘要审批、取消、响应丢失重试、权限和退出登录。
 - PG17/MySQL8.4控制库各27项真实CDC检查通过：Java8、MySQL8.4双库源、原固定Agent/LOCAL-H2日志、PostgreSQL17业务核验目标、MySQL8.4健康订阅；两管理入口审阅和重新扫描两张表，原子记录两条缺口。测试资源均清理。
 
-RC-08仍为PARTIAL：完整应用/覆盖水位、其他目标的核验语义及更广源/JDK/K8s矩阵未验收。[中文核验指南](../zh-CN/gap-verification.md) / [English](../en/gap-verification.md)。
+RC-08首批SQL档案已验收；其他目标由RC-10/LG-03/LG-04跟踪，更广源/JDK/K8s矩阵仍未验收。[中文核验指南](../zh-CN/gap-verification.md) / [English](../en/gap-verification.md)。
 
 The same candidate passes bounded native and public real-CDC gap verification. Historical results above are provenance rather than fresh certification. No complete connector/source/JDK/K8s recertification is claimed.
+
+RC-08水位收尾候选：`abee42cfb26ee3623c419f9d43d9dbe6a429508a8dd01da33da38338dcdcf372`。22项定向检查、103项DOM及PG/MySQL各58项原生合同通过。当前包复验只读水位、API/界面与原生恢复合同；未改变的审批/事务写入链路复用上面的3404041真实CDC27项/控制产品结果，不将旧结果改称本包重跑。复用理由及确切版本记录在baseline.json。
+
+Coverage includes explicit SKIP;the contiguous SQL applied prefix stops before the first skip and is unchanged by historical verification. Broker/materializer acknowledgments have distinct semantics and never claim downstream-consumer completion. All incremental sequence fields used by this view are exact decimal strings.

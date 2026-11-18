@@ -416,6 +416,28 @@ public final class JdbcJournal implements NormalizedJournal {
             result.put("subscriptions",subscriptions(c));return result;
         }
     }
+    /** One incremental progress frame. First-gap lookups use the per-subscription primary key. */
+    public Map<String,Object> deliveryProgress()throws Exception{
+        try(Connection c=connect()){
+            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);c.setAutoCommit(false);int format;long captured;
+            try(PreparedStatement p=c.prepareStatement("SELECT format_version,next_seq FROM "+table("job")+" WHERE pipeline_id=?")){
+                p.setString(1,settings.pipelineId);try(ResultSet r=p.executeQuery()){if(!r.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");format=r.getInt(1);captured=r.getLong(2)-1;}
+            }
+            if(format!=3&&format!=4)throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");if(format==4)JdbcSkipJournal.verifyTables(this,c);
+            Map<String,Object> progress=new TreeMap<>();
+            for(Subscription sub:subscriptions(c)){
+                long prefix=sub.acknowledged;Long first=null;
+                if(format==4)try(PreparedStatement p=c.prepareStatement("SELECT g.stream_seq,g.plan_hash,p.stream_seq,p.subscription_id,p.plan_hash,p.run_state FROM "+table("gap")+" g LEFT JOIN "+table("skip_plan")+" p ON p.pipeline_id=g.pipeline_id AND p.operation_id=g.operation_id WHERE g.pipeline_id=? AND g.subscription_id=? ORDER BY g.stream_seq LIMIT 1")){
+                    p.setString(1,settings.pipelineId);p.setString(2,sub.id);try(ResultSet r=p.executeQuery()){if(r.next()){
+                        first=r.getLong(1);if(first<1||first>sub.acknowledged||r.getObject(3)==null||first!=r.getLong(3)||!sub.id.equals(r.getString(4))||!Objects.equals(r.getString(2),r.getString(5))||!"COMPLETED".equals(r.getString(6)))throw new IllegalStateException("GAP_PROGRESS_RECORD_CHANGED");prefix=first-1;
+                    }}
+                }
+                if(sub.acknowledged<0||sub.acknowledged>captured)throw new IllegalStateException("GAP_PROGRESS_CHECKPOINT_INVALID");
+                Map<String,Object> row=new LinkedHashMap<>();row.put("safeCoveredSequence",Long.toString(sub.acknowledged));row.put("contiguousDeliveredSequence",Long.toString(prefix));row.put("firstSkippedSequence",first==null?null:Long.toString(first));progress.put(sub.id,row);
+            }
+            Map<String,Object> result=new LinkedHashMap<>();result.put("capturedSequence",Long.toString(captured));result.put("subscriptions",progress);c.rollback();return result;
+        }
+    }
     /** Bounded metadata preview for the console; never loads all business schemas or rows. */
     public Map<String,Object> snapshotSummary(int limit)throws Exception{
         if(limit<1||limit>1000)throw new IllegalArgumentException("SNAPSHOT_PREVIEW_LIMIT_INVALID");Map<String,Object> result=new LinkedHashMap<>();

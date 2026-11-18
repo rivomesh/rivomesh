@@ -69,3 +69,16 @@
 | 接受数据丢失是否自动算一致 | 不算。接受跳过只建立缺口；必须重新扫描并匹配完整受影响表，才能追加指定共同点的核验凭据。 |
 
 核验计划、原始SKIP记录及成功凭据保留在源日志元数据中；原生目标回执和业务数据不改写。审阅计划持久保存，核验凭据与全部选中缺口关联在同一源库事务提交；首版元数据结构直接创建，不提供旧开发候选的原地结构迁移。
+
+## 水位含义
+
+| 字段 | 含义 |
+|---|---|
+| `captured_sequence` | 已捕获的增量日志序号，十进制字符串 |
+| `covered_sequence` | 所有目标安全覆盖序号的最小值，包含明确跳过 |
+| `subscriptions[].safeCoveredSequence` | 指定目标已经确认覆盖的序号 |
+| `subscriptions[].contiguousDeliveredSequence` | 从起点连续未跳过的前缀；止于首个历史SKIP之前 |
+| `subscriptions[].firstSkippedSequence` | 首个历史跳过序号；没有跳过则为null |
+| `subscriptions[].progressSemantics` | SQL_COMMITTED、BROKER_ACCEPTED或MATERIALIZER_ACKNOWLEDGED |
+
+SQL目标的连续前缀表示已按原顺序提交的投影事务；核验成功不会把原SKIP改成APPLIED。Broker确认不表示消费者完成；物化确认不表示全部副本可见。新进度字段均为字符串以保留超过JavaScript安全整数范围的序号。全量快照完成度使用独立状态，不能由增量序号推断。

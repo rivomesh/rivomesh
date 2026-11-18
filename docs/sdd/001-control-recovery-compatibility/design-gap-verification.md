@@ -1,8 +1,8 @@
 # 缺口核验：共同校验点与原子记录
 
-[English](design-gap-verification.en.md) · [任务](tasks.md) · RC-08 PARTIAL
+[English](design-gap-verification.en.md) · [任务](tasks.md) · RC-08 DONE · 限定SQL档案 / bounded SQL profile
 
-计划、管理员API/UI、跨节点审批与取消已接入，原生PG/MySQL各54项合同及102项DOM检查通过；PG/MySQL控制库各27项真实同步链路检查通过，RC-08尚未整项关闭。操作步骤和FAQ见[核验手册](../../zh-CN/gap-verification.md)。
+计划、管理员API/UI、跨节点审批与取消已接入，原生PG/MySQL各58项合同及103项DOM检查通过；PG/MySQL控制库各27项真实同步链路检查通过，RC-08限定SQL档案已完成。操作步骤和FAQ见[核验手册](../../zh-CN/gap-verification.md)。
 
 ## 审阅范围
 
@@ -30,4 +30,6 @@
 
 ## 尚未完成
 
-PG/MySQL控制库跨入口闭环各27项已通过，业务核验目标为PostgreSQL17，另有MySQL8.4健康订阅；原生PG/MySQL之外的SQL、分析库和消息目标仍未扩展核验协议。失败事务补偿、类型化手工补数据及完整真实水位展示仍由RC-06/07/08/10继续追踪。
+PG/MySQL控制库跨入口闭环各27项已通过，业务核验目标为PostgreSQL17，另有MySQL8.4健康订阅；原生PG/MySQL之外的SQL、分析库和消息目标仍未扩展核验协议。失败事务补偿、类型化手工补数据及其他目标协议仍由RC-06/07/10继续追踪。
+
+增量水位以同一日志快照计算：安全覆盖包含显式SKIP；连续未跳过前缀止于首个历史SKIP之前，核验成功也不改写它。每目标按主键索引读取第一条历史缺口，不扫描全部缺口负载。SQL提交、Broker接收、物化确认分别标注；所有用于界面显示的序号使用十进制字符串。快照完成度独立展示。
