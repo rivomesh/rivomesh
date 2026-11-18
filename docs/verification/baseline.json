@@ -1141,7 +1141,9 @@
     "status": "PASS",
     "sourceVersion": "23.26.4.0.0",
     "cleanupExitCode": 0,
-    "reproduce": "python3 tests/oracle-source-probe.py --artifact <candidate jar> --jdbc-driver <ojdbc8.jar> --output target/oracle-proof"
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact <candidate jar> --jdbc-driver <ojdbc8.jar> --output target/oracle-proof",
+    "archiveRedo": "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+    "archiveRedoNativeChecks": 5
   },
   "postgresqlSourceRuntimeMatrix": {
     "artifactSha256": "4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c",

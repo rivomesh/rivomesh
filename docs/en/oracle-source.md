@@ -15,3 +15,5 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main probe-oracle config/o
 The report includes DBID, the resetlogs SCN, PDB GUID and a common snapshot SCN. It checks a Flashback read in each table at that SCN and reports primary-key presence. For `ORACLE_WRITABLE_PDB_REQUIRED`, verify the PDB is open read/write and the root account can see that PDB. For `ORACLE_PDB_AUTHORITY_MISMATCH`, compare the supplied service and PDB identity.
 
 The [native fixture](../../tests/oracle-source-probe.py) verifies keyed and keyless tables, a historical update/delete and rejection of the root service supplied as the PDB.
+
+Add `--logminer` for the native archive verification. One commit XID contains an update and keyless delete with redo and undo SQL, and the committed-only result excludes a rolled-back insert. The streaming adapter still needs durable checkpoints and normalized transaction delivery. [Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)

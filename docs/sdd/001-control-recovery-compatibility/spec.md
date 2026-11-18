@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.23 · 2026-11-18 · IMPLEMENTING
+RM-SDD-001 · v0.24 · 2026-11-18 · IMPLEMENTING
 
 实施中：48项持续追踪，21项DONE、26项PARTIAL、1项NEW，余27项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、源范围恢复和完整兼容矩阵继续追踪。
 
@@ -53,7 +53,7 @@ RM-SDD-001 · v0.23 · 2026-11-18 · IMPLEMENTING
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。其他 JDK 由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | 17.12 单主已实测快照、增量、续传与槽丢失。跨时间线切换及共同点未验收。 |
-| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 23.26.4.0.0 的 CDB/PDB 身份、SCN Flashback、主键/无主键读取和误连拒绝已实测。LogMiner 增量、重启和 RAC 待实现。 |
+| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 的 CDB/PDB 身份、SCN Flashback 与原生归档 LogMiner 已验证同一 XID 的更新和无主键删除，并排除已回滚事件。事务流、断点和 RAC 待实现。 |
 
 ## Java运行时兼容
 

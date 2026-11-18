@@ -11,9 +11,9 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "SO-07 native LogMiner redo and transaction semantics.",
     "CP-04 fixed-owner scheduling and explicit safe relocation work.",
-    "CP-06 capture lease and Worker process indicators. Targeted Java and console checks pass; native cross-entry CDC is running."
+    "CP-06 capture lease and Worker process indicators. Targeted Java and console checks pass; native cross-entry CDC is running.",
+    "SO-07 Oracle typed normalization, archive-loss admission and CDC checkpoint implementation."
   ],
   "reportContents": [
     "Current totals",
@@ -47,7 +47,8 @@
     "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence.",
     "LG-06 native worker outage passed. PostgreSQL stayed online on the control plane; the recovered worker reused its CSI volume and resumed under a new lease.",
     "SO-07 advanced to PARTIAL. Oracle 26ai ARM64 completed four SCN Flashback and source authority checks using an external Java 8 driver.",
-    "PostgreSQL 17.12 passed 35 native tests across Java 8, 11, 17, 21 and 25 on one frozen artifact."
+    "PostgreSQL 17.12 passed 35 native tests across Java 8, 11, 17, 21 and 25 on one frozen artifact.",
+    "Native Oracle 26ai archive LogMiner returns retained redo/undo, one commit SCN/XID and excludes rolled-back DML."
   ],
   "nextTasks": [
     "Implement Oracle redo transaction boundaries, retained archive checking and checkpoint handoff.",

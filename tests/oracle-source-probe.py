@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--java', default='java')
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
+    parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     options.output.mkdir(parents=True, exist_ok=True)
@@ -91,6 +92,10 @@ def main():
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_orders TO C##RIVO_PROBE;
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_keyless TO C##RIVO_PROBE;
             """)
+        if options.logminer:
+            sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                ALTER TABLE rivo_app.rivo_orders ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+                ALTER TABLE rivo_app.rivo_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'
         pdb_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREEPDB1'
         document = {
@@ -137,6 +142,52 @@ def main():
             denied = execute(*program, env=environment, checked=False)
             assert denied.returncode != 0 and 'ORACLE_PDB_AUTHORITY_MISMATCH' in denied.stderr
             observed('A root connection substituted for the PDB is refused before flashback')
+            if options.logminer:
+                sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                    INSERT INTO rivo_app.rivo_orders VALUES(2,'rolled back');
+                    ROLLBACK;""")
+                end = sql('SELECT current_scn FROM v$database;').stdout.strip()
+                assert end.isdecimal() and int(end) > int(scn)
+                sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+                mined = sql(f"""
+                    DECLARE
+                        added NUMBER := 0;
+                    BEGIN
+                        FOR file_row IN (
+                            SELECT DISTINCT name FROM v$archived_log
+                            WHERE resetlogs_change#=(SELECT resetlogs_change# FROM v$database)
+                              AND name IS NOT NULL AND status='A' AND deleted='NO'
+                              AND first_change# <= {end} AND next_change# > {scn}
+                        ) LOOP
+                            dbms_logmnr.add_logfile(
+                                logfilename=>file_row.name,
+                                options=>CASE WHEN added=0 THEN dbms_logmnr.new ELSE dbms_logmnr.addfile END);
+                            added := added + 1;
+                        END LOOP;
+                        dbms_logmnr.start_logmnr(
+                            startscn=>{scn}, endscn=>{end},
+                            options=>dbms_logmnr.dict_from_online_catalog + dbms_logmnr.committed_data_only);
+                    END;
+                    /
+                    SELECT operation||'|'||commit_scn||'|'||RAWTOHEX(xid)||'|'||sql_undo||'|'||sql_redo
+                    FROM v$logmnr_contents
+                    WHERE seg_owner='RIVO_APP' AND table_name='RIVO_ORDERS' AND src_con_name='FREEPDB1'
+                    AND operation IN ('INSERT','UPDATE','DELETE') AND status=0;
+                    SELECT operation||'|'||commit_scn||'|'||RAWTOHEX(xid)||'|'||sql_undo||'|'||sql_redo
+                    FROM v$logmnr_contents
+                    WHERE seg_owner='RIVO_APP' AND table_name='RIVO_KEYLESS' AND src_con_name='FREEPDB1'
+                    AND operation IN ('INSERT','UPDATE','DELETE') AND status=0;
+                    EXEC dbms_logmnr.end_logmnr
+                """).stdout.splitlines()
+                changes = [line.strip().split('|') for line in mined if '|' in line]
+                updates = [row for row in changes if row[0]=='UPDATE']
+                deletes = [row for row in changes if row[0]=='DELETE']
+                assert len(changes)==2 and len(updates)==len(deletes)==1, changes
+                assert updates[0][1:3]==deletes[0][1:3], changes
+                assert "'before'" in updates[0][3] and "'after'" in updates[0][4], changes
+                assert '"VALUE"' in deletes[0][3].upper() and "'7'" in deletes[0][3], changes
+                assert int(updates[0][1]) > int(scn), changes
+                observed('LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert')
         report['status'] = 'PASS'
     except Exception as failure:
         detail = str(failure)

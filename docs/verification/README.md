@@ -113,3 +113,5 @@ Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` pass
 ## PostgreSQL source runtime matrix
 
 Artifact `4e19cc6dd662de282ebc63b3da1ce6dbea6d918ab230de35c1299d56c8f5d27c` ran seven native PostgreSQL 17.12 source cases on each of Java 8, 11, 17, 21 and 25, a total of 35 successful cases. Runtime versions and image IDs are in the baseline. Run `python3 tests/postgres-source-run.py --jdk <8|11|17|21|25> --artifact <candidate jar> --output target/pg-source-proof` for an individual profile.
+
+The same Oracle 26ai image also passed the native `--logminer` archive check. The source exposes redo/undo SQL, a common commit SCN and XID for keyed update and keyless delete, and excludes the rolled-back insert.

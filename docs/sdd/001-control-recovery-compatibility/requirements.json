@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.23",
+  "version": "0.24",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1016,8 +1016,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 23.26.4.0.0 的 CDB/PDB 身份、SCN Flashback、主键/无主键读取和误连拒绝已实测。LogMiner 增量、重启和 RAC 待实现。",
-        "en": "Native Oracle 26ai 23.26.4.0.0 CDB/PDB identity, SCN flashback, keyed/keyless reads and wrong-service refusal pass. LogMiner CDC, restart and RAC remain."
+        "zh-CN": "Oracle 26ai 的 CDB/PDB 身份、SCN Flashback 与原生归档 LogMiner 已验证同一 XID 的更新和无主键删除，并排除已回滚事件。事务流、断点和 RAC 待实现。",
+        "en": "Oracle CDB/PDB identity, SCN Flashback and native archive LogMiner are verified. One XID contains update and keyless delete, and rolled-back DML is excluded. Streaming checkpoints and RAC remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
