@@ -120,7 +120,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-JV-04
 ## Complete documentation
 
-- [ ] T-DO-01 · Bilingual traceable SDD baseline · P0 · Depends on: none
+- [x] T-DO-01 · Bilingual traceable SDD baseline · P0 · Depends on: none
   Deliver: Each requirement has stable ID,status,gap,dependencies,priority,acceptance and task;ZH/EN IDs match and changes preserve evidence scope.
   Acceptance: AC-DO-01
 - [ ] T-DO-02 · Deployment and cluster operations docs · P1 · Depends on: CP-07, SE-04, JV-04, LG-05, LG-06

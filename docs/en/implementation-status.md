@@ -2,12 +2,13 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **20 DONE, 26 PARTIAL and 2 NEW, with 28 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **21 DONE, 25 PARTIAL and 2 NEW, with 27 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
 | Scope | Result |
 |---|---|
+| DO-01 | All 48 bilingual SDD requirements, acceptance profiles, evidence and totals are checked automatically. |
 | CP-01 | Unified registry,roles,versions,heartbeat and ownership |
 | SE-01–05 | Reload persistence,expiry/revocation,secure cookies/CSRF,cross-entry sessions and API identity rules |
 | CP-07 | Separated control/execution;bounded original-Worker continuity during management outages |

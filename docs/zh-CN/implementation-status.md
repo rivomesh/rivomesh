@@ -2,12 +2,13 @@
 
 首版尚未发布。Java/Maven命名空间为`io.github.rivomesh`。[完整SDD](../sdd/001-control-recovery-compatibility/spec.md) · [任务清单](../sdd/001-control-recovery-compatibility/tasks.md) · [English](../en/implementation-status.md)。
 
-48项需求：**20项完成、26项部分完成、2项未实现，剩余28项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
+48项需求：**21项完成、25项部分完成、2项未实现，剩余27项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
 
 ## 已验收
 
 | 范围 | 当前结果 |
 |---|---|
+| DO-01 | 双语 SDD 的 48 项需求、验收、证据与进度自动核对。 |
 | CP-01 | 统一节点目录、角色、版本、心跳及归属 |
 | SE-01～05 | 刷新登录、期限/撤销、安全Cookie/CSRF、跨入口会话、API身份规则 |
 | CP-07 | 控制/执行分离；限定档案下管理故障不影响原Worker安全同步 |

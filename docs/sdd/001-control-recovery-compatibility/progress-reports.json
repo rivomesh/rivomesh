@@ -33,8 +33,8 @@
     "0ec162deca1c3f097e74636b36860d58f50c2ea2"
   ],
   "currentSdd": {
-    "DONE": 20,
-    "PARTIAL": 26,
+    "DONE": 21,
+    "PARTIAL": 25,
     "NEW": 2
   },
   "newSinceLastReport": [
@@ -42,7 +42,8 @@
     "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check.",
     "RC-04 advanced to PARTIAL. Read-only capture review passed on PostgreSQL lost slot and through two controllers for a real MySQL decode failure.",
     "SO-06 native check now includes idle keepalive with unrelated WAL. PostgreSQL driver is 42.7.14 with explicit durable LSN feedback.",
-    "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation."
+    "LG-06 passed four live checks per format on a two-node ARM64 Kubernetes cluster. Helm and native YAML verified RWO CSI remount/CDC, config rollout and Secret rotation.",
+    "DO-01 accepted; the verifier checks all 48 bilingual requirement records and rejects stale acceptance text, counts and evidence."
   ],
   "nextTasks": [
     "Verify both Kubernetes deployment formats and recovery on CSI.",

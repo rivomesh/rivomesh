@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.19",
+  "version": "0.20",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -39,7 +39,8 @@
       ],
       "verification": {
         "artifactSha256": "e42cd685bcc9fb38a1e0e82819230ac58869a54f40c4417d39cd596337b91d11",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "5636a00be4a18805dd5c784c7f8b2d73c68e0e44a4eac2fc56e499d4d4d75f63"
       }
     },
     {
@@ -224,7 +225,8 @@
       "verification": {
         "artifactSha256": "aa17cf5b6d9c21e302af818c5f48ff7c46bbb32d3a532ab1fa0491abe43403bf",
         "archive": "docs/verification/README.md",
-        "profile": "Java8 real CDC;fixed Agent;LOCAL/H2 journal;MySQL8.4 source;PostgreSQL17/MySQL8.4 targets;PostgreSQL17/MySQL8.4 control"
+        "profile": "Java8 real CDC;fixed Agent;LOCAL/H2 journal;MySQL8.4 source;PostgreSQL17/MySQL8.4 targets;PostgreSQL17/MySQL8.4 control",
+        "criteriaSha256": "0c9c250e431062a2a7bc8213c6cd5f33b07970cc5b1a37f1a15d0cab0ead4b99"
       }
     },
     {
@@ -259,7 +261,8 @@
       },
       "verification": {
         "artifactSha256": "95127453ff4e6b9a6b0f16d80ea1a16c2c5861b4a260226e875bab6bc72c60a3",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "316634d99965d5aecbcc4441eb280d9f470bf99fc0f6ec608b2a35ff43c8bc43"
       }
     },
     {
@@ -297,7 +300,8 @@
       },
       "verification": {
         "artifactSha256": "95127453ff4e6b9a6b0f16d80ea1a16c2c5861b4a260226e875bab6bc72c60a3",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "237dc647aff722a3f8fc984a931d2479e708a745c5a54143b80fd4e6d568fa36"
       }
     },
     {
@@ -335,7 +339,8 @@
       },
       "verification": {
         "artifactSha256": "95127453ff4e6b9a6b0f16d80ea1a16c2c5861b4a260226e875bab6bc72c60a3",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "6123e87539823739fa3a2cc81ffbea790ca38577364597be15086ac4eadd63e9"
       }
     },
     {
@@ -371,7 +376,8 @@
       },
       "verification": {
         "artifactSha256": "a1ec34fc060b4078cdaa10f357d5933f4df60f5b9616519433c851ddad69fa4a",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "2aeb4360145fa5c76055a649a3952adf856611eca014067a3784ff632a583b1a"
       }
     },
     {
@@ -410,7 +416,8 @@
       },
       "verification": {
         "artifactSha256": "95127453ff4e6b9a6b0f16d80ea1a16c2c5861b4a260226e875bab6bc72c60a3",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "ff619b20564b085943bb4756fde48c31000af13ad9e36257c4f6cc58f8106474"
       }
     },
     {
@@ -449,7 +456,8 @@
       "verification": {
         "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
         "archive": "docs/verification/README.md",
-        "profile": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization."
+        "profile": "Java 8. MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, PostgreSQL control, two controllers and the original Agent with LOCAL/H2 journal. Real source connection, DDL and decoder failures, snapshot and target apply faults. Typed normalization and journal acknowledgment contracts and native MySQL journal initialization.",
+        "criteriaSha256": "3f61a32e52362e02b6df69d66e559ec4f37c5823c0b0c70270104e9f7e6dc187"
       }
     },
     {
@@ -497,7 +505,8 @@
       ],
       "verification": {
         "artifactSha256": "bcaae9309898a33ecfe919d69bfa6c43227647524498f8269682df44942cbcbe",
-        "archive": "docs/verification/README.md"
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "6b3c435d9ebcac0c3330f3ad6a75fae5aaad923da752fd985b63fee7fb465383"
       }
     },
     {
@@ -539,7 +548,8 @@
       "verification": {
         "artifactSha256": "656245c6ed5d8c80c3017ed319e3802d8974f03e69f432a2ec64f0566660ac74",
         "archive": "docs/verification/README.md",
-        "profile": "Java8;MySQL8.4 two-database source;original fixed Agent;LOCAL/H2 journal;PostgreSQL17 business skip target;PG17/MySQL8.4 control stores;native PG/MySQL contracts;both pauses retained"
+        "profile": "Java8;MySQL8.4 two-database source;original fixed Agent;LOCAL/H2 journal;PostgreSQL17 business skip target;PG17/MySQL8.4 control stores;native PG/MySQL contracts;both pauses retained",
+        "criteriaSha256": "da400e20600802bf9d95035800577a002d26f02c7507352f8c1890157a199292"
       }
     },
     {
@@ -609,7 +619,8 @@
       "verification": {
         "artifactSha256": "9f97b4d98c103e895c9d1262cd19dcd0946b21b6fc0f72fff2267e59c727de00",
         "archive": "docs/verification/README.md",
-        "profile": "Java8;MySQL8.4 source;original fixed Agent;LOCAL/H2 journal;PostgreSQL17/MySQL8.4 control stores;public real-CDC PostgreSQL confirmation;native PG/MySQL transaction contracts;whole task paused"
+        "profile": "Java8;MySQL8.4 source;original fixed Agent;LOCAL/H2 journal;PostgreSQL17/MySQL8.4 control stores;public real-CDC PostgreSQL confirmation;native PG/MySQL transaction contracts;whole task paused",
+        "criteriaSha256": "4d15992bc26eb6d9b7d9623ee5763891e7ac459b36ff8e89d7afb919ee0f770b"
       }
     },
     {
@@ -646,7 +657,8 @@
       "verification": {
         "artifactSha256": "d1b1595b8efbe4a6e2258f899836fa53cf33b2c11d31f621c5fc4ca9955b67a3",
         "archive": "docs/verification/README.md",
-        "profile": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination."
+        "profile": "Java 8 with PostgreSQL 17 and MySQL 8.4 native compensation. Real CDC uses two controllers, PostgreSQL control storage, LOCAL/H2 journal, the original Agent, and PostgreSQL as the compensation destination.",
+        "criteriaSha256": "fb1c66c4160309392d646d882a9e31fc2c68cdc98bc91f8fb3504668c2804424"
       }
     },
     {
@@ -683,7 +695,8 @@
       "verification": {
         "artifactSha256": "33a1d4dca6a381664855c0ae96100fa9da004a61070155b0ed7a646c6a2c4f25",
         "archive": "docs/verification/README.md",
-        "profile": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store."
+        "profile": "Java 8 with native PostgreSQL 17 and MySQL 8.4 correction tests. Real CDC uses two management entries, a fixed Agent and LOCAL/H2 journal with MySQL 8.4 source and PostgreSQL 17 correction destination/control store.",
+        "criteriaSha256": "505a1dc5ca034ea5a3e9f77030ed76c9721c3708127ff2e07597b0bb0834b4b2"
       }
     },
     {
@@ -731,7 +744,8 @@
         "artifactSha256": "abee42cfb26ee3623c419f9d43d9dbe6a429508a8dd01da33da38338dcdcf372",
         "archive": "docs/verification/README.md",
         "profile": "Java8;PG/MySQL native journal/target contracts58/product;103 DOM;22 focused progress/API checks. Unchanged public mutation workflow reuses parent3404041 PG/MySQL-control real CDC27/product with original Agent/LOCAL-H2/MySQL8.4 two-database source/PostgreSQL17 verification target. No full target/JDK/K8s claim.",
-        "reusedWorkflowArtifactSha256": "3404041b03ed0a407777366056b509778f4c93e12dea0a4f14572b01670a63ce"
+        "reusedWorkflowArtifactSha256": "3404041b03ed0a407777366056b509778f4c93e12dea0a4f14572b01670a63ce",
+        "criteriaSha256": "8c53c5d9ee9883bdc6471ae98ccb886e561e050fa34ba36bbcc756634af275ba"
       }
     },
     {
@@ -768,7 +782,8 @@
       "verification": {
         "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
         "archive": "docs/verification/README.md",
-        "profile": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL."
+        "profile": "Java 8, two controllers, fixed Agent, LOCAL/H2 journal, MySQL 8.4 source and healthy peer, PostgreSQL 17 control and recovery destination. Both compensation and correction passed queued and running cancellation and exact-request recovery across pre- and post-commit Agent SIGKILL.",
+        "criteriaSha256": "53a8847683e94358a9b6699fc32db9633b8cec2f881375ca232205bc9a4a0f0d"
       }
     },
     {
@@ -854,7 +869,8 @@
       "verification": {
         "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
         "archive": "docs/verification/README.md",
-        "profile": "Java 8, MySQL 5.7.44 linux/amd64, Connector/J 8.4.0, ROW/FULL/GTID, V3 standalone, GTID async promotion and single-primary MGR. Multi-schema SQL fan-out, keyless, JSON, supported generated columns, DDL refusal, restart, failed replica SQL thread, missing binlog refusal and durable checkpoint retention."
+        "profile": "Java 8, MySQL 5.7.44 linux/amd64, Connector/J 8.4.0, ROW/FULL/GTID, V3 standalone, GTID async promotion and single-primary MGR. Multi-schema SQL fan-out, keyless, JSON, supported generated columns, DDL refusal, restart, failed replica SQL thread, missing binlog refusal and durable checkpoint retention.",
+        "criteriaSha256": "3beaf1a2e031241bf719de9260c442b9426ec6e64720fe371fc366dd885801ec"
       }
     },
     {
@@ -887,7 +903,8 @@
       "verification": {
         "artifactSha256": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
         "archive": "docs/verification/README.md",
-        "profile": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks."
+        "profile": "Same Java 8 candidate with a MySQL 8.0.46 GTID/ROW/FULL source, multi-database snapshot/CDC and SQL targets, one real asynchronous promotion, one real MGR election, and 14 remote compensation/correction and process fault checks.",
+        "criteriaSha256": "708f25ce3a81178c01f3adf5ede8127e697003b6e3cd25b786995dd317337e4b"
       }
     },
     {
@@ -922,7 +939,8 @@
       "verification": {
         "artifactSha256": "cce6a099cd6edc00fa0713689aa20a80a1b67a6443dfd756fa23186a340b6829",
         "archive": "docs/verification/README.md",
-        "profile": "MySQL 8.2.0 ARM64 with GTID, ROW and FULL. Java 8 V3 reactor passed 56 tests. Frozen package passed native async promotion and single-primary MGR election on PostgreSQL and openGauss targets."
+        "profile": "MySQL 8.2.0 ARM64 with GTID, ROW and FULL. Java 8 V3 reactor passed 56 tests. Frozen package passed native async promotion and single-primary MGR election on PostgreSQL and openGauss targets.",
+        "criteriaSha256": "35fe1183a0d0ab504a46c1ea38a4dd4f30739a83de1867d18f55d2d579cc2aa9"
       }
     },
     {
@@ -955,7 +973,8 @@
       "verification": {
         "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
         "archive": "docs/verification/README.md",
-        "profile": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
+        "profile": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",
+        "criteriaSha256": "e6a817b12056f5ab5ea16c3a2d8bd89c8758ac77556ec69e5dbdb81c5dc3ac05"
       }
     },
     {
@@ -1040,7 +1059,8 @@
       "verification": {
         "artifactSha256": "c5a11f6ec7a52f94bd9b305708a1d0c08c8b2ce6387ced762ec8ecfac05bb9a3",
         "archive": "docs/verification/README.md",
-        "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown."
+        "profile": "Same Java 8 bytecode artifact. Two Controller JVMs, one Agent and one Worker on each of Java 8/11/17/21/25 ARM64. Each profile verifies actual JVM executables, native MySQL 8.4 source, PostgreSQL 17 and MySQL 8.4 targets, snapshot and CDC equality, and teardown.",
+        "criteriaSha256": "a75f19ca2d3221b816584e1d5428529357573ebb4b74683e551bb8e739782af3"
       }
     },
     {
@@ -1130,14 +1150,14 @@
       "id": "DO-01",
       "epic": "DOCS",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "双语SDD基线与范围可追踪",
         "en": "Bilingual traceable SDD baseline"
       },
       "gap": {
-        "zh-CN": "本轮建立v0.1基线；详细模块设计、规格变更管理和实现证据闭环仍需完成。",
-        "en": "This change creates the v0.1 inventory;module designs,spec change control and implementation evidence closure remain open."
+        "zh-CN": "48 项需求、任务和验收用稳定 ID 对齐。证据档案、双语验收文本与进度计数由门禁核对。",
+        "en": "All 48 requirements, tasks and verdicts are aligned by stable ID. The verifier checks bilingual criteria, archived evidence and progress totals."
       },
       "acceptance": {
         "zh-CN": "每项需求有稳定ID、现状、未完成点、依赖、优先级、验收和任务；中英文ID一致；规格变化有记录，旧验收不可冒充新范围通过。",
@@ -1145,9 +1165,18 @@
       },
       "dependsOn": [],
       "evidence": [
+        "tests/sdd-check.py",
         "docs/zh-CN/requirements-and-decisions.md",
-        "docs/zh-CN/implementation-status.md"
-      ]
+        "docs/en/requirements-and-decisions.md",
+        "docs/verification/baseline.json"
+      ],
+      "verification": {
+        "artifactSha256": "d2a9fb5e16014825a51fbbd0569e885eeb00d7954ccf57c7724b5bd1fa8aef08",
+        "artifactKind": "SDD verifier",
+        "archive": "docs/verification/README.md",
+        "profile": "48 bilingual requirements; stable IDs; unique tasks/rows; acyclic dependencies; criteria and archived evidence linked by hash and verified current counts.",
+        "criteriaSha256": "9c08c60fba519a64e49a1b4c72e00cfa3f98292db224ffd735ffa77b8746b9a4"
+      }
     },
     {
       "id": "DO-02",

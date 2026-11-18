@@ -18,28 +18,28 @@ RM-SDD-001 · 2026-11-17
 | AC-SE-03 | SE-03 | 浏览器端不保存可读的长期认证令牌；会话标识采用受保护cookie/等效方案，生产HTTPS及HttpOnly/SameSite策略可验证；cookie鉴权写操作具备CSRF/Origin检查；会话不进URL或日志。 | [通过：单控制器](../../verification/README.md) |
 | AC-SE-04 | SE-04 | 登录A后请求落到B仍合法；重启/切换控制实例按有效期恢复；集群撤销即时按规定传播，不以粘性会话掩盖状态缺失。 | DONE · [shared-access](../../verification/README.md) |
 | AC-SE-05 | SE-05 | 既有CLI/API令牌可继续使用；cookie与Authorization身份冲突有明确拒绝/优先规则；会话恢复重验权限，晚到响应不能复活退出会话，双语提示一致。 | [通过：单控制器](../../verification/README.md) |
-| AC-RC-01 | RC-01 | [PASS · MySQL source and SQL destinations](../../verification/README.md) |
+| AC-RC-01 | RC-01 | 分别展示源连接/读取、解码、DDL/规范化、目标应用、确认及日志存储错误；UI给出该阶段可用的重试、补偿、事务跳过或缺口恢复路径，不能把所有binlog故障当目标SQL错误。 | [PASS · MySQL source and SQL destinations](../../verification/README.md) |
 | AC-RC-02 | RC-02 | 显示源身份、完整事务ID、事件范围、表/目标、原始及规范化摘要、前后镜像可用性和当前断点；原始值仅授权角色可读并分页限额；执行前保留可恢复证据。 | 已验收限定MySQL8.4/LOCAL固定Agent、PG/MySQL控制档案；[bcaae930](../../verification/README.md) |
-| AC-RC-03 | RC-03 | 对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。 | 待验收 |
+| AC-RC-03 | RC-03 | 对已知边界的下一失败事务，管理员选择目标、原因并审阅后跳过；同一源事务跨表事件不可拆半；目标原生SKIP凭据与安全进度同本地事务，崩溃重放不重复/误跳其他事务。 | [通过 · PostgreSQL 限定档案](../../verification/README.md) |
 | AC-RC-04 | RC-04 | 单独设计已验证事务/源范围的隔离与排除计划，列出所有受影响订阅并保留原日志；边界或内容无法证明时拒绝执行，提供恢复日志、切换合格源或新基线方案；不能伪造普通应用成功。 | 部分验收（只读检查） |
 | AC-RC-05 | RC-05 | 若目标已提交但ACK未落盘，先验证事务内容并恢复确认，禁止再次补偿/伪记为未应用跳过；来源、世代、epoch、错误版本、配置、原事务摘要或断点不符必须拒绝。 | [PASS · 限定档案](../../verification/README.md) |
 | AC-RC-06 | RC-06 | 重建首个受影响身份的事务前状态，正确处理同键多次变更、主键移动、插入后删除、无主键重复行/ROW_ID、JSON与生成值；只修补审阅范围；数据与补偿凭据原子提交，原事务和GTID不改写。 | [PASS · bounded SQL](../../verification/README.md) |
 | AC-RC-07 | RC-07 | 界面提供类型化新增/修改/删除和导入预览；校验精度、NULL、键和内部行身份，禁止无主键误批量修改；计划显示前后值、范围和行数，目标漂移拒绝；不自动修改源库，不绕过外键/触发器保护。 | [PASS · bounded SQL](../../verification/README.md) |
 | AC-RC-08 | RC-08 | 记录每次跳过的事务/范围、目标、原因、操作者、摘要和原事件位置；界面/API区分已应用、安全覆盖及有缺口继续运行；对账/补偿证据才可验证关闭缺口，接受丢失不能伪装成数据一致。 | 已通过限定SQL档案；跨版本/其他目标仍另列 |
-| AC-RC-09 | RC-09 | [PASS · bounded SQL](../../verification/README.md) |
+| AC-RC-09 | RC-09 | 远端目标的计划、批准、取消、凭据和原始数据位置可追踪；控制/执行节点强杀后以同一请求恢复；已提交不重复、未提交回滚；跳过后不自动宣称业务接管完成。 | [PASS · bounded SQL](../../verification/README.md) |
 | AC-RC-10 | RC-10 | 为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。 | 待验收 |
 | AC-SO-01 | SO-01 | 每任务显式source.type、逻辑源身份、命名空间和版本配置；MySQL GTID、PG LSN、Oracle SCN不能互相比较；向导/预检按实际能力启用，未支持配置明确拒绝。 | 待验收 |
 | AC-SO-02 | SO-02 | 固定补丁、驱动、日志配置后验证全量转增量、JSON/无主键/生成列能力、重启/切主/日志缺失、所支持DDL和恢复；不支持项预检拒绝并形成独立证据。 | 通过（5.7.44 Java 8 V3 实库档案） |
-| AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
-| AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
-| AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
+| AC-SO-03 | SO-03 | 对本次发布包补验多库多目标、类型/生成列、事务、主备/MGR、失败恢复与人工操作；按拓扑和小版本注明范围。 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
+| AC-SO-04 | SO-04 | 提供可复现8.2夹具/真实环境、版本探测、连接认证、状态命令、binlog事件和首个完整同步/恢复矩阵；不能只增加版本字符串或通过JDBC连接。 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
+| AC-SO-05 | SO-05 | 在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。 | [PASS · MySQL 8.4.13](../../verification/README.md) |
 | AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收 |
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 待验收 |
-| AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
+| AC-JV-01 | JV-01 | 同一候选版本的控制器/Agent/Worker分别在五个JDK实际启动，报告真实JVM版本、包SHA、架构与所用依赖；Java8代码级别和驱动运行要求可核验。 | [PASS · Five JDKs](../../verification/README.md) |
 | AC-JV-02 | JV-02 | 每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。 | 待验收 |
 | AC-JV-03 | JV-03 | 验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。 | 待验收 |
 | AC-JV-04 | JV-04 | 提供五JDK部署档案和能力调度限制，验证混合节点间命令/事件/状态兼容与滚动升级；不支持回退时明确拒绝并保留恢复路径。 | 待验收 |
-| AC-DO-01 | DO-01 | 每项需求有稳定ID、现状、未完成点、依赖、优先级、验收和任务；中英文ID一致；规格变化有记录，旧验收不可冒充新范围通过。 | 待验收 |
+| AC-DO-01 | DO-01 | 每项需求有稳定ID、现状、未完成点、依赖、优先级、验收和任务；中英文ID一致；规格变化有记录，旧验收不可冒充新范围通过。 | [PASS](../../verification/README.md#do-01-bilingual-sdd-verifier) |
 | AC-DO-02 | DO-02 | 提供单机及多节点四类可运行示例，说明控制/日志/会话/报告存储、Secret/TLS、节点注册排空、备份恢复升级和无独立存储边界；K8s实机另有证据。 | 待验收 |
 | AC-DO-03 | DO-03 | 逐场景描述现象、原因、界面/API操作、执行前后断点、缺口、幂等/撤销边界；覆盖源切主、日志丢失、SQL错误、确认丢失、节点/存储故障、会话撤销和人工恢复。 | 待验收 |
 | AC-DO-04 | DO-04 | 配置字段、权限、状态码、请求/命令/计划版本、Source坐标、目标一致性及源×目标×JDK矩阵都有对应样例和实测状态；增加或改字段同时更新双语文档。 | 待验收 |

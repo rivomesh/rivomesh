@@ -94,8 +94,12 @@ Artifact `d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0` pass
 
 Candidate `ff8208b7758f335a103202e21e1370c44505fb488a926a7502b032cb071ccb66` passed six native MySQL 8.4 checks with two controllers and an independent Agent. Both entries returned the same read-only review after a decode fault and Agent restart, with every affected subscription listed and the original error generation and GTID retained. PostgreSQL missing-slot review kept the original LSN and left the slot absent. Source-range proof and approved exclusion remain open. See the [operator guide](../en/capture-recovery.md).
 
+The same candidate also passed the MySQL 5.7.44 PostgreSQL-only asynchronous promotion fixture. After a real uncollected binlog was purged, the review returned `SOURCE_LOG_GAP`, the affected subscription and the original captured sequence. Reproduce with `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7.44 SYNC_V3_HA_POSTGRES_ONLY=1 tests/v3-ha-run.sh`.
+
 ## LG-06 live Kubernetes RWO CSI
 
 The image built from JAR `16efe0b21bad57fda1418195484595ac20b8e5579f4763f4a109e474beef44a9` passed four live checks each on Helm and native YAML in a two-node Kubernetes v1.31.0 ARM64 cluster. The checks exercised browser refresh, real PostgreSQL snapshot/CDC, RWO CSI remount across scale 0/1, configuration rollout and Secret rotation. Node-local CSI and single controller are the tested profile. See the [deployment guide](../en/console-and-deployment.md#two-node-live-verification).
 
-The same candidate also passed the MySQL 5.7.44 PostgreSQL-only asynchronous promotion fixture. After a real uncollected binlog was purged, the review returned `SOURCE_LOG_GAP`, the affected subscription and the original captured sequence. Reproduce with `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7.44 SYNC_V3_HA_POSTGRES_ONLY=1 tests/v3-ha-run.sh`.
+## DO-01 bilingual SDD verifier
+
+Verifier SHA-256 `d2a9fb5e16014825a51fbbd0569e885eeb00d7954ccf57c7724b5bd1fa8aef08`. The check verifies stable IDs, unique tasks and acceptance rows, criteria rendered in both languages, acyclic dependencies, progress totals and archived evidence. The criteria checksum detects a changed acceptance scope.

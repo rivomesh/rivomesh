@@ -99,3 +99,7 @@ Test task isolation, cross-database transactions, target-specific recovery, jour
 **Can every target share identical DDL/write SQL?** No. Reuse the event model; adapters own types, indexes, transactions, batch commits, and reading semantics.
 
 **Are all new features available now?** No. Renaming, v3 fan-out, keyless/JSON/supported generated columns, optional journals, Web and Kafka/RabbitMQ/NATS/Redis Streams/Pulsar/RocketMQ are implemented. Complete DDL, remaining adapters, permissions/repair and business switching remain in development. Enable features according to the implementation/validation matrices.
+
+## Specification changes and acceptance
+
+Keep the same requirement ID across [requirements](../sdd/001-control-recovery-compatibility/requirements.json), both specifications, tasks and acceptance tables. Git retains specification versions and changes. The archive binds each accepted profile to its artifact SHA-256 and the hash of both language versions of its criteria. Reopen a requirement or provide fresh evidence when its acceptance scope expands. Run `python3 tests/sdd-check.py` to verify the records.
