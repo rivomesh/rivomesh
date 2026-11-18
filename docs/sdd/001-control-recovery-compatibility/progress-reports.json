@@ -16,7 +16,8 @@
     "SO-01 accepted. PostgreSQL and Oracle V3 source wizards, explicit target restrictions and source-specific configuration guards. Seven Chrome checks against the live API, 115 DOM, 23 focused Java and 25 configuration examples passed; PostgreSQL and Oracle native regressions passed seven and thirteen."
   ],
   "inProgress": [
-    "RC-04 bounded same-file MySQL transaction-header review at an unchanged capture checkpoint. Exact native decode fixture compiling."
+    "RC-04 original source contents and approved isolation/exclusion.",
+    "CP-06 global owner and destination status filtering."
   ],
   "reportContents": [
     "Current totals",
@@ -50,8 +51,10 @@
     "Continue managed Agent relocation with durable owner/epoch guards and real external-log acceptance.",
     "Extend remaining target cluster, recovery and deployment matrix cases."
   ],
-  "currentCandidateArtifact": "0c553e56c7c4402bd298984cd77ca4dfa5f34ec253fa9426ded4b5adb1556f8b",
-  "currentCandidateScope": "Source capability wizard, 7 Chrome, 115 DOM, 23 focused Java, 25 shipped configurations",
+  "currentCandidateArtifact": "6d629310028898525a76a54683910b8db4fad01e919f28b46359ae444fd4c2ab",
+  "currentCandidateScope": "Java 8 native MySQL 8.4 read-only transaction header boundary and purge refusal",
   "lastAcceptedPublicWorkflowArtifact": "f7b7dfb7c88785a8622077edbed3ec2f6d800f8c9a035ea1a4e73217322f90a3",
-  "newSinceLastReport": []
+  "newSinceLastReport": [
+    "RC-04 native MySQL 8.4 source review passed nine checks, including exact next GTID/commit/table headers after Agent restart and removal of header evidence after purge with the original checkpoint preserved. Console passed 116 DOM checks."
+  ]
 }

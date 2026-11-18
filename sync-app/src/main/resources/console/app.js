@@ -146,6 +146,8 @@ let captureRecoveryDialog;
 function closeCaptureRecovery(){
  if(captureRecoveryDialog){captureRecoveryDialog.remove();captureRecoveryDialog=null;}
 }
+Object.assign(messages.zh,{decodeBoundary:'原生 binlog 事务边界',decodeBoundaryScope:'仅核对到提交标记及受影响表，仍需原始事件内容才能审阅跳过。'});
+Object.assign(messages.en,{decodeBoundary:'Native binlog transaction boundary',decodeBoundaryScope:'The commit marker and affected tables are available. Reviewing a skip still requires the original event contents.'});
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -160,7 +162,16 @@ async function openCaptureRecovery(task){
   for(const action of report.actions)steps.append(text('li',t(action)));
   content.replaceChildren(text('p',t('UNPROVEN_SOURCE_RANGE')),
    text('p',t('sourceAdmission')+' · '+explain(report.sourceAdmission)),
-   text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')),steps);
+   text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
+  const boundary=report.nextTransactionHeaders;
+  if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
+   const evidence=text('section','','callout');
+   evidence.append(text('strong',t('decodeBoundary')),text('p',t('decodeBoundaryScope')),
+    text('p',boundary.transactionId),text('p',`${boundary.logFile} · ${boundary.startOffset}–${boundary.endOffset}`),
+    text('p',boundary.tables.join(', ')));
+   content.append(evidence);
+  }
+  content.append(steps);
  }catch(error){content.replaceChildren(text('p',error.message,'callout warning'));}
 }
 Object.assign(messages.zh,{

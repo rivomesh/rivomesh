@@ -75,6 +75,25 @@ test('summary readers do not receive raw-detail buttons',async()=>{
  for(const role of ['VIEWER','OPERATOR']){const ui=detailFixture(role);try{await login(ui);ui.d.querySelector('[data-validation-report]').click();await flush();assert.match(ui.d.getElementById('task-detail').textContent,/db\.<img src=x>/);assert.equal(ui.d.querySelector('[data-validation-differences]'),null);assert.equal(ui.d.querySelector('[data-validation-values]'),null);}finally{ui.dom.window.close();}}
 });
 
+test('capture recovery shows native header evidence as text and still requires retained event contents',async()=>{
+ const task={id:'headers',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
+  status:{run_state:'ERROR',error_stage:'SOURCE_DECODE',error_code:'BINLOG_SCHEMA_WIDTH_CHANGED'}};
+ const ui=setup([task]),fallback=ui.w.fetch;
+ ui.w.fetch=async(path,options)=>{
+  if(path!=='/api/tasks/headers/capture-recovery')return fallback(path,options);
+  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],
+   actions:['PRESERVE_SOURCE_LOGS','REPAIR_CAPTURE_CAUSE'],nextTransactionHeaders:{scope:'BINLOG_HEADERS_ONLY',transactionId:'source-gtid',
+    logFile:'mysql-bin.000042',startOffset:'1024',endOffset:'2048',tables:['sales.<img src=x>']}})};
+ };
+ try{
+  await login(ui);ui.d.querySelector('.pipeline-failure button').click();await flush();
+  const dialog=ui.d.querySelector('dialog.failure-review-dialog');
+  assert.match(dialog.textContent,/原生 binlog 事务边界/);assert.match(dialog.textContent,/原始事件内容/);
+  assert.match(dialog.textContent,/mysql-bin.000042.*1024–2048/);assert.match(dialog.textContent,/sales.<img src=x>/);
+  assert.equal(dialog.querySelector('img'),null);assert.equal(dialog.querySelectorAll('button').length,1);
+ }finally{ui.dom.window.close();}
+});
+
 test('capture recovery explains a source gap without offering a target skip',async()=>{
  const task={id:'capture',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'SOURCE_CONNECT',error_code:'SOURCE_LOG_GAP'}};

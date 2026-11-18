@@ -31,6 +31,7 @@ parser.add_argument('--runtime-image', help='Locally built nonroot runtime image
 parser.add_argument('--failure-diagnostics', action='store_true', help='Check phase-only cross-entry status and persistent SQL failure after Worker restart')
 parser.add_argument('--source-diagnostics', choices=('connection-ddl','decode'),
                     help='Exercise native source connection, DDL or row-image diagnostics across both entries')
+parser.add_argument('--header-boundary', action='store_true', help='Check native same-file GTID boundary after a row decode fault')
 parser.add_argument('--worker-diagnostics', action='store_true',
                     help='Check redacted Worker event pages after owner restart in a source fault profile')
 parser.add_argument('--snapshot-diagnostics', action='store_true', help='Inject initial DDL permission and snapshot CHECK faults before normal catch-up')
@@ -43,6 +44,8 @@ parser.add_argument('--correction', action='store_true', help='Check administrat
 parser.add_argument('--recovery-jobs', action='store_true', help='Cancel a blocked recovery and restart the Agent on both sides of the native commit')
 parser.add_argument('--test-classes', type=Path, help='Frozen application test classes, required for --managed-commit or --recovery-jobs')
 args = parser.parse_args()
+if args.header_boundary and args.source_diagnostics != 'decode':
+    parser.error('--header-boundary requires --source-diagnostics decode')
 if args.worker_diagnostics and not args.source_diagnostics:
     parser.error('--worker-diagnostics requires --source-diagnostics')
 if args.control_product == 'MYSQL' and not args.separate_execution:
@@ -115,6 +118,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'runtimeJdk': args.runtime_jdk,
             'mixedRuntimeUpgrade': args.mixed_runtime_upgrade,
             'workerDiagnostics': args.worker_diagnostics,
+            'headerBoundary': args.header_boundary,
             'sourceDiagnostics': args.source_diagnostics,
             'sourceImage': args.source_image,
             'notCovered': 'Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix'}
@@ -530,6 +534,14 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert reviews[0]['sourceAdmission']=='SOURCE_CHECKPOINT_AVAILABLE'
         assert set(reviews[0]['affectedSubscriptions'])=={sub['id'] for sub in observed['subscriptions']}
         assert 'REPAIR_CAPTURE_CAUSE' in reviews[0]['actions']
+        if args.header_boundary:
+            boundary = reviews[0]['nextTransactionHeaders']
+            assert boundary['scope']=='BINLOG_HEADERS_ONLY' and boundary['tables']==['sales.items']
+            assert len(boundary['boundaryHash'])==64 and int(boundary['endOffset'])>int(boundary['startOffset'])
+            assert sql('mysql', "SELECT GTID_SUBSET('"+boundary['transactionId']+"',@@GLOBAL.gtid_executed)")=='1'
+            assert sql('mysql', "SELECT GTID_SUBSET('"+boundary['transactionId']+"','"+checkpoint+"')")=='0'
+            assert 'incomplete image' not in json.dumps(boundary)
+            passed('Both entries show the same native GTID and complete header boundary while preserving the original checkpoint')
         verified=task()['status']
         assert verified['capture_gtid']==checkpoint and verified['error_count']==observed['error_count']
         assert verified['run_state']=='ERROR'
@@ -547,6 +559,17 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             http('node-b',endpoint,token=env['RM_GC_VIEWER'],expected=403)
             http('node-b',endpoint+'?limit=26',expected=400)
             passed(expected + ': bounded and redacted diagnostic pages agree across management entries after Agent restart')
+
+        if args.header_boundary:
+            sql('mysql', 'FLUSH BINARY LOGS')
+            log = sql('mysql', 'SHOW BINARY LOG STATUS').split('|')[0]
+            assert re.fullmatch(r'mysql-bin\.\d+', log) and log != boundary['logFile']
+            sql('mysql', "PURGE BINARY LOGS TO '" + log + "'")
+            gone = [http(node, route + '/capture-recovery') for node in ('node-a','node-b')]
+            assert gone[0] == gone[1] and 'nextTransactionHeaders' not in gone[0]
+            assert gone[0]['sourceAdmission'] == 'SOURCE_LOG_GAP' and gone[0]['checkpointHash'] == reviews[0]['checkpointHash']
+            assert task()['status']['capture_gtid'] == checkpoint and task()['status']['run_state'] == 'ERROR'
+            passed('Purging the fixture log removes header evidence, reports the gap and retains the exact checkpoint')
 
     def run_recovery_cases():
         if args.compensation:

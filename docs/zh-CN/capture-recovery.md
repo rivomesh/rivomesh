@@ -22,3 +22,7 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml
 **为什么目标库有数据，采集仍停在原位置？** 目标可能仍保有之前已成功同步的数据。查看任务的采集断点和每个订阅的确认水位。
 
 **什么时候可以使用事务跳过？** 当事件已经形成可审阅的完整目标事务、目标状态明确且符合审批条件时，使用[事务跳过](transaction-skip.md)流程。源端范围隔离和批准排除由 RC-04 的后续工作跟踪。
+
+### MySQL 原生事务边界
+
+受支持的 `SOURCE_DECODE` 故障可查看原断点后的第一个事务。检查从同一 MySQL 实例及同一 binlog 文件读取最多 256 条事件头，要求位移连续直到 `Xid`，展示 GTID、文件范围和涉及表。`nextTransactionHeaders` 的范围为 `BINLOG_HEADERS_ONLY`，应保留原始 binlog 供行内容审阅和审批。轮换、断档、后端变化、未知事件或不完整事务边界都可能导致证据缺失。读取权限沿用 MySQL 复制账号。[MySQL 事件说明](https://dev.mysql.com/doc/refman/8.4/en/show-binlog-events.html) · [实库证据](../verification/README.md#mysql-decode-header-review)

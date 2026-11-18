@@ -22,3 +22,7 @@ The review checks the pipeline identity, original position and snapshot dependen
 **Why does the destination have data while capture remains paused?** The destination may retain data delivered before the failure. Check the source checkpoint and each subscription acknowledgment to establish its progress.
 
 **When can I skip a transaction?** Use the [transaction skip](transaction-skip.md) workflow when a complete destination transaction is available for review, the target state is established and the approval requirements are met. RC-04 tracks subsequent source-range quarantine and approved exclusion.
+
+### Native MySQL transaction headers
+
+For a supported `SOURCE_DECODE` fault, the review can show the first transaction after the durable checkpoint. It reads up to 256 native event headers from the same server and binlog file, requires continuous offsets through `Xid`, and lists the GTID, file coordinates and affected tables. The `nextTransactionHeaders` field uses `BINLOG_HEADERS_ONLY` as its scope. Retain the original binary log for row-content review and approvals. Rotation, a gap, a backend change, unfamiliar events or an incomplete boundary can leave the header evidence absent. Read permissions follow the existing MySQL replication account. [MySQL binary log event reference](https://dev.mysql.com/doc/refman/8.4/en/show-binlog-events.html) · [Native evidence](../verification/README.md#mysql-decode-header-review)

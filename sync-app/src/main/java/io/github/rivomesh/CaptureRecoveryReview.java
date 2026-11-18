@@ -24,8 +24,9 @@ public final class CaptureRecoveryReview {
                     !Arrays.asList("SOURCE_CONNECT","SOURCE_READ","SOURCE_DECODE","SOURCE_SNAPSHOT","SOURCE_DISCOVERY","DDL","NORMALIZE").contains(phase))
                 throw new IllegalStateException("SOURCE_REVIEW_REQUIRES_CAPTURE_ERROR");
             SourcePosition checkpoint=journal.captured();
+            Map<String,Object> nativeEvidence=new LinkedHashMap<>();
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":
-                    probe(config,(String)before.get("generation"),checkpoint,journal);
+                    probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence);
 
             Map<String,Object> after=journal.status();
             for(String key:Arrays.asList("generation","epoch","run_state","errorGeneration","errorCode","lastSequence")){
@@ -46,15 +47,25 @@ public final class CaptureRecoveryReview {
             report.put("affectedSubscriptions",config.subscribers());
             report.put("scope","UNPROVEN_SOURCE_RANGE");
             report.put("actions",actions(admission,phase));
+            report.putAll(nativeEvidence);
             return report;
         }
     }
 
-    private static String probe(PipelineConfig config,String generation,SourcePosition checkpoint,JdbcJournal journal)throws Exception{
+    private static String probe(PipelineConfig config,String generation,SourcePosition checkpoint,JdbcJournal journal,
+                                String phase,Map<String,Object> nativeEvidence)throws Exception{
         // Read journal dependencies before the source probe so storage errors cannot look like source failures.
         List<SourcePosition> dependencies=journal.dependencies();
         try(SourceAdapter source=PipelineSources.open(config,generation)){
             source.validateFailover(checkpoint,dependencies);
+            if(source instanceof MysqlCdcSource&&"SOURCE_DECODE".equals(phase)){
+                try{
+                    Map<String,Object> boundary=((MysqlCdcSource)source).inspectDecodeBoundary(checkpoint);
+                    if(boundary!=null)nativeEvidence.put("nextTransactionHeaders",boundary);
+                }catch(java.sql.SQLException unavailable){
+                    // A missing, rotated or unreadable source file leaves only the admission result.
+                }
+            }
             return "SOURCE_CHECKPOINT_AVAILABLE";
         }catch(InterruptedException interrupted){
             Thread.currentThread().interrupt();

@@ -54,6 +54,13 @@ public final class MysqlCdcSource implements SourceAdapter {
         if(evaluator!=null){evaluator.close();evaluator=null;}
         try(Connection c=selected.connect();Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT @@SESSION.sql_mode")){rs.next();sqlMode=rs.getString(1);}
     }
+    Map<String,Object> inspectDecodeBoundary(SourcePosition checkpoint)throws SQLException{
+        Model.Position position=position(checkpoint);
+        if(!Objects.equals(physicalIdentity(),position.sourceUuid))return null;
+        try(Connection connection=selected.connect()){
+            return MysqlDecodeBoundary.read(connection,position);
+        }
+    }
     @Override public boolean includes(SourcePosition baseline,String id){return Gtids.contains(position(baseline).gtidSet,id);}
     public void useSchema(TableSchema table){table.validate();schemas.put(table.database+"\u0000"+table.name,table);}
     @Override public List<TableSchema> discover()throws Exception{
