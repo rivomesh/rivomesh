@@ -438,9 +438,13 @@ public final class JdbcJournal implements NormalizedJournal {
     }
     @Override public Map<String,Object> status()throws Exception{
         try(Connection c=connect()){Map<String,Object> result=new LinkedHashMap<>();
+            long observedAt=now(c);
             try(PreparedStatement p=c.prepareStatement("SELECT epoch,owner,lease_until,next_seq,pending_bytes,snapshot_bytes,generation,normalized_seq,identity_bytes,run_state,error_generation,error_code,format_version FROM "+table("job")+" WHERE pipeline_id=?")){
                 p.setString(1,settings.pipelineId);try(ResultSet rs=p.executeQuery()){if(!rs.next())throw new IllegalStateException("JOURNAL_NOT_INITIALIZED");result.put("epoch",rs.getLong(1));result.put("owner",rs.getString(2));result.put("leaseUntil",rs.getLong(3));result.put("lastSequence",rs.getLong(4)-1);result.put("pendingBytes",rs.getLong(5));result.put("snapshotBytes",rs.getLong(6));result.put("generation",rs.getString(7));result.put("normalizedSequence",rs.getLong(8));result.put("identityBytes",rs.getLong(9));result.put("run_state",rs.getString(10));result.put("errorGeneration",rs.getLong(11));result.put("errorCode",rs.getString(12));result.put("dataFormat",rs.getInt(13));}
             }
+            String leaseState=result.get("owner")==null?"UNCLAIMED":
+                    (long)result.get("leaseUntil")>observedAt?"CLAIMED":"EXPIRED";
+            result.put("captureLeaseState",leaseState);
             if("ERROR".equals(result.get("run_state")))
                 result.put("errorStage",pipelineFailurePhase(c,(long)result.get("errorGeneration")));
             if(((Number)result.get("dataFormat")).intValue()==4)result.putAll(JdbcSkipJournal.summary(this,c));

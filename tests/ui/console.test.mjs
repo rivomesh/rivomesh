@@ -103,6 +103,19 @@ test('capture recovery explains a source gap without offering a target skip',asy
  }
 });
 
+test('a running worker and an expired capture lease remain separate in the console',async()=>{
+ const task={id:'lease',formatVersion:3,workerState:'RUNNING',desired:'RUNNING',operations:[],destinations:[],
+  status:{run_state:'RUNNING'},captureLeaseState:'EXPIRED',statusAvailable:true};
+ const ui=setup([task]);
+ try{
+  await login(ui);
+  const grid=ui.d.querySelector('.status-grid');
+  const lease=[...grid.querySelectorAll('div')].find(section=>section.firstChild.textContent==='采集租约');
+  assert.equal(lease.lastChild.textContent,'已过期');
+  assert.match(grid.textContent,/运行中/);
+ }finally{ui.dom.window.close();}
+});
+
 test('validation submits explicit SQL targets and budgets without including messaging targets',async()=>{
  const task={id:'validate',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',status:{run_state:'RUNNING'},operations:[],destinations:[{id:'pg',product:'POSTGRESQL',consistency:'TRANSACTIONAL'},{id:'mq',product:'KAFKA',consistency:'AT_LEAST_ONCE_EVENTS'}]};const ui=setup([task]);try{
   await login(ui);assert.equal(ui.d.querySelectorAll('[data-validation-target]').length,1);const read=ui.d.querySelector('[data-validation-limit="read"]');read.value='7200';read.dispatchEvent(new ui.w.Event('input'));ui.d.querySelector('[data-validation-action="start"]').click();await flush();

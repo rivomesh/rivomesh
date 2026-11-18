@@ -647,6 +647,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('DDL permission and snapshot CHECK failures remain distinct across entries/restart,carry no incremental sequence,and recover under their original error generations')
         wait(rows_match, 'snapshot exact rows')
         passed('Two source databases to two targets; snapshot keyed/keyless/JSON/generated values')
+        wait(lambda: all(task(n).get('captureLeaseState')=='CLAIMED' for n in ('node-a','node-b')),
+             'both entries observe the live capture lease')
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
@@ -799,6 +801,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         passed('Native SQL constraint error pauses target; explicit generation-bound replay catches up')
         compose('kill', '-s', 'SIGKILL', owner_node)
         wait(lambda: task().get('ownerState') != 'HEALTHY', 'owner offline')
+        assert task().get('captureLeaseState','UNKNOWN')=='UNKNOWN'
         sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(10,'offline',JSON_OBJECT('n',10))")
         stop, accepted = action('STOP', complete=False)
         assert next(op for op in accepted['operations'] if op['id'] == stop)['deliveryStatus'] == 'PENDING'
@@ -811,6 +814,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         surviving_entry = 'node-b' if args.separate_execution else 'node-a'
         wait(lambda: outcome(stop, surviving_entry), 'offline STOP after reopen')
         wait(lambda: task(surviving_entry).get('workerState') == 'STOPPED', 'worker stopped')
+        wait(lambda: task(surviving_entry).get('captureLeaseState') in ('UNCLAIMED','EXPIRED'),
+             'capture lease inactive after offline STOP')
+        passed('Both entries report the capture lease separately from process liveness; stale owner state reports unknown')
         time.sleep(2)
         assert sql('postgres', 'SELECT COUNT(*) FROM rm_pg_sales.items WHERE id=10') == '0'
         passed('Offline STOP survives SIGKILL/reopen and prevents restoring old RUNNING intent')
@@ -1003,7 +1009,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         manifest['failureType'] = type(failure).__name__
         try:
             observed = task()
-            diagnostics['task'] = {key: observed.get(key) for key in ('workerState', 'desired', 'problem', 'statusAvailable', 'status', 'operations')}
+            diagnostics['task'] = {key: observed.get(key) for key in ('workerState', 'captureLeaseState', 'desired', 'problem', 'statusAvailable', 'status', 'operations')}
         except Exception:
             pass
         for node in members:

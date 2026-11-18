@@ -15,7 +15,7 @@ RM-SDD-001 · v0.27 · 2026-11-18 · IMPLEMENTING
 | CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
 | CP-04 | P0 / PARTIAL | 故障接管、隔离与资源调度 | 已有Worker租约/epoch，缺少统一节点调度、远端生命周期和滚动升级协议。 |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。 |
 | CP-07 | P0 / DONE | 控制面HA及控制/数据面解耦 | 协议4分离档案已通过PG/MySQL控制库、管理全停/命令恢复、控制库中断、原Worker持续及非root验收；默认组合模式仍耦合，自动接管和其他存储/适配器档案另行追踪。 |
 
 ## 登录状态保持
@@ -98,7 +98,7 @@ RM-SDD-001 · v0.27 · 2026-11-18 · IMPLEMENTING
 | CP-03 | P0 / PARTIAL | 跨节点持久命令路由 | 公开持久命令、离线STOP、真实多目标校验/修复及原UNKNOWN升级恢复已验收；完整取消/故障/迁移与容量矩阵仍未完成。 |
 | CP-04 | [JdbcJournal.java](../../../sync-app/src/main/java/io/github/rivomesh/cdc/JdbcJournal.java) / [TaskService.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java) |
 | CP-05 | P0 / PARTIAL | 共享权限、审计和密钥引用 | 共享账号/授权/链式审计及Worker环境过滤已实现；完整远端关联、最小密钥引用和进程/文件隔离仍缺。 |
-| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。 |
+| CP-06 | P1 / PARTIAL | 全局日志、指标与诊断界面 | 双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。 |
 | CP-07 | [README.md](../../../docs/verification/README.md) / [OwnerRuntime.java](../../../sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java) |
 | SE-01 | [app.js](../../../sync-app/src/main/resources/console/app.js) |
 | SE-02 | [app.js](../../../sync-app/src/main/resources/console/app.js) / [account-management.md](../../../docs/zh-CN/account-management.md) |

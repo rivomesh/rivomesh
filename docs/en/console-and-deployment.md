@@ -50,6 +50,8 @@ Unexpected exits restart with backoff; after five exits CRASH_LOOP requires repa
 No queues are deleted or GTIDs changed. Database administrators still repair source replication errors. Failed status reads show the last successful time and an explicit stale-data indication.
 The workbench shows at most 100 tables/task with the total count; other tables continue syncing. Full table status remains available through CLI; paginated search will follow.
 
+V3 task details show the Worker process and capture lease separately. `captureLeaseState` is `CLAIMED`, `EXPIRED`, or `UNCLAIMED` as observed using the journal's clock. The console shows an unknown lease when it cannot read fresh journal state. Consult the source failure stage and checkpoint to diagnose a Worker that is running while capture is stalled.
+
 ## Durable files and APIs
 
 tasksDirectory stores configurations; dataDirectory/controller.json stores intent, revisions, and operation history using atomic replacement. A file lock permits one controller per directory; corrupt state is not silently reset. V2 checkpoints remain in target metadata. V3 stores capture/snapshot artifacts/subscriber ACKs in LOCAL or EXTERNAL journals, transactional checkpoints with target business data, and confirmed message receipts in the journal. LOCAL uses dataDirectory/journals/pipelineId; use EXTERNAL for cross-host HA. Never delete a journal and continue from old target checkpoints.

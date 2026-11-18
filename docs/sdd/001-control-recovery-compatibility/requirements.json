@@ -175,8 +175,8 @@
         "en": "Cluster logs,metrics and diagnostics"
       },
       "gap": {
-        "zh-CN": "全局任务观察、owner/未知状态、分页及维护结果已有；完整节点/目标过滤、远端日志和诊断检索仍缺。 Worker进程存活与日志接管就绪仍需更清晰区分。",
-        "en": "Global observations,owner/unknown state,pagination and maintenance results exist;complete node/target filters,remote logs and diagnostics search remain open. Worker process liveness versus journal-claim readiness needs clearer presentation."
+        "zh-CN": "双入口已显示 Worker 进程和独立的采集租约。失联时显示未知。完整节点及目标过滤、远端日志与诊断检索待完成。",
+        "en": "Both controller entries show Worker liveness and the capture lease independently, with unknown state after owner loss. Complete node and target filters, remote logs and diagnostics search remain."
       },
       "acceptance": {
         "zh-CN": "界面按节点/任务/目标过滤状态、延迟、积压、日志和错误；注明采集时间及失联范围；远端日志分页/限流且不泄露业务值或凭据。",
@@ -189,7 +189,9 @@
       ],
       "evidence": [
         "sync-app/src/main/resources/console/app.js",
-        "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/TaskService.java",
+        "tests/global-control-pipeline.py",
+        "docs/verification/baseline.json"
       ]
     },
     {

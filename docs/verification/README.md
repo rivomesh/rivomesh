@@ -131,3 +131,7 @@ Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` pass
 ## Oracle typed archived changes
 
 Oracle Free 23.26.4.0.0 ARM64 on Java 8 passed eight native checks on artifact `a59076b9c8d364a47a2848a59179ca70b05ceae8b52e655427f9d15ae3e0404e`. The scoped JDBC account opened the archived files with LogMiner. The same Oracle update and keyless delete decoded into one typed transaction with identical content hashes on two reads. A rolled-back insert stayed outside the committed set and the unarchived suffix was refused. See the [native fixture](../../tests/oracle-source-probe.py) and [manifest](baseline.json).
+
+## Capture lease through two controllers
+
+Artifact `5c33b78a9fec625db629d11c65453d04ea1ea5279c708b92348fd0c6413ec2c8` passed 18 native PostgreSQL control-store and MySQL 8.4.13 source checks with two controllers and a distinct Agent/Worker. Both entries displayed the same journal lease independently of Worker process liveness. The disconnected owner produced unknown lease state. A durable STOP accepted while the owner was offline prevented Worker restoration and left the lease inactive. The console passed 111 DOM checks. [Native manifest](baseline.json)
