@@ -71,7 +71,7 @@ public final class PipelineConfig {
     static String driver(TargetProduct product){if(product!=null&&product.mysqlDialect())return "com.mysql.cj.jdbc.Driver";if(product==TargetProduct.POSTGRESQL)return "org.postgresql.Driver";if(product==TargetProduct.GAUSS)return "io.github.rivomesh.gaussdb.jdbc.Driver";if(product==TargetProduct.GBASE_8C)return "com.gbase8c.Driver";if(product==TargetProduct.KINGBASE)return "com.kingbase8.Driver";if(product==TargetProduct.DM)return "dm.jdbc.driver.DmDriver";throw new IllegalArgumentException("PRODUCT_NOT_ENABLED");}
     private static void id(String value){if(value==null||!value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("PIPELINE_ID_INVALID");}
     private static void url(TargetProduct product,String url){driver(product);if(url==null||!url.startsWith(product.mysqlDialect()?"jdbc:mysql://":product==TargetProduct.GBASE_8C?"jdbc:gbase8c://":product==TargetProduct.KINGBASE?"jdbc:kingbase8://":product==TargetProduct.DM?"jdbc:dm://":"jdbc:postgresql://"))throw new IllegalArgumentException("TARGET_URL_INVALID");}
-    String effectiveSourceType(){
+    public String effectiveSourceType(){
         String nested=source==null?null:source.type;
         if(nested!=null&&sourceType!=null&&!nested.equals(sourceType))
             throw new IllegalArgumentException("SOURCE_TYPE_CONFLICT");
@@ -81,8 +81,8 @@ public final class PipelineConfig {
         if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
         Set<String> db=new TreeSet<>();for(String name:databases)if(name==null||name.isEmpty()||name.indexOf('\0')>=0||!db.add(name))throw new IllegalArgumentException("DATABASE_LIST_INVALID");
         if(chunkSize<1||chunkSize>10000||leaseMillis<3000||heartbeatMillis<100||heartbeatMillis>leaseMillis/3||pollIntervalMillis<10||retryDelayMillis<10||journal.maxBytes<1)throw new IllegalArgumentException("PIPELINE_LIMIT_INVALID");
-        PipelineSources.requireSupported(this);
-        legacy().validate();Set<String> ids=new HashSet<>(),destinations=new HashSet<>(),mapped=new TreeSet<>();
+        PipelineSources.validate(this);
+        Set<String> ids=new HashSet<>(),destinations=new HashSet<>(),mapped=new TreeSet<>();
         for(Target t:targets){
             if(t==null)throw new IllegalArgumentException("TARGET_REQUIRED");id(t.id);if(!ids.add(t.id))throw new IllegalArgumentException("DUPLICATE_TARGET_ID");
             if(t.product!=TargetProduct.DM&&t.dm!=null)throw new IllegalArgumentException("DM_OPTIONS_ON_OTHER_TARGET");if(t.product==TargetProduct.DM&&t.dm==null)t.dm=new Dm();
@@ -148,6 +148,13 @@ public final class PipelineConfig {
     public DorisMaterializer.Settings dorisSettings(Target target,String generation){DorisMaterializer.Settings s=new DorisMaterializer.Settings();s.http=dorisHttp(target);s.jdbcUrl=target.url;s.username=target.username;s.password=target.password;s.pipelineId=pipelineId;s.subscriptionId=target.id;s.generation=generation;s.fingerprint=fingerprint();s.metadataDatabase=target.metadataSchema;s.mappings=new TreeMap<>(target.mappings);s.autoCreate=target.doris.autoCreate;s.replicas=target.doris.replicas;s.buckets=target.doris.buckets;s.secondaryIndexes=target.doris.secondaryIndexes;return s;}
     public String fingerprint(){
         Map<String,Object> identity=new TreeMap<>();identity.put("version",formatVersion);identity.put("pipelineId",pipelineId);identity.put("sourceId",source.clusterId);identity.put("topology",source.topology);identity.put("jdbcOptions",source.jdbcOptions);identity.put("databases",new TreeSet<>(databases));
+        if("POSTGRESQL".equals(effectiveSourceType())){
+            identity.put("sourceType","POSTGRESQL");
+            identity.put("sourceDatabase",source.database);
+            identity.put("sourceUrl",source.postgresql.url);
+            identity.put("publication",source.postgresql.publication);
+            identity.put("slotPrefix",source.postgresql.slotPrefix);
+        }
         Map<String,Object> outputs=new TreeMap<>();for(Target t:targets){Map<String,Object> output=new TreeMap<>();output.put("product",t.product);output.put("url",t.url);output.put("metadataSchema",t.metadataSchema);output.put("mappings",new TreeMap<>(t.mappings));output.put("uniquePolicy",t.uniquePolicy);if(t.product==TargetProduct.DM)output.put("storageProfile","DM_LOSSLESS_V1");if(t.product==TargetProduct.HIVE)output.put("materializationProfile","HIVE_ACID_HISTORY_V1");if(t.product==TargetProduct.DORIS){output.put("materializationProfile","DORIS_MOW_SEQUENCE_V1");output.put("secondaryIndexes",t.doris.secondaryIndexes);output.put("replicas",t.doris.replicas);output.put("buckets",t.doris.buckets);}if(t.product==TargetProduct.CLICKHOUSE){output.put("materializationProfile","CLICKHOUSE_REPLACING_V1");if(t.clickhouse!=null&&t.clickhouse.secondaryIndexes==ClickHouseIndexPlan.Mode.DATA_SKIPPING)output.put("secondaryIndexes","DATA_SKIPPING_V1");}if(t.product!=null&&t.product.messaging()){Map<String,Object> messaging=new TreeMap<>();messaging.put("stream",t.messaging.stream);messaging.put("queueType",t.messaging.queueType);if(t.product==TargetProduct.KAFKA)messaging.put("topic",t.messaging.topic);if(t.product==TargetProduct.REDIS_STREAMS||t.product==TargetProduct.PULSAR)messaging.put("replicas",t.messaging.replicas);if(t.product==TargetProduct.PULSAR){messaging.put("topic",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);}if(t.product==TargetProduct.ROCKETMQ){messaging.put("topicPrefix",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);messaging.put("broker",t.messaging.broker);messaging.put("minimumRetentionHours",t.messaging.minimumRetentionHours);}if(t.product==TargetProduct.ACTIVEMQ_CLASSIC){messaging.put("queuePrefix",t.messaging.stream);messaging.put("broker",t.messaging.broker);messaging.put("profile","CLASSIC_LOCAL_TX_V1");}if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS){messaging.put("broker",t.messaging.broker==null||t.messaging.broker.isEmpty()?null:t.messaging.broker);messaging.put("replicas",t.messaging.replicas);}output.put("messaging",messaging);}outputs.put(t.id,output);}identity.put("targets",outputs);return Codec.sha256(Codec.encode(identity));
     }
     public List<String> subscribers(){List<String> ids=new ArrayList<>();for(Target target:targets)ids.add(target.id);return ids;}

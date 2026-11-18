@@ -27,6 +27,8 @@ public final class Config {
         public String type;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public String expectedVersion;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public PostgresqlSource postgresql;
         public String host = "127.0.0.1";
         public int port = 3306;
         public String database;
@@ -40,6 +42,11 @@ public final class Config {
         public long serverId = 910001;
         public String sslMode = "DISABLED";
         public String jdbcOptions = "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&zeroDateTimeBehavior=EXCEPTION&connectTimeout=10000&socketTimeout=60000";
+    }
+
+    public static final class PostgresqlSource {
+        public String url,publication;
+        public String slotPrefix="rivomesh";
     }
 
     public static final class Endpoint {
@@ -97,6 +104,7 @@ public final class Config {
         if (source == null || target == null || source.nodes == null) throw new IllegalArgumentException("源、目标和候选地址列表不能为空");
         required(jobId, "jobId"); required(source.database, "source.database");
         if(source.type!=null&&!"MYSQL".equals(source.type))throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
+        if(source.postgresql!=null)throw new IllegalArgumentException("POSTGRESQL_OPTIONS_REQUIRE_POSTGRESQL_SOURCE");
         if(source.expectedVersion!=null&&!source.expectedVersion.matches("[1-9][0-9]{0,2}\\.(0|[1-9][0-9]{0,2})(\\.(0|[1-9][0-9]{0,3}))?"))
             throw new IllegalArgumentException("SOURCE_VERSION_PROFILE_INVALID");
         required(source.host, "source.host"); required(source.username, "source.username");

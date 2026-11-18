@@ -7,13 +7,19 @@ import java.util.TreeSet;
 final class PipelineSources {
     private PipelineSources() {}
 
-    static void requireSupported(PipelineConfig config) {
-        if(!"MYSQL".equals(config.effectiveSourceType()))
-            throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
+    static void validate(PipelineConfig config) {
+        switch(config.effectiveSourceType()){
+            case "MYSQL":config.legacy().validate();break;
+            case "POSTGRESQL":PostgresqlCdcSource.validate(config);break;
+            default:throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
+        }
     }
 
     static SourceAdapter open(PipelineConfig config,String generation)throws Exception {
-        requireSupported(config);
-        return new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),generation);
+        switch(config.effectiveSourceType()){
+            case "MYSQL":return new MysqlCdcSource(config.legacy(),new TreeSet<>(config.databases),generation);
+            case "POSTGRESQL":return new PostgresqlCdcSource(config,generation);
+            default:throw new IllegalArgumentException("SOURCE_ADAPTER_UNAVAILABLE");
+        }
     }
 }

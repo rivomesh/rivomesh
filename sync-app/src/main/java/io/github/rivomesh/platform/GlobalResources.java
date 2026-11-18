@@ -47,8 +47,10 @@ final class GlobalResources {
     private Map<String,Integer> plan(TaskDefinition task){
         Map<String,Integer> claims=new TreeMap<>();namespaces(claims,task.spaces(false),BUSINESS);namespaces(claims,task.metadataSpaces(),METADATA);
         // Explicit logical cluster identities also catch failover endpoints that do not overlap.
-        if(!"default".equals(task.source.clusterId))add(claims,"mysql-source\ncluster/"+task.source.clusterId+"\n"+task.source.serverId,SOURCE);
-        for(io.github.rivomesh.Config.Endpoint endpoint:task.endpoints())add(claims,"mysql-source\nendpoint/"+endpoint.host.toLowerCase(Locale.ROOT)+":"+endpoint.port+"\n"+task.source.serverId,SOURCE);
+        if("MYSQL".equals(task.sourceType())){
+            if(!"default".equals(task.source.clusterId))add(claims,"mysql-source\ncluster/"+task.source.clusterId+"\n"+task.source.serverId,SOURCE);
+            for(io.github.rivomesh.Config.Endpoint endpoint:task.endpoints())add(claims,"mysql-source\nendpoint/"+endpoint.host.toLowerCase(Locale.ROOT)+":"+endpoint.port+"\n"+task.source.serverId,SOURCE);
+        }
         if(claims.size()>20000)throw new IllegalArgumentException("RESOURCE_PLAN_LIMIT");return claims;
     }
     private void namespaces(Map<String,Integer> claims,Map<String,Set<String>> destinations,int kind){for(Map.Entry<String,Set<String>> destination:destinations.entrySet())for(String namespace:destination.getValue()){if(namespace==null)throw new IllegalArgumentException("RESOURCE_NAMESPACE_REQUIRED");add(claims,"target\n"+destination.getKey()+"\n"+namespace.toLowerCase(Locale.ROOT),kind);}}

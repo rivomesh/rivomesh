@@ -27,7 +27,12 @@ final class PipelineBackend {
             if(status.containsKey("errorStage"))status.put("error_stage",status.get("errorStage"));
             long totalSnapshots=((Number)preview.get("table_count")).longValue();@SuppressWarnings("unchecked")Map<String,Long> snapshotAcks=(Map<String,Long>)preview.get("snapshotAcknowledgments");boolean targetsReady=true;for(Map<String,Object> sub:subscriptions)if(snapshotAcks.getOrDefault((String)sub.get("id"),0L)<totalSnapshots)targetsReady=false;
             status.put("phase",totalSnapshots==0?"DISCOVERY":!preview.get("table_count").equals(preview.get("completed_tables"))?"SNAPSHOT":!targetsReady?"TARGET_SNAPSHOT":((Number)status.get("pending_transactions")).longValue()>0?"CATCHUP":"STREAMING");
-            SourcePosition position=journal.captured();if(position!=null){status.put("sourcePosition",position);status.put("capture_gtid",position.getPayload().get("gtidSet"));}
+            SourcePosition position=journal.captured();
+            if(position!=null){
+                status.put("sourcePosition",position);
+                if("MYSQL".equals(position.getSourceType()))status.put("capture_gtid",position.getPayload().get("gtidSet"));
+                if("POSTGRESQL".equals(position.getSourceType()))status.put("capture_lsn",position.getPayload().get("lsn"));
+            }
             status.put("subscriptions",subscriptions);status.put("maxBytes",c.journal.maxBytes);return status;
         }catch(IllegalStateException e){if("JOURNAL_NOT_INITIALIZED".equals(e.getMessage()))return Collections.emptyMap();throw e;}
         catch(SQLException e){if(Arrays.asList("42P01","3F000","3F001","42S02","90079").contains(e.getSQLState()))return Collections.emptyMap();throw e;}

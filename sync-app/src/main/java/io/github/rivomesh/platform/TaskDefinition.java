@@ -41,6 +41,7 @@ public final class TaskDefinition {
     void validate(){if(pipeline==null)legacy.validate();else pipeline.validate();}
     String fingerprint()throws Exception{return pipeline==null?legacy.fingerprint():pipeline.fingerprint();}
     String stateIdentity(){if(pipeline==null)return "V2";JdbcJournal.Settings settings=pipeline.journalSettings();return pipeline.journal.mode+"\n"+settings.driver+"\n"+settings.url+"\n"+settings.namespace;}
+    String sourceType(){return pipeline==null?"MYSQL":pipeline.effectiveSourceType();}
     List<Config.Endpoint> endpoints(){return pipeline==null?legacy.endpoints():pipeline.legacy().endpoints();}
     String databases(){return pipeline==null?source.database:String.join(", ",pipeline.databases);}
     /** Explicit allowlist for consumer setup; never return connection URLs or credentials. */

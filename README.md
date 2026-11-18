@@ -20,6 +20,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 首次部署与控制模式 | [首版基线](docs/zh-CN/first-release.md) | [First-release baseline](docs/en/first-release.md) |
 | SDD规格、任务、验收 | [规格](docs/sdd/001-control-recovery-compatibility/spec.md) | [Specification](docs/sdd/001-control-recovery-compatibility/spec.en.md) |
 | UI/Linux/Docker/Helm/Kubernetes | [控制台与部署](docs/zh-CN/console-and-deployment.md) | [Console/deployment](docs/en/console-and-deployment.md) |
+| PostgreSQL 17 实验性源 | [配置与恢复](docs/zh-CN/postgresql-source.md) | [Configuration and recovery](docs/en/postgresql-source.md) |
 | 同步、映射、索引与恢复 | [同步手册](docs/zh-CN/pipeline-v3.md) | [Pipelines](docs/en/pipeline-v3.md) |
 | 多节点与持久命令 | [全局控制](docs/zh-CN/global-control.md) | [Global control](docs/en/global-control.md) |
 | 事务证据与提交确认 | [审阅](docs/zh-CN/failure-review.md)、[确认](docs/zh-CN/commit-acknowledgement.md) | [Review](docs/en/failure-review.md),[confirmation](docs/en/commit-acknowledgement.md) |
@@ -31,7 +32,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar serve config/platform.
 | 目标产品与能力边界 | [平台方案](docs/zh-CN/platform-design.md) | [Platform design](docs/en/platform-design.md) |
 | 当前验证范围 | [单一验证基线](docs/verification/README.md) | [Verification baseline](docs/verification/README.md) |
 
-目标范围包含MySQL/PostgreSQL、openGauss/分布式GaussDB、达梦/金仓/OceanBase/GBase、ClickHouse/Doris/Hive及Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ/Redis Streams/NATS JetStream。**实现和实测范围按产品档案区分；不能把产品名称、JDBC连通或同协议当成完整支持。** PostgreSQL/Oracle源、缺口验证关闭、失败事务补偿、完整集群/JDK/TLS/性能矩阵仍在实现。
+目标范围包含MySQL/PostgreSQL、openGauss/分布式GaussDB、达梦/金仓/OceanBase/GBase、ClickHouse/Doris/Hive及Kafka/Pulsar/RabbitMQ/RocketMQ/ActiveMQ/Redis Streams/NATS JetStream。**实现和实测范围按产品档案区分；不能把产品名称、JDBC连通或同协议当成完整支持。** PostgreSQL 17 单主源已有实验档案。Oracle 源及完整集群、JDK、TLS 和性能矩阵仍在实现。
 
 ## 开发迭代
 

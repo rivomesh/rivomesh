@@ -972,5 +972,25 @@
       }
     ],
     "scope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
+  },
+  "postgresqlSourcePilot": {
+    "artifactSha256": "75881be872f5a0d1ef9f1b57eb888d863bba010c3233838df2eb9e9dd7fee93f",
+    "scope": "Java 8, PostgreSQL 17.12 single writable primary, V3 LOCAL journal, PostgreSQL 17.12 target.",
+    "focusedJavaTests": 31,
+    "consoleDomTests": 109,
+    "native": {
+      "artifactSha256": "75881be872f5a0d1ef9f1b57eb888d863bba010c3233838df2eb9e9dd7fee93f",
+      "status": "PASS",
+      "checks": [
+        "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+        "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+        "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+        "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+        "The missing slot is refused and the last durable LSN remains available"
+      ],
+      "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "reproduce": "python3 tests/postgres-source-run.py --artifact <candidate jar> --output target/pg-source-proof"
   }
 }

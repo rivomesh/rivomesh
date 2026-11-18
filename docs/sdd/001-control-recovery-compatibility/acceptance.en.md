@@ -33,7 +33,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
-| AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | NOT_RUN |
+| AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | PARTIAL |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | NOT_RUN |
 | AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
 | AC-JV-02 | JV-02 | Each approved source profile crosses five JDKs for snapshot,CDC,restart and equality;record separate adapter/SDK/TLS/object/cluster/recovery gates and never label unrun combinations passed. | NOT_RUN |

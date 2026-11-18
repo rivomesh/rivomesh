@@ -1,0 +1,30 @@
+formatVersion: 3
+pipelineId: postgres-sales
+nodeId: postgres-worker
+source:
+  type: POSTGRESQL
+  clusterId: sales-postgresql
+  database: accounting
+  topology: SINGLE
+  expectedVersion: "17"
+  username: ${RIVOMESH_SOURCE_USER}
+  password: ${RIVOMESH_SOURCE_PASSWORD}
+  postgresql:
+    url: ${RIVOMESH_SOURCE_JDBC_URL}
+    publication: rivomesh_sales
+    slotPrefix: rivomesh_sales
+databases:
+  - sales
+  - billing
+journal:
+  mode: LOCAL
+targets:
+  - id: warehouse
+    product: POSTGRESQL
+    url: ${RIVOMESH_TARGET_JDBC_URL}
+    username: ${RIVOMESH_TARGET_USER}
+    password: ${RIVOMESH_TARGET_PASSWORD}
+    metadataSchema: rivomesh_meta
+    mappings:
+      sales: migrated_sales
+      billing: migrated_billing

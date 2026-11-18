@@ -33,7 +33,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
-| AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 待验收 |
+| AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收 |
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 待验收 |
 | AC-JV-01 | JV-01 | [PASS · Five JDKs](../../verification/README.md) |
 | AC-JV-02 | JV-02 | 每个批准的源档案与五JDK至少验证全量、增量、重启和内容一致；目标驱动、消息SDK、TLS、JSON/无主键、集群、修复/跳过单独登记，未跑不得标记通过。 | 待验收 |

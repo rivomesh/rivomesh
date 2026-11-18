@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.15",
+  "version": "0.16",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -951,14 +951,14 @@
       "id": "SO-06",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "NEW",
+      "status": "PARTIAL",
       "title": {
         "zh-CN": "PostgreSQL 源适配器",
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "能力目录仅PLANNED，PG目标驱动不等于PG源。",
-        "en": "Catalog says PLANNED;a PG sink driver is not a PG source."
+        "zh-CN": "PostgreSQL 17.12 单主、pgoutput、LSN 续传与槽丢失拒绝已通过。生成列、主备切换、共同点核验和更广目标档案待验证。",
+        "en": "PostgreSQL 17.12 single-primary pgoutput, LSN restart and missing-slot refusal passed. Generated columns, promotion, common-cut validation and broader sinks remain."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -969,7 +969,11 @@
       ],
       "evidence": [
         "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java"
+        "sync-app/src/main/java/io/github/rivomesh/cdc/SourceAdapter.java",
+        "docs/zh-CN/postgresql-source.md",
+        "docs/en/postgresql-source.md",
+        "tests/postgres-source-run.py",
+        "docs/verification/baseline.json"
       ]
     },
     {

@@ -233,8 +233,9 @@ public final class TaskService implements AutoCloseable {
             if (other.jobId.equals(task.jobId)) throw new Conflict("TASK_EXISTS");
             if (other.overlaps(task))
                 throw new Conflict("DESTINATION_OVERLAP");
-            boolean sameSource=other.endpoints().stream().anyMatch(a -> task.endpoints().stream().anyMatch(b -> a.host.equalsIgnoreCase(b.host)&&a.port==b.port));
-            if (sameSource && other.source.serverId==task.source.serverId) throw new Conflict("REPLICATION_SERVER_ID_COLLISION");
+            if("MYSQL".equals(other.sourceType())&&"MYSQL".equals(task.sourceType())&&other.source.serverId==task.source.serverId
+                    &&other.endpoints().stream().anyMatch(a->task.endpoints().stream().anyMatch(b->a.host.equalsIgnoreCase(b.host)&&a.port==b.port)))
+                throw new Conflict("REPLICATION_SERVER_ID_COLLISION");
         }
     }
     private Registry copy() throws IOException { return Model.JSON.readValue(Model.JSON.writeValueAsBytes(registry),Registry.class); }
@@ -752,7 +753,7 @@ public final class TaskService implements AutoCloseable {
     private void stop(Entry e) throws Exception {synchronized(e){if(e.worker!=null){e.worker.stop();if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");e.worker=null;}if(e.permit){slots.release();e.permit=false;}e.workerState="STOPPED";}}
     private static Map<String,Object> publicStatus(Map<String,Object> db,TaskDefinition config) {
         Map<String,Object> out=new LinkedHashMap<>();
-        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","required_gtid","applied_sequence","covered_sequence","captured_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited","openGapCount","verifiedGapCount","hasOpenGaps"))
+        for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","capture_lsn","required_gtid","applied_sequence","covered_sequence","captured_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited","openGapCount","verifiedGapCount","hasOpenGaps"))
             if(db.containsKey(key))out.put(key,db.get(key));
         if(config.pipeline!=null&&db.get("gapsBySubscription") instanceof Map){
             Map<?,?> observed=(Map<?,?>)db.get("gapsBySubscription");Map<String,Long> counts=new LinkedHashMap<>();
@@ -792,6 +793,7 @@ public final class TaskService implements AutoCloseable {
         row.put("targetSchema",e.config.target.schema);row.put("targetType",e.config.target.type);row.put("status",e.database);row.put("observedAt",e.observedAt);row.put("problem",e.problem);
         if(e.config.pipeline!=null){row.put("targetCount",e.config.pipeline.targets.size());row.put("destinations",e.config.destinations((String)e.database.get("generation")));}
         row.put("statusAvailable",e.statusAvailable);
+        row.put("sourceType",e.config.sourceType());
         // Copy operation views: serialization must never race a later request mutating controller state.
         com.fasterxml.jackson.databind.node.ArrayNode operations=Model.JSON.valueToTree(c.operations);
         for(com.fasterxml.jackson.databind.JsonNode operation:operations)

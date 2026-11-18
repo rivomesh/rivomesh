@@ -2,15 +2,17 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-18T09:53:41+08:00",
-  "nextReportAt": "2026-11-18T10:53:41+08:00",
+  "lastReportAt": "2026-11-18T10:54:04+08:00",
+  "nextReportAt": "2026-11-18T11:54:04+08:00",
   "completedSincePrevious": [
-    "SO-04 accepted on MySQL 8.2.0 ARM64 with 56 V3 tests, real GTID promotion, and real MGR election.",
-    "RC-09 accepted: 42 Java, 108 DOM, 8 native contracts and 14 real CDC checks.",
-    "JV-01 accepted on Java 8, 11, 17, 21 and 25 with actual Controller, Agent and Worker processes."
+    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
+    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks.",
+    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending.",
+    "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "SO-06 PostgreSQL 17 pgoutput decoder and source adapter. First native snapshot and restart verification being prepared."
+    "SO-02 MySQL 5.7.44 real single-primary MGR passes; GTID switchover/log loss and standalone fan-out are underway.",
+    "LG-06 disposable two-node Kubernetes with CSI is starting."
   ],
   "reportContents": [
     "Current totals",
@@ -20,29 +22,28 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 16,
-    "PARTIAL": 28,
-    "NEW": 4
-  },
-  "lastReportedPublishedCommits": [
-    "5ccf8ed760d5d12368975818be140902219ff634",
-    "8af64d9fd7df2797594599c82f718c8b552a20fc",
-    "64f6eeef7f262f260ba9af5aa584803e4e682c15"
-  ],
-  "currentSdd": {
     "DONE": 19,
     "PARTIAL": 25,
     "NEW": 4
   },
+  "lastReportedPublishedCommits": [
+    "adfe1b78025342e9aa813fce5ff212811601608c",
+    "688e53b75e3b8158f35d27cb71aeb55192524ef2",
+    "0af97fddcafb20d9adccf691b1b2418be90c4949",
+    "0ec162deca1c3f097e74636b36860d58f50c2ea2"
+  ],
+  "currentSdd": {
+    "DONE": 19,
+    "PARTIAL": 26,
+    "NEW": 3
+  },
   "newSinceLastReport": [
-    "RC-01 accepted with 48 Java, 109 DOM, 4 native MySQL and three real CDC fault profiles.",
-    "SO-03 accepted on MySQL 8.0.46. Five native V3 cases, two topology cases and 14 real CDC recovery checks.",
-    "SO-01 unified the source adapter entry point and verified explicit MySQL type/version. PostgreSQL and Oracle are still pending.",
-    "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
+    "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL."
   ],
   "nextTasks": [
-    "SO-06 PostgreSQL pgoutput source profile.",
-    "Consolidate V2/V3 execution branches."
+    "Complete the native PostgreSQL pilot and MySQL 5.7 V3 matrix.",
+    "Obtain a disposable real Kubernetes cluster and verify both deployment formats.",
+    "Continue source gap recovery and Oracle source work."
   ],
   "currentCandidateArtifact": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
   "currentCandidateScope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",

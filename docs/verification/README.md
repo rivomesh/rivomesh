@@ -81,3 +81,7 @@ Capture, preflight and common-cut validation share the source adapter entry poin
 候选包 `d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0` 通过 41 项 Java 检查、109 项界面检查、6 项 V3 单机实库检查和两项真实选主检查。独立日志档案验证了非 FULL、匿名模式、部分 JSON、压缩事务和带标签历史的拒绝。部分 JSON 与压缩事务也通过了采集中的原生事件拒绝测试。该包在五个 JDK 复跑 Controller、Agent 和 Worker 启动、全量与增量。
 
 Native MySQL version was 8.4.13. Reproduce the profile with `tests/mysql84-profile-run.sh` and `tests/matrix.sh --v3 8.4`.
+
+## SO-06 PostgreSQL 17 source pilot
+
+Candidate `75881be872f5a0d1ef9f1b57eb888d863bba010c3233838df2eb9e9dd7fee93f` passed 31 focused Java tests, 109 console tests and five native PostgreSQL 17.12 checks. They cover two schemas, JSONB, numeric and bytea, keyless duplicates, atomic CDC, SQL-fault replay, SIGKILL restart on the original LSN and safe refusal of a missing slot. SO-06 is partial. Cross-timeline promotion, generated columns, common-cut verification and other destination combinations remain. See the [English guide](../en/postgresql-source.md) and [Chinese guide](../zh-CN/postgresql-source.md).
