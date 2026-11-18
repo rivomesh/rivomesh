@@ -86,7 +86,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none
   Deliver: Each task declares source type,identity,namespace and version;GTID,LSN and SCN are not interchangeable;UI/preflight follow real capabilities and reject unsupported profiles.
   Acceptance: AC-SO-01
-- [ ] T-SO-02 · MySQL5.7 supported profile · P1 · Depends on: SO-01
+- [x] T-SO-02 · MySQL5.7 supported profile · P1 · Depends on: SO-01
   Deliver: Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence.
   Acceptance: AC-SO-02
 - [x] T-SO-03 · MySQL8.0 current V3 acceptance · P1 · Depends on: SO-01

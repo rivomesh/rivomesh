@@ -10,7 +10,7 @@ if [[ "${1:-}" == --v3 ]]; then
 fi
 if [[ "$#" -eq 0 ]]; then
     if [[ "$profile" == v3 ]]; then
-        set -- 8.0 8.2.0 8.4
+        set -- 5.7.44 8.0 8.2.0 8.4
     else
         set -- 8.0 8.4
     fi
@@ -38,7 +38,11 @@ for version in "$@"; do
             esac
             report_dir="$project_dir/target/matrix-ha/$version/$suite"
         fi
-        SYNC_MYSQL_IMAGE="$registry:$version" "$test_dir/$script"
+        if [[ "$profile" == v3 && "$version" == 5.7* ]]; then
+            SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE="$registry:$version" "$test_dir/$script"
+        else
+            SYNC_MYSQL_IMAGE="$registry:$version" "$test_dir/$script"
+        fi
         mkdir -p "$report_dir"
         cp "$project_dir"/sync-app/target/surefire-reports/"$report_suite"/TEST-*.xml "$report_dir/"
     done

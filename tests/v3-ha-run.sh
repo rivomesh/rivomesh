@@ -3,6 +3,7 @@ set -euo pipefail
 test_dir="$(cd "$(dirname "$0")" && pwd)"
 project="rivomesh-v3-ha-$$"
 compose=(docker compose -p "$project" -f "$test_dir/compose.yml" -f "$test_dir/postgres-compose.yml" -f "$test_dir/ha-compose.yml")
+if [ "${SYNC_MYSQL57:-0}" = 1 ]; then compose+=(-f "$test_dir/mysql57-compose.yml" -f "$test_dir/mysql57-ha-compose.yml"); fi
 cleanup() {
     status=$?
     if [ "$status" -ne 0 ]; then "${compose[@]}" logs --tail 80; fi

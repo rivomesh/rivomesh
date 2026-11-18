@@ -19,7 +19,7 @@ class PipelineGroupIntegrationTest {
             Journal.SnapshotState incomplete=journal.snapshot("source",tableId);ClusterHarness.sql("mysql","UPDATE "+h.sourceTable()+" SET amount=777 WHERE id=40");
             try{ClusterHarness.sql("mysql","SHUTDOWN");}catch(SQLException expected){/* real primary process exits */}
             String[] primary={null};h.await(()->{
-                for(String host:Arrays.asList("mysql-2","mysql-3"))try{if("PRIMARY".equals(ClusterHarness.scalar(host,"SELECT MEMBER_ROLE FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@global.server_uuid AND MEMBER_STATE='ONLINE'"))){primary[0]=host;return true;}}catch(SQLException ignored){/* election */}return false;
+                for(String host:Arrays.asList("mysql-2","mysql-3"))try{if(GroupIntegrationTest.onlinePrimary(host)){primary[0]=host;return true;}}catch(SQLException ignored){/* election */}return false;
             },90);h.cleanupHost=primary[0];
             ClusterHarness.sql(primary[0],"INSERT INTO "+h.sourceTable()+" VALUES (99,999,'new-group-primary')");ClusterHarness.sql(primary[0],"DELETE FROM "+h.sourceTable()+" WHERE id=2");ClusterHarness.sql(primary[0],"UPDATE "+h.sourceTable()+" SET amount=888 WHERE id=1");
             h.await(()->h.count("id=99")==1&&h.count("id=2")==0&&h.count("id=1 AND amount=888")==1&&h.count("id=40 AND amount=777")==1,90);

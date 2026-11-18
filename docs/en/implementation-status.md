@@ -2,7 +2,7 @@
 
 The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [SDD](../sdd/001-control-recovery-compatibility/spec.en.md) · [Tasks](../sdd/001-control-recovery-compatibility/tasks.en.md) · [中文](../zh-CN/implementation-status.md).
 
-48 requirements: **19 DONE, 26 PARTIAL and 3 NEW, with 29 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
+48 requirements: **20 DONE, 25 PARTIAL and 3 NEW, with 28 open**. Each accepted item is limited to its declared profile rather than every product/version/deployment combination.
 
 ## Accepted
 
@@ -20,6 +20,7 @@ The first release is not published. Java/Maven namespace:`io.github.rivomesh`. [
 | RC-01 | MySQL source, journal and target fault phases across entries and restart |
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
 | JV-01 | Actual Controller, Agent and Worker on all five JDKs with SQL snapshot and CDC verification |
+| SO-02 | MySQL 5.7.44 Java 8 V3 across three topologies, replica SQL fault and native binlog-loss refusal. |
 | SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery |
 | SO-05 | MySQL 8.4.13 V3 topologies, log profile admission and unsupported live events |
 | SO-04 | MySQL 8.2.0 on Java 8 with native V3 standalone, GTID async and single-primary MGR profiles |

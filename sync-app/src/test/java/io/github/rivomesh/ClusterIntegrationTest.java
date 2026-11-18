@@ -86,6 +86,16 @@ class ClusterIntegrationTest {
             assertTrue(Gtids.contains(h.store.captured().gtidSet, oldUuid+":1"));
         }
     }
+    static String replicationKeyword(Connection connection)throws SQLException{
+        return connection.getMetaData().getDatabaseMajorVersion()<8?"SLAVE":"REPLICA";
+    }
+
+    static void replicaControl(String host,String action,String options)throws Exception{
+        try(Connection connection=ClusterHarness.mysql(host);Statement statement=connection.createStatement()){
+            statement.execute(action+" "+replicationKeyword(connection)+options);
+        }
+    }
+
     static void provisionReplica() throws Exception {
         try(Connection c=ClusterHarness.mysql("mysql"); Statement s=c.createStatement()) {
             s.execute("SET SESSION sql_log_bin=0"); s.execute("CREATE USER IF NOT EXISTS 'sync_repl'@'%' IDENTIFIED BY 'Sync@Test123'");
@@ -97,8 +107,10 @@ class ClusterIntegrationTest {
             try { s.execute("RESET BINARY LOGS AND GTIDS"); } catch(SQLException e) { if(!"42000".equals(e.getSQLState()))throw e; s.execute("RESET MASTER"); }
             // Fresh controlled fixtures have identical system users and no business data; establish the bootstrap baseline.
             s.execute("SET GLOBAL gtid_purged='"+baseline+"'");
-            s.execute("CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql',SOURCE_USER='sync_repl',SOURCE_PASSWORD='Sync@Test123',SOURCE_AUTO_POSITION=1,GET_SOURCE_PUBLIC_KEY=1");
-            s.execute("SET GLOBAL super_read_only=ON"); s.execute("START REPLICA");
+            boolean old="SLAVE".equals(replicationKeyword(c));
+            s.execute(old?"CHANGE MASTER TO MASTER_HOST='mysql',MASTER_USER='sync_repl',MASTER_PASSWORD='Sync@Test123',MASTER_AUTO_POSITION=1"
+                    :"CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql',SOURCE_USER='sync_repl',SOURCE_PASSWORD='Sync@Test123',SOURCE_AUTO_POSITION=1,GET_SOURCE_PUBLIC_KEY=1");
+            s.execute("SET GLOBAL super_read_only=ON"); s.execute("START "+replicationKeyword(c));
         }
     }
     private static int replicaError() throws Exception {

@@ -2,7 +2,7 @@
 
 首版尚未发布。Java/Maven命名空间为`io.github.rivomesh`。[完整SDD](../sdd/001-control-recovery-compatibility/spec.md) · [任务清单](../sdd/001-control-recovery-compatibility/tasks.md) · [English](../en/implementation-status.md)。
 
-48项需求：**19项完成、26项部分完成、3项未实现，剩余29项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
+48项需求：**20项完成、25项部分完成、3项未实现，剩余28项**。完成项仅适用于各自声明的验收档案，不代表所有数据库版本和部署组合均已通过。
 
 ## 已验收
 
@@ -20,6 +20,7 @@
 | RC-01 | MySQL 源连接、解码、DDL、日志及目标应用阶段诊断，跨入口和重启验证 |
 | RC-09 | 补偿与修正跨入口取消、提交前后强杀恢复，并按原请求核对凭据 |
 | JV-01 | 五个 JDK 的 Controller、Agent 和 Worker 实际启动并完成 SQL 全量和增量 |
+| SO-02 | MySQL 5.7.44 的 Java 8 V3 三种拓扑、真实主从 SQL 线程故障和 binlog 缺失。 |
 | SO-03 | MySQL 8.0.46 的 V3 三种拓扑及跨入口人工恢复 |
 | SO-05 | MySQL 8.4.13 的 V3 三种拓扑、日志准入和会话级不支持事件的处理 |
 | SO-04 | MySQL 8.2.0 在 Java 8 的 V3 单机、GTID 主从和单主组复制实库档案 |
@@ -54,7 +55,7 @@ V2/V3双执行链、对应向导和旧配置仍有交叉引用，将作为下一
 
 1. 源端受控范围恢复及其他目标恢复协议。
 2. 自动跨Agent接管、排空迁移、完整全局诊断与存储可达性。
-3. PostgreSQL/Oracle 源，以及 MySQL 5.7 完整档案。
+3. PostgreSQL 源的主备切换和共同校验点，以及 Oracle 源。
 4. 分布式GaussDB、其他厂商/消息/分析目标生产矩阵。
 5. 大事务/海量表/硬件基准、真实K8s、完整JDK矩阵与双语文档。
 

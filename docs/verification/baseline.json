@@ -241,6 +241,19 @@
         "archive": "docs/verification/README.md",
         "profile": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs."
       }
+    },
+    {
+      "id": "SO-02",
+      "title": {
+        "zh-CN": "MySQL 5.7 完整支持档案",
+        "en": "MySQL5.7 supported profile"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8, MySQL 5.7.44 linux/amd64, Connector/J 8.4.0, ROW/FULL/GTID, V3 standalone, GTID async promotion and single-primary MGR. Multi-schema SQL fan-out, keyless, JSON, supported generated columns, DDL refusal, restart, failed replica SQL thread, missing binlog refusal and durable checkpoint retention."
+      }
     }
   ],
   "productProfiles": [
@@ -992,5 +1005,20 @@
       "cleanupExitCode": 0
     },
     "reproduce": "python3 tests/postgres-source-run.py --artifact <candidate jar> --output target/pg-source-proof"
+  },
+  "mysql57V3Profile": {
+    "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+    "archive": "docs/verification/README.md",
+    "profile": "Java 8, MySQL 5.7.44 linux/amd64, Connector/J 8.4.0, ROW/FULL/GTID, V3 standalone, GTID async promotion and single-primary MGR. Multi-schema SQL fan-out, keyless, JSON, supported generated columns, DDL refusal, restart, failed replica SQL thread, missing binlog refusal and durable checkpoint retention.",
+    "engineVersion": "5.7.44",
+    "imageId": "sha256:5107333e08a87b836d48ff7528b1e84b9c86781cc9f1748bbc1b8c42a870d933",
+    "imageManifest": "mysql@sha256:4bc6bc963e6d8443453676cae56536f4b8156d78bae03c0145cbe47c2aad73bb",
+    "architecture": "amd64",
+    "nativeSuites": {
+      "integration": 6,
+      "ha": 1,
+      "group": 1
+    },
+    "reproduce": "tests/matrix.sh --v3 5.7.44"
   }
 }

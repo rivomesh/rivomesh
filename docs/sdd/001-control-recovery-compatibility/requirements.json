@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.16",
+  "version": "0.17",
   "date": "2026-11-18",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -825,14 +825,14 @@
       "id": "SO-02",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "MySQL 5.7 完整支持档案",
         "en": "MySQL5.7 supported profile"
       },
       "gap": {
-        "zh-CN": "有5.7.44基础链路记录，未覆盖当前平台全部必要对象、恢复和运行时组合。",
-        "en": "5.7.44 basic evidence does not cover the required current-platform object/recovery/runtime matrix."
+        "zh-CN": "MySQL 5.7.44 的 Java 8 V3 单机、GTID 主从、单主 MGR、主从 SQL 线程故障、日志缺失及断点保护已验收。其他 JDK 由 JV-02 跟踪。",
+        "en": "MySQL 5.7.44 Java 8 V3 standalone, GTID async and single-primary MGR, replica SQL fault, missing binlog and checkpoint retention passed. JV-02 covers other JDKs."
       },
       "acceptance": {
         "zh-CN": "固定补丁、驱动、日志配置后验证全量转增量、JSON/无主键/生成列能力、重启/切主/日志缺失、所支持DDL和恢复；不支持项预检拒绝并形成独立证据。",
@@ -843,8 +843,16 @@
       ],
       "evidence": [
         "docs/validation.md",
-        "tests/mysql57-run.sh"
-      ]
+        "docs/en/validation.md",
+        "tests/matrix.sh",
+        "tests/mysql57-group-compose.yml",
+        "tests/mysql57-ha-compose.yml"
+      ],
+      "verification": {
+        "artifactSha256": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
+        "archive": "docs/verification/README.md",
+        "profile": "Java 8, MySQL 5.7.44 linux/amd64, Connector/J 8.4.0, ROW/FULL/GTID, V3 standalone, GTID async promotion and single-primary MGR. Multi-schema SQL fan-out, keyless, JSON, supported generated columns, DDL refusal, restart, failed replica SQL thread, missing binlog refusal and durable checkpoint retention."
+      }
     },
     {
       "id": "SO-03",

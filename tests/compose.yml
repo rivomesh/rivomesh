@@ -20,7 +20,7 @@ services:
       GS_HOST_AUTH_METHOD: sha256
       OTHER_PG_CONF: password_encryption_type = 2
     healthcheck:
-      test: ["CMD-SHELL", "su - omm -c 'gsql -d sync_test -c \"SELECT 1\"' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "test \"$$(cat /proc/1/comm)\" = gaussdb && su - omm -c 'gsql -d sync_test -c \"SELECT 1\"' >/dev/null 2>&1"]
       interval: 3s
       timeout: 5s
       retries: 60

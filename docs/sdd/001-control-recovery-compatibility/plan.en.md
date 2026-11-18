@@ -1,10 +1,10 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.16 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
+RM-SDD-001 · v0.17 · 2026-11-18 · IMPLEMENTING: transaction skip and gap recovery
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
-Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **19 DONE, 26 PARTIAL and 3 NEW, with 29 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and five-JDK process and source/target diagnostic profiles passed bounded acceptance.
+Current authority: [requirements.json](requirements.json),[tasks](tasks.en.md) and [acceptance](acceptance.en.md). **20 DONE, 25 PARTIAL and 3 NEW, with 28 open**. [RC-05](design-checkpoint-recovery.en.md) and[RC-03](../../verification/README.md)passed bounded profiles;Bounded gap verification and compensation have passed. Bounded manual correction has passed. Distributed recovery, MySQL 8.0.46, 8.2.0, 8.4.13 and five-JDK process and source/target diagnostic profiles passed bounded acceptance.
 
 ## Current baseline
 
@@ -65,7 +65,7 @@ A proposed gap record links source/range,transaction/raw/normalized hashes,targe
 
 | Source | Existing scope | Remaining |
 |---|---|---|
-| MySQL5.7 | Basic5.7.44 evidence | Current V3 objects/recovery/HA/runtime profile |
+| MySQL5.7 | 5.7.44 Java 8 V3 standalone, GTID async and MGR | Native source binlog gap retained the last checkpoint | PASS (bounded) |
 | MySQL8.0 | Historical8.0.46 V2/HA | Current V3/new recovery acceptance |
 | MySQL8.2 | Java 8 V3 passes three native 8.2.0 topologies | JV-02 covers other JDKs |
 | MySQL8.4 | Representative V3/recovery | Broader auth/log/topology/target/JDK matrix |

@@ -1,10 +1,10 @@
 # 设计边界、决策和实施顺序
 
-RM-SDD-001 · v0.16 · 2026-11-18 · 实施中：推进事务跳过与缺口
+RM-SDD-001 · v0.17 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 [规格](spec.md) · [任务](tasks.md) · [验收](acceptance.md) · [English](plan.en.md)
 
-当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**19 DONE、26 PARTIAL、3 NEW，29 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、五 JDK 真实进程与源目标故障阶段已验收。
+当前状态以 [requirements.json](requirements.json)、[任务清单](tasks.md)和[验收清单](acceptance.md)为准：**20 DONE、25 PARTIAL、3 NEW，28 项未完成**。[RC-05](design-checkpoint-recovery.md)与[RC-03](../../verification/README.md)限定档案已验收，缺口核验和事务补偿已通过限定档案。跨节点恢复作业、MySQL 8.0.46、8.2.0、8.4.13、五 JDK 真实进程与源目标故障阶段已验收。
 
 ## 1. 当前基线
 
@@ -73,7 +73,7 @@ RM-SDD-001 · v0.16 · 2026-11-18 · 实施中：推进事务跳过与缺口
 
 | 源 | 现状 | 未完成要求 |
 |---|---|---|
-| MySQL5.7 | 5.7.44基础链路证据 | 当前V3对象/恢复/HA及运行时档案补齐 |
+| MySQL5.7 | 5.7.44 Java 8 V3 单机、GTID 主从、MGR | 实际日志缺失保留断点 | 限定档案通过 |
 | MySQL8.0 | 8.0.46历史V2/HA等证据 | 当前发布V3和新增恢复能力补验 |
 | MySQL8.2 | 8.2.0 的 Java 8 V3 三种拓扑实库通过 | 其他 JDK 由 JV-02 跟踪 |
 | MySQL8.4 | 代表性V3/恢复已验收 | 扩展认证、日志特性、拓扑、目标和JDK矩阵 |

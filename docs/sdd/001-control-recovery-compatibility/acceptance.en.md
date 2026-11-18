@@ -29,7 +29,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-RC-09 | RC-09 | [PASS · bounded SQL](../../verification/README.md) |
 | AC-RC-10 | RC-10 | Declare recovery capability per adapter;SQL uses local transactions,analytical/queue adapters verified receipts/gap notifications;other subscriptions are not silently skipped and unresolved evidence is retained with backpressure/alerts. | NOT_RUN |
 | AC-SO-01 | SO-01 | Each task declares source type,identity,namespace and version;GTID,LSN and SCN are not interchangeable;UI/preflight follow real capabilities and reject unsupported profiles. | NOT_RUN |
-| AC-SO-02 | SO-02 | Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence. | NOT_RUN |
+| AC-SO-02 | SO-02 | Pin patch/driver/log settings and verify snapshot-to-CDC,object capabilities,restart/promotion/log loss,supported DDL/recovery with explicit negative cases and independent evidence. | PASS (5.7.44 Java 8 V3 native profile) |
 | AC-SO-03 | SO-03 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | [PASS · MySQL 8.4.13](../../verification/README.md) |
@@ -71,7 +71,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 
 | Source profile | Java8 | Java11/17/21/25 | Whole current platform |
 |---|---|---|---|
-| MySQL5.7 | Basic historical5.7.44 | Dedicated source-version evidence missing | PARTIAL |
+| MySQL5.7 | 5.7.44 Java 8 V3 standalone, GTID async and MGR | Native source binlog gap retained the last checkpoint | PASS (bounded) |
 | MySQL8.0 | 8.0.46 V3 three topologies and manual recovery passed | Tracked in JV-02 | DONE (bounded profile) |
 | MySQL8.2 | V3 standalone, GTID async and single-primary MGR passed | Tracked in JV-02 | DONE (bounded profile) |
 | MySQL8.4 | V3 topologies and log admission pass on 8.4.13 | Five JDK process profiles passed | DONE (bounded profile) |

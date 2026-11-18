@@ -49,13 +49,30 @@ class GroupIntegrationTest {
     private static Connection admin(String host) throws SQLException {
         return DriverManager.getConnection("jdbc:mysql://"+host+":3306/?useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=3000&socketTimeout=60000","root",ClusterHarness.PASSWORD);
     }
+    static boolean onlinePrimary(String host)throws SQLException{
+        try(Connection c=admin(host);Statement statement=c.createStatement()){
+            boolean old="SLAVE".equals(ClusterIntegrationTest.replicationKeyword(c));
+            String sql=old?"SELECT MEMBER_ID FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@global.server_uuid AND MEMBER_STATE='ONLINE'"
+                    :"SELECT MEMBER_ROLE FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@global.server_uuid AND MEMBER_STATE='ONLINE'";
+            String local;
+            try(ResultSet result=statement.executeQuery(sql)){local=result.next()?result.getString(1):null;}
+            if(local==null)return false;
+            if(!old)return "PRIMARY".equals(local);
+            try(ResultSet result=statement.executeQuery("SHOW GLOBAL STATUS LIKE 'group_replication_primary_member'")){
+                return result.next()&&local.equalsIgnoreCase(result.getString(2));
+            }
+        }
+    }
+
     static void startGroup() throws Exception {
         String group="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
         for(String host:Arrays.asList("mysql","mysql-2","mysql-3")) {
             try(Connection c=admin(host); Statement s=c.createStatement()) {
                 s.execute("SET SESSION sql_log_bin=0");
+                boolean old="SLAVE".equals(ClusterIntegrationTest.replicationKeyword(c));
                 s.execute("CREATE USER IF NOT EXISTS 'gr_recovery'@'%' IDENTIFIED BY 'Sync@Test123'");
-                s.execute("GRANT REPLICATION SLAVE,CONNECTION_ADMIN,BACKUP_ADMIN ON *.* TO 'gr_recovery'@'%'");
+                s.execute(old?"GRANT REPLICATION SLAVE ON *.* TO 'gr_recovery'@'%'"
+                        :"GRANT REPLICATION SLAVE,CONNECTION_ADMIN,BACKUP_ADMIN ON *.* TO 'gr_recovery'@'%'");
                 try { s.execute("RESET BINARY LOGS AND GTIDS"); } catch(SQLException e) { if(!"42000".equals(e.getSQLState()))throw e; s.execute("RESET MASTER"); }
                 s.execute("SET GLOBAL group_replication_group_name='"+group+"'");
                 s.execute("SET GLOBAL group_replication_local_address='"+host+":33061'");
@@ -63,9 +80,13 @@ class GroupIntegrationTest {
                 s.execute("SET GLOBAL group_replication_single_primary_mode=ON");
                 s.execute("SET GLOBAL group_replication_ssl_mode='DISABLED'");
                 s.execute("SET GLOBAL group_replication_recovery_use_ssl=OFF");
-                s.execute("SET GLOBAL group_replication_recovery_get_public_key=ON");
-                s.execute("SET GLOBAL group_replication_consistency='BEFORE_ON_PRIMARY_FAILOVER'");
-                s.execute("CHANGE REPLICATION SOURCE TO SOURCE_USER='gr_recovery',SOURCE_PASSWORD='Sync@Test123' FOR CHANNEL 'group_replication_recovery'");
+                if(old){
+                    s.execute("CHANGE MASTER TO MASTER_USER='gr_recovery',MASTER_PASSWORD='Sync@Test123' FOR CHANNEL 'group_replication_recovery'");
+                }else{
+                    s.execute("SET GLOBAL group_replication_recovery_get_public_key=ON");
+                    s.execute("SET GLOBAL group_replication_consistency='BEFORE_ON_PRIMARY_FAILOVER'");
+                    s.execute("CHANGE REPLICATION SOURCE TO SOURCE_USER='gr_recovery',SOURCE_PASSWORD='Sync@Test123' FOR CHANNEL 'group_replication_recovery'");
+                }
             }
         }
         try(Connection c=admin("mysql"); Statement s=c.createStatement()) {

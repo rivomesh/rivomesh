@@ -1,0 +1,13 @@
+x-mysql57-group: &mysql57-group
+  image: ${SYNC_MYSQL57_IMAGE:-public.ecr.aws/docker/library/mysql:5.7}
+  platform: linux/amd64
+services:
+  mysql:
+    <<: *mysql57-group
+    command: ["--server-id=1", "--report-host=mysql", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-checksum=NONE", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-slave-updates=ON", "--master-info-repository=TABLE", "--relay-log-info-repository=TABLE", "--transaction-write-set-extraction=XXHASH64", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]
+  mysql-2:
+    <<: *mysql57-group
+    command: ["--server-id=2", "--report-host=mysql-2", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-checksum=NONE", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-slave-updates=ON", "--master-info-repository=TABLE", "--relay-log-info-repository=TABLE", "--transaction-write-set-extraction=XXHASH64", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]
+  mysql-3:
+    <<: *mysql57-group
+    command: ["--server-id=3", "--report-host=mysql-3", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL", "--binlog-checksum=NONE", "--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--log-slave-updates=ON", "--master-info-repository=TABLE", "--relay-log-info-repository=TABLE", "--transaction-write-set-extraction=XXHASH64", "--plugin-load-add=group_replication.so", "--loose-group-replication-start-on-boot=OFF"]

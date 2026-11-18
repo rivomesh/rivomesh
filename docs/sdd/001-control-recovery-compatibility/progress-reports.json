@@ -11,7 +11,6 @@
     "SO-05 accepted on MySQL 8.4.13 with native binlog refusal, three V3 topologies and the new artifact on five JDKs."
   ],
   "inProgress": [
-    "SO-02 MySQL 5.7.44 real single-primary MGR passes; GTID switchover/log loss and standalone fan-out are underway.",
     "LG-06 disposable two-node Kubernetes with CSI is starting."
   ],
   "reportContents": [
@@ -33,17 +32,17 @@
     "0ec162deca1c3f097e74636b36860d58f50c2ea2"
   ],
   "currentSdd": {
-    "DONE": 19,
-    "PARTIAL": 26,
+    "DONE": 20,
+    "PARTIAL": 25,
     "NEW": 3
   },
   "newSinceLastReport": [
-    "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL."
+    "SO-06 PostgreSQL 17.12 single-primary pilot passed 31 Java, 109 DOM and five native checks. SO-06 advanced to PARTIAL.",
+    "SO-02 MySQL 5.7.44 Java 8 V3 accepted with six standalone, one GTID failover/log loss and one MGR check."
   ],
   "nextTasks": [
-    "Complete the native PostgreSQL pilot and MySQL 5.7 V3 matrix.",
-    "Obtain a disposable real Kubernetes cluster and verify both deployment formats.",
-    "Continue source gap recovery and Oracle source work."
+    "Verify both Kubernetes deployment formats and recovery on CSI.",
+    "Continue source range recovery and Oracle source work."
   ],
   "currentCandidateArtifact": "d7fc2e8bad6f4ddcb4a7a1e4eda248214df6c88976d0c02449e37e4651b543b0",
   "currentCandidateScope": "MySQL 8.4.13 with native GTID/ROW/FULL. Java 8 V3 standalone, async and single-primary MGR. Preflight refuses partial JSON, compressed transactions, non-FULL row images, anonymous-capable GTID and tagged history. Live partial JSON and compression stop before publication. Same artifact passes actual processes on five JDKs.",
