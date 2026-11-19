@@ -13,7 +13,8 @@
   "inProgress": [
     "CP-04 automatic Agent takeover, network partitions and drain/move.",
     "LG-05 live adoption of raw archives and historical failures.",
-    "LG-04 and JV-03 Pulsar token and native TLS preflight, certificate refusal and restart."
+    "SO-07 native binary JSON, LOB and RAC compatibility.",
+    "LG-04 Pulsar multi-broker, BookKeeper and workload profiles."
   ],
   "reportContents": [
     "Current totals",
@@ -37,17 +38,18 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Verify the pending Agent approval diagnostic and authorized reapproval across both Controllers.",
-    "Continue CP-04 automatic takeover and LG-05 live evidence adoption."
+    "Continue CP-04 automatic owner takeover and partition scenarios.",
+    "Continue LG-05 live evidence adoption and larger connector acceptance."
   ],
-  "currentCandidateArtifact": "05d34f775a4e30c522070a3379b3c0bfe2c626112ec3b1a7bba78a9f9f5f4d4d",
-  "currentCandidateScope": "Same-store approved Agent continuation with durable blockers and revised authorization. 29 native, 91 Java and 156 DOM.",
+  "currentCandidateArtifact": "1a352fe2ac8f2a318dad914104a2425a6a6fe50888d6504c26699171ecc51706",
+  "currentCandidateScope": "Integrated public Agent handoff, diagnostics, raw staging, Oracle virtual columns and Pulsar TLS/JWT. Three Pulsar native, 54 Java and 156 DOM tests.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "CP-04 public ownership transfer and explicit candidate Worker continuation passed 31 native checks with MySQL 8.4.13 and two SQL targets. Both Controllers replayed the original approvals. The former Agent and earlier binary stayed fenced.",
     "SO-07 Oracle 26ai integer virtual values completed 17 native cases through Flashback, archived CDC and restart into PostgreSQL. The merged candidate passed 123 Java and 154 DOM tests.",
     "LG-05 passed 23 native checks for the retained MySQL raw capture and offline verification of the bound candidate staging ZIP.",
-    "CP-04 managed handoff shows durable native mismatch and authorization blockers. Both Controllers accepted one fresh approval after the shared account revision changed. 29 native, 91 Java and 156 DOM tests."
+    "CP-04 managed handoff shows durable native mismatch and authorization blockers. Both Controllers accepted one fresh approval after the shared account revision changed. 29 native, 91 Java and 156 DOM tests.",
+    "Pulsar 4.0.14 private CA and JWT passed three native checks covering credential rejection, TLS hostname verification and exact history across broker restart. The integrated package passed 54 Java and 156 DOM tests."
   ],
   "lastScheduledReportAt": "2026-11-19T10:58:16+08:00",
   "lastVerifiedReactor": {

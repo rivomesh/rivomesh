@@ -5,6 +5,9 @@ import org.apache.pulsar.client.admin.TopicPolicies;
 import org.apache.pulsar.client.api.*;
 import org.apache.pulsar.common.policies.data.*;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -12,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 public final class PulsarTransport implements AutoCloseable {
     public static final String OWNER="rivomesh.owner",PROVISION="rivomesh.provision";
     public static final class Settings {
-        public String serviceUrl,adminUrl,cluster,topic,token;
+        public String serviceUrl,adminUrl,cluster,topic,token,tlsTrustCertsFilePath;
         public int connectTimeoutMillis=5000,requestTimeoutMillis=10000,replicas=1;
     }
     public static final class Publication {
@@ -33,17 +36,37 @@ public final class PulsarTransport implements AutoCloseable {
     public PulsarTransport(Settings settings,String binding)throws Exception{
         this.settings=settings;this.binding=binding;validate(settings);String[] topic=settings.topic.substring("persistent://".length()).split("/");namespace=topic[0]+"/"+topic[1];
         admin=admin(settings.adminUrl,settings);
-        try{ClientBuilder builder=PulsarClient.builder().serviceUrl(settings.serviceUrl).connectionTimeout(settings.connectTimeoutMillis,TimeUnit.MILLISECONDS).operationTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS).lookupTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS).enableTlsHostnameVerification(true).allowTlsInsecureConnection(false).ioThreads(1).listenerThreads(1).statsInterval(0,TimeUnit.SECONDS).memoryLimit(16,org.apache.pulsar.client.api.SizeUnit.MEGA_BYTES);if(settings.token!=null&&!settings.token.isEmpty())builder.authentication(AuthenticationFactory.token(settings.token));client=builder.build();}
-        catch(Exception failure){admin.close();throw classify(failure);}
+        try{
+            ClientBuilder builder=PulsarClient.builder().serviceUrl(settings.serviceUrl)
+                    .connectionTimeout(settings.connectTimeoutMillis,TimeUnit.MILLISECONDS)
+                    .operationTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS)
+                    .lookupTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS)
+                    .enableTlsHostnameVerification(true).allowTlsInsecureConnection(false)
+                    .ioThreads(1).listenerThreads(1).statsInterval(0,TimeUnit.SECONDS)
+                    .memoryLimit(16,org.apache.pulsar.client.api.SizeUnit.MEGA_BYTES);
+            if(settings.token!=null&&!settings.token.isEmpty())builder.authentication(AuthenticationFactory.token(settings.token));
+            if(settings.tlsTrustCertsFilePath!=null)builder.tlsTrustCertsFilePath(settings.tlsTrustCertsFilePath);
+            client=builder.build();
+        }catch(Exception failure){admin.close();throw classify(failure);}
     }
-    private static void validate(Settings s){
+    private static void validate(Settings s)throws Failure{
         if(s==null||s.topic==null||!s.topic.matches("persistent://[A-Za-z0-9][A-Za-z0-9_-]{0,62}/[A-Za-z0-9][A-Za-z0-9_-]{0,62}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||s.topic.contains("-partition-")||s.cluster==null||!s.cluster.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,127}")||s.replicas<1||s.replicas>5||s.connectTimeoutMillis<100||s.connectTimeoutMillis>120000||s.requestTimeoutMillis<100||s.requestTimeoutMillis>120000)throw new IllegalArgumentException("PULSAR_CONFIG_INVALID");
         URI service=URI.create(s.serviceUrl),http=URI.create(s.adminUrl);if(!Arrays.asList("pulsar","pulsar+ssl").contains(service.getScheme())||!Arrays.asList("http","https").contains(http.getScheme())||service.getHost()==null||http.getHost()==null||service.getUserInfo()!=null||http.getUserInfo()!=null||service.getQuery()!=null||http.getQuery()!=null||service.getFragment()!=null||http.getFragment()!=null||service.getPath()!=null&&!service.getPath().isEmpty()||http.getPath()!=null&&!http.getPath().isEmpty()&&!http.getPath().equals("/")||service.getScheme().equals("pulsar+ssl")!=http.getScheme().equals("https"))throw new IllegalArgumentException("PULSAR_ENDPOINT_INVALID");
+        if(s.tlsTrustCertsFilePath!=null){
+            Path ca;
+            try{
+                ca=Paths.get(s.tlsTrustCertsFilePath);
+                if(!ca.isAbsolute()||!service.getScheme().equals("pulsar+ssl"))throw new IllegalArgumentException();
+            }catch(IllegalArgumentException invalid){throw reject("PULSAR_TLS_TRUST_CONFIG_INVALID");}
+            if(!Files.isRegularFile(ca)||!Files.isReadable(ca))throw reject("PULSAR_TLS_TRUST_FILE_UNAVAILABLE");
+        }
     }
     private static PulsarAdmin admin(String url,Settings settings)throws Exception{
         try{
         PulsarAdminBuilder builder=PulsarAdmin.builder().serviceHttpUrl(url).connectionTimeout(settings.connectTimeoutMillis,TimeUnit.MILLISECONDS).readTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS).requestTimeout(settings.requestTimeoutMillis,TimeUnit.MILLISECONDS).enableTlsHostnameVerification(true).allowTlsInsecureConnection(false);
-        if(settings.token!=null&&!settings.token.isEmpty())builder.authentication(AuthenticationFactory.token(settings.token));return builder.build();
+        if(settings.token!=null&&!settings.token.isEmpty())builder.authentication(AuthenticationFactory.token(settings.token));
+        if(settings.tlsTrustCertsFilePath!=null)builder.tlsTrustCertsFilePath(settings.tlsTrustCertsFilePath);
+        return builder.build();
         }catch(Exception failure){throw classify(failure);}
     }
     private static Failure reject(String code){return new Failure(code,false,null);}

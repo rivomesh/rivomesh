@@ -10559,5 +10559,26 @@
     "domTestsPassed": 156,
     "scope": "MySQL 8.4.13 with PostgreSQL control/journal and two transactional SQL targets. Both entries read the same native target mismatch and then the changed approval authorization. The old approval cannot be reused. A newly approved request resumes the same cut and preserves ordinary lifecycle commands and report history.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/native-handoff-diagnostics --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-target-fence --handoff-worker-start --handoff-public-owner --handoff-approval-diagnostics --previous-handoff-runtime /path/to/previous.jar"
+  },
+  "pulsarTransportTlsTokenNative": {
+    "native": {
+      "status": "PASS",
+      "brokerImage": "apachepulsar/pulsar:4.0.14",
+      "checks": [
+        "Pulsar TLS rejects absent authentication, untrusted CA and a mismatched hostname",
+        "Native TLS and JWT persist and read the exact Pulsar message",
+        "Trusted TLS reconnect keeps the existing topic identity and exact confirmed history"
+      ],
+      "artifactSha256": "1a352fe2ac8f2a318dad914104a2425a6a6fe50888d6504c26699171ecc51706",
+      "harnessSourceSha256": "98d5478c4e1a9259f3715f7b64ff52a53c815ac92a37ad1dd8cd252208ae3f14",
+      "brokerImageId": "sha256:eefc3bbe50639ee3feea05f49700dcccf4de6d3bdfe05acdade091e388de047b",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "bc54b3b01b0e061c3a8eb07b0ff3ca1e9787e2b9905f9846cde543b85445facf",
+    "javaTestsPassed": 54,
+    "javaConditionalSkips": 0,
+    "domTestsPassed": 156,
+    "scope": "Java 21 application package and Pulsar 4.0.14 with one TLS-only broker, a private trust CA, native HTTPS checks and Token authorization. Preflight rejects an untrusted CA, a wrong endpoint name and absent authentication. Reopening after broker restart reuses the exact topic and reads confirmed messages.",
+    "reproduce": "python3 tests/pulsar-tls-run.py --artifact /path/to/rivomesh.jar --test-classes pulsar-transport/target/test-classes --output target/native-pulsar-tls"
   }
 }

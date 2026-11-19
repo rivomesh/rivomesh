@@ -575,3 +575,7 @@ The `446030732f40c563137f1bcdec9c663d2502434f02f1926bb15434c1a11acf02` package p
 ### Durable handoff blockers and explicit reapproval
 
 The `05d34f775a4e30c522070a3379b3c0bfe2c626112ec3b1a7bba78a9f9f5f4d4d` package passed 29 native checks, 91 Java tests and 156 DOM tests. Both Controllers read the same sanitized checkpoint mismatch and later authorization change while the candidate remained stopped. The old approval was refused. A fresh approval resumed from the same source checkpoint with the original snapshots. The console displayed the last verification time and enabled the reapproval action when the latest signed plan allowed it. [Operator workflow](../en/global-control.md#start-the-candidate-worker) · [Manifest](baseline.json)
+
+### Pulsar private CA and Token restart
+
+The `1a352fe2ac8f2a318dad914104a2425a6a6fe50888d6504c26699171ecc51706` package passed three native Pulsar 4.0.14 TLS scenarios, 54 Java tests and 156 DOM tests. Both the administrative connection and the publisher verified the CA and broker hostname. Invalid certificates and absent credentials failed before provisioning. After the authenticated broker restarted, the original topic returned both confirmed messages in order. [Messaging configuration](../en/messaging-v3.md#pulsar) · [Manifest](baseline.json)

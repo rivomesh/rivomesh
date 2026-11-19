@@ -1197,8 +1197,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。",
-        "en": "Java 21 verified MySQL/PostgreSQL TLS and reconnect, external Dameng native SQL repair, and external Kingbase native authentication, precision, reconnect and receipt continuation. Five external JDBC paths have verified classpath admission. Further vendor TLS and cluster profiles remain."
+        "zh-CN": "Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 Pulsar 4.0.14 已实测单 Broker 的私有 CA、Token、拒绝错误主机名和重启续传。",
+        "en": "Java 21 verified MySQL/PostgreSQL TLS and reconnect, external Dameng native SQL repair, and external Kingbase native authentication, precision, reconnect and receipt continuation. Five external JDBC paths have verified classpath admission. Further vendor TLS and cluster profiles remain. Pulsar 4.0.14 passed a single-broker private-CA and JWT profile, wrong-host refusal and broker restart."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1549,8 +1549,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。",
-        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain."
+        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 Pulsar 4.0.14 已实测单 Broker TLS 和 Token，确认重启后保留原消息。多 Broker、BookKeeper 和容量场景继续验收。",
+        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion of the original AOF replica with consumer recovery passed. Other cluster, TLS and capacity profiles remain. Pulsar 4.0.14 passed single-broker TLS and JWT with its original confirmed history across restart. Multi-broker, BookKeeper and capacity profiles remain."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",

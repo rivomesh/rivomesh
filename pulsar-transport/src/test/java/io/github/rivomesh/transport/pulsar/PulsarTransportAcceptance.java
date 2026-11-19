@@ -18,11 +18,61 @@ public final class PulsarTransportAcceptance {
     }
     static PulsarTransport.Publication publication(String id){PulsarTransport.Publication p=new PulsarTransport.Publication();p.id=id;p.channel="sales.items";p.key="key-"+id;p.body=("{\"id\":\""+id+"\"}").getBytes(StandardCharsets.UTF_8);return p;}
     static List<String> read(PulsarTransport.Settings settings)throws Exception{
-        List<String> result=new ArrayList<>();try(PulsarClient client=PulsarClient.builder().serviceUrl(settings.serviceUrl).operationTimeout(10,TimeUnit.SECONDS).build();Reader<byte[]> reader=client.newReader(Schema.BYTES).topic(settings.topic).startMessageId(MessageId.earliest).create()){
+        ClientBuilder builder=PulsarClient.builder().serviceUrl(settings.serviceUrl).operationTimeout(10,TimeUnit.SECONDS)
+                .enableTlsHostnameVerification(true).allowTlsInsecureConnection(false);
+        if(settings.token!=null)builder.authentication(AuthenticationFactory.token(settings.token));
+        if(settings.tlsTrustCertsFilePath!=null)builder.tlsTrustCertsFilePath(settings.tlsTrustCertsFilePath);
+        List<String> result=new ArrayList<>();try(PulsarClient client=builder.build();Reader<byte[]> reader=client.newReader(Schema.BYTES).topic(settings.topic).startMessageId(MessageId.earliest).create()){
             for(int count=0;count<20;count++){Message<byte[]> message=reader.readNext(2,TimeUnit.SECONDS);if(message==null)break;require("sales.items".equals(message.getProperty("rivomesh_channel")),"Logical channel missing");require(("key-"+message.getProperty("rivomesh_event_id")).equals(message.getKey()),"Publication key changed");require(new String(message.getValue(),StandardCharsets.UTF_8).equals("{\"id\":\""+message.getProperty("rivomesh_event_id")+"\"}"),"Immutable body changed");result.add(message.getProperty("rivomesh_event_id"));}
         }return result;
     }
+    private static void rejected(PulsarTransport.Settings settings,String code)throws Exception{
+        try{PulsarTransport.check(settings);throw new AssertionError("Invalid secure connection was accepted");}
+        catch(PulsarTransport.Failure refused){require(!refused.retryable&&code.equals(refused.code),"Expected "+code+" but received "+refused.code);}
+    }
+    private static void tls()throws Exception{
+        PulsarTransport.Settings settings=new PulsarTransport.Settings();
+        settings.serviceUrl="pulsar+ssl://pulsar:6651";
+        settings.adminUrl="https://pulsar:8443";
+        settings.cluster="standalone";
+        settings.topic="persistent://public/default/rivomesh_tls_"+UUID.randomUUID().toString().replace("-","");
+        settings.connectTimeoutMillis=2500;
+        settings.requestTimeoutMillis=6000;
+        settings.tlsTrustCertsFilePath="/fixture/ca.pem";
+        settings.token=new String(Files.readAllBytes(Paths.get("/fixture/token")),StandardCharsets.US_ASCII).trim();
+        String validToken=settings.token;
+        settings.token=null;
+        rejected(settings,"BROKER_AUTHENTICATION_REJECTED");
+        settings.token=validToken;
+        settings.tlsTrustCertsFilePath="/fixture/untrusted.pem";
+        rejected(settings,"BROKER_TLS_REJECTED");
+        settings.tlsTrustCertsFilePath="/fixture/ca.pem";
+        settings.adminUrl="https://pulsar-other:8443";
+        rejected(settings,"BROKER_TLS_REJECTED");
+        settings.adminUrl="https://pulsar:8443";
+        PulsarTransport.check(settings);
+        System.out.println("PASS Pulsar TLS rejects absent authentication, untrusted CA and a mismatched hostname");
+        String binding="tls-publication";
+        try(PulsarTransport transport=new PulsarTransport(settings,binding)){
+            retry(()->transport.prepare(true));
+            transport.publish(Collections.singletonList(publication("first")));
+            require(read(settings).equals(Collections.singletonList("first")),"TLS publication differs");
+        }
+        System.out.println("PASS Native TLS and JWT persist and read the exact Pulsar message");
+        Path marker=Paths.get(System.getenv("RIVOMESH_PULSAR_RESTART_DIR"));
+        Files.write(marker.resolve("restart.request"),new byte[]{1});
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(120);
+        while(!Files.exists(marker.resolve("restart.done"))&&System.nanoTime()<deadline)Thread.sleep(100);
+        require(Files.exists(marker.resolve("restart.done")),"TLS broker restart not executed");
+        try(PulsarTransport transport=new PulsarTransport(settings,binding)){
+            retry(()->transport.prepare(false));
+            transport.publish(Collections.singletonList(publication("second")));
+            require(read(settings).equals(Arrays.asList("first","second")),"TLS restart changed durable history");
+        }
+        System.out.println("PASS Trusted TLS reconnect keeps the existing topic identity and exact confirmed history");
+    }
     public static void main(String[] args)throws Exception{
+        if(args.length==1&&"tls".equals(args[0])){tls();return;}
         require(Class.forName("org.slf4j.Logger").getProtectionDomain().getCodeSource().getLocation().toString().contains("rivomesh-app"),"Core logging API was replaced");
         Class.forName("io.github.rivomesh.pulsar.internal.slf4j.Logger").getMethod("atDebug");
         Class.forName("com.fasterxml.jackson.annotation.JsonProperty");Class.forName("io.github.rivomesh.pulsar.internal.jackson.annotation.JsonProperty");

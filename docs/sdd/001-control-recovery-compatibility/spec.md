@@ -61,7 +61,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 Pulsar 4.0.14 已实测单 Broker 的私有 CA、Token、拒绝错误主机名和重启续传。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档
@@ -81,7 +81,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
 | LG-02 | P1 / DONE | 非空接管、约束恢复、切换回切 | 限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。另一个同切点档案验证了二进制排序、NO PAD 的 VARCHAR UNIQUE(email)，保留原普通索引并继续 CDC。更广产品及写后逆向迁移分别跟踪。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 通过全量、增量、原目录身份、整组重启、Worker 原快照续传、四批回执与独立 SQL 错误重放。分布式仓库、生产集群、旧备份恢复和容量仍在验收。 |
-| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
+| LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 Pulsar 4.0.14 已实测单 Broker TLS 和 Token，确认重启后保留原消息。多 Broker、BookKeeper 和容量场景继续验收。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选日志、候选 Agent 安装原报告和已办结回执、以及原始 MySQL 采集档案私有暂存通过限定实库。共享挂载离线时两入口可核验原 ZIP。原始档案与故障证据正式接管、其他存储和目标档案待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |

@@ -154,6 +154,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-04 · Queue cluster and recovery profiles · P1 · Depends on: JV-01
   Deliver: Each queue verifies lost confirmations,election,durable receipts,resource loss,consumer dedup/backlog and skip-gap protocol with honest delivery/consumption boundaries.
   Acceptance: AC-LG-04
+  - [x] Single-broker Pulsar private CA and JWT, certificate refusal and original-message restart.
+  - [ ] Pulsar multi-broker, BookKeeper failure, capacity and remaining messaging profiles.
 - [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05

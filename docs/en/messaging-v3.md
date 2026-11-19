@@ -137,7 +137,20 @@ python3 tests/redis-promotion-run.py --artifact sync-app/target/rivomesh-app-0.1
 
 ### Pulsar
 
-Pulsar uses a dedicated **persistent, non-partitioned topic** for all mapped namespaces. Configure `url: pulsar://host:6650`, `messaging.adminUrl: http://host:8080`, `cluster`, and `topic: persistent://tenant/namespace/topic`. The tenant/namespace must already exist and belong to exactly the configured cluster; geo-replication needs a separate plan. The first profile uses one service endpoint with native broker discovery; extra `endpoints` and username/password authentication are rejected. Token authentication uses `messaging.token`. TLS requires both `pulsar+ssl://` and HTTPS admin access with hostname verification. Actual token/TLS and multi-broker/BookKeeper-failure acceptance remain pending.
+Pulsar uses a dedicated **persistent, non-partitioned topic** for all mapped namespaces. Configure `url: pulsar://host:6650`, `messaging.adminUrl: http://host:8080`, `cluster`, and `topic: persistent://tenant/namespace/topic`. The tenant/namespace must already exist and belong to exactly the configured cluster; geo-replication needs a separate plan. The first profile uses one service endpoint with native broker discovery; extra `endpoints` and username/password authentication are rejected. Token authentication uses `messaging.token`. TLS requires both `pulsar+ssl://` and HTTPS admin access with hostname verification. A single-broker TLS and Token profile verifies the configured CA, hostname, credentials and history after broker restart. Multi-broker and BookKeeper-failure profiles remain open.
+
+For a private CA, mount the PEM bundle on the Worker and on any Agent that runs Check. Use its absolute path in `messaging.tlsTrustCertsFilePath`. The transport uses that CA for both broker traffic and HTTPS administration. Broker names advertised by the service must appear in their certificate SANs. The Token needs the cluster, namespace and topic permissions required by the configured provisioning policy. [Pulsar TLS](https://pulsar.apache.org/docs/4.0.x/security-tls-transport/) · [Pulsar Token authentication](https://pulsar.apache.org/docs/4.0.x/security-token-admin/)
+
+```yaml
+url: pulsar+ssl://pulsar.example:6651
+messaging:
+  adminUrl: https://pulsar.example:8443
+  cluster: pulsar-production
+  topic: persistent://tenant/namespace/rivomesh-events
+  token: ${RIVOMESH_PULSAR_TOKEN}
+  tlsTrustCertsFilePath: /run/secrets/pulsar-ca.pem
+```
+
 
 Every active broker must disable automatic topic creation and inactive-topic deletion and enable topic-level policies. Namespace overrides must not re-enable automatic creation. The publisher reads these settings through advertised admin endpoints, requiring cluster/broker/namespace management-read permissions as well as topic operations. Native reconnect must not recreate a deleted empty topic. Restrict administrative policy changes during publication; existence/binding checks cannot detect every purge or restoration of an old backup.
 

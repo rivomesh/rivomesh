@@ -13,7 +13,7 @@ public final class PulsarMessagePublisher implements ConfirmedPublisher {
         this.target=target;try{transport=new PulsarTransport(settings(target),binding);}catch(Exception failure){throw translated(failure);}
     }
     private static PulsarTransport.Settings settings(PipelineConfig.Target target){
-        PipelineConfig.Messaging m=target.messaging;PulsarTransport.Settings s=new PulsarTransport.Settings();s.serviceUrl=target.url;s.adminUrl=m.adminUrl;s.cluster=m.cluster;s.topic=m.topic;s.token=m.token;s.replicas=m.replicas;s.connectTimeoutMillis=m.connectTimeoutMillis;s.requestTimeoutMillis=m.requestTimeoutMillis;return s;
+        PipelineConfig.Messaging m=target.messaging;PulsarTransport.Settings s=new PulsarTransport.Settings();s.serviceUrl=target.url;s.adminUrl=m.adminUrl;s.cluster=m.cluster;s.topic=m.topic;s.token=m.token;s.tlsTrustCertsFilePath=m.tlsTrustCertsFilePath;s.replicas=m.replicas;s.connectTimeoutMillis=m.connectTimeoutMillis;s.requestTimeoutMillis=m.requestTimeoutMillis;return s;
     }
     private static Exception translated(Exception failure){if(failure instanceof PulsarTransport.Failure){PulsarTransport.Failure error=(PulsarTransport.Failure)failure;return new SyncFailure(error.code,"MESSAGE_PUBLICATION",error.retryable,"Pulsar operation was not confirmed",failure,null,0,null);}return failure;}
     public static void check(PipelineConfig.Target target)throws Exception{try{PulsarTransport.check(settings(target));}catch(Exception failure){throw translated(failure);}}

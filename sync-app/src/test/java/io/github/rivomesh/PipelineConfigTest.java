@@ -85,6 +85,28 @@ class PipelineConfigTest {
         t.messaging.topic="non-persistent://public/default/sales";assertThrows(IllegalArgumentException.class,c::validate);t.messaging.topic="persistent://public/default/sales";t.url="pulsar+ssl://broker:6651";assertThrows(IllegalArgumentException.class,c::validate);t.messaging.adminUrl="https://broker:8443";c.validate();t.messaging.adminUrl="https://user:secret@broker:8443";assertThrows(IllegalArgumentException.class,c::validate);t.messaging.adminUrl="https://broker:8443";t.username="unused";assertThrows(IllegalArgumentException.class,c::validate);
     }
 
+    @Test void pulsarPrivateCaRequiresTlsAndDoesNotReassignTheTopic(){
+        PipelineConfig config=config();
+        PipelineConfig.Target target=config.targets.getFirst();
+        target.product=TargetProduct.PULSAR;
+        target.username=null;
+        target.url="pulsar+ssl://broker:6651";
+        target.messaging=new PipelineConfig.Messaging();
+        target.messaging.adminUrl="https://broker:8443";
+        target.messaging.cluster="standalone";
+        target.messaging.topic="persistent://public/default/sales";
+        config.validate();
+        String original=config.fingerprint();
+        target.messaging.tlsTrustCertsFilePath="/run/secrets/pulsar-ca.pem";
+        config.validate();
+        assertEquals(original,config.fingerprint());
+        target.messaging.tlsTrustCertsFilePath="pulsar-ca.pem";
+        assertEquals("PULSAR_TLS_TRUST_CONFIG_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        target.messaging.tlsTrustCertsFilePath="/run/secrets/pulsar-ca.pem";
+        target.url="pulsar://broker:6650";
+        target.messaging.adminUrl="http://broker:8080";
+        assertEquals("PULSAR_TLS_TRUST_CONFIG_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+    }
     @Test void rocketUsesGenerationBoundNamesAndRejectsUnverifiedDurabilityAndCredentials(){
         PipelineConfig c=config();PipelineConfig.Target t=c.targets.get(0);t.product=TargetProduct.ROCKETMQ;t.url="rocketmq://nameserver:9876";t.username=null;t.messaging=new PipelineConfig.Messaging();t.messaging.topic="sales";t.messaging.cluster="business";t.messaging.broker="broker-a";c.validate();String original=c.fingerprint();t.messaging.endpoints.add("rocketmq://standby:9876");t.messaging.connectTimeoutMillis=8000;assertEquals(original,c.fingerprint());t.messaging.minimumRetentionHours++;assertNotEquals(original,c.fingerprint());t.messaging.minimumRetentionHours--;t.messaging.broker="broker-b";assertNotEquals(original,c.fingerprint());t.messaging.replicas=2;assertThrows(IllegalArgumentException.class,c::validate);t.messaging.replicas=1;t.password="unsupported-secret";assertThrows(IllegalArgumentException.class,c::validate);t.password=null;t.url="rocketmq://nameserver:9876/path";assertThrows(IllegalArgumentException.class,c::validate);
         String first=MessagePublishers.binding(c.pipelineId,t.id,"first"),second=MessagePublishers.binding(c.pipelineId,t.id,"second");assertNotEquals(io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first),io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",second));assertEquals(io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first),io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first));

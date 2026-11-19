@@ -137,7 +137,20 @@ python3 tests/redis-promotion-run.py --artifact sync-app/target/rivomesh-app-0.1
 
 ### Pulsar
 
-Pulsar 为全部映射命名空间使用一个 **persistent、非分区专用 Topic**。配置 `url: pulsar://host:6650`、`messaging.adminUrl: http://host:8080`、`cluster` 和 `topic: persistent://tenant/namespace/topic`。tenant/namespace 必须已经存在，且只属于配置的集群；跨地域复制需要单独计划。首个档案使用一个服务入口和原生 Broker 发现，拒绝额外 `endpoints` 和用户名/密码认证；令牌使用 `messaging.token`。TLS 要求同时使用 `pulsar+ssl://` 和 HTTPS 管理入口，并验证主机名。真实令牌/TLS、多 Broker/BookKeeper 故障验收仍待完成。
+Pulsar 为全部映射命名空间使用一个 **persistent、非分区专用 Topic**。配置 `url: pulsar://host:6650`、`messaging.adminUrl: http://host:8080`、`cluster` 和 `topic: persistent://tenant/namespace/topic`。tenant/namespace 必须已经存在，且只属于配置的集群；跨地域复制需要单独计划。首个档案使用一个服务入口和原生 Broker 发现，拒绝额外 `endpoints` 和用户名/密码认证；令牌使用 `messaging.token`。TLS 要求同时使用 `pulsar+ssl://` 和 HTTPS 管理入口，并验证主机名。单 Broker 的令牌和 TLS 档案已核验 CA、主机名、认证和重启后的消息历史。多 Broker 与 BookKeeper 故障场景待验。
+
+使用私有 CA 时，把 PEM 证书包挂载到 Worker 和执行检查的 Agent。在 `messaging.tlsTrustCertsFilePath` 填写绝对路径，数据连接和 HTTPS 管理连接共用同一 CA。Broker 公布的主机名须在相应证书的 SAN 中。Token 需要当前资源创建策略所用的集群、命名空间和 Topic 权限。 [Pulsar TLS](https://pulsar.apache.org/docs/4.0.x/security-tls-transport/) · [Pulsar Token 认证](https://pulsar.apache.org/docs/4.0.x/security-token-admin/)
+
+```yaml
+url: pulsar+ssl://pulsar.example:6651
+messaging:
+  adminUrl: https://pulsar.example:8443
+  cluster: pulsar-production
+  topic: persistent://tenant/namespace/rivomesh-events
+  token: ${RIVOMESH_PULSAR_TOKEN}
+  tlsTrustCertsFilePath: /run/secrets/pulsar-ca.pem
+```
+
 
 所有活动 Broker 必须关闭自动建 Topic、关闭闲置 Topic 删除并启用 Topic 级策略；命名空间覆盖策略不能重新允许自动创建。服务通过各 Broker 广播的管理入口读取配置，因此除 Topic 操作外，还需要集群/Broker/命名空间的管理读取权限。原生客户端重连不能误删后自动建空。同步期间应限制管理员修改保留策略；存在性/所有权检查不能发现所有清空或旧备份回退。
 

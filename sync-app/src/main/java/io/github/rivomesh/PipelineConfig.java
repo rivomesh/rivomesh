@@ -63,6 +63,8 @@ public final class PipelineConfig {
         public boolean autoCreate=true;
         public String stream,token,topic,adminUrl,cluster,broker,queueType="quorum",securityProtocol="PLAINTEXT",saslMechanism="PLAIN";
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public String tlsTrustCertsFilePath;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public KafkaNotice recoveryNotice;
     }
     public static final class KafkaNotice {
@@ -167,6 +169,13 @@ public final class PipelineConfig {
         if(target.product==TargetProduct.ROCKETMQ){
             if(m.topic==null||!m.topic.matches("[A-Za-z][A-Za-z0-9_-]{0,47}")||m.cluster==null||!m.cluster.matches("[A-Za-z0-9_-]{1,127}")||m.broker==null||!m.broker.matches("[A-Za-z0-9_-]{1,127}")||m.minimumRetentionHours<1)throw new IllegalArgumentException("ROCKETMQ_TOPIC_CLUSTER_BROKER_REQUIRED");
             if(m.replicas!=1||target.username!=null&&!target.username.isEmpty()||target.password!=null&&!target.password.isEmpty()||m.token!=null&&!m.token.isEmpty())throw new IllegalArgumentException("ROCKETMQ_PROFILE_REQUIRES_PLAN");
+        }
+        if(m.tlsTrustCertsFilePath!=null){
+            try{
+                if(target.product!=TargetProduct.PULSAR||!target.url.startsWith("pulsar+ssl:")
+                        ||!Path.of(m.tlsTrustCertsFilePath).isAbsolute())
+                    throw new IllegalArgumentException();
+            }catch(IllegalArgumentException invalid){throw new IllegalArgumentException("PULSAR_TLS_TRUST_CONFIG_INVALID");}
         }
         if(target.product==TargetProduct.PULSAR){
             if(m.topic==null||!m.topic.matches("persistent://[A-Za-z0-9][A-Za-z0-9_-]{0,62}/[A-Za-z0-9][A-Za-z0-9_-]{0,62}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||m.topic.contains("-partition-")||m.cluster==null||!m.cluster.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,127}"))throw new IllegalArgumentException("PULSAR_TOPIC_AND_CLUSTER_REQUIRED");
