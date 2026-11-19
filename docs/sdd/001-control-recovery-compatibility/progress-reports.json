@@ -13,8 +13,8 @@
     "A separately frozen internal Kafka notice prototype passed two native KRaft cases with a stable old-producer fence and same-offset lost-response replay, without touching business offsets or subscription ACKs. Public notice publication is still in development."
   ],
   "inProgress": [
-    "CP-04 exact private end-to-end package passed 65 Java. A scoped dual-Agent fixture is running, covering real authenticated readiness, same-store CAS, former retirement, lost reply and candidate STOPPED installation.",
-    "CP-04 managed evidence staging console is published. Two earlier full cluster fixture runs did not reach the real browser stage. Independent live backend, packaged standalone Chrome and synthetic endpoint browser checks passed.",
+    "CP-04 candidate activation following the completed internal signed dual-Agent proof. Live recovery evidence adoption and public operator authorization are still open.",
+    "CP-04 managed evidence staging is published and its exact dual-entry stage and release passed six real Chrome checks as part of the 20-case native profile.",
     "LG-03 external Hive Metastore proof passed stock catalog, snapshot/CDC, original catalog identity and three-service outage recovery. Complete Worker and SQL-only recovery require stable-host verification.",
     "RC-10 internal Kafka dedicated-topic notice is natively verified. Operator plan, approved dispatch and final durability semantics remain."
   ],
@@ -50,7 +50,9 @@
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
     "CP-04 private dual-Agent same-store transfer and STOPPED projection published. Seventeen exact native checks and 65 integrated Java. Real lost response replays at the other Controller, one epoch transfer, old Agent cannot reclaim after restart, both target cuts remain. Public transfer and next Worker activation are separately fenced.",
-    "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes."
+    "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes.",
+    "The published evidence staging console passed 20 exact dual-Controller native checks including six real Chrome cases. Entry A staged and revalidated, entry B checked and released. Task revision and all cuts remained exact.",
+    "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development."
   ],
   "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
   "lastVerifiedReactor": {
