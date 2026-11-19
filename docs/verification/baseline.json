@@ -13099,5 +13099,131 @@
     "firstFailureReason": "The promoted CommitLog contained the confirmed bytes but both surviving brokers lacked the separate topic configuration; native read returned TOPIC_NOT_EXIST.",
     "manifestSha256": "01194558e6acf49fba6e028dadffe3e976cb0f36f51b96b406fa745451892c6a",
     "reproduce": "tests/rocketmq/controller-promotion.md"
+  },
+  "managedPostgresJournalBothSqlAckInterruption": {
+    "artifactSha256": "37343e68e73d492d65608c96de78dbf317852e19944ec04277abb87d4fe4c353",
+    "harnessSha256": "501efcf401faabe141b00e3b8057b63b5c134a12c6c1afa3dd8701261e891112",
+    "javaFocusedPassed": 91,
+    "runtime": "Eclipse Temurin 21.0.13+9 ARM64",
+    "sharedControlAndJournal": "PostgreSQL 17.12",
+    "source": "MySQL 8.4.13",
+    "profiles": {
+      "MYSQL": {
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "The live PostgreSQL ACK setting respects a shorter administrator timeout and is restored at rollback",
+          "Only the original Agent can admit the explicitly initialized managed writer",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "MySQL waits on the actual row lock with no native receipt while PostgreSQL commits and the journal ACKs the transaction",
+          "MySQL business and receipt are committed while its journal ACK is blocked on a native row lock",
+          "Only the original Agent control and journal path is cut; its live container still reaches the source and both targets",
+          "Releasing the journal lock while the original Agent remains partitioned preserves both commits and the missing ACK",
+          "Asymmetric partition exposes expired control and unknown Worker, intent and capture at both Controllers",
+          "Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts",
+          "Offline STOP completes on the reconnected original Agent without a restart before the missing acknowledgement is reconciled",
+          "Native receipt reconciliation advances only the missing MySQL ACK with no new business writes",
+          "Former Agent and capture leases are fenced after both target receipts converge"
+        ],
+        "manifestSha256": "3f390442362f84348a6429f963fe2265bb20e22120cadeea5d3da0d6f9fbd6eb",
+        "nativeLogSha256": "2dce10b1c8d85f61b0b5f580c405743ff67c927c9af69e96c67c59f74a8a4a9d",
+        "formerAckBackendAfterUnlock": {
+          "present": true,
+          "state": "idle in transaction",
+          "waitEventType": "Client",
+          "waitEvent": "ClientRead",
+          "transactionAgeMillis": 9172,
+          "holdsAckRow": true
+        },
+        "inflightWitness": {
+          "capturedSequence": 2,
+          "capturedPositionUnchanged": true,
+          "retainedJournalAcknowledgements": {
+            "pg": 2,
+            "my": 1
+          },
+          "restoredJournalAcknowledgements": {
+            "my": 2,
+            "pg": 2
+          },
+          "nativeBusinessWrites": {
+            "pg": {
+              "insert": 1,
+              "update": 1
+            },
+            "my": {
+              "insert": 1,
+              "update": 1
+            }
+          },
+          "retainedNativeSequences": {
+            "pg": 2,
+            "my": 2
+          },
+          "nativeReceiptIdentitiesUnchanged": true
+        },
+        "cleanupExitCode": 0
+      },
+      "POSTGRESQL": {
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "The live PostgreSQL ACK setting respects a shorter administrator timeout and is restored at rollback",
+          "Only the original Agent can admit the explicitly initialized managed writer",
+          "Controllers create Agent-owned task and share revision",
+          "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+          "Cross-database transaction insert/update/delete and keyless multiplicity",
+          "PostgreSQL waits on the actual row lock with no native receipt while MySQL commits and the journal ACKs the transaction",
+          "PostgreSQL business and receipt are committed while its journal ACK is blocked on a native row lock",
+          "Only the original Agent control and journal path is cut; its live container still reaches the source and both targets",
+          "Releasing the journal lock while the original Agent remains partitioned preserves both commits and the missing ACK",
+          "Asymmetric partition exposes expired control and unknown Worker, intent and capture at both Controllers",
+          "Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts",
+          "Offline STOP completes on the reconnected original Agent without a restart before the missing acknowledgement is reconciled",
+          "Native receipt reconciliation advances only the missing PostgreSQL ACK with no new business writes",
+          "Former Agent and capture leases are fenced after both target receipts converge"
+        ],
+        "manifestSha256": "a02f454420efd12cdf1dee602ea3460f2675fd8b583fe3b43a381c2263c88839",
+        "nativeLogSha256": "8e16d43c4862bab814f0538411494df3b190dc185a10d8b152dcad92e317bd73",
+        "formerAckBackendAfterUnlock": {
+          "present": true,
+          "state": "idle in transaction",
+          "waitEventType": "Client",
+          "waitEvent": "ClientRead",
+          "transactionAgeMillis": 14634,
+          "holdsAckRow": true
+        },
+        "inflightWitness": {
+          "capturedSequence": 2,
+          "capturedPositionUnchanged": true,
+          "retainedJournalAcknowledgements": {
+            "my": 2,
+            "pg": 1
+          },
+          "restoredJournalAcknowledgements": {
+            "my": 2,
+            "pg": 2
+          },
+          "nativeBusinessWrites": {
+            "pg": {
+              "insert": 1,
+              "update": 1
+            },
+            "my": {
+              "insert": 1,
+              "update": 1
+            }
+          },
+          "retainedNativeSequences": {
+            "pg": 2,
+            "my": 2
+          },
+          "nativeReceiptIdentitiesUnchanged": true
+        },
+        "cleanupExitCode": 0
+      }
+    },
+    "scope": "Both cases use the original Agent and shared PostgreSQL control/journal. Each run selects one of two SQL destinations as the committed-but-unacknowledged target. Reconnect, STOP and explicit START advance only the missing ACK. The launch without the target option exercises PostgreSQL.",
+    "reproduce": "docs/en/global-control.md#asymmetric-control-network-partition"
   }
 }

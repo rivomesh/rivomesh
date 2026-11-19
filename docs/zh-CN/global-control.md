@@ -169,7 +169,7 @@ owner 失联期间 STOP 保持等待。恢复时使用原节点的私有目录�
 
 分区期间，目标原生断点可能比日志确认领先一笔事务。目标在同一事务中提交业务数据和原生回执。原 Agent 恢复后，Worker 比较保留事务的标识和投影摘要与目标回执。核对一致时补齐该目标的确认，另一目标保留原确认位置。原采集断点和两个目标已有的业务写入均保持原样。
 
-PostgreSQL 目标夹具将日志确认行锁保留至原 Worker 退出。此时 PostgreSQL 已提交事务，MySQL 也已对同一事务完成确认。原 Agent 恢复后，先确认先前排队的 STOP，再显式启动任务。夹具核对两端原生回执身份、补齐后的确认位置和目标数据库提交记录。MySQL 作为缺确认的目标需要独立分区验收。
+使用共享 PostgreSQL 控制库和日志时，夹具可以在 PostgreSQL 或 MySQL 8.4 目标已提交后中断其投递确认。夹具先锁定选定目标的业务行，等待另一目标提交并确认同一源事务，再锁定选定目标的日志确认行并释放业务行。MySQL 场景通过 Performance Schema 确认真实的 InnoDB 行锁等待。原 Agent 恢复后，先确认先前排队的 STOP，再显式启动任务。夹具核对两端原生回执身份、补齐后的确认位置和目标数据库提交记录。[MySQL 原生锁等待](https://dev.mysql.com/doc/refman/8.4/en/performance-schema-data-lock-waits-table.html)
 
 托管 PostgreSQL 日志在获取确认行锁前设置事务级空闲超时。超时上限沿用采集租约时长，数据库管理员设置了更短的非零会话值时采用该值。客户端断连留下空闲确认事务时，即使 Agent 的链路仍未恢复，PostgreSQL 也会回滚旧事务并释放其锁。[PostgreSQL 客户端连接设置](https://www.postgresql.org/docs/17/runtime-config-client.html)
 

@@ -66,7 +66,9 @@ parser.add_argument('--handoff-split-store-browser', type=Path,
 parser.add_argument('--handoff-asymmetric-inflight', action='store_true',
                     help='Partition the original Agent while the PostgreSQL target is blocked on a real row lock')
 parser.add_argument('--handoff-asymmetric-unacknowledged', action='store_true',
-                    help='Partition after the PostgreSQL target commits while its shared journal acknowledgement is locked')
+                    help='Partition after a SQL target commits while its shared journal acknowledgement is locked')
+parser.add_argument('--handoff-asymmetric-unacknowledged-target', choices=('POSTGRESQL','MYSQL'),
+                    help='Target with a missing journal acknowledgement (default: POSTGRESQL)')
 parser.add_argument('--partition-mysqlbinlog', type=Path,
                     help='Executable mysqlbinlog used to read a bounded native log copy in the in-flight fixture')
 parser.add_argument('--handoff-staging', action='store_true',
@@ -189,6 +191,10 @@ if args.partition_mysqlbinlog and not args.handoff_asymmetric_inflight:
     parser.error('--partition-mysqlbinlog requires --handoff-asymmetric-inflight')
 if args.handoff_asymmetric_unacknowledged and not args.handoff_asymmetric_inflight:
     parser.error('--handoff-asymmetric-unacknowledged requires --handoff-asymmetric-inflight')
+if args.handoff_asymmetric_unacknowledged_target and not args.handoff_asymmetric_unacknowledged:
+    parser.error('--handoff-asymmetric-unacknowledged-target requires --handoff-asymmetric-unacknowledged')
+unacknowledged_target = ((args.handoff_asymmetric_unacknowledged_target or 'POSTGRESQL')
+                         if args.handoff_asymmetric_unacknowledged else None)
 if args.handoff_original_outage and (not args.handoff_assessment or args.handoff_probe
         or not args.test_classes or not args.test_classes.is_dir()
         or args.control_product != 'POSTGRESQL' or args.runtime_image):
@@ -356,6 +362,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffAsymmetricPartition': args.handoff_asymmetric_partition,
             'handoffAsymmetricInflight': args.handoff_asymmetric_inflight,
             'handoffAsymmetricUnacknowledged': args.handoff_asymmetric_unacknowledged,
+            'handoffAsymmetricUnacknowledgedTarget': unacknowledged_target,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffAutoResume': args.handoff_auto_resume,
             'handoffStaging': args.handoff_staging,
@@ -791,25 +798,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         passed('Releasing the reservation resumes only the original Agent from the same native assignment and snapshot generation')
 
     @contextmanager
-    def locked_partition_record(service, database, lock_tag, query, waiter_query):
-        command = compose_args('exec','-T',service,'psql','-h','127.0.0.1','-X','-v','ON_ERROR_STOP=1',
-                               '-U','postgres','-d',database)
-        with subprocess.Popen(command, env=env, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+    def partition_lock_session(command, query, command_env):
+        with subprocess.Popen(command, env=command_env, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL, text=True) as holder:
             try:
-                holder.stdin.write(f"BEGIN; SET LOCAL application_name='{lock_tag}'; {query};\n")
+                holder.stdin.write(query + '\n')
                 holder.stdin.flush()
-                wait(lambda: sql(service, "SELECT count(*) FROM pg_stat_activity WHERE application_name='"
-                                 + lock_tag + "' AND state='idle in transaction'") == '1',
-                     'PostgreSQL holds the fixture record lock', seconds=15)
-
-                def blocked_writer():
-                    return sql(service, "SELECT writer.pid FROM pg_stat_activity writer "
-                               "JOIN pg_stat_activity holder ON holder.pid=ANY(pg_blocking_pids(writer.pid)) "
-                               "WHERE holder.application_name='" + lock_tag + "' AND writer.wait_event_type='Lock' "
-                               f"AND writer.query LIKE '{waiter_query}'")
-
-                yield blocked_writer
+                yield
             finally:
                 try:
                     holder.communicate(input="ROLLBACK;\n\\q\n", timeout=15)
@@ -819,19 +814,64 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     raise AssertionError('Fixture record-lock session failed to exit')
                 assert holder.returncode == 0, 'Fixture record-lock session did not roll back'
 
-    def locked_partition_row():
-        return locked_partition_record(
+    @contextmanager
+    def locked_postgres_partition_record(service, database, lock_tag, query, waiter_query):
+        command = compose_args('exec','-T',service,'psql','-h','127.0.0.1','-X','-v','ON_ERROR_STOP=1',
+                               '-U','postgres','-d',database)
+        begin = f"BEGIN; SET LOCAL application_name='{lock_tag}'; {query};"
+        with partition_lock_session(command, begin, env):
+            wait(lambda: sql(service, "SELECT count(*) FROM pg_stat_activity WHERE application_name='"
+                             + lock_tag + "' AND state='idle in transaction'") == '1',
+                 'PostgreSQL holds the fixture record lock', seconds=15)
+
+            def blocked_writer():
+                return sql(service, "SELECT writer.pid FROM pg_stat_activity writer "
+                           "JOIN pg_stat_activity holder ON holder.pid=ANY(pg_blocking_pids(writer.pid)) "
+                           "WHERE holder.application_name='" + lock_tag + "' AND writer.wait_event_type='Lock' "
+                           f"AND writer.query LIKE '{waiter_query}'")
+
+            yield blocked_writer
+
+    def locked_partition_postgres_row():
+        return locked_postgres_partition_record(
             'postgres','sync_test','rivomesh_fixture_partition_row_lock',
             "SELECT id FROM rm_pg_sales.items WHERE id=1 FOR UPDATE",'UPDATE %rm_pg_sales%items%')
 
-    def locked_partition_acknowledgement():
-        return locked_partition_record(
+    @contextmanager
+    def locked_partition_mysql_row():
+        command = compose_args('exec','-T','-e','MYSQL_PWD','mysql-target','mysql','--no-defaults',
+                               '-h127.0.0.1','-uroot','-N','-B','--unbuffered')
+        begin = ("START TRANSACTION; SET @rivomesh_fixture_partition_row_lock='held'; "
+                 "SELECT id FROM rm_my_sales.items WHERE id=1 FOR UPDATE;")
+        row = ("held.OBJECT_SCHEMA='rm_my_sales' AND held.OBJECT_NAME='items' AND held.INDEX_NAME='PRIMARY' "
+               "AND held.LOCK_TYPE='RECORD' AND held.LOCK_DATA='1' AND held.LOCK_STATUS='GRANTED'")
+        session = ("JOIN performance_schema.user_variables_by_thread marker ON marker.THREAD_ID=held.THREAD_ID "
+                   "AND marker.VARIABLE_NAME='rivomesh_fixture_partition_row_lock' AND marker.VARIABLE_VALUE='held'")
+        with partition_lock_session(command, begin, dict(env, MYSQL_PWD=env['RM_GC_DATA'])):
+            wait(lambda: sql('mysql-target', 'SELECT count(*) FROM performance_schema.data_locks held '
+                             + session + ' WHERE ' + row) == '1',
+                 'MySQL holds the fixture primary-key record lock', seconds=15)
+
+            def blocked_writer():
+                return sql('mysql-target', 'SELECT DISTINCT writer.PROCESSLIST_ID '
+                           'FROM performance_schema.data_lock_waits waiter '
+                           'JOIN performance_schema.data_locks held ON held.ENGINE=waiter.ENGINE '
+                           'AND held.ENGINE_LOCK_ID=waiter.BLOCKING_ENGINE_LOCK_ID '
+                           'JOIN performance_schema.threads writer ON writer.THREAD_ID=waiter.REQUESTING_THREAD_ID '
+                           + session + " WHERE " + row + " AND writer.PROCESSLIST_ID IS NOT NULL")
+
+            yield blocked_writer
+
+    def locked_partition_acknowledgement(subscription):
+        assert subscription in ('pg','my')
+        return locked_postgres_partition_record(
             'store','rivomesh_control','rivomesh_fixture_partition_ack_lock',
             "SELECT acknowledged FROM transfer_journal.rm3_subscription "
-            "WHERE pipeline_id='global_cdc' AND subscription_id='pg' FOR UPDATE",
+            f"WHERE pipeline_id='global_cdc' AND subscription_id='{subscription}' FOR UPDATE",
             'SELECT acknowledged,run_state,%rm3_subscription%FOR UPDATE')
 
-    def former_ack_backend(pid):
+    def former_ack_backend(pid, subscription):
+        assert subscription in ('pg','my')
         former = int(pid)
         state = sql('store', "SELECT coalesce(state,''),coalesce(wait_event_type,''),coalesce(wait_event,''),"
                     "coalesce(floor(extract(epoch FROM clock_timestamp()-xact_start)*1000)::bigint,-1) "
@@ -841,7 +881,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         activity,wait_type,event,age = state.split('|')
         holds = sql('store', "SELECT EXISTS (SELECT 1 FROM pgrowlocks('transfer_journal.rm3_subscription') locks "
                     "JOIN transfer_journal.rm3_subscription sub ON sub.ctid=locks.locked_row "
-                    "WHERE sub.pipeline_id='global_cdc' AND sub.subscription_id='pg' "
+                    f"WHERE sub.pipeline_id='global_cdc' AND sub.subscription_id='{subscription}' "
                     f"AND {former}=ANY(locks.pids))")
         return dict(present=True,state=activity,waitEventType=wait_type,waitEvent=event,
                     transactionAgeMillis=int(age),holdsAckRow=holds=='t')
@@ -898,6 +938,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         targets = (('postgres', 'pg'), ('mysql-target', 'my'))
         inflight = args.handoff_asymmetric_inflight
         unacknowledged = args.handoff_asymmetric_unacknowledged
+        mysql_blocked = unacknowledged_target == 'MYSQL'
+        blocked_index, peer_index = (1,0) if mysql_blocked else (0,1)
+        blocked_subscription, peer_subscription = targets[blocked_index][1], targets[peer_index][1]
+        blocked_name, peer_name = ('MySQL','PostgreSQL') if mysql_blocked else ('PostgreSQL','MySQL')
+        locked_business_row = locked_partition_mysql_row if mysql_blocked else locked_partition_postgres_row
 
         def current_views():
             return [task(entry) for entry in entries]
@@ -975,70 +1020,73 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             starting_notes = target_notes()
             settled_sequence = original_targets[0][1]
             next_sequence = str(int(settled_sequence) + 1)
-            retained_ack = {'my': next_sequence, 'pg': settled_sequence}
+            retained_ack = {peer_subscription:next_sequence, blocked_subscription:settled_sequence}
             wait(lambda: acknowledged()==dict(my=settled_sequence,pg=settled_sequence),
                  'both journal ACKs confirm the settled cut before the lock')
             if unacknowledged:
                 sql('store','CREATE EXTENSION pgrowlocks')
             business_writes = partition_target_write_witness()
-            retained_writes = {'pg':(0,0), 'my':(1,1)}
+            retained_writes = {blocked_subscription:(0,0), peer_subscription:(1,1)}
             recovered_writes = {'pg':(1,1), 'my':(1,1)}
-            retained_notes = [starting_notes[0], 'partition-inflight']
+            retained_notes = list(starting_notes)
+            retained_notes[peer_index] = 'partition-inflight'
             with ExitStack() as acknowledgement_lock:
-                with locked_partition_row() as blocked_writer:
+                with locked_business_row() as blocked_writer:
                     sql('mysql', "START TRANSACTION; "
                         "INSERT INTO sales.items(id,note,payload) VALUES(104,'partition-inflight',JSON_OBJECT('n',104)); "
                         "UPDATE sales.items SET note='partition-inflight' WHERE id=1; COMMIT")
-                    wait(lambda: acknowledged()==retained_ack, 'MySQL target ACK advances while PostgreSQL is blocked')
-                    waiter = wait(blocked_writer, 'native PostgreSQL writer waits on the locked business row')
+                    wait(lambda: acknowledged()==retained_ack, f'{peer_name} target ACK advances while {blocked_name} is blocked')
+                    waiter = wait(blocked_writer, f'native {blocked_name} writer waits on the locked business row')
                     assert waiter.isdigit(), 'Expected exactly one native writer waiting on the fixture row lock'
                     retained_targets = target_receipts()
                     retained_cut = journal_cut()
-                    retained_counts = ['0', '1']
-                    assert retained_targets[0] == original_targets[0]
-                    assert retained_targets[1][0] == original_targets[1][0]
-                    assert retained_targets[1][1] == next_sequence and retained_targets[1][2] != original_targets[1][2]
-                    assert retained_targets[1][3] != original_targets[1][3]
+                    retained_counts = ['0', '0']
+                    retained_counts[peer_index] = '1'
+                    assert retained_targets[blocked_index] == original_targets[blocked_index]
+                    peer_receipt, original_peer_receipt = retained_targets[peer_index], original_targets[peer_index]
+                    assert peer_receipt[0] == original_peer_receipt[0] and peer_receipt[1] == next_sequence
+                    assert peer_receipt[2] != original_peer_receipt[2] and peer_receipt[3] != original_peer_receipt[3]
                     recorded_epoch, next_position, normalized, captured = retained_cut.split('|',3)
                     assert recorded_epoch == old_capture_epoch and int(next_position) == int(next_sequence) + 1
                     assert normalized == next_sequence and captured != original_cut.split('|',3)[3]
                     assert pending_row_counts() == retained_counts
                     assert target_notes() == retained_notes and business_writes() == retained_writes
-                    passed('PostgreSQL waits on the actual row lock with no native receipt while MySQL commits and the journal ACKs the transaction')
+                    passed(f'{blocked_name} waits on the actual row lock with no native receipt while {peer_name} commits and the journal ACKs the transaction')
                     if unacknowledged:
-                        blocked_ack = acknowledgement_lock.enter_context(locked_partition_acknowledgement())
+                        blocked_ack = acknowledgement_lock.enter_context(locked_partition_acknowledgement(blocked_subscription))
                     else:
                         isolated, reconnect = partition_original_agent()
                         require_isolated(isolated)
                         wait(capture_expired,'former capture lease expires with the native target still locked')
 
                 if unacknowledged:
-                    waiter = wait(blocked_ack, 'PostgreSQL target has committed and its acknowledgement waits on the shared journal row')
+                    waiter = wait(blocked_ack, f'{blocked_name} target has committed and its acknowledgement waits on the shared journal row')
                     assert waiter.isdigit(), 'Expected exactly one native acknowledgement waiter'
                     committed_targets = target_receipts()
-                    assert committed_targets[0][0] == original_targets[0][0]
-                    assert committed_targets[0][1] == next_sequence and committed_targets[0][2] != original_targets[0][2]
-                    assert committed_targets[0][3] == retained_targets[1][3]
-                    assert committed_targets[1] == retained_targets[1]
+                    committed_receipt = committed_targets[blocked_index]
+                    original_receipt = original_targets[blocked_index]
+                    assert committed_receipt[0] == original_receipt[0] and committed_receipt[1] == next_sequence
+                    assert committed_receipt[2] != original_receipt[2] and committed_receipt[3] == peer_receipt[3]
+                    assert committed_targets[peer_index] == peer_receipt
                     assert acknowledged() == retained_ack and journal_cut() == retained_cut
                     retained_targets = committed_targets
                     retained_counts = ['1','1']
                     retained_notes = ['partition-inflight','partition-inflight']
                     retained_writes = recovered_writes
-                    passed('PostgreSQL business and receipt are committed while its journal ACK is blocked on a native row lock')
+                    passed(f'{blocked_name} business and receipt are committed while its journal ACK is blocked on a native row lock')
                     isolated, reconnect = partition_original_agent()
                     require_isolated(isolated)
                     wait(capture_expired,'former capture lease expires while the acknowledgement is still locked')
 
             if unacknowledged:
                 def after_ack_unlock():
-                    observation = former_ack_backend(waiter)
+                    observation = former_ack_backend(waiter,blocked_subscription)
                     return observation if observation.get('state') != 'active' else None
 
                 manifest['formerAckBackendAfterUnlock'] = wait(after_ack_unlock,
                     'former acknowledgement session leaves its active wait after releasing the test lock',seconds=15)
                 def former_ack_disconnected():
-                    observation = former_ack_backend(waiter)
+                    observation = former_ack_backend(waiter,blocked_subscription)
                     return observation if not observation['present'] else None
 
                 manifest['formerAckBackendBeforeReconnect'] = wait(former_ack_disconnected,
@@ -1124,11 +1172,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert acknowledged() == retained_ack and business_writes() == retained_writes
             if unacknowledged:
                 assert journal_contains(next_sequence)
-                after_reconnect = former_ack_backend(waiter)
+                after_reconnect = former_ack_backend(waiter,blocked_subscription)
                 manifest['formerAckBackendAfterReconnect'] = after_reconnect
 
                 def ack_backend_quiescent():
-                    observation = former_ack_backend(waiter)
+                    observation = former_ack_backend(waiter,blocked_subscription)
                     manifest['formerAckBackendBeforeStart'] = observation
                     return not observation['holdsAckRow'] and observation.get('transactionAgeMillis',-1) < 0
 
@@ -1152,12 +1200,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if inflight:
             wait(lambda: acknowledged() == {'my':next_sequence, 'pg':next_sequence},
                  'both journals ACK the restored native target cut')
-            assert recovered_targets[1][1:] == retained_targets[1][1:]
-            assert recovered_targets[0][3] == retained_targets[1][3]
+            assert recovered_targets[peer_index][1:] == retained_targets[peer_index][1:]
+            assert recovered_targets[blocked_index][3] == retained_targets[peer_index][3]
             assert target_notes() == ['partition-inflight','partition-inflight'] and business_writes() == recovered_writes
             if unacknowledged:
                 assert [receipt[1:] for receipt in recovered_targets] == [receipt[1:] for receipt in retained_targets]
-                passed('Native receipt reconciliation advances only the missing PostgreSQL ACK with no new business writes')
+                passed(f'Native receipt reconciliation advances only the missing {blocked_name} ACK with no new business writes')
             else:
                 passed('Only the missing PostgreSQL apply is replayed and each destination log shows one insert and one update')
         assert writer_authority() == original_writer

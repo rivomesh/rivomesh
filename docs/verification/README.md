@@ -734,3 +734,7 @@ the three initial members before SIGKILL and on both survivors after promotion.
 The current Rivomesh adapter refused the Controller profile before and after
 promotion. Both fixture projects were cleaned up.
 [Reproduce](../../tests/rocketmq/controller-promotion.md) · [Manifest](baseline.json)
+
+### Both SQL destinations under an interrupted PostgreSQL journal ACK
+
+The `37343e68e73d492d65608c96de78dbf317852e19944ec04277abb87d4fe4c353` Temurin 21 package passed 15 native checks per destination and 91 focused Java tests. The MySQL profile proved the real InnoDB row lock and committed receipt before disconnecting the original Agent. The PostgreSQL journal timed out the old ACK session while it was still disconnected. After the original Agent completed STOP and explicitly started, only MySQL ACK advanced. The default profile selected PostgreSQL and advanced only its ACK under the same harness. In both cases, both Controllers observed UNKNOWN during disconnection, source coordinates and native receipts stayed fixed, and each target log retained one insert and one update. Both fixture projects were cleaned up. [Operations](../en/global-control.md#asymmetric-control-network-partition) · [Manifest](baseline.json)
