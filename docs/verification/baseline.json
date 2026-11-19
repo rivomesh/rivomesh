@@ -11072,5 +11072,47 @@
     "integratedDomPassed": 157,
     "reproduce": "python3 tests/kafka-cluster-run.py --artifact /path/to/rivomesh.jar --output target/native-kafka-retained --java-home /path/to/jdk21 --only-managed-notice-plan",
     "scope": "Authorized native identity review across a bounded catalog. Historical configurations are resolved under current Agent grants. The preview reports current physical broker routes; historical write custody and approved notification delivery remain open."
+  },
+  "pulsarMultiBrokerBookKeeperQuorumNative": {
+    "status": "PASS",
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "cef5e54f077c2e4fa8c13d04d103211ae36256cd93030262ffa57934cb232726",
+      "testClassSha256": "ba8060a9834cbf15f31e1cb624db45bc4f4fbab5d40577200a9f3820141e72a8",
+      "harnessSourceSha256": "3581dadcaebcc4addeed7f0bc3a07ed73d2b4d5be9b380159577ed72216dcfed",
+      "brokerImage": "apachepulsar/pulsar:4.0.14",
+      "brokerImageId": "sha256:eefc3bbe50639ee3feea05f49700dcccf4de6d3bdfe05acdade091e388de047b",
+      "runnerImageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+      "brokerCount": 2,
+      "bookieCount": 3,
+      "metadataNodes": 1,
+      "topicQuorum": [
+        2,
+        2,
+        2
+      ],
+      "checks": [
+        "An active broker confirms a message with the configured two-BookKeeper quorum",
+        "After the owning broker is killed the retry path confirms at the original topic binding through the survivor",
+        "One surviving bookie cannot confirm a publication requiring two acknowledgements",
+        "Restarted bookies recover exact confirmed history and the pending stable event identity"
+      ],
+      "cleanupVerified": true
+    },
+    "nativeManifestSha256": "16730963f5a418c1528508b013756dde03af2844fb8a4dbb1d906b5ee5916e71",
+    "acceptanceJavaSourceSha256": "960eae96ad7528154ea6f640aefc7273b2dbb2806b019139eaaffd4d4577168a",
+    "priorFixtureAttempts": [
+      {
+        "manifestSha256": "2ffc45903b0a67ffb1bec128aa32ace4f5594ab28136e0c1f644fd16a9e58bc4",
+        "phase": "ZooKeeper volume permission before startup"
+      },
+      {
+        "manifestSha256": "85c2945d328e9e10386c66a3e1939e55300f4b6ebf6b5cfbd4ec648ade780e8a",
+        "phase": "The fixture expected the existing producer to publish immediately instead of reopening after a retryable timeout"
+      }
+    ],
+    "messageSinkAndFanoutJavaTests": 12,
+    "scope": "Isolated plaintext native Pulsar transport with two brokers, three bookies and one ZooKeeper node. Original confirmed messages and binding persist across broker ownership change, loss of BookKeeper acknowledgements and restart on original volumes. Storage redundancy and TLS require separate cluster validation.",
+    "reproduce": "python3 tests/pulsar-quorum-run.py --artifact /path/to/rivomesh.jar --test-classes pulsar-transport/target/test-classes --output target/native-pulsar-quorum"
   }
 }

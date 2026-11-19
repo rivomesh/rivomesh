@@ -143,7 +143,7 @@ python3 tests/redis-promotion-run.py --artifact sync-app/target/rivomesh-app-0.1
 
 ### Pulsar
 
-Pulsar 为全部映射命名空间使用一个 **persistent、非分区专用 Topic**。配置 `url: pulsar://host:6650`、`messaging.adminUrl: http://host:8080`、`cluster` 和 `topic: persistent://tenant/namespace/topic`。tenant/namespace 必须已经存在，且只属于配置的集群；跨地域复制需要单独计划。首个档案使用一个服务入口和原生 Broker 发现，拒绝额外 `endpoints` 和用户名/密码认证；令牌使用 `messaging.token`。TLS 要求同时使用 `pulsar+ssl://` 和 HTTPS 管理入口，并验证主机名。单 Broker 的令牌和 TLS 档案已核验 CA、主机名、认证和重启后的消息历史。多 Broker 与 BookKeeper 故障场景待验。
+Pulsar 为全部映射命名空间使用一个 **persistent、非分区专用 Topic**。配置 `url: pulsar://host:6650`、`messaging.adminUrl: http://host:8080`、`cluster` 和 `topic: persistent://tenant/namespace/topic`。tenant/namespace 必须已经存在，且只属于配置的集群；跨地域复制需要单独计划。首个档案使用一个服务入口和原生 Broker 发现，拒绝额外 `endpoints` 和用户名/密码认证；令牌使用 `messaging.token`。TLS 要求同时使用 `pulsar+ssl://` 和 HTTPS 管理入口，并验证主机名。单 Broker 的令牌和 TLS 档案已核验 CA、主机名、认证和重启后的消息历史。另有两 Broker、三 BookKeeper 恢复档案。部署需提供故障后仍可访问的服务和管理入口，并让 Worker 可以访问 Broker 发现返回的地址。
 
 使用私有 CA 时，把 PEM 证书包挂载到 Worker 和执行检查的 Agent。在 `messaging.tlsTrustCertsFilePath` 填写绝对路径，数据连接和 HTTPS 管理连接共用同一 CA。Broker 公布的主机名须在相应证书的 SAN 中。Token 需要当前资源创建策略所用的集群、命名空间和 Topic 权限。 [Pulsar TLS](https://pulsar.apache.org/docs/4.0.x/security-tls-transport/) · [Pulsar Token 认证](https://pulsar.apache.org/docs/4.0.x/security-token-admin/)
 
@@ -163,6 +163,8 @@ messaging:
 首次创建时原子写入 `rivomesh.owner`（通用 pipeline/subscription/generation 绑定）与 `rivomesh.provision=BUILDING_V1`。仅对这个未完成、属于当前订阅的 Topic 设置策略：时间/大小均无限保留、TTL 0、禁止闲置删除、BookKeeper 持久化，以及拒绝生产者而不淘汰消费者历史的积压策略。确认实际生效后才标记 `READY_V1` 并创建生产者。策略异步传播时自动重试，尚不发布业务事件。已有 READY 策略不符、无所有权或其他订阅占用时需要计划，不直接覆盖。`autoCreate: false` 预建资源必须具备正确绑定、READY_V1 与全部策略；已初始化 Topic 丢失时不建空替代。
 
 此档案的 `replicas` 表示 **BookKeeper 最少 ACK 副本数**。新 Topic 的 ensemble/write/ACK quorum 都设置为该值；已有兼容 Topic 可以使用更大的 ensemble/write quorum，但 ACK quorum 不能低于配置下限。它不会部署 bookie、Broker 副本或故障域。确认依赖 BookKeeper 的持久 journal、复制配置及可恢复元数据；单 bookie 测试不是生产高可用或断电保证。无限保留需要规划容量、归档和消费者安全清理。
+
+本机故障夹具使用 Pulsar 4.0.14、两个活动 Broker、三个 BookKeeper 节点和一个 ZooKeeper 节点。验收核对原 Topic 绑定及 2/2/2 的集合、写入和确认策略。服务 Topic 的 Broker 退出后，发布端可通过幸存服务入口重新打开原 Topic。消息写入端在发布未确认时关闭旧连接，并用新连接重试相同事件。两个 bookie 离线时，需要两份确认的发布保持未确认。原 bookie 使用各自的持久卷恢复后，传输端打开原 Topic，并重试同一个稳定事件 ID。消费者应按事件 ID 去重。此档案使用隔离明文网络。集群 TLS、元数据服务冗余、存储故障域和负载容量需要单独验收。 [Pulsar 集群配置](https://pulsar.apache.org/docs/4.0.x/deploy-bare-metal/) · [验收记录](../verification/README.md)
 
 客户端同步发送字节消息，关闭批处理/分片并限制待发送请求数。消息 properties 携带稳定事件 ID、逻辑通道与传输 header，Pulsar key 携带逻辑行/事务键。收到发送确认后才提交日志回执。Pulsar message ID 或 Broker 去重不能代替事件 ID 持久去重和事务暂存；这里不使用 Pulsar 原生事务，更换生产者或源租约接管后仍采用通用至少一次契约。
 

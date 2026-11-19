@@ -71,8 +71,103 @@ public final class PulsarTransportAcceptance {
         }
         System.out.println("PASS Trusted TLS reconnect keeps the existing topic identity and exact confirmed history");
     }
+    private static PulsarTransport.Settings quorumSettings(String broker,String topic){
+        PulsarTransport.Settings settings=new PulsarTransport.Settings();
+        settings.serviceUrl="pulsar://"+broker+":6650";
+        settings.adminUrl="http://"+broker+":8080";
+        settings.cluster="local-quorum";
+        settings.topic=topic;
+        settings.replicas=2;
+        settings.connectTimeoutMillis=2500;
+        settings.requestTimeoutMillis=8000;
+        return settings;
+    }
+    private static void stage(Path markers,String name)throws Exception{
+        Files.createFile(markers.resolve(name+".request"));
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(130);
+        while(!Files.exists(markers.resolve(name+".ready"))&&System.nanoTime()<deadline)Thread.sleep(100);
+        require(Files.exists(markers.resolve(name+".ready")),"Fault coordination timed out: "+name);
+    }
+    private static void quorum()throws Exception{
+        Path markers=Paths.get(System.getenv("RIVOMESH_PULSAR_RESTART_DIR"));
+        String topic="persistent://public/default/rivomesh-quorum";
+        String binding="bookkeeper-quorum-acceptance";
+        PulsarTransport.Settings primary=quorumSettings("broker-a",topic);
+        try(PulsarTransport transport=new PulsarTransport(primary,binding)){
+            retry(()->transport.prepare(true));
+            transport.publish(Collections.singletonList(publication("first")));
+        }
+        require(read(primary).equals(Collections.singletonList("first")),"Initial confirmation missing");
+        System.out.println("PASS An active broker confirms a message with the configured two-BookKeeper quorum");
+        stage(markers,"second-broker");
+        PulsarTransport.Settings stable=quorumSettings("broker-b",topic);
+        try(PulsarAdmin admin=PulsarAdmin.builder().serviceHttpUrl(stable.adminUrl).build()){
+            require(admin.brokers().getActiveBrokers(stable.cluster).size()==2,"Expected two live brokers");
+            require("pulsar://broker-a:6650".equals(admin.lookups().lookupTopic(topic)),"Initial topic owner differs");
+            Map<String,String> identity=admin.topics().getProperties(topic);
+            require(binding.equals(identity.get(PulsarTransport.OWNER))&&"READY_V1".equals(identity.get(PulsarTransport.PROVISION)),
+                    "Topic ownership or provisioning proof missing");
+            org.apache.pulsar.common.policies.data.PersistencePolicies persistence=admin.topicPolicies().getPersistence(topic,true);
+            require(persistence.getBookkeeperEnsemble()==2&&persistence.getBookkeeperWriteQuorum()==2
+                    &&persistence.getBookkeeperAckQuorum()==2,"The topic does not require two bookies");
+            boolean confirmedAfterBrokerFailure=false;
+            try(PulsarTransport original=new PulsarTransport(stable,binding)){
+                retry(()->original.prepare(false));
+                stage(markers,"kill-owner");
+                long transferDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(30);
+                String owner=null;
+                while(System.nanoTime()<transferDeadline){
+                    try{owner=admin.lookups().lookupTopic(topic);}
+                    catch(PulsarAdminException transientLookup){
+                        if(transientLookup.getStatusCode()<500)throw transientLookup;
+                    }
+                    if("pulsar://broker-b:6650".equals(owner))break;
+                    Thread.sleep(250);
+                }
+                require("pulsar://broker-b:6650".equals(owner),"New topic owner differs");
+                try{
+                    original.publish(Collections.singletonList(publication("after-broker")));
+                    confirmedAfterBrokerFailure=true;
+                }catch(PulsarTransport.Failure staleProducer){
+                    require(staleProducer.retryable,"Owner loss did not report a retryable failure: "+staleProducer.code);
+                }
+            }
+            List<String> confirmedHistory;
+            try(PulsarTransport transport=new PulsarTransport(stable,binding)){
+                retry(()->transport.prepare(false));
+                if(!confirmedAfterBrokerFailure)transport.publish(Collections.singletonList(publication("after-broker")));
+                confirmedHistory=read(stable);
+                require(confirmedHistory.size()>=2&&"first".equals(confirmedHistory.get(0))
+                        &&confirmedHistory.subList(1,confirmedHistory.size()).stream().allMatch("after-broker"::equals),
+                        "Broker handoff changed confirmed history or the pending stable identity");
+                require(identity.equals(admin.topics().getProperties(topic)),"Topic binding changed after broker handoff");
+                System.out.println("PASS After the owning broker is killed the retry path confirms at the original topic binding through the survivor");
+                stage(markers,"lose-quorum");
+                try{
+                    transport.publish(Collections.singletonList(publication("quorum-retry")));
+                    throw new AssertionError("Publication confirmed below the BookKeeper quorum");
+                }catch(PulsarTransport.Failure failure){
+                    require(failure.retryable,"BookKeeper disruption was not classified as retryable: "+failure.code);
+                }
+                System.out.println("PASS One surviving bookie cannot confirm a publication requiring two acknowledgements");
+            }
+            stage(markers,"restore-quorum");
+            try(PulsarTransport reopened=new PulsarTransport(stable,binding)){
+                retry(()->reopened.prepare(false));
+                reopened.publish(Collections.singletonList(publication("quorum-retry")));
+            }
+            List<String> history=read(stable);
+            require(history.size()>confirmedHistory.size()
+                    &&history.subList(0,confirmedHistory.size()).equals(confirmedHistory)
+                    &&history.subList(confirmedHistory.size(),history.size()).stream().allMatch("quorum-retry"::equals),
+                    "Recovery changed a confirmed message or the retried event identity");
+            require(identity.equals(admin.topics().getProperties(topic)),"Recovery recreated or changed the topic binding");
+            System.out.println("PASS Restarted bookies recover exact confirmed history and the pending stable event identity");
+        }
+    }
     public static void main(String[] args)throws Exception{
         if(args.length==1&&"tls".equals(args[0])){tls();return;}
+        if(args.length==1&&"quorum".equals(args[0])){quorum();return;}
         require(Class.forName("org.slf4j.Logger").getProtectionDomain().getCodeSource().getLocation().toString().contains("rivomesh-app"),"Core logging API was replaced");
         Class.forName("io.github.rivomesh.pulsar.internal.slf4j.Logger").getMethod("atDebug");
         Class.forName("com.fasterxml.jackson.annotation.JsonProperty");Class.forName("io.github.rivomesh.pulsar.internal.jackson.annotation.JsonProperty");

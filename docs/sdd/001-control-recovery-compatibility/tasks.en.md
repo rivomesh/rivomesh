@@ -161,7 +161,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Each queue verifies lost confirmations,election,durable receipts,resource loss,consumer dedup/backlog and skip-gap protocol with honest delivery/consumption boundaries.
   Acceptance: AC-LG-04
   - [x] Single-broker Pulsar private CA and JWT, certificate refusal and original-message restart.
-  - [ ] Pulsar multi-broker, BookKeeper failure, capacity and remaining messaging profiles.
+  - [x] Pulsar with two brokers and three bookies verifies topic reassignment, insufficient quorum, retained-volume recovery and stable-event retry.
+  - [ ] Pulsar cluster TLS, metadata redundancy, capacity and remaining messaging profiles.
 - [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05
