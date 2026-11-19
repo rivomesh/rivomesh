@@ -1776,8 +1776,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "签名检查点与完整原始审计事件都可独立核验并写入 S3 Object Lock。本地 MinIO 已实测精确版本、COMPLIANCE 保留、同版重试、跨批次连续性及离线还原。SBOM 与五路外置 JDBC 包已有证据。真实 AWS 权限、项目授权、LICENSE/NOTICE 及外部身份仍待完成。",
-        "en": "The checkpoint and complete original audit events can be verified independently and retained with S3 Object Lock. Local MinIO verified exact versions, COMPLIANCE retention, identical retries, continuity and offline retrieval. SBOM and five external JDBC drivers have evidence. Live AWS permissions, source rights, LICENSE/NOTICE and external identity remain."
+        "zh-CN": "签名检查点与完整原始审计事件都可独立核验并写入 S3 Object Lock。本地 MinIO 已实测精确版本、COMPLIANCE 保留、同版重试、跨批次连续性及离线还原。SBOM 与五路外置 JDBC 包已有证据。真实 AWS 权限、项目授权、LICENSE/NOTICE 及外部身份仍待完成。 精确发行包扫描已识别外置版本的 151 个包内组件，并记录 46 个 Maven BOM 缺项。显式分发审查会阻止未知嵌套制品。",
+        "en": "The checkpoint and complete original audit events can be verified independently and retained with S3 Object Lock. Local MinIO verified exact versions, COMPLIANCE retention, identical retries, continuity and offline retrieval. SBOM and five external JDBC drivers have evidence. Live AWS permissions, source rights, LICENSE/NOTICE and external identity remain. Exact external-vendor package inventory identifies 151 packaged coordinates and 46 absent from the Maven BOM. Explicit distribution review blocks unidentified embedded JARs."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",
@@ -1798,7 +1798,8 @@
         "tests/audit-export-test.py",
         "tests/verify-artifact.py",
         "tools/audit-retain-s3.py",
-        "tests/audit-retain-s3-native.py"
+        "tests/audit-retain-s3-native.py",
+        "tests/release-inventory-test.py"
       ]
     }
   ],

@@ -200,6 +200,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-LG-10
   - [x] The signed checkpoint retention tool can run on a schedule. MinIO verified the exact version and COMPLIANCE lock.
   - [x] Full audit events and their signed head share one immutable version. Native storage verifies continuity, exact recovery and offline verification.
+  - [x] The exact-package inventory reviews outer and nested dependencies. Explicit review blocks unidentified JARs and incomplete legacy coverage.
   - [ ] Live AWS permissions, external identity and source rights remain.
 
 ## Recent deliverables (not additional parent requirements)

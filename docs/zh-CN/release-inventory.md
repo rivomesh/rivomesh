@@ -15,7 +15,9 @@ python3 tests/release-inventory.py \
   --output target/release-inventory.json
 ```
 
-清单记录两个文件的 SHA-256、JAR 内嵌 Maven 坐标，以及识别出的许可文件、原生库和嵌套 JAR 摘要。`requiredComponentReviews` 列出包内第三方坐标、JDBC 标记和 Maven BOM 中声明的许可名称。遇到空列表时应查验上游发布包。核对 BOM 遗漏项，以及经重定位但未保留 Maven 元数据的依赖。内嵌 Hive SDK 的审核要登记嵌套 JAR 的摘要和其内部依赖。Oracle 源预检使用部署方提供的驱动。
+清单以 SHA-256 绑定实际候选 JAR 与 Maven BOM。外层 Maven 字段描述外层 JAR。`packagedComponentEvidence` 记录组件位置及其标识文件或 JAR 的摘要。`embeddedNestedJars` 列出每个嵌套 JAR 的坐标和许可文件。审核完整制品时查看 `packagedCoordinatesOutsideMavenBom` 和 `unidentifiedNestedJars`。
+
+清单读取 Hive SDK 内层 Maven properties，按 Maven Central 公布的 SHA-256 识别三个 Bouncy Castle 1.86 JAR，并在存在 Kafka 客户端类时读取其构建属性。SHA-256 为 `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3` 的外置厂商候选包识别出 151 个包内坐标，其中 46 个未列入含 175 个组件的 Maven BOM。新识别的组件也进入 `requiredComponentReviews`。许可列表为空时需要核查上游，未识别的内容仍需人工审核。Oracle 源预检使用部署方提供的驱动。[Hive JDBC 构建](https://github.com/apache/hive/blob/rel/release-4.0.1/jdbc/pom.xml) · [Bouncy Castle 下载](https://www.bouncycastle.org/download/bouncy-castle-java/) · [Kafka 构建属性](https://github.com/apache/kafka/blob/3.9.2/clients/src/main/java/org/apache/kafka/common/utils/AppInfoParser.java)
 
 Temurin 21 候选包 `cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40` 有 109 个内嵌坐标，其中 6 个未列入含 175 个组件的 Maven BOM。清单识别出 111 个原生二进制文件及嵌套 JAR、20 个许可证和通知文件。该包的 `META-INF/LICENSE` 和 `META-INF/NOTICE` 来自单个依赖。当前源码在 `META-INF/rivomesh-licenses/` 保留 GaussDB 与 GBase8c 的上游许可原文。识别到对应驱动标记时，清单会核对内嵌许可的字节摘要。
 
@@ -99,6 +101,19 @@ java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
 
 金仓目标实库档案的候选包只添加外置金仓 JDBC。测试核对驱动来源和连接认证，并核验中断后在同一地址恢复时的事务回执和重放行为。[金仓实库复现](kingbase-v3.md#java-21-外置金仓驱动实库验收)
 
+### 外置厂商候选包的内容审查
+
+SHA-256 为 `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3` 的外置厂商 JAR 有 105 个外层 Maven 坐标。对应 BOM 含 175 个组件，SHA-256 为 `0eb72993c39c1c048ac9739dbb6410e39ea93e162a420eb39f6af6ecb2390e89`。外层有四项未进入 BOM，分别是 Logback Classic/Core 1.3.5、RocketMQ Logback 扩展 1.0.1 和 JCTools Core 4.0.5。Logback 1.3.5 提供 EPL 1.0 与 LGPL 2.1 两种条款。扩展和 JCTools 的自身代码发布于 Apache 2.0 条款。单独核对 Logback 的所选条款、包名变更和二进制声明条件。[Logback 1.3.5](https://github.com/qos-ch/logback/blob/v_1.3.5/LICENSE.txt) · [RocketMQ logging](https://github.com/aliyun-mq/rocketmq-logging/blob/master/LICENSE) · [JCTools 4.0.5](https://github.com/JCTools/JCTools/blob/v4.0.5/LICENSE) · [ASF 第三方政策](https://www.apache.org/legal/resolved.html#category-b)
+
+同一候选包内嵌的 Hive JDBC 4.0.1 独立 JAR 有 44 个 Maven 坐标，其中 42 个在外层 Maven 元数据与汇总 BOM 中均缺失。单独核对这个 JAR 的内容和通知。另有三个嵌套 Bouncy Castle 1.86 JAR，版本来自 bundle manifest，包内各有 MIT 许可文件。将对应的 JAR 摘要与 manifest 关联到 BOM 条目。[Hive JDBC 4.0.1 构建](https://github.com/apache/hive/blob/rel/release-4.0.1/jdbc/pom.xml) · [Bouncy Castle 许可](https://www.bouncycastle.org/licence.html)
+
+```sh
+unzip -p "$candidate" rivomesh-sdk/hive-jdbc-4.0.1-standalone.jar > target/hive-jdbc-review.jar
+unzip -Z1 target/hive-jdbc-review.jar
+```
+
+外层 `NOTICE` 与 Kafka Clients 3.9.2 原包逐字节相同。`META-INF/NOTICE` 来自 ActiveMQ Classic Client 5.16.8。Kafka 版本标记和一个消费者类也与上游包一致，清单用这一版本标记将 Kafka 纳入 `requiredComponentReviews`。将通知来源与嵌套及重定位依赖一起记入 `packagedContentsEvidence`，再按已审内容及源码权利准备分发包的 LICENSE 与 NOTICE。[ASF 许可文档要求](https://www.apache.org/legal/release-policy.html#licensing)
+
 ### 分发审核记录
 
 人工审核完成后，运行清单命令并附加 `--asf-review target/candidate/distribution-review.json`。审核记录包含以下字段。
@@ -112,7 +127,9 @@ java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
 | `packageLicenseFiles` | 对象，键为 `META-INF/LICENSE` 和 `META-INF/NOTICE`，值为 JAR 内已审核文件的 SHA-256 |
 | `componentReviews` | 对象，键与 `requiredComponentReviews` 一致。每项含适用许可条款字符串 `license` 及证据引用字符串 `evidence` |
 
-审查记录缺项、摘要不匹配、分发包许可文件缺失、厂商通知缺失或修改，或包内仍含 Connector/J 时，输出 `ASF_DISTRIBUTION_REVIEW_BLOCKED` 并返回退出码 1。`ASF_DISTRIBUTION_REVIEW_RECORDED` 表示记录与实际 JAR 匹配且扫描未发现已知阻断项。适用许可和完整内容由审核人员核对。每个对外分发的源码包、二进制包和镜像都分别审查。[ASF 分发包许可要求](https://www.apache.org/legal/release-policy.html#licensing)
+指定 `--asf-review` 时，审查记录缺项、摘要不匹配、分发包许可文件缺失、厂商通知缺失或修改、包内仍含 Connector/J，或存在无法识别的嵌套 JAR，都会输出 `ASF_DISTRIBUTION_REVIEW_BLOCKED` 并返回退出码 1。`UNIDENTIFIED_NESTED_JAR` 会给出完整嵌套路径和 JAR 的 SHA-256。可以直接生成普通清单取得这些信息，再按可核验的元数据或已公布的二进制摘要确认组件身份。
+
+`ASF_DISTRIBUTION_REVIEW_RECORDED` 表示记录与实际 JAR 匹配且扫描未发现已知阻断项。适用许可和完整内容由审核人员核对。每个对外分发的源码包、二进制包和镜像都分别审查。[ASF 分发包许可要求](https://www.apache.org/legal/release-policy.html#licensing)
 
 项目级 LICENSE 和 NOTICE 取决于源码权利审查。准备这两个文件前，先记录代码、素材和厂商组件的来源及贡献权。新孵化项目的初始代码按 Incubator 的 podling IP 指南办理。[Podling IP 审查指南](https://incubator.apache.org/guides/ip_clearance.html)
 

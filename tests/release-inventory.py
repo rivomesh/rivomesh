@@ -61,6 +61,16 @@ JDBC_NOTICE_OWNERS = {
     VENDOR_DRIVERS['GBase8c vendor JDBC 3.0.0B02'][2]: 'gbase8c',
 }
 GAUSSDB_UNRELOCATED_DRIVER_SHA256 = 'c140b8a47715d13a206f9db1d66a58a514745e48c12bd5a5a15c20f33bf2a53c'
+# These upstream JARs omit Maven properties. Each key is the release .jar.sha256 from Maven Central.
+PUBLISHED_JAR_COORDINATES = {
+    '8d8b41a4b149bdae8d331f059a578870954d1e3ff29f8269a9eb3ee19a7e4ef7': ('org.bouncycastle', 'bcpkix-jdk18on', '1.86'),
+    '2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f': ('org.bouncycastle', 'bcprov-jdk18on', '1.86'),
+    '1c268e15f785aafb1e4670d8d6e5f856f69475e96c162dadcd1ff9b350e9139f': ('org.bouncycastle', 'bcutil-jdk18on', '1.86'),
+}
+MAVEN_PROPERTIES = re.compile(r'META-INF/maven/([^/]+)/([^/]+)/pom\.properties')
+KAFKA_BUILD_PROPERTIES = 'kafka/kafka-version.properties'
+KAFKA_CLIENT_CLASS = 'org/apache/kafka/clients/consumer/KafkaConsumer.class'
+BINARY_ENTRY = re.compile(r'\.(?:jar|so(?:\.\d+)*|dll|dylib|jnilib|a)$', flags=re.IGNORECASE)
 
 
 def stream_digest(source):
@@ -89,41 +99,65 @@ def properties(data):
 
 
 def embedded_metadata(artifact):
-    versions = set()
-    notices = {}
-    binaries = {}
+    contents = {}
+    jdbc_locations = {driver: [] for driver in ('mysql', *VENDOR_JDBC_MARKERS)}
     with ZipFile(artifact) as archive:
-        paths = archive.namelist()
-        names = set(paths)
-        if len(paths) != len(names):
-            raise ValueError('The JAR has duplicate entries')
-        for entry in sorted(name for name in names if not name.endswith('/')):
-            if re.fullmatch(r'META-INF/maven/[^/]+/[^/]+/pom.properties', entry):
-                p = properties(archive.read(entry))
-                if p.keys() >= {'groupId', 'artifactId', 'version'}:
-                    versions.add((p['groupId'], p['artifactId'], p['version']))
-            if is_license_notice(entry):
-                with archive.open(entry) as content:
-                    notices[entry] = stream_digest(content)
-            if re.search(r'\.(?:jar|so(?:\.\d+)*|dll|dylib|jnilib|a)$', entry, flags=re.IGNORECASE):
-                with archive.open(entry) as content:
-                    binaries[entry] = stream_digest(content)
-        jdbc_locations = jdbc_driver_locations(archive)
+        scan_archive(archive, 'JAR', None, contents, jdbc_locations)
+        names = set(archive.namelist())
+    notices = contents['JAR']['notices']
     vendors = [{'component': component, 'embeddedClass': marker, 'requiredLicenseEntry': license_entry,
                 'licenseMatchesUpstream': notices.get(license_entry) == license_digest}
                for component, (marker, license_entry, license_digest) in VENDOR_DRIVERS.items() if marker in names]
-    return versions, notices, binaries, vendors, jdbc_locations
+    return contents, vendors, jdbc_locations
 
 
-def jdbc_driver_locations(archive, location='JAR'):
+def scan_archive(archive, location, jar_sha256, contents, jdbc_locations):
+    if location in contents:
+        raise ValueError('Ambiguous nested archive location: ' + location)
     paths = archive.namelist()
     names = set(paths)
     if len(paths) != len(names):
-        raise ValueError('Duplicate JDBC inventory entries in ' + location)
+        raise ValueError('Duplicate archive entries in ' + location)
+    components = {}
+    notices = {}
+    binaries = {}
+    found = set()
+    for entry in sorted(name for name in names if not name.endswith('/')):
+        match = MAVEN_PROPERTIES.fullmatch(entry)
+        if match:
+            data = archive.read(entry)
+            fields = properties(data)
+            if (fields.get('groupId'), fields.get('artifactId')) == match.groups() and fields.get('version'):
+                components[(*match.groups(), fields['version'])] = {
+                    'kind': 'MAVEN_PROPERTIES', 'entry': entry, 'sha256': sha256(data).hexdigest(),
+                }
+        if is_license_notice(entry):
+            with archive.open(entry) as content:
+                notices[entry] = stream_digest(content)
+            owner = JDBC_NOTICE_OWNERS.get(notices[entry])
+            if owner is not None:
+                found.add(owner)
+        if BINARY_ENTRY.search(entry):
+            with archive.open(entry) as content:
+                binaries[entry] = stream_digest(content)
+    if KAFKA_BUILD_PROPERTIES in names and KAFKA_CLIENT_CLASS in names:
+        data = archive.read(KAFKA_BUILD_PROPERTIES)
+        fields = properties(data)
+        version = fields.get('version', '')
+        if (re.fullmatch(r'\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?', version)
+                and re.fullmatch(r'[a-fA-F0-9]{7,64}', fields.get('commitId', ''))):
+            components.setdefault(('org.apache.kafka', 'kafka-clients', version), {
+                'kind': 'KAFKA_BUILD_PROPERTIES', 'entry': KAFKA_BUILD_PROPERTIES, 'sha256': sha256(data).hexdigest(),
+            })
+    if jar_sha256 in PUBLISHED_JAR_COORDINATES:
+        components.setdefault(PUBLISHED_JAR_COORDINATES[jar_sha256], {
+            'kind': 'PUBLISHED_JAR_SHA256', 'sha256': jar_sha256,
+        })
+    contents[location] = {'components': components, 'notices': notices, 'binaries': binaries, 'sha256': jar_sha256}
+
     provider_entry = 'META-INF/services/java.sql.Driver'
     providers = (archive.read(provider_entry).splitlines() if provider_entry in names else [])
     providers = {line.partition(b'#')[0].strip() for line in providers}
-    found = set()
     if MYSQL_JDBC_PROVIDERS.intersection(providers) or any(CONNECTOR_J_MARKER.search(name) for name in names):
         found.add('mysql')
     for driver, (marker, provider, _) in VENDOR_JDBC_MARKERS.items():
@@ -133,27 +167,23 @@ def jdbc_driver_locations(archive, location='JAR'):
     postgres_marker = 'org/postgresql/Driver.class'
     if postgres_marker in names and sha256(archive.read(postgres_marker)).hexdigest() == GAUSSDB_UNRELOCATED_DRIVER_SHA256:
         found.add('gaussdb')
-    for entry in names:
-        if not entry.endswith('/') and is_license_notice(entry):
-            with archive.open(entry) as content:
-                owner = JDBC_NOTICE_OWNERS.get(stream_digest(content))
-            if owner is not None:
-                found.add(owner)
-    locations = {driver: [location] if driver in found else [] for driver in ('mysql', *VENDOR_JDBC_MARKERS)}
-    for name in sorted(entry for entry in names if entry.lower().endswith('.jar')):
+    for driver in found:
+        jdbc_locations[driver].append(location)
+    for name, nested_sha256 in binaries.items():
+        if not name.lower().endswith('.jar'):
+            continue
         nested_location = location + '!/' + name
         with archive.open(name) as packaged:
             try:
                 with ZipFile(packaged) as nested:
-                    for driver, matches in jdbc_driver_locations(nested, nested_location).items():
-                        locations[driver].extend(matches)
+                    scan_archive(nested, nested_location, nested_sha256, contents, jdbc_locations)
             except BadZipFile as error:
                 raise ValueError('Cannot inspect embedded JAR: ' + nested_location) from error
-    return locations
 
 
 def is_license_notice(entry):
-    if entry.startswith(('META-INF/license/', 'META-INF/licenses/', 'META-INF/rivomesh-licenses/')):
+    if entry.startswith(('META-INF/license/', 'META-INF/licenses/', 'META-INF/licenses-binary/',
+                         'META-INF/rivomesh-licenses/')):
         return True
     filename = entry.removeprefix('META-INF/')
     return bool(re.fullmatch(r'(?:[\w.-]+[-_.])?(?:LICEN[CS]E|NOTICE|COPYING)(?:[-_.][\w.-]+)?', filename,
@@ -170,7 +200,7 @@ def declared_terms(component):
     return sorted(terms)
 
 
-def asf_review_blockers(notices, vendors, mysql_locations):
+def asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars):
     blockers = []
     # The shipped 8.4.0 community connector uses GPLv2 with the Universal FOSS
     # Exception, which is not an ASF policy exception for bundled software.
@@ -179,6 +209,8 @@ def asf_review_blockers(notices, vendors, mysql_locations):
     blockers.extend('MISSING_OR_CHANGED_VENDOR_LICENSE: ' + item['requiredLicenseEntry']
                     for item in vendors if not item['licenseMatchesUpstream'])
     blockers.extend('MISSING_PACKAGE_LICENSE_FILE: ' + entry for entry in PACKAGE_LICENSE_FILES if entry not in notices)
+    blockers.extend(f"UNIDENTIFIED_NESTED_JAR: {item['location']} (sha256={item['sha256']})"
+                    for item in unidentified_nested_jars)
     return blockers
 
 
@@ -234,19 +266,36 @@ def main():
     dependencies = {coordinate(component): component for component in bom['components']}
     artifact_sha256 = digest(args.artifact)
     try:
-        embedded, notices, binaries, vendors, jdbc_locations = embedded_metadata(args.artifact)
+        contents, vendors, jdbc_locations = embedded_metadata(args.artifact)
     except (ValueError, BadZipFile) as error:
         parser.error(str(error))
     if digest(args.artifact) != artifact_sha256:
         parser.error('The JAR changed during inventory')
+    root = contents['JAR']
+    embedded = {key for key, item in root['components'].items() if item['kind'] == 'MAVEN_PROPERTIES'}
+    notices, binaries = root['notices'], root['binaries']
     if not embedded or not notices:
         parser.error('The JAR must contain dependency metadata and embedded notices')
 
     def entries(components):
         return [':'.join(parts) for parts in sorted(components)]
 
+    packaged = {}
+    nested_jars = []
+    for location, archive in contents.items():
+        components = archive['components']
+        for key, evidence in components.items():
+            packaged.setdefault(key, []).append({'location': location, **evidence})
+        if location != 'JAR':
+            nested_jars.append({
+                'location': location, 'sha256': archive['sha256'],
+                'componentCoordinates': entries(components),
+                'coordinatesOutsideMavenBom': entries(components.keys() - dependencies.keys()),
+                'licenseAndNoticeFiles': [{'entry': name, 'sha256': value}
+                                          for name, value in archive['notices'].items()],
+            })
     reviews = {
-        ':'.join(key): declared_terms(dependencies.get(key, {})) for key in sorted(embedded)
+        ':'.join(key): declared_terms(dependencies.get(key, {})) for key in sorted(packaged)
         if key[0] != 'io.github.rivomesh'
     }
     mysql_locations = jdbc_locations.pop('mysql')
@@ -254,6 +303,7 @@ def main():
         if matches:
             _, _, component = VENDOR_JDBC_MARKERS[driver]
             reviews.setdefault(component, declared_terms(dependencies.get(tuple(component.split(':')), {})))
+    unidentified_nested_jars = [item for item in nested_jars if not item['componentCoordinates']]
     report = {
         'artifactSha256': artifact_sha256,
         'mavenBomSha256': sha256(bom_data).hexdigest(),
@@ -264,6 +314,12 @@ def main():
         'mavenComponentsWithoutEmbeddedCoordinates': entries(dependencies.keys() - embedded),
         'mavenComponentsWithoutDeclaredLicense': entries(key for key, component in dependencies.items()
                                                          if not component.get('licenses')),
+        'packagedComponentCoordinates': entries(packaged),
+        'packagedCoordinatesOutsideMavenBom': entries(packaged.keys() - dependencies.keys()),
+        'mavenComponentsWithoutPackagedEvidence': entries(dependencies.keys() - packaged.keys()),
+        'packagedComponentEvidence': {':'.join(key): packaged[key] for key in sorted(packaged)},
+        'embeddedNestedJars': nested_jars,
+        'unidentifiedNestedJars': [item['location'] for item in unidentified_nested_jars],
         'vendoredBinaryMarkers': vendors,
         'embeddedLicenseAndNoticeFiles': [{'entry': name, 'sha256': value} for name, value in notices.items()],
         'embeddedBinaryFiles': [{'entry': name, 'sha256': value} for name, value in binaries.items()],
@@ -272,7 +328,7 @@ def main():
         'requiredComponentReviews': reviews,
         'asfDistributionReview': {
             'status': 'NOT_RECORDED',
-            'blockingFindings': asf_review_blockers(notices, vendors, mysql_locations),
+            'blockingFindings': asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars),
         },
     }
     review_status = report['asfDistributionReview']
@@ -288,8 +344,9 @@ def main():
                                    else 'RECORDED')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
-    print(f'INVENTORY_GENERATED {len(dependencies)} Maven components, {len(embedded)} embedded coordinates, '
-          f'{len(vendors)} vendor markers, {len(notices)} notice/license files')
+    print(f'INVENTORY_GENERATED {len(dependencies)} Maven components, {len(embedded)} outer Maven coordinates, '
+          f'{len(packaged)} packaged coordinates, {len(packaged.keys() - dependencies.keys())} outside the BOM, '
+          f'{len(nested_jars)} nested JARs, {len(vendors)} vendor markers, {len(notices)} outer notice/license files')
     if args.asf_review:
         print('ASF_DISTRIBUTION_REVIEW_' + review_status['status'])
     if args.expect_external_mysql:

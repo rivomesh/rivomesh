@@ -11926,5 +11926,264 @@
     "integratedHarnessSha256": "11e038025905bdbc1d7d7ed6506ccd03fbbf86e8ca068ef96598390d9596989d",
     "scope": "Separate PostgreSQL databases and networks. Candidate loses only the journal path, retains its control lease and source/target reachability, then recovers same-process read-only staging after JDBC proof. Both entries refuse cross-database writer ownership. Original assignment and target cuts survive, and the original Agent consumes a later source transaction after release.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/split-store-native --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-split-store --handoff-split-store-browser /path/to/chrome --source-image mysql:8.4 --source-expected-version 8.4.13"
+  },
+  "exactPackagedComponentReviewInventory": {
+    "baselineGitCommit": "53ce826",
+    "publicationCandidateTree": "5106c49e39c9e125dc94d72ce65d3be122f51bc1",
+    "scopedPatchSha256": "4415402ebe2290e25c34d46b3d4056d8fdbbf7274538cb9c4a6b4673c83bb40f",
+    "scannerSha256": "5b58e6164227f0e39f2662e34885fc409ea198425863f0362e03d9e3f5a234e6",
+    "testSha256": "60781e0979a8c67e0922f933927a3a4a2e752270e154c5f27f6d2319b2c7d75f",
+    "exactExternalVendorJdk21": {
+      "artifactSha256": "02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3",
+      "mavenBomSha256": "0eb72993c39c1c048ac9739dbb6410e39ea93e162a420eb39f6af6ecb2390e89",
+      "inventorySha256": "8a97abe9dfe3ece7a94f76d203204ad417687f98c4f01b33b23b53aeccc21cc1",
+      "nestedJars": [
+        {
+          "location": "JAR!/lib/bcpkix-jdk18on-1.86.jar",
+          "sha256": "8d8b41a4b149bdae8d331f059a578870954d1e3ff29f8269a9eb3ee19a7e4ef7",
+          "componentCoordinates": [
+            "org.bouncycastle:bcpkix-jdk18on:1.86"
+          ],
+          "coordinatesOutsideMavenBom": [],
+          "licenseAndNoticeFiles": [
+            {
+              "entry": "META-INF/LICENSE.md",
+              "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd"
+            }
+          ]
+        },
+        {
+          "location": "JAR!/lib/bcprov-jdk18on-1.86.jar",
+          "sha256": "2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f",
+          "componentCoordinates": [
+            "org.bouncycastle:bcprov-jdk18on:1.86"
+          ],
+          "coordinatesOutsideMavenBom": [],
+          "licenseAndNoticeFiles": [
+            {
+              "entry": "META-INF/LICENSE.md",
+              "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd"
+            }
+          ]
+        },
+        {
+          "location": "JAR!/lib/bcutil-jdk18on-1.86.jar",
+          "sha256": "1c268e15f785aafb1e4670d8d6e5f856f69475e96c162dadcd1ff9b350e9139f",
+          "componentCoordinates": [
+            "org.bouncycastle:bcutil-jdk18on:1.86"
+          ],
+          "coordinatesOutsideMavenBom": [],
+          "licenseAndNoticeFiles": [
+            {
+              "entry": "META-INF/LICENSE.md",
+              "sha256": "0e01f1549c9022f406392ac2947d32223b7c2e977d21ea2f8c182fdeb4dae5fd"
+            }
+          ]
+        },
+        {
+          "location": "JAR!/rivomesh-sdk/hive-jdbc-4.0.1-standalone.jar",
+          "sha256": "5d74bb0130aae6a8a2fad9cf5ffa1608974a55f1013464334490f7e06311959e",
+          "componentCoordinates": [
+            "com.fasterxml.woodstox:woodstox-core:5.4.0",
+            "com.github.stephenc.jcip:jcip-annotations:1.0-1",
+            "com.google.errorprone:error_prone_annotations:2.5.1",
+            "com.google.guava:failureaccess:1.0.1",
+            "com.google.guava:guava:30.1.1-jre",
+            "com.google.guava:listenablefuture:1.0",
+            "com.google.j2objc:j2objc-annotations:1.3",
+            "commons-codec:commons-codec:1.15",
+            "commons-collections:commons-collections:3.2.2",
+            "commons-daemon:commons-daemon:1.0.13",
+            "commons-logging:commons-logging:1.2",
+            "jakarta.activation:jakarta.activation-api:1.2.1",
+            "jakarta.xml.bind:jakarta.xml.bind-api:2.3.3",
+            "javax.annotation:javax.annotation-api:1.3.2",
+            "javax.ws.rs:jsr311-api:1.1.1",
+            "org.apache.commons:commons-configuration2:2.8.0",
+            "org.apache.commons:commons-lang3:3.12.0",
+            "org.apache.commons:commons-text:1.10.0",
+            "org.apache.curator:curator-client:5.2.0",
+            "org.apache.curator:curator-framework:5.2.0",
+            "org.apache.curator:curator-recipes:5.2.0",
+            "org.apache.hadoop:hadoop-registry:3.3.6",
+            "org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1",
+            "org.apache.hive:hive-classification:4.0.1",
+            "org.apache.hive:hive-common:4.0.1",
+            "org.apache.hive:hive-hplsql:4.0.1",
+            "org.apache.hive:hive-jdbc:4.0.1",
+            "org.apache.hive:hive-llap-client:4.0.1",
+            "org.apache.hive:hive-serde:4.0.1",
+            "org.apache.hive:hive-service:4.0.1",
+            "org.apache.hive:hive-service-rpc:4.0.1",
+            "org.apache.hive:hive-shims:4.0.1",
+            "org.apache.hive:hive-standalone-metastore-common:4.0.1",
+            "org.apache.hive:hive-storage-api:4.0.1",
+            "org.apache.hive.shims:hive-shims-0.23:4.0.1",
+            "org.apache.hive.shims:hive-shims-common:4.0.1",
+            "org.apache.httpcomponents:httpclient:4.5.13",
+            "org.apache.httpcomponents:httpcore:4.4.13",
+            "org.apache.yetus:audience-annotations:0.12.0",
+            "org.apache.zookeeper:zookeeper:3.8.3",
+            "org.apache.zookeeper:zookeeper-jute:3.8.3",
+            "org.codehaus.mojo:animal-sniffer-annotations:1.14",
+            "org.codehaus.woodstox:stax2-api:4.2.1",
+            "org.slf4j:slf4j-api:1.7.30"
+          ],
+          "coordinatesOutsideMavenBom": [
+            "com.fasterxml.woodstox:woodstox-core:5.4.0",
+            "com.github.stephenc.jcip:jcip-annotations:1.0-1",
+            "com.google.errorprone:error_prone_annotations:2.5.1",
+            "com.google.guava:guava:30.1.1-jre",
+            "com.google.guava:listenablefuture:1.0",
+            "com.google.j2objc:j2objc-annotations:1.3",
+            "commons-codec:commons-codec:1.15",
+            "commons-daemon:commons-daemon:1.0.13",
+            "commons-logging:commons-logging:1.2",
+            "jakarta.activation:jakarta.activation-api:1.2.1",
+            "jakarta.xml.bind:jakarta.xml.bind-api:2.3.3",
+            "javax.annotation:javax.annotation-api:1.3.2",
+            "javax.ws.rs:jsr311-api:1.1.1",
+            "org.apache.commons:commons-configuration2:2.8.0",
+            "org.apache.commons:commons-lang3:3.12.0",
+            "org.apache.commons:commons-text:1.10.0",
+            "org.apache.curator:curator-client:5.2.0",
+            "org.apache.curator:curator-framework:5.2.0",
+            "org.apache.curator:curator-recipes:5.2.0",
+            "org.apache.hadoop:hadoop-registry:3.3.6",
+            "org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1",
+            "org.apache.hive:hive-classification:4.0.1",
+            "org.apache.hive:hive-common:4.0.1",
+            "org.apache.hive:hive-hplsql:4.0.1",
+            "org.apache.hive:hive-jdbc:4.0.1",
+            "org.apache.hive:hive-llap-client:4.0.1",
+            "org.apache.hive:hive-serde:4.0.1",
+            "org.apache.hive:hive-service:4.0.1",
+            "org.apache.hive:hive-service-rpc:4.0.1",
+            "org.apache.hive:hive-shims:4.0.1",
+            "org.apache.hive:hive-standalone-metastore-common:4.0.1",
+            "org.apache.hive:hive-storage-api:4.0.1",
+            "org.apache.hive.shims:hive-shims-0.23:4.0.1",
+            "org.apache.hive.shims:hive-shims-common:4.0.1",
+            "org.apache.httpcomponents:httpclient:4.5.13",
+            "org.apache.httpcomponents:httpcore:4.4.13",
+            "org.apache.yetus:audience-annotations:0.12.0",
+            "org.apache.zookeeper:zookeeper:3.8.3",
+            "org.apache.zookeeper:zookeeper-jute:3.8.3",
+            "org.codehaus.mojo:animal-sniffer-annotations:1.14",
+            "org.codehaus.woodstox:stax2-api:4.2.1",
+            "org.slf4j:slf4j-api:1.7.30"
+          ],
+          "licenseAndNoticeFiles": [
+            {
+              "entry": "META-INF/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "entry": "META-INF/LICENSE.md",
+              "sha256": "dcbbdbb512a272b5f1e01e82225a23eba92406ec28f7b36e490057478d8d1570"
+            },
+            {
+              "entry": "META-INF/LICENSE.txt",
+              "sha256": "fa8e3b89be48cb181a94c68f24e108606faeed435d4fed4550c52c2cb7221e85"
+            },
+            {
+              "entry": "META-INF/NOTICE",
+              "sha256": "b27f07ec5ccab3a56f42af5b82582791ebeae0664e633fa4ea50cdbf8e5e49d4"
+            },
+            {
+              "entry": "META-INF/NOTICE-binary",
+              "sha256": "137d7002b60aadfd602b48b8d9b8de42b7cd2e5f5acb219e0c586a5bcfb1d883"
+            },
+            {
+              "entry": "META-INF/NOTICE.md",
+              "sha256": "190bb88e764baa914edd55f80952d0fe63795a4986176afb6b41705e5612c458"
+            },
+            {
+              "entry": "META-INF/NOTICE.txt",
+              "sha256": "bd8d44431e4ce7a8d03d194d6d11f6d1b3206de594885825ef7ce98ee40c456e"
+            },
+            {
+              "entry": "META-INF/licenses-binary/LICENSE.protobuf.txt",
+              "sha256": "95bc0839fe9ffb3baf1b5ad8f5c347b58a07196387b3939c9f121d48461443dc"
+            }
+          ]
+        }
+      ],
+      "mavenComponentCount": 175,
+      "outerMavenCoordinates": 105,
+      "packagedCoordinates": 151,
+      "packagedCoordinatesOutsideMavenBom": 46,
+      "requiredReviewsBefore": 99,
+      "requiredReviewsAfter": 145,
+      "syntheticPreviousReviewCoverageRejectedForMissingComponents": 46,
+      "externalVendorJdbcCheck": "PASS",
+      "scansByteForByteEqual": true,
+      "asfReviewStatus": "NOT_RECORDED"
+    },
+    "upstreamKnownJarHashes": [
+      {
+        "coordinate": "org.bouncycastle:bcpkix-jdk18on:1.86",
+        "publishedSha256Url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.86/bcpkix-jdk18on-1.86.jar.sha256",
+        "sha256": "8d8b41a4b149bdae8d331f059a578870954d1e3ff29f8269a9eb3ee19a7e4ef7",
+        "publicLicenseUrl": "https://www.bouncycastle.org/licence.html"
+      },
+      {
+        "coordinate": "org.bouncycastle:bcprov-jdk18on:1.86",
+        "publishedSha256Url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.86/bcprov-jdk18on-1.86.jar.sha256",
+        "sha256": "2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f",
+        "publicLicenseUrl": "https://www.bouncycastle.org/licence.html"
+      },
+      {
+        "coordinate": "org.bouncycastle:bcutil-jdk18on:1.86",
+        "publishedSha256Url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.86/bcutil-jdk18on-1.86.jar.sha256",
+        "sha256": "1c268e15f785aafb1e4670d8d6e5f856f69475e96c162dadcd1ff9b350e9139f",
+        "publicLicenseUrl": "https://www.bouncycastle.org/licence.html"
+      }
+    ],
+    "verifiedUpstreamNoticeAndClassMatches": {
+      "org.apache.activemq:activemq-client:5.16.8": {
+        "upstreamJarSha256": "24797f038e61653ae503204b5992bbb692a472ef36a9e97797617b46ffce3990",
+        "matchingEntries": {
+          "META-INF/NOTICE": "78075a3bdb38465bd07593c3275aaf228e3fca79380fff37cfea14d2accd637c",
+          "META-INF/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "upstreamJarUrl": "https://repo.maven.apache.org/maven2/org/apache/activemq/activemq-client/5.16.8/activemq-client-5.16.8.jar"
+      },
+      "org.apache.kafka:kafka-clients:3.9.2": {
+        "upstreamJarSha256": "014b4ef36884478a932641818b080c36a8f8e2e92dc771e800c9d2694f4f83d8",
+        "matchingEntries": {
+          "NOTICE": "52259722ac65cc34187cdbbb846a074b060ce9fa9510100c7ffab1848a071a22",
+          "kafka/kafka-version.properties": "54085c669e5802efd0db4c2f6f69a76dafe1a4e43be850151c42ff0a89723347",
+          "org/apache/kafka/clients/consumer/KafkaConsumer.class": "9a4dca3095587f8ee930559779829785b50ad2dcc5ecdc954eb0e1acdd1b52d1"
+        },
+        "upstreamJarSha256Url": "https://repo.maven.apache.org/maven2/org/apache/kafka/kafka-clients/3.9.2/kafka-clients-3.9.2.jar.sha256"
+      }
+    },
+    "previousPublicLicenseEvidenceSha256": "effa3d1e7758c4e6ed3df40e4bfd17c888d7ae6f30141e15ccd28bd7a45629ff",
+    "developmentJvm21Inventory": {
+      "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+      "inventorySha256": "11ac2f378919b84c6e2a6b589a25f05a96c9c632cb317ffbce82d4b6f351037d",
+      "bundledMySqlConnectorJDetected": true,
+      "vendorNoticesMatch": true
+    },
+    "syntheticRegressionTestsPassed": 4,
+    "sddAndBilingualDocs": "PASS",
+    "gateOnlyPatchSha256": "8d3e76c0193ab8fecadf142ccec7e57565063de6b5cb73b5e3d895efb76ba8bf",
+    "previousInventoryEvidenceSha256": "7aee5c32a29ce33477f277893fa8feff22afcaf99de881adeac03f4982b1b68a",
+    "unidentifiedNestedJarReviewGate": {
+      "ordinaryInventoryExitCode": 0,
+      "ordinaryInventoryReviewStatus": "NOT_RECORDED",
+      "explicitReviewExitCode": 1,
+      "explicitReviewStatus": "BLOCKED",
+      "reviewRecordErrors": [],
+      "findingCode": "UNIDENTIFIED_NESTED_JAR",
+      "verifiedFullNestedLocation": "JAR!/sdk.jar!/plugins/unidentified.jar",
+      "verifiedFindingBindsNestedJarSha256": true,
+      "externalAndDevelopmentReportsMatchPreviousBytes": true
+    },
+    "status": "PASS",
+    "scope": "Package component identification and review gate only. Application authorship, redistribution terms, the final project LICENSE and NOTICE, and approval require separate review.",
+    "evidenceSha256": "f61ac77fdaba1f8dd828eb7622abd594bb77c0700b7a5236b595d6f57ef9efa9",
+    "reproduce": "python3 tests/release-inventory.py --artifact /path/to/external-vendor.jar --maven-bom /path/to/rivomesh-cyclonedx.json --output target/exact-inventory.json --expect-external-vendor-jdbc"
   }
 }

@@ -15,7 +15,9 @@ python3 tests/release-inventory.py \
   --output target/release-inventory.json
 ```
 
-The comparison records both SHA-256 digests, Maven coordinates inside the JAR, and hashes for recognized license files, native libraries and nested JARs. The `requiredComponentReviews` map lists bundled third-party coordinates and JDBC markers, alongside the license names declared by the Maven BOM. An empty list requires investigation of the upstream package. Review BOM omissions and shaded dependencies even when the package does not expose their Maven metadata. For the private Hive SDK, record its bundled dependencies as well as the nested JAR hash. Oracle source preflight uses an operator-provided driver.
+The comparison binds the exact JAR and Maven BOM by SHA-256. The outer Maven fields describe the outer JAR. `packagedComponentEvidence` adds component locations and the hashes of the identifying entries or JARs. `embeddedNestedJars` lists each nested JAR, its coordinates and license files. Examine `packagedCoordinatesOutsideMavenBom` and `unidentifiedNestedJars` when reviewing the complete binary contents.
+
+The scan reads Maven properties inside the Hive SDK, identifies the three packaged Bouncy Castle 1.86 JARs by their published Maven Central SHA-256 digests, and reads Kafka build properties when the client class is present. In the external-vendor candidate at SHA-256 `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3`, it finds 151 packaged coordinates against the 175-component Maven BOM, including 46 absent from that BOM. The `requiredComponentReviews` map includes the newly identified components. An empty license list requires upstream evidence, and unidentified contents still require manual review. Oracle source preflight uses an operator-provided driver. [Hive JDBC build](https://github.com/apache/hive/blob/rel/release-4.0.1/jdbc/pom.xml) · [Bouncy Castle downloads](https://www.bouncycastle.org/download/bouncy-castle-java/) · [Kafka build properties](https://github.com/apache/kafka/blob/3.9.2/clients/src/main/java/org/apache/kafka/common/utils/AppInfoParser.java)
 
 The Temurin 21 candidate at SHA-256 `cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40` has 109 embedded coordinates. Six are absent from the 175-component Maven BOM. It has 111 recognized native binaries and nested JARs and 20 recognized license and notice files. Its `META-INF/LICENSE` and `META-INF/NOTICE` are copies from individual dependencies. The current source preserves the exact upstream GaussDB and GBase8c notices under `META-INF/rivomesh-licenses/`. The inventory compares each of those files against the corresponding upstream bytes when the driver marker appears.
 
@@ -99,6 +101,19 @@ The native Dameng profile uses this same candidate with only the external Connec
 
 The native Kingbase target profile runs the candidate with only its external Kingbase JDBC JAR. It exercises actual authentication and class origin, then verifies native transaction receipts and replay through the same endpoint after an outage. [Kingbase native reproduction](kingbase-v3.md#native-kingbase-connection-with-an-external-java-21-driver)
 
+### Contents review of the external vendor candidate
+
+The external-vendor JAR at SHA-256 `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3` has 105 outer Maven coordinates against its 175-component BOM at SHA-256 `0eb72993c39c1c048ac9739dbb6410e39ea93e162a420eb39f6af6ecb2390e89`. Its four outer BOM differences are Logback Classic and Core 1.3.5, the RocketMQ Logback extensions 1.0.1, and JCTools Core 4.0.5. Logback 1.3.5 publishes alternative EPL 1.0 and LGPL 2.1 terms. The extensions and JCTools publish Apache 2.0 terms for their own code. Review Logback separately from the extension, including the selected terms, the relocated classes and the applicable binary notice conditions. [Logback 1.3.5](https://github.com/qos-ch/logback/blob/v_1.3.5/LICENSE.txt) · [RocketMQ logging](https://github.com/aliyun-mq/rocketmq-logging/blob/master/LICENSE) · [JCTools 4.0.5](https://github.com/JCTools/JCTools/blob/v4.0.5/LICENSE) · [ASF third-party policy](https://www.apache.org/legal/resolved.html#category-b)
+
+The same candidate embeds a Hive JDBC 4.0.1 standalone JAR with 44 Maven coordinates, 42 of which are absent from both the outer Maven metadata and the aggregate BOM. Inspect that JAR's contents and notices independently. Three separately nested Bouncy Castle 1.86 JARs expose their versions in bundle manifests and carry their own MIT license files. Use their payload hashes and manifests to associate the packaged files with the corresponding BOM entries. [Hive JDBC 4.0.1 build](https://github.com/apache/hive/blob/rel/release-4.0.1/jdbc/pom.xml) · [Bouncy Castle license](https://www.bouncycastle.org/licence.html)
+
+```sh
+unzip -p "$candidate" rivomesh-sdk/hive-jdbc-4.0.1-standalone.jar > target/hive-jdbc-review.jar
+unzip -Z1 target/hive-jdbc-review.jar
+```
+
+The outer `NOTICE` matches Kafka Clients 3.9.2 byte for byte. Its `META-INF/NOTICE` matches ActiveMQ Classic Client 5.16.8. Kafka's version marker and a consumer class also match its upstream JAR. The scanner uses the version marker to include Kafka in `requiredComponentReviews`. Include the notice attribution in `packagedContentsEvidence` alongside the nested and shaded dependencies. Prepare the final package-level LICENSE and NOTICE from the reviewed contents and source provenance. [ASF licensing documentation](https://www.apache.org/legal/release-policy.html#licensing)
+
 ### Distribution review record
 
 Run the inventory with `--asf-review target/candidate/distribution-review.json` to check an exact JAR against a completed manual review. Use the following fields in that record.
@@ -112,7 +127,9 @@ Run the inventory with `--asf-review target/candidate/distribution-review.json` 
 | `packageLicenseFiles` | Object mapping `META-INF/LICENSE` and `META-INF/NOTICE` to their reviewed SHA-256 values in the JAR |
 | `componentReviews` | Object keyed exactly by `requiredComponentReviews`. Each value has a `license` string for the selected terms and an `evidence` string for the corresponding review record |
 
-The inventory writes `ASF_DISTRIBUTION_REVIEW_BLOCKED` and exits with code 1 on an incomplete record, digest mismatch, missing package licensing file, missing or changed vendor notice, or bundled Connector/J. `ASF_DISTRIBUTION_REVIEW_RECORDED` confirms the record matches the inspected JAR and that the scanner found no known blocker. Reviewers determine the applicable terms and verify all content. Repeat the review for each source archive, binary and image that will be distributed. [ASF distribution licensing requirements](https://www.apache.org/legal/release-policy.html#licensing)
+With `--asf-review`, the inventory writes `ASF_DISTRIBUTION_REVIEW_BLOCKED` and exits with code 1 on an incomplete record, digest mismatch, missing package licensing file, missing or changed vendor notice, bundled Connector/J, or an unidentified nested JAR. `UNIDENTIFIED_NESTED_JAR` includes the full nested location and the JAR's SHA-256. Run the inventory without `--asf-review` to collect these findings and identify the component from verifiable metadata or its published binary digest.
+
+`ASF_DISTRIBUTION_REVIEW_RECORDED` confirms the record matches the inspected JAR and that the scanner found no known blocker. Reviewers determine the applicable terms and verify all content. Repeat the review for each source archive, binary and image that will be distributed. [ASF distribution licensing requirements](https://www.apache.org/legal/release-policy.html#licensing)
 
 The project-level LICENSE and NOTICE depend on the source rights review. Record the contribution rights and provenance of code, assets and vendor components before preparing those files. For a new podling, follow the initial codebase process in the Incubator's podling IP guide. [Podling IP clearance](https://incubator.apache.org/guides/ip_clearance.html)
 
