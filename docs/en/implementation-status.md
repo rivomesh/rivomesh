@@ -24,10 +24,10 @@ The SDD contains the current totals and requirements. The verification archive d
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
 | JV-01 | Temurin 21 is the current release baseline for Controller, Agent and Worker. |
 | LG-07 | Verified capacity matrix, 256 database mappings, large transactions and shared-journal backpressure with resume. |
-| SO-02 | MySQL 5.7.44 V3 in three historical topologies, including replica SQL failure and binlog-loss refusal. Temurin 21 passed the standalone profile. |
-| SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery |
+| SO-02 | MySQL 5.7.44 V3 in three historical topologies, including replica SQL failure and binlog-loss refusal. Temurin 21 passed the standalone and async GTID profiles. |
+| SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery. Temurin 21 passed async GTID failover. |
 | SO-05 | MySQL 8.4.13 V3 topologies, log profile admission and unsupported live events |
-| SO-04 | MySQL 8.2.0 V3 with historical standalone, GTID async and single-primary MGR results. Temurin 21 passed the standalone profile. |
+| SO-04 | MySQL 8.2.0 V3 standalone and GTID async on Temurin 21, plus historical single-primary MGR. |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.
 
@@ -35,9 +35,9 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 
 | Capability | Current boundary |
 |---|---|
-| Replication | MySQL multi-database fan-out, automatic tables, chunked snapshot, durable progress, keyless rows, JSON and supported generated columns. MySQL 8.4.13 async GTID promotion and single-primary Group Replication passed on Temurin 21. |
+| Replication | MySQL multi-database fan-out, automatic tables, chunked snapshot, durable progress, keyless rows, JSON and supported generated columns. Async GTID promotion passed on Temurin 21 for all four MySQL versions. MySQL 8.4.13 also passed single-primary Group Replication. |
 | PostgreSQL source | Synchronized-slot promotion on 17.12 and stored generated columns on 18.7 passed. Native 17.12 REAL and DOUBLE PRECISION replicate into PostgreSQL and MySQL. [Operator guide](postgresql-source.md) |
-| Oracle source | Oracle Free 26ai single-PDB Flashback and archived LogMiner CDC. Two PostgreSQL subscriptions preserve original SCNs through savepoint rollback and forced restart. The profile accepts strict text JSON and blocks native JSON when redo images are missing. [Source guide](oracle-source.md) |
+| Oracle source | Oracle Free 26ai single-PDB Flashback and archived LogMiner CDC. Two PostgreSQL subscriptions preserve original SCNs through savepoint rollback and forced restart. The profile accepts strict text JSON and the tested AL32UTF8 and AL16UTF16 character declarations. Preflight blocks native JSON when redo images are missing. [Source guide](oracle-source.md) |
 | Capture recovery | Inspect the original position and affected targets, verify MySQL GTID boundaries and original binlog bytes, and approve one verified source transaction exclusion on the bounded profile. [Operator guide](capture-recovery.md) |
 | Management | Bilingual wizard, shared revisions, isolated Workers and cross-entry control. Real Chrome verified retained sessions, report and receipt lookup, and approved report recovery. Keycloak 26.7.4 passed HTTPS code login with S256 PKCE and cross-entry revocation. [Global control](global-control.md) · [OIDC](oidc-login.md) |
 | Interrupted journal ACK | With a PostgreSQL journal, native tests cover a committed MySQL or PostgreSQL target. After the original Agent reconnects, explicit START completes only the missing ACK. Permanent original Agent loss still requires a durable fence and archived recovery evidence. [Operator guide](global-control.md#asymmetric-control-network-partition) |

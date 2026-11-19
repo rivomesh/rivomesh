@@ -24,10 +24,10 @@
 | RC-09 | 补偿与修正跨入口取消、提交前后强杀恢复，并按原请求核对凭据 |
 | JV-01 | Controller、Agent 和 Worker 当前统一使用 Temurin 21。 |
 | LG-07 | 硬件容量矩阵、256 个数据库映射、大事务和共享日志背压续传已实测。 |
-| SO-02 | MySQL 5.7.44 的 V3 历史档案覆盖三种拓扑、真实主从 SQL 线程故障及 binlog 缺失。Temurin 21 已补验单机。 |
-| SO-03 | MySQL 8.0.46 的 V3 三种拓扑及跨入口人工恢复 |
+| SO-02 | MySQL 5.7.44 的 V3 历史档案覆盖三种拓扑、真实主从 SQL 线程故障及 binlog 缺失。Temurin 21 已补验单机及异步 GTID 主备。 |
+| SO-03 | MySQL 8.0.46 的 V3 三种拓扑及跨入口人工恢复。Temurin 21 已补验异步 GTID。 |
 | SO-05 | MySQL 8.4.13 的 V3 三种拓扑、日志准入和会话级不支持事件的处理 |
-| SO-04 | MySQL 8.2.0 V3 原有单机、GTID 主从和单主组复制实库档案。Temurin 21 已补验单机。 |
+| SO-04 | MySQL 8.2.0 的单机和异步 GTID 已在 Temurin 21 补验，单主组复制另有既有实库档案。 |
 
 [单一验证基线](../verification/README.md)保存验收范围和可追溯摘要，不再维护开发迭代的逐次副本。清理后的最新回归与旧验收记录分开标记。
 
@@ -35,9 +35,9 @@
 
 | 能力 | 当前状态 |
 |---|---|
-| 同步链路 | MySQL 多库映射、同源多目标、自动建表、分块快照、持久断点、无主键行、JSON 和受支持生成列。MySQL 8.4.13 异步 GTID 提升和单主组复制已在 Temurin 21 实测。 |
+| 同步链路 | MySQL 多库映射、同源多目标、自动建表、分块快照、持久断点、无主键行、JSON 和受支持生成列。四个 MySQL 版本的异步 GTID 提升均已在 Temurin 21 实测。8.4.13 另通过单主组复制。 |
 | PostgreSQL 源 | 已实测 17.12 逻辑槽切换续传及 18.7 存储型生成列。17.12 的 REAL 和 DOUBLE PRECISION 可复制到 PostgreSQL 与 MySQL。 [配置与恢复](postgresql-source.md) |
-| Oracle 源 | Oracle Free 26ai 单 PDB 的 Flashback 和归档 LogMiner 已通过。两路 PostgreSQL 保留原 SCN，支持保存点回滚及强制重启。严格文本 JSON 已验收，缺少重做镜像的原生 JSON 在预检拦截。 [源库手册](oracle-source.md) |
+| Oracle 源 | Oracle Free 26ai 单 PDB 的 Flashback 和归档 LogMiner 已通过。两路 PostgreSQL 保留原 SCN，支持保存点回滚及强制重启。严格文本 JSON 和限定 AL32UTF8、AL16UTF16 字符类型已验收。预检拦截缺少重做镜像的原生 JSON。 [源库手册](oracle-source.md) |
 | 采集故障恢复 | 检查原断点及受影响目标，核对 MySQL GTID 边界和原始日志，限定档案支持审批后排除一个已核验事务。 [操作说明](capture-recovery.md) |
 | 管理 | 中英文向导、共享修订、独立 Worker 和跨入口控制。真实 Chrome 已验证登录保持、报告和回执检索、审批后恢复报告。Keycloak 26.7.4 已通过 HTTPS 授权码、S256 PKCE 和跨入口撤权。 [全局控制](global-control.md) · [OIDC](oidc-login.md) |
 | 日志 ACK 中断 | 共享 PostgreSQL 日志下，已实测 MySQL 或 PostgreSQL 目标先提交。原 Agent 重连并显式启动后只补缺失 ACK。永久丢失原 Agent 的接管仍缺持久围栏和完整恢复归档。 [操作手册](global-control.md#控制网络非对称分区) |

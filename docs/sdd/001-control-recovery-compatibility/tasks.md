@@ -125,7 +125,7 @@ RM-SDD-001 · 2026-11-17
   - [x] BasicFiles 与 SecureFiles 的 BLOB/CLOB 实库证据、受限账号分型预检和独立迁移说明。
   - [x] 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。
   - [x] 原生二进制 JSON 的受限预检、LogMiner 无镜像证据和 JDBC Flashback 诊断通过。
-  - [x] AL32UTF8 和 AL16UTF16 实库字符诊断已核对 40 个变更及 60 个镜像。当前支持两种 VARCHAR2 长度声明，CHAR/NCHAR/NVARCHAR2 正在接入。
+  - [x] AL32UTF8 和 AL16UTF16 实库诊断已核对 40 个变更及 60 个镜像。声明不超过 4000 字节的 CHAR、NCHAR 和 NVARCHAR2 已通过两路 PostgreSQL 重启验收，保留原 SCN 和填充空格。
   - [ ] 其他表达式、二进制 JSON、LOB 完整镜像采集与 RAC 切换。
 ## Java运行时兼容
 
@@ -135,7 +135,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-JV-02 · Java 21 源、目标及恢复组合 · P1 · 依赖：JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
   交付：各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。
   验收：AC-JV-02
-  - [x] Temurin 21 实库覆盖四个 MySQL 版本的单机档案，以及 MySQL 8.4.13 异步 GTID 提升和单主组复制。
+  - [x] Temurin 21 实库覆盖四个 MySQL 版本的单机与异步 GTID 切主。8.4.13 另通过异步 GTID 双目标续传和单主组复制。
   - [ ] 在 Temurin 21 扩展源拓扑、目标驱动和恢复场景的验收。
 - [ ] T-JV-03 · 驱动隔离、依赖与安全协议兼容 · P1 · 依赖：JV-01
   交付：验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。

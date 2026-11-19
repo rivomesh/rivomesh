@@ -13548,5 +13548,55 @@
     "targetVersion": "PostgreSQL 17.12",
     "scope": "One Oracle Free 26ai PDB on AL32UTF8 and AL16UTF16. CHAR, NCHAR and NVARCHAR2 declarations are bounded to 4000 dictionary bytes. Two independent subscriptions on one PostgreSQL instance retain the original twelve snapshots and byte-identical Flashback values after Controller and Worker SIGKILL.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --pipeline --character-pipeline"
+  },
+  "temurin21MySqlAsyncGtidFailoverMatrix": {
+    "status": "PASS",
+    "artifactSha256": "fba330c1f5306588c86a3bfd2e408a1476306a2c7ea34c062c9c591929334321",
+    "runtimeVersion": "openjdk version \"21.0.12.1\" 2026-08-18 LTS",
+    "targetVersion": "PostgreSQL 17.12",
+    "journal": "PostgreSQL 17.12",
+    "profiles": [
+      {
+        "sourceVersion": "5.7.44",
+        "sourceImageId": "sha256:5107333e08a87b836d48ff7528b1e84b9c86781cc9f1748bbc1b8c42a870d933",
+        "architecture": "amd64",
+        "nativeScenariosPassed": 1,
+        "logSha256": "908416bd1c1b09e382c578fcaeedd62ae6592c6208bd1b12b110db30c621568e"
+      },
+      {
+        "sourceVersion": "8.0.46",
+        "sourceImageId": "sha256:b7e118f56c5963e079252e0d6e2978c9c010eb7fc7aaaec100e367796b5dd08f",
+        "architecture": "arm64",
+        "nativeScenariosPassed": 1,
+        "logSha256": "7c1468d3669af3396e4582c9e01b8e5da2ce1b1c460893b125115c238c50c577"
+      },
+      {
+        "sourceVersion": "8.2.0",
+        "sourceImageId": "sha256:a76e521c029290a5e42acd182b67a66b8bf1c42045e4a6977ee21e46a5fe6083",
+        "architecture": "arm64",
+        "nativeScenariosPassed": 1,
+        "logSha256": "2664fa6e2daf9f6809ef0532c9d12f46270f1f7a333d4d418dd11f59d2530a83"
+      },
+      {
+        "sourceVersion": "8.4.13",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "architecture": "arm64",
+        "nativeScenariosPassed": 1,
+        "logSha256": "0297e21a02dee77d23d57c051185ff5c86b3d0747a86a95c986465e4a178cd63"
+      }
+    ],
+    "nativeScenariosPassed": 4,
+    "fixtureContainersRemaining": 0,
+    "fixtureNetworksRemaining": 0,
+    "fixtureVolumesRemaining": 0,
+    "firstFixtureFailure": "The first 5.7 attempt stopped before the pipeline test in offline Maven plugin resolution. The exact prebuilt run passed without rebuilding the release artifact.",
+    "checks": [
+      "One source primary and replica use asynchronous GTID replication",
+      "Concurrent Workers take over after owner termination and increment the journal epoch",
+      "A real 1032 SQL error prevents the unhealthy replica from being accepted as primary",
+      "After real primary shutdown and external promotion, the same pipeline applies the new primary changes and retains its original snapshot",
+      "Purging the uncaptured range blocks capture and preserves the exact prior checkpoint and sequence"
+    ],
+    "reproduce": "RIVOMESH_TEST_PREBUILT=1 SYNC_V3_HA_POSTGRES_ONLY=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 bash tests/v3-ha-run.sh"
   }
 }

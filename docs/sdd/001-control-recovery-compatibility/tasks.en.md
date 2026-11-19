@@ -125,7 +125,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Native BasicFiles and SecureFiles BLOB/CLOB archive evidence, storage-specific restricted-role preflight and independent migration instructions.
   - [x] Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN.
   - [x] Native binary JSON preflight refusal, missing LogMiner images and independent JDBC Flashback diagnostics passed.
-  - [x] Native AL32UTF8 and AL16UTF16 diagnostics match 40 character changes and 60 images. Both VARCHAR2 length forms passed preflight. CHAR, NCHAR and NVARCHAR2 implementation remains.
+  - [x] Native AL32UTF8 and AL16UTF16 diagnostics match 40 character changes and 60 images. CHAR, NCHAR and NVARCHAR2 up to 4000 dictionary bytes passed restart on two PostgreSQL subscriptions with original SCNs and exact padding.
   - [ ] Other expressions, binary JSON, full LOB image capture and RAC promotion.
 ## Java runtime compatibility
 
@@ -135,7 +135,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
   Deliver: On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product.
   Acceptance: AC-JV-02
-  - [x] Temurin 21 native evidence covers four standalone MySQL versions and MySQL 8.4.13 async GTID promotion and single-primary Group Replication.
+  - [x] Temurin 21 passed standalone and async GTID failover on all four MySQL versions. MySQL 8.4.13 also passed two-target async continuation and single-primary Group Replication.
   - [ ] Extend Temurin 21 acceptance across source topologies, destination drivers and recovery cases.
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.

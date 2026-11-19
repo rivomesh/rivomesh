@@ -53,14 +53,14 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
 | SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 PostgreSQL 17.12 扩展 NUMERIC 标度已实测 PostgreSQL 和 MySQL 双目标，涉及源端舍入、65 位精度、无主键重数及 NaN 整笔暂停。 PostgreSQL 17.12 的有限 REAL 与 DOUBLE PRECISION 已实测映射到 PostgreSQL 和 MySQL。相邻浮点、次正规数、无主键重复及原位重启保留值。非有限值阻断整笔事务。 |
-| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。 Oracle Free 26ai 原生 JSON 档案已实测缺少前后镜像。受限 JDBC Flashback 能读取，当前源预检拒绝该类型，尚无可靠增量档案。 AL32UTF8 和 AL16UTF16 实库字符诊断已核对 40 个变更及 60 个镜像。当前支持两种 VARCHAR2 长度声明，CHAR/NCHAR/NVARCHAR2 正在接入。 |
+| SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。 Oracle Free 26ai 原生 JSON 档案已实测缺少前后镜像。受限 JDBC Flashback 能读取，当前源预检拒绝该类型，尚无可靠增量档案。 AL32UTF8 和 AL16UTF16 实库诊断已核对 40 个变更及 60 个镜像。声明不超过 4000 字节的 CHAR、NCHAR 和 NVARCHAR2 已通过两路 PostgreSQL 重启验收，保留原 SCN 和填充空格。 |
 
 ## Java运行时兼容
 
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | 首版仅使用 Temurin 21 LTS。已实测四个 MySQL 版本的单机全量与增量、MySQL 8.4.13 异步 GTID 双目标续传与三节点单主组复制，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。 |
+| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | 首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量及异步 GTID 切主。8.4.13 另通过异步 GTID 双目标续传和三节点单主组复制。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 Pulsar 4.0.14 已实测单 Broker 的私有 CA、Token、拒绝错误主机名和重启续传。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 

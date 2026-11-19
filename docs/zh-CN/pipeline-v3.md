@@ -78,6 +78,8 @@ MySQL 8.4 使用无标签 GTID、ROW binlog 和 FULL 行镜像。预检拒绝匿
 
 Java 21 实库档案使用 MySQL 8.4.13 异步 GTID 主备、外部 PostgreSQL 日志、两个管理入口和 PostgreSQL、MySQL 目标。强杀原主后，两入口显示采集中断，两个目标断点保持原值。外部流程完成提升后，Rivomesh 把新主的 GTID 自动投递到两个目标，并复用配置修订、日志代次和快照 ID。复现命令为 `python3 tests/global-control-pipeline.py --separate-execution --mysql-async-failover --source-expected-version 8.4.13 --artifact <发布包> --output target/mysql-async-proof`。[验收归档](../verification/README.md)
 
+另一组 Temurin 21 实测使用同一发行包，以 PostgreSQL 17.12 为目标和日志库，分别运行 MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13。用例终止原 Worker、制造真实复制 SQL 线程 1032 错误并拒绝不健康副本，再恢复复制并关停原主。外部提升后，核对原快照 ID 和新写入目标的行。清除尚未采集的 binlog 区间时，采集停在原日志断点。构建发行 JAR 和测试类后，用 `RIVOMESH_TEST_PREBUILT=1 SYNC_V3_HA_POSTGRES_ONLY=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 bash tests/v3-ha-run.sh` 复现。5.7 另设 `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7`。
+
 ### MySQL 8.4 单主组复制故障恢复
 
 设置 `source.topology: GROUP_REPLICATION`，在 `source.nodes` 中配置同一个单主组的成员。MySQL 选举可写主库。Rivomesh 核验候选节点在线、可写且保留所需的 GTID 历史。旧主重启后应保持 MySQL 超级只读，直到重新入组。组复制要求被复制的表具备主键或等效唯一键。[单主模式](https://dev.mysql.com/doc/refman/8.4/en/group-replication-single-primary-mode.html) · [组复制要求](https://dev.mysql.com/doc/refman/8.4/en/group-replication-requirements.html)
