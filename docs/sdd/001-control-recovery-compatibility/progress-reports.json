@@ -2,29 +2,21 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T18:58:16+08:00",
-  "nextReportAt": "2026-11-19T19:58:16+08:00",
+  "lastReportAt": "2026-11-19T19:58:34+08:00",
+  "nextReportAt": "2026-11-19T20:58:16+08:00",
   "completedSincePrevious": [
-    "The license inventory now blocks project-level LICENSE/NOTICE slots occupied by verified dependency documents. Normal and external vendor artifacts were audited. Pushed e9ff2fd.",
-    "Kafka notice approval gained an original-approver sender prerequisites check and exact native-read requirement on prototype receipt replay. The focused package passed 137 Java and 165 DOM cases. Pushed d7e84c6.",
-    "The exact Temurin 21 full regression record now includes 664 passing application cases, 35 optional skips, 164 DOM, 14 actual Chrome and 25 configuration examples. Pushed 4e579ca.",
-    "Shared PostgreSQL durable writer freeze and independent closed receipt custody passed 18 native checks with two live SQL targets. Restart, ordinary and direct CLI writer refusal, and a stopped same-directory cancellation preserve the exact cuts. Pushed 7d04628.",
-    "Real Redis 8.0.2 TLS/ACL checks preserved the exact stream across AOF cold restart. Untrusted CA, absent SAN and bad credentials are refused before writing. Pushed 9ebfe11.",
-    "Real Kafka 3.9.2 three-node TLS/SCRAM verified a single conditional approval and both Controller views. Same-name UUID replacement and a later configuration are rejected. All broker offsets and both ACKs remain unchanged. Pushed 18e79e4.",
-    "Two actual shaded packages started after synthetic release document assembly. The reviewed-input preparer retains dependency documents and removes known blocker collisions in the candidate's outer project slots. Rights verification remains independent. Pushed 6e1e159.",
-    "Oracle 26ai archived DDL fingerprint fixes the exact blocked SCN, record set and SQL hash. Eighteen native checks demonstrate that later DDL/DML leaves the original failure, snapshot and target receipts stable. Pushed 6306238.",
-    "The exact released offline ownership transition passed 22 native checks. Two SQL target fences and explicit candidate START resume the three original journal snapshots. Current grants remain valid after an unrelated account change, and the former original cannot reclaim ownership. Pushed 2bb7f1e.",
-    "A frozen handoff displays its authenticated freeze time in either language. Both ordinary and frozen display cases passed in 167 DOM checks. Pushed 138f224.",
-    "The full Temurin 21 package passed 683 application cases, 167 DOM checks, 14 real Chrome checks and 25 provided configuration examples. Thirty-five optional integration cases were skipped. Pushed ca11b8c.",
-    "Native MySQL V3 automatic placement refuses both unreachable Agents without writing authority. After making the external PostgreSQL journal reachable to only one Agent, it commits once across two entrances. Only explicit START initializes and writes the selected journal. Pushed 98d8a60."
+    "PostgreSQL 17.12 AUTO source placement passed four native cases with two Controllers and Agents. An unavailable journal leaves zero task, version and CREATE rows. The eligible node starts both SQL targets using the original logical slot. Pushed bab7e1e.",
+    "Aligned both languages for Hive external PostgreSQL Metastore and removed outdated multi-JDK coverage expectations from the Doris and Kingbase guides. Pushed 9f72f23.",
+    "The same Temurin 21 package passed four native three-member single-primary Group Replication profiles on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. Each elected a replacement after primary shutdown during a snapshot and caught up both SQL targets. Pushed 6c28138.",
+    "ClickHouse 25.8.33.6 on Temurin 21 refused a physically restored older nonempty target, preserving the journal-backed sequence 3. Native index, keyless row and replay checks passed. Pushed 0e2f631.",
+    "PostgreSQL 17.12 BYTEA/TOAST passed eight native checks on PostgreSQL and MySQL targets. Larger binary values and keyless multiplicity survive Worker SIGKILL using the original slot, generation and five snapshots. Pushed bc8898c.",
+    "Standard Temurin 21 full regression passed 691 application checks, 167 DOM, 14 real Chrome and 25 configurations. Thirty-five optional checks were skipped. The run recorded and corrected the macOS temporary directory symlink. Pushed 5947a1e.",
+    "A PostgreSQL source default of escape reproduced a CDC stall after snapshot on the old package. The logical session now sets its own hex format. Both escape and hex source configurations passed eight native checks each and retain both SQL target cuts. Pushed aa39de1.",
+    "Published the grouped completion conditions for all 12 unfinished SDD requirements and updated the bilingual implementation status with new native coverage. Pushed 7c9baf7.",
+    "Native MySQL and two real Kafka targets passed five managed LOCAL first-send and recovery checks. Scoped failure isolation, Agent restart, old Worker fencing and the full 698-case application regression passed. Pushed 3f11d21."
   ],
   "inProgress": [
-    "CP-04 native frozen-offline transfer now passes, including separate SQL fence and START and prior original-directory return. Bounded automatic placement with PostgreSQL journal passes and is published. Abrupt loss before sealing, other adapters and broader topology remain.",
-    "LG-05 independent control/journal storage and unsealed abrupt prior loss still require durable independent evidence. The same-database closed-receipt archive is verified.",
-    "SO-07 and LG-08 Oracle DDL review now binds the original archived record to its fault generation. Reviewed apply, native binary JSON and LOB images, and RAC remain.",
-    "RC-10 native Kafka sender prerequisites pass. Complete historical route evidence is required before a publish action. Other destination recovery protocols remain under development.",
-    "LG-01 and LG-04 the remaining RocketMQ full Worker and OceanBase native attempts need more Docker VM storage.",
-    "LG-10 package preparation now accepts only reviewed, digest-bound inputs. Actual project rights and required notices, commercial test systems and AWS remain independent."
+    "RC-10 is the sole active requirement at the user's request. Native first-send isolation, explicit resume, restart and fencing are published. Complete historical attribution and physical Topic ID-addressed notices remain open."
   ],
   "reportContents": [
     "Current totals",
@@ -39,18 +31,15 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "e9ff2fd",
-    "d7e84c6",
-    "4e579ca",
-    "7d04628",
-    "9ebfe11",
-    "18e79e4",
-    "6e1e159",
-    "6306238",
-    "2bb7f1e",
-    "138f224",
-    "ca11b8c",
-    "98d8a60"
+    "bab7e1e",
+    "9f72f23",
+    "6c28138",
+    "0e2f631",
+    "bc8898c",
+    "5947a1e",
+    "aa39de1",
+    "7c9baf7",
+    "3f11d21"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -58,24 +47,22 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Retain exact release-artifact automatic placement proof and extend remaining profiles where preflight can safely prove connectivity and runnable components.",
-    "Extend the bounded handoff, connector recovery, and reviewed source DDL across their remaining profiles where exact native environments are available.",
-    "Repeat native RocketMQ and OceanBase runs with enough Docker VM storage. Verify distributed commercial GaussDB, Oracle RAC and cloud security deployments in their actual environments."
+    "Continue RC-10 only. Verify physical Topic ID addressing and independently retained route history before enabling approved recovery notices."
   ],
-  "currentCandidateArtifact": "2905f5a4dc9ac3d0fd1070f3d4797720b32998befd5b56c242c3b2e0c9442469",
-  "currentCandidateScope": "Published automatic placement passed 125 focused Java, 167 DOM and four exact uninstrumented native checks. Frozen offline ownership passed 22 native checks using its distinct exact package. The full runtime reactor holds separate exact digests.",
+  "currentCandidateArtifact": "29052847a2b02d758a95abef41d7273859c6ff8bcb881895a5fc8aa7d632fbdc",
+  "currentCandidateScope": "Exact Temurin 21 release with native LOCAL Kafka first-send evidence, independent subscription recovery and revoked Worker fence.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [],
-  "lastScheduledReportAt": "2026-11-19T18:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-19T19:58:16+08:00",
   "lastVerifiedReactor": {
-    "baseCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
-    "artifactSha256": "2a2c91cf1837a037e0c6da547b957f96929bb3d74be37947509bb06bca475966",
-    "javaTestsPassed": 683,
+    "baseCommit": "aa39de119e4a5c04a6ab75403eca3908eb6c34b3",
+    "artifactSha256": "29052847a2b02d758a95abef41d7273859c6ff8bcb881895a5fc8aa7d632fbdc",
+    "javaTestsPassed": 698,
     "optionalSkips": 35,
     "domTestsPassed": 167,
     "nativeChromeChecksPassed": 14,
     "configurationExamplesPassed": 25,
-    "scope": "Full Temurin 21 release reactor and exact browser/configuration checks."
+    "scope": "Full standard release and browser/configuration checks on the exact packaged artifact."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
@@ -102,7 +89,7 @@
   "runtimeScope": {
     "supported": "Eclipse Temurin 21 LTS",
     "policyCommit": "0727c95",
-    "priorReportCommit": "5a1d19d263db5dc3975b39c14a01d3c1b3efad54"
+    "priorReportCommit": "3aa4b0d1b410e9c1afd91f271bec978d419f1e6f"
   },
   "remainingRequirements": [
     "CP-04",
@@ -119,19 +106,31 @@
     "LG-10"
   ],
   "cleanupSincePrevious": {
-    "retiredApplicationJarsRemoved": 3,
-    "intermediateSdkCopiesRemoved": 50,
-    "logicalBytesRemoved": 2750603330,
-    "scope": "Removed only old Java 17 application builds and intermediate Hive SDK copies with duplicate bytes in both Maven cache and retained app archives. Native fixture resources were cleaned after each isolated run."
+    "checkedNamedFixtureResources": true,
+    "logicalBytesRemoved": 0,
+    "scope": "Per-run named test containers, networks and volumes are removed. No unrelated Docker images or host data were pruned."
   },
   "previousVerifiedReactor": {
-    "baseCommit": "309feaf6e902f4ebdc9d9d0c47f1007aa988d019",
-    "artifactSha256": "56b3bc67f2250b98057be8a8dbd2ccf44e2a772481bb9ebf6c0bf8d015e249cf",
-    "javaTestsPassed": 654,
+    "baseCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
+    "artifactSha256": "2a2c91cf1837a037e0c6da547b957f96929bb3d74be37947509bb06bca475966",
+    "javaTestsPassed": 683,
     "optionalSkips": 35,
-    "domTestsPassed": 162,
+    "domTestsPassed": 167,
     "nativeChromeChecksPassed": 14,
     "configurationExamplesPassed": 25,
-    "scope": "Full standard Eclipse Temurin 21 reactor with separate configuration and browser provenance. Later package-specific verification records use distinct hashes."
-  }
+    "scope": "Full Temurin 21 release reactor and exact browser/configuration checks."
+  },
+  "pausedRequirements": [
+    "CP-04",
+    "SO-06",
+    "SO-07",
+    "JV-02",
+    "JV-03",
+    "LG-01",
+    "LG-03",
+    "LG-04",
+    "LG-05",
+    "LG-08",
+    "LG-10"
+  ]
 }
