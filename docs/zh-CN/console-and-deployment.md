@@ -124,7 +124,7 @@ Chart 已提供持久化、防提权、只读根文件系统、临时目录、�
 
 ## 开发验证
 
-Maven verify 运行单元/API 测试，tests/matrix.sh 运行 MySQL 8.0/8.4 与 openGauss 的平台和既有故障回归。
+Maven verify 运行单元和 API 测试。在 Eclipse Temurin 21 LTS 上，`tests/matrix.sh` 默认测试 MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 的 V3 单机、GTID 主从切换和组复制档案。
 可选 npm ci --prefix tests/ui --ignore-scripts 后执行 npm test --prefix tests/ui，验证实际 HTML/JavaScript 的 DOM 交互；仅开发测试需要相应 Node 版本，服务运行不需要 Node。
 构建镜像后执行 python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT，检查 Helm/原生清单一致性及非 root 镜像、鉴权、配置权限、重复请求和卷恢复。脚本只删除自己创建的测试容器与卷，不部署到用户 K8s 集群。
 原生 Chrome 测试打开实际控制台，验证键盘登录、刷新续登、诊断弹窗的可访问名称与移动端布局。更多操作和浏览器另行验收。[浏览器记录](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)

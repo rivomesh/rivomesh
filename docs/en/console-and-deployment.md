@@ -124,7 +124,7 @@ Manifests include persistence, restricted privileges, read-only root filesystem,
 
 ## Development verification
 
-Maven verify runs unit/API tests; tests/matrix.sh covers platform and existing failover behavior on MySQL 8.0/8.4 with openGauss.
+Maven verify runs unit and API tests. With Eclipse Temurin 21 LTS, `tests/matrix.sh` defaults to the V3 standalone, asynchronous GTID failover and Group Replication profiles for MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13.
 Optionally run npm ci --prefix tests/ui --ignore-scripts and npm test --prefix tests/ui for the actual HTML/JavaScript DOM interactions. Node is a development-test dependency only, not a service requirement.
 After building, python3 tests/deployment-check.py --image rivomesh:0.1.0-SNAPSHOT checks Helm/native parity, nonroot image, authentication, file permissions, request replay, and volume recovery. It removes only its own containers/volumes and never deploys into user Kubernetes clusters.
 A Chrome smoke test opens the real console, signs in with the keyboard, verifies session restoration after reload and checks the accessible diagnostics dialog and mobile viewport. Broader workflows and browsers have separate acceptance. [Browser record](../verification/README.md#worker-diagnostic-events-and-chrome-smoke)
