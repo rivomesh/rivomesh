@@ -97,6 +97,8 @@ java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
 
 达梦实库档案使用同一种候选包，部署方的 classpath 只添加外置 Connector/J 和达梦驱动。实测涵盖连接认证、驱动加载来源、缺驱动拒绝、达梦原生错误处理和数据库重启后重连。[达梦实库复现](dm-v3.md#java-21-外置达梦驱动实库验收)
 
+金仓目标实库档案的候选包只添加外置金仓 JDBC。测试核对驱动来源和连接认证，并核验中断后在同一地址恢复时的事务回执和重放行为。[金仓实库复现](kingbase-v3.md#java-21-外置金仓驱动实库验收)
+
 ### 分发审核记录
 
 人工审核完成后，运行清单命令并附加 `--asf-review target/candidate/distribution-review.json`。审核记录包含以下字段。

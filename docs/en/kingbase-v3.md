@@ -53,6 +53,18 @@ The same actual release also passed cross-schema business/checkpoint rollback, r
 
 With a lawful compatible image available, run `bash tests/kingbase-pipeline-run.sh`; override `RIVOMESH_KINGBASE_IMAGE` for the same-layout build. The test uses actual release-JAR workers with isolated MySQL8.4/PostgreSQL17/Kingbase services and removes only its own project/volumes. Initialization explicitly selects PG/UTF8 without case-insensitive initialization, running the native server as the image's kingbase user, without sudo/systemd/privileged. Different image layouts require fixture changes; replacing a version tag alone is not acceptance.
 
+### Native Kingbase connection with an external Java 21 driver
+
+The external-vendor candidate on Temurin 21.0.13 loads the operator-provided `kingbase8-9.0.1.jar` and connects to KingbaseES V009R001C001B0025 ARM64 in PG/UTF8 mode. The test checks the driver's JAR origin and verifies that an invalid password returns SQLSTATE `28P01`. It uses synthetic row inputs through the packaged transactional sink to verify UINT64, DECIMAL(65,30), JSON and atomic rollback. After the same endpoint restarts, the sink keeps its snapshot and receipt, fences the old epoch and applies the next transaction once.
+
+Use a Java 21 JDK, the compatible local image and the [external vendor JDBC candidate](release-inventory.md#candidate-with-external-vendor-jdbc-drivers).
+
+```bash
+python3 tests/kingbase-external-jdbc-native.py --artifact "$candidate" \
+  --kingbase-driver "$kingbase_driver" --java "$JAVA_HOME/bin/java" \
+  --output target/kingbase-external-jdbc-native
+```
+
 - [Official JDBC guide](https://docs.kingbase.com.cn/cn/KES-V9R1C10/quick_start/access_tool/java/jdbc/)
 - [Official Docker guide](https://help.kingbase.com.cn/v8/install-updata/install-docker/install-docker-1.html)
 - [Official parameter guide](https://help.kingbase.com.cn/v8/faq/faq-new/parameter.html)

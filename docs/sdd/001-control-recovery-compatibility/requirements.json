@@ -1193,8 +1193,8 @@
         "en": "Driver isolation,dependencies and TLS compatibility"
       },
       "gap": {
-        "zh-CN": "Java 21 已实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动的实连精度、原生 SQL 错误、故障续传和修正。已核对 MySQL 与四个厂商 JDBC 外置加载。其他厂商、TLS 及集群组合待验。",
-        "en": "Java 21 verified native MySQL/PostgreSQL TLS and reconnect, plus external Dameng JDBC class origin, native precision, SQL diagnostics, reconnect and repair. MySQL and four vendor JDBC packages have verified external classpath admission. Other vendor endpoints, TLS and cluster profiles remain."
+        "zh-CN": "Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。",
+        "en": "Java 21 verified MySQL/PostgreSQL TLS and reconnect, external Dameng native SQL repair, and external Kingbase native authentication, precision, reconnect and receipt continuation. Five external JDBC paths have verified classpath admission. Further vendor TLS and cluster profiles remain."
       },
       "acceptance": {
         "zh-CN": "验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。",
@@ -1209,7 +1209,8 @@
         "tests/global-control-pipeline.py",
         "tests/postgres-source-run.py",
         "tests/mysql-tls-run.py",
-        "tests/dm-external-jdbc-native.py"
+        "tests/dm-external-jdbc-native.py",
+        "tests/kingbase-external-jdbc-native.py"
       ]
     },
     {

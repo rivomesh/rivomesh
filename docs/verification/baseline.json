@@ -9040,5 +9040,60 @@
     "manifestSha256": "74be1a743efccaa74c91934f9c92f8681f5799ca878529e0a078bd38dce6d58d",
     "scope": "Native Hive 4.0.1 with standalone Metastore, a dedicated PostgreSQL 17.12 catalog, local warehouse volumes, MySQL 8.4.13 capture and an independent PostgreSQL 17.12 business target. Stock catalog schema validation, preserved physical catalog and warehouse identity, service restart, Worker restart, exact receipts and isolated SQL repair passed.",
     "reproduce": "RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh --postgres-metastore /path/to/postgresql-42.7.14.jar"
+  },
+  "kingbaseJava21ExternalJdbcNative": {
+    "native": {
+      "status": "PASS",
+      "project": "rivomesh-kingbase-external-e568d76ae2",
+      "runtime": [
+        "openjdk version \"21.0.13\" 2026-10-20 LTS",
+        "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+        "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+      ],
+      "source": "synthetic row inputs",
+      "artifactSha256": "520aecc1fff7de42aaf4c51ea45b61d56a2a333675a88008bae56a3b0f3807ce",
+      "driverSha256": "662ad6f0646cc3fb9b552c9fff93e09bf9eb12e4a9f33f0dec18a624cb48104c",
+      "fixtureSha256": "541d0c6720073d173edd18c279f105510ced60cd7bf76b3481b6e12f4ae2f927",
+      "profileSha256": "f94054e2889af529bcfc89fdeb27acd4d2451a13d53c2aa0eb5ecc307d9f4ff3",
+      "composeSha256": "ab0e02a1606c3271839ec2a12a2786e84bf0a0d70da22f2f769bd2ccb0cc2828",
+      "checks": [
+        "KINGBASE_EXTERNAL_MISSING_DRIVER_ACCEPTED",
+        "KINGBASE_EXTERNAL_ORIGIN_AND_AUTH_ACCEPTED",
+        "KINGBASE_EXTERNAL_TYPES_AND_ATOMICITY_ACCEPTED",
+        "KINGBASE_EXTERNAL_OUTAGE_ACCEPTED",
+        "KINGBASE_EXTERNAL_RECONNECT_REPLAY_ACCEPTED"
+      ],
+      "imageId": "sha256:ac53980f8e722186239f4eb4ab9c1c357cae92d82ef76f0bbb6c37b393e16e87",
+      "startScriptSha256": "f5a7a28783bef0d04e552a409d8472b9a1d0b5f4dbb99b197b6c71f8e36fabaf",
+      "sameEndpointAcrossRestart": true,
+      "nativeProfile": {
+        "authenticationRefusal": "28P01",
+        "driverVersion": "V008R006B0001",
+        "encoding": "UTF8",
+        "mode": "pg",
+        "product": "KingbaseES",
+        "synchronousCommit": "on",
+        "version": "KingbaseES V009R001C001B0025 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 20150623 (NeoKylin 4.8.5-36), 64-bit"
+      },
+      "nativeReceipts": {
+        "after": {
+          "epoch": 2,
+          "sequence": 2,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2",
+          "transactionHash": "ed467c736b1489fd4242eff921dea2d41460cc11f1249a83631d2eb03952e978"
+        },
+        "before": {
+          "epoch": 1,
+          "sequence": 1,
+          "transactionId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1",
+          "transactionHash": "d5b0610eb0b0aa8f22388ed56b386bb1774bab2f4a200bcae78c78d4c17154ac"
+        },
+        "snapshotId": "e079fdf5-81e1-4f0b-a5ad-b0200a88a104"
+      },
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "ec98ec641da5143396a96e6171064ed984e8c510a37d32e57536d47963f0909b",
+    "scope": "One real KingbaseES V009R001C001B0025 ARM64 PG/UTF8 target, vendor-supplied Kingbase JDBC Maven artifact kingbase8-9.0.1 and the external vendor JDBC Temurin 21 package. Synthetic transaction inputs drive packaged JDBC target paths. Real SCRAM-role authentication, native types, duplicate-key rollback, restart, persisted checkpoint and deterministic replay passed.",
+    "reproduce": "Follow the external JDBC fixture command in docs/en/kingbase-v3.md."
   }
 }

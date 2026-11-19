@@ -61,7 +61,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
 | JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。 |
-| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 已实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动的实连精度、原生 SQL 错误、故障续传和修正。已核对 MySQL 与四个厂商 JDBC 外置加载。其他厂商、TLS 及集群组合待验。 |
+| JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 
 ## 完整文档

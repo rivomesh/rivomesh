@@ -97,6 +97,8 @@ java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
 
 The native Dameng profile uses this same candidate with only the external Connector/J and Dameng driver files on the operator classpath. It verified actual authentication and driver origins, missing-driver refusal, Dameng error handling and reconnect after a database restart. [Dameng native reproduction](dm-v3.md#native-dameng-connection-with-an-external-java-21-driver)
 
+The native Kingbase target profile runs the candidate with only its external Kingbase JDBC JAR. It exercises actual authentication and class origin, then verifies native transaction receipts and replay through the same endpoint after an outage. [Kingbase native reproduction](kingbase-v3.md#native-kingbase-connection-with-an-external-java-21-driver)
+
 ### Distribution review record
 
 Run the inventory with `--asf-review target/candidate/distribution-review.json` to check an exact JAR against a completed manual review. Use the following fields in that record.

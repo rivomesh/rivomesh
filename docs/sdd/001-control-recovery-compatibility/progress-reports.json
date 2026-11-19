@@ -54,7 +54,9 @@
     "The published evidence staging console passed 20 exact dual-Controller native checks including six real Chrome cases. Entry A staged and revalidated, entry B checked and released. Task revision and all cuts remained exact.",
     "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development.",
     "The exact bbe4fc8 Temurin 21 normal packaging reactor passed 576 app and two isolated transport Java tests. Thirty-five explicitly optional external-profile tests skipped. Binary package gate passed.",
-    "LG-03 stable external PostgreSQL Hive Metastore rerun passed all seven native markers plus stock schema validation. Worker SIGKILL preserved the original snapshot and four exact catalog-bound Hive receipts. The isolated PostgreSQL constraint recovery did not alter Hive receipts. All disposable resources were cleared."
+    "LG-03 stable external PostgreSQL Hive Metastore rerun passed all seven native markers plus stock schema validation. Worker SIGKILL preserved the original snapshot and four exact catalog-bound Hive receipts. The isolated PostgreSQL constraint recovery did not alter Hive receipts. All disposable resources were cleared.",
+    "JV-03 Kingbase external JDBC native proof published. Five checks cover class origin, authentication, precision, atomic rollback, original endpoint restart and native receipt replay. One real vendor target with synthetic source row transactions.",
+    "Removed 110 generated outputs totaling 2,077,421,012 logical bytes, preserving packaged evidence and active test files."
   ],
   "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
   "lastVerifiedReactor": {
