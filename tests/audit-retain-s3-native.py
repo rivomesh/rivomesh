@@ -122,6 +122,55 @@ def fixture(workspace, minio, cli):
             assert base64.b64decode(envelope["checkpoint"], validate=True) == checkpoint.read_bytes()
             assert base64.b64decode(envelope["signature"], validate=True) == signature.read_bytes()
             print("VERSION_READBACK_HAS_EXACT_SIGNED_ARTIFACTS", flush=True)
+
+            event_command = [*command, "--retain-events"]
+            first = subprocess.run(event_command, env=aws_env, capture_output=True, text=True, timeout=30)
+            assert first.returncode == 0, first.stderr
+            event = json.loads(first.stdout)
+            assert event["status"] == "AUDIT_EVENT_ARCHIVE_RETAINED" and event["eventCount"] == 2
+            retry = subprocess.run(event_command, env=aws_env, capture_output=True, text=True, timeout=30)
+            assert retry.returncode == 0 and retry.stdout == first.stdout, retry.stderr
+            print("FULL_EVENT_ARCHIVE_RETRY_PRESERVES_VERSION", flush=True)
+
+            event_version = ("--bucket", bucket, "--key", event["key"], "--version-id", event["versionId"])
+            aws("delete-object", *event_version, expected_error="WORM protected")
+            event_path = workspace / "retained-events.jsonl"
+            aws("get-object", *event_version, "--checksum-mode", "ENABLED", str(event_path))
+            assert event_path.read_bytes().split(b"\n", 1)[1] == export.read_bytes()
+            verify = [sys.executable, "-B", str(fixtures.RETENTION), "--verify-event-archive", str(event_path),
+                      "--public-key", str(public), "--store-id", "scope-1"]
+            verified = subprocess.run(verify, env=aws_env, capture_output=True, text=True, timeout=30)
+            assert verified.returncode == 0, verified.stderr
+            assert json.loads(verified.stdout)["checksumSHA256"] == event["checksumSHA256"]
+            print("COMPLIANCE_EVENT_VERSION_RETURNS_EXACT_EVENTS_AND_VERIFIES_OFFLINE", flush=True)
+
+            previous, previous_signature = workspace / "previous.json", workspace / "previous.sig"
+            checkpoint.rename(previous)
+            signature.rename(previous_signature)
+            fixtures.export_window(export, 5, after=2)
+            fixtures.retention.audit.verify_export(export, anchor_out=checkpoint)
+            subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(private), "-out", str(signature),
+                            str(checkpoint)], check=True, capture_output=True, timeout=10)
+            continuity = ["--previous-checkpoint", str(previous), "--previous-signature", str(previous_signature)]
+            later = subprocess.run([*event_command, *continuity], env=aws_env, capture_output=True, text=True, timeout=30)
+            assert later.returncode == 0, later.stderr
+            later_receipt = json.loads(later.stdout)
+            assert later_receipt["fromExclusive"] == 2 and later_receipt["eventCount"] == 3 and later_receipt["sequence"] == 5
+            next_path = workspace / "next-events.jsonl"
+            aws("get-object", "--bucket", bucket, "--key", later_receipt["key"],
+                "--version-id", later_receipt["versionId"], "--checksum-mode", "ENABLED", str(next_path))
+            assert next_path.read_bytes().split(b"\n", 1)[1] == export.read_bytes()
+            verify[verify.index(str(event_path))] = str(next_path)
+            no_previous = subprocess.run(verify, env=aws_env, capture_output=True, text=True, timeout=30)
+            assert no_previous.returncode and "AUDIT_RETENTION_PREVIOUS_CHECKPOINT_REQUIRED" in no_previous.stderr
+            checked = subprocess.run([*verify, *continuity], env=aws_env, capture_output=True, text=True, timeout=30)
+            assert checked.returncode == 0 and json.loads(checked.stdout)["checksumSHA256"] == later_receipt["checksumSHA256"]
+            print("LATER_LOCKED_WINDOW_REQUIRES_THE_PREVIOUS_SIGNED_CUT", flush=True)
+
+            next_path.write_bytes(next_path.read_bytes().replace(b"event-data-only", b"event-altered"))
+            altered = subprocess.run([*verify, *continuity], env=aws_env, capture_output=True, text=True, timeout=30)
+            assert altered.returncode and "AUDIT_RETENTION_INPUT_UNREADABLE_OR_INVALID" in altered.stderr
+            print("ALTERED_VERSION_COPY_FAILS_EVENT_CHAIN_VERIFICATION", flush=True)
         finally:
             server.terminate()
             try:

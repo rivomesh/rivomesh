@@ -193,7 +193,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights.
   Acceptance: AC-LG-10
   - [x] The signed checkpoint retention tool can run on a schedule. MinIO verified the exact version and COMPLIANCE lock.
-  - [ ] Live AWS permissions, full event retention, external identity and source rights remain.
+  - [x] Full audit events and their signed head share one immutable version. Native storage verifies continuity, exact recovery and offline verification.
+  - [ ] Live AWS permissions, external identity and source rights remain.
 
 ## Recent deliverables (not additional parent requirements)
 

@@ -11408,5 +11408,38 @@
     "integratedHarnessSha256": "bf3e276d1b3eb59123582510aaa575d07f946847d0ced0db85cc4840a555b77f",
     "scope": "A single explicit ownership approval in the same PostgreSQL database with four independent staging failures, a live MySQL raw binlog ZIP, a signed PostgreSQL failed-transaction record, dual target cuts, both closed receipts and a candidate restart. Executable recovery, automatic commit after Controller loss, other storage and target profiles require separate acceptance.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/combined-history-native --test-classes sync-app/target/test-classes --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-failure-custody --handoff-raw-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-public-owner --handoff-public-owner-browser /path/to/chrome --handoff-adopted-browser /path/to/chrome --source-image mysql:8.4 --source-expected-version 8.4.13"
+  },
+  "signedAuditEventVersionRetention": {
+    "status": "PASS",
+    "implementationTree": "d14f659a0fe73f1150b004bb59d4dfb4d6d36dbf",
+    "sourceSha256": {
+      "tools/audit-export.py": "d5454fbd7310112a4e79e5add09a41a3c19bc1f8a47c623ea21c8b46403d1ae2",
+      "tools/audit-retain-s3.py": "3c29f9ec985969f482612939c184586e31c48e090e35b064b16e7acdecce7203",
+      "tests/audit-retain-s3-native.py": "dc952ed08465e55cf6fed702a2d0bdc3b85b569fbdd13497aab785f25d5801d6"
+    },
+    "pythonChecks": {
+      "retention": 8,
+      "export": 13
+    },
+    "minioUpstreamCommit": "9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a",
+    "minioBinarySha256": "887fae873a8d4ade4a34f49f2a084274ec28854bc036f654b6bd6f0fe2963b07",
+    "awsCli": "aws-cli/2.32.24 Python/3.13.11 Darwin/25.6.0 exe/arm64",
+    "awsCliBinarySha256": "28414f1f1e69209c0b80c8f0ef12f93ec6f0fde589c6fb0fa2c7597c31747c0e",
+    "nativeAssertions": [
+      "EXACT_VERSION_COMPLIANCE_AND_SHA256_VERIFIED",
+      "IDENTICAL_RETRY_RETURNS_SAME_VERSION",
+      "CONDITIONAL_REPLACEMENT_REFUSED",
+      "COMPLIANCE_VERSION_DELETE_REFUSED_FOR_STORAGE_ADMIN",
+      "COMPLIANCE_DEADLINE_SHORTENING_REFUSED",
+      "UNLOCKED_CONTROL_VERSION_DELETE_SUCCEEDED",
+      "VERSION_READBACK_HAS_EXACT_SIGNED_ARTIFACTS",
+      "FULL_EVENT_ARCHIVE_RETRY_PRESERVES_VERSION",
+      "COMPLIANCE_EVENT_VERSION_RETURNS_EXACT_EVENTS_AND_VERIFIES_OFFLINE",
+      "LATER_LOCKED_WINDOW_REQUIRES_THE_PREVIOUS_SIGNED_CUT",
+      "ALTERED_VERSION_COPY_FAILS_EVENT_CHAIN_VERIFICATION"
+    ],
+    "nativeLogSha256": "b21797a08dbe978027756bee2823dbc7554bcf487b17350c7b1dba606490b92a",
+    "scope": "One complete signed event window per COMPLIANCE object version. A second window checks the previous audit cut after pruning. A native loopback MinIO and AWS CLI exercise upload, conditional retry, exact-version download, deletion refusal and offline verification. Live AWS credentials, IAM policy, owner restriction and extra providers require their own acceptance.",
+    "reproduce": "python3 -B tests/audit-retain-s3-native.py --minio /path/to/minio --aws /path/to/aws"
   }
 }

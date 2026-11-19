@@ -125,7 +125,7 @@ def verify_page(page, after=None, through=None, previous=None):
 
 
 def verify_export(path, against_anchor=None, anchor_out=None, *, anchor_signature=None, anchor_public_key=None,
-                  anchor_store_id=None):
+                  anchor_store_id=None, offset=0):
     """Verify a saved JSONL export with bounded memory, including its completion marker."""
     signed_options = (anchor_signature, anchor_public_key, anchor_store_id)
     if any(value is not None for value in signed_options) and (against_anchor is None or None in signed_options):
@@ -134,6 +134,8 @@ def verify_export(path, against_anchor=None, anchor_out=None, *, anchor_signatur
     if anchor_store_id is not None and trusted["storeId"] != anchor_store_id:
         raise AuditAnchorError("AUDIT_ANCHOR_STORE_CHANGED")
     with Path(path).open(encoding="utf-8") as stream:
+        if offset:
+            stream.seek(offset)
         def record():
             line = stream.readline(1024 * 1024 + 1)
             if len(line) > 1024 * 1024:

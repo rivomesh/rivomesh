@@ -106,7 +106,24 @@ aws s3api get-object --region us-east-1 --bucket your-enrolled-audit-bucket \
   --version-id "$RIVOMESH_ARCHIVE_VERSION" --checksum-mode ENABLED /private/retained-audit.json
 ```
 
-对象的 JSON 字段为 `formatVersion`、`checkpoint` 和 `signature`。将后两个 Base64 字段解码成原始 JSON 和分离签名，然后按前面的签名检查点流程验证。对象保存检查点及其签名，完整审计事件导出依照留存政策另行归档。
+对象的 JSON 字段为 `formatVersion`、`checkpoint` 和 `signature`。将后两个 Base64 字段解码成原始 JSON 和分离签名，然后按前面的签名检查点流程验证。
+
+### 留存完整审计事件
+
+在同一留存命令中加上 `--retain-events`，把原始 JSONL 导出和签名后的最终检查点存入同一个 `COMPLIANCE` 对象版本。将回执保存在独立的归档目录中。回执包含起始边界（不含）、最终序列、事件数量、SHA-256 和精确的 S3 版本 ID。在本地清理移除上一次已验收断点之后的事件前完成导出。
+
+第一次归档必须包含序列为零的初始边界。后续归档加上 `--previous-checkpoint /custodian/checkpoints/previous.json --previous-signature /custodian/checkpoints/previous.sig`，使用最近一次独立验收的完整归档的签名检查点。上一批的最终序列必须是本批事件，或刚好位于首条事件之前。如果本批起点已经越过该序列，工具会在上传前返回 `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW`。先恢复包含缺口的中间归档或较早的数据库副本，再证明缺失区间。重试使用原导出和原签名文件。
+
+归档对象首行包含检查点及其签名。其余字节是原始 JSONL 导出，包括起始边界和完成标记。每次归档或核验先生成私有临时副本，流式处理内容。单次 S3 PUT 最多 5 GB，上传时限为十分钟。为完整对象预留临时空间，按磁盘、上行带宽和本地审计保留范围安排导出频率。[S3 单次上传校验](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html)
+
+使用前面的 `get-object` 命令下载目录登记的精确对象版本，保存为 `/private/retained-events.jsonl`。离线核验使用独立配置的公钥和库标识。核验滚动归档时需一并提供上一批的检查点和签名。
+
+```sh
+python3 tools/audit-retain-s3.py --verify-event-archive /private/retained-events.jsonl \
+  --public-key /trusted/audit-public.pem --store-id your-enrolled-store-id
+```
+
+将输出中的 `checksumSHA256`、`fromExclusive`、`sequence` 和 `checkpointHash` 与独立回执比对。`AUDIT_EVENT_ARCHIVE_VERIFIED` 表示内嵌签名检查点和每一条事件链路都有效。MinIO 实测覆盖精确版本恢复、锁定、重试、跨批次衔接和篡改识别。AWS 身份和桶策略须在部署环境中核验。
 
 ## API
 

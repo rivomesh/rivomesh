@@ -106,7 +106,24 @@ aws s3api get-object --region us-east-1 --bucket your-enrolled-audit-bucket \
   --version-id "$RIVOMESH_ARCHIVE_VERSION" --checksum-mode ENABLED /private/retained-audit.json
 ```
 
-The versioned object is a JSON envelope with `formatVersion`, `checkpoint`, and `signature`. Decode the two Base64 fields to recover the original JSON and detached signature, then use signed-checkpoint verification above. The object contains the checkpoint pair. Retain full audit-event exports separately according to the evidence policy.
+The versioned object is a JSON envelope with `formatVersion`, `checkpoint`, and `signature`. Decode the two Base64 fields to recover the original JSON and detached signature, then use signed-checkpoint verification above.
+
+### Retain complete audit event windows
+
+Add `--retain-events` to the same retention command to archive the original JSONL export with its signed final checkpoint in one `COMPLIANCE` object version. Keep the receipt in the independent archive catalog. It records the exclusive starting sequence, the final sequence, the event count, SHA-256 and the exact S3 version ID. Schedule exports before local pruning removes events beyond the last accepted cut.
+
+For the first archive, the export must include the initial audit boundary at sequence zero. For later cuts, add `--previous-checkpoint /custodian/checkpoints/previous.json --previous-signature /custodian/checkpoints/previous.sig`, using the signed head from the last independently accepted full archive. The prior sequence must appear as an event or as the boundary just before the first event. If the export starts after that point, the tool returns `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW` before uploading. Recover an intermediate archived window or an earlier database copy to prove the missing interval. For retries, reuse the exact export and signing artifacts.
+
+The first line of the retained object contains the signed checkpoint pair. The remaining bytes are the original JSONL export, including the first boundary and completion marker. Each command spools a private local copy before verifying it and uses bounded memory. The single S3 PUT accepts up to 5 GB per archive and allows ten minutes for the upload. Provision temporary space for the entire object, and choose an export cadence that fits the available disk, uplink and local audit retention. [S3 single-upload integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html)
+
+Recover the cataloged object version with the same `get-object` command above, saving it as `/private/retained-events.jsonl`. Use the independently configured key and store ID for offline verification. Supply the preceding checkpoint and signature for a rolling window.
+
+```sh
+python3 tools/audit-retain-s3.py --verify-event-archive /private/retained-events.jsonl \
+  --public-key /trusted/audit-public.pem --store-id your-enrolled-store-id
+```
+
+Compare the printed `checksumSHA256`, `fromExclusive`, `sequence` and `checkpointHash` with the independent receipt. `AUDIT_EVENT_ARCHIVE_VERIFIED` confirms that the embedded signed head and each event chain link are valid. MinIO acceptance verifies exact version recovery, retention, retry, continuity and tamper detection. Validate the enrolled AWS identity and bucket policies in the deployment.
 
 ## API
 

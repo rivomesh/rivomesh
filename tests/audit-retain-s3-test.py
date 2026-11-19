@@ -40,7 +40,7 @@ def value(name):
 assert value("--bucket") == "rivomesh-worm-fixture"
 assert value("--expected-bucket-owner") == "012345678901"
 assert value("--region") == "us-east-1"
-assert value("--key") == "retention/audit/scope-1/00000000000000000002.json"
+assert value("--key") == os.environ["FIXTURE_KEY"]
 behavior = os.environ["FIXTURE_BEHAVIOR"]
 metadata = directory / "metadata.json"
 if action == "put-object":
@@ -86,7 +86,7 @@ else:
 '''
 
 
-def export_window(path, through, store_id="scope-1"):
+def export_window(path, through, store_id="scope-1", after=0):
     previous, events = "0" * 64, []
     for sequence in range(1, through + 1):
         event = {"version": 1, "sequence": sequence, "id": "audit-" + str(sequence), "actorId": "event-data-only"}
@@ -95,9 +95,10 @@ def export_window(path, through, store_id="scope-1"):
         event.update(previousHash=previous, hash=current)
         events.append({"type": "EVENT", "event": event})
         previous = current
-    records = [{"type": "HEADER", "version": 1, "storeId": store_id, "after": 0, "anchorSequence": 0,
-                "anchorHash": "0" * 64, "previousHash": "0" * 64, "through": through, "throughHash": previous},
-               *events, {"type": "COMPLETE", "through": through, "events": through, "hash": previous}]
+    boundary = events[after - 1]["event"]["hash"] if after else "0" * 64
+    records = [{"type": "HEADER", "version": 1, "storeId": store_id, "after": after, "anchorSequence": after,
+                "anchorHash": boundary, "previousHash": boundary, "through": through, "throughHash": previous},
+               *events[after:], {"type": "COMPLETE", "through": through, "events": through - after, "hash": previous}]
     path.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
 
 
@@ -129,15 +130,32 @@ class RetentionTest(unittest.TestCase):
         subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(self.private_key), "-out", str(self.signature),
                         str(self.checkpoint)], check=True, capture_output=True)
 
-    def run_retention(self, behavior="ok", store_id="scope-1", deadline=None):
+    def run_retention(self, behavior="ok", store_id="scope-1", deadline=None, *,
+                      events=False, previous=None, after=0, through=2):
+        prefix = "retention/audit"
+        key = f"{prefix}/scope-1/"
+        key += f"events/{after:020d}-{through:020d}.jsonl" if events else f"{through:020d}.json"
         environment = {"PATH": str(self.workspace) + os.pathsep + os.environ["PATH"],
-                       "FIXTURE_BEHAVIOR": behavior, "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS": "false"}
+                       "FIXTURE_BEHAVIOR": behavior, "FIXTURE_KEY": key,
+                       "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS": "false"}
+        flags = ["--retain-events"] if events else []
+        if previous:
+            flags.extend(("--previous-checkpoint", str(previous[0]), "--previous-signature", str(previous[1])))
         return subprocess.run(
             [sys.executable, "-B", str(RETENTION), "--export", str(self.export), "--checkpoint", str(self.checkpoint),
              "--signature", str(self.signature), "--public-key", str(self.public_key), "--store-id", store_id,
              "--bucket", "rivomesh-worm-fixture", "--bucket-owner", "012345678901", "--region", "us-east-1",
-             "--prefix", "retention/audit", "--retain-until", deadline or self.deadline],
+             "--prefix", prefix, "--retain-until", deadline or self.deadline, *flags],
             env=environment, text=True, capture_output=True, timeout=45,
+        )
+
+    def verify_archive(self, path, previous=None):
+        flags = [] if previous is None else ["--previous-checkpoint", str(previous[0]),
+                                             "--previous-signature", str(previous[1])]
+        return subprocess.run(
+            [sys.executable, "-B", str(RETENTION), "--verify-event-archive", str(path),
+             "--public-key", str(self.public_key), "--store-id", "scope-1", *flags],
+            text=True, capture_output=True, timeout=15,
         )
 
     def assert_rejected(self, result, reason):
@@ -204,6 +222,67 @@ class RetentionTest(unittest.TestCase):
         export_window(self.export, 2)
         self.signature.write_bytes(b"invalid-signature")
         self.assert_rejected(self.run_retention(), "AUDIT_ANCHOR_SIGNATURE_INVALID")
+        self.assertFalse(self.calls.exists())
+
+    def test_complete_event_archive_versions_and_offline_readback(self):
+        first = self.run_retention("lost-response", events=True)
+        self.assertEqual(0, first.returncode, first)
+        receipt = json.loads(first.stdout)
+        self.assertEqual("AUDIT_EVENT_ARCHIVE_RETAINED", receipt["status"])
+        self.assertEqual(0, receipt["fromExclusive"])
+        self.assertEqual(2, receipt["eventCount"])
+        archive = self.uploaded.read_bytes()
+        raw_header, raw_export = archive.split(b"\n", 1)
+        envelope = json.loads(raw_header)
+        self.assertEqual("RIVOMESH_SIGNED_AUDIT", envelope["type"])
+        self.assertEqual(self.checkpoint.read_bytes(), base64.b64decode(envelope["checkpoint"], validate=True))
+        self.assertEqual(self.signature.read_bytes(), base64.b64decode(envelope["signature"], validate=True))
+        self.assertEqual(self.export.read_bytes(), raw_export)
+        verified = self.verify_archive(self.uploaded)
+        self.assertEqual(0, verified.returncode, verified)
+        self.assertEqual("AUDIT_EVENT_ARCHIVE_VERIFIED", json.loads(verified.stdout)["status"])
+        self.assertEqual(receipt["checksumSHA256"], json.loads(verified.stdout)["checksumSHA256"])
+        retry = self.run_retention(events=True)
+        self.assertEqual(first.stdout, retry.stdout)
+        self.export.write_bytes(self.export.read_bytes().replace(b"\n", b"\r\n"))
+        self.assert_rejected(self.run_retention(events=True), "AUDIT_RETENTION_CONTENT_UNCONFIRMED")
+        self.assertEqual(archive, self.uploaded.read_bytes())
+
+    def test_rolling_event_archive_needs_previous_signed_checkpoint(self):
+        previous = self.checkpoint, self.signature
+        self.checkpoint, self.signature = self.workspace / "next.json", self.workspace / "next.sig"
+        export_window(self.export, 4, after=2)
+        retention.audit.verify_export(self.export, anchor_out=self.checkpoint)
+        self.sign()
+
+        self.assert_rejected(self.run_retention(events=True), "AUDIT_RETENTION_PREVIOUS_CHECKPOINT_REQUIRED")
+        self.assertFalse(self.calls.exists())
+        result = self.run_retention(events=True, previous=previous, after=2, through=4)
+        self.assertEqual(0, result.returncode, result)
+        receipt = json.loads(result.stdout)
+        self.assertEqual(4, receipt["sequence"])
+        self.assertEqual(2, receipt["fromExclusive"])
+        self.assertEqual(2, receipt["eventCount"])
+        self.assertEqual(0, self.verify_archive(self.uploaded, previous).returncode)
+        self.assert_rejected(self.verify_archive(self.uploaded), "AUDIT_RETENTION_PREVIOUS_CHECKPOINT_REQUIRED")
+
+        export_window(self.export, 5, after=3)
+        self.checkpoint.unlink()
+        retention.audit.verify_export(self.export, anchor_out=self.checkpoint)
+        self.sign()
+        self.calls.unlink()
+        self.assert_rejected(self.run_retention(events=True, previous=previous, after=3, through=5),
+                             "AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW")
+        self.assertFalse(self.calls.exists())
+
+    def test_tampered_event_fails_offline_and_before_storage(self):
+        result = self.run_retention(events=True)
+        self.assertEqual(0, result.returncode, result)
+        self.uploaded.write_bytes(self.uploaded.read_bytes().replace(b"event-data-only", b"modified-event"))
+        self.assert_rejected(self.verify_archive(self.uploaded), "AUDIT_RETENTION_INPUT_UNREADABLE_OR_INVALID")
+        self.export.write_bytes(self.export.read_bytes().replace(b"event-data-only", b"modified-event"))
+        self.calls.unlink()
+        self.assert_rejected(self.run_retention(events=True), "AUDIT_RETENTION_INPUT_UNREADABLE_OR_INVALID")
         self.assertFalse(self.calls.exists())
 
 
