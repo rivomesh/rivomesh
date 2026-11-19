@@ -95,29 +95,37 @@ public final class KafkaPhysicalReceipt {
         }
     }
 
-    private record Envelope(Scope scope,String key,@JsonInclude(JsonInclude.Include.NON_NULL) MemberWitness member){}
+    private record Envelope(Scope scope,String key,@JsonInclude(JsonInclude.Include.NON_NULL) MemberWitness member,
+            @JsonInclude(JsonInclude.Include.NON_NULL) KafkaHistoryOrigin historyOrigin,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String historyIntentKey){}
 
     public static final class Grant {
         private final Scope scope;
         private final String key;
         private final MemberWitness member;
+        private final KafkaHistoryOrigin historyOrigin;
+        private final String historyIntentKey;
         Grant(Scope scope,String key){this(scope,key,null);}
-        public Grant(Scope scope,String key,MemberWitness member) {
+        public Grant(Scope scope,String key,MemberWitness member) {this(scope,key,member,null,null);}
+        public Grant(Scope scope,String key,MemberWitness member,KafkaHistoryOrigin historyOrigin,String historyIntentKey) {
             if(scope==null||!validSignature(key)||Base64.getUrlDecoder().decode(key).length!=32
-                    ||member!=null&&!scope.equals(member.member().scope()))throw invalid();
-            this.scope=scope;this.key=key;this.member=member;
+                    ||member!=null&&!scope.equals(member.member().scope())
+                    ||(historyOrigin==null)!=(historyIntentKey==null)
+                    ||historyOrigin!=null&&(member==null||!historyOrigin.belongsTo(scope)||!validSignature(historyIntentKey)))throw invalid();
+            this.scope=scope;this.key=key;this.member=member;this.historyOrigin=historyOrigin;this.historyIntentKey=historyIntentKey;
         }
         public Scope scope(){return scope;}
         public MemberWitness member(){return member;}
+        public KafkaHistoryOrigin historyOrigin(){return historyOrigin;}
         public String encode(){return Base64.getUrlEncoder().withoutPadding().encodeToString(
-                Codec.encode(new Envelope(scope,key,member)).getBytes(StandardCharsets.UTF_8));}
+                Codec.encode(new Envelope(scope,key,member,historyOrigin,historyIntentKey)).getBytes(StandardCharsets.UTF_8));}
         public static Grant open(String encoded,String task,byte[] workerProjection)throws Exception{
             if(encoded==null)return null;
             if(encoded.length()>4096)throw invalid();
             Envelope envelope;
             try{envelope=Codec.decode(new String(Base64.getUrlDecoder().decode(encoded),StandardCharsets.UTF_8),Envelope.class);}
             catch(Exception invalid){throw invalid();}
-            var grant=new Grant(envelope.scope(),envelope.key(),envelope.member());
+            var grant=new Grant(envelope.scope(),envelope.key(),envelope.member(),envelope.historyOrigin(),envelope.historyIntentKey());
             if(!task.equals(grant.scope.task())||!Codec.sha256(workerProjection).equals(grant.scope.workerProjectionSha256()))throw invalid();
             return grant;
         }
@@ -142,12 +150,20 @@ public final class KafkaPhysicalReceipt {
             return scope.equals(value.receipt().scope())&&MessageDigest.isEqual(authenticate(value.receipt()).getBytes(StandardCharsets.US_ASCII),
                     value.signature().getBytes(StandardCharsets.US_ASCII));
         }
-        private String authenticate(Receipt receipt){
+        String signHistoryIntent(String payload){
+            if(historyOrigin==null)throw invalid();
+            return authenticate(historyIntentKey,"kafka-history-first-intent-v1\n"+historyOrigin.signature()+"\n"+payload);
+        }
+        boolean verifiesHistoryIntent(String payload,String signature){
+            return signature!=null&&MessageDigest.isEqual(signHistoryIntent(payload).getBytes(StandardCharsets.US_ASCII),
+                    signature.getBytes(StandardCharsets.US_ASCII));
+        }
+        private String authenticate(Receipt receipt){return authenticate(key,"kafka-physical-ack-v1\n"+Codec.encode(receipt));}
+        private static String authenticate(String key,String payload){
             try{
                 Mac mac=Mac.getInstance("HmacSHA256");
                 mac.init(new SecretKeySpec(Base64.getUrlDecoder().decode(key),"HmacSHA256"));
-                return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(
-                        ("kafka-physical-ack-v1\n"+Codec.encode(receipt)).getBytes(StandardCharsets.UTF_8)));
+                return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
             }catch(GeneralSecurityException impossible){throw new IllegalStateException("KAFKA_PHYSICAL_CRYPTO_UNAVAILABLE");}
         }
     }

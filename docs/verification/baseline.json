@@ -14320,5 +14320,52 @@
       }
     },
     "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-bytea-escape --source-image postgres:17.12 --bytea-values --bytea-escape-output --jdk 21"
+  },
+  "kafkaManagedLocalFirstSendNativeTemurin21": {
+    "scope": "Real MySQL 8.4.13 source, distinct real MySQL 8.4.13 control store, native Kafka 3.9.2 TLS/SCRAM, two Controllers, real Agent and spawned Worker, two Kafka topics with independent ACKs and the original LOCAL H2 journal. The first batch is intentionally UNKNOWN.",
+    "artifactSha256": "29052847a2b02d758a95abef41d7273859c6ff8bcb881895a5fc8aa7d632fbdc",
+    "buildParent": "aa39de119e4a5c04a6ab75403eca3908eb6c34b3",
+    "buildSourceTree": "f5d4fb95837c161b46a0dee06544f387d62b3b8b",
+    "runtime": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)",
+    "imageIds": {
+      "MySQL 8.4.13": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64",
+      "Kafka 3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f arm64"
+    },
+    "nativeLogSha256": "a24dabb2687ee4843ad89cdb80b650e4bef3df619fa098284a78c502c0f65990",
+    "nativeFixtureSha256": {
+      "tests/kafka-notice-writer-run.py": "8a71e477b5053e10131d9e3af9598553b337ce98ab78f172502aa52abf9195d3",
+      "tests/kafka/KafkaFirstSendAcceptance.java": "218902efd2540763ea45ecd879e1621e4bd6dbb03a1799be24be630770701fef"
+    },
+    "nativeChecks": [
+      "MySQL source account can read group membership, acquire the global read lock and release it.",
+      "Kafka denied the selected first SCHEMA attempt and the peer received its native snapshot row.",
+      "genuine Kafka Produce refusal preserves UNKNOWN and keeps the peer snapshot and MySQL CDC running.",
+      "both Kafka targets resume MySQL CDC with the original signed first attempts after Agent restart.",
+      "the revoked Agent loses the old Worker and neither target sends or ACKs a newly introduced MySQL row."
+    ],
+    "nativeChecksPassed": 5,
+    "fullJavaTestsPassed": 698,
+    "fullJavaOptionalSkipped": 35,
+    "fullJavaResultsSha256": "f3ce10dd30850afac52b4f44c221a32ffa36e461282442d826926c59764f4065",
+    "domPassed": 167,
+    "domResultsSha256": "35e2fcb2650bf4e0b140c507a5ec3a69bbfcd241d96db0e1c8c9604a4cf88905",
+    "browserChecksPassed": 14,
+    "browserManifestSha256": "9cdf44a171d305b51301f8cdf883a3782d0cfd9eb78b524a07571f3d239e2faf",
+    "configExamplesPassed": 25,
+    "configurationExamplesLogSha256": "cefeaf194af4e2e234f454e4606aa3fdab84e0a77b4451ccf73a329f8335d813",
+    "fixtureRemaining": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "earlierAttempts": {
+      "macosAndSourceGrantDiagnostics": "8123ac40baa4e19b05a98a371912bbfc5247f9cddd27eccf2c6324745a3f8678",
+      "sourceControlTogetherInitial": "f1c0c3cbc12fc82e9a0f0a0a2f73ac22254d2099062e18190268ce8312dadaf4",
+      "sourceControlTogetherRestart": "64b87c13ba35200c1c2764fc486b28f1a0dc29461faf51203628a19dc94ffb22",
+      "sameAgentCouldReadmitAfterExpiry": "69d8f9aa4b9171465c6c824e0dc6db6bfa3c0e07d7a79a1502c46079a3a9d8ac",
+      "revokedCredentialsRejectFinalShutdownAudit": "5e8830fb33fd7bf9c1177b7864b096bc4ac445e7c4729a1dea29247335fc6c18"
+    },
+    "pending": "The first attempt does not establish the complete history or physical destination UUID. Approved recovery notice dispatch and whole-history evidence remain blocked.",
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-first-send --java-home <Temurin 21 directory> --artifact-sha256 <release SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
   }
 }

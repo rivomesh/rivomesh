@@ -2,7 +2,9 @@ package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
 import java.nio.file.Paths;
 import java.util.*;
@@ -54,7 +56,23 @@ final class OwnerRuntime implements AutoCloseable {
             queryLoop.scheduleWithFixedDelay(this::queries,0,100,TimeUnit.MILLISECONDS);
         }catch(Exception failure){commandProblem=code(failure);close();throw failure;}
     }
+    private record KafkaGrantRegistration(PipelineConfig config,KafkaPhysicalReceipt.Grant grant,
+                                         KafkaHistoryEnrollments.Enrollment enrollment){}
     private KafkaPhysicalReceipt.Grant kafkaPhysicalGrant(String task,String projected)throws Exception{
+        KafkaGrantRegistration registration=kafkaGrantRegistration(task,projected,null);
+        if(registration.enrollment()==null)return registration.grant();
+        // H2 initialization and the shared authority lock never overlap.
+        PipelineConfig pipeline=registration.config();
+        boolean creating=!registration.enrollment().ready();
+        pipeline.prepareLocalDirectory();
+        var storage=creating?pipeline.journalSettings():pipeline.existingJournalSettings();
+        storage.kafkaPhysicalGrant=registration.grant();
+        try(JdbcJournal journal=new JdbcJournal(storage)){
+            journal.prepareKafkaHistoryOrigin(pipeline.fingerprint(),pipeline.subscribers(),creating);
+        }
+        return kafkaGrantRegistration(task,projected,registration).grant();
+    }
+    private KafkaGrantRegistration kafkaGrantRegistration(String task,String projected,KafkaGrantRegistration prepared)throws Exception{
         return authority.service((c,accounts)->{
             ControlStore.Lease lease=leases.get();
             agents.require(c,lease,directory);
@@ -69,12 +87,23 @@ final class OwnerRuntime implements AutoCloseable {
                 throw new TaskService.Conflict("KAFKA_PHYSICAL_WORKER_PROJECTION_CHANGED");
             KafkaPhysicalReceipt.Scope scope=new KafkaPhysicalReceipt.Scope(authority.identity,task,directory,
                     record.activeConfigurationVersion,Codec.sha256(projected.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            var enrollment=expected.pipeline.kafkaHistoryFromFirstSend?authority.kafkaHistoryEnrollments.require(c,record):null;
+            if(prepared!=null&&(enrollment==null||!enrollment.origin().equals(prepared.enrollment().origin())
+                    ||!scope.equals(prepared.grant().scope())))throw new TaskService.Conflict("KAFKA_HISTORY_ORIGIN_AUTHORITY_CHANGED");
             var live=agents.require(c,lease,directory);
             var member=new KafkaPhysicalReceipt.Member(scope,lease.nodeId,lease.incarnation,lease.epoch,
                     live.observedUtcMillis(),live.expiresUtcMillis());
+            if(prepared!=null){
+                var original=prepared.grant().member().member();
+                if(original.epoch()!=member.epoch()||!original.incarnation().equals(member.incarnation()))throw new ControlStore.Fenced();
+                if(!enrollment.ready())authority.kafkaHistoryEnrollments.ready(c,enrollment.origin());
+            }
             var cipher=authority.commandCipher();
             var witness=new KafkaPhysicalReceipt.MemberWitness(member,cipher.signature(member.signatureDomain()));
-            return new KafkaPhysicalReceipt.Grant(scope,cipher.signature(scope.keyDomain()),witness);
+            var grant=new KafkaPhysicalReceipt.Grant(scope,cipher.signature(scope.keyDomain()),witness,
+                    enrollment==null?null:enrollment.origin(),
+                    enrollment==null?null:cipher.signature(enrollment.origin().intentKeyDomain()));
+            return new KafkaGrantRegistration(expected.pipeline,grant,enrollment);
         });
     }
     private void importCommittedWriter(String task,ControlStore.Lease lease)throws Exception{

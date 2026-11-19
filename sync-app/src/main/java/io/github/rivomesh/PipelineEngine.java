@@ -25,12 +25,14 @@ public final class PipelineEngine implements AutoCloseable {
         catch(Exception e){throw new SourceFailure(e);}
     }
     public void run()throws Exception{
+        if(config.kafkaHistoryFromFirstSend!=(config.kafkaPhysicalGrant!=null&&config.kafkaPhysicalGrant.historyOrigin()!=null))
+            throw new IllegalStateException("KAFKA_HISTORY_ORIGIN_MANAGED_GRANT_REQUIRED");
         config.prepareLocalDirectory();JdbcJournal localKeeper=null;
         try{while(!stopped)try{
             // Keep a LOCAL automatic server alive across Busy/PAUSED/reconnect loops.
             // Repeatedly closing the owning JVM's last connection churns its lock file
             // and prevents same-host status/resume clients from completing a handoff.
-            if("LOCAL".equals(config.journal.mode)&&localKeeper==null)localKeeper=new JdbcJournal(config.journalSettings());
+            if("LOCAL".equals(config.journal.mode)&&localKeeper==null)localKeeper=new JdbcJournal(runtimeJournalSettings());
             runOwner();
         }
         catch(InterruptedException end){if(!stopped)throw end;}
@@ -45,10 +47,13 @@ public final class PipelineEngine implements AutoCloseable {
             System.err.println("PIPELINE_RETRY "+failure.getClass().getSimpleName());Thread.sleep(config.retryDelayMillis);
         }}finally{if(localKeeper!=null)localKeeper.close();}
     }
+    private JdbcJournal.Settings runtimeJournalSettings(){
+        return config.kafkaHistoryFromFirstSend?config.existingJournalSettings():config.journalSettings();
+    }
     private void runOwner()throws Exception{
         ScheduledExecutorService scheduler=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"v3-journal-heartbeat");t.setDaemon(true);return t;});
-        try(JdbcJournal journal=new JdbcJournal(config.journalSettings())){
-            JdbcJournal.Settings storage=config.journalSettings();
+        JdbcJournal.Settings storage=runtimeJournalSettings();
+        try(JdbcJournal journal=new JdbcJournal(storage)){
             // Check physical identity before any journal DDL can enter the source binlog.
             SourceAdapter probe;
             try{probe=PipelineSources.open(config,"probe");}

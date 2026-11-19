@@ -105,7 +105,10 @@ public final class JdbcJournal implements NormalizedJournal {
         if(hasSourceExclusions(format))JdbcSourceExclusion.verify(this,c);
     }
     @Override public void initialize(String fingerprint,String generation,List<String> subscribers)throws Exception{
-        if(settings.writerAssignment!=null){
+        if(historyOrigin()!=null){
+            if(generation!=null&&!historyOrigin().generation().equals(generation))throw JdbcKafkaHistoryOrigin.refused();
+            verifyKafkaHistoryOrigin(fingerprint,subscribers);
+        }else if(settings.writerAssignment!=null){
             verifyIdentity(fingerprint,subscribers);
             try(Connection c=connect()){
                 c.setAutoCommit(false);
@@ -116,6 +119,28 @@ public final class JdbcJournal implements NormalizedJournal {
                 if(settings.kafkaPhysicalGrant!=null)JdbcKafkaPhysicalHistory.prepare(this,c,false);
             }
         }else initializeStorage(fingerprint,generation,subscribers);
+    }
+    KafkaHistoryOrigin historyOrigin(){
+        return settings.kafkaPhysicalGrant==null?null:settings.kafkaPhysicalGrant.historyOrigin();
+    }
+    /** Only the current Agent prepares a new origin before it can launch a Worker. */
+    public void prepareKafkaHistoryOrigin(String fingerprint,List<String> subscribers,boolean creating)throws Exception{
+        KafkaHistoryOrigin origin=historyOrigin();
+        if(origin==null||!localH2()||settings.writerAssignment!=null||!settings.pipelineId.equals(origin.task())
+                ||settings.kafkaPublicationTargets.isEmpty())throw JdbcKafkaHistoryOrigin.refused();
+        if(!subscribers.containsAll(settings.kafkaPublicationTargets))throw JdbcKafkaHistoryOrigin.refused();
+        if(creating)initializeStorage(fingerprint,origin.generation(),subscribers);
+        verifyKafkaHistoryOrigin(fingerprint,subscribers);
+    }
+    private void verifyKafkaHistoryOrigin(String fingerprint,List<String> subscribers)throws Exception{
+        verifyIdentity(fingerprint,subscribers);
+        try(Connection c=connect()){
+            c.setAutoCommit(false);
+            JdbcKafkaHistoryOrigin.requireTables(this,c);
+            JdbcKafkaHistoryOrigin.verify(this,c,historyOrigin(),(String)locked(c).get("generation"));
+            c.rollback();
+            JdbcKafkaPhysicalHistory.prepare(this,c,false);
+        }
     }
     void initializeStorage(String fingerprint,String generation,List<String> subscribers)throws Exception{
         if(fingerprint==null||fingerprint.length()!=64||(generation!=null&&(generation.isEmpty()||generation.length()>128))||subscribers==null||subscribers.isEmpty())
@@ -130,6 +155,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 execute(c,"INSERT INTO "+table("job")+" (pipeline_id,format_version,fingerprint,generation,epoch,owner,lease_until,next_seq,captured,pending_bytes,snapshot_bytes,normalized_seq,identity_bytes,run_state,error_generation) VALUES (?,?,?,?,0,NULL,0,1,NULL,0,0,0,0,'RUNNING',0)",settings.pipelineId,settings.managedWriter?11:settings.writerAssignment==null?3:7,fingerprint,stream);
                 for(String id:ids)execute(c,"INSERT INTO "+table("subscription")+" (pipeline_id,subscription_id,acknowledged,run_state,error_generation) VALUES (?,?,0,'RUNNING',0)",settings.pipelineId,id);
                 if(settings.writerAssignment!=null)JournalWriterAssignment.initial(this,c,stream);
+                if(historyOrigin()!=null)JdbcKafkaHistoryOrigin.insert(this,c,settings.kafkaPhysicalGrant);
                 c.commit();
             }catch(SQLException e){c.rollback();if(!duplicate(e))throw e;}
             try(PreparedStatement p=c.prepareStatement("SELECT format_version,fingerprint,generation FROM "+table("job")+" WHERE pipeline_id=?")){
@@ -150,6 +176,7 @@ public final class JdbcJournal implements NormalizedJournal {
             throw rejected;
         }
         if(settings.kafkaPhysicalGrant!=null)JdbcKafkaPhysicalHistory.prepare(this,c,true);
+        if(historyOrigin()!=null)JdbcKafkaHistoryOrigin.prepare(this,c);
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
         if(settings.oracleDdlEvidence)JdbcOracleDdlEvidence.initialize(this,c);

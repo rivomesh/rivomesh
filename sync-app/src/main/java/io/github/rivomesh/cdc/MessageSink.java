@@ -49,7 +49,14 @@ public final class MessageSink implements SinkAdapter {
     }
     private void send(long epoch,List<ConfirmedPublisher.Message> messages)throws Exception{
         store.check(epoch);
-        try{ConfirmedPublisher active=publisher();active.publish(messages);String confirmed=active.confirmedProgress();if(confirmed!=null){store.progress(epoch,transportProgress,confirmed);transportProgress=confirmed;}else if(active.requiresProgress())throw new IllegalStateException("PUBLICATION_TRANSPORT_PROGRESS_MISSING");}catch(Exception failure){reset();throw failure;}
+        try{
+            ConfirmedPublisher active=publisher();
+            if(store instanceof JdbcPublicationStore jdbc)jdbc.beforeSend(epoch,messages);
+            active.publish(messages);
+            String confirmed=active.confirmedProgress();
+            if(confirmed!=null){store.progress(epoch,transportProgress,confirmed);transportProgress=confirmed;}
+            else if(active.requiresProgress())throw new IllegalStateException("PUBLICATION_TRANSPORT_PROGRESS_MISSING");
+        }catch(Exception failure){reset();throw failure;}
     }
     private void reset(){if(publisher!=null)try{publisher.close();}catch(Exception ignored){/* publication receipt has not advanced */}finally{publisher=null;}}
     @Override public synchronized void prepare(long epoch,TableSchema table)throws Exception{

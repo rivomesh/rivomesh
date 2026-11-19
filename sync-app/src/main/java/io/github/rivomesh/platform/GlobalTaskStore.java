@@ -29,6 +29,7 @@ final class GlobalTaskStore {
     private final ControlCipher cipher;
     private final int maximum;
     private final HandoffPreparations preparations;
+    final KafkaHistoryEnrollments kafkaHistoryEnrollments;
 
     GlobalTaskStore(ClusterConfig config,SharedAccessStore access,String key,String expected,int maximum)throws Exception{
         if(!access.controls(config)||maximum<1||maximum>200000)throw new IllegalArgumentException("GLOBAL_TASK_POLICY_INVALID");this.access=access;this.maximum=maximum;cluster=config.id;db=new JdbcControlStore(config);
@@ -39,9 +40,10 @@ final class GlobalTaskStore {
             JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("task_authority")+" (cluster_id VARCHAR(128) NOT NULL,task_id VARCHAR(128) NOT NULL,owner_id VARCHAR(64) NOT NULL,directory_id VARCHAR(36) NOT NULL,revision VARCHAR(36) NOT NULL,configuration_version VARCHAR(36) NOT NULL,active_version VARCHAR(36),configuration_index BIGINT NOT NULL,record_hash VARCHAR(43) NOT NULL,sequence_no BIGINT NOT NULL,PRIMARY KEY(cluster_id,task_id))"+suffix);
             JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("task_version")+" (cluster_id VARCHAR(128) NOT NULL,task_id VARCHAR(128) NOT NULL,version_id VARCHAR(36) NOT NULL,parent_version VARCHAR(36),sealed_yaml "+text+" NOT NULL,content_hash VARCHAR(43) NOT NULL,actor_id VARCHAR(64) NOT NULL,created_at BIGINT NOT NULL,PRIMARY KEY(cluster_id,task_id,version_id))"+suffix);
             JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("task_request")+" (cluster_id VARCHAR(128) NOT NULL,request_id VARCHAR(128) NOT NULL,task_id VARCHAR(128) NOT NULL,actor_id VARCHAR(64) NOT NULL,signature VARCHAR(43) NOT NULL,PRIMARY KEY(cluster_id,request_id))"+suffix);
+            KafkaHistoryEnrollments.bootstrap(db,c,suffix);
             db.index(c,"task_authority","rmc_task_owner_page","cluster_id, owner_id, task_id");
-            if(db.mysql())try(PreparedStatement p=db.prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rmc_task_root','rmc_task_authority','rmc_task_version','rmc_task_request')",config.namespace);ResultSet r=p.executeQuery()){
-                int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new TaskService.Conflict("CONTROL_STORE_ENGINE_INVALID");if(!"utf8mb4_bin".equalsIgnoreCase(r.getString(2)))throw new TaskService.Conflict("CONTROL_STORE_COLLATION_INVALID");}if(count!=4)throw new TaskService.Conflict("CONTROL_STORE_TABLES_MISSING");
+            if(db.mysql())try(PreparedStatement p=db.prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rmc_task_root','rmc_task_authority','rmc_task_version','rmc_task_request','rmc_kafka_history_origin')",config.namespace);ResultSet r=p.executeQuery()){
+                int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new TaskService.Conflict("CONTROL_STORE_ENGINE_INVALID");if(!"utf8mb4_bin".equalsIgnoreCase(r.getString(2)))throw new TaskService.Conflict("CONTROL_STORE_COLLATION_INVALID");}if(count!=5)throw new TaskService.Conflict("CONTROL_STORE_TABLES_MISSING");
             }
             c.setAutoCommit(false);String proof=null,stateHash=null;int configuredMaximum=maximum;long sequence=0;
             try(PreparedStatement p=db.prepare(c,"SELECT store_id,key_proof,maximum_tasks,access_identity,next_sequence,state_hash FROM "+db.table("task_root")+" WHERE cluster_id=? FOR UPDATE",cluster);ResultSet r=p.executeQuery()){
@@ -49,7 +51,7 @@ final class GlobalTaskStore {
             }
             if(selected==null){
                 if(expected!=null)throw new TaskService.Conflict("GLOBAL_TASK_STATE_REQUIRED");
-                for(String table:Arrays.asList("task_authority","task_version","task_request"))try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table(table)+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)>0)throw new TaskService.Conflict("GLOBAL_TASK_STATE_REQUIRED");}
+                for(String table:Arrays.asList("task_authority","task_version","task_request",KafkaHistoryEnrollments.TABLE))try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table(table)+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)>0)throw new TaskService.Conflict("GLOBAL_TASK_STATE_REQUIRED");}
                 selected=UUID.randomUUID().toString();
             }
             if(expected!=null&&!expected.equals(selected))throw new TaskService.Conflict("GLOBAL_TASK_IDENTITY_CHANGED");
@@ -61,6 +63,7 @@ final class GlobalTaskStore {
             try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("task_authority")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)!=sequence)throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");}c.commit();
         }
         identity=selected;cipher=selectedCipher;preparations=new HandoffPreparations(config,db,cipher);
+        kafkaHistoryEnrollments=new KafkaHistoryEnrollments(db,cluster,identity,cipher);
     }
     private void root(Connection c)throws Exception{root(c,true);}
     private void root(Connection c,boolean lock)throws Exception{
@@ -150,6 +153,7 @@ final class GlobalTaskStore {
             valid(owner,"[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
             valid(directory,"[a-f0-9-]{36}");
         }
+        boolean kafkaHistory=KafkaHistoryEnrollments.requested(yaml);
         ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(yaml);
         if(declaration!=null)declaration.requireOwner(owner);
         String signature=automatic?autoSignature(id,yaml)
@@ -174,6 +178,7 @@ final class GlobalTaskStore {
             try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();record.sequence=r.getLong(1)+1;}
             version(c,record,actor);db.update(c,"INSERT INTO "+db.table("task_authority")+" (cluster_id,task_id,owner_id,directory_id,revision,configuration_version,active_version,configuration_index,record_hash,sequence_no) VALUES (?,?,?,?,?,?,?,?,?,?)",cluster,id,owner,directory,record.revision,record.configurationVersion,null,record.configurationIndex,recordSignature(record),record.sequence);
             db.update(c,"UPDATE "+db.table("task_root")+" SET next_sequence=?,state_hash=? WHERE cluster_id=?",record.sequence,cipher.signature("root\n"+access.identity+"\n"+maximum+"\n"+record.sequence),cluster);db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));
+            if(kafkaHistory)kafkaHistoryEnrollments.enroll(c,record);
             if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_TASK_CREATED"));c.commit();return record;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
@@ -204,7 +209,10 @@ final class GlobalTaskStore {
             if(replay(c,request,signature,id,actor)){configuration(c,record);c.commit();return record;}
             if(!record.revision.equals(revision))throw new TaskService.Conflict("REVISION_CHANGED");
             preparations.requireUnreserved(c,id);
-            ManagedWriterDeclaration.requireUnchanged(version(c,id,record.configurationVersion).yaml,yaml);
+            String previousYaml=version(c,id,record.configurationVersion).yaml;
+            ManagedWriterDeclaration.requireUnchanged(previousYaml,yaml);
+            if(KafkaHistoryEnrollments.requested(previousYaml)!=KafkaHistoryEnrollments.requested(yaml))
+                throw new TaskService.Conflict("KAFKA_HISTORY_ORIGIN_CREATE_ONLY");
             record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
             db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,configuration_version=?,configuration_index=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,record.configurationVersion,record.configurationIndex,recordSignature(record),cluster,id);
             db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_CONFIG_COMMITTED"));c.commit();return record;

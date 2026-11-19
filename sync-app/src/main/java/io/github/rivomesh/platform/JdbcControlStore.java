@@ -28,6 +28,16 @@ final class JdbcControlStore implements ControlStore {
         PreparedStatement p=c.prepareStatement(sql);p.setQueryTimeout(5);for(int i=0;i<args.length;i++)p.setObject(i+1,args[i]);return p;
     }
     int update(Connection c,String sql,Object...args)throws SQLException{try(PreparedStatement p=prepare(c,sql,args)){return p.executeUpdate();}}
+    void requireDurableTaskTable(Connection c,String name)throws SQLException{
+        if(h2)return;
+        String sql=mysql?"SELECT ENGINE='InnoDB' AND TABLE_COLLATION='utf8mb4_bin' FROM information_schema.TABLES "
+                +"WHERE TABLE_SCHEMA=? AND TABLE_NAME=?"
+                :"SELECT r.relkind='r' AND r.relpersistence='p' AND NOT r.relhasrules FROM pg_catalog.pg_class r "
+                +"JOIN pg_catalog.pg_namespace n ON r.relnamespace=n.oid WHERE n.nspname=? AND r.relname=?";
+        try(PreparedStatement p=prepare(c,sql,config.namespace,"rmc_"+name);ResultSet r=p.executeQuery()){
+            if(!r.next()||!r.getBoolean(1)||r.next())throw new TaskService.Conflict("KAFKA_HISTORY_ORIGIN_CONTROL_TABLE_INVALID");
+        }
+    }
     long now(Connection c)throws SQLException{
         String sql=mysql?"SELECT CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)":h2?"SELECT CURRENT_TIMESTAMP":"SELECT CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)";
         try(PreparedStatement p=prepare(c,sql);ResultSet rs=p.executeQuery()){rs.next();return h2?rs.getTimestamp(1).getTime():rs.getLong(1);}

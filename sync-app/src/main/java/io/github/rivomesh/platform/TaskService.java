@@ -206,13 +206,19 @@ public final class TaskService implements AutoCloseable {
 
     private KafkaPhysicalReceipt.Grant kafkaGrant(Entry entry)throws Exception{
         KafkaGrantIssuer issuer=kafkaGrantIssuer;
-        return issuer!=null&&entry.config.pipeline!=null
-                &&entry.config.pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.KAFKA)
+        PipelineConfig pipeline=entry.config.pipeline;
+        boolean enrolled=pipeline!=null&&pipeline.kafkaHistoryFromFirstSend;
+        if(issuer==null&&enrolled)throw new Conflict("KAFKA_HISTORY_ORIGIN_MANAGED_GRANT_REQUIRED");
+        KafkaPhysicalReceipt.Grant grant=issuer!=null&&pipeline!=null
+                &&pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.KAFKA)
                 ?issuer.issue(entry.config.jobId,entry.config.workerYaml):null;
+        if(enrolled)entry.config.holdExistingLocalJournal();
+        return grant;
     }
 
     private OwnerWorkerLease managedWorkerLease(Entry entry){
-        return entry.config.pipeline!=null&&entry.config.pipeline.journal.managedWriter?ownerWorkerLease:null;
+        PipelineConfig pipeline=entry.config.pipeline;
+        return pipeline!=null&&(pipeline.journal.managedWriter||pipeline.kafkaHistoryFromFirstSend)?ownerWorkerLease:null;
     }
     synchronized void holdOwnerStart(String task,boolean hold){if(hold)ownerStartBlocks.add(task);else ownerStartBlocks.remove(task);}
     synchronized ManagedRecipientImport.Receipt installStoppedRecipient(ManagedRecipientImport.Grant grant,
@@ -405,6 +411,8 @@ public final class TaskService implements AutoCloseable {
     }
     private void validateTask(TaskDefinition task,String replacing) throws Exception {
         task.validate();
+        if(task.pipeline!=null&&task.pipeline.kafkaHistoryFromFirstSend&&(config.cluster==null||!config.cluster.sharedTasks))
+            throw new Conflict("KAFKA_HISTORY_ORIGIN_MANAGED_GRANT_REQUIRED");
         if (!task.jobId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) throw new Conflict("TASK_ID_INVALID");
         if (entries.size()>=config.maxTasks && replacing==null) throw new Conflict("TASK_LIMIT");
         for (Entry entry:entries.values()) {
@@ -1056,7 +1064,7 @@ public final class TaskService implements AutoCloseable {
                             Control committed=registry.tasks.get(id);
                             if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);
                             else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));
-                            entry.config.holdLocalJournal();
+                            if(entry.config.pipeline==null||!entry.config.pipeline.kafkaHistoryFromFirstSend)entry.config.holdLocalJournal();
                             Path log=logDirectory.resolve(id+".log");
                             entry.worker=workerLease==null?workers.start(entry.path,log,config.workerHeapMiB,kafkaGrant(entry))
                                     :workerLease.prepareAndLaunch(()->kafkaGrant(entry),
@@ -2001,7 +2009,7 @@ public final class TaskService implements AutoCloseable {
     public static String safeCode(Throwable error) {
         if(error instanceof Conflict)return error.getMessage();
         if(error instanceof SyncFailure)return ((SyncFailure)error).code;
-        if((error instanceof IllegalStateException||error instanceof IllegalArgumentException)&&error.getMessage()!=null&&error.getMessage().matches("(?:VALIDATION|REPAIR|FAILURE|SKIP|SINK|GAP|COMPENSATION|CORRECTION|KAFKA_RECOVERY)_[A-Z0-9_]+"))return error.getMessage();
+        if((error instanceof IllegalStateException||error instanceof IllegalArgumentException)&&error.getMessage()!=null&&error.getMessage().matches("(?:VALIDATION|REPAIR|FAILURE|SKIP|SINK|GAP|COMPENSATION|CORRECTION|KAFKA_RECOVERY|KAFKA_HISTORY_ORIGIN)_[A-Z0-9_]+"))return error.getMessage();
         if("ERROR_GENERATION_CHANGED".equals(error.getMessage()))return "ERROR_GENERATION_CHANGED";
         String message=error.getMessage();
         if(message!=null&&(error instanceof IllegalStateException||error instanceof IOException)

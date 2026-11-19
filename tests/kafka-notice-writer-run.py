@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Run read-only Kafka writer and receipt checks on disposable TLS/SCRAM brokers."""
+"""Run Kafka recovery and first-send checks on disposable TLS/SCRAM brokers."""
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import hashlib
 import os
 from pathlib import Path
 import re
 import secrets
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -91,12 +93,72 @@ def provision_users(name, secret):
             raise RuntimeError(f'Could not provision the synthetic {role} SCRAM identity') from None
 
 
+def private_worker_java(source, directory, certificate):
+    copied = directory / 'temurin'
+    shutil.copytree(source, copied, symlinks=True)
+    trust = copied / 'lib' / 'security' / 'cacerts'
+    if trust.is_symlink():
+        original = source / 'lib' / 'security' / 'cacerts'
+        trust.unlink()
+        shutil.copyfile(original, trust)
+    trust.chmod(0o600)
+    copied_bin = copied / 'bin'
+    run(str(copied_bin / 'keytool'), '-importcert', '-noprompt', '-alias', 'rivomesh-fixture',
+        '-keystore', str(trust), '-storepass', 'changeit', '-file', str(certificate), capture_output=True)
+    return copied_bin / 'java'
+
+
+def start_first_send_mysql(directory, name, port, secret):
+    fixture = directory / name
+    fixture.mkdir(mode=0o700)
+    password = fixture / 'root-password'
+    schema = fixture / 'schema.sql'
+    password.write_text(secret + '-mysql\n')
+    schema.write_text(f"""
+CREATE DATABASE fixture_sales;
+CREATE DATABASE fixture_control CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+CREATE USER 'fixture_source'@'%' IDENTIFIED BY '{secret}-source';
+GRANT SELECT ON fixture_sales.* TO 'fixture_source'@'%';
+GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'fixture_source'@'%';
+GRANT SELECT ON performance_schema.replication_group_members TO 'fixture_source'@'%';
+GRANT FLUSH_TABLES ON *.* TO 'fixture_source'@'%';
+CREATE USER 'fixture_control'@'%' IDENTIFIED BY '{secret}-control';
+GRANT ALL PRIVILEGES ON fixture_control.* TO 'fixture_control'@'%';
+CREATE USER 'fixture_agent'@'%' IDENTIFIED BY '{secret}-agent';
+GRANT ALL PRIVILEGES ON fixture_control.* TO 'fixture_agent'@'%';
+""")
+    password.chmod(0o644)
+    schema.chmod(0o644)
+    run('docker', 'run', '-d', '--rm', '--name', name, '--memory', '1400m', '--cpus', '2',
+        '-p', f'127.0.0.1:{port}:3306',
+        '-e', 'MYSQL_ROOT_PASSWORD_FILE=/run/fixture-root-password', '-e', 'MYSQL_ROOT_HOST=%',
+        '-v', f'{password}:/run/fixture-root-password:ro',
+        '-v', f'{schema}:/docker-entrypoint-initdb.d/00-first-send.sql:ro',
+        'mysql:8.4', '--server-id=1', '--log-bin=mysql-bin', '--binlog-format=ROW', '--binlog-row-image=FULL',
+        '--binlog-transaction-compression=OFF', '--gtid-mode=ON', '--enforce-gtid-consistency=ON',
+        '--log-replica-updates=ON', '--innodb-buffer-pool-size=128M', capture_output=True, timeout=90)
+    probe = ('docker', 'exec', name, 'sh', '-c',
+             'MYSQL_PWD="$(cat /run/fixture-root-password)" mysql --protocol=TCP -h127.0.0.1 '
+             '-uroot -N -e "SELECT 1" fixture_sales')
+    deadline = time.monotonic() + 135
+    while time.monotonic() < deadline:
+        try:
+            result = subprocess.run(probe, text=True, capture_output=True, timeout=6)
+            if result.returncode == 0 and result.stdout.strip() == '1':
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(2)
+    raise RuntimeError('Disposable MySQL 8.4 did not finish GTID source setup')
+
+
 def main():
     options = argparse.ArgumentParser(description=__doc__)
     options.add_argument('artifact', type=Path)
     mode = options.add_mutually_exclusive_group()
     mode.add_argument('--physical-ownership', action='store_true')
     mode.add_argument('--managed-physical-receipt', action='store_true')
+    mode.add_argument('--managed-first-send', action='store_true', help='Exercise the ordinary Worker with native MySQL and Kafka')
     mode.add_argument('--managed-notice-preflight', action='store_true', help='Use a three-broker TLS/SCRAM control Topic')
     options.add_argument('--artifact-sha256', help='Require this SHA-256 of the normal application JAR')
     options.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), help='Eclipse Temurin 21 JDK')
@@ -123,12 +185,15 @@ def main():
     managed = args.managed_physical_receipt or args.managed_notice_preflight
     if managed:
         fixtures = ['KafkaManagedPhysicalReceiptAcceptance', 'KafkaPhysicalOwnershipAcceptance']
+    if args.managed_first_send:
+        fixtures = ['KafkaFirstSendAcceptance', 'KafkaPhysicalOwnershipAcceptance']
     name = f'rivomesh-kafka-writer-{secrets.token_hex(6)}'
     names = [f'{name}-{node}' for node in (1,2,3)] if args.managed_notice_preflight else [name]
     network = name+'-net' if args.managed_notice_preflight else None
+    mysqls = [name+'-mysql-source', name+'-mysql-control'] if args.managed_first_send else []
     secret = secrets.token_hex(24)
     with tempfile.TemporaryDirectory(prefix='rivomesh-kafka-writer-') as directory:
-        home = Path(directory)
+        home = Path(directory).resolve(strict=True)
         home.chmod(0o755)
         classes = home / 'classes'
         classes.mkdir()
@@ -141,25 +206,50 @@ def main():
                 run(str(java_home / 'java'), '-Xmx384m', '-cp', classpath,
                     f'io.github.rivomesh.cdc.{fixtures[0]}', '--control-preflight', str(home),
                     *(['--notice-preflight'] if args.managed_notice_preflight else []), env=environment, timeout=65)
+            if args.managed_first_send:
+                run(str(java_home / 'java'), '-Xmx256m', '-cp', classpath,
+                    'io.github.rivomesh.cdc.KafkaFirstSendAcceptance', '--control-preflight', '3306', '3307', str(home),
+                    env=environment, timeout=25)
             print('Fixture compiled against the supplied application. No broker started.', flush=True)
             return
         with ExitStack() as reservations:
-            sockets = [reservations.enter_context(socket.socket()) for _ in names]
+            sockets = [reservations.enter_context(socket.socket()) for _ in range(len(names) + len(mysqls))]
             for reservation in sockets:
                 reservation.bind(('127.0.0.1', 0))
             ports = [reservation.getsockname()[1] for reservation in sockets]
-        trust, password = provision_tls(home, str(java_home / 'keytool'))
+        broker_home = home
+        if mysqls:
+            broker_home = home / 'broker'
+            broker_home.mkdir(mode=0o755)
+        trust, password = provision_tls(broker_home, str(java_home / 'keytool'))
         cluster = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip('=')
         try:
             if network:
                 run('docker', 'network', 'create', network, capture_output=True, timeout=15)
                 voters = ','.join(f'{node}@{broker}:9093' for node, broker in enumerate(names, 1))
                 for node, (broker, port) in enumerate(zip(names, ports), 1):
-                    start(home, port, password, broker, cluster, node, voters, network)
+                    start(broker_home, port, password, broker, cluster, node, voters, network)
                 run('docker', 'start', *names, capture_output=True, timeout=35)
             else:
-                start(home, ports[0], password, name, cluster)
+                start(broker_home, ports[0], password, name, cluster)
             provision_users(names[0], secret)
+            if mysqls:
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    starts = [pool.submit(start_first_send_mysql, home, member, port, secret)
+                              for member, port in zip(mysqls, ports[-2:])]
+                    for started in starts:
+                        started.result()
+                java = private_worker_java(args.java_home, home, broker_home / 'broker.pem')
+                result = subprocess.run([str(java), '-Xmx384m', '-Dorg.slf4j.simpleLogger.defaultLogLevel=off', '-cp',
+                                         classpath, 'io.github.rivomesh.cdc.KafkaFirstSendAcceptance',
+                                         f'127.0.0.1:{ports[0]}', str(ports[-2]), str(ports[-1]), str(home)],
+                                        env=environment, timeout=390, text=True, capture_output=True)
+                for output in (result.stdout, result.stderr):
+                    lines = output.replace(secret, '[synthetic-secret]').strip().splitlines()
+                    if lines:
+                        print('\n'.join(line[:300] for line in lines[-40:]), flush=True)
+                result.check_returncode()
+                return
             fixture_arguments = [','.join(f'127.0.0.1:{port}' for port in ports)]
             if managed:
                 fixture_arguments.append(str(home))
@@ -171,13 +261,14 @@ def main():
                 '-cp', classpath, f'io.github.rivomesh.cdc.{fixtures[0]}', *fixture_arguments,
                 env=environment, timeout=250 if args.managed_notice_preflight else 210 if managed else 125)
         except Exception:
-            for broker in names:
-                logs = subprocess.run(['docker', 'logs', '--tail', '25', broker], capture_output=True, text=True, timeout=10)
+            for member in names + mysqls:
+                logs = subprocess.run(['docker', 'logs', '--tail', '25', member], capture_output=True, text=True, timeout=10)
                 if logs.returncode == 0:
                     print((logs.stdout + logs.stderr).replace(secret, '[synthetic-secret]'), flush=True)
             raise
         finally:
-            subprocess.run(['docker', 'rm', '-f', *names], check=False, capture_output=True, timeout=20)
+            subprocess.run(['docker', 'rm', '-f', *names, *mysqls],
+                           check=False, capture_output=True, timeout=20)
             if network:
                 subprocess.run(['docker','network','rm',network],check=False,capture_output=True,timeout=15)
             remaining = subprocess.run(['docker', 'ps', '-a', '--filter', f'name={name}', '--format', '{{.Names}}'],

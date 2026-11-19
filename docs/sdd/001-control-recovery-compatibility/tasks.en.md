@@ -99,6 +99,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Both entries can verify and replay a durable blocked approval, with the exact scope, authorization and audit anchor. Topic and consumer offsets remain at the original values.
   - [x] Native Kafka records a signed Topic receipt, Agent membership and journal UTC for the first new COMMIT with PostgreSQL, MySQL and H2 journals.
   - [x] Two entries verify the same signed receipt against real TLS/SCRAM Kafka and report missing evidence for a replacement Topic UUID.
+  - [x] Native MySQL to two Kafka targets verifies first-send UNKNOWN, subscription isolation, restart and fencing after the old Worker loses admission.
   - [ ] historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
 ## Source compatibility
 

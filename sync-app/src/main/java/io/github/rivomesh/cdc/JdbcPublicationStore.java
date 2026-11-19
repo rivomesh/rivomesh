@@ -26,6 +26,16 @@ public final class JdbcPublicationStore implements PublicationStore {
         boolean exists=false;for(Journal.Subscription sub:journal.subscriptions(c))if(subscription.equals(sub.id)){exists=true;if(lease!=null&&!"RUNNING".equals(sub.state))throw new JdbcJournal.Paused();}if(!exists)throw new IllegalArgumentException("SUBSCRIPTION_NOT_FOUND");return job;
     }
     @Override public void check(long epoch)throws Exception{try(Connection c=journal.connect()){c.setAutoCommit(false);fence(c,epoch);c.rollback();}}
+    void beforeSend(long epoch,List<ConfirmedPublisher.Message> messages)throws Exception{
+        if(journal.historyOrigin()==null||!journal.settings.kafkaPublicationTargets.contains(subscription))return;
+        try(Connection c=journal.connect()){
+            c.setAutoCommit(false);
+            if(lease==null)throw new JdbcJournal.Fenced();
+            Map<String,Object> job=fence(c,epoch);
+            JdbcKafkaHistoryOrigin.beforeSend(journal,c,subscription,(String)job.get("generation"),epoch,messages);
+            c.commit();
+        }
+    }
     private String progress(Connection c,String generation)throws Exception{
         try(PreparedStatement p=c.prepareStatement("SELECT generation,payload FROM "+t("publication_transport")+" WHERE pipeline_id=? AND subscription_id=?")){p.setString(1,pipeline);p.setString(2,subscription);try(ResultSet rs=p.executeQuery()){if(!rs.next())return null;if(!generation.equals(rs.getString(1)))throw new IllegalStateException("PUBLICATION_GENERATION_MISMATCH");return rs.getString(2);}}
     }
