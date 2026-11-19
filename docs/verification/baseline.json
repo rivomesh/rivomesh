@@ -12755,5 +12755,23 @@
     ],
     "sqlFixture": "tests/kafka-journal-durability-run.py",
     "kafkaFixture": "tests/kafka-notice-writer-run.py"
+  },
+  "temurin21OidcKafkaFullReactor": {
+    "artifactSha256": "f31cb970e9f64b522a8546bd0e741f81aa9a0412c3dd27bce81dbb39f4ed6a44",
+    "applicationCommit": "d2cb0a67e47cd82f91b6f74adc7ab01f9fb5ed5f",
+    "helmVerificationCommit": "39ed017b0c68cb067f2ccf82afc6be3026d732bf",
+    "runtime": "Eclipse Temurin 21.0.13+9 ARM64",
+    "applicationJavaPassed": 646,
+    "applicationJavaOptionalSkips": 35,
+    "domPassed": 161,
+    "browserName": "Chrome/157.0.8103.79",
+    "browserChecksPassed": 14,
+    "configurationExamplesPassed": 25,
+    "mavenReactorLogSha256": "e10f0d9f399bbdafb6929bbeb0174c5faac435a4cd59c9aae313665852584307",
+    "browserManifestSha256": "f031623618f7869cc44f6871e23cef6b0c8b894489b45a3261085855c7e033a2",
+    "domLogSha256": "3d0e811323f1802d3d5c6e12314afdd637fb46520272f5498cdd4f33435a4cdb",
+    "configurationCheckLogSha256": "9463308b5a5aabba71365312987e173eca892029c7cbc50d4018be58d400afc9",
+    "helmVerificationLogSha256": "5394a7db4b781addd3ffa196ce45f5c90a2f3f8d11dff0e3bc448e0f3dfdb1f1",
+    "scope": "Full standard Maven reactor with shared OIDC and Kafka physical custody features. Browser checks run against the exact shaded artifact. The distinct Helm verification covers render parity, OIDC and Kafka opt-in settings, and Secret references. Live Kubernetes and driver combinations remain individually scoped."
   }
 }
