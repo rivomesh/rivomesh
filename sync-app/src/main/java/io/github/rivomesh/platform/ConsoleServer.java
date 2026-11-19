@@ -217,6 +217,21 @@ public final class ConsoleServer implements AutoCloseable {
                 }
                 return;
             }
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("kafka-notice-approvals")
+                    &&parts[6].equals("preflight")&&method.equals("POST")){
+                JsonNode input=body(exchange);
+                if(input.size()!=2||!input.path("approvalScopeSha256").isTextual()||!input.path("expectedRevision").isTextual())
+                    throw new IllegalArgumentException("KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PREFLIGHT,parts[3]);
+                request.reference=parts[5];request.revision=input.path("expectedRevision").asText();
+                request.identityHash=input.path("approvalScopeSha256").asText();
+                try{json(exchange,200,control.invoke(request,principal));}
+                catch(NoSuchElementException missing){
+                    if(!"RECOVERY_RECEIPT_NOT_FOUND".equals(missing.getMessage()))throw missing;
+                    error(exchange,404,"RECOVERY_RECEIPT_NOT_FOUND");
+                }
+                return;
+            }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("kafka-physical-receipt")&&method.equals("POST")){
                 JsonNode input=body(exchange);
                 if(input.size()!=2||!input.path("predecessorRequestId").isTextual()||!input.path("expectedRevision").isTextual())
@@ -526,6 +541,8 @@ public final class ConsoleServer implements AutoCloseable {
             return "POST_KAFKA_NOTICE_PLAN";
         if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-notice-approvals"))
             return "POST_KAFKA_NOTICE_APPROVAL";
+        if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-notice-approvals/[A-Za-z0-9_-]{8,128}/preflight"))
+            return "POST_KAFKA_NOTICE_PREFLIGHT";
         if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-physical-receipt"))
             return "POST_KAFKA_PHYSICAL_RECEIPT";
         String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/recovery-receipts/[A-Za-z0-9_-]{8,128}")?"RECOVERY_RECEIPT":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";

@@ -13687,5 +13687,22 @@
     ],
     "scannerTestsPassed": 5,
     "scope": "Normal and previously verified external-vendor JARs stop distribution review at recognized reused dependency licensing files. The external-vendor regression uses a synthetic complete review record. Source rights, project notices and undeclared license terms still require review."
+  },
+  "kafkaManagedNoticeSenderPreflight": {
+    "status": "PASS",
+    "nativeBrokerVerified": false,
+    "evidenceSha256": "5cae233e38970af13099d6763c358369fabc0a3ce43a7f665d361b5b03318fce",
+    "artifactSha256": "c76e9858a72f144c3447b0fce3b3b9c732a19641fe4ed5a85a3e83e3f612c7a3",
+    "artifactBaseCommit": "c8f8f32c2bf364a644d0fd6915b2106fe3952b2c",
+    "jdk": "Eclipse Temurin 21.0.13+9",
+    "focusedJavaTestsPassed": 137,
+    "domTestsPassed": 165,
+    "checks": [
+      "read-only preflight authenticates the original approval and audit, exact current task/failure/catalog and original approver",
+      "fresh owner review verifies dynamically scoped signed predecessor and still blocks history, even when that one ACK is verified",
+      "read back the exact offset and bytes from the broker to replay an already verified internal prototype ledger receipt",
+      "cross-controller HTTP and UI validated with controlled broker results; exact broker behavior awaits native acceptance"
+    ],
+    "scope": "Two Controller HTTP entries and UI use a controlled Kafka backend. Only the original approver can recheck an authenticated approval, exact failure, independent physical control topic and signed preceding ACK. Missing full historical route scope blocks sender authorization. The internal receipt prototype requires exact native body and offset on replay."
   }
 }

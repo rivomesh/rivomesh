@@ -6,6 +6,7 @@ import io.github.rivomesh.cdc.KafkaNoticePlanning.Prepared;
 import io.github.rivomesh.cdc.KafkaNoticeWriterReview.Result;
 import io.github.rivomesh.recovery.FailureEvidence;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +46,41 @@ final class KafkaNoticeApproval {
         if("VERIFIED_AT_REVIEW".equals(writer.status())&&writer.evidenceSha256()==null)
             writer=new Result("BLOCKED","KAFKA_NOTICE_WRITER_EVIDENCE_REFRESH_REQUIRED");
         return new Scope(plan,hash(coverage,"configurationCutSha256"),hash(coverage,"physicalRoutesSha256"),writer,HISTORY);
+    }
+
+    static Map<String,Object> senderPreflight(String approvalId,Scope scope,Map<String,Object> receipt){
+        var plan=scope.plan();var failure=plan.failure();var task=plan.task();
+        Object status=receipt.get("status"),code=receipt.get("code");
+        boolean exact=task.configurationVersion().equals(receipt.get("configurationVersion"))
+                &&failure.targetId().equals(receipt.get("targetId"))
+                &&failure.acknowledgedSequence().equals(receipt.get("acknowledgedSequence"));
+        var blockers=new ArrayList<>(scope.blockers());var predecessor=new LinkedHashMap<String,Object>();
+        if(exact&&"VERIFIED".equals(status)&&"KAFKA_PHYSICAL_RECEIPT_VERIFIED".equals(code)
+                &&receipt.get("receiptSha256") instanceof String digest&&FailureEvidence.hash(digest)){
+            predecessor.put("receiptSha256",digest);
+        }else if(exact&&"MISSING".equals(status)&&("KAFKA_PHYSICAL_RECEIPT_UNVERIFIED".equals(code)
+                ||"KAFKA_PHYSICAL_RECEIPT_TOPIC_CHANGED".equals(code))){
+            blockers.add("KAFKA_NOTICE_PREDECESSOR_PHYSICAL_RECEIPT_REQUIRED");
+        }else if("UNREACHABLE".equals(status)&&code instanceof String problem
+                &&(exact&&"KAFKA_PHYSICAL_RECEIPT_BROKER_UNAVAILABLE".equals(problem)
+                ||Set.of("OWNER_QUERY_UNAVAILABLE","OWNER_QUERY_FAILED","OWNER_QUERY_TIMEOUT","OWNER_QUERY_EXPIRED").contains(problem))){
+            blockers.add("KAFKA_NOTICE_PREDECESSOR_PHYSICAL_RECEIPT_UNAVAILABLE");
+        }else throw new TaskService.Conflict("KAFKA_NOTICE_PREFLIGHT_RECEIPT_CHANGED");
+        predecessor.put("status",status);
+
+        var report=new LinkedHashMap<String,Object>();
+        report.put("status","SENDER_BLOCKED");
+        report.put("executionAuthorized",false);
+        report.put("approvalRequestId",approvalId);
+        report.put("approvalScopeSha256",scope.digest());
+        report.put("task",task);
+        report.put("failure",failure);
+        report.put("controlTopicId",plan.controlTopic().topicId());
+        report.put("noticeId",plan.noticeId());
+        report.put("payloadSha256",plan.payloadSha256());
+        report.put("precedingPhysicalReceipt",predecessor);
+        report.put("blockers",List.copyOf(blockers));
+        return report;
     }
 
     private static String hash(Map<String,Object> coverage,String field){

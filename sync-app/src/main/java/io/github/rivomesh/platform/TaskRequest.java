@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_NOTICE_APPROVAL,KAFKA_CATALOG_PROBE,KAFKA_PHYSICAL_RECEIPT,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_NOTICE_APPROVAL,KAFKA_NOTICE_PREFLIGHT,KAFKA_CATALOG_PROBE,KAFKA_PHYSICAL_RECEIPT,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -107,6 +107,10 @@ final class TaskRequest {
                 ||reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)
                 ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")||yaml!=null||document!=null))
             throw new IllegalArgumentException("KAFKA_NOTICE_APPROVAL_REQUEST_INVALID");
+        if(kind==Kind.KAFKA_NOTICE_PREFLIGHT&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
+                ||revision==null||!revision.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
+                ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")||requestId!=null||yaml!=null||document!=null))
+            throw new IllegalArgumentException("KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID");
         if(kind==Kind.KAFKA_CATALOG_PROBE&&(revision==null||!revision.matches("[a-f0-9-]{36}")
                 ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")||yaml!=null||document!=null))
             throw new IllegalArgumentException("KAFKA_NOTICE_CATALOG_PROBE_INVALID");
@@ -189,7 +193,7 @@ final class TaskRequest {
     boolean excludesCapture(){return kind==Kind.ACTION&&"CAPTURE_EXCLUDE".equals(action);}
     boolean captureRetention(){return kind==Kind.ACTION&&"CAPTURE_RETAIN".equals(action);}
     boolean failureReview(){return kafkaReview()||kind==Kind.KAFKA_NOTICE_PLAN||kind==Kind.KAFKA_NOTICE_APPROVAL
-            ||kind==Kind.KAFKA_CATALOG_PROBE||kind==Kind.KAFKA_PHYSICAL_RECEIPT||kind==Kind.FAILURE_EVIDENCE_SUMMARY
+            ||kind==Kind.KAFKA_NOTICE_PREFLIGHT||kind==Kind.KAFKA_CATALOG_PROBE||kind==Kind.KAFKA_PHYSICAL_RECEIPT||kind==Kind.FAILURE_EVIDENCE_SUMMARY
             ||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}
 }

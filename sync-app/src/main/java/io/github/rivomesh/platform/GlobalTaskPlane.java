@@ -42,16 +42,11 @@ final class GlobalTaskPlane implements TaskControlPlane {
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
                 return kafkaNoticePlan(request,actor).response();
             case KAFKA_NOTICE_APPROVAL:return kafkaNoticeApproval(request,actor);
+            case KAFKA_NOTICE_PREFLIGHT:return kafkaNoticePreflight(request,actor);
             case KAFKA_PHYSICAL_RECEIPT:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_PHYSICAL_RECEIPT_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
-                try{return queries.await(queries.submit(request,actor),actor);}
-                catch(TaskService.Conflict unavailable){
-                    String code=unavailable.getMessage();
-                    if(code==null||!Set.of("OWNER_QUERY_UNAVAILABLE","OWNER_QUERY_FAILED","OWNER_QUERY_TIMEOUT","OWNER_QUERY_EXPIRED").contains(code))
-                        throw unavailable;
-                    return Map.of("status","UNREACHABLE","code",code);
-                }
+                return kafkaPhysicalReceipt(request,actor);
             case HANDOFF_ASSESS:case HANDOFF_LATEST:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);
@@ -139,6 +134,30 @@ final class GlobalTaskPlane implements TaskControlPlane {
     }
 
     private record KafkaNoticeReview(Map<String,Object> response,KafkaNoticeApproval.Scope approval){}
+
+    private Map<String,Object> kafkaNoticePreflight(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        var retained=commands.kafkaNoticePreflight(request,actor);
+        var predecessor=retained.predecessor();
+        TaskRequest check=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PLAN,request.taskId);
+        check.revision=request.revision;check.reference=predecessor.receipt().requestId();check.kafkaNoticePredecessor=predecessor;
+        if(!retained.approval().equals(kafkaNoticePlan(check,actor).approval()))
+            throw new TaskService.Conflict("KAFKA_NOTICE_PREFLIGHT_REVIEW_CHANGED");
+        check.kind=TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT;
+        var physical=kafkaPhysicalReceipt(check,actor);
+        if(!retained.equals(commands.kafkaNoticePreflight(request,actor)))
+            throw new TaskService.Conflict("KAFKA_NOTICE_PREFLIGHT_REVIEW_CHANGED");
+        return KafkaNoticeApproval.senderPreflight(request.reference,retained.approval(),physical);
+    }
+
+    private Map<String,Object> kafkaPhysicalReceipt(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        try{return queries.await(queries.submit(request,actor),actor);}
+        catch(TaskService.Conflict unavailable){
+            String code=unavailable.getMessage();
+            if(code==null||!Set.of("OWNER_QUERY_UNAVAILABLE","OWNER_QUERY_FAILED","OWNER_QUERY_TIMEOUT","OWNER_QUERY_EXPIRED").contains(code))
+                throw unavailable;
+            return Map.of("status","UNREACHABLE","code",code);
+        }
+    }
 
     private Map<String,Object> kafkaNoticeApproval(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> retained=commands.replayKafkaNoticeApproval(request,actor);

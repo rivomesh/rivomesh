@@ -110,7 +110,7 @@ final class KafkaRecoveryNotice {
 
     private Receipt recover(Plan plan,JdbcKafkaNoticeLedger.Entry entry,Authority authority)throws Exception {
         authority.verify();
-        if(entry.verified())return new Receipt(plan.id(),plan.topic(),entry.offset(),plan.payloadSha256());
+        // A JDBC row alone cannot establish a native receipt, even after a previous verified read.
         Receipt nativeReceipt=broker.read(plan,entry.offset());
         if(nativeReceipt==null)return null;
         requireReceipt(plan,entry.offset(),nativeReceipt);

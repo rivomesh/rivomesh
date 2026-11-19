@@ -58,7 +58,7 @@ class KafkaRecoveryNoticeTest {
             assertEquals(recovered,protocol.publish(plan,plan.hash(),AUTHORIZED));
             assertEquals(List.of(plan.transactionalId()),broker.producers);
             assertEquals(1,broker.commitCalls);
-            assertEquals(List.of(broker.receipt.offset()),broker.requestedOffsets);
+            assertEquals(List.of(broker.receipt.offset(),broker.receipt.offset()),broker.requestedOffsets);
             assertEquals(0,reopened.inspectFailure("slow",1,100000).subscription.acknowledged);
             assertEquals(1,reopened.subscriptions().stream().filter(sub->sub.id.equals("fast")).findFirst().orElseThrow().acknowledged);
         }
@@ -93,6 +93,45 @@ class KafkaRecoveryNoticeTest {
                     ()->protocol.publish(plan,plan.hash(),AUTHORIZED)).getMessage());
             assertFalse(new JdbcKafkaNoticeLedger(journal).existing(plan).verified());
             assertEquals(1,broker.commitCalls);
+        }
+    }
+
+    @Test void aVerifiedLedgerRowCannotSupplyAnOffsetOrRecoverAVanishedNativeReceipt()throws Exception {
+        Native broker=new Native();
+        try(JdbcJournal journal=new JdbcJournal(settings)){
+            var protocol=protocol(journal,broker);
+            Receipt original=protocol.publish(plan,plan.hash(),AUTHORIZED);
+            assertNotNull(original);
+            var ledger=new JdbcKafkaNoticeLedger(journal);
+            long replacement=original.offset()+20,number=ledger.existing(plan).number();
+            String forgedChecksum=Codec.sha256(Codec.encode(List.of(plan.id(),plan.hash(),"VERIFIED",number,Long.toString(replacement))));
+            FailureReviewTest.sql(journal,"UPDATE "+journal.table("kafka_recovery_notice")+" SET native_offset=?,state_hash=? "
+                    +"WHERE pipeline_id=? AND notice_id=?",replacement,forgedChecksum,plan.failure().pipeline(),plan.id());
+            assertEquals(replacement,ledger.existing(plan).offset());
+            assertEquals("KAFKA_NOTICE_NATIVE_RECEIPT_CONFLICT",assertThrows(IllegalStateException.class,
+                    ()->protocol.publish(plan,plan.hash(),AUTHORIZED)).getMessage());
+            broker.receipt=null;
+            assertNull(protocol.publish(plan,plan.hash(),AUTHORIZED));
+            assertEquals(List.of(original.offset(),replacement,replacement),broker.requestedOffsets);
+            assertEquals(1,broker.commitCalls);
+            assertEquals(1,broker.producers.size());
+            assertEquals(0,journal.inspectFailure("slow",1,100000).subscription.acknowledged);
+            assertEquals(1,journal.subscriptions().stream().filter(sub->sub.id.equals("fast")).findFirst().orElseThrow().acknowledged);
+        }
+    }
+
+    @Test void revokedAfterNativeReadCannotReplayAPreviouslyVerifiedReceipt()throws Exception {
+        Native broker=new Native();
+        AtomicBoolean allowed=new AtomicBoolean(true);
+        Authority authority=()->{if(!allowed.get())throw new SecurityException("AUTHORIZATION_CHANGED");};
+        try(JdbcJournal journal=new JdbcJournal(settings)){
+            var protocol=protocol(journal,broker);
+            assertNotNull(protocol.publish(plan,plan.hash(),authority));
+            broker.afterRead=()->allowed.set(false);
+            assertThrows(SecurityException.class,()->protocol.publish(plan,plan.hash(),authority));
+            assertEquals(1,broker.commitCalls);
+            assertEquals(1,broker.producers.size());
+            assertEquals(0,journal.inspectFailure("slow",1,100000).subscription.acknowledged);
         }
     }
 
@@ -184,7 +223,7 @@ class KafkaRecoveryNoticeTest {
     private static final class Native implements KafkaRecoveryNotice.Broker {
         boolean commitReplyLost,commitInvisible,sendReplyLost,openUncommitted;
         byte[] nativeBytes;
-        Runnable afterSend=()->{};
+        Runnable afterSend=()->{},afterRead=()->{};
         int commitCalls;
         Receipt receipt;
         final List<Long> requestedOffsets=new ArrayList<>();
@@ -192,7 +231,7 @@ class KafkaRecoveryNoticeTest {
 
         @Override public Receipt read(Plan plan,Long offset){
             if(offset==null&&openUncommitted)throw new IllegalStateException("KAFKA_NOTICE_HISTORY_UNAVAILABLE");
-            if(offset!=null)requestedOffsets.add(offset);
+            if(offset!=null){requestedOffsets.add(offset);afterRead.run();}
             return receipt;
         }
 

@@ -98,6 +98,39 @@ window.RivomeshRecovery=(()=>{
   };
   section.append(button,result);return section;
  }
+ function kafkaNoticePreflight(task,approval,plan,current){
+  const section=text('section'),button=label('button','kafkaNoticePreflight'),result=text('div');
+  section.dataset.kafkaNoticePreflight='';result.setAttribute('aria-live','polite');
+  button.onclick=async()=>{
+   const revision=plan.task.revision;
+   const eligible=()=>{
+    const latest=bridge.task(task.id);
+    return current()&&section.isConnected&&receiptAllowed(latest)&&paused(latest)&&bridge.session()?.recoveryReview
+     &&typeof revision==='string'&&latest.revision===revision;
+   };
+   if(!eligible()||button.disabled)return;
+   button.disabled=true;result.replaceChildren();
+   try{
+    const check=await api(base(task)+'/kafka-notice-approvals/'+encodeURIComponent(approval.id)+'/preflight',{
+     method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},
+     body:JSON.stringify({expectedRevision:revision,approvalScopeSha256:approval.approvalScopeSha256})});
+    if(!eligible())return;
+    const states={VERIFIED:'kafkaPhysicalVerified',MISSING:'kafkaPhysicalMissing',UNREACHABLE:'kafkaPhysicalUnavailable'};
+    const status=check?.precedingPhysicalReceipt?.status;
+    if(check?.status!=='SENDER_BLOCKED'||check.executionAuthorized!==false||check.approvalRequestId!==approval.id
+     ||check.approvalScopeSha256!==approval.approvalScopeSha256||check.task?.revision!==revision||check.task?.taskId!==task.id
+     ||check.task?.configurationVersion!==plan.task.configurationVersion
+     ||check.controlTopicId!==plan.controlTopic.topicId||check.payloadSha256!==plan.payloadSha256
+     ||check.failure?.failedSequence!==plan.failure.failedSequence||check.failure?.targetId!==plan.controlTopic.targetId
+     ||!Object.hasOwn(states,status)||status==='VERIFIED'&&!digest.test(check.precedingPhysicalReceipt.receiptSha256||'')
+     ||!Array.isArray(check.blockers)||!check.blockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'))
+     throw new Error(t('receiptMismatch'));
+    result.append(label('p',states[status]),label('p','kafkaNoticePreflightBlocked'));
+   }catch(error){if(eligible())result.append(text('p',error.message,'error'));}
+   finally{button.disabled=false;}
+  };
+  section.append(button,result);return section;
+ }
  function kafkaNoticePreview(task,receipt,current){
   const scope=()=>bridge.task(task.id);
   const eligible=latest=>receiptAllowed(latest)&&paused(latest)&&bridge.session()?.recoveryReview
@@ -160,7 +193,7 @@ window.RivomeshRecovery=(()=>{
        if(recorded?.id!==approvalId||recorded?.taskId!==task.id||recorded?.status!=='RECORDED_BLOCKED'
         ||recorded.executionAuthorized!==false||recorded.approvalScopeSha256!==data.approvalScopeSha256)
         throw new Error(t('receiptMismatch'));
-       approvalResult.append(label('p','kafkaNoticeApprovalRecorded'),text('code',approvalId));
+       approvalResult.append(label('p','kafkaNoticeApprovalRecorded'),text('code',approvalId),kafkaNoticePreflight(task,recorded,plan,current));
       }catch(error){
        if(current()&&approvalResult.isConnected)approvalResult.append(text('p',error.message,'error'));
        approve.disabled=false;
@@ -612,6 +645,7 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprove:'登记条件审批',
   kafkaNoticeApprovalNote:'历史物理归属仍待核对。登记审批仅保存本次核对范围，通知不会发送。',
   kafkaNoticeApprovalRecorded:'审批已登记，通知仍未获准发送。',
+  kafkaNoticePreflight:'核对发送条件',kafkaNoticePreflightBlocked:'控制 Topic 的历史归属仍待核实，通知继续受阻。',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'已核对生效和可回退配置当前指向的 Kafka Topic。',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'管理目录超出这次只读核对的范围。',
@@ -646,6 +680,7 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprove:'Record conditional approval',
   kafkaNoticeApprovalNote:'Historical topic ownership needs verification. Recording approval saves the reviewed scope and keeps publication blocked.',
   kafkaNoticeApprovalRecorded:'Approval recorded. Publication is still blocked.',
+  kafkaNoticePreflight:'Check sender prerequisites',kafkaNoticePreflightBlocked:'The notice remains blocked until historical control Topic ownership is verified.',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'Verified where active and restorable Kafka configurations point at review time.',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'The managed catalog exceeds the scope of this read-only review.',

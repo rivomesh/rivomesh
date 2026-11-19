@@ -374,6 +374,28 @@ final class DurableCommands {
         });
     }
 
+    record KafkaNoticePreflight(KafkaNoticeApproval.Scope approval,KafkaNoticePredecessor predecessor){}
+
+    KafkaNoticePreflight kafkaNoticePreflight(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        if(request.kind!=TaskRequest.Kind.KAFKA_NOTICE_PREFLIGHT)throw new IllegalArgumentException("KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID");
+        return tasks.transaction(request.taskId,actor,(c,task,current)->{
+            authorize(request,current);root(c,false);
+            if(!task.revision.equals(request.revision))throw new TaskService.Conflict("REVISION_CHANGED");
+            var retained=read(c,request.reference);
+            if(retained==null||!task.id.equals(retained.task)||retained.kafkaNoticeApproval==null)
+                throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+            if(!current.id.equals(retained.actor))throw new SecurityException("FORBIDDEN");
+            if(!Objects.equals(current.authorizationRevision,retained.actorRevision))
+                throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+            if(!request.revision.equals(retained.acceptedRevision))throw new TaskService.Conflict("REVISION_CHANGED");
+            var scope=retained.kafkaNoticeApproval;
+            if(!request.identityHash.equals(scope.digest()))throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_CHANGED");
+            requireApprovalAudit(c,retained.id);
+            if(hasUnresolved(c,task.id))throw new TaskService.Conflict("OPERATION_PENDING");
+            return new KafkaNoticePreflight(scope,requireApprovalCut(c,task,retained.request,current,scope));
+        });
+    }
+
     Map<String,Object> recordKafkaNoticeApproval(TaskRequest request,AccessControl.Principal actor,
                                                 KafkaNoticeApproval.Scope approval)throws Exception{
         return tasks.transaction(request.taskId,actor,(c,task,current)->{
@@ -428,7 +450,7 @@ final class DurableCommands {
         if(!access.containsReceipt(c,approvalAuditId(request)))throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_AUDIT_REQUIRED");
     }
 
-    private void requireApprovalCut(Connection c,GlobalTaskStore.Record task,TaskRequest request,
+    private KafkaNoticePredecessor requireApprovalCut(Connection c,GlobalTaskStore.Record task,TaskRequest request,
                                     AccessControl.Principal actor,KafkaNoticeApproval.Scope approval)throws Exception{
         var proof=kafkaNoticePredecessor(c,task,actor,request.reference,request.revision);
         var plan=approval.plan();
@@ -449,6 +471,7 @@ final class DurableCommands {
                 ||!observed.observedTopicIdentitySha256().equals(plan.catalogIdentity().businessTopicSha256()))
             throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_CHANGED");
         KafkaNoticeCatalog.requireConfigurationCut(tasks,c,task,plan,approval.configurationCutSha256());
+        return proof;
     }
 
     private static Map<String,Object> approvalView(Stored command){

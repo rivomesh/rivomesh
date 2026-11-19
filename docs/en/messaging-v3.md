@@ -112,6 +112,8 @@ After the preview verifies the current managed catalog, an administrator can sel
 
 API clients send `POST /api/tasks/<task>/kafka-notice-approvals` with a stable `X-Request-ID` header and JSON fields `expectedRevision`, `predecessorRequestId` and the preview's `approvalScopeSha256`. A successful record returns `RECORDED_BLOCKED` and `executionAuthorized: false`. Either controller can replay the request while the reviewed configurations and the approving account's authorization revision remain current. For the historical receipt, use `GET /api/tasks/<task>/recovery-receipts/<request-id>` as an authorized administrator, including while the task owner is offline.
 
+After recording the approval, the same administrator can select **Check sender prerequisites**. API clients use `POST /api/tasks/<task>/kafka-notice-approvals/<request-id>/preflight` with `expectedRevision` and `approvalScopeSha256` through either controller. The read-only checks require the original approval and audit record. They recheck the exact failure, Kafka Topic, configuration catalog and dedicated writer permissions, then report the verification status of the signed preceding ACK. A changed approval scope, writer entitlement or physical route requires a fresh review. A verified preceding ACK covers one COMMIT and leaves the historical ownership blocker in place. The response remains `SENDER_BLOCKED`. The query leaves the approval, Kafka records and journal progress intact.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof

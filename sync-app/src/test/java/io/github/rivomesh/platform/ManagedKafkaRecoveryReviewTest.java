@@ -73,6 +73,7 @@ class ManagedKafkaRecoveryReviewTest {
         volatile String businessIdentity=Codec.sha256("test topic");
         volatile String controlIdentity=Codec.sha256("test control topic");
         final AtomicInteger physicalReads=new AtomicInteger();
+        volatile boolean physicalVerified,wrongPhysicalTarget;
 
         @Override public Map<String,Object> reviewKafkaPhysicalReceipt(TaskDefinition task,KafkaPhysicalReceipt.Scope scope,
                 KafkaNoticePlanning.Predecessor predecessor,String key,Predicate<KafkaPhysicalReceipt.MemberWitness> verifyMember){
@@ -84,7 +85,11 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals(predecessor.ownerDirectoryId(),scope.ownerDirectory());
             assertEquals(Codec.sha256(task.workerYaml),scope.workerProjectionSha256());
             assertTrue(key.matches("[A-Za-z0-9_-]{43}"));
-            return Map.of("status","MISSING","code","KAFKA_PHYSICAL_RECEIPT_UNVERIFIED","targetId","kafka",
+            String target=wrongPhysicalTarget?"different-target":"kafka";
+            if(physicalVerified)return Map.of("status","VERIFIED","code","KAFKA_PHYSICAL_RECEIPT_VERIFIED",
+                    "targetId",target,"configurationVersion",scope.configurationVersion(),"acknowledgedSequence","6",
+                    "receiptSha256",Codec.sha256("checked physical receipt"),"signature","private fixture material");
+            return Map.of("status","MISSING","code","KAFKA_PHYSICAL_RECEIPT_UNVERIFIED","targetId",target,
                     "configurationVersion",scope.configurationVersion(),"acknowledgedSequence","6");
         }
 
@@ -386,6 +391,90 @@ class ManagedKafkaRecoveryReviewTest {
             }
             assertCode(409,"KAFKA_NOTICE_APPROVAL_AUDIT_REQUIRED",
                     PlatformTest.http(api,approvalReceipt,replacement,null,null));
+        }
+    }
+
+    @Test void senderPreflightBindsTheRecordedApprovalAndNeverClearsHistoryOrChangesProgress()throws Exception{
+        var fixture=new GlobalControlHttpTest();fixture.directory=directory;
+        var controller=fixture.config("a");var owner=fixture.config("b");
+        controller.cluster.recoveryReview=true;owner.cluster.recoveryReview=true;
+        var backend=new Backend();
+        try(var first=new TaskService(controller,new PlatformTest.Backend(),new PlatformTest.Workers());
+            var second=new TaskService(owner,backend,new PlatformTest.Workers());
+            var one=new ConsoleServer(controller,first);var two=new ConsoleServer(owner,second)){
+            one.start();two.start();String api=fixture.base(one),peer=fixture.base(two);
+            create(fixture,api,true);createScopedOperator(fixture,api);
+            String otherAdmin=createReplacementAdmin(fixture,api);
+            fixture.action(api,"job","PAUSE","pause_before_sender_preflight",PlatformTest.TOKEN);
+            PlatformTest.await(()->fixture.completed(api,"job","pause_before_sender_preflight"));
+            assertEquals(202,post(api,request(fixture,api),ID,PlatformTest.TOKEN).status);
+            awaitCode(fixture,api,ID,KafkaRecoveryReview.VERIFIED);
+            var task=fixture.get(api,TASK,PlatformTest.TOKEN);String revision=task.path("revision").asText();
+            var planRequest=Model.JSON.createObjectNode().put("expectedRevision",revision).put("predecessorRequestId",ID);
+            var plan=noticePlan(api,TASK+"/kafka-notice-plan",planRequest);
+            String scope=plan.path("approvalScopeSha256").asText(),approvalId="record_sender_preflight";
+            var recorded=PlatformTest.http(api,TASK+"/kafka-notice-approvals",PlatformTest.TOKEN,
+                    planRequest.deepCopy().put("approvalScopeSha256",scope).toString(),approvalId);
+            assertEquals(200,recorded.status,recorded.text);
+            var historical=Model.JSON.readTree(recorded.text);
+            var input=Model.JSON.createObjectNode().put("expectedRevision",revision).put("approvalScopeSha256",scope);
+            String preflight=TASK+"/kafka-notice-approvals/"+approvalId+"/preflight";
+            assertEquals(403,PlatformTest.http(api,preflight,OPERATOR,input.toString(),null).status);
+            assertEquals(403,PlatformTest.http(peer,preflight,otherAdmin,input.toString(),null).status);
+            assertCode(404,"RECOVERY_RECEIPT_NOT_FOUND",PlatformTest.http(api,
+                    TASK+"/kafka-notice-approvals/unknown_sender_approval/preflight",PlatformTest.TOKEN,input.toString(),null));
+            assertCode(400,"KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID",PlatformTest.http(api,preflight,PlatformTest.TOKEN,
+                    input.deepCopy().put("offset","31").toString(),null));
+            assertCode(409,"REVISION_CHANGED",PlatformTest.http(api,preflight,PlatformTest.TOKEN,
+                    input.deepCopy().put("expectedRevision",UUID.randomUUID().toString()).toString(),null));
+            assertCode(409,"KAFKA_NOTICE_APPROVAL_CHANGED",PlatformTest.http(api,preflight,PlatformTest.TOKEN,
+                    input.deepCopy().put("approvalScopeSha256","0".repeat(64)).toString(),null));
+            assertEquals(0,backend.physicalReads.get());
+
+            var missing=noticePlan(api,preflight,input);
+            assertEquals("SENDER_BLOCKED",missing.path("status").asText());
+            assertFalse(missing.path("executionAuthorized").asBoolean(true));
+            assertEquals("MISSING",missing.path("precedingPhysicalReceipt").path("status").asText());
+            assertTrue(missing.path("blockers").toString().contains("KAFKA_NOTICE_PREDECESSOR_PHYSICAL_RECEIPT_REQUIRED"));
+            backend.physicalVerified=true;
+            var verified=noticePlan(api,preflight,input);
+            assertEquals(verified,noticePlan(peer,preflight,input));
+            assertEquals("SENDER_BLOCKED",verified.path("status").asText());
+            assertFalse(verified.path("executionAuthorized").asBoolean(true));
+            assertEquals(scope,verified.path("approvalScopeSha256").asText());
+            assertEquals(approvalId,verified.path("approvalRequestId").asText());
+            assertEquals(plan.path("plan").path("task"),verified.path("task"));
+            assertEquals(plan.path("plan").path("failure"),verified.path("failure"));
+            assertEquals(plan.path("plan").path("controlTopic").path("topicId"),verified.path("controlTopicId"));
+            assertEquals(plan.path("plan").path("payloadSha256"),verified.path("payloadSha256"));
+            assertEquals("VERIFIED",verified.path("precedingPhysicalReceipt").path("status").asText());
+            assertEquals(Codec.sha256("checked physical receipt"),verified.path("precedingPhysicalReceipt").path("receiptSha256").asText());
+            assertFalse(verified.toString().contains("private fixture"));
+            assertEquals(List.of("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED","KAFKA_NOTICE_WRITER_NOT_CONFIGURED"),
+                    Model.JSON.convertValue(verified.path("blockers"),List.class));
+            assertEquals(revision,fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText());
+            assertEquals(historical,fixture.get(api,TASK+"/recovery-receipts/"+approvalId,PlatformTest.TOKEN));
+            assertEquals(1,backend.captures.get());
+            backend.wrongPhysicalTarget=true;
+            assertCode(409,"KAFKA_NOTICE_PREFLIGHT_RECEIPT_CHANGED",PlatformTest.http(peer,preflight,PlatformTest.TOKEN,input.toString(),null));
+            backend.wrongPhysicalTarget=false;
+            backend.controlIdentity=backend.businessIdentity;
+            assertCode(409,"KAFKA_NOTICE_PREFLIGHT_REVIEW_CHANGED",PlatformTest.http(peer,preflight,PlatformTest.TOKEN,input.toString(),null));
+            backend.controlIdentity=Codec.sha256("test control topic");
+            var changedWriter=new PlatformConfig.KafkaNoticeWriter();changedWriter.taskId="job";changedWriter.targetId="kafka";
+            changedWriter.clusterSha256=Codec.sha256("test Kafka cluster");changedWriter.topicId=NOTICE_TOPIC_ID;
+            changedWriter.bootstrapServers=List.of("fixture-writer-only:9094");
+            changedWriter.username="configured-writer";changedWriter.password="configured-fixture-secret";
+            owner.kafkaNoticeWriters=List.of(changedWriter);
+            assertCode(409,"KAFKA_NOTICE_PREFLIGHT_REVIEW_CHANGED",PlatformTest.http(peer,preflight,PlatformTest.TOKEN,input.toString(),null));
+            owner.kafkaNoticeWriters=List.of();
+
+            String actorRevision=fixture.get(api,"/api/accounts",otherAdmin).path("revision").asText();
+            var change=Model.JSON.createObjectNode().put("expectedRevision",actorRevision).put("role","VIEWER").put("enabled",true);
+            var revoked=AccountManagementTest.http(api,"PUT","/api/accounts/operator",otherAdmin,change.toString(),"revoke_sender_context");
+            assertEquals(200,revoked.status,revoked.json.toString());
+            assertCode(409,"AUTHORIZATION_CHANGED",PlatformTest.http(peer,preflight,PlatformTest.TOKEN,input.toString(),null));
+            assertEquals(historical,fixture.get(api,TASK+"/recovery-receipts/"+approvalId,otherAdmin));
         }
     }
 

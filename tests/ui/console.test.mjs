@@ -267,6 +267,7 @@ test('Kafka review submits a paused target and opens only the verified native re
 
 test('Kafka notice preview is bound to the verified receipt and displays publication blocked',async()=>{
  const id='verified_notice_review',target='kafka',code='PRECEDING_KAFKA_RECEIPTS_VERIFIED';
+ const version='4d8d04a0-d50d-400f-baa6-223864edbeb5',topicId='cKtKfC5KQGq-qM1RDCb_3w';
  const task={id:'notice-preview',revision:'task-revision',formatVersion:3,workerState:'PAUSED',desired:'PAUSED',statusAvailable:true,
   status:{run_state:'PAUSED'},destinations:[{id:target,product:'KAFKA',kafkaNoticePlanningAvailable:true}],
   operations:[{id,action:'REVIEW_KAFKA_RECEIPTS',code,status:'SUCCEEDED'}]};
@@ -276,6 +277,8 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  let coverage={status:'INCOMPLETE',code:'KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING'};
  let approvalScope=null;
  const approvalRequests=[];
+ const preflightRequests=[];
+ let preflightAuthorizes=true;
  ui.w.fetch=async(path,options)=>{
   if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
    id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
@@ -290,6 +293,15 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
    return{ok:true,status:200,json:async()=>({id:request.id,taskId:task.id,status:'RECORDED_BLOCKED',
     executionAuthorized:false,approvalScopeSha256:approvalScope})};
   }
+  if(path===base+'/kafka-notice-approvals/'+approvalRequests.at(-1)?.id+'/preflight'){
+   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+   preflightRequests.push(JSON.parse(options.body));
+   return{ok:true,status:200,json:async()=>({status:'SENDER_BLOCKED',executionAuthorized:preflightAuthorizes,
+    approvalRequestId:approvalRequests.at(-1).id,approvalScopeSha256:approvalScope,controlTopicId:topicId,payloadSha256:'d'.repeat(64),
+    task:{taskId:task.id,revision:task.revision,configurationVersion:version},failure:{failedSequence:'7',targetId:target},
+    precedingPhysicalReceipt:{status:'VERIFIED',receiptSha256:'f'.repeat(64),signature:'private display fixture'},
+    blockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED']})};
+  }
   if(path!==base+'/kafka-notice-plan')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
   requests.push(JSON.parse(options.body));
@@ -298,8 +310,8 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
    catalogCoverage:coverage,
    approvalScopeSha256:approvalScope,approvalBlockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'],
    writerEntitlement:{status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED'},
-   plan:{task:{taskId:task.id},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
-    controlTopic:{targetId:target,topicName:'control.events',topicId:'cKtKfC5KQGq-qM1RDCb_3w'},credential:'not sent to the DOM'}})};
+   plan:{task:{taskId:task.id,revision:task.revision,configurationVersion:version},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
+    controlTopic:{targetId:target,topicName:'control.events',topicId},credential:'not sent to the DOM'}})};
  };
  try{
   await login(ui);ui.d.querySelector('[data-recovery-receipt-request="'+id+'"]').click();await flush();
@@ -332,6 +344,15 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
    approvalScopeSha256:approvalScope});
   assert.match(section.textContent,/审批已登记，通知仍未获准发送/);
   assert.ok(approve.disabled);
+  const preflight=section.querySelector('[data-kafka-notice-preflight]'),check=preflight.querySelector('button');
+  check.click();await flush();
+  assert.match(preflight.textContent,/回执与当前请求不符/);
+  preflightAuthorizes=false;check.click();await flush();
+  assert.match(preflight.textContent,/已核实本次故障的确切前序 ACK/);
+  assert.match(preflight.textContent,/历史归属仍待核实，通知继续受阻/);
+  assert.ok(!preflight.textContent.includes('private display fixture'));
+  assert.equal(preflight.querySelectorAll('button').length,1);
+  assert.deepEqual(preflightRequests,Array(2).fill({expectedRevision:task.revision,approvalScopeSha256:approvalScope}));
  }finally{ui.dom.window.close();}
 });
 

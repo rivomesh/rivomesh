@@ -110,6 +110,8 @@ Kafka 3.9.2 实库档案使用 TLS/SCRAM-SHA-512，两个 Controller 通过同�
 
 API 调用使用 `POST /api/tasks/<task>/kafka-notice-approvals`，携带固定的 `X-Request-ID`，请求体包含 `expectedRevision`、`predecessorRequestId` 和预览返回的 `approvalScopeSha256`。登记成功返回 `RECORDED_BLOCKED` 和 `executionAuthorized: false`。相关配置和审批人授权修订保持有效时，可在任一管理入口用原请求重放。已授权的管理员可用 `GET /api/tasks/<task>/recovery-receipts/<request-id>` 查询历史记录，任务所属节点离线时也可查询。
 
+登记审批后，原审批人可选择 **核对发送条件**。API 客户端可从任一管理入口调用 `POST /api/tasks/<task>/kafka-notice-approvals/<request-id>/preflight` 并提交 `expectedRevision` 和 `approvalScopeSha256`。服务以只读方式检查原审批和审计记录，重新核对确切失败、Kafka Topic、配置目录和独立写入权限，再报告前序 ACK 的签名物理收据状态。如果审批范围、写入权限或物理路由变化，需要重新核对。已核实的前序 ACK 只覆盖一笔 COMMIT，历史归属仍是阻断条件。返回状态仍为 `SENDER_BLOCKED`，查询保留原审批、Kafka 消息和日志进度。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh
