@@ -81,7 +81,8 @@ Design consequences:
 
 - Ordinary indexes provide neither cross-DN global uniqueness nor GSI's separate distribution/covering design; changing an index does not redistribute its base table.
 - Retaining indexed columns does not preserve query plans, covering behavior, or JOIN performance. Validate representative queries with `EXPLAIN`.
-- A global structure required to enforce PK identity cannot be relaxed. Prefer distribution compatible with the PK; fail preflight when correctness cannot be preserved.
+- A global structure required to enforce PK identity cannot be relaxed. Prefer distribution compatible with the PK. Stop before table creation when correctness cannot be preserved.
+- An explicitly global primary index or a GSI on the exact primary or candidate identity columns requires a distribution plan, even when the columns are reordered. A business GSI with additional columns can still become an ordinary index. A plain UNIQUE on exactly the declared identity columns retains uniqueness.
 - Existing GSI may support constraints or other dependencies. Migration must inspect ownership, dependencies, validity, and rollback paths before removal.
 
 Partition GLOBAL/LOCAL indexes describe partition coverage and must not be confused with distributed GSI. openGauss partition-index syntax is not evidence of GaussDB GSI capability. [openGauss index documentation](https://docs.opengauss.org/zh/docs/latest/database_administration_guide/creating_and_managing_indexes.html).
@@ -139,6 +140,8 @@ After application writes begin, the original one-way sync service cannot safely 
 - Test process death around index DDL, connection loss, uncertain responses, definition conflicts, invalid indexes, and stale owners.
 - Use real multi-CN/DN GaussDB to validate distribution compatibility, global row identity, transaction ordering, and ordinary-index plans; validate openGauss separately.
 - Before takeover, validate collations, empty strings/NULLs, target uniqueness, and the frozen barrier. Deliberate conflicts must block switching without discarding data.
+
+For commercial acceptance, record the distributed GaussDB build, compatibility mode, GTM mode, CN/DN topology and JDBC driver. In a disposable database, run the real sink against a plain business `UNIQUE(email)`, a modeled business GSI, a GSI on reordered composite identity columns and an explicitly global primary index. Use JDBC catalog metadata to verify that both business plans create nonunique ordinary indexes with the planned names and column order. Verify that both identity GSI cases stop before table creation. Capture `EXPLAIN` for representative lookups on the declared distribution. Then disconnect and replay, and check primary-key enforcement and the sink checkpoint together. [GaussDB CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/zh-cn/distributed-devg-v8-gaussdb/gaussdb-12-0546.html) · [GaussDB GSI query-plan example](https://support.huaweicloud.com/intl/zh-cn/distributed-devg-v8-gaussdb/gaussdb-12-1729.html)
 
 The current [validation record](validation.md) excludes these new capabilities. It must not be used to claim index conversion or commercial distributed GaussDB acceptance.
 

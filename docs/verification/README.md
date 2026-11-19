@@ -591,3 +591,7 @@ The retention tool verifies the signed export checkpoint before it writes an S3 
 ### Managed handoff of original MySQL capture history
 
 The `9caca6d9160b7e7e8689b90793d854bcd2a378db1ab161a620c58e676316d893` package passed 29 native checks, including three Chrome checks through both Controllers. The original Agent kept its capture key. After the approved owner transfer, the candidate restarted and both entries could still verify the exact private ZIP while the shared and staging copies were offline. The previous Agent and the direct Worker launch stayed fenced. Both SQL target receipts and the source checkpoint matched the reviewed cut. The package integrated with the Kafka permissions feature, `0928633dc58f955cd29632a09f9f5f69920304e217dbb989e6eb75f4d30b5c63`, passed 61 Java and 156 DOM tests and the artifact gate. [Operator guide](../en/capture-recovery.md) · [Manifest](baseline.json)
+
+### JDBC identity index protection
+
+The `331ecb19e9dca51eeff2455cc343da8a04efd431289f414a432bafd72fc6227a` package passed 31 focused Java tests, including nine JDBC sink tests. The H2 guard fixture rejected explicit global primary indexes and reordered identity GSI before creating the target schema. Ordinary UNIQUE retains the declared identity constraint, and a business GSI with additional columns retains its ordinary-index plan. The optional real-database test was skipped. The bilingual guide defines the commercial distributed GaussDB acceptance. [Index operations](../en/gaussdb-index-policy.md) · [Manifest](baseline.json)

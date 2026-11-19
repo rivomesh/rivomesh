@@ -81,6 +81,7 @@ CREATE INDEX ix_customer_email ON app.customer (email);
 - 普通索引不提供跨 DN 的全局唯一性，也不保留 GSI 独立分布/覆盖列设计；替换索引不会改变基表分布。
 - 保留索引列不表示查询计划、覆盖查询或 JOIN 性能等价，需要真实查询与 `EXPLAIN` 验证。
 - 主键若只能依赖某种全局唯一结构才能正确成立，不能把它降级。优先规划与主键相容的分布键；无法满足则拒绝建表并报告原因。
+- 显式声明的全局主键，或列集合与主键或候选定位键完全相同的 GSI，需要分布方案，列顺序不同也一样。包含额外列的业务 GSI 仍可转为普通索引。普通 UNIQUE 的列集合与声明的定位键完全相同时保留唯一性。
 - 现存 GSI 可能承载约束或其他依赖，迁移要识别索引所有权、依赖、有效状态和回滚路径，不能盲目 DROP。
 
 注意：分区表的 GLOBAL/LOCAL 索引表示索引覆盖分区的范围，不能与分布式 GSI 混为一谈。openGauss 的分区索引语法也不能直接当成 GaussDB GSI 能力证明。[openGauss 索引文档](https://docs.opengauss.org/zh/docs/latest/database_administration_guide/creating_and_managing_indexes.html)。
@@ -138,6 +139,8 @@ CREATE INDEX ix_customer_email ON app.customer (email);
 - 索引 DDL 前后杀进程、目标连接丢失、提交响应不确定、同名异定义、无效索引和旧 owner 均正确处理。
 - 分布式 GaussDB 在真实多 CN/DN 环境验证分布键兼容、全局行身份、事务顺序和普通索引查询计划；openGauss 单独验证。
 - 接管前验证排序规则、空字符串/NULL、目标唯一约束和冻结屏障；故意制造冲突时阻止切换并保留全部数据。
+
+商用验收要记录分布式 GaussDB 的确切版本、兼容模式、GTM 模式、CN/DN 拓扑及 JDBC 驱动。在一次性测试库用实际写入端分别验证普通业务 `UNIQUE(email)`、建模的业务 GSI、键列换序的复合定位 GSI 和显式全局主键。通过 JDBC 目录核对两类业务索引均为非唯一普通索引，名称和列顺序符合计划，并确认两类身份 GSI 均在建表前停止。对声明分布上的代表查询留存 `EXPLAIN`。随后执行断连重放，同时核验真实主键约束与写入断点。[GaussDB CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/zh-cn/distributed-devg-v8-gaussdb/gaussdb-12-0546.html) · [GaussDB GSI 查询计划](https://support.huaweicloud.com/intl/zh-cn/distributed-devg-v8-gaussdb/gaussdb-12-1729.html)
 
 当前 [验证记录](../validation.md) 不包含以上新增能力；不能据此标记索引转换或商业分布式 GaussDB 已通过验收。
 

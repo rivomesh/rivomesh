@@ -10716,5 +10716,21 @@
     "integratedDomTestsPassed": 156,
     "scope": "The source and both transactional targets stay at the reviewed cut while the successor takes ownership stopped. The two authorized controller entries read the exact original MySQL archive from the successor after both input copies are unavailable and the successor restarts. The isolated native package predates integration with the independently tested Kafka permissions change.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/raw-history-native --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-raw-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-public-owner --handoff-public-owner-browser /path/to/chrome --handoff-adopted-browser /path/to/chrome"
+  },
+  "jdbcIdentityIndexPlan": {
+    "status": "PASS",
+    "verifiedProfile": "JdbcSink.prepare against isolated H2, plus focused Java regression suite",
+    "artifactSha256": "331ecb19e9dca51eeff2455cc343da8a04efd431289f414a432bafd72fc6227a",
+    "suiteJavaPassed": 31,
+    "jdbcSinkCasesPassed": 9,
+    "optionalRealDatabaseTestsSkipped": 1,
+    "agentPatchSha256": "0c7a7a26259d425377a342892983716434f740fe0db76834dea657ee3ac36e7c",
+    "checks": [
+      "Explicit global primary and reordered identity GSI refuse before the destination schema is created",
+      "A reordered ordinary UNIQUE over the exact identity columns keeps uniqueness",
+      "A business GSI with additional columns retains its ordinary-index conversion plan"
+    ],
+    "reproduce": "mvn -pl sync-app -am -Dtest=JdbcSinkTest -Dsurefire.failIfNoSpecifiedTests=false test",
+    "scope": "Conversion decision and pre-DDL guard. Managed Gauss check and actual commercial GaussDB multi-CN/DN acceptance remain."
   }
 }

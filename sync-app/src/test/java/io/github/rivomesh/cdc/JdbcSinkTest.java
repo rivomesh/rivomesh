@@ -127,6 +127,44 @@ class JdbcSinkTest {
         assertEquals("REQUIRES_PLAN",IndexPolicy.plan(t,TargetProduct.GAUSS,JdbcSink.UniquePolicy.DOWNGRADE_BUSINESS).get(1).action);
         gsi.prefixLengths.add(20);assertEquals("REQUIRES_PLAN",IndexPolicy.plan(t,TargetProduct.GAUSS,JdbcSink.UniquePolicy.DOWNGRADE_BUSINESS).get(1).action);
     }
+    @Test void globalIndexCoveringPrimaryOrCandidateIdentityStopsBeforeBusinessDdl()throws Exception{
+        JdbcSink.Settings settings=settings();
+        try(JdbcSink sink=new JdbcSink(settings)){
+            sink.activate(1);
+            for(boolean primary:List.of(true,false)){
+                TableSchema table=schema(false);
+                table.primaryKey.clear();
+                List<String> key=primary?table.primaryKey:table.identityKey;
+                key.addAll(List.of("id","email"));
+                TableSchema.Index index=table.indexes.getFirst();
+                index.columns=new ArrayList<>(List.of("email","id"));
+                assertTrue(IndexPolicy.plan(table,TargetProduct.GAUSS,settings.uniquePolicy).getFirst().unique);
+                index.method="GSI";
+                IndexPolicy.Decision decision=IndexPolicy.plan(table,TargetProduct.GAUSS,settings.uniquePolicy).getFirst();
+                assertEquals("REQUIRES_PLAN",decision.action);
+                assertEquals("GLOBAL_IDENTITY_REQUIRES_DISTRIBUTION_PLAN",decision.reason);
+                assertTrue(decision.unique);
+                assertEquals("INDEX_CONVERSION_REQUIRES_PLAN",assertThrows(IllegalStateException.class,()->sink.prepare(1,table)).getMessage());
+                index.columns.add("amount");
+                assertEquals("REPLACE_GSI",IndexPolicy.plan(table,TargetProduct.GAUSS,settings.uniquePolicy).getFirst().action);
+            }
+            TableSchema table=schema(false);
+            TableSchema.Index index=table.indexes.getFirst();
+            index.name="PRIMARY";
+            index.columns=new ArrayList<>(table.primaryKey);
+            index.primary=true;
+            assertTrue(IndexPolicy.plan(table,TargetProduct.GAUSS,settings.uniquePolicy).isEmpty());
+            index.method="GLOBAL_BTREE";
+            IndexPolicy.Decision decision=IndexPolicy.plan(table,TargetProduct.GAUSS,settings.uniquePolicy).getFirst();
+            assertEquals("REQUIRES_PLAN",decision.action);
+            assertEquals("GLOBAL_IDENTITY_REQUIRES_DISTRIBUTION_PLAN",decision.reason);
+            assertEquals("INDEX_CONVERSION_REQUIRES_PLAN",assertThrows(IllegalStateException.class,()->sink.prepare(1,table)).getMessage());
+        }
+        try(Connection c=JdbcConnections.open(settings.driver,settings.url,settings.username,settings.password);
+            ResultSet schemas=c.getMetaData().getSchemas()){
+            while(schemas.next())assertNotEquals(settings.databases.get("sales"),schemas.getString("TABLE_SCHEM"));
+        }
+    }
     @Test void anEmptyTableCannotHaveTwoPublishersAndLostTablesRequireARebuildPlan()throws Exception{
         JdbcSink.Settings settings=settings();TableSchema table=schema(false);
         try(JdbcSink first=new JdbcSink(settings)){
