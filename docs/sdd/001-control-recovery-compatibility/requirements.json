@@ -1595,8 +1595,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志、原报告和已办结回执已通过限定实库。已审批的 PostgreSQL 同库交接支持同时保留原始 MySQL ZIP 和签名故障记录。四种私有暂存缺失或篡改都拒绝变更归属。候选重启后，两个入口仍核验共同接收摘要和原回执。跨存储、扩展目标及更多故障路径待验。",
-        "en": "Bounded native tests cover optional journals, original reports and closed receipts. An approved PostgreSQL same-database transfer adopts the original MySQL ZIP and signed failure history together. Four missing or damaged private staging cases refuse ownership change. Both entries verify the common adoption digest and original receipts after candidate restart. Independent stores, further destinations and broader faults remain."
+        "zh-CN": "可选日志与 PostgreSQL 同库双证据交接已实测。候选丢失独立日志库链路时控制租约原地续期，原生切点拒绝。复联后可重新核验并暂存，双入口拒绝跨库写入接管。释放后原 Agent 从原断点向两目标续传。异库持久围栏、其他存储和目标拓扑待验。",
+        "en": "Optional journals and combined PostgreSQL same-database custody passed. During independent journal loss, the candidate keeps its control lease and cannot prove a native cut. After reconnect it can recheck and stage offline history. Both entries refuse cross-database writer transfer. Release lets the original Agent continue to both targets from its original cut. Durable split-store fencing and other storage and destination profiles remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",

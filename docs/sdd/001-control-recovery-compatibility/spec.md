@@ -82,7 +82,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | LG-02 | P1 / DONE | 非空接管、约束恢复、切换回切 | 限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。另一个同切点档案验证了二进制排序、NO PAD 的 VARCHAR UNIQUE(email)，保留原普通索引并继续 CDC。更广产品及写后逆向迁移分别跟踪。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 通过全量、增量、原目录身份、整组重启、Worker 原快照续传、四批回执与独立 SQL 错误重放。分布式仓库、生产集群、旧备份恢复和容量仍在验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升及消费恢复已有原生档案。Pulsar 4.0.14 已验证单 Broker 私有 CA/Token，以及双 Broker、三 BookKeeper 下的原 Topic 恢复、确认不足时暂停确认和同事件重试。双 Broker 私有 CA/Token 与三节点 ZooKeeper 主节点故障后的元数据写入也已通过。跨主机存储故障域、内部链路加密、负载容量和其他消息目标档案待验。 |
-| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选日志、原报告和已办结回执已通过限定实库。已审批的 PostgreSQL 同库交接支持同时保留原始 MySQL ZIP 和签名故障记录。四种私有暂存缺失或篡改都拒绝变更归属。候选重启后，两个入口仍核验共同接收摘要和原回执。跨存储、扩展目标及更多故障路径待验。 |
+| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选日志与 PostgreSQL 同库双证据交接已实测。候选丢失独立日志库链路时控制租约原地续期，原生切点拒绝。复联后可重新核验并暂存，双入口拒绝跨库写入接管。释放后原 Agent 从原断点向两目标续传。异库持久围栏、其他存储和目标拓扑待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 关系变化也已实测停留原 LSN 并可审阅当前发布差异。 JDBC 目标已回归验证身份列换序时仍保护 UNIQUE，显式全局主键和身份 GSI 在建表前要求分布方案。MySQL 源的 Gauss 目标可在管理预检审阅索引动作，覆盖完整统计及有界详情。商用多 CN/DN 和目标目录行为仍需实机验收。 openGauss 7.0.0-RC3 已核对源 UNIQUE(email) 降级与索引 OID 保留，目标主键和同步回执的唯一性保留。 |

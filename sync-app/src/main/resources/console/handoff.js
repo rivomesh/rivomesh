@@ -69,6 +69,7 @@ window.RivomeshHandoff=(()=>{
   HANDOFF_STAGING_BUSY:'候选 Agent 正在处理暂存文件，稍后可重试。',
   HANDOFF_STAGING_CAPACITY:'候选 Agent 的私有暂存目录已达到容量上限。',
   HANDOFF_RAW_STAGING_REQUIRED:'候选 Agent 上缺少经过核验的原始采集档案。请重新暂存。',
+  HANDOFF_MANAGED_CONTROL_CUT_REQUIRED:'控制事务无法同时核验日志切点。仍可核验证据或释放预留。',
   HANDOFF_FAILURE_HISTORY_STAGING_REQUIRED:'候选 Agent 上缺少经过核验的历史故障证据。请重新暂存。',
   HANDOFF_STAGING_BYTES_CHANGED:'候选 Agent 上已暂存文件的内容发生变化，未通过核验。',
   HANDOFF_ARCHIVE_BYTES_CHANGED:'原证据归档摘要已变化，请重新核对归档。'
@@ -82,6 +83,7 @@ window.RivomeshHandoff=(()=>{
   HANDOFF_STAGING_BUSY:'The candidate is working with the staging files. Retry shortly.',
   HANDOFF_STAGING_CAPACITY:'The candidate’s private staging directories reached their capacity limit.',
   HANDOFF_RAW_STAGING_REQUIRED:'Restage the verified raw capture archive on the candidate Agent.',
+  HANDOFF_MANAGED_CONTROL_CUT_REQUIRED:'The control transaction could not verify the journal cut. Evidence verification and reservation release remain available.',
   HANDOFF_FAILURE_HISTORY_STAGING_REQUIRED:'Restage the verified historical failure evidence on the candidate Agent.',
   HANDOFF_STAGING_BYTES_CHANGED:'The candidate’s staged contents changed and could not be verified.',
   HANDOFF_ARCHIVE_BYTES_CHANGED:'The original evidence archive digest changed. Review the archive again.'
@@ -354,6 +356,8 @@ window.RivomeshHandoff=(()=>{
     ||!(Object.hasOwn(preparationLabels,state)||transferredState&&validTransfer(response))
     ||response.executionAuthorized!==workerAdmitted(state)
     ||response.commitRequestId!=null&&(!requestPattern.test(response.commitRequestId)||!(active||transferredState))
+    ||response.commitBlocker!=null&&(!active||response.writerActivation?.checkedInControlTransaction!==false
+     ||response.commitBlocker!=='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
     ||response.reservedTaskSlots!==Number(active)||response.reservedWorkerSlots!==Number(active)
     ||!sha256.test(response.evidenceSha256||'')||!Number.isFinite(Date.parse(response.createdAt))
     ||!(Date.parse(response.expiresAt)>Date.parse(response.createdAt))
@@ -451,6 +455,8 @@ window.RivomeshHandoff=(()=>{
    details.append(node('summary',t('handoffReservationId')),node('code',preparation.id));
    v.preparationResult.append(facts,details);
    if(active)v.preparationResult.append(node('p',t('handoffActiveHelp'),'subtle'));
+   if(active&&preparation.commitBlocker==='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
+    v.preparationResult.append(node('p',t(preparation.commitBlocker),'callout warning'));
   }
   if(proof&&!activeReservation(v)){
    const review=node('dl'),digest=node('details');

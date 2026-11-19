@@ -404,6 +404,8 @@ final class HandoffPreparations {
         view.put("createdAt",Instant.ofEpochMilli(p.created).toString());view.put("expiresAt",Instant.ofEpochMilli(p.expires).toString());
         view.put("executionAuthorized",workerAdmitted(p));view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
         view.put("reservedWorkerSlots","PREPARED".equals(p.phase)?1:0);
+        if("PREPARED".equals(p.phase)&&p.activation!=null&&!p.activation.checkedInControlTransaction())
+            view.put("commitBlocker","HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
         if(p.executionRequest!=null&&(p.writerCommit!=null||"PREPARED".equals(p.phase)))
             view.put("commitRequestId",p.executionRequest);

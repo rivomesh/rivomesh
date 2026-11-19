@@ -308,6 +308,20 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('a split-store reservation shows the commit blocker and still offers staging and release',async()=>{
+  const plan={...preparation('split-store-preparation'),
+   writerActivation:{checkedInControlTransaction:false},commitBlocker:'HANDOFF_MANAGED_CONTROL_CUT_REQUIRED'};
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),stage:()=>stagingReply(plan)});
+  try{
+   await open(ui);
+   assert.match(reservation(ui).textContent,/控制事务无法同时核验日志切点/);
+   button(ui,'stage').click();await flush();
+   assert.match(staged(ui).textContent,/已核验暂存文件/);
+   assert.equal(ui.dom.window.document.querySelector('[data-handoff-action="commit-owner"]'),null);
+   assert.ok(!button(ui,'release').hidden&&!button(ui,'release').disabled);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff shows verified raw capture counts and refuses evidence from a different preparation',async()=>{
   const plan=preparation('staging-preparation');
   const raw={state:'STAGED',executionAuthorized:false,preparationId:plan.id,candidateNodeId:plan.candidateNodeId,

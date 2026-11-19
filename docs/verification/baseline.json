@@ -11843,5 +11843,88 @@
     "scope": "Single-node openGauss new-table index plan, catalog and original journal/endpoint recovery. Commercial distributed GaussDB and GSI require independent verification.",
     "status": "PASS",
     "evidenceSha256": "640ba95c970e519e6aa6eb836f800f5931ec2a789238b5826328d1e45c46a76c"
+  },
+  "independentJournalControlReachability": {
+    "status": "PASS",
+    "native": {
+      "artifactSha256": "dc88c6399ced052299f10159df0b765a8f56978f040922f01a7564c090619be6",
+      "harnessSourceSha256": "d5d177e970339732f9635bbc7dcc684b4cca5fd5b7f5a4c87c115dfca167e55a",
+      "sourceImage": "mysql:8.4",
+      "sourceVersion": "8.4.13",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "controlProduct": "POSTGRESQL",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Only the original Agent can admit the explicitly initialized managed writer",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+        "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+        "Concurrent refreshes against the same receipt allow exactly one replacement",
+        "Controller restart retains the assessed placement, original owner and masked cut proof",
+        "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+        "Candidate with a disjoint private mount cannot claim custody of the original completed report",
+        "Candidate journal-network loss fails native cut proof while the control, source and destination routes remain reachable",
+        "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+        "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+        "Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain",
+        "Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records",
+        "Chrome: node-a shows the precise split-store blocker and can verify private evidence without a commit control",
+        "Chrome: node-b shows the precise split-store blocker and can verify private evidence without a commit control",
+        "A split-store preparation retains exact private reports and receipts through an offline shared mount",
+        "Both Controllers refuse the same split-store ownership request before binding it or changing native checkpoints",
+        "Releasing the reservation resumes only the original Agent from the same native assignment and snapshot generation"
+      ],
+      "splitStorePreflight": {
+        "independentJournalRoute": true,
+        "controlLeaseRenewedDuringJournalLoss": true,
+        "originalJournalReachableDuringCandidateLoss": true,
+        "offlinePrivateStaging": true,
+        "dualEntryRefusal": true,
+        "originalResumed": true,
+        "sameNativeAssignmentAndSnapshots": true
+      },
+      "browserHandoffSplitStore": {
+        "status": "PASS",
+        "scenario": "handoff-split-store",
+        "browser": "Chrome/157.0.8103.79",
+        "checks": [
+          "node-a shows the precise split-store blocker and can verify private evidence without a commit control",
+          "node-b shows the precise split-store blocker and can verify private evidence without a commit control"
+        ],
+        "sourceSha256": {
+          "browser-handoff.mjs": "fbfd498f9f4482486ebb8b1febc2ab1f9dea33e0dda9f3460d1a5cd8977f023a",
+          "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "7ccc475123e73faa6e3370182af9134dd5e371baee7dc7976648117317d09ef5",
+    "earlierFixtureAttempts": [
+      {
+        "status": "FAIL",
+        "manifestSha256": "262bf38415bb240d5f10283a96e344ed10295a50217c00f9acdb73b885da33a5",
+        "harnessSha256": "990b17c490383d2fef865262c98f43b7a295012e623da950d14bb4261ef2c10a",
+        "passedChecks": 11,
+        "cleanupExitCode": 0,
+        "reason": "The host-published health port timed out when its container lost the journal network attachment."
+      },
+      {
+        "status": "FAIL",
+        "manifestSha256": "9a57cd8c52951299b47718fe4e38c31d659e5d55486ea676c6fe14500eb99f81",
+        "harnessSha256": "e7a70dde23b4164243293f56bad46c834121bf85fbffbb445fca6ef778355981",
+        "passedChecks": 12,
+        "cleanupExitCode": 0,
+        "reason": "Reconnected TCP was reachable before a fresh candidate JDBC query could establish cut proof."
+      }
+    ],
+    "integratedPackageSha256": "5b2943645739166ae427d0522a1cffdc3840f6914331ab3a827e6d0b44a63e40",
+    "integratedTree": "1a1b0d9cc14fbc6e202d728f07464cbb04b1cddc",
+    "integratedJavaPassed": 96,
+    "integratedDomPassed": 158,
+    "integratedHarnessSha256": "11e038025905bdbc1d7d7ed6506ccd03fbbf86e8ca068ef96598390d9596989d",
+    "scope": "Separate PostgreSQL databases and networks. Candidate loses only the journal path, retains its control lease and source/target reachability, then recovers same-process read-only staging after JDBC proof. Both entries refuse cross-database writer ownership. Original assignment and target cuts survive, and the original Agent consumes a later source transaction after release.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/split-store-native --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-split-store --handoff-split-store-browser /path/to/chrome --source-image mysql:8.4 --source-expected-version 8.4.13"
   }
 }

@@ -105,6 +105,12 @@ For automation, send `POST /api/tasks/{id}/handoff/preparation/commit-owner` wit
 
 If the Controller disconnects, read the preparation from either entry. Retry a bound operation with the same request ID. The preparation returns `commitRequestId` while a request is bound and after transfer. A fresh preparation is required when the reviewed cut, candidate binding or authorization changes before commit.
 
+### Verify a handoff across separate journal and control databases
+
+A managed PostgreSQL journal in a separate database can verify the original stopped cut and stage reports and closed receipts under a reservation. The candidate must reach the journal, source and destinations as well as the control database. Restoring a disconnected journal route allows a fresh probe. An authenticated stage retry can verify an existing private copy when the shared archive is unavailable.
+
+The console shows why ownership commit is unavailable. The preparation returns `checkedInControlTransaction: false` and `commitBlocker: HANDOFF_MANAGED_CONTROL_CUT_REQUIRED`. Both Controller entries refuse ownership commit before binding the request. The original Agent and the journal and target checkpoints remain in place. Release the reservation to restart the original Agent from the same cut. Ownership activation across databases needs a separate durable protocol.
+
 ### Fence the parked SQL targets
 
 After the candidate has adopted the signed report and receipt history, an administrator can select **Fence SQL targets** in the handoff panel. For API approval, use `POST /api/tasks/{id}/handoff/preparation/fence-targets` with `X-Request-ID` and the JSON fields `expectedPreparation` and `expectedRevision`. Use the preparation ID and the **committed** task revision displayed in the handoff panel. `202` acknowledges durable approval. Read `GET /api/tasks/{id}/handoff/preparation` or refresh the handoff panel to follow `FENCE_PENDING` and `TARGETS_FENCED`.

@@ -57,6 +57,10 @@ parser.add_argument('--handoff-original-outage', action='store_true',
                     help='Observe a killed original Agent through both entries and fence its former leases on return')
 parser.add_argument('--handoff-asymmetric-partition', action='store_true',
                     help='Cut only the original Agent path to PostgreSQL control and journal while all data endpoints stay reachable')
+parser.add_argument('--handoff-split-store', action='store_true',
+                    help='Verify private staging and ownership refusal when the journal and control databases are independent')
+parser.add_argument('--handoff-split-store-browser', type=Path,
+                    help='Verify the split-store blocker and stage control in real Chrome')
 parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
@@ -175,6 +179,13 @@ if args.handoff_original_outage and (not args.handoff_assessment or args.handoff
     parser.error('--handoff-original-outage requires --handoff-assessment, PostgreSQL control, and compiled --test-classes')
 if args.handoff_staging and not args.handoff_preparation:
     parser.error('--handoff-staging requires --handoff-preparation')
+if args.handoff_split_store and (not args.handoff_managed_writer or not args.handoff_staging or any((
+        args.handoff_private_writer,args.handoff_raw_custody,args.handoff_failure_custody,
+        args.handoff_original_outage,args.mysql_async_failover))):
+    parser.error('--handoff-split-store requires managed-writer staging with the report and receipt custody profile')
+if args.handoff_split_store_browser and (not args.handoff_split_store
+        or not os.access(args.handoff_split_store_browser.resolve(),os.X_OK)):
+    parser.error('--handoff-split-store-browser requires --handoff-split-store and an executable Chrome path')
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
         or not args.test_classes.is_dir()):
     parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes')
@@ -306,6 +317,8 @@ runtime_major = args.runtime_jdk or 21
 runtime_image = {17:'eclipse-temurin:17-jre',21:'eclipse-temurin:21-jre-jammy',25:'eclipse-temurin:25-jre'}[runtime_major]
 if args.separate_execution:
     env['RM_GC_STORE_URL'] = 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if args.control_product == 'MYSQL' else 'jdbc:postgresql://store:5432/rivomesh_control'
+journal_database = 'rivomesh_journal' if args.handoff_split_store else 'rivomesh_control'
+journal_service = 'journal-store' if args.handoff_split_store else 'store'
 checks = []
 diagnostics = {}
 manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
@@ -329,6 +342,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffAutoResume': args.handoff_auto_resume,
             'handoffStaging': args.handoff_staging,
+            'handoffSplitStore': args.handoff_split_store,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'handoffAdoptedBrowser': bool(args.handoff_adopted_browser),
             'handoffTargetFence': args.handoff_target_fence,
@@ -493,6 +507,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             '/fixture/' + owner_node + '.json', '/fixture/kill-after-recovery-commit']
     composition = home / 'compose.json'
     compose_data = {'services': services, 'volumes': volumes}
+    if args.handoff_split_store:
+        services[journal_service]={'image':'postgres:17','networks':['journal'],
+            'environment':{'POSTGRES_PASSWORD':'${RM_GC_CONTROL}','POSTGRES_DB':journal_database}}
+        compose_data['networks']={'default':{},'journal':{}}
+        for agent in execution_agents:
+            services[agent]['networks']=['default','journal']
     if args.handoff_asymmetric_partition:
         compose_data['networks'] = {'default': {}, 'control': {}}
         services['store']['networks'] = ['control']
@@ -505,8 +525,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               cwd=ROOT, check=check, capture_output=True, text=True, timeout=180)
 
     def sql(service, statement):
-        if service == 'postgres' or service == 'store' and args.control_product == 'POSTGRESQL':
-            result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'sync_test' if service == 'postgres' else 'rivomesh_control', '-A', '-t', '-F', '|', '-c', statement)
+        if service in ('postgres','journal-store') or service == 'store' and args.control_product == 'POSTGRESQL':
+            database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal'}[service]
+            result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d',
+                             database, '-A', '-t', '-F', '|', '-c', statement)
         else:
             password_key = 'RM_GC_CONTROL' if service == 'store' else 'RM_GC_DATA'
             if args.mysql_async_failover and service in ('mysql','mysql-replica'):
@@ -659,6 +681,82 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert inspect(original, '{{.State.Pid}}') == original_pid
         return isolated, reconnect
 
+    def run_split_store_preflight(preparation,review,original_cut,data_cut,archive,report_bytes,report_id,closed,candidate):
+        def writer():
+            return sql(journal_service,
+                       "SELECT a.assignment_id,h.node_id,h.activated_epoch "
+                       "FROM transfer_journal.rm3_writer_assignment a JOIN transfer_journal.rm3_writer_assignment_history h "
+                       "ON a.pipeline_id=h.pipeline_id AND a.assignment_id=h.assignment_id WHERE a.pipeline_id='global_cdc'")
+
+        def snapshots():
+            return sql(journal_service,"SELECT snapshot_scope,table_id,snapshot_id FROM transfer_journal.rm3_snapshot "
+                                       "ORDER BY snapshot_scope,table_id")
+
+        original_writer,original_snapshots=writer(),snapshots()
+        original_source=sql(journal_service,'SELECT captured FROM transfer_journal.rm3_job')
+        assert original_writer and original_snapshots and original_source
+        assert sql('store',"SELECT to_regclass('transfer_journal.rm3_writer_assignment') IS NULL")=='t'
+        reservation='gc_split_prepare_'+uuid.uuid4().hex
+        prepared=http('node-a',preparation,review,request=reservation)
+        assert prepared==http('node-b',preparation)
+        assert prepared['state']=='PREPARED' and not prepared['executionAuthorized']
+        assert prepared['writerActivation']['checkedInControlTransaction'] is False
+        assert prepared['commitBlocker']=='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED'
+        approved={'expectedPreparation':reservation,'expectedRevision':prepared['taskRevision'],
+                  'expectedEvidenceSha256':prepared['evidenceSha256']}
+        staging=preparation+'/stage'
+        stage_request='gc_split_stage_'+uuid.uuid4().hex
+        staged=http('node-b',staging,approved,request=stage_request)
+        assert staged['state']=='STAGED' and staged['candidateNodeId']==candidate and not staged['executionAuthorized']
+        staged_root=home/candidate/'controller'/'handoff-staging'
+        publication,=[path for path in staged_root.iterdir() if path.is_dir()]
+        original_report=publication/'reports'/report_id
+        assert (original_report/'rows.staged.mv.db').read_bytes()==report_bytes['rows.mv.db']
+        assert (original_report/'summary.staged.json').read_bytes()==report_bytes['summary.json']
+        assert json.loads((publication/'closed-receipts.json').read_text())==closed
+        offline=archive.with_name('split-store-shared-archive.held')
+        archive.rename(offline)
+        try:
+            assert http('node-a',staging,approved,request=stage_request)==staged
+            if args.handoff_split_store_browser:
+                browser_check('handoff-split-store',owner=owner_node,candidate=candidate,revision=prepared['taskRevision'],
+                              preparationId=reservation)
+        finally:
+            offline.rename(archive)
+        passed('A split-store preparation retains exact private reports and receipts through an offline shared mount')
+
+        execution='gc_split_commit_'+uuid.uuid4().hex
+        for controller in ('node-a','node-b'):
+            refused=http(controller,preparation+'/commit-owner',approved,request=execution,expected=409)
+            assert refused['code']=='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED'
+            receipt=http(controller,preparation)
+            assert receipt==prepared and 'commitRequestId' not in receipt
+            assert task(controller)['ownerNodeId']==owner_node and task(controller)['workerState']=='STOPPED'
+        assert data_cut()==original_cut and writer()==original_writer and snapshots()==original_snapshots
+        candidate_private=home/candidate/'controller'
+        assert not (candidate_private/'handoff-adopted').exists()
+        assert not (home/candidate/'tasks'/'global_cdc.yml').exists()
+        passed('Both Controllers refuse the same split-store ownership request before binding it or changing native checkpoints')
+
+        release_id='gc_split_release_'+uuid.uuid4().hex
+        released=http('node-b',preparation+'/release',{'expectedPreparation':reservation},request=release_id)
+        assert released==http('node-a',preparation) and released['state']=='RELEASED'
+        assert released['reservedTaskSlots']==0 and 'commitBlocker' not in released and 'commitRequestId' not in released
+        assert data_cut()==original_cut and writer()==original_writer
+        action('START',node='node-a')
+        wait(lambda:task('node-b').get('workerState')=='RUNNING','original Agent resumes after release')
+        sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(191,'split store resume',JSON_OBJECT('n',191))")
+        wait(rows_match,'original Agent resumes both native destinations')
+        assert writer()==original_writer and snapshots()==original_snapshots
+        assert sql(journal_service,'SELECT captured FROM transfer_journal.rm3_job')!=original_source
+        assert all(task(n)['ownerNodeId']==owner_node for n in ('node-a','node-b')) and len(worker_pids())==1
+        action('STOP',node='node-b')
+        wait(lambda:task().get('workerState')=='STOPPED','stop original split-store fixture')
+        manifest['splitStorePreflight']={'independentJournalRoute':True,'controlLeaseRenewedDuringJournalLoss':True,
+            'originalJournalReachableDuringCandidateLoss':True,'offlinePrivateStaging':True,
+            'dualEntryRefusal':True,'originalResumed':True,'sameNativeAssignmentAndSnapshots':True}
+        passed('Releasing the reservation resumes only the original Agent from the same native assignment and snapshot generation')
+
     def run_original_agent_outage():
         entries = ('node-a', 'node-b')
         endpoint = route + '/handoff'
@@ -807,12 +905,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                        taskId='global_cdc', **state)
         preparation = scenario == 'handoff-preparation'
         adopted = scenario == 'handoff-adopted'
-        handoff = preparation or adopted or scenario in ('handoff','handoff-owner-commit')
+        handoff = preparation or adopted or scenario in ('handoff','handoff-owner-commit','handoff-split-store')
         browser_test = ROOT / ('tests/ui/browser-handoff.mjs' if handoff else 'tests/ui/browser-recovery.mjs')
         sources = (browser_test, browser_test.with_name('chromium.mjs'))
         hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
         chrome = {'handoff-preparation':args.handoff_preparation_browser,'handoff-adopted':args.handoff_adopted_browser,
-                  'handoff':args.handoff_browser,'handoff-owner-commit':args.handoff_public_owner_browser}.get(scenario,args.browser)
+                  'handoff':args.handoff_browser,'handoff-owner-commit':args.handoff_public_owner_browser,
+                  'handoff-split-store':args.handoff_split_store_browser}.get(scenario,args.browser)
         command = ['node', str(browser_test), str(chrome.resolve()), scenario]
         result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
         if result.returncode:
@@ -827,6 +926,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             manifest['browserHandoffAdopted'] = evidence
         elif scenario=='handoff-owner-commit':
             manifest['browserHandoffOwnerCommit'] = evidence
+        elif scenario=='handoff-split-store':
+            manifest['browserHandoffSplitStore'] = evidence
         elif handoff:
             manifest['browserHandoffPreparation' if preparation else 'browserHandoff'] = evidence
         else:
@@ -2375,6 +2476,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         databases = ('mysql', 'mysql-target', 'postgres', 'store') if args.separate_execution else ('mysql', 'mysql-target', 'postgres')
         if args.mysql_async_failover:
             databases += ('mysql-replica',)
+        if args.handoff_split_store:
+            databases += (journal_service,)
         compose('up', '-d', *databases)
         for service in databases:
             wait(lambda s=service: sql(s, 'SELECT 1') == '1', service + ' SQL ready')
@@ -2433,11 +2536,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 credentials['password']='${RM_GC_OWN_TASK}'
         enrolled_writer = args.handoff_managed_writer or args.handoff_original_outage
         if enrolled_writer:
-            sql('store',"CREATE ROLE sync_journal LOGIN PASSWORD '"+env['RM_GC_DATA']
-                +"'; GRANT CREATE ON DATABASE rivomesh_control TO sync_journal")
+            sql(journal_service,"CREATE ROLE sync_journal LOGIN PASSWORD '"+env['RM_GC_DATA']
+                +"'; GRANT CREATE ON DATABASE "+journal_database+" TO sync_journal")
+            journal_url='jdbc:postgresql://journal-store:5432/rivomesh_journal' if args.handoff_split_store else env['RM_GC_STORE_URL']
             assignment=str(uuid.uuid4())
             document['nodeId']=owner_node
-            document['journal'].update(managedWriter=True,writerAssignment=assignment,url=env['RM_GC_STORE_URL'],username='sync_journal')
+            document['journal'].update(managedWriter=True,writerAssignment=assignment,url=journal_url,username='sync_journal')
             (home/'managed-writer.json').write_text(json.dumps(document))
             enrolled=json.loads(compose('exec','-T',owner_node,'java',*launch,'init-writer','/fixture/managed-writer.json').stdout)
             assert enrolled['assignment']==assignment and enrolled['node']==owner_node and enrolled['epoch']==0
@@ -2622,7 +2726,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Controller restart retains the assessed placement, original owner and masked cut proof')
             if args.handoff_probe:
                 def data_cut():
-                    return [sql('store' if args.handoff_managed_writer else 'postgres',
+                    return [sql(journal_service if args.handoff_managed_writer else 'postgres',
                                 'SELECT epoch,next_seq,normalized_seq,captured FROM transfer_journal.rm3_job'),
                             sql('postgres','SELECT epoch,stream_seq,transaction_hash FROM rm_pg_meta.rm3_sink_job'),
                             sql('mysql-target','SELECT epoch,stream_seq,transaction_hash FROM rm_my_meta.rm3_sink_job')]
@@ -2669,14 +2773,76 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     updated=json.loads(candidate_file.read_text())
                     updated['cluster']['handoffEvidenceRoot']='/fixture/handoff-shared'
                     candidate_file.write_text(json.dumps(updated))
-                composition.write_text(json.dumps({'services':services,'volumes':volumes}))
+                composition.write_text(json.dumps(compose_data))
                 compose('up','-d','--force-recreate',candidate)
                 address(candidate)
                 wait(lambda:http(candidate,'/readyz',expected=(200,503)).get('status')=='UP',
                      'corrected candidate enrolled')
                 assert http('node-a',probe_endpoint,{'expectedAssessment':stopped['id']},expected=409)['code']=='HANDOFF_ASSESSMENT_CHANGED'
                 good_plan=http('node-a',endpoint,dict(stopped_input,expectedAssessment=stopped['id']))
-                good_plan,good=current_probe(good_plan)
+                if args.handoff_split_store:
+                    container=compose('ps','-q',candidate).stdout.strip()
+                    network=project+'_journal'
+
+                    def reaches(agent,host,port):
+                        return compose('exec','-T',agent,'timeout','3','bash','-c','exec 3<>/dev/tcp/"$1"/"$2"',
+                                       'tcp-check',host,str(port),check=False).returncode==0
+
+                    def inspect(service,template):
+                        service_id=compose('ps','-q',service).stdout.strip()
+                        return subprocess.check_output(['docker','inspect','-f',template,service_id],text=True,timeout=15).strip()
+
+                    def ip(service,network_name):
+                        return inspect(service,'{{(index .NetworkSettings.Networks "'+network_name+'").IPAddress}}')
+
+                    def candidate_lease():
+                        return int(sql('store',"SELECT lease_until FROM global_control.rmc_node WHERE cluster_id='global-cdc' "
+                                               "AND node_id='node-worker-alt' AND lifecycle='RUNNING'"))
+
+                    journal_ip=ip(journal_service,network)
+                    control_ip=ip('store',project+'_default')
+                    candidate_pid=inspect(candidate,'{{.State.Pid}}')
+                    lease_before=candidate_lease()
+                    assert journal_ip and control_ip and journal_ip!=control_ip and int(candidate_pid)>0
+                    assert reaches(candidate,journal_service,5432) and reaches(candidate,journal_ip,5432)
+                    subprocess.run(['docker','network','disconnect',network,container],
+                                   check=True,capture_output=True,text=True,timeout=15)
+                    try:
+                        assert not reaches(candidate,journal_service,5432) and not reaches(candidate,journal_ip,5432)
+                        assert reaches(owner_node,journal_service,5432) and reaches(owner_node,journal_ip,5432)
+                        assert all(reaches(candidate,host,port) for host,port in
+                                   [('store',5432),(control_ip,5432),('mysql',3306),('postgres',5432),('mysql-target',3306)])
+                        wait(lambda:candidate_lease()>lease_before,'control database observes candidate lease renewal during journal-only loss',seconds=15)
+                        assert inspect(candidate,'{{.State.Pid}}')==candidate_pid
+                        good_plan,isolated=current_probe(good_plan)
+                        assert isolated['probe']['candidate']['state']=='REFUSED'
+                        assert 'preparationEvidenceSha256' not in isolated and not isolated['executionAuthorized']
+                        readiness=compose('exec','-T',candidate,'timeout','8','bash','-c',
+                            r'''exec 3<>/dev/tcp/127.0.0.1/8080
+printf 'GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+cat <&3''').stdout
+                        headers,body=readiness.split('\n\n',1)
+                        assert headers.splitlines()[0].startswith('HTTP/1.1 200 ') and json.loads(body)['status']=='UP'
+                        assert all(task(n)['ownerNodeId']==owner_node for n in ('node-a','node-b'))
+                        assert data_cut()==original_cut
+                        passed('Candidate journal-network loss fails native cut proof while the control, source and destination routes remain reachable')
+                    finally:
+                        subprocess.run(['docker','network','connect',network,container],
+                                       check=True,capture_output=True,text=True,timeout=15)
+                    wait(lambda:reaches(candidate,journal_service,5432),'candidate regains only the journal link',seconds=25)
+                    assert inspect(candidate,'{{.State.Pid}}')==candidate_pid
+                    reconnect_plan=[good_plan]
+
+                    def verified_reconnect():
+                        plan, result=current_probe(reconnect_plan[0])
+                        reconnect_plan[0]=plan
+                        if result['probe']['current'] and result['probe']['candidate']['state']=='VERIFIED':
+                            return plan,result
+
+                    good_plan,good=wait(verified_reconnect,'same candidate JVM restores native journal and target proof',seconds=60)
+                    assert inspect(candidate,'{{.State.Pid}}')==candidate_pid
+                else:
+                    good_plan,good=current_probe(good_plan)
                 proof=good['probe']
                 assert proof['current'] and proof['candidate']['state']=='VERIFIED', proof['candidate'].get('code')
                 cut=proof['candidate']['cut']
@@ -2691,7 +2857,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     attempt=compose('exec','-T',candidate,'java',*launch,'transfer-writer','/fixture/disguised-writer.json',
                                     assignment,enrolled['generation'],str(managed['epoch']),check=False)
                     assert attempt.returncode and 'WRITER_ASSIGNMENT_MANAGED_REQUIRED' in attempt.stderr+attempt.stdout
-                    assert sql('store','SELECT format_version FROM transfer_journal.rm3_job')=='11' and data_cut()==original_cut
+                    assert sql(journal_service,'SELECT format_version FROM transfer_journal.rm3_job')=='11' and data_cut()==original_cut
                     passed('Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification')
                 assert len(cut['journalGenerationSha256'])==len(cut['nativeEvidenceSha256'])==64
                 assert good['blockers']==['ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED'] and not good['executionAuthorized']
@@ -3304,6 +3470,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             http('node-a',preparation,expected=404)
                             prepared_input={'expectedAssessment':good['id'],'expectedRevision':task()['revision'],
                                             'expectedEvidenceSha256':good['preparationEvidenceSha256']}
+                            if args.handoff_split_store:
+                                run_split_store_preflight(preparation,prepared_input,original_cut,data_cut,archive,
+                                                          saved_bytes,report_id,closed,candidate)
+                                manifest['status']='PASS'
+                                assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+                                print('GLOBAL_CONTROL_SPLIT_STORE_PREFLIGHT_ACCEPTED artifact='+digest)
+                                raise SystemExit(0)
                             if args.handoff_managed_writer:
                                 assert assignment not in json.dumps(task())
                                 seen=int(sql('store','SELECT activated_epoch FROM transfer_journal.rm3_writer_assignment_history'))

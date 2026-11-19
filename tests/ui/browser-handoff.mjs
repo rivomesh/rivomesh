@@ -6,7 +6,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {launchChrome,waitFor} from './chromium.mjs';
 
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['handoff','handoff-preparation','handoff-adopted','handoff-owner-commit'].includes(scenario));
+assert(binary&&['handoff','handoff-preparation','handoff-adopted','handoff-owner-commit','handoff-split-store'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const {first,second,taskId,token,owner,candidate,revision,previousReceiptId,
@@ -259,7 +259,37 @@ try{
   checks.push('The second Controller stages signed custody and commits the already bound owner transfer by keyboard at 390px, keeping the Worker stopped');
  }
 
- if(scenario==='handoff-adopted'){
+ async function splitStoreFlow(){
+  const taskPath='/api/tasks/'+encodeURIComponent(taskId);
+  const prep='document.querySelector("[data-handoff-preparation]")';
+  let firstReceipt;
+  for(const [entry,url,width] of [['node-a',first,390],['node-b',second,320]]){
+   const chinese=entry==='node-a';
+   await cdp('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:false});
+   await navigate(url,entry,chinese);
+   if(!chinese)await evaluate('if(document.documentElement.lang!=="en")document.querySelector("#language").click()');
+   await open();
+   const label=chinese?'控制事务无法同时核验日志切点':'The control transaction could not verify the journal cut';
+   await poll(`${prep}?.textContent.includes(${quote(label)})`,'split-store commit blocker');
+   const receipt=await evaluate(`fetch(${quote(taskPath+'/handoff/preparation')}).then(response=>response.json())`);
+   assert.deepEqual([receipt.id,receipt.state,receipt.originalNodeId,receipt.candidateNodeId,receipt.taskRevision,
+    receipt.writerActivation.checkedInControlTransaction,receipt.commitBlocker,receipt.executionAuthorized],
+    [preparationId,'PREPARED',owner,candidate,revision,false,'HANDOFF_MANAGED_CONTROL_CUT_REQUIRED',false]);
+   if(firstReceipt)assert.deepEqual(receipt,firstReceipt);
+   else firstReceipt=receipt;
+   await clickByKeyboard('[data-handoff-stage]');
+   const staged=chinese?'已核验暂存文件':'verified the staged files';
+   await poll(`document.querySelector("[data-handoff-stage-status]")?.textContent.includes(${quote(staged)})`,'offline private stage');
+   assert(await evaluate(`!document.querySelector('[data-handoff-action="commit-owner"]')
+    &&!document.querySelector('[data-handoff-release]').disabled
+    &&document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth`));
+   checks.push(entry+' shows the precise split-store blocker and can verify private evidence without a commit control');
+  }
+ }
+
+ if(scenario==='handoff-split-store'){
+  await splitStoreFlow();
+ }else if(scenario==='handoff-adopted'){
   await adoptedFlow();
  }else if(scenario==='handoff-owner-commit'){
   await commitOwnerFlow();

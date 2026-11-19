@@ -178,7 +178,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Approved ownership transfer preserves the exact MySQL ZIP as candidate read-only history after restart and loss of the shared and staging copies.
   - [x] Approved same-database transfer adopts original signed failure records and closed receipts. Both Controllers reopen the read-only history after candidate restart.
   - [x] One approved transfer adopts raw capture and signed failure history. Four staging failures are isolated. Both Controllers verify a common receipt after restart.
-  - [ ] Independent control and journal stores, further storage and destination profiles.
+  - [x] Independent journal loss refuses native cut proof. Recovery restores read-only staging. Both entries block writer transfer and the original Agent resumes.
+  - [ ] Durable split-store fencing and further storage and destination profiles.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06

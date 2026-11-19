@@ -105,6 +105,12 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 Controller 断开后，可通过任一入口读取最新准备记录。若请求已绑定，用同一请求 ID 重试。准备记录在请求绑定和切换提交后都会返回 `commitRequestId`。提交前审阅的断点、候选绑定或授权变化时，需重新准备。
 
+### 日志库和控制库分离时核验交接
+
+受管理的 PostgreSQL 日志库与控制库分开时，可审阅原任务的停机切点，并在预留期间暂存报告和已办结回执。候选 Agent 需要同时访问控制库、日志库、源库和目标库。日志链路恢复后可以重新探测。共享归档不可用时，可重试暂存请求核验候选已有的私有副本。
+
+界面会显示归属切换受阻的原因。准备回执返回 `checkedInControlTransaction: false` 和 `commitBlocker: HANDOFF_MANAGED_CONTROL_CUT_REQUIRED`。两个入口都在绑定请求之前拒绝归属提交，原 Agent、日志断点和目标回执保持原状。释放预留后可在原 Agent 从同一切点启动。异库归属激活需要独立的持久化协议。
+
 ### 隔离已停驻任务的 SQL 目标
 
 候选 Agent 接收签名报告和回执历史后，管理员可在交接面板选择 **隔离 SQL 目标**。通过 API 审批时，提交 `POST /api/tasks/{id}/handoff/preparation/fence-targets`，携带 `X-Request-ID`，请求体传入 `expectedPreparation` 和 `expectedRevision`。使用交接面板里的准备 ID 和**已提交的任务修订**。返回 `202` 表示审批已持久化。刷新交接面板或调用 `GET /api/tasks/{id}/handoff/preparation`，可查看 `FENCE_PENDING` 和 `TARGETS_FENCED`。
