@@ -42,22 +42,41 @@ final class GlobalTaskViews {
             }agents.require(c,lease,directory);return null;
         });
     }
-    private Map<String,Object> unavailable(GlobalTaskStore.Record task,String state){
-        Map<String,Object> view=new LinkedHashMap<>();view.put("id",task.id);view.put("ownerNodeId",task.owner);view.put("revision",task.revision);view.put("configurationVersion",task.configurationVersion);view.put("workerState","UNKNOWN");view.put("desired","UNKNOWN");view.put("status",Collections.emptyMap());view.put("operations",Collections.emptyList());view.put("destinations",Collections.emptyList());view.put("statusAvailable",false);view.put("ownerState",state);view.put("sourceDatabase","—");view.put("sourceCluster","");view.put("targetSchema","—");return view;
+    private record Registration(String incarnation,long epoch,String controlState){}
+
+    private Registration registration(Connection c,String owner,long now)throws SQLException{
+        try(PreparedStatement p=db.prepare(c,"SELECT incarnation,epoch,lease_until,lifecycle FROM "+db.table("node")
+                +" WHERE cluster_id=? AND node_id=?",cluster,owner);ResultSet r=p.executeQuery()){
+            if(!r.next())return new Registration(null,0,"UNKNOWN");
+            String controlState=!"RUNNING".equals(r.getString(4))?"STOPPED":r.getLong(3)<=now?"STALE":"HEALTHY";
+            return new Registration(r.getString(1),r.getLong(2),controlState);
+        }
+    }
+    String ownerControlState(Connection c,String owner)throws SQLException{
+        return registration(c,owner,db.now(c)).controlState;
+    }
+    private Map<String,Object> unavailable(GlobalTaskStore.Record task,String state,String controlState){
+        Map<String,Object> view=new LinkedHashMap<>();view.put("id",task.id);view.put("ownerNodeId",task.owner);view.put("revision",task.revision);view.put("configurationVersion",task.configurationVersion);
+        view.put("workerState","UNKNOWN");view.put("desired","UNKNOWN");view.put("captureLeaseState","UNKNOWN");
+        view.put("status",Collections.emptyMap());view.put("operations",Collections.emptyList());view.put("destinations",Collections.emptyList());
+        view.put("statusAvailable",false);view.put("ownerState",state);view.put("ownerControlState",controlState);
+        view.put("sourceDatabase","—");view.put("sourceCluster","");view.put("targetSchema","—");return view;
     }
     Map<String,Object> read(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor)throws Exception{
-        Observation observation;
+        Observation observation=null;
         try(PreparedStatement p=db.prepare(c,"SELECT envelope FROM "+db.table("task_observation")+" WHERE cluster_id=? AND task_id=?",cluster,task.id);ResultSet r=p.executeQuery()){
-            if(!r.next())return unavailable(task,"UNOBSERVED");observation=Model.JSON.readValue(cipher.open("task-view/"+task.id,r.getString(1)),Observation.class);
+            if(r.next())observation=Model.JSON.readValue(cipher.open("task-view/"+task.id,r.getString(1)),Observation.class);
         }
+        long now=db.now(c);
+        Registration current=registration(c,task.owner,now);
+        if(observation==null)return unavailable(task,"UNOBSERVED",current.controlState);
         if(observation.version!=1||!task.id.equals(observation.task)||!task.owner.equals(observation.owner)||!task.directory.equals(observation.directory)||observation.view==null||!task.id.equals(observation.view.get("id")))throw new TaskService.Conflict("TASK_VIEW_INVALID");
-        String state="UNKNOWN";long now=db.now(c);
-        try(PreparedStatement p=db.prepare(c,"SELECT incarnation,epoch,lease_until,lifecycle FROM "+db.table("node")+" WHERE cluster_id=? AND node_id=?",cluster,task.owner);ResultSet r=p.executeQuery()){
-            if(r.next())state=!"RUNNING".equals(r.getString(4))?"STOPPED":r.getLong(3)<=now?"STALE":r.getLong(2)!=observation.epoch||!observation.incarnation.equals(r.getString(1))?"REGISTERING":"HEALTHY";
-        }
+        String state=current.controlState;
+        if("HEALTHY".equals(state)&&(current.epoch!=observation.epoch||!Objects.equals(observation.incarnation,current.incarnation)))
+            state="REGISTERING";
         if(now<observation.observedAt||now-observation.observedAt>freshness)state="OBSERVATION_STALE";
-        if(!"HEALTHY".equals(state)){Map<String,Object> view=unavailable(task,state);view.put("ownerObservedAt",Instant.ofEpochMilli(observation.observedAt).toString());view.put("observedAt",observation.view.get("observedAt"));return view;}
-        Map<String,Object> result=new LinkedHashMap<>(observation.view);result.put("ownerRevision",result.get("revision"));result.put("ownerConfigurationVersion",result.get("configurationVersion"));result.put("id",task.id);result.put("revision",task.revision);result.put("configurationVersion",task.configurationVersion);result.put("ownerNodeId",task.owner);result.put("ownerState",state);result.put("ownerObservedAt",Instant.ofEpochMilli(observation.observedAt).toString());return result;
+        if(!"HEALTHY".equals(state)){Map<String,Object> view=unavailable(task,state,current.controlState);view.put("ownerObservedAt",Instant.ofEpochMilli(observation.observedAt).toString());view.put("observedAt",observation.view.get("observedAt"));return view;}
+        Map<String,Object> result=new LinkedHashMap<>(observation.view);result.put("ownerRevision",result.get("revision"));result.put("ownerConfigurationVersion",result.get("configurationVersion"));result.put("id",task.id);result.put("revision",task.revision);result.put("configurationVersion",task.configurationVersion);result.put("ownerNodeId",task.owner);result.put("ownerState",state);result.put("ownerControlState",current.controlState);result.put("ownerObservedAt",Instant.ofEpochMilli(observation.observedAt).toString());return result;
     }
     Map<String,Object> get(String id,AccessControl.Principal actor)throws Exception{return tasks.transaction(id,actor,(c,record,current)->read(c,record,current));}
 }

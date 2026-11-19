@@ -53,6 +53,8 @@ parser.add_argument('--handoff-preparation', action='store_true',
                     help='Reserve the candidate and verify durable review release without changing data authority')
 parser.add_argument('--handoff-managed-writer', action='store_true',
                     help='Enroll an Agent writer and verify the same PostgreSQL connection can lock the original cut')
+parser.add_argument('--handoff-original-outage', action='store_true',
+                    help='Observe a killed original Agent through both entries and fence its former leases on return')
 parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
@@ -163,6 +165,10 @@ if args.handoff_preparation and not args.handoff_closed_receipts:
     parser.error('--handoff-preparation requires --handoff-closed-receipts')
 if args.handoff_managed_writer and (not args.handoff_preparation or args.control_product!='POSTGRESQL' or args.runtime_image):
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
+if args.handoff_original_outage and (not args.handoff_assessment or args.handoff_probe
+        or not args.test_classes or not args.test_classes.is_dir()
+        or args.control_product != 'POSTGRESQL' or args.runtime_image):
+    parser.error('--handoff-original-outage requires --handoff-assessment, PostgreSQL control, and compiled --test-classes')
 if args.handoff_staging and not args.handoff_preparation:
     parser.error('--handoff-staging requires --handoff-preparation')
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
@@ -313,7 +319,8 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffRawCustody': args.handoff_raw_custody,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
-            'handoffManagedWriter': args.handoff_managed_writer,
+            'handoffManagedWriter': args.handoff_managed_writer or args.handoff_original_outage,
+            'handoffOriginalOutage': args.handoff_original_outage,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffAutoResume': args.handoff_auto_resume,
             'handoffStaging': args.handoff_staging,
@@ -461,7 +468,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         (home / 'standalone.json').write_text(json.dumps(local))
         services['standalone'] = dict(services['node-a'], environment={'RM_GC_TOKEN': '${RM_GC_TOKEN}'},
                                       entrypoint=['java', '-Xmx384m', *launch, 'serve', '/fixture/standalone.json'])
-    if args.managed_commit or args.recovery_jobs or args.command_routing or args.handoff_private_writer:
+    if (args.managed_commit or args.recovery_jobs or args.command_routing
+            or args.handoff_private_writer or args.handoff_original_outage):
         classes=args.test_classes.resolve();classes.relative_to(ROOT)
         for fixture_node in ('node-a','node-b') if args.handoff_private_writer else (owner_node,):
             services[fixture_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
@@ -591,6 +599,133 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if complete:
             wait(lambda: outcome(request, node, task_path), name)
         return request, accepted
+
+    def run_original_agent_outage():
+        entries = ('node-a', 'node-b')
+        endpoint = route + '/handoff'
+        candidate = 'node-worker-alt'
+        clock = 'CAST(EXTRACT(EPOCH FROM clock_timestamp())*1000 AS BIGINT)'
+        node_row = " FROM global_control.rmc_node WHERE cluster_id='global-cdc' AND node_id='node-worker'"
+        job_row = " FROM transfer_journal.rm3_job WHERE pipeline_id='global_cdc'"
+        targets = (('postgres', 'pg'), ('mysql-target', 'my'))
+
+        def current_views():
+            return [task(entry) for entry in entries]
+
+        def streaming():
+            return all(t.get('ownerControlState') == 'HEALTHY' and t.get('workerState') == 'RUNNING'
+                       and t.get('captureLeaseState') == 'CLAIMED' and t.get('status', {}).get('phase') == 'STREAMING'
+                       for t in current_views())
+
+        def writer_authority():
+            return sql('store', "SELECT a.assignment_id,h.node_id,h.activated_epoch "
+                       "FROM transfer_journal.rm3_writer_assignment a JOIN transfer_journal.rm3_writer_assignment_history h "
+                       "ON a.pipeline_id=h.pipeline_id AND a.assignment_id=h.assignment_id WHERE a.pipeline_id='global_cdc'")
+
+        def target_receipts():
+            return [sql(service, f"SELECT epoch,stream_seq,transaction_hash FROM rm_{target}_meta.rm3_sink_job "
+                        f"WHERE pipeline_id='global_cdc' AND subscription_id='{target}'").split('|')
+                    for service, target in targets]
+
+        def journal_cut():
+            return sql('store', 'SELECT epoch,next_seq,normalized_seq,captured' + job_row)
+
+        def pending_row_counts():
+            return [sql(service, f'SELECT COUNT(*) FROM rm_{target}_sales.items WHERE id=104')
+                    for service, target in targets]
+
+        def fully_applied():
+            sequence = sql('store', 'SELECT normalized_seq' + job_row
+                           + ' AND next_seq=normalized_seq+1 AND owner IS NOT NULL AND lease_until>' + clock)
+            return sequence and all(receipt[1] == sequence for receipt in target_receipts())
+
+        wait(streaming, 'both entries see healthy running original Agent')
+        wait(fully_applied, 'live journal and both native targets share the settled original cut')
+        revision = task()['revision']
+        review = dict(candidateNodeId=candidate, expectedRevision=revision)
+        before = http('node-a', endpoint, review)
+        assert before['state'] == 'BLOCKED' and before['originalControlState'] == 'HEALTHY'
+        assert 'ORIGINAL_WORKER_NOT_DRAINED' in before['blockers']
+        old_incarnation, old_control_epoch = sql('store', 'SELECT incarnation,epoch' + node_row).split('|')
+        old_capture_owner, old_capture_epoch = sql('store', 'SELECT owner,epoch' + job_row).split('|')
+        assert old_capture_owner and int(old_capture_epoch) > 0
+        directory = home / owner_node / 'controller' / 'owner-directory-id'
+        original_directory = directory.read_bytes()
+        original_writer = writer_authority()
+        original_targets = target_receipts()
+        original_cut = journal_cut()
+        assert original_writer.split('|')[1] == owner_node
+        assert all(int(receipt[1]) > 0 and len(receipt[2]) == 64 for receipt in original_targets)
+
+        compose('kill', '-s', 'SIGKILL', owner_node)
+        assert compose('ps', '-q', owner_node).stdout.strip() == ''
+        def unreachable(expected_revision):
+            return all(t.get('ownerControlState') == 'STALE' and not t.get('statusAvailable')
+                       and t.get('workerState') == t.get('captureLeaseState') == t.get('desired') == 'UNKNOWN'
+                       and t['ownerNodeId'] == owner_node and t['revision'] == expected_revision for t in current_views())
+        wait(lambda: unreachable(revision), 'expired original Agent control lease masks Worker, intent and capture observations')
+        wait(lambda: sql('store', 'SELECT COUNT(*)' + job_row + ' AND lease_until>' + clock) == '0',
+             'independent capture lease expires on the journal database clock')
+        passed('Original Agent SIGKILL exposes expired control and unknown Worker, intent and capture at both Controllers')
+
+        for entry in entries:
+            prior = http(entry, endpoint)
+            assert prior['id'] == before['id'] and prior['state'] == 'STALE' and prior['originalControlState'] == 'STALE'
+        refreshed = http('node-b', endpoint, dict(review, expectedAssessment=before['id']))
+        assert refreshed == http('node-a', endpoint)
+        assert refreshed['state'] == 'BLOCKED' and refreshed['originalControlState'] == 'STALE'
+        assert refreshed['originalCut'] is None and not refreshed['executionAuthorized']
+        assert 'ORIGINAL_TASK_STATE_UNVERIFIED' in refreshed['blockers']
+        assert http('node-a', endpoint + '/probe', {'expectedAssessment': refreshed['id']},
+                    expected=409)['code'] == 'HANDOFF_ASSESSMENT_BLOCKED'
+        assert writer_authority() == original_writer and journal_cut() == original_cut
+        assert target_receipts() == original_targets
+        passed('Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts')
+
+        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(104,'offline-backlog',JSON_OBJECT('n',104))")
+        stop, accepted = action('STOP', node='node-b', complete=False)
+        assert next(op for op in accepted['operations'] if op['id'] == stop)['deliveryStatus'] == 'PENDING'
+        stop_revision = accepted['revision']
+        assert stop_revision != revision
+        assert not outcome(stop, 'node-a') and unreachable(stop_revision)
+        compose('up', '-d', owner_node)
+        address(owner_node)
+        wait(lambda: all(outcome(stop, entry) for entry in entries), 'durable STOP from the original Agent after restart')
+
+        def stopped():
+            return all(t.get('ownerControlState') == 'HEALTHY' and t.get('workerState') == 'STOPPED'
+                       and t.get('desired') == 'STOPPED' and t.get('captureLeaseState') in ('UNCLAIMED', 'EXPIRED')
+                       and t['ownerNodeId'] == owner_node and t['revision'] == stop_revision for t in current_views())
+
+        wait(stopped, 'both Controllers confirm explicit STOP on the same recovered Agent')
+        new_incarnation, new_control_epoch = sql('store', 'SELECT incarnation,epoch' + node_row).split('|')
+        assert new_incarnation != old_incarnation and int(new_control_epoch) > int(old_control_epoch)
+        assert directory.read_bytes() == original_directory
+        assert pending_row_counts() == ['0', '0'] and journal_cut() == original_cut
+        assert writer_authority() == original_writer and target_receipts() == original_targets
+        passed('Offline STOP survives original directory and Agent restart before the backlog can reach either target')
+
+        action('START', node='node-a')
+        wait(streaming, 'same Agent explicitly reclaims capture using new generations')
+        wait(rows_match, 'both targets apply the original backlog')
+        wait(fully_applied, 'journal and both native targets share the recovered cut')
+        assert pending_row_counts() == ['1', '1']
+        new_capture_epoch = int(sql('store', 'SELECT epoch' + job_row))
+        assert new_capture_epoch > int(old_capture_epoch)
+        recovered_targets = target_receipts()
+        for old, new in zip(original_targets, recovered_targets):
+            assert int(new[0]) == new_capture_epoch and int(new[1]) == int(old[1]) + 1 and new[2] != old[2]
+        assert writer_authority() == original_writer
+        recovered_cut = journal_cut()
+        probe = compose('exec', '-T', owner_node, 'java', '-cp', '/app/rivomesh.jar:/fixture-tests',
+                        'io.github.rivomesh.platform.OriginalAgentOutageFixture',
+                        '/fixture/' + owner_node + '.json', '/fixture/managed-writer.json',
+                        old_incarnation, old_control_epoch, old_capture_owner, old_capture_epoch, check=False)
+        assert probe.returncode == 0 and probe.stdout.strip() == 'ORIGINAL_AGENT_GENERATIONS_FENCED', (
+            'Former lease attempt was not fenced; fixture exit ' + str(probe.returncode))
+        assert journal_cut() == recovered_cut and target_receipts() == recovered_targets
+        assert pending_row_counts() == ['1', '1']
+        passed('Explicit START consumes one backlog transaction on both targets and rejects the former Agent and capture leases')
 
     def browser_check(scenario, **state):
         # Only a disposable loopback browser receives the random credential. Keep it out of args and evidence.
@@ -2222,7 +2357,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         if args.secret_audit:
             for credentials in (document['source'],*document['targets']):
                 credentials['password']='${RM_GC_OWN_TASK}'
-        if args.handoff_managed_writer:
+        enrolled_writer = args.handoff_managed_writer or args.handoff_original_outage
+        if enrolled_writer:
             sql('store',"CREATE ROLE sync_journal LOGIN PASSWORD '"+env['RM_GC_DATA']
                 +"'; GRANT CREATE ON DATABASE rivomesh_control TO sync_journal")
             assignment=str(uuid.uuid4())
@@ -2236,7 +2372,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert wrong['code']=='MANAGED_WRITER_OWNER_REQUIRED'
             passed('Only the original Agent can admit the explicitly initialized managed writer')
         created = 'gc_create_' + uuid.uuid4().hex
-        body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement and not args.handoff_managed_writer else {'ownerNodeId':owner_node})}
+        body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement and not enrolled_writer else {'ownerNodeId':owner_node})}
         http('node-a','/api/tasks',body,request=created,expected=202)
         wait(lambda: outcome(created), 'remote create')
         assert task()['ownerNodeId'] == owner_node
@@ -2285,6 +2421,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         sql('mysql', "START TRANSACTION; UPDATE sales.items SET note='updated',payload=JSON_OBJECT('n',11) WHERE id=1; DELETE FROM sales.items WHERE id=2; INSERT INTO sales.items(id,note,payload) VALUES(3,'third',JSON_OBJECT('n',3)); UPDATE sales.duplicates SET value=8 WHERE value=7 LIMIT 1; UPDATE billing.ledger SET amount=456.7890 WHERE id=1; COMMIT")
         wait(rows_match, 'incremental exact rows')
         passed('Cross-database transaction insert/update/delete and keyless multiplicity')
+        if args.handoff_original_outage:
+            run_original_agent_outage()
+            assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+            manifest['status'] = 'PASS'
+            print('GLOBAL_CONTROL_HANDOFF_ORIGINAL_OUTAGE_ACCEPTED artifact=' + digest)
+            raise SystemExit(0)
         if args.mysql_async_failover:
             run_mysql_async_failover()
             assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest

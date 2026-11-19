@@ -100,7 +100,7 @@ final class ManagedHandoff {
                     Agent.of(original),Agent.of(candidate.binding()),candidate.taskSlots(),candidate.workerSlots(),
                     candidate.assignedTasks(),actor.id,actor.authorizationRevision,assessedAt,originalCut,List.copyOf(blockers),null);
             save(c,next,prior==null,actor,"MANAGED_HANDOFF_ASSESSED");
-            return summary(next,false,assessedAt);
+            return summary(next,false,assessedAt,views.ownerControlState(c,original.node));
         });
     }
 
@@ -130,7 +130,7 @@ final class ManagedHandoff {
             Assessment proved=new Assessment(a.version,a.task,a.request,a.replaces,a.revision,a.activeVersion,a.original,
                     a.candidate,a.taskSlots,a.workerSlots,a.assigned,a.actor,a.actorRevision,a.assessedAt,a.originalCut,a.blockers,result);
             save(c,proved,false,current,"MANAGED_HANDOFF_PROBED");
-            return summary(proved,false,now);
+            return summary(proved,false,now,views.ownerControlState(c,proved.original.node));
         });
     }
 
@@ -559,7 +559,7 @@ final class ManagedHandoff {
     }
 
     private Map<String,Object> view(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
-        return summary(a,stale(c,task,actor,a),db.now(c));
+        return summary(a,stale(c,task,actor,a),db.now(c),views.ownerControlState(c,a.original.node));
     }
     private boolean stale(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
         boolean stale=!task.revision.equals(a.revision)||!Objects.equals(task.activeConfigurationVersion,a.activeVersion)
@@ -580,11 +580,12 @@ final class ManagedHandoff {
         return stale;
     }
 
-    private Map<String,Object> summary(Assessment a,boolean stale,long now)throws Exception{
+    private Map<String,Object> summary(Assessment a,boolean stale,long now,String originalControlState)throws Exception{
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("id",a.request);result.put("taskId",a.task);result.put("taskRevision",a.revision);
         result.put("activeConfigurationVersion",a.activeVersion);
         result.put("originalNodeId",a.original.node);result.put("originalNodeEpoch",Long.toString(a.original.epoch));
+        result.put("originalControlState",originalControlState);
         result.put("candidateNodeId",a.candidate.node);result.put("candidateNodeEpoch",Long.toString(a.candidate.epoch));
         result.put("candidateState",a.candidate.state);result.put("candidateAssignedTasks",a.assigned);
         result.put("candidateTaskCapacity",a.taskSlots);result.put("candidateWorkerCapacity",a.workerSlots);

@@ -36,9 +36,40 @@ class GlobalTaskPlaneTest {
         AccessControl.Principal forged=new AccessControl.Principal(viewer.id,PlatformConfig.Role.ADMIN,null,viewer.authorizationRevision);assertThrows(SecurityException.class,()->b.invoke(stop,forged));
     }
     @Test void offlineOwnerIsUnknownAndStopRemainsPendingWithoutPretendingToStopIt()throws Exception{
-        create();execution.cycle();publish();fixture.owner.registry.stopped(fixture.owner.lease);assertEquals("UNKNOWN",view(b).get("workerState"));assertEquals("STOPPED",view(b).get("ownerState"));
+        create();execution.cycle();publish();fixture.owner.registry.stopped(fixture.owner.lease);assertEquals("UNKNOWN",view(b).get("workerState"));assertEquals("STOPPED",view(b).get("ownerState"));assertEquals("STOPPED",view(b).get("ownerControlState"));
         TaskRequest stop=TaskRequest.of(TaskRequest.Kind.ACTION,"job");stop.action="STOP";stop.requestId="global_offline_stop";stop.revision=(String)view(b).get("revision");Map<String,Object> accepted=b.invoke(stop,fixture.admin());assertEquals("UNKNOWN",accepted.get("workerState"));assertEquals("PENDING",fixture.status(stop.requestId));
         assertThrows(ControlStore.Fenced.class,()->publish());
+    }
+    @Test void bothEntriesDistinguishTheControlLeaseFromUnobservedWorkerAndCapture()throws Exception{
+        create();
+        assertEquals("HEALTHY",view(b).get("ownerControlState"));
+        assertEquals("UNOBSERVED",view(b).get("ownerState"));
+        execution.cycle();publish();
+        fixture.owner.sql("UPDATE rivomesh_control.rmc_node SET lease_until=0 WHERE node_id='a'");
+        for(GlobalTaskPlane entry:List.of(a,b)){
+            Map<String,Object> task=view(entry);
+            assertEquals("a",task.get("ownerNodeId"));
+            assertEquals("STALE",task.get("ownerControlState"));
+            assertEquals("UNKNOWN",task.get("workerState"));
+            assertEquals("UNKNOWN",task.get("captureLeaseState"));
+            assertEquals("UNKNOWN",task.get("desired"));
+            assertEquals(false,task.get("statusAvailable"));
+        }
+        assertThrows(ControlStore.Expired.class,()->publish());
+
+        ControlStore.Lease next=fixture.owner.registry.register(ControlStoreTest.node("a"),List.of());
+        String otherDirectory=UUID.randomUUID().toString();
+        assertEquals("AGENT_DIRECTORY_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->fixture.owner.a.register(next,otherDirectory)).getMessage());
+        assertThrows(ControlStore.Fenced.class,()->publish());
+        assertEquals("REGISTERING",fixture.owner.b.owner("a",fixture.fixture.directory).state);
+        for(GlobalTaskPlane entry:List.of(a,b)){
+            Map<String,Object> task=view(entry);
+            assertEquals("HEALTHY",task.get("ownerControlState"));
+            assertEquals("REGISTERING",task.get("ownerState"));
+            assertEquals("UNKNOWN",task.get("workerState"));
+            assertEquals("UNKNOWN",task.get("captureLeaseState"));
+        }
     }
     @Test void observationsCannotBePublishedUnderAnotherDirectoryOrReadAsAnotherTask()throws Exception{
         create();execution.cycle();publish();assertFalse(Model.JSON.writeValueAsString(view(b)).contains("source-secret"));assertFalse(Model.JSON.writeValueAsString(view(b)).contains("url-secret"));

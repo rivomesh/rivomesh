@@ -3,7 +3,7 @@ window.RivomeshHandoff=(()=>{
  const bridge=window.RivomeshConfiguration,{api,can,requestId,t}=bridge;
  bridge.register({
   handoffTitle:'评估 Agent 接管',handoffHelp:'评估、预留和暂存期间，任务归原 Agent。完成核验后，可确认归属切换。',
-  handoffOriginal:'当前 Agent',handoffCandidate:'选择候选 Agent',handoffCandidateNode:'候选 Agent',handoffChoose:'请选择 Agent',
+  handoffOriginal:'当前 Agent',handoffOriginalLease:'原 Agent 控制租约',handoffCandidate:'选择候选 Agent',handoffCandidateNode:'候选 Agent',handoffChoose:'请选择 Agent',
   handoffMore:'查看更多 Agent',handoffReload:'刷新节点、评估和预留',handoffAssess:'记录评估',
   handoffReassess:'更新评估',handoffRetry:'重试同一评估',handoffReceipt:'评估回执',
   handoffNone:'该任务暂无评估。',handoffNoCandidate:'当前页没有获授权的候选 Agent。',
@@ -31,7 +31,7 @@ window.RivomeshHandoff=(()=>{
   ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED:'尚需确认候选 Agent 能读取原恢复报告和回执。'
  },{
   handoffTitle:'Assess Agent handoff',handoffHelp:'The current Agent keeps ownership during assessment, reservation and staging. After verification, you can confirm the owner change.',
-  handoffOriginal:'Current Agent',handoffCandidate:'Choose a candidate Agent',handoffCandidateNode:'Candidate Agent',handoffChoose:'Select an Agent',
+  handoffOriginal:'Current Agent',handoffOriginalLease:'Original Agent control lease',handoffCandidate:'Choose a candidate Agent',handoffCandidateNode:'Candidate Agent',handoffChoose:'Select an Agent',
   handoffMore:'More Agents',handoffReload:'Refresh nodes, assessment and reservation',handoffAssess:'Record assessment',
   handoffReassess:'Update assessment',handoffRetry:'Retry the same assessment',handoffReceipt:'Assessment receipt',
   handoffNone:'This task has no assessment yet.',handoffNoCandidate:'This page has no eligible Agent within your grants.',
@@ -401,6 +401,8 @@ window.RivomeshHandoff=(()=>{
   const facts=node('dl');
   for(const [label,value] of [
    ['handoffOriginal',receipt.originalNodeId],['handoffCandidateNode',receipt.candidateNodeId+' · '+t(receipt.candidateState||'UNKNOWN')],
+   ...(['HEALTHY','STALE','STOPPED','UNKNOWN'].includes(receipt.originalControlState)
+    ?[['handoffOriginalLease',t(receipt.originalControlState)]]:[]),
    ['handoffAssigned',receipt.candidateAssignedTasks+' / '+receipt.candidateTaskCapacity],
    ['handoffWorkers',receipt.candidateWorkerCapacity],
    ['handoffAt',new Date(receipt.assessedAt).toLocaleString()]

@@ -134,6 +134,20 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('handoff displays an expired original control lease without enabling a stale review',async()=>{
+  const latest={...reviewed(),state:'STALE',originalControlState:'STALE'};
+  const ui=fixture({read:()=>reply(latest),taskState:{
+   ownerState:'OBSERVATION_STALE',ownerControlState:'STALE',workerState:'UNKNOWN',desired:'UNKNOWN',captureLeaseState:'UNKNOWN'
+  }});
+  try{
+   await open(ui);
+   assert.match(receipt(ui).textContent,/原 Agent 控制租约心跳过期/);
+   assert.ok(!button(ui,'probe')||button(ui,'probe').disabled);
+   assert.equal(ui.probes.length,0);
+   assert.equal(ui.reserves.length,0);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff verifies bound evidence, reviews reservation impact, reserves capacity and releases the original task',async()=>{
   let latest={...snapshot('fresh-assessment'),originalCut:{checkpointHash:'7'.repeat(64)}};
   let planned,checks=0;

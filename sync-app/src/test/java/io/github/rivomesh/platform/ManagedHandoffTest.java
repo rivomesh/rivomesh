@@ -208,6 +208,31 @@ class ManagedHandoffTest {
                 assess("handoff_third_request","handoff_second_request"),fixture.admin)).getMessage());
     }
 
+    @Test void unreachableOriginalInvalidatesTheReceiptWithoutProvingAStoppedWorker()throws Exception{
+        publish("RUNNING","CLAIMED","GTID-history");
+        Map<String,Object> original=a.invoke(assess("handoff_outage_initial",null),fixture.admin);
+        assertEquals("HEALTHY",original.get("originalControlState"));
+        assertEquals("BLOCKED",original.get("state"));
+        try(Connection c=fixture.connection();Statement s=c.createStatement()){
+            assertEquals(1,s.executeUpdate("UPDATE rivomesh_control.rmc_node SET lease_until=0 WHERE node_id='a'"));
+        }
+        for(GlobalTaskPlane entry:List.of(a,b)){
+            Map<String,Object> receipt=latest(entry,fixture.admin);
+            assertEquals(original.get("id"),receipt.get("id"));
+            assertEquals("STALE",receipt.get("state"));
+            assertEquals("STALE",receipt.get("originalControlState"));
+        }
+        Map<String,Object> after=b.invoke(assess("handoff_outage_refresh","handoff_outage_initial"),fixture.admin);
+        assertEquals("BLOCKED",after.get("state"));
+        assertEquals("STALE",after.get("originalControlState"));
+        assertNull(after.get("originalCut"));
+        assertFalse((Boolean)after.get("executionAuthorized"));
+        assertTrue(((List<?>)after.get("blockers")).contains("ORIGINAL_TASK_STATE_UNVERIFIED"));
+        conflict("HANDOFF_ASSESSMENT_BLOCKED",()->a.invoke(probe("handoff_outage_refresh"),fixture.admin));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+    }
+
     @Test void deniesScopedCandidateAndMarksCapacityAndPendingCommands()throws Exception{
         String accounts=fixture.access.accounts().revision;
         String token="scoped-handoff-admin-token-32-characters";
