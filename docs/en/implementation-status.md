@@ -24,10 +24,10 @@ The SDD contains the current totals and requirements. The verification archive d
 | RC-09 | Cross-entry cancellation and original-request recovery across compensation and correction commit boundaries |
 | JV-01 | Temurin 21 is the current release baseline for Controller, Agent and Worker. |
 | LG-07 | Verified capacity matrix, 256 database mappings, large transactions and shared-journal backpressure with resume. |
-| SO-02 | MySQL 5.7.44 V3 in three historical topologies, including replica SQL failure and binlog-loss refusal. Temurin 21 passed the standalone and async GTID profiles. |
-| SO-03 | MySQL 8.0.46 V3 across three topologies and cross-entry manual recovery. Temurin 21 passed async GTID failover. |
+| SO-02 | Temurin 21 passes standalone, async GTID promotion, three-member single-primary Group Replication, replica SQL failure and binlog-loss refusal on MySQL 5.7.44. |
+| SO-03 | Temurin 21 passes standalone, async GTID promotion and three-member single-primary Group Replication on MySQL 8.0.46. Cross-entry manual recovery has a separate profile. |
 | SO-05 | MySQL 8.4.13 V3 topologies, log profile admission and unsupported live events |
-| SO-04 | MySQL 8.2.0 V3 standalone and GTID async on Temurin 21, plus historical single-primary MGR. |
+| SO-04 | Temurin 21 passes standalone, async GTID promotion and three-member single-primary Group Replication on MySQL 8.2.0. |
 
 The [single verification baseline](../verification/README.md) retains scoped provenance rather than repeated development snapshots. Cleanup validation is distinguished from earlier acceptance.
 
@@ -35,17 +35,17 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 
 | Capability | Current boundary |
 |---|---|
-| Replication | MySQL multi-database fan-out, automatic tables, chunked snapshot, durable progress, keyless rows, JSON and supported generated columns. Async GTID promotion passed on Temurin 21 for all four MySQL versions. MySQL 8.4.13 also passed single-primary Group Replication. |
-| PostgreSQL source | Synchronized-slot promotion on 17.12 and stored generated columns on 18.7 passed. Native 17.12 REAL and DOUBLE PRECISION replicate into PostgreSQL and MySQL. [Operator guide](postgresql-source.md) |
+| Replication | MySQL multi-database fan-out, automatic tables, chunked snapshot, durable progress, keyless rows, JSON and supported generated columns. Async GTID promotion and three-member single-primary Group Replication pass on Temurin 21 for MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. Both SQL destinations catch up after election in all four group profiles. |
+| PostgreSQL source | Synchronized-slot promotion on 17.12 and stored generated columns on 18.7 passed. Native 17.12 REAL, DOUBLE PRECISION and BYTEA resume into PostgreSQL and MySQL. BYTEA accepts source server hex and escape defaults, preserving keyless multiplicity and out-of-line values. [Operator guide](postgresql-source.md) |
 | Oracle source | Oracle Free 26ai single-PDB Flashback and archived LogMiner CDC. Two PostgreSQL subscriptions preserve original SCNs through savepoint rollback and forced restart. The profile accepts strict text JSON and the tested AL32UTF8 and AL16UTF16 character declarations. Preflight blocks native JSON when redo images are missing. [Source guide](oracle-source.md) |
 | Capture recovery | Inspect the original position and affected targets, verify MySQL GTID boundaries and original binlog bytes, and approve one verified source transaction exclusion on the bounded profile. [Operator guide](capture-recovery.md) |
-| Management | Bilingual wizard, shared revisions, isolated Workers and cross-entry control. Real Chrome verified retained sessions, report and receipt lookup, and approved report recovery. Keycloak 26.7.4 passed HTTPS code login with S256 PKCE and cross-entry revocation. [Global control](global-control.md) · [OIDC](oidc-login.md) |
+| Management | Bilingual wizard, shared revisions, isolated Workers and cross-entry control. MySQL and PostgreSQL sources verify Agent JVM, components and external PostgreSQL journal reachability before automatic placement. Real Chrome verified retained sessions, report and receipt lookup, and approved report recovery. Keycloak 26.7.4 passed HTTPS code login with S256 PKCE and cross-entry revocation. [Global control](global-control.md) · [OIDC](oidc-login.md) |
 | Interrupted journal ACK | With a PostgreSQL journal, native tests cover a committed MySQL or PostgreSQL target. After the original Agent reconnects, explicit START completes only the missing ACK. For a stopped task with an already frozen writer and complete closed receipts, the same-store offline handoff preserves both SQL cuts through candidate start. [Operator guide](global-control.md#asymmetric-control-network-partition) |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |
 | Gap verification | Reviewed plans,administrator confirmation,fresh scans,atomic receipts and cross-entry cancellation;bounded PG/MySQL,see [guide](gap-verification.md) for acceptance |
 | Transaction compensation | Administrator review and approval for PostgreSQL and MySQL with atomic target receipts and original transaction replay. See the [operator guide](transaction-compensation.md) |
 | Relational targets | MySQL, PostgreSQL and openGauss have native profiles. DM, Kingbase, GBase8c and OceanBase MySQL mode have bounded native transaction and mixed restart profiles. Distributed GaussDB and other vendor modes remain open. |
-| Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
+| Analytical targets | ClickHouse, Doris and Hive have materialization and recovery profiles. On Temurin 21, ClickHouse 25.8.33.6 retains the newer journal position and refuses to write after restoring an older nonempty volume. Production clusters, TLS and capacity require separate acceptance. |
 | Messaging | Eight broker profiles use confirmed at-least-once delivery. Native profiles include Kafka signed receipt readback, ActiveMQ Classic and Artemis shared-store failover, NATS TLS/quorum, RabbitMQ quorum and externally promoted Redis Streams. RocketMQ 5.5.0 opt-in publisher failover passed with three data replicas and a minimum of two synchronized replicas. [Messaging guide](messaging-v3.md) |
 | Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
 | Java | Eclipse Temurin 21 LTS is the sole supported build and runtime. Connector, deployment and security protocol acceptance uses the exact Java 21 candidate. |
@@ -56,12 +56,15 @@ See [design](platform-design.md),[console operations](console-and-deployment.md)
 
 The first-release runbooks describe the current artifact and state formats. Use coordinated Controller, journal and target backups and verify their identity before restoring. Temporary fixture containers and duplicate build artifacts are cleaned after verification. [First-release operations](first-release.md)
 
-## Next work
+## Remaining acceptance
 
-1. Extend offline handoff to additional evidence inventories and storage profiles. Preserve safety when the original task disappears before a freeze.
-2. Reviewed report reclamation, formal nonempty adoption and writer handover or failback.
-3. Per-target recovery protocols and native database, analytical and broker compatibility profiles.
-4. Reviewed PostgreSQL/Oracle schema changes, Oracle RAC and additional vendor modes. Production ingress and audit retention, distribution licensing and required notices remain under review.
+| Scope | Completion condition |
+|---|---|
+| CP-04, LG-05 | Verify fencing and recovery after losing the original Agent before a freeze. Takeover after permanent disk loss requires independently retained directory identity, closed receipts, failure evidence and audit history. Separate control and journal databases require native durable fencing and replay verification. |
+| RC-10, LG-04 | Verify message intent with a real source and broker, and complete per-target gap notice and fault tests. Record the native receipt and consumer deduplication boundary for each broker. |
+| SO-06, SO-07, LG-08 | Complete reviewed schema changes and common-cut verification. Extend Oracle LOB/RAC, complex types and coordinated restore profiles. |
+| JV-02, JV-03, LG-01, LG-03 | Verify drivers, TLS, clusters and recovery by target on Temurin 21. Commercial distributed GaussDB requires a real multi-CN/DN installation. Analytical products require their production cluster profiles. |
+| LG-10 | Verify production external identity, revocation and audit retention. Confirm distribution rights, LICENSE and NOTICE. |
 
 [Complete task list](../sdd/001-control-recovery-compatibility/tasks.en.md)
 
