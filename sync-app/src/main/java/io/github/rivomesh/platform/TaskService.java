@@ -1217,7 +1217,7 @@ public final class TaskService implements AutoCloseable {
                         if(Files.exists(configurationFile(request.taskId+".yml"),LinkOption.NOFOLLOW_LINKS))
                             throw new Conflict("CONFIG_FILE_EXISTS");
                     }
-                });
+                },request.handoffRawStaging);
         synchronized(this){
             requireCandidateHandoffScope(request,actor);
             AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_CANDIDATE_READY";
@@ -1384,6 +1384,17 @@ public final class TaskService implements AutoCloseable {
                 authorized.committedRevision(),task.recipientImport,guard,request,actor::node,authorized);
         if(receipt==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
         return Map.of("id",receipt.request(),"status",receipt.phase(),"code",receipt.code(),"actorRole",receipt.role());
+    }
+    synchronized Map<String,Object> adoptedRawHistory(String id,AccessControl.Principal actor,
+                                                      HandoffEvidenceAdoption.Receipt authorized)throws Exception{
+        ensureOpen();currentActor(actor);
+        if(!actor.administers()||!actor.task(id)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        require(id);
+        Control task=registry.tasks.get(id);
+        if(authorized==null||task.recipientImport==null)throw new NoSuchElementException("HANDOFF_RAW_HISTORY_NOT_FOUND");
+        ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        return HandoffEvidenceAdoption.rawHistory(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
+                authorized.committedRevision(),task.recipientImport,guard,actor::node,authorized);
     }
     private Path failureEvidenceDirectory(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("failure-evidence").resolve(id);}
     private io.github.rivomesh.recovery.FailureEvidence.Scope failureEvidenceScope(String id)throws Exception{

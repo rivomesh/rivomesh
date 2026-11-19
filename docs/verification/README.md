@@ -587,3 +587,7 @@ The `fb7fd290fbccabc7dcf7a565a89fac3dbaad77262b2aa14f4c896590aedff72a` package p
 ### External Object Lock for signed audit checkpoints
 
 The retention tool verifies the signed export checkpoint before it writes an S3 object. Five transport tests and 13 signature export regressions passed. In seven loopback MinIO checks, it confirmed the same SHA-256 and locked version after a retry. Conditional overwrite, early version deletion and shortening the COMPLIANCE retention deadline were refused. An exact-version read preserved the signed bytes. This fixture verifies the compatible Object Lock operations. AWS account permissions and bucket policy require deployment validation. [Operator guide](../en/security-audit.md) · [Manifest](baseline.json)
+
+### Managed handoff of original MySQL capture history
+
+The `9caca6d9160b7e7e8689b90793d854bcd2a378db1ab161a620c58e676316d893` package passed 29 native checks, including three Chrome checks through both Controllers. The original Agent kept its capture key. After the approved owner transfer, the candidate restarted and both entries could still verify the exact private ZIP while the shared and staging copies were offline. The previous Agent and the direct Worker launch stayed fenced. Both SQL target receipts and the source checkpoint matched the reviewed cut. The package integrated with the Kafka permissions feature, `0928633dc58f955cd29632a09f9f5f69920304e217dbb989e6eb75f4d30b5c63`, passed 61 Java and 156 DOM tests and the artifact gate. [Operator guide](../en/capture-recovery.md) · [Manifest](baseline.json)

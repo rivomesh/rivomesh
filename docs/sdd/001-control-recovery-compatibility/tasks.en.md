@@ -84,6 +84,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-RC-10 · Destination-specific recovery and retention · P1 · Depends on: RC-08, LG-03, LG-04
   Deliver: Declare recovery capability per adapter;SQL uses local transactions,analytical/queue adapters verified receipts/gap notifications;other subscriptions are not silently skipped and unresolved evidence is retained with backpressure/alerts.
   Acceptance: AC-RC-10
+  - [x] Verified broker-native permissions for an independent Kafka notice writer identity.
+  - [ ] Physical topic ownership across all targets, approved dispatch and failure recovery remain.
 ## Source compatibility
 
 - [x] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none
@@ -160,7 +162,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05
   - [x] Adopted reports and closed receipts, and private MySQL capture ZIP staging with offline verification.
-  - [ ] Live adoption of raw capture archives and historical failure evidence, with further storage profiles.
+  - [x] Approved ownership transfer preserves the exact MySQL ZIP as candidate read-only history after restart and loss of the shared and staging copies.
+  - [ ] Historical failure evidence adoption and further storage and target profiles.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06
@@ -176,6 +179,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-10 · External identity,immutable audit and Apache preparation · P2 · Depends on: CP-05, SE-05
   Deliver: Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights.
   Acceptance: AC-LG-10
+  - [x] The signed checkpoint retention tool can run on a schedule. MinIO verified the exact version and COMPLIANCE lock.
+  - [ ] Live AWS permissions, full event retention, external identity and source rights remain.
 
 ## Recent deliverables (not additional parent requirements)
 

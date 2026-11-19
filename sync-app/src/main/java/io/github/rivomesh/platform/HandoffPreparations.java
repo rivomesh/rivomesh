@@ -15,7 +15,13 @@ final class HandoffPreparations {
     record JournalCut(String epoch,String sequence,String checkpointSha256){}
     record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
                             String nativeEvidenceSha256,boolean checkedInControlTransaction){}
-    record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){}
+    record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch,
+                        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                        RawCaptureHandoffStaging.Proof rawCapture){
+        WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){
+            this(actor,stagingSha256,configurationSha256,revision,configuration,journalEpoch,null);
+        }
+    }
     record PendingProblem(String code,long observedAt){}
     record TargetFenceRequest(String id,String actor,String actorRevision,JournalWriterAssignment.TargetFence result,
                               @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -87,7 +93,9 @@ final class HandoffPreparations {
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
                     case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
-                            &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor);
+                            &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor)
+                            &&(p.writerCommit.rawCapture()==null||p.writerCommit.rawCapture().matches(p)
+                                &&cluster.equals(p.writerCommit.rawCapture().binding().scope().cluster()));
                     default->false;
                 })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
                 ||(evidenceInstalled(p)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null)
@@ -183,7 +191,8 @@ final class HandoffPreparations {
     }
 
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
-        if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires)
+        if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires
+                ||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
                 null,null,Math.max(now,p.created),p.activation,receipt,p.executionRequest,null);
@@ -236,6 +245,7 @@ final class HandoffPreparations {
                 &&plan.writerCommit.revision.equals(receipt.committedRevision())
                 &&plan.writerCommit.configurationSha256.equals(receipt.configurationSha256())
                 &&plan.writerCommit.stagingSha256.equals(receipt.stagingSha256())
+                &&Objects.equals(plan.writerCommit.rawCapture(),receipt.rawCapture())
                 &&receipt.adoptionSha256()!=null&&receipt.adoptionSha256().matches("[a-f0-9]{64}")
                 &&receipt.reports()>=0&&receipt.closedReceipts()>0&&receipt.closedReceipts()<=SharedHandoffEvidence.MAX_RECEIPTS;
     }
@@ -394,8 +404,14 @@ final class HandoffPreparations {
             view.put("committedRevision",p.writerCommit.revision);
             view.put("committedConfigurationVersion",p.writerCommit.configuration);
         }
-        if(p.evidenceAdoption!=null)view.put("adoptedEvidence",Map.of(
-                "validationReports",p.evidenceAdoption.reports(),"closedReceipts",p.evidenceAdoption.closedReceipts()));
+        if(p.evidenceAdoption!=null){
+            var adopted=new LinkedHashMap<String,Object>();
+            adopted.put("validationReports",p.evidenceAdoption.reports());
+            adopted.put("closedReceipts",p.evidenceAdoption.closedReceipts());
+            if(p.evidenceAdoption.rawCapture()!=null)
+                adopted.put("rawCaptures",p.evidenceAdoption.rawCapture().binding().archive().rawCaptures());
+            view.put("adoptedEvidence",adopted);
+        }
         if("EVIDENCE_ADOPTED".equals(p.phase))view.put("targetFenceAvailable",true);
         if("TARGETS_FENCED".equals(p.phase))view.put("workerStartAvailable",true);
         if(p.workerStart!=null)view.put("workerStart",Map.of("requestId",p.workerStart.id()));

@@ -219,7 +219,13 @@ final class GlobalTaskStore {
     HandoffPreparations.Plan commitPreparedWriter(Connection c,Record record,HandoffPreparations.Plan plan,
             AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successorYaml,
             String candidateStagingSha256,String executionRequest)throws Exception{
+        return commitPreparedWriter(c,record,plan,actor,cut,successorYaml,candidateStagingSha256,executionRequest,null);
+    }
+    HandoffPreparations.Plan commitPreparedWriter(Connection c,Record record,HandoffPreparations.Plan plan,
+            AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successorYaml,
+            String candidateStagingSha256,String executionRequest,RawCaptureHandoffStaging.Proof rawCapture)throws Exception{
         HandoffPreparations.requireExecution(plan,executionRequest);
+        if(rawCapture!=null&&!rawCapture.matches(plan))throw new TaskService.Conflict("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
         if(candidateStagingSha256==null||!candidateStagingSha256.matches("[a-f0-9]{64}"))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED");
         HandoffPreparations.Evidence evidence=plan.evidence();
@@ -261,7 +267,7 @@ final class GlobalTaskStore {
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         db.update(c,"DELETE FROM "+db.table("task_observation")+" WHERE cluster_id=? AND task_id=?",cluster,record.id);
         HandoffPreparations.Plan committed=preparations.commitWriter(c,plan,new HandoffPreparations.WriterCommit(actor.id,
-                candidateStagingSha256,AuditStore.hash(successorYaml),record.revision,record.configurationVersion,placement.epoch()),db.now(c));
+                candidateStagingSha256,AuditStore.hash(successorYaml),record.revision,record.configurationVersion,placement.epoch(),rawCapture),db.now(c));
         access.append(c,event(record,plan.id(),actor,"MANAGED_HANDOFF_WRITER_COMMITTED"));
         return committed;
     }

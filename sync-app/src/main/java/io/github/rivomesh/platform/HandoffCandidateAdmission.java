@@ -19,7 +19,13 @@ final class HandoffCandidateAdmission {
     @FunctionalInterface interface Validator { void validate(String successorYaml)throws Exception; }
     @FunctionalInterface interface AdmittedEvidence<T>{ T accept(ReadyConfig ready,HandoffStaging.Verified staged)throws Exception; }
     record Ready(String preparation,HandoffPreparations.Binding binding,String desired,
-                 String configurationSha256,String stagingSha256){}
+                 String configurationSha256,String stagingSha256,
+                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                 RawCaptureHandoffStaging.Proof rawCapture){
+        Ready(String preparation,HandoffPreparations.Binding binding,String desired,String configurationSha256,String stagingSha256){
+            this(preparation,binding,desired,configurationSha256,stagingSha256,null);
+        }
+    }
     record ReadyConfig(Ready receipt,String successorYaml){
         @Override public String toString(){return "ReadyConfig[receipt="+receipt+"]";}
     }
@@ -30,7 +36,15 @@ final class HandoffCandidateAdmission {
 
     static Ready prepare(Path state,HandoffStaging.Binding staged,HandoffPreparations.Plan plan,String originalYaml,
                          ControlCipher cipher,Validator validator)throws Exception{
+        return prepare(state,staged,plan,originalYaml,cipher,validator,null);
+    }
+
+    static Ready prepare(Path state,HandoffStaging.Binding staged,HandoffPreparations.Plan plan,String originalYaml,
+                         ControlCipher cipher,Validator validator,RawCaptureHandoffStaging.Binding rawBinding)throws Exception{
         requireScope(plan,staged,"PREPARED");
+        RawCaptureHandoffStaging.Proof raw=rawBinding==null?null:RawCaptureHandoffStaging.requireProof(state,rawBinding,cipher);
+        if(raw!=null&&(!raw.matches(plan)||!rawBinding.scope().equals(staged.scope())))
+            throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
         if(originalYaml==null||originalYaml.getBytes(StandardCharsets.UTF_8).length>MAX_YAML)
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         ManagedWriterDeclaration original=ManagedWriterDeclaration.read(originalYaml);
@@ -42,7 +56,7 @@ final class HandoffCandidateAdmission {
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         validator.validate(successor);
         return HandoffStaging.withVerifiedStage(state,staged,cipher,stagingSha256->{
-            Ready receipt=new Ready(plan.id(),staged.candidate(),STOPPED,Codec.sha256(successor),stagingSha256);
+            Ready receipt=new Ready(plan.id(),staged.candidate(),STOPPED,Codec.sha256(successor),stagingSha256,raw);
             Seal intended=new Seal(1,staged,plan.evidence().original(),plan.activation(),receipt,successor);
             Path file=sealPath(state,plan,true);
             if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS)){
@@ -70,7 +84,9 @@ final class HandoffCandidateAdmission {
         return HandoffStaging.withVerifiedFiles(state,observed.stage(),cipher,staged->{
             Seal current=read(file,plan,cipher);
             Ready expected=new Ready(plan.id(),plan.evidence().candidate(),STOPPED,
-                    plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256());
+                    plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),plan.writerCommit().rawCapture());
+            if(expected.rawCapture()!=null&&!expected.rawCapture().matches(plan))
+                throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
             if(!current.equals(observed)||!current.original().equals(plan.evidence().original())
                     ||!current.activation().equals(plan.activation())||!expected.equals(current.receipt())
                     ||!staged.sealSha256().equals(expected.stagingSha256())

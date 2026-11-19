@@ -197,9 +197,16 @@ try{
    })()`);
    const names=light?['原 Agent','当前归属 Agent','已提交日志代次','校验报告','已办结回执']:
     ['Original Agent','Current owner Agent','Committed journal epoch','Validation reports','Closed receipts'];
-   expectMasked(visible.facts,names.map((name,index)=>[name,[
+   const expectedFacts=names.map((name,index)=>[name,[
     owner,candidate,summary.activatedJournalEpoch,String(adoption.validationReports),String(adoption.closedReceipts)
-   ][index]]),'The dialog shows exact node names, decimal journal epoch and counts');
+   ][index]]);
+   if(adoption.rawCaptures){
+    expectedFacts.push([light?'只读原始采集档案':'Read-only raw capture archives',String(adoption.rawCaptures)]);
+    const raw=await read(taskPath+'/handoff/raw-history');
+    expectMasked([raw.state,raw.preparationId,raw.rawCaptures,raw.executionAuthorized],
+     ['READ_ONLY_HISTORY',preparationId,adoption.rawCaptures,false],'The candidate serves the corresponding raw history');
+   }
+   expectMasked(visible.facts,expectedFacts,'The dialog shows exact node names, decimal journal epoch and counts');
    const allowed=light?['关闭','刷新交接状态']:['Close','Refresh handoff status'];
    if(fenceOffered)allowed.push(light?'隔离 SQL 目标':'Fence SQL targets');
    expectMasked(visible.controls,allowed,'Only the signed approval and read-only controls are visible');

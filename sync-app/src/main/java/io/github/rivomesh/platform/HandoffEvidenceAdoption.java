@@ -1,5 +1,6 @@
 package io.github.rivomesh.platform;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.validation.ValidationStore;
@@ -14,16 +15,23 @@ import java.util.concurrent.TimeUnit;
 /** Publishes an immutable local read namespace for the exact projected recipient. */
 final class HandoffEvidenceAdoption {
     private static final String ROOT="handoff-adopted",SEAL=ValidationStore.HANDOFF_ADOPTION_SEAL,
-            RECEIPTS="closed-receipts.json",ROWS="rows.mv.db",SUMMARY="summary.json",LOCK="validation.lock";
+            RECEIPTS="closed-receipts.json",RAW_CAPTURE="raw-capture.zip",ROWS="rows.mv.db",SUMMARY="summary.json",LOCK="validation.lock";
     private static final int MAX_SEAL=64*1024,MAX_RECEIPTS=128*1024;
     record Receipt(String preparation,String task,HandoffPreparations.Binding candidate,String committedRevision,
-                   String configurationSha256,String stagingSha256,String adoptionSha256,int reports,int closedReceipts){}
+                   String configurationSha256,String stagingSha256,String adoptionSha256,int reports,int closedReceipts,
+                   @JsonInclude(JsonInclude.Include.NON_NULL) RawCaptureHandoffStaging.Proof rawCapture){
+        Receipt(String preparation,String task,HandoffPreparations.Binding candidate,String committedRevision,
+                String configurationSha256,String stagingSha256,String adoptionSha256,int reports,int closedReceipts){
+            this(preparation,task,candidate,committedRevision,configurationSha256,stagingSha256,adoptionSha256,reports,closedReceipts,null);
+        }
+    }
     private record Seal(int version,String preparation,String task,String originalNode,HandoffPreparations.Binding candidate,String committedRevision,
                         String configurationSha256,String stagingSha256,int reports,int closedReceipts,
-                        SortedMap<String,HandoffStaging.FileSeal> files){
+                        SortedMap<String,HandoffStaging.FileSeal> files,
+                        @JsonInclude(JsonInclude.Include.NON_NULL) RawCaptureHandoffStaging.Proof rawCapture){
         Receipt receipt()throws Exception{
             return new Receipt(preparation,task,candidate,committedRevision,configurationSha256,stagingSha256,
-                    Codec.sha256(Model.JSON.writeValueAsBytes(this)),reports,closedReceipts);
+                    Codec.sha256(Model.JSON.writeValueAsBytes(this)),reports,closedReceipts,rawCapture);
         }
     }
     private record Publication(Path directory,Seal seal){}
@@ -38,8 +46,10 @@ final class HandoffEvidenceAdoption {
             SortedMap<String,HandoffStaging.FileSeal> adopted=new TreeMap<>();
             for(var artifact:verified.manifest().files().entrySet())adopted.put(adoptedName(artifact.getKey()),artifact.getValue());
             HandoffPreparations.WriterCommit commit=plan.writerCommit();
+            var raw=commit.rawCapture();
+            if(raw!=null)adopted.put(RAW_CAPTURE,rawSeal(raw));
             Seal intended=new Seal(1,plan.id(),plan.task(),plan.evidence().original().node(),ready.receipt().binding(),commit.revision(),
-                    ready.receipt().configurationSha256(),verified.sealSha256(),archive.reports(),archive.closedReceipts(),adopted);
+                    ready.receipt().configurationSha256(),verified.sealSha256(),archive.reports(),archive.closedReceipts(),adopted,raw);
             Receipt receipt=intended.receipt();
             if(HandoffPreparations.evidenceInstalled(plan)&&!receipt.equals(plan.evidenceAdoption()))
                 throw refused("HANDOFF_ADOPTED_SCOPE_CHANGED");
@@ -64,6 +74,8 @@ final class HandoffEvidenceAdoption {
                 if(!target.getParent().equals(pending))prepareReport(target.getParent());
                 copy(verified.directory().resolve(artifact.getKey()),target,artifact.getValue(),deadline);
             }
+            if(raw!=null)
+                copy(RawCaptureHandoffStaging.verifiedZip(state,raw,cipher),pending.resolve(RAW_CAPTURE),rawSeal(raw),deadline);
             verify(pending,intended,cipher,deadline);
             for(String id:reportIds(intended))HandoffStaging.force(pending.resolve(id));
             HandoffStaging.force(pending);
@@ -104,6 +116,28 @@ final class HandoffEvidenceAdoption {
         var receipts=Model.JSON.readValue(bytes,SharedHandoffEvidence.ClosedReceipt[].class);
         if(receipts.length!=adopted.seal().closedReceipts())throw refused("HANDOFF_ADOPTED_BYTES_CHANGED");
         return Arrays.stream(receipts).filter(receipt->receipt.request().equals(id)).findFirst().orElse(null);
+    }
+
+    static Map<String,Object> rawHistory(Path state,String task,String node,String directory,String revision,
+                        ManagedRecipientImport.Receipt config,ControlCipher cipher,java.util.function.Predicate<String> nodeGranted,
+                        Receipt authorized)throws Exception{
+        Publication adopted=publication(state,task,node,directory,revision,config,cipher,authorized);
+        if(adopted==null||adopted.seal().rawCapture()==null||!nodeGranted.test(adopted.seal().originalNode()))
+            throw new NoSuchElementException("HANDOFF_RAW_HISTORY_NOT_FOUND");
+        checkRoot(adopted.directory(),adopted.seal());
+        var raw=adopted.seal().rawCapture();
+        var archive=raw.binding().archive();
+        Path file=adopted.directory().resolve(RAW_CAPTURE);
+        HandoffStaging.secureFile(file);
+        SharedHandoffEvidence.verifyStagedRawCapture(file,raw.binding().scope(),archive);
+        return Map.of("state","READ_ONLY_HISTORY","preparationId",adopted.seal().preparation(),
+                "archiveSha256",archive.sha256(),"archiveBytes",archive.bytes(),"rawCaptures",archive.rawCaptures(),
+                "adoptionSha256",authorized.adoptionSha256(),"executionAuthorized",false);
+    }
+
+    private static HandoffStaging.FileSeal rawSeal(RawCaptureHandoffStaging.Proof raw){
+        var archive=raw.binding().archive();
+        return new HandoffStaging.FileSeal(archive.bytes(),archive.sha256());
     }
 
     private static Publication publication(Path state,String task,String node,String directory,String revision,
@@ -176,12 +210,13 @@ final class HandoffEvidenceAdoption {
     }
     private static void checkRoot(Path root,Seal seal)throws Exception{
         Set<String> names=new HashSet<>(reportIds(seal));names.add(SEAL);names.add(RECEIPTS);
+        if(seal.rawCapture()!=null)names.add(RAW_CAPTURE);
         HandoffStaging.exactNames(root,names);
     }
     private static Set<String> reportIds(Seal seal){
         Set<String> ids=new TreeSet<>();
         for(String name:seal.files().keySet()){
-            if(RECEIPTS.equals(name))continue;
+            if(RECEIPTS.equals(name)||RAW_CAPTURE.equals(name)&&seal.rawCapture()!=null)continue;
             if(!name.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/(?:rows\\.mv\\.db|summary\\.json)"))
                 throw refused("HANDOFF_ADOPTED_SCOPE_CHANGED");
             if(name.endsWith("/"+ROWS))ids.add(name.substring(0,36));
@@ -206,7 +241,8 @@ final class HandoffEvidenceAdoption {
         Seal seal=Model.JSON.readValue(cipher.open(purpose(task,preparation),new String(envelope,StandardCharsets.US_ASCII)),Seal.class);
         if(seal==null||seal.version()!=1||seal.originalNode()==null||seal.candidate()==null||seal.files()==null||seal.reports()<0||seal.reports()>32
                 ||seal.closedReceipts()<1||seal.closedReceipts()>SharedHandoffEvidence.MAX_RECEIPTS
-                ||seal.files().size()!=1+2*seal.reports()||!seal.files().containsKey(RECEIPTS)
+                ||seal.files().size()!=1+2*seal.reports()+(seal.rawCapture()==null?0:1)||!seal.files().containsKey(RECEIPTS)
+                ||seal.rawCapture()!=null&&!rawSeal(seal.rawCapture()).equals(seal.files().get(RAW_CAPTURE))
                 ||seal.files().values().stream().anyMatch(file->file==null||file.bytes()<1||file.sha256()==null||!file.sha256().matches("[a-f0-9]{64}")))throw refused("HANDOFF_ADOPTED_SCOPE_CHANGED");
         return seal;
     }

@@ -48,6 +48,21 @@ final class RawCaptureHandoffStaging {
         }
     }
     private record Stored(int version,Binding binding){}
+    record Proof(Binding binding,String sealSha256){
+        Proof{
+            if(binding==null||sealSha256==null||!sealSha256.matches("[a-f0-9]{64}"))
+                throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
+        }
+        boolean matches(HandoffPreparations.Plan plan){
+            var evidence=plan.evidence();
+            var scope=binding.scope();
+            return plan.id().equals(binding.preparation())&&plan.task().equals(scope.task())
+                    &&evidence.proof().equals(binding.evidence())&&evidence.candidate().equals(binding.candidate())
+                    &&evidence.original().directory().equals(scope.originalDirectory())
+                    &&evidence.assessment().equals(scope.assessment())&&evidence.revision().equals(scope.revision())
+                    &&evidence.configuration().equals(scope.configuration());
+        }
+    }
     record Receipt(String state,String preparationId,String candidateNodeId,String evidenceSha256,String archiveSha256,
                    long archiveBytes,int rawCaptures,String stagedSealSha256,boolean executionAuthorized){}
 
@@ -91,6 +106,17 @@ final class RawCaptureHandoffStaging {
         Path complete=root.resolve(binding.key());
         if(Files.notExists(complete,LinkOption.NOFOLLOW_LINKS))return Optional.empty();
         return Optional.of(verify(complete,binding,cipher));
+    }
+
+    static Proof requireProof(Path data,Binding binding,ControlCipher cipher)throws Exception{
+        Receipt receipt=inspect(data,binding,cipher).orElseThrow(()->refused("HANDOFF_RAW_STAGING_REQUIRED"));
+        return new Proof(binding,receipt.stagedSealSha256());
+    }
+
+    static Path verifiedZip(Path data,Proof required,ControlCipher cipher)throws Exception{
+        if(!required.equals(requireProof(data,required.binding(),cipher)))
+            throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
+        return root(data,required.binding()).resolve(required.binding().key()).resolve(ZIP);
     }
 
     private static void completePending(Path pending,Path shared,Binding binding,ControlCipher cipher)throws Exception{

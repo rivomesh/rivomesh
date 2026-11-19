@@ -1,12 +1,17 @@
 package io.github.rivomesh.platform;
 
+import io.github.rivomesh.CaptureArchiveReceipt;
+import io.github.rivomesh.CaptureArchiveReceiptTest;
 import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.validation.ValidationStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Base64;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,8 +19,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class HandoffEvidenceAdoptionTest {
     @TempDir Path home;
-    private final HandoffPreparations.Binding original=new HandoffPreparations.Binding("original","original-dir","origin-one",3);
-    private final HandoffPreparations.Binding candidate=new HandoffPreparations.Binding("candidate","candidate-dir","agent-two",9);
+    private final HandoffPreparations.Binding original=new HandoffPreparations.Binding("original",UUID.randomUUID().toString(),UUID.randomUUID().toString(),3);
+    private final HandoffPreparations.Binding candidate=new HandoffPreparations.Binding("candidate",UUID.randomUUID().toString(),UUID.randomUUID().toString(),9);
     private final SharedHandoffEvidence.ClosedReceipt closed=new SharedHandoffEvidence.ClosedReceipt("closed_fixture_01",
             "a".repeat(64),"admin","ADMIN",TaskRequest.Kind.ACTION,"SUCCEEDED","VALIDATION_MATCH");
 
@@ -87,13 +92,48 @@ class HandoffEvidenceAdoptionTest {
         assertEquals("[]",Files.readString(receipts));
     }
 
+    @Test void committedRawCaptureRemainsPrivateHistoryAfterStagingAndSharedCopiesAreUnavailable()throws Exception{
+        Fixture f=prepare(true);
+        assertThrows(NoSuchElementException.class,()->rawHistory(f,null,original.node()));
+        var adoption=HandoffEvidenceAdoption.install(f.state(),f.plan(),cipher());
+        var raw=adoption.rawCapture();
+        assertNotNull(raw);assertEquals(f.plan().writerCommit().rawCapture(),raw);
+        Path archive=readWorkspace(f,null,adoption).resolve("raw-capture.zip");
+        byte[] exact=Files.readAllBytes(f.rawArchive());
+        assertArrayEquals(exact,Files.readAllBytes(archive));
+        assertEquals(PosixFilePermissions.fromString("rw-------"),Files.getPosixFilePermissions(archive));
+        Files.delete(f.rawArchive());
+        Path rawStage=f.state().resolve("handoff-raw-staging").resolve(raw.binding().key());
+        Files.move(rawStage,rawStage.resolveSibling("offline"));
+        assertEquals(adoption,HandoffEvidenceAdoption.install(f.state(),phase(f.plan(),"EVIDENCE_ADOPTED",adoption),cipher()));
+        var publicHistory=rawHistory(f,adoption,original.node());
+        assertEquals(Set.of("state","preparationId","archiveSha256","archiveBytes","rawCaptures",
+                "adoptionSha256","executionAuthorized"),publicHistory.keySet());
+        assertEquals("READ_ONLY_HISTORY",publicHistory.get("state"));
+        assertEquals(Codec.sha256(exact),publicHistory.get("archiveSha256"));
+        assertEquals(false,publicHistory.get("executionAuthorized"));
+        assertThrows(NoSuchElementException.class,()->rawHistory(f,adoption,candidate.node()));
+        assertFalse(Files.exists(f.state().resolve("capture-evidence")));
+        assertEquals(32,Files.size(f.original().resolve("native-capture").resolve(".capture-key")));
+        byte[] damaged=exact.clone();damaged[damaged.length-1]^=1;Files.write(archive,damaged);
+        assertEquals("HANDOFF_ARCHIVE_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->rawHistory(f,adoption,original.node())).getMessage());
+        assertArrayEquals(damaged,Files.readAllBytes(archive));
+    }
+
+    private java.util.Map<String,Object> rawHistory(Fixture f,HandoffEvidenceAdoption.Receipt authorized,String granted)throws Exception{
+        return HandoffEvidenceAdoption.rawHistory(f.state(),f.plan().task(),candidate.node(),candidate.directory(),
+                f.plan().writerCommit().revision(),f.local(),cipher(),granted::equals,authorized);
+    }
+
     private record Fixture(Path state,Path original,Path archive,Path staged,String report,
-                           HandoffPreparations.Plan plan,ManagedRecipientImport.Receipt local){}
-    private Fixture prepare()throws Exception{
+                           HandoffPreparations.Plan plan,ManagedRecipientImport.Receipt local,Path rawArchive){}
+    private Fixture prepare()throws Exception{return prepare(false);}
+    private Fixture prepare(boolean rawProfile)throws Exception{
         Path root=home.toRealPath(),source=root.resolve("original"),shared=root.resolve("shared"),state=root.resolve("candidate");
         for(Path dir:List.of(source,shared,state))HandoffStaging.createDirectory(dir);
         String report=HandoffStagingTest.completedReport(source);
-        var scope=new SharedHandoffEvidence.Scope("cluster","orders","assessed_01","revision_001","configuration_001",original.directory(),candidate.directory());
+        var scope=new SharedHandoffEvidence.Scope("cluster","orders","assessed_01",UUID.randomUUID().toString(),UUID.randomUUID().toString(),original.directory(),candidate.directory());
         var archive=SharedHandoffEvidence.export(shared,scope,source,List.of(closed));
         var binding=new HandoffStaging.Binding("prepared_01","b".repeat(64),candidate,scope,archive);
         HandoffStaging.stage(state,shared,binding,cipher());
@@ -114,13 +154,29 @@ class HandoffEvidenceAdoptionTest {
                 new HandoffPreparations.JournalCut("23","12","c".repeat(64)),binding.evidence(),archive.sha256());
         var prepared=new HandoffPreparations.Plan(binding.preparation(),scope.task(),1,"PREPARED","admin","actor",evidence,
                 100,900100,null,null,0,activation,null,null,null);
-        var ready=HandoffCandidateAdmission.prepare(state,binding,prepared,yaml,cipher(),successor->{});
+        RawCaptureHandoffStaging.Binding rawBinding=null;
+        Path rawArchive=null;
+        if(rawProfile){
+            Path identity=Files.writeString(state.resolve("owner-directory-id"),candidate.directory());
+            Files.setPosixFilePermissions(identity,PosixFilePermissions.fromString("rw-------"));
+            Path captures=source.resolve("native-capture");
+            var origin=new CaptureArchiveReceipt.Owner(scope.task(),original.node(),original.directory());
+            CaptureArchiveReceiptTest.retainFixture(captures,origin);
+            var raw=SharedHandoffEvidence.exportCapture(shared,scope,captures,origin);
+            var expected=new RawCaptureHandoffStaging.Binding(prepared.id(),binding.evidence(),candidate,scope,raw);
+            assertEquals("HANDOFF_RAW_STAGING_REQUIRED",assertThrows(TaskService.Conflict.class,
+                    ()->HandoffCandidateAdmission.prepare(state,binding,prepared,yaml,cipher(),successor->{},expected)).getMessage());
+            RawCaptureHandoffStaging.stage(state,shared,expected,cipher());
+            rawBinding=expected;
+            rawArchive=SharedHandoffEvidence.verifiedRawStagingSource(shared,scope,raw);
+        }
+        var ready=HandoffCandidateAdmission.prepare(state,binding,prepared,yaml,cipher(),successor->{},rawBinding);
         var committed=new HandoffPreparations.WriterCommit(prepared.actor(),ready.stagingSha256(),ready.configurationSha256(),
-                "revision_002","configuration_002",24);
+                "revision_002","configuration_002",24,ready.rawCapture());
         var projected=new HandoffPreparations.Plan(prepared.id(),prepared.task(),prepared.sequence(),"PROJECTED",prepared.actor(),
                 prepared.actorRevision(),evidence,100,900100,null,null,200,activation,committed,"execute_001",null);
         var local=new ManagedRecipientImport.Receipt(prepared.id(),ready.configurationSha256(),ready.stagingSha256());
-        return new Fixture(state,source,SharedHandoffEvidence.stagingSource(shared,scope,archive),state.resolve("handoff-staging").resolve(binding.key()),report,projected,local);
+        return new Fixture(state,source,SharedHandoffEvidence.stagingSource(shared,scope,archive),state.resolve("handoff-staging").resolve(binding.key()),report,projected,local,rawArchive);
     }
     private static HandoffPreparations.Plan phase(HandoffPreparations.Plan plan,String phase,HandoffEvidenceAdoption.Receipt adoption){
         return new HandoffPreparations.Plan(plan.id(),plan.task(),plan.sequence(),phase,plan.actor(),plan.actorRevision(),plan.evidence(),

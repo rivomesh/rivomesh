@@ -857,8 +857,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "原事件保留与回收、ClickHouse 原生前序回执和 Kafka 持久回执已实测。四 Broker、双管理入口通过 Kafka 只读通知计划与部分发布拒绝。计划已绑定实际业务和通知 Topic 标识，多个 Kafka 目标缺证时保持未授权。通知投递及跨适配器补偿待验。",
-        "en": "Native event retention, ClickHouse preceding receipts and Kafka durable receipts are verified. Four brokers and two management entries passed the read-only Kafka notice plan and refusal after partial publication. The plan binds actual business and control Topic identities. Additional Kafka destinations with missing ownership evidence keep publication blocked. Notice delivery and cross-adapter compensation remain."
+        "zh-CN": "原事件留存与回收、ClickHouse 原生前序回执、Kafka 持久回执已实测。Kafka 只读通知计划绑定实际业务与通知 Topic，现已实测独立写入身份的 TLS、SCRAM 和有效权限检查。全量目标归属核验、审批后发送与恢复、跨适配器补偿仍待验。",
+        "en": "Native event retention, ClickHouse preceding receipts and Kafka durable receipts are verified. The read-only Kafka notice plan binds the business and control topics. Native tests confirm TLS, SCRAM and effective permissions for the separate writer. Ownership across all configured targets, approved dispatch and recovery, and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -877,7 +877,9 @@
         "sync-app/src/main/java/io/github/rivomesh/cdc/ClickHouseRecoveryReview.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaRecoveryReview.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaNoticePlanning.java",
-        "tests/kafka-cluster-run.py"
+        "tests/kafka-cluster-run.py",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaNoticeWriterReview.java",
+        "tests/kafka-notice-writer-run.py"
       ]
     },
     {
@@ -1578,8 +1580,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志、候选 Agent 安装原报告和已办结回执、以及原始 MySQL 采集档案私有暂存通过限定实库。共享挂载离线时两入口可核验原 ZIP。原始档案与故障证据正式接管、其他存储和目标档案待验。",
-        "en": "Bounded native tests cover optional journals, adopted reports and closed receipts, and private staging of original MySQL capture archives. Both entries can reverify the exact ZIP after the shared mount goes offline. Live adoption of raw archives and historical failures, plus further storage and target profiles, remain."
+        "zh-CN": "可选日志、原报告和已办结回执通过限定实库。候选 Agent 已能在批准的 PostgreSQL 管理归属交接后接收原始 MySQL ZIP。候选重启或共享与暂存副本离线时，两个管理入口均可查询只读历史。历史故障证据的正式接管和其他存储及目标档案待验。",
+        "en": "Bounded native tests cover optional journals, adopted reports and closed receipts. The candidate adopts the exact original MySQL ZIP after an approved PostgreSQL-managed owner transfer. Both entries serve read-only history after the candidate restarts and the shared and staging copies go offline. Historical failure custody and broader storage and target profiles remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1595,7 +1597,9 @@
         "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/HandoffStaging.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/RawCaptureHandoffStaging.java",
+        "tests/global-control-pipeline.py"
       ]
     },
     {
@@ -1750,8 +1754,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "独立审计锚点已支持离线签名和审计库标识核验。SBOM 及可选外置五路 JDBC 包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。",
-        "en": "Independent audit checkpoints support offline signature and pinned audit store verification. SBOM and the optional five-driver external JDBC package have verification evidence. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain."
+        "zh-CN": "已支持离线签名及审计库标识核验。签名检查点通过定时调用工具写入 S3 Object Lock，本地 MinIO 已实测精确版本、COMPLIANCE 保留和重试。SBOM 与外置五路 JDBC 包已有证据。完整事件长期留存、真实 AWS 权限、项目授权、LICENSE/NOTICE 及外部身份仍待完成。",
+        "en": "Independent signatures and audit store identity are verified offline. A scheduled tool can retain the signed checkpoints with S3 Object Lock. Local MinIO verified the exact version, COMPLIANCE retention and retry. SBOM and five optional external JDBC drivers have verification evidence. Full event retention, live AWS permissions, source rights, LICENSE/NOTICE and external identity remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",
@@ -1770,7 +1774,9 @@
         "tests/release-inventory.py",
         "tools/audit-export.py",
         "tests/audit-export-test.py",
-        "tests/verify-artifact.py"
+        "tests/verify-artifact.py",
+        "tools/audit-retain-s3.py",
+        "tests/audit-retain-s3-native.py"
       ]
     }
   ],

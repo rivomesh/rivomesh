@@ -164,8 +164,10 @@ if args.handoff_managed_writer and (not args.handoff_preparation or args.control
 if args.handoff_staging and not args.handoff_preparation:
     parser.error('--handoff-staging requires --handoff-preparation')
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
-        or not args.test_classes.is_dir() or args.handoff_failure_custody or args.handoff_raw_custody):
-    parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with source/failure evidence absent')
+        or not args.test_classes.is_dir() or args.handoff_failure_custody):
+    parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with failure evidence absent')
+if args.handoff_private_writer and args.handoff_raw_custody and not args.handoff_public_owner:
+    parser.error('official raw history acceptance requires --handoff-public-owner')
 if args.handoff_target_fence and not args.handoff_private_writer:
     parser.error('--handoff-target-fence requires --handoff-private-writer')
 if args.handoff_public_owner and not args.handoff_private_writer:
@@ -1609,8 +1611,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         identity_sql='SELECT generation,fingerprint FROM transfer_journal.rm3_job'
         snapshot_sql=('SELECT snapshot_scope,table_id,snapshot_id FROM transfer_journal.rm3_snapshot '
                       'ORDER BY snapshot_scope,table_id')
-        original_identity=sql('postgres',identity_sql)
-        snapshots=sql('postgres',snapshot_sql)
+        journal_service='store' if args.handoff_managed_writer else 'postgres'
+        original_identity=sql(journal_service,identity_sql)
+        snapshots=sql(journal_service,snapshot_sql)
         assert original_identity and snapshots
 
         # The capture worker starts with a budget of eight rows. MySQL records a regular
@@ -1675,7 +1678,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         recovered=wait(resumed,'capture returns to streaming')
         assert not recovered.get('hasOpenGaps') and not recovered.get('hasSourceExclusions')
         assert sql('mysql',"SELECT GTID_SUBTRACT('%s','%s')"%(recovered['capture_gtid'],checkpoint))==header['transactionId']
-        assert sql('postgres',identity_sql)==original_identity and sql('postgres',snapshot_sql)==snapshots
+        assert sql(journal_service,identity_sql)==original_identity and sql(journal_service,snapshot_sql)==snapshots
         assert sql('mysql','SELECT COUNT(*) FROM sales.items WHERE id BETWEEN 201 AND 209')=='9'
         passed('The original Agent retains real binlog bytes and replays the same GTID after a reviewed budget increase without a gap or new generation')
         return original,file,content,witness
@@ -2477,6 +2480,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             staged=http('node-b',preparation+'/stage',stage_input)
                             assert staged['state']=='STAGED'
                             request='gc_private_commit_'+uuid.uuid4().hex
+                            if args.handoff_raw_custody:
+                                raw_history_path=endpoint+'/raw-history'
+                                for controller in ('node-a','node-b'):
+                                    assert http(controller,raw_history_path,expected=404)['code']=='HANDOFF_RAW_HISTORY_NOT_FOUND'
+                                assert staged['rawCapture']['archiveSha256']==raw_result['archive']['sha256']
+                                candidate_state_path=home/candidate/'controller'
+                                raw_stage,=[folder for folder in (candidate_state_path/'handoff-raw-staging').iterdir()
+                                            if folder.is_dir()]
+                                exact_raw_zip=raw_zip.read_bytes()
+                                assert (raw_stage/'capture.zip').read_bytes()==exact_raw_zip
+                                original_key=raw_origin/'.capture-key'
+                                original_key_digest=hashlib.sha256(original_key.read_bytes()).hexdigest()
 
                             def private_writer(controller,mode,evidence=stage_input['expectedEvidenceSha256'],
                                                execution=request,check=True):
@@ -2508,6 +2523,17 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 refused=http('node-b',commit_url,stage_input,request=replacement,expected=409)
                                 assert refused['code']=='HANDOFF_EXECUTION_REQUEST_CHANGED'
                                 assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                if args.handoff_raw_custody:
+                                    held_stage=raw_stage.with_name(raw_stage.name+'.held')
+                                    raw_stage.rename(held_stage)
+                                    try:
+                                        refused=http('node-a',commit_url,stage_input,request=request,expected=409)
+                                        assert refused['code']=='HANDOFF_RAW_STAGING_REQUIRED'
+                                        assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                    finally:
+                                        held_stage.rename(raw_stage)
+                                    raw_zip.rename(raw_zip.with_name('raw-unavailable-after-staging.held'))
+                                    passed('An authenticated raw proof requires its exact candidate private staging before the native writer changes')
                                 # Discard this response and verify the same operation through the other entry.
                                 if args.handoff_public_owner_browser:
                                     browser_check('handoff-owner-commit',owner=owner_node,candidate=candidate,
@@ -2540,8 +2566,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 assert replay['commitRequestId']==request
                                 assert replay==http('node-b',commit_url,stage_input,request=request)
                             assert replay==adopted_receipt and replay['activatedJournalEpoch']==str(managed['epoch']+1)
-                            assert replay['adoptedEvidence']=={'validationReports':receipts['archive']['reports'],
-                                                              'closedReceipts':receipts['archive']['closedReceipts']}
+                            expected_adoption={'validationReports':receipts['archive']['reports'],
+                                               'closedReceipts':receipts['archive']['closedReceipts']}
+                            if args.handoff_raw_custody:
+                                expected_adoption['rawCaptures']=1
+                            assert replay['adoptedEvidence']==expected_adoption
                             assert replay['commitRequestId']==request
                             refused=private_writer('node-b','observe',execution=replacement,check=False)
                             assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
@@ -2579,12 +2608,34 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 adopted_directory,=[item for item in (candidate_data/'handoff-adopted').iterdir() if item.is_dir()]
                                 assert all((adopted_directory/report_id/name).read_bytes()==payload for name,payload in saved_bytes.items())
                                 assert json.loads((adopted_directory/'closed-receipts.json').read_text())==closed
+                                if args.handoff_raw_custody:
+                                    raw_archive=adopted_directory/'raw-capture.zip'
+                                    assert raw_archive.stat().st_mode & 0o777==0o600
+                                    assert raw_archive.read_bytes()==exact_raw_zip
+                                    with zipfile.ZipFile(raw_archive) as files:
+                                        assert set(files.namelist())=={'scope.json','capture/'+raw_file,'capture-receipts/'+raw_file}
+                                        assert files.read('capture/'+raw_file)==raw_bytes
+                                        assert files.read('capture-receipts/'+raw_file)==raw_witness
+                                    assert hashlib.sha256(original_key.read_bytes()).hexdigest()==original_key_digest
+                                    assert not (candidate_data/'capture-evidence'/'global_cdc').exists()
+                                    assert not (candidate_data/'failure-evidence'/'global_cdc').exists()
+                                    assert not any(candidate_data.rglob('.capture-key'))
+                                    expected_history={'state':'READ_ONLY_HISTORY','preparationId':prepared_id,
+                                                      'archiveSha256':raw_result['archive']['sha256'],
+                                                      'archiveBytes':len(exact_raw_zip),'rawCaptures':1,'executionAuthorized':False}
+                                    received=http('node-a',raw_history_path)
+                                    assert received==http('node-b',raw_history_path)
+                                    assert re.fullmatch(r'[0-9a-f]{64}',received.pop('adoptionSha256'))
+                                    assert received==expected_history and not raw_zip.exists()
+                                    assert http('node-b',raw_history_path,expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
                                 if additional_report is None:
                                     assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert all((local_report/name).read_bytes()==payload for name,payload in saved_bytes.items())
 
                             adopted_reads()
                             passed('Both Controllers read exact adopted report history and verify the candidate closed receipt without exposing signatures')
+                            if args.handoff_raw_custody:
+                                raw_stage.rename(raw_stage.with_name(raw_stage.name+'.offline'))
                             compose('kill','-s','SIGKILL',candidate)
                             wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                             " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','adopted candidate lease expires')
@@ -2595,6 +2646,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             adopted_reads()
                             assert task()['ownerNodeId']==candidate and data_cut()==actual
                             passed('A candidate restart reopens immutable adopted history with the same native cut and Worker stopped')
+                            if args.handoff_raw_custody:
+                                manifest['rawHistoryAdoption']={'archiveSha256':raw_result['archive']['sha256'],
+                                    'archiveBytes':len(exact_raw_zip),'nativeCaptures':1,'crossControllerQueries':True,
+                                    'candidateRestartWithoutSharedOrStagedRaw':True,'originalKeyPreserved':True,'workerStopped':True}
+                                passed('Candidate restart reads the offline adopted native MySQL ZIP from both Controllers with its original HMAC and live recovery scope untouched')
                             parked_status="SELECT run_state,owner IS NULL,lease_until,format_version FROM transfer_journal.rm3_job"
                             assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
                             worker_config='/fixture/'+candidate+'/tasks/global_cdc.yml'

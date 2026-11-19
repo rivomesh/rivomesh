@@ -11,6 +11,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         if(request.kind==TaskRequest.Kind.KAFKA_NOTICE_PLAN)return tasks.planKafkaNotice(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)return tasks.stageHandoffEvidence(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
+        if(request.kind==TaskRequest.Kind.HANDOFF_RAW_HISTORY)return tasks.adoptedRawHistory(request.taskId,actor,request.adoptedEvidence);
         if(request.kind==TaskRequest.Kind.RECOVERY_RECEIPT)return tasks.adoptedHandoffReceipt(request.taskId,request.reference,actor,request.adoptedEvidence);
         if(request.handoffRpc())return tasks.handoffProbe(request,actor);
         if(request.readAtRevision())request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);

@@ -260,7 +260,9 @@ final class OwnerQueries {
         });
     }
     private static Map<String,Object> readinessResponse(Entry entry,Map<String,Object> response){
-        if(response==null||!response.keySet().equals(Set.of("preparation","binding","desired","configurationSha256","stagingSha256")))
+        Set<String> keys=Set.of("preparation","binding","desired","configurationSha256","stagingSha256");
+        if(response==null||!(response.keySet().equals(keys)
+                ||response.size()==keys.size()+1&&response.keySet().containsAll(keys)&&response.get("rawCapture")!=null))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         ManagedHandoff.CandidateAdmission ready;
         try{ready=Model.JSON.convertValue(response,ManagedHandoff.CandidateAdmission.class);}

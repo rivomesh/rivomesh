@@ -31,6 +31,12 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
             case RECOVERY_RECEIPT:return recoveryReceipt(request,actor);
+            case HANDOFF_RAW_HISTORY:
+                try{return queries.await(queries.submit(request,actor),actor);}
+                catch(TaskService.Conflict rejected){
+                    if(!"OWNER_DATA_NOT_FOUND".equals(rejected.getMessage()))throw rejected;
+                    throw new NoSuchElementException("HANDOFF_RAW_HISTORY_NOT_FOUND");
+                }
             case KAFKA_NOTICE_PLAN:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
