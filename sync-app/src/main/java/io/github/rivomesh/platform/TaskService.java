@@ -1165,21 +1165,33 @@ public final class TaskService implements AutoCloseable {
     }
     Map<String,Object> stageHandoffEvidence(TaskRequest request,AccessControl.Principal actor)throws Exception{
         HandoffStaging.Binding binding=request.handoffStaging;
+        RawCaptureHandoffStaging.Binding raw=request.handoffRawStaging;
         ControlCipher guard;
         Path shared;
         synchronized(this){
             requireCandidateHandoffScope(request,actor);
+            if(raw!=null&&(!binding.preparation().equals(raw.preparation())||!binding.evidence().equals(raw.evidence())
+                    ||!binding.candidate().equals(raw.candidate())||!binding.scope().equals(raw.scope())))
+                throw new Conflict("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
             if(config.cluster.handoffEvidenceRoot==null)throw new Conflict("HANDOFF_ARCHIVE_DISABLED");
             shared=Path.of(config.cluster.handoffEvidenceRoot);
             guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
         }
-        Map<String,Object> staged=HandoffStaging.stage(statePath.getParent(),shared,binding,guard);
+        Map<String,Object> staged=new LinkedHashMap<>(HandoffStaging.stage(statePath.getParent(),shared,binding,guard));
+        RawCaptureHandoffStaging.Receipt rawReceipt=raw==null?null:RawCaptureHandoffStaging.stage(statePath.getParent(),shared,raw,guard);
+        if(rawReceipt!=null)staged.put("rawCapture",rawReceipt);
         synchronized(this){
             ensureOpen();currentActor(actor);
             AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_EVIDENCE_STAGED";
             event.taskId=request.taskId;event.subjectId=binding.preparation();event.actorId=actor.id;event.actorRole=actor.role.name();
             event.clientRequestHash=AuditStore.hash(request.requestId);event.operationHash=binding.archive().sha256();
             event.status="STAGED";appendAudit(event);
+            if(rawReceipt!=null){
+                AuditStore.Event capture=new AuditStore.Event();capture.kind="MANAGED_HANDOFF_RAW_CAPTURE_STAGED";
+                capture.taskId=request.taskId;capture.subjectId=binding.preparation();capture.actorId=actor.id;
+                capture.actorRole=actor.role.name();capture.clientRequestHash=event.clientRequestHash;
+                capture.operationHash=rawReceipt.stagedSealSha256();capture.status="STAGED";appendAudit(capture);
+            }
         }
         return staged;
     }

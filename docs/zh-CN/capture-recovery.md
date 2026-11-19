@@ -58,6 +58,8 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
 
 实库验收使用一笔超过配置行数上限的 MySQL 8.4.13 完整行镜像事务。原 Agent 留存原始字节，经审批提高上限后按同一 GTID 回放。两个 SQL 目标与源数据一致，日志代次、指纹和快照 ID 保持一致。任务排空后，候选 Agent 核验独立挂载的原始归档。保管核验显示原任务持有者，并返回 `executionAuthorized: false`。
 
+原 Agent 和候选 Agent 核验同一个原始归档后，在交接准备中点击 **暂存报告和回执**。Controller 核验准备记录并将原始归档的描述发给绑定候选。候选把原始 ZIP 和密封绑定写入私有的 `handoff-raw-staging` 目录。API 返回 `rawCapture`，界面显示已核验的归档数量。共享挂载不可用时，可从任一 Controller 重放同一暂存请求，直接核验候选的密封副本。原 Agent 保管 HMAC 密钥。暂存后任务归属与源断点仍在原审阅状态。候选正式接管恢复目录需要独立步骤。 [交接控制](global-control.md)
+
 ### 批准跳过源事务
 
 留存成功后，在操作回执中选择 **审阅源事务跳过**。核对单笔 GTID、受影响表和全部受影响目标，填写原因并确认影响。跳过后任务保持暂停。

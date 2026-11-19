@@ -54,7 +54,7 @@ final class OwnerQueries {
             if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");Entry entry=Model.JSON.readValue(cipher.open("owner-query/"+id,r.getString("envelope")),Entry.class);
             if(entry.version!=1||!id.equals(entry.id)||!Objects.equals(entry.task,r.getString("task_id"))||!Objects.equals(entry.owner,r.getString("owner_id"))||entry.epoch!=r.getLong("node_epoch")||!Objects.equals(entry.phase,r.getString("phase"))||entry.expiresAt!=r.getLong("expires_at")||entry.request==null||!entry.task.equals(entry.request.taskId))throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");readonly(entry.request);
             if(entry.request.preparedHandoffRpc()&&(entry.request.handoffStaging!=null
-                    ||entry.request.handoffPreparation!=null||entry.request.yaml!=null))
+                    ||entry.request.handoffRawStaging!=null||entry.request.handoffPreparation!=null||entry.request.yaml!=null))
                 throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");
             return entry;
         }
@@ -214,6 +214,7 @@ final class OwnerQueries {
                 if(scoped.preparedHandoffRpc()){
                     ManagedHandoff.StageRoute route=verifyPreparedHandoff(c,record,actor,entry);
                     scoped.handoffStaging=route.binding();
+                    scoped.handoffRawStaging=route.rawCapture();
                     if(scoped.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC){
                         scoped.handoffPreparation=route.plan();
                         scoped.yaml=tasks.activeYaml(c,record);

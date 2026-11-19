@@ -37,6 +37,7 @@ final class TaskRequest {
     public SharedHandoffEvidence.Archive handoffArchive;
     public SharedHandoffEvidence.ReceiptPlan handoffClosedReceipts;
     public HandoffStaging.Binding handoffStaging;
+    public RawCaptureHandoffStaging.Binding handoffRawStaging;
     public DurableCommands.KafkaNoticePredecessor kafkaNoticePredecessor;
     public HandoffPreparations.Plan handoffPreparation;
     public HandoffEvidenceAdoption.Receipt adoptedEvidence;
@@ -72,6 +73,7 @@ final class TaskRequest {
                 ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")
                 ||requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")||requestId.equals(reference))
                 ||handoffStaging!=null&&!preparedHandoffRpc()
+                ||handoffRawStaging!=null&&kind!=Kind.HANDOFF_STAGING_RPC
                 ||handoffPreparation!=null&&kind!=Kind.HANDOFF_READINESS_RPC)
             throw new IllegalArgumentException("HANDOFF_STAGING_REQUEST_INVALID");
         if(handoffCut!=null&&kind!=Kind.HANDOFF_CANDIDATE_PROBE)

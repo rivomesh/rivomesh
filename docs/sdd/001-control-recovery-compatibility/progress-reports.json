@@ -11,9 +11,9 @@
     "The Oracle virtual integer column candidate passed 29 Java tests, 152 DOM tests and native opt-in and expression refusal in Oracle Free. Full snapshot and archive replay remain under native verification."
   ],
   "inProgress": [
-    "CP-04 automatic Agent takeover, network partitions and drain/move.",
-    "LG-05 authenticated private staging of exact retained MySQL raw evidence.",
-    "SO-07 binary JSON, LOB and RAC compatibility."
+    "CP-04 exposes durable authorization and native cut blockers in the managed handoff UI.",
+    "LG-05 live adoption of raw archives and historical failures awaits completion.",
+    "Automatic owner takeover, network partitions and drain/move still require acceptance."
   ],
   "reportContents": [
     "Current totals",
@@ -37,15 +37,16 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish and publish native Agent staging of raw MySQL captures.",
-    "Continue automatic takeover and runtime compatibility acceptance."
+    "Verify the pending Agent approval diagnostic and authorized reapproval across both Controllers.",
+    "Continue CP-04 automatic takeover and LG-05 live evidence adoption."
   ],
-  "currentCandidateArtifact": "4d81f927ee7000af9b948e4842c51127e873f091a17602175ae8712b0ef603a7",
-  "currentCandidateScope": "Published Agent handoff plus Oracle 26ai integer virtual column profile. 17 Oracle native, 123 Java and 154 DOM tests.",
+  "currentCandidateArtifact": "446030732f40c563137f1bcdec9c663d2502434f02f1926bb15434c1a11acf02",
+  "currentCandidateScope": "Exact prepared raw capture staging, including Oracle virtual columns and public Agent ownership transfer. 23 native, 76 Java and 155 DOM.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "CP-04 public ownership transfer and explicit candidate Worker continuation passed 31 native checks with MySQL 8.4.13 and two SQL targets. Both Controllers replayed the original approvals. The former Agent and earlier binary stayed fenced.",
-    "SO-07 Oracle 26ai integer virtual values completed 17 native cases through Flashback, archived CDC and restart into PostgreSQL. The merged candidate passed 123 Java and 154 DOM tests."
+    "SO-07 Oracle 26ai integer virtual values completed 17 native cases through Flashback, archived CDC and restart into PostgreSQL. The merged candidate passed 123 Java and 154 DOM tests.",
+    "LG-05 passed 23 native checks for the retained MySQL raw capture and offline verification of the bound candidate staging ZIP."
   ],
   "lastScheduledReportAt": "2026-11-19T10:58:16+08:00",
   "lastVerifiedReactor": {

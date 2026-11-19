@@ -62,7 +62,7 @@ window.RivomeshHandoff=(()=>{
  bridge.register({
   handoffStage:'暂存报告和回执',handoffStageAgain:'复核已暂存的报告和回执',handoffStageRetry:'重试同一暂存请求',
   handoffStageHelp:'在候选 Agent 的私有目录暂存已核验的校验报告和已办结回执。暂存后仍由原 Agent 负责该任务。',
-  handoffStageDone:'候选 Agent 已核验暂存文件。',handoffStageReports:'校验报告',handoffStageReceipts:'已办结回执',
+  handoffStageDone:'候选 Agent 已核验暂存文件。',handoffStageReports:'校验报告',handoffStageReceipts:'已办结回执',handoffStageRawCapture:'原始采集档案',handoffStageRawPending:'原始证据暂存后仍须另行接管。',
   handoffStageUnknown:'暂存结果未知。可重试同一请求来核验候选 Agent 上的文件。',
   handoffStageInvalid:'暂存回执与当前准备记录不匹配。请重试核验。',
   HANDOFF_AGENT_CHANGED:'Agent 的登记已变化，请重新评估。',
@@ -73,7 +73,7 @@ window.RivomeshHandoff=(()=>{
  },{
   handoffStage:'Stage reports and receipts',handoffStageAgain:'Reverify staged reports and receipts',handoffStageRetry:'Retry the same staging request',
   handoffStageHelp:'Stage verified validation reports and closed receipts in the candidate Agent’s private directory. The original Agent keeps ownership.',
-  handoffStageDone:'The candidate Agent verified the staged files.',handoffStageReports:'Validation reports',handoffStageReceipts:'Closed receipts',
+  handoffStageDone:'The candidate Agent verified the staged files.',handoffStageReports:'Validation reports',handoffStageReceipts:'Closed receipts',handoffStageRawCapture:'Raw capture archives',handoffStageRawPending:'The staged source evidence still requires adoption.',
   handoffStageUnknown:'The staging outcome is unknown. Retry the same request to verify the candidate’s files.',
   handoffStageInvalid:'The staging receipt does not match this preparation. Retry to verify.',
   HANDOFF_AGENT_CHANGED:'An Agent registered again. Reassess before staging.',
@@ -288,7 +288,8 @@ window.RivomeshHandoff=(()=>{
   const plan=v.preparation;
   if(!v.preparationLoaded||!plan||!preparationScope(v,plan))return null;
   if(plan.state==='PREPARED'&&plan.writerActivation?.checkedInControlTransaction===true
-   &&v.stageAttempt?.counts&&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
+   &&v.stageAttempt?.counts&&!v.stageAttempt.counts.rawCaptures
+   &&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
   if(plan.state==='EVIDENCE_ADOPTED'&&plan.targetFenceAvailable===true)return 'fence-targets';
   if(plan.state==='TARGETS_FENCED'&&plan.workerStartAvailable===true)return 'start-worker';
   return null;
@@ -463,7 +464,8 @@ window.RivomeshHandoff=(()=>{
   v.stage.textContent=t(attempted?.uncertain?'handoffStageRetry':attempted?.counts?'handoffStageAgain':'handoffStage');
   const counts=attempted?.counts;
   const status=counts?t('handoffStageDone')+' '+t('handoffStageReports')+' '+counts.reports+' · '
-   +t('handoffStageReceipts')+' '+counts.closedReceipts:'';
+   +t('handoffStageReceipts')+' '+counts.closedReceipts
+   +(counts.rawCaptures?' · '+t('handoffStageRawCapture')+' '+counts.rawCaptures+' · '+t('handoffStageRawPending'):''):'';
   if(v.stageStatus.textContent!==status)v.stageStatus.textContent=status;
  }
  function update(v){
@@ -693,7 +695,12 @@ window.RivomeshHandoff=(()=>{
   try{
    const result=await api(preparationEndpoint(v)+'/stage',postOptions(body,attempt.id));
    if(!current(v)||v.stageAttempt!==attempt)return;
-   if(result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
+   const raw=result?.rawCapture;
+   const rawValid=raw==null||raw.state==='STAGED'&&raw.executionAuthorized===false
+     &&raw.preparationId===plan.id&&raw.candidateNodeId===plan.candidateNodeId&&raw.evidenceSha256===plan.evidenceSha256
+     &&sha256.test(raw.archiveSha256||'')&&raw.archiveSha256!==result.archiveSha256&&sha256.test(raw.stagedSealSha256||'')
+     &&Number.isSafeInteger(raw.archiveBytes)&&raw.archiveBytes>0&&Number.isSafeInteger(raw.rawCaptures)&&raw.rawCaptures>0;
+   if(!rawValid||result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
      ||result.taskRevision!==plan.taskRevision||result.candidateNodeId!==plan.candidateNodeId
      ||result.evidenceSha256!==plan.evidenceSha256||result.archiveSha256!==plan.custodySha256
      ||!Number.isSafeInteger(result.reports)||result.reports<0
@@ -701,7 +708,7 @@ window.RivomeshHandoff=(()=>{
     attempt.counts=null;attempt.uncertain=true;v.feedback.textContent=t('handoffStageInvalid');
     return;
    }
-   attempt.counts={reports:result.reports,closedReceipts:result.closedReceipts};attempt.uncertain=false;
+   attempt.counts={reports:result.reports,closedReceipts:result.closedReceipts,rawCaptures:raw?.rawCaptures};attempt.uncertain=false;
   }catch(error){
    if(!current(v)||v.stageAttempt!==attempt)return;
    attempt.counts=null;

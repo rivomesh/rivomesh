@@ -294,6 +294,25 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('handoff shows verified raw capture counts and refuses evidence from a different preparation',async()=>{
+  const plan=preparation('staging-preparation');
+  const raw={state:'STAGED',executionAuthorized:false,preparationId:plan.id,candidateNodeId:plan.candidateNodeId,
+   evidenceSha256:plan.evidenceSha256,archiveSha256:'a'.repeat(64),stagedSealSha256:'6'.repeat(64),archiveBytes:4096,rawCaptures:1};
+  let result={...raw,preparationId:'unrelated-stage'};
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),
+   stage:()=>stagingReply(plan,{rawCapture:result})});
+  try{
+   await open(ui);button(ui,'stage').click();await flush();
+   assert.match(feedback(ui),/暂存回执与当前准备记录不匹配/);
+   assert.equal(staged(ui).textContent,'');
+   result=raw;
+   button(ui,'stage').click();await flush();
+   assert.match(staged(ui).textContent,/校验报告 2.*已办结回执 5.*原始采集档案 1/);
+   assert.doesNotMatch(staged(ui).textContent,/6{20}|a{20}|4096/);
+   assert.equal(ui.stages[0].headers['X-Request-ID'],ui.stages[1].headers['X-Request-ID']);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff forgets the staged receipt when the reservation expires or scope changes',async()=>{
   let plan=preparation('staging-preparation');
   const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),stage:()=>stagingReply(plan)});

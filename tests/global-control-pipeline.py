@@ -2775,6 +2775,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             print('GLOBAL_CONTROL_PRIVATE_HANDOFF_ACCEPTED artifact='+digest)
                             raise SystemExit(0)
                         if args.handoff_preparation:
+                            if args.handoff_staging and args.handoff_raw_custody:
+                                good_plan,good=current_probe(good_plan)
+                                assert good['probe']['current'] and good['probe']['sharedReceiptCustody']==receipts
                             preparation=endpoint+'/preparation'
                             http('node-a',preparation,expected=404)
                             prepared_input={'expectedAssessment':good['id'],'expectedRevision':task()['revision'],
@@ -2846,6 +2849,24 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 assert 'global_cdc' not in json.loads((candidate_data/'controller.json').read_text())['tasks']
                                 assert data_cut()==original_cut and task()['ownerNodeId']==owner_node
                                 passed('Prepared candidate privately stages exact report and receipt bytes with live ownership, checkpoints and registry untouched')
+                                if args.handoff_raw_custody:
+                                    private_raw=staged['rawCapture']
+                                    raw_scope=good['probe']['sharedRawCaptureCustody']['archive']
+                                    assert private_raw['state']=='STAGED' and not private_raw['executionAuthorized']
+                                    assert private_raw['preparationId']==preparation_id and private_raw['candidateNodeId']==candidate
+                                    assert private_raw['evidenceSha256']==saved[0]['evidenceSha256']
+                                    assert private_raw['rawCaptures']==1 and private_raw['archiveSha256']==raw_scope['sha256']
+                                    assert private_raw['archiveBytes']==raw_scope['bytes'] and re.fullmatch(r'[0-9a-f]{64}',private_raw['stagedSealSha256'])
+                                    raw_destination,=[d for d in (candidate_data/'handoff-raw-staging').iterdir() if d.is_dir()]
+                                    assert set(p.name for p in raw_destination.iterdir())=={'capture.zip','evidence.seal'}
+                                    assert (raw_destination/'capture.zip').read_bytes()==raw_zip.read_bytes()
+                                    assert not (candidate_data/'capture-evidence'/'global_cdc').exists()
+                                    assert set(private_raw)=={'state','executionAuthorized','preparationId','candidateNodeId','evidenceSha256',
+                                                              'rawCaptures','archiveSha256','archiveBytes','stagedSealSha256'}
+                                    passed('The same prepared request stages the exact verified native raw archive as an inactive signed ZIP')
+                                else:
+                                    assert 'rawCapture' not in staged
+
                                 with open(home/'staging-cli.json','x',opener=lambda path,flags:os.open(path,flags,0o600)) as config_file:
                                     json.dump(document,config_file)
                                 report_root='/fixture/'+(destination/'reports').relative_to(home).as_posix()
@@ -2856,9 +2877,14 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 passed('The ordinary validation CLI refuses the candidate custody directory without creating any live report files')
                                 parked=archive.with_name('staging-replay-archive.held')
                                 archive.rename(parked)
+                                parked_raw=None
+                                if args.handoff_raw_custody:
+                                    parked_raw=raw_zip.with_name('raw-staging-replay-archive.held')
+                                    raw_zip.rename(parked_raw)
                                 try:
                                     assert http('node-a',stage_path,stage_input,request=stage_request)==staged
                                 finally:
+                                    if parked_raw is not None:parked_raw.rename(raw_zip)
                                     parked.rename(archive)
                                 assert closed[0]['signature'] not in json.dumps(staged)
                                 passed('The other Controller revalidates the same authenticated staged bytes without re-reading a missing shared file')

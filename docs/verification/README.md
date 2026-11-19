@@ -567,3 +567,7 @@ The `0c2e231f473a3a6546a221abcc188305202e4d3d1d77f26c680f830722e0d933` package p
 ### Oracle integer virtual columns through archived restart
 
 The `4d81f927ee7000af9b948e4842c51127e873f091a17602175ae8712b0ef603a7` package passed 17 native checks, 123 Java tests and 154 DOM tests. Oracle Free 26ai supplied keyed and keyless Flashback rows and the original archived operand for each before and after image. PostgreSQL received the derived values, SQL NULL and exact duplicate counts. The Worker replayed work recorded during a SIGKILL outage while retaining the original snapshots. Preflight refused unapproved virtual columns and function expressions. [Operator guide](../en/oracle-source.md#integer-virtual-columns) · [Manifest](baseline.json)
+
+### Authenticated private staging of MySQL raw capture archives
+
+The `446030732f40c563137f1bcdec9c663d2502434f02f1926bb15434c1a11acf02` package passed 23 native checks, 76 Java tests and 155 DOM tests. The original Agent retained bytes from a real row-limit failure and replayed the same GTID after review. The candidate staged the exact signed raw ZIP beside completed validation reports and closed receipts. Both shared files were temporarily unavailable when the other Controller reverified the local files. The native journal, targets and task ownership stayed at the reviewed cut. [Capture recovery](../en/capture-recovery.md) · [Manifest](baseline.json)

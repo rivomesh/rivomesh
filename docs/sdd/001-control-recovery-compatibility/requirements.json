@@ -1578,8 +1578,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志、候选 Agent 原报告和闭合回执安装已通过限定实库。两入口读取原历史，重启保持原资料和断点。故障证据、原始档案的正式接管与更多存储和产品待验。",
-        "en": "Optional journals and candidate installation of original reports and closed receipts passed bounded native checks. Both entries read original history across restart at the preserved cut. Live failure and raw archive adoption, other storage and products remain."
+        "zh-CN": "可选日志、候选 Agent 安装原报告和已办结回执、以及原始 MySQL 采集档案私有暂存通过限定实库。共享挂载离线时两入口可核验原 ZIP。原始档案与故障证据正式接管、其他存储和目标档案待验。",
+        "en": "Bounded native tests cover optional journals, adopted reports and closed receipts, and private staging of original MySQL capture archives. Both entries can reverify the exact ZIP after the shared mount goes offline. Live adoption of raw archives and historical failures, plus further storage and target profiles, remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",

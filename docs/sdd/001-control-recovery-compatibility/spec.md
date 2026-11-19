@@ -82,7 +82,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | LG-02 | P1 / DONE | 非空接管、约束恢复、切换回切 | 限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。另一个同切点档案验证了二进制排序、NO PAD 的 VARCHAR UNIQUE(email)，保留原普通索引并继续 CDC。更广产品及写后逆向迁移分别跟踪。 |
 | LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 通过全量、增量、原目录身份、整组重启、Worker 原快照续传、四批回执与独立 SQL 错误重放。分布式仓库、生产集群、旧备份恢复和容量仍在验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
-| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选日志、候选 Agent 原报告和闭合回执安装已通过限定实库。两入口读取原历史，重启保持原资料和断点。故障证据、原始档案的正式接管与更多存储和产品待验。 |
+| LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选日志、候选 Agent 安装原报告和已办结回执、以及原始 MySQL 采集档案私有暂存通过限定实库。共享挂载离线时两入口可核验原 ZIP。原始档案与故障证据正式接管、其他存储和目标档案待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
 | LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。 PostgreSQL 关系变化也已实测停留原 LSN 并可审阅当前发布差异。 |

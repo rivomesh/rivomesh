@@ -24,7 +24,8 @@ final class ManagedHandoff {
                                Map<String,Object> sharedRawCaptureCustody){}
     record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
                       JournalWriterAssignment.ExpectedCut cut){}
-    record StageRoute(HandoffStaging.Binding binding,AgentDirectory.Binding candidate,HandoffPreparations.Plan plan){}
+    record StageRoute(HandoffStaging.Binding binding,AgentDirectory.Binding candidate,HandoffPreparations.Plan plan,
+                      RawCaptureHandoffStaging.Binding rawCapture){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
                               Agent original,Agent candidate,int taskSlots,int workerSlots,long assigned,
                               String actor,String actorRevision,long assessedAt,OriginalCut originalCut,List<String> blockers,
@@ -240,7 +241,22 @@ final class ManagedHandoff {
             throw new TaskService.Conflict("HANDOFF_AGENT_CHANGED");
         SharedHandoffEvidence.Scope scope=new SharedHandoffEvidence.Scope(cluster,task.id,evidence.assessment(),
                 evidence.revision(),evidence.configuration(),evidence.original().directory(),evidence.candidate().directory());
-        return new StageRoute(new HandoffStaging.Binding(plan.id(),evidence.proof(),evidence.candidate(),scope,archive),candidate,plan);
+        RawCaptureHandoffStaging.Binding raw=request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC
+                ?rawCaptureStage(assessment,plan,scope):null;
+        return new StageRoute(new HandoffStaging.Binding(plan.id(),evidence.proof(),evidence.candidate(),scope,archive),candidate,plan,raw);
+    }
+
+    private static RawCaptureHandoffStaging.Binding rawCaptureStage(Assessment assessment,HandoffPreparations.Plan plan,
+                                                                   SharedHandoffEvidence.Scope scope){
+        Object witness=assessment.probe.originalEvidence.get("rawCaptureEvidence");
+        Map<String,Object> candidate=assessment.probe.sharedRawCaptureCustody;
+        if(!(witness instanceof Map<?,?> original)||!"ARCHIVED".equals(original.get("state"))
+                ||candidate==null||!"VERIFIED".equals(candidate.get("state")))return null;
+        var published=Model.JSON.convertValue(original.get("archive"),SharedHandoffEvidence.Archive.class);
+        var verified=Model.JSON.convertValue(candidate.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(published==null||!published.equals(verified)||published.rawCaptures()<1)
+            throw new TaskService.Conflict("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
+        return new RawCaptureHandoffStaging.Binding(plan.id(),plan.evidence().proof(),plan.evidence().candidate(),scope,published);
     }
 
     Map<String,Object> latestPreparation(String id,AccessControl.Principal supplied)throws Exception{

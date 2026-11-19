@@ -131,7 +131,27 @@ final class SharedHandoffEvidence {
     }
 
     static void verify(Path configured,Scope expected,Archive proof)throws Exception{
-        Path original=archive(privateRoot(configured),expected,proof.rawCaptures()>0);
+        verifyFile(archive(privateRoot(configured),expected,proof.rawCaptures()>0),expected,proof);
+    }
+
+    static Path verifiedRawStagingSource(Path configured,Scope scope,Archive proof)throws Exception{
+        requireRawArchive(proof);
+        Path file=archive(privateRoot(configured),scope,true);
+        verifyFile(file,scope,proof);
+        return file;
+    }
+
+    static void verifyStagedRawCapture(Path file,Scope scope,Archive proof)throws Exception{
+        requireRawArchive(proof);
+        rejectLinks(file);
+        verifyFile(file,scope,proof);
+    }
+
+    private static void requireRawArchive(Archive proof){
+        if(proof==null||proof.rawCaptures()<1)throw refusal("HANDOFF_RAW_CAPTURE_ARCHIVE_INVALID");
+    }
+
+    private static void verifyFile(Path original,Scope expected,Archive proof)throws Exception{
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);
         if(!Files.isRegularFile(original,LinkOption.NOFOLLOW_LINKS))
             throw refusal("HANDOFF_ARCHIVE_MISSING");

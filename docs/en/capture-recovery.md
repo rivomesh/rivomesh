@@ -58,6 +58,8 @@ New archives retained through global task control also have a private authentica
 
 Native acceptance uses a full-image MySQL 8.4.13 commit that exceeds the configured row limit. The original Agent retains the native bytes, then replays the same GTID after an approved increase to the row limit. Both SQL destinations match the source, and the journal generation, fingerprint and snapshot IDs stay the same. After the task drains, the candidate verifies the separately mounted raw archive. The custody probe reports the original task owner and returns `executionAuthorized: false`.
 
+After both Agents verify the same raw archive, open the handoff preparation and select **Stage reports and receipts**. The Controller verifies the preparation and sends the bound candidate the exact archive descriptor. The candidate stores the raw ZIP and its sealed binding in private `handoff-raw-staging` storage. The response adds `rawCapture` and the console shows the verified archive count. Retry the same staging request from either Controller to reverify the sealed copy after a shared mount outage. The original Agent keeps its HMAC key. Publishing this inactive archive leaves the source checkpoint and task owner at the reviewed cut. Adoption into the candidate's live recovery directory is a separate step. [Handoff controls](global-control.md#assess-transfer-to-another-agent)
+
 ### Approve a source transaction skip
 
 After retention succeeds, select **Review source transaction skip** from the operation receipt. Check the single GTID, affected tables and all affected destinations. Enter a reason and confirm the impact. The task stays paused after the skip.
