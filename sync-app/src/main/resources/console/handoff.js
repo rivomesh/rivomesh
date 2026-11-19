@@ -164,7 +164,7 @@ window.RivomeshHandoff=(()=>{
   HANDOFF_OFFLINE_CANDIDATE_CHANGED:'候选 Agent 的绑定或密封配置已变化。请重新核对冻结回执。',
   HANDOFF_OFFLINE_INVENTORY_UNVERIFIED:'候选的冻结库存无法验证。请核对受保护的暂存副本。',
   HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED:'此冻结已由另一个离线请求消费。请刷新交接状态。',
-  handoffFreezeRequest:'冻结请求 ID',handoffFreezeEpoch:'冻结日志纪元',
+  handoffFreezeRequest:'冻结请求 ID',handoffFreezeEpoch:'冻结日志纪元',handoffFrozenAt:'冻结时间',
   handoffCommitted:'归属已提交',handoffProjected:'候选配置已安装',handoffEvidenceAdopted:'证据已接收',
   handoffCommittedHelp:'任务归属已变更。候选 Agent 正在等待安装已审阅的任务配置。',
   handoffProjectedHelp:'候选 Agent 已保存停止状态的任务配置。接收报告和回执后会更新交接状态。',
@@ -207,7 +207,7 @@ window.RivomeshHandoff=(()=>{
   HANDOFF_OFFLINE_CANDIDATE_CHANGED:'The candidate Agent binding or sealed configuration changed. Review the frozen preparation.',
   HANDOFF_OFFLINE_INVENTORY_UNVERIFIED:'The candidate could not verify the frozen inventory. Check its protected staged copy.',
   HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED:'A different offline request already consumed the freeze. Refresh the handoff status.',
-  handoffFreezeRequest:'Freeze request ID',handoffFreezeEpoch:'Frozen journal epoch',
+  handoffFreezeRequest:'Freeze request ID',handoffFreezeEpoch:'Frozen journal epoch',handoffFrozenAt:'Frozen at',
   handoffCommitted:'Ownership committed',handoffProjected:'Candidate configuration installed',handoffEvidenceAdopted:'Evidence received',
   handoffCommittedHelp:'Task ownership has changed. The candidate Agent is waiting to install the reviewed configuration.',
   handoffProjectedHelp:'The candidate Agent saved the task configuration in a stopped state. Handoff status will update when it receives the reports and receipts.',
@@ -546,19 +546,18 @@ window.RivomeshHandoff=(()=>{
   }
   v.preparationResult.append(node('h3',t('handoffReservation')));
   if(preparation){
-   const active=activeReservation(v),facts=node('dl');
+   const active=activeReservation(v),facts=node('dl'),freeze=preparation.originalFreeze;
    v.preparationResult.append(node('span',t(preparationLabels[preparation.state]),'badge '+(active?'good':'neutral')));
    for(const [label,value] of [
     ['handoffOriginal',preparation.originalNodeId],['handoffCandidateNode',preparation.candidateNodeId],
     ['handoffReservedCapacity',preparation.reservedTaskSlots+' / '+preparation.reservedWorkerSlots],
-    ['handoffExpires',timestamp(preparation.expiresAt)]
+    [freeze?'handoffFrozenAt':'handoffExpires',timestamp(freeze?.frozenAt||preparation.expiresAt)]
    ]){
     const item=node('dd');item.append(value);facts.append(node('dt',t(label)),item);
    }
    const details=node('details');
    details.append(node('summary',t('handoffReservationId')),node('code',preparation.id));
    v.preparationResult.append(facts,details);
-   const freeze=preparation.originalFreeze;
    if(freeze){
     facts.append(node('dt',t('handoffFreezeEpoch')),node('dd',freeze.journalEpoch));
     details.append(node('p',t('handoffFreezeRequest')),node('code',freeze.requestId),
