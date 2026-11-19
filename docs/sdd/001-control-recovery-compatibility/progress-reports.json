@@ -2,27 +2,29 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T15:58:16+08:00",
-  "nextReportAt": "2026-11-19T16:58:16+08:00",
+  "lastReportAt": "2026-11-19T16:58:16+08:00",
+  "nextReportAt": "2026-11-19T17:58:16+08:00",
   "completedSincePrevious": [
-    "Oracle Free LOB archive limitations and distinct BasicFiles/SecureFiles preflight. 12 native and 14 Java. Pushed 31d5369.",
-    "Approved same-store raw capture and signed failure archive adoption. 37 native checks including Chrome, 96 Java and 157 DOM. Pushed 68ce1bb.",
-    "Immutable full audit event windows with signed continuity. 11 native MinIO and 21 Python checks. Pushed a948341.",
-    "PostgreSQL extended NUMERIC preserves precision and keyless multiplicity to PostgreSQL and MySQL. 11 native and 37 Java. Pushed b264be0.",
-    "Optional Java 17 bundle passed 627 application tests with 35 optional skips and 12 ARM64 native rolling checks. Pushed d533a99.",
-    "Kafka blocked approval binds configuration, physical routes, authorization and audit. 4 native and 106 exact Java checks. Pushed 5018320.",
-    "Native openGauss 7.0.0-RC3 mode A index mapping and same-endpoint restart. 8 native checks. Pushed 1d353da.",
-    "Independent journal reachability, same-process recovery and blocked cross-store writer transfer. 21 native checks including Chrome, 96 Java and 158 DOM. Pushed a1d3ef0.",
-    "Exact external package review identifies 151 packaged coordinates and 46 BOM omissions. 4 Python regressions. Pushed 08691d4.",
-    "Native Artemis shared-store primary failure retains the queue, prior record, receipt and retry. 4 native checks. Pushed 07a9203.",
-    "In-flight row lock partition rolls back the incomplete PostgreSQL commit and fills it once. 13 native checks and 50 Java. Pushed 0ae5542.",
-    "Java 17 native MySQL 8.4.13 asynchronous primary failure, external promotion and automatic dual-target GTID continuation. 9 native checks. Pushed 7aabd72."
+    "Eclipse Temurin 21 is the only supported release JDK. The bytecode gate and 12 native rolling checks on the exact application preserve both target snapshots, GTID and the STOP receipt. Pushed 0727c95.",
+    "Shared external OIDC authentication and account binding shipped. Two Controller HTTP entries use a pinned HTTPS fixture IdP and revoke the previous local sessions together. 48 focused Java and 161 DOM checks. Pushed 12e4721.",
+    "First newly observed Kafka COMMIT carries signed native Topic UUID, offset, Agent membership and journal UTC. Native Kafka, PostgreSQL, MySQL and H2 profiles passed. Pushed d2cb0a6.",
+    "Helm renders Kafka custody on executing members and verifies OIDC Controller Secret reference and HTTPS guards. Older JDK evidence is clearly archived in the manuals. Pushed 39ed017.",
+    "Full standard Temurin 21 Maven reactor shipped its evidence. 646 application tests, 35 optional integration skips, 161 DOM, 14 real Chrome and 25 supplied configuration examples. Pushed b782f19.",
+    "ActiveMQ Classic 5.19.12 passed five native shared KahaDB failover checks. The broker and publisher reuse the original native receipt through the stable OpenWire and Jolokia addresses. Pushed 7f2c2c2.",
+    "Oracle nested savepoints, repeated archived read and restart passed 19 native checks. Two PostgreSQL subscriptions match same-SCN Flashback with original snapshots and no canceled changes. Pushed fc26888.",
+    "Oracle native reproduction uses the fixture's actual --jdbc-driver argument and explicit Temurin 21 command. Pushed d1c0e6a.",
+    "PostgreSQL 17.12 native catalog review passed eight checks and leaves the actual LSN, source snapshots and target rows unchanged. The Kafka managed readback UI shipped. The combined package passed 158 Java, 162 DOM and 14 Chrome checks. Pushed 2f35c5e.",
+    "The current V3 validation launcher defaults to 5.7.44, 8.0.46, 8.2.0 and 8.4.13. Offline wrapper dispatch verified all 12 suites and no legacy matrix path remains in that launcher. Pushed 0843774.",
+    "Kafka managed receipt readback passed six native TLS/SCRAM checks via two Controllers and an owner Agent. Replaced Topic UUID, unauthorized actor and stale state are refused with unchanged broker and journal progress. Pushed 7d25c89.",
+    "Managed PostgreSQL journal ACK timeout passed 15 native failure checks and 101 latest integrated Java checks. Old ACK locks expire during partition. The original Agent reconciles only the interrupted ACK with each target written once. Pushed 989ad7d.",
+    "Native RocketMQ 5.5.0 proof of broker-level promotion and retained CommitLog. Current Rivomesh adapter still rejects that HA mode. Pushed 5b1d747."
   ],
   "inProgress": [
-    "JV-02 continues with Temurin 21 only. Verify additional source, target, driver, TLS and recovery profiles against the same supported release runtime.",
-    "RC-10 Kafka Worker physical receipt passed native TLS/SCRAM against the exact 5018320-integrated candidate. Independent startup-lock and journal-preflight fixes passed focused tests and are being integrated. Membership and journal-time evidence remain in progress.",
-    "LG-10 OIDC mock identity provider and two Controller HTTP acceptance are in development. Existing local account authority remains unchanged.",
-    "CP-04 The in-flight row-lock profile passed. Permanent original Agent loss, committed-but-unacknowledged outcomes and broader draining remain."
+    "CP-04 MySQL business destination as the missing ACK with PostgreSQL journal. The isolated test uses real MySQL row-lock waits. Permanent original Agent loss and broader planned drain stay open.",
+    "LG-04 RocketMQ 5.5.0 broker-native Controller promotion passed. The first fixture retained CommitLog but lacked TopicConfig. The corrected run verifies both. Opt-in product failover remains under implementation.",
+    "SO-07 Oracle native binary JSON. The first closed archive twice reported the native JSON changes as UNSUPPORTED while scalar markers survived. A faulty scalar MINE_VALUE identifier interrupted the separate positive-control probe and is being corrected.",
+    "LG-10 Prepare a production-grade local Keycloak interoperability fixture with controlled credentials and HTTPS. The existing two-entry OIDC fixture remains verified.",
+    "JV-02 and JV-03 expand only the Temurin 21 connector, TLS and recovery combinations."
   ],
   "reportContents": [
     "Current totals",
@@ -37,18 +39,19 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "31d5369",
-    "68ce1bb",
-    "a948341",
-    "b264be0",
-    "d533a99",
-    "5018320",
-    "1d353da",
-    "a1d3ef0",
-    "08691d4",
-    "07a9203",
-    "0ae5542",
-    "7aabd72"
+    "0727c95",
+    "12e4721",
+    "d2cb0a6",
+    "39ed017",
+    "b782f19",
+    "7f2c2c2",
+    "fc26888",
+    "d1c0e6a",
+    "2f35c5e",
+    "0843774",
+    "7d25c89",
+    "989ad7d",
+    "5b1d747"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -56,25 +59,24 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Verify the single Temurin 21 build and deployment configuration, then extend the native connector and recovery coverage on that runtime.",
-    "Integrate and verify Kafka receipt safeguards. Keep historical ownership and dispatch tracked separately.",
-    "Verify cross-entry external identity mapping and revocation.",
-    "Advance broader cutover, lost-node and missing-log profiles; commercial GaussDB, Oracle RAC and live AWS require their matching environments."
+    "Complete queued native RocketMQ, Oracle binary JSON and missing MySQL ACK evidence. Keep source checkpoints and native receipts exact.",
+    "Continue reviewed DDL, cross-store durable fencing, Kafka notice dispatch and broader data warehouse or messaging profiles where their evidence can be reproduced.",
+    "Commercial distributed GaussDB multi-CN/DN, additional vendor modes, Oracle RAC, production IdP/Ingress and AWS require their exact environments. Apache rights and package-level LICENSE/NOTICE require current review."
   ],
-  "currentCandidateArtifact": "512742f469edf00f544911937cbc6013e988e2544d9519501aaec3f8ae777dca",
-  "currentCandidateScope": "Single Temurin 21 release baseline. 41 Java tests, package bytecode and 12 native rolling checks passed.",
+  "currentCandidateArtifact": "1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8",
+  "currentCandidateScope": "Temurin 21 integrated PostgreSQL managed ACK bound, signed Kafka readback and schema drift. 101 focused Java tests and artifact checks. Native scopes tracked by exact JAR.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [
-    "Single Temurin 21 LTS release policy replaced multi-version support. 41 Java tests, fixed class-file gate and 12 native rolling checks passed."
-  ],
-  "lastScheduledReportAt": "2026-11-19T15:58:16+08:00",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T16:58:16+08:00",
   "lastVerifiedReactor": {
-    "baseCommit": "5018320504ac4ded545c8a142b2a87940d814423",
-    "artifactSha256": "b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3",
-    "javaTestsPassed": 630,
+    "baseCommit": "d2cb0a67e47cd82f91b6f74adc7ab01f9fb5ed5f",
+    "artifactSha256": "f31cb970e9f64b522a8546bd0e741f81aa9a0412c3dd27bce81dbb39f4ed6a44",
+    "javaTestsPassed": 646,
     "optionalSkips": 35,
-    "domTestsPassed": 157,
-    "scope": "Temurin 21 standard Maven application package gate; later split-store merged candidate passed 96 focused Java and 158 DOM tests."
+    "domTestsPassed": 161,
+    "nativeChromeChecksPassed": 14,
+    "configurationExamplesPassed": 25,
+    "scope": "Full standard Eclipse Temurin 21 reactor and browser/configuration evidence. Later focused packages and native fixtures retain their distinct digests."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
@@ -100,6 +102,25 @@
   ],
   "runtimeScope": {
     "supported": "Eclipse Temurin 21 LTS",
+    "policyCommit": "0727c95",
     "priorReportCommit": "419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c"
+  },
+  "remainingRequirements": [
+    "CP-04",
+    "RC-10",
+    "SO-06",
+    "SO-07",
+    "JV-02",
+    "JV-03",
+    "LG-01",
+    "LG-03",
+    "LG-04",
+    "LG-05",
+    "LG-08",
+    "LG-10"
+  ],
+  "cleanupSincePrevious": {
+    "approximateLogicalBytes": 1078321606,
+    "scope": "Retired Java 11 experimental JARs and generated output for the superseded schema-only fixture. Disposable native fixtures checked their project resources after teardown."
   }
 }
