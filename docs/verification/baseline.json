@@ -11311,6 +11311,6 @@
     "profile": "BLOB and CLOB capture refused with storage diagnostics. No LOB admission.",
     "status": "PASS",
     "evidenceManifestSha256": "6780f22109400d8302b6c266b7ac4235a76f6d7dcd9008b62e29168c98bc0135",
-    "reproduce": "python3 tests/oracle-source-probe.py --output target/oracle-lob-profile --logminer --lob-evidence --lob-preflight --artifact /path/to/rivomesh.jar --oracle-driver /path/to/ojdbc8.jar"
+    "reproduce": "python3 tests/oracle-source-probe.py --output target/oracle-lob-profile --logminer --lob-evidence --lob-preflight --artifact /path/to/rivomesh.jar --jdbc-driver /path/to/ojdbc8.jar"
   }
 }
