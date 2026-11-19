@@ -87,7 +87,7 @@ Implementation:48requirements,36 DONE, 12 PARTIAL and 0 NEW, with 12 open. RC-01
 | LG-07 | P1 / DONE | Large catalogs,transactions and hardware standards | The bounded Temurin 21 resource profile is accepted, with 12 hardware trials, 256 mapped databases, a transaction over 8 MiB and slow-target backpressure plus restart recovery through a separate journal. |
 | LG-08 | P1 / PARTIAL | Historical DDL,types,indexes and state migration | Allowlisted objects and UNIQUE/GSI conversions exist. Java 21 verified coordinated LOCAL journal and PostgreSQL backup/restore, original MySQL 8.4.13 continuation and identity refusal. Broader DDL, types and other products remain. |
 | LG-09 | P1 / DONE | Report retention and real-browser acceptance | Dual-entry report/receipt discovery, approvals, keyboard pagination, archival and exact restore passed. The bounded reclaim profile removes only an archived duplicate row file after stop, retention, digest and active-lock checks. |
-| LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Independent audit checkpoints, SBOM inventory and optional five-driver external JDBC package are verified across three variants. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain. |
+| LG-10 | P2 / PARTIAL | External identity,immutable audit and Apache preparation | Independent audit checkpoints support offline signature and pinned audit store verification. SBOM and the optional five-driver external JDBC package have verification evidence. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain. |
 
 ## Baseline evidence index
 

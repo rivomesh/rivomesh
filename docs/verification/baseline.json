@@ -9320,5 +9320,15 @@
     "integratedDomTestsPassed": 146,
     "scope": "Four Kafka 3.9.2 KRaft brokers with two packaged management entries. Exact read-only plan, same owner and request, native Topic identity, unchanged business and consumer positions, original transaction evidence and refusal after an observed partial BEGIN. Dedicated Topic remains empty, so live notice dispatch is outside this acceptance.",
     "reproduce": "python3 tests/kafka-cluster-run.py --only-managed-notice-plan --artifact /path/to/rivomesh.jar --output target/kafka-managed-plan"
+  },
+  "auditSignedCheckpointOffline": {
+    "status": "PASS",
+    "commit": "78eeb52",
+    "toolSha256": "c6fe393aff6a3c11cd5a64aa87d0effdb052c1fe714a5a13c02eb163eabff2ac",
+    "testCounts": {
+      "OpenSSL 3.6.2": 13,
+      "LibreSSL 3.3.6": 13
+    },
+    "scope": "ECDSA P-256 detached signature on the original audit checkpoint bytes, pinned key and storeId, verified continuity, no output on signature or scope refusal. External signing, immutable retention and source rights are separate."
   }
 }

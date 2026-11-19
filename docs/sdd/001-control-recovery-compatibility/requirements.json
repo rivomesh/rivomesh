@@ -1748,8 +1748,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "已有独立审计锚点、SBOM 和可选外置五路 JDBC 包，三种包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。",
-        "en": "Independent audit checkpoints, SBOM inventory and optional five-driver external JDBC package are verified across three variants. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain."
+        "zh-CN": "独立审计锚点已支持离线签名和审计库标识核验。SBOM 及可选外置五路 JDBC 包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。",
+        "en": "Independent audit checkpoints support offline signature and pinned audit store verification. SBOM and the optional five-driver external JDBC package have verification evidence. Source rights, LICENSE/NOTICE, external identity and immutable automatic retention remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",

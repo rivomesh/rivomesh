@@ -531,3 +531,7 @@ The `93b7860597bfd0ab93e2de2a708a00c2aaa0ffba57a8bb8f7ea44bf876db80cf` Java 21 p
 ### Read-only Kafka gap notice plan through two management entries
 
 The `675b34ac8ec1df9536986888db039558f3307bac33d177cd2a3ff241707e769a` package passed 67 focused Java and three native checks on four Kafka 3.9.2 KRaft brokers. The two entries returned the same plan bound to original failure and physical Topic identity. A subsequent partial BEGIN blocked planning. The dedicated control topic stayed empty, and the source evidence, business positions, consumer offset and journal receipts stayed intact. The current integrated package passed 46 Java and 146 DOM tests. Global Topic ownership evidence and approved dispatch remain separate. [Kafka operations](../en/messaging-v3.md) · [Manifest](baseline.json)
+
+### Offline signed audit checkpoints
+
+Commit `78eeb52` passed 13 audit export tests each with OpenSSL 3.6.2 and LibreSSL 3.3.6. Verification accepts the original ECDSA P-256 signature, exact checkpoint bytes and independently enrolled store identity. It refuses the wrong key, modified data and a genuine signature from the same signer for another store. The independent custodian retains the signing key and latest trusted sequence. [Operations](../en/security-audit.md#signed-checkpoints) · [Manifest](baseline.json)

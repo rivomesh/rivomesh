@@ -53,7 +53,7 @@ These contracts track implementation acceptance. CP-01,SE-01/02/03/04/05,CP-07,R
 | AC-LG-07 | LG-07 | Bound memory/disk for large transactions/catalogs/slow sinks and publish multi-run hardware/workload results without linear extrapolation or count-only correctness. | PASS. 12 hardware trials, 256 databases, a large transaction and bounded slow-target restart |
 | AC-LG-08 | LG-08 | Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits. | NOT_RUN |
 | AC-LG-09 | LG-09 | Provide authorized report/receipt search,retention and active-file protection;real browsers verify cluster/session/confirmation/recovery/pagination and accessibility. | PASS. Authorized history, paging, protected reclamation and exact restore passed native and real-browser profiles. |
-| AC-LG-10 | LG-10 | Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights. | NOT_RUN |
+| AC-LG-10 | LG-10 | Verify external identity/revocation,external audit and distribution conditions;complete license/NOTICE/SBOM/contribution docs without claiming Apache affiliation or trademark rights. | PARTIAL (pinned audit store and offline signatures; external identity and immutable retention remain) |
 
 ## Cross-cutting scenarios and evidence
 
