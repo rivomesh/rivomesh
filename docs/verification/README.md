@@ -754,3 +754,11 @@ The `1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8` Temurin 2
 ### Temurin 21 full reactor after SQL recovery and type support
 
 The `56b3bc67f2250b98057be8a8dbd2ccf44e2a772481bb9ebf6c0bf8d015e249cf` package at `309feaf` passed the full Maven reactor and the Java 21 class-file gate. The application ran 654 tests with zero failures and 35 optional integration tests skipped. The exact artifact passed 14 real Chrome checks and all 25 shipped configuration examples. The console suite passed 162 DOM checks. Closely related native product profiles retain their separate exact recordings. [Manifest](baseline.json)
+
+### Opt-in RocketMQ publisher promotion
+
+The `60dc0e19ba2402e776e8739e56348a27753d3427c0fa0bfa503297e244bf3470` Temurin 21 package passed RocketMQ 5.5.0 native opt-in publisher failover. Three independent broker stores agree on the generation-bound topic before writing. The original publisher verifies the same queue and CommitLog receipt after master SIGKILL and synchronously publishes through the promoted route. A fresh publisher verifies the next receipt. With only one live synchronized replica, the publisher refuses new writes and retains both the last receipt and broker queue end. The default single-broker profile fingerprints and physical identities remain stable. [Operations](../en/messaging-v3.md) · [Native fixture](../../tests/rocketmq/controller-promotion.md) · [Manifest](baseline.json)
+
+### Original Agent offline handoff preflight
+
+The `84c4f438174bf9ddafaa274f91b58cde2dbeab851e4e521ecb794e2c42103e16` package passed 78 Java and 163 DOM checks. Both entries preserve the historical stopped cut, reports and closed receipts. The bilingual handoff dialog reads current and missing evidence even when the unreachable original Agent's task format is masked. Optional corrupt historical descriptors are treated as absent in readback. The offline route remains read-only and requires a durable seal and independently retained complete archive before any future takeover. The `fba330c1f5306588c86a3bfd2e408a1476306a2c7ea34c062c9c591929334321` combined package passed 112 Java and 164 DOM checks. [Operations](../en/global-control.md#unexpected-original-agent-outage) · [Manifest](baseline.json)

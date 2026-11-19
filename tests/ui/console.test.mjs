@@ -909,6 +909,31 @@ test('RocketMQ wizard collects its broker and retention profile and excludes uns
   }finally{ui.dom.window.close();}
 });
 
+test('RocketMQ wizard requires explicit trusted Controller endpoints for the two-copy profile',async()=>{
+ const ui=setup();try{
+  await login(ui);ui.d.getElementById('new-task').click();
+  const form=ui.d.getElementById('create-form');
+  for(const [name,value]of Object.entries({jobId:'rocket-ha',clusterId:'source',sourceDatabase:'sales',sourceUsername:'reader'}))form.elements[name].value=value;
+  ui.d.getElementById('next-step').click();form.elements.targetType.value='ROCKETMQ';
+  form.elements.targetType.dispatchEvent(new ui.w.Event('change'));form.elements.targetSchema.value='sales_events';
+  const root=ui.d.getElementById('primary-messaging'),trusted=root.querySelector('[data-field=rocketmqControllerEndpoints]'),
+        copies=root.querySelector('[data-field=replicas]');
+  assert.equal(trusted.required,false);assert.equal(copies.value,'1');
+  trusted.value='http://controller-1:9877';
+  ui.d.getElementById('next-step').click();
+  assert.equal(ui.d.getElementById('step-2').classList.contains('hidden'),true);
+  assert.match(trusted.validationMessage,/带端口/);
+  trusted.value='rocketmq://controller-1:9877, rocketmq://controller-2:9877';
+  trusted.dispatchEvent(new ui.w.Event('input'));
+  assert.equal(copies.value,'2');assert.equal(copies.readOnly,true);
+  ui.d.getElementById('next-step').click();
+  form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+  const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
+  assert.equal(config.targets[0].messaging.replicas,2);
+  assert.deepEqual(config.targets[0].messaging.rocketmqControllerEndpoints,['rocketmq://controller-1:9877','rocketmq://controller-2:9877']);
+ }finally{ui.dom.window.close();}
+});
+
 test('Artemis wizard selects a retained queue profile and keeps broker authentication enabled',async()=>{
   const ui=setup();try{
     await login(ui);ui.d.getElementById('new-task').click();const form=ui.d.getElementById('create-form');for(const [name,value]of Object.entries({jobId:'artemis',clusterId:'source',sourceDatabase:'sales',sourceUsername:'reader'}))form.elements[name].value=value;

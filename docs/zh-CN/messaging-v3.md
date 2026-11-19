@@ -240,11 +240,36 @@ Redis 依据：[WAITAOF 同连接语义和返回计数](https://redis.io/docs/la
 
 ## RocketMQ 原生 TCP 配置
 
-`ROCKETMQ` 已实现 Java 8 兼容的 5.5.1 原生客户端，依赖单独隔离。原生 Broker 确认、客户端/Broker 重启、不安全刷盘拒绝、Topic 丢失保护已通过（`target/rocketmq-transport-cached.log`）；联合全量/增量、Worker 强杀及三轮 Broker 重启已通过（`target/messaging-rocketmq-mixed.log`，49 项执行），不宣称集群、ACL 或 TLS 已通过。首批配置限定单个 `ASYNC_MASTER` Broker 组，确认 **一份本地同步落盘副本**，不代表同步复制或 Raft 保证。`replicas` 必须为 1；认证配置完成验收前拒绝 username/password/token，应在可信网络使用。
+`ROCKETMQ` 已实现 Java 8 兼容的 5.5.1 原生客户端，依赖单独隔离。原生 Broker 确认、客户端/Broker 重启、不安全刷盘拒绝、Topic 丢失保护已通过（`target/rocketmq-transport-cached.log`）；联合全量/增量、Worker 强杀及三轮 Broker 重启已通过（`target/messaging-rocketmq-mixed.log`，49 项执行），既有单机实测未覆盖 ACL 或 TLS。默认档案使用单个 `ASYNC_MASTER` Broker 组，确认 **一份本地同步落盘副本**，不代表同步复制或 Raft 保证。默认档案的 `replicas` 为 1。认证配置完成验收前拒绝 username/password/token，应在可信网络使用。
 
 配置 `rocketmq://nameserver:9876`，其他同一集群的 NameServer 放在 `messaging.endpoints`；另填 `cluster`、`broker`、`topic`、`minimumRetentionHours`。地址是原生 TCP NameServer，不是 5.x gRPC Proxy。`topic` 是 1–48 位前缀，首位字母，后续仅字母、数字、下划线、连字符；物理 Topic 是 `<前缀>_<64位任务/订阅/代次绑定哈希>`。日志代次初始化后，界面目标卡片展示实际名称。同代次重启复用，新代次使用新名称。这些名称专供 Rivomesh，禁止外部创建、删除、扩队列和写入。
 
-准备阶段读取 Broker 配置，在选定 Broker 组上显式创建一个读写队列。要求 `flushDiskType=SYNC_FLUSH`、`transientStorePoolEnable=false`、`autoCreateTopicEnable=false`、`cleanFileForciblyEnable=false`，且 `fileReservedTime >= minimumRetentionHours`（默认 87600 小时）。拒绝 DLedger/controller/复制配置。刷盘配置必须在 Broker 启动时生效，不应运行中切换存储模式。客户端同步持久发送并启用 waitStoreMsgOK，只有 `SEND_OK` 才推进日志确认位点；刷盘/从库超时状态不推进，重试可能产生同一事件 ID 的重复消息。
+### 启用 Controller 主备切换
+
+在 `messaging.rocketmqControllerEndpoints` 填写受信的原生 Controller 地址，并将 `messaging.replicas` 设为 `2`。目标 URL 和 `messaging.endpoints` 继续填写 NameServer 地址。在控制台的 RocketMQ 目标设置中，可填写带端口的 Controller 地址，以逗号分隔。向导自动选择最少两份副本。留空时沿用原单 ASYNC_MASTER 档案。
+
+```yaml
+url: rocketmq://rocketnamesrv:9876
+messaging:
+  cluster: BusinessCluster
+  broker: broker-a
+  topic: sales_events
+  replicas: 2
+  rocketmqControllerEndpoints:
+    - rocketmq://rocketnamesrv:9877
+```
+
+同一 Broker 组须配置三个使用独立存储的数据副本，受信 Controller 采用干净选主。投递前，Controller 的主节点地址、永久副本编号须与 NameServer 的活动路由及 Broker 实际角色一致。SyncStateSet 内成员须在线，且至少有两个。活动 Broker 角色为 `SYNC_MASTER`，配置 `SYNC_FLUSH`、`allAckInSyncStateSet=true`、`minInSyncReplicas=2`、`syncFromLastFile=false`、`asyncLearner=false`。所有副本应符合下文的保留策略、强制清理及自动建主题规则。数据路径使用 AutoSwitch CommitLog，停用 DLedger CommitLog。[RocketMQ Controller 部署说明](https://rocketmq.apache.org/zh/docs/deploymentOperations/03autofailover/)
+
+物理主题包含日志代次。首次初始化可在已确认的活动 Broker 创建主题，等活跃同步副本都能读取确切的单队列配置后才写入归属记录或事件。已经初始化的主题须保有元数据与原生历史。提升后，主题元数据或主节点路由未就绪时保持已有确认并重试。少于两个在线同步副本时停止继续投递。
+
+已确认的主节点或任期变化时，Rivomesh 关闭旧 SDK 连接，直接向已核验的活动地址发送。读取原生消息，并再次核对同一任期、主节点和同步集合后才接受回执。原主题代次和 `ROCKETMQ_OFFSET_V1` 坐标继续使用。确认丢失或不确定时仍可能以相同事件 ID 重放。已确认内容出现冲突时，恢复前须核实历史。Controller 档案有独立的配置指纹，切换持久性档案需明确迁移计划。
+
+已使用 RocketMQ 5.5.0、在线的内嵌 Controller 和三个独立 Broker 数据卷完成产品发布者实测。主节点任期从 1 增至 2 后，保留事件的队列偏移 1、物理偏移 451 和内容摘要一致。新事件在 2 / 906 得到确认，新建发布者能以原生回执重开。停止剩余备用节点后，已确认回执及 Broker 队列末尾保持不变。Controller 停机、Broker 存储丢失、DLedger CommitLog、TLS、ACL 和完整 CDC Worker 切换分别验收。NameServer、Controller 与 Broker 保持在可信网络。[原生夹具与复现命令](../../tests/rocketmq/controller-promotion.md)
+
+### 主题和保留设置
+
+准备阶段读取 Broker 配置，在选定 Broker 组上显式创建一个读写队列。要求 `flushDiskType=SYNC_FLUSH`、`transientStorePoolEnable=false`、`autoCreateTopicEnable=false`、`cleanFileForciblyEnable=false`，且 `fileReservedTime >= minimumRetentionHours`（默认 87600 小时）。默认模式拒绝复制组。Controller 档案执行上文的在线检查。刷盘配置必须在 Broker 启动时生效，不应运行中切换存储模式。客户端同步持久发送并启用 waitStoreMsgOK，只有 `SEND_OK` 才推进日志确认位点；刷盘/从库超时状态不推进，重试可能产生同一事件 ID 的重复消息。
 
 队列偏移 0 是归属清单，用户属性包含 `rivomesh_publication_manifest`。消费者需先过滤此消息，再按通用 JSON 信封解析后续事件。后续消息带 `rivomesh_event_id`、`rivomesh_channel`、`rivomesh_key` 属性；所有逻辑表和控制通道共用队列 0。消费者仍需去重、核对 SNAPSHOT_END / COMMIT 及行数，Broker 确认不代表业务处理完成。
 
@@ -256,7 +281,7 @@ Redis 依据：[WAITAOF 同连接语义和返回计数](https://redis.io/docs/la
 
 仅归属清单匹配不能证明已确认历史仍保留。RocketMQ 已加入下述原生确认回执与回退检测；其他消息产品仍需各自的检测和故障验收，不能把这项保证外推到全部 Broker。
 
-RocketMQ 原生 Broker 选主已验证。Rivomesh 仍拒绝 Controller 模式，接入和端到端续传待验。 [原生证据](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
+RocketMQ 原生 Broker 选主已验证。原默认档案拒绝 Controller 模式。可选档案执行上文的验证，完整 Worker 续传另行验收。 [原生证据](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
 
 ### RocketMQ 原生确认回执
 

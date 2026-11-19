@@ -4,6 +4,7 @@ import io.github.rivomesh.Model;
 import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.ConfirmedPublisher;
 import io.github.rivomesh.cdc.RocketMessagePublisher;
 import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.transport.rocketmq.RocketTransport;
@@ -56,7 +57,114 @@ public final class RocketControllerPromotionAcceptance {
     public static void main(String[] args) throws Exception {
         require(Runtime.version().feature() == 21 && "Eclipse Adoptium".equals(System.getProperty("java.vendor")),
                 "Expected the Temurin 21 fixture runtime");
-        new RocketControllerPromotionAcceptance().accept(Path.of(args[0]));
+        RocketControllerPromotionAcceptance fixture = new RocketControllerPromotionAcceptance();
+        if (args.length == 2 && "--product".equals(args[1])) fixture.acceptProduct(Path.of(args[0]));
+        else fixture.accept(Path.of(args[0]));
+    }
+
+    private void acceptProduct(Path markers) throws Exception {
+        Set<String> channels = Set.of("sales.items");
+        DefaultMQProducer inspector = producer();
+        try {
+            MQClientAPIImpl api = api(inspector);
+            Election initial = until(() -> election(api, 1, null), "the distinguished primary");
+            require("rocket-primary:10911".equals(initial.address()), "Unexpected initial leader");
+            write(markers, "leader-ready.json", Map.of("master", initial.address()));
+            Election original = until(() -> election(api, 3, null), "both original synchronized followers");
+            require(original.id() == initial.id(), "Enrolling followers changed the initial master");
+            checkPolicies(api, original);
+            requireRejectedAdapter();
+
+            PipelineConfig.Target target = target();
+            target.messaging.replicas = 2;
+            target.messaging.rocketmqControllerEndpoints = List.of("rocketmq://" + CONTROLLER);
+            RocketMessagePublisher.check(target);
+            try (RocketMessagePublisher publisher = new RocketMessagePublisher(target, binding)) {
+                until(() -> {
+                    try {
+                        publisher.prepare(channels);
+                        return Boolean.TRUE;
+                    } catch (SyncFailure failure) {
+                        if (!failure.retryable) throw new AssertionError("Opt-in preparation rejected: " + failure.code, failure);
+                        return null;
+                    }
+                }, "the production publisher creating and verifying the replicated topic");
+                Cut owner = cut(publisher.confirmedProgress());
+                require(owner.queueOffset() == 0, "Prepared ownership is not present at offset zero");
+                awaitReplicatedTopic(api, original);
+
+                publisher.publish(List.of(publication("retained-before-promotion")));
+                String oldProgress = publisher.confirmedProgress();
+                Cut before = cut(oldProgress);
+                require(before.queueOffset() == 1 && before.commitLogOffset() > owner.commitLogOffset(), "Original production receipt is invalid");
+                awaitHistory(api, original, owner, before);
+                write(markers, "original-cut.json", Map.of("master", original.address(), "masterId", original.id(),
+                        "epoch", original.epoch(), "syncStateEpoch", original.syncEpoch(), "liveInSync", original.liveInSync(),
+                        "topicConfigurationReplicas", original.liveInSync(), "retained", before));
+                until(() -> Files.isRegularFile(markers.resolve("original-killed")) ? Boolean.TRUE : null, "SIGKILL of the original master");
+
+                Election promoted = until(() -> election(api, 2, original), "the promoted master and synchronized survivor");
+                checkPolicies(api, promoted);
+                requireRejectedAdapter();
+                awaitTopic(api, promoted.address());
+                awaitReplicatedTopic(api, promoted);
+                awaitHistory(api, promoted, owner, before);
+
+                require(oldProgress.equals(publisher.confirmedProgress()), "Checkpoint changed before the retry");
+                publisher.publish(List.of(publication("appended-after-promotion")));
+                String newProgress = publisher.confirmedProgress();
+                Cut after = cut(newProgress);
+                require(after.queueOffset() == before.queueOffset() + 1 && after.commitLogOffset() > before.commitLogOffset(),
+                        "Production publisher did not append at the next logical and a later physical offset");
+                for (String address : promoted.liveInSync()) verify(api, address, after, "appended-after-promotion");
+                try (RocketMessagePublisher reopened = new RocketMessagePublisher(target, binding)) {
+                    reopened.resumeProgress(newProgress);
+                    reopened.require(channels);
+                    require(newProgress.equals(reopened.confirmedProgress()), "Reopening did not authenticate the promoted native receipt");
+                }
+                write(markers, "promoted-cut.json", Map.of("master", promoted.address(), "masterId", promoted.id(),
+                        "epoch", promoted.epoch(), "syncStateEpoch", promoted.syncEpoch(), "liveInSync", promoted.liveInSync(),
+                        "topicConfigurationReplicas", promoted.liveInSync(), "retained", before, "appended", after,
+                        "adapterOutcome", "CONTROLLER_PROFILE_PUBLISHED"));
+                until(() -> Files.isRegularFile(markers.resolve("remaining-follower-killed")) ? Boolean.TRUE : null,
+                        "the last follower to be killed");
+                until(() -> election(api, 1, original), "the live SyncStateSet falling below two");
+                try {
+                    publisher.publish(List.of(publication("must-not-publish")));
+                    throw new AssertionError("Publisher accepted one live replica");
+                } catch (SyncFailure failure) {
+                    require(failure.retryable && "ROCKETMQ_CONTROLLER_ROUTE_RETRY".equals(failure.code),
+                            "Unexpected refusal under minimum: " + failure.code);
+                }
+                require(newProgress.equals(publisher.confirmedProgress())
+                        && api.getMaxOffset(promoted.address(), queue, TIMEOUT) == after.queueOffset() + 1,
+                        "Loss of the last follower changed the confirmed receipt or broker queue");
+                write(markers, "minimum-refused.json", Map.of("status", "PASS", "confirmed", after));
+            }
+        } finally {
+            inspector.shutdown();
+        }
+    }
+
+    private Cut cut(String progress) {
+        require(progress != null, "Production publisher returned no native position");
+        String[] fields = progress.split(":", -1);
+        require(fields.length == 5 && "ROCKETMQ_OFFSET_V1".equals(fields[0]) && topic.equals(fields[1]),
+                "Production progress format or topic changed");
+        return new Cut(Long.parseLong(fields[2]), Long.parseLong(fields[3]), fields[4]);
+    }
+
+    private static ConfirmedPublisher.Message publication(String id) {
+        ConfirmedPublisher.Message result = new ConfirmedPublisher.Message();
+        result.id = id;
+        result.destination = "sales.items";
+        result.key = "key-" + id;
+        result.body = ("{\"id\":\"" + id + "\"}").getBytes(StandardCharsets.UTF_8);
+        return result;
+    }
+
+    private static void write(Path markers, String name, Map<String,?> facts) throws Exception {
+        Files.writeString(markers.resolve(name), Model.JSON.writeValueAsString(facts));
     }
 
     private void accept(Path markers) throws Exception {
@@ -241,7 +349,7 @@ public final class RocketControllerPromotionAcceptance {
         return HexFormat.of().formatHex(hash.digest());
     }
 
-    private static void requireRejectedAdapter() throws Exception {
+    private static PipelineConfig.Target target() {
         PipelineConfig.Target target = new PipelineConfig.Target();
         target.product = TargetProduct.ROCKETMQ;
         target.url = "rocketmq://" + NAMESERVER;
@@ -250,8 +358,12 @@ public final class RocketControllerPromotionAcceptance {
         target.messaging.broker = BROKER;
         target.messaging.topic = PREFIX;
         target.messaging.requestTimeoutMillis = TIMEOUT;
+        return target;
+    }
+
+    private static void requireRejectedAdapter() throws Exception {
         try {
-            RocketMessagePublisher.check(target);
+            RocketMessagePublisher.check(target());
             throw new AssertionError("The existing adapter accepted an unsupported replication profile");
         } catch (SyncFailure refusal) {
             require(!refusal.retryable && "ROCKETMQ_REPLICATION_PROFILE_REQUIRES_PLAN".equals(refusal.code),

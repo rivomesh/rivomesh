@@ -212,11 +212,34 @@ window.RivomeshHandoff=(()=>{
   handoffFormerOwner:'Original Agent',handoffCurrentOwner:'Current owner Agent',handoffTransferId:'Preparation ID',handoffRefreshProgress:'Refresh handoff status'
  });
 
+ bridge.register({
+  handoffOfflineTitle:'离线接管预检',handoffOfflineBlocked:'离线接管受阻',
+  handoffOfflineAuthority:'任务与已审查配置',handoffOfflineCut:'历史排空切点',
+  handoffOfflineCustody:'历史报告和结案回执',handoffOfflineMatch:'匹配',handoffOfflineChanged:'已变化',
+  handoffOfflineRecorded:'已记录',handoffOfflineMissing:'未记录',
+  HANDOFF_OFFLINE_DURABLE_FREEZE_REQUIRED:'缺少已持久化的原写入者冻结证明。',
+  HANDOFF_OFFLINE_COMPLETE_ARCHIVE_REQUIRED:'缺少可独立访问的完整恢复归档。',
+  HANDOFF_OFFLINE_REVIEW_CHANGED:'任务修订或配置已变化，原评估不再匹配。',
+  HANDOFF_OFFLINE_STOPPED_CUT_UNRECORDED:'评估中缺少已排空的切点。',
+  HANDOFF_OFFLINE_REPORT_RECEIPT_CUSTODY_UNRECORDED:'评估中缺少经核验的报告和结案回执。'
+ },{
+  handoffOfflineTitle:'Offline handoff preflight',handoffOfflineBlocked:'Offline handoff blocked',
+  handoffOfflineAuthority:'Task and reviewed configuration',handoffOfflineCut:'Historical drained checkpoint',
+  handoffOfflineCustody:'Historical reports and closed receipts',handoffOfflineMatch:'Matches',handoffOfflineChanged:'Changed',
+  handoffOfflineRecorded:'Recorded',handoffOfflineMissing:'Missing',
+  HANDOFF_OFFLINE_DURABLE_FREEZE_REQUIRED:'A durable freeze for the original writer is missing.',
+  HANDOFF_OFFLINE_COMPLETE_ARCHIVE_REQUIRED:'A complete, independently accessible recovery archive is missing.',
+  HANDOFF_OFFLINE_REVIEW_CHANGED:'The task revision or configuration changed since this assessment.',
+  HANDOFF_OFFLINE_STOPPED_CUT_UNRECORDED:'The assessment lacks a drained checkpoint.',
+  HANDOFF_OFFLINE_REPORT_RECEIPT_CUSTODY_UNRECORDED:'The assessment lacks verified reports and closed receipts.'
+ });
+
  const nodeId=/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
  const revisionId=/^[0-9a-f-]{36}$/;
  const requestPattern=/^[A-Za-z0-9_-]{8,128}$/;
  const sha256=/^[0-9a-f]{64}$/;
  const stateLabels={BLOCKED:'handoffStateBlocked',EVIDENCE_REQUIRED:'handoffStateEvidence',STALE:'handoffStateStale'};
+ const offlineControlStates=['STALE','STOPPED','UNKNOWN'];
  const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired'};
  const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted',FENCE_PENDING:'handoffFencePending',TARGETS_FENCED:'handoffTargetsFenced',
   START_PENDING:'handoffStartPending',WORKER_ADMITTED:'handoffWorkerAdmitted',WORKER_PROJECTED:'handoffWorkerProjected'};
@@ -279,6 +302,15 @@ window.RivomeshHandoff=(()=>{
  function readOnly(v){
   return bridge.task(v.taskId)?.formatVersion!==3||transferred(v.preparation)||v.unverifiedTransfer;
  }
+ function offlineReadback(v){
+  const task=bridge.task(v.taskId);
+  return task?.statusAvailable===false&&offlineControlStates.includes(task.ownerControlState)
+   &&!transferred(v.preparation)&&!v.unverifiedTransfer;
+ }
+ function offlineReceipt(v,receipt){
+  return receipt?.originalNodeId===v.owner&&offlineControlStates.includes(receipt.originalControlState)
+   &&['STALE','BLOCKED'].includes(receipt.state);
+ }
  function evidenceCount(value){return Number.isSafeInteger(value)&&value>0&&value<=64;}
  function validTransfer(preparation){
   if(!revisionId.test(preparation.committedRevision||'')||preparation.committedRevision===preparation.taskRevision
@@ -311,7 +343,7 @@ window.RivomeshHandoff=(()=>{
  function nextHandoffAction(v){
   const plan=v.preparation;
   if(!v.preparationLoaded||!plan||!preparationScope(v,plan))return null;
-  if(plan.state==='PREPARED'&&plan.writerActivation?.checkedInControlTransaction===true
+  if(plan.state==='PREPARED'&&!readOnly(v)&&plan.writerActivation?.checkedInControlTransaction===true
    &&v.stageAttempt?.counts
    &&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
   if(['EVIDENCE_ADOPTED','FENCE_PENDING'].includes(plan.state)&&plan.targetFenceAvailable===true)return 'fence-targets';
@@ -393,11 +425,29 @@ window.RivomeshHandoff=(()=>{
   if(!probe.current)v.result.append(node('p',t('handoffProbeExpired'),'callout warning'));
   v.result.append(facts);
  }
+ function renderOfflinePreflight(v,receipt){
+  const preflight=receipt.offlinePreflight;
+  if(!offlineReceipt(v,receipt)||preflight?.state!=='BLOCKED'
+   ||typeof preflight.authorityMatchesReview!=='boolean'||typeof preflight.historicalDrainedCut!=='boolean'
+   ||typeof preflight.historicalReportsAndReceipts!=='boolean'||!Array.isArray(preflight.blockers)
+   ||preflight.blockers.length<1||preflight.blockers.length>5)return;
+  const section=node('section'),heading=node('h4',t('handoffOfflineTitle')),facts=node('dl'),blockers=node('ul');
+  section.dataset.handoffOfflinePreflight='';
+  heading.id='handoff-offline-preflight-title';section.setAttribute('aria-labelledby',heading.id);
+  for(const [label,value] of [
+   ['handoffOfflineAuthority',preflight.authorityMatchesReview?'handoffOfflineMatch':'handoffOfflineChanged'],
+   ['handoffOfflineCut',preflight.historicalDrainedCut?'handoffOfflineRecorded':'handoffOfflineMissing'],
+   ['handoffOfflineCustody',preflight.historicalReportsAndReceipts?'handoffOfflineRecorded':'handoffOfflineMissing']
+  ])facts.append(node('dt',t(label)),node('dd',t(value)));
+  for(const code of preflight.blockers)blockers.append(node('li',refusal(code)));
+  section.append(heading,node('p',t('handoffOfflineBlocked'),'callout warning'),facts,blockers);
+  v.result.append(section);
+ }
  function renderReceipt(v){
-  const receipt=v.receipt,revision=bridge.task(v.taskId)?.revision;
+  const receipt=v.receipt,revision=bridge.task(v.taskId)?.revision,locale=document.documentElement.lang;
   const stale=receipt&&(receipt.state==='STALE'||receipt.taskRevision!==revision||receipt.originalNodeId!==v.owner);
-  if(v.drawn&&v.drawn.receipt===receipt&&v.drawn.stale===stale&&v.drawn.loaded===v.loaded)return;
-  v.drawn={receipt,stale,loaded:v.loaded};
+  if(v.drawn&&v.drawn.receipt===receipt&&v.drawn.stale===stale&&v.drawn.loaded===v.loaded&&v.drawn.locale===locale)return;
+  v.drawn={receipt,stale,loaded:v.loaded,locale};
   v.result.replaceChildren();
   if(!receipt){
    if(v.loaded)v.result.append(node('p',t('handoffNone'),'subtle'));
@@ -427,6 +477,7 @@ window.RivomeshHandoff=(()=>{
   if(blockers.childElementCount)v.result.append(blockers);
   v.result.append(details);
   renderProbe(v,receipt.probe);
+  renderOfflinePreflight(v,receipt);
  }
  function renderPreparation(v,readonly){
   const preparation=v.preparation,proof=!readonly&&reviewReady(v)?v.receipt.preparationEvidenceSha256:null;
@@ -533,7 +584,8 @@ window.RivomeshHandoff=(()=>{
   const active=activeReservation(v),attempt=v.preparationAttempt,readonly=readOnly(v);
   const assessmentLocked=readonly||active||!!attempt;
   v.header.textContent=t(readonly?'handoffProgress':'handoffTitle');
-  for(const entry of [v.help,v.original,v.field,v.candidateMessage,v.submit,v.result])entry.hidden=readonly;
+  for(const entry of [v.help,v.original,v.field,v.candidateMessage,v.submit])entry.hidden=readonly;
+  v.result.hidden=readonly&&!(offlineReadback(v)&&offlineReceipt(v,v.receipt));
   v.reload.textContent=t(readonly?'handoffRefreshProgress':'handoffReload');
   v.select.disabled=busy||v.loadingNodes||assessmentLocked||!!v.attempt||!v.nodes.size;
   v.more.hidden=readonly||!v.next;
@@ -632,7 +684,9 @@ window.RivomeshHandoff=(()=>{
   if(v.fenceAttempt?.action==='commit-owner')await bridge.refresh();
   if(!current(v))return;
   await readPreparation(v);
-  if(current(v)&&!readOnly(v))await Promise.all([read(v),candidates(v)]);
+  if(!current(v))return;
+  if(!readOnly(v))await Promise.all([read(v),candidates(v)]);
+  else if(offlineReadback(v))await read(v);
  }
  async function reconcile(v,error){
   if(error.code==='REVISION_CHANGED')await bridge.refresh();

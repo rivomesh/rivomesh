@@ -46,7 +46,7 @@
 | 事务补偿 | PostgreSQL 和 MySQL 的管理员预览、确认、目标原子凭据和原事务重放。见[操作说明](transaction-compensation.md) |
 | 关系目标 | MySQL、PostgreSQL、openGauss 有实库档案。达梦、金仓、GBase8c、OceanBase MySQL 模式通过限定事务和联合中断恢复。分布式 GaussDB 和其他厂商模式待验收。 |
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
-| 消息目标 | 八种 Broker 已有确认式至少一次投递档案。实库包含 Kafka 签名回执查询、ActiveMQ Classic 和 Artemis 共享存储主备、NATS TLS 和多数派、RabbitMQ 多数派及 Redis Streams 外部提升。 [消息目标](messaging-v3.md) |
+| 消息目标 | 八种 Broker 已有确认式至少一次投递档案。实库包含 Kafka 签名回执查询、ActiveMQ Classic 和 Artemis 共享存储主备、NATS TLS 和多数派、RabbitMQ 多数派及 Redis Streams 外部提升。 RocketMQ 5.5.0 的可选发布器以三个数据副本、至少两个同步副本完成主备实测。 [消息目标](messaging-v3.md) |
 | 部署 | Linux、Docker、Helm、原生 Kubernetes。双节点实测 RWO 重挂、配置更新、Secret 轮换、外部日志和旧 Worker 写入隔离。Helm 和原生 YAML 均通过应用镜像替换及跨节点挂载原 CSI 卷后的自动续传。 |
 | Java | Eclipse Temurin 21 LTS 是唯一支持的构建与运行时。连接器、部署和安全协议使用实际 Java 21 候选包验收。 |
 

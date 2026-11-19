@@ -222,8 +222,14 @@ class ManagedHandoffTest {
             assertEquals(original.get("id"),receipt.get("id"));
             assertEquals("STALE",receipt.get("state"));
             assertEquals("STALE",receipt.get("originalControlState"));
+            var preflight=Model.JSON.valueToTree(receipt.get("offlinePreflight"));
+            assertEquals("BLOCKED",preflight.path("state").asText());
+            assertFalse(preflight.path("historicalDrainedCut").asBoolean());
+            assertFalse(preflight.path("historicalReportsAndReceipts").asBoolean());
+            assertTrue(preflight.path("blockers").toString().contains("HANDOFF_OFFLINE_STOPPED_CUT_UNRECORDED"));
         }
         Map<String,Object> after=b.invoke(assess("handoff_outage_refresh","handoff_outage_initial"),fixture.admin);
+        assertEquals(after,latest(a,fixture.admin));
         assertEquals("BLOCKED",after.get("state"));
         assertEquals("STALE",after.get("originalControlState"));
         assertNull(after.get("originalCut"));
@@ -232,6 +238,93 @@ class ManagedHandoffTest {
         conflict("HANDOFF_ASSESSMENT_BLOCKED",()->a.invoke(probe("handoff_outage_refresh"),fixture.admin));
         assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
         assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+    }
+
+    @Test void offlinePreflightKeepsAPreparedCutAndCustodyHistoricalAcrossEntries()throws Exception{
+        var proof=verifiedAssessment("handoff_offline_proof",fixture.admin);
+        assertFalse(proof.containsKey("offlinePreflight"));
+        var preparation=a.invoke(prepare("handoff_offline_prepare",proof),fixture.admin);
+        assertEquals("PREPARED",preparation.get("state"));
+        try(Connection c=fixture.connection();Statement s=c.createStatement()){
+            assertEquals(1,s.executeUpdate("UPDATE rivomesh_control.rmc_node SET lease_until=0 WHERE node_id='a'"));
+        }
+        var offline=latest(a,fixture.admin);
+        assertEquals(offline,latest(entryB(),fixture.admin));
+        assertEquals("STALE",offline.get("state"));
+        assertFalse((Boolean)offline.get("executionAuthorized"));
+        assertFalse(offline.containsKey("preparationEvidenceSha256"));
+        assertFalse(Model.JSON.valueToTree(offline.get("probe")).path("current").asBoolean(true));
+        assertEquals(Map.of("state","BLOCKED","authorityMatchesReview",true,"historicalDrainedCut",true,
+                "historicalReportsAndReceipts",true,"blockers",List.of("HANDOFF_OFFLINE_DURABLE_FREEZE_REQUIRED",
+                        "HANDOFF_OFFLINE_COMPLETE_ARCHIVE_REQUIRED")),offline.get("offlinePreflight"));
+        assertEquals(preparation,b.invoke(currentPreparation(),fixture.admin));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+        assertFalse(Model.JSON.writeValueAsString(offline.get("offlinePreflight")).contains(candidateDirectory));
+    }
+
+    @Test void malformedOptionalCustodyIsMissingInOfflineReadbackAndCannotPrepare()throws Exception{
+        var proof=verifiedAssessment("handoff_offline_malformed",fixture.admin);
+        var preparation=prepare("handoff_offline_malformed_prepare",proof);
+        editProbe("handoff_offline_malformed",probe->{
+            ((com.fasterxml.jackson.databind.node.ObjectNode)probe.get("sharedReportCustody")).put("archive","invalid");
+            ((com.fasterxml.jackson.databind.node.ObjectNode)probe.path("originalEvidence").path("shareableReports")).put("archive","invalid");
+        });
+        assertThrows(IllegalArgumentException.class,()->b.invoke(preparation,fixture.admin));
+        try(Connection c=fixture.connection();Statement s=c.createStatement()){
+            assertEquals(1,s.executeUpdate("UPDATE rivomesh_control.rmc_node SET lease_until=0 WHERE node_id='a'"));
+        }
+        var offline=Model.JSON.valueToTree(latest(b,fixture.admin));
+        assertEquals("STALE",offline.path("state").asText());
+        assertFalse(offline.path("offlinePreflight").path("historicalReportsAndReceipts").asBoolean(true));
+        assertFalse(offline.path("probe").has("sharedReportCustody"));
+        assertFalse(offline.path("probe").path("originalEvidence").has("shareableReports"));
+        editProbe("handoff_offline_malformed",probe->{
+            probe.remove("originalEvidence");
+            probe.remove("sharedReportCustody");
+            probe.put("sharedRawCaptureCustody","invalid");
+        });
+        var absent=Model.JSON.valueToTree(latest(a,fixture.admin));
+        assertEquals("STALE",absent.path("state").asText());
+        assertFalse(absent.path("offlinePreflight").path("historicalReportsAndReceipts").asBoolean(true));
+        assertFalse(absent.path("probe").has("sharedRawCaptureCustody"));
+        assertFalse(absent.path("executionAuthorized").asBoolean(true));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+    }
+
+    private void editProbe(String request,java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> change)
+            throws Exception{
+        String purpose="managed-handoff/orders/"+request;
+        ControlCipher cipher=fixture.a.commandCipher();
+        String envelope;
+        try(Connection c=fixture.connection();PreparedStatement read=c.prepareStatement(
+                "SELECT envelope FROM rivomesh_control.rmc_task_handoff WHERE task_id='orders' AND request_id=?")){
+            read.setString(1,request);
+            try(ResultSet row=read.executeQuery()){assertTrue(row.next());envelope=row.getString(1);}
+        }
+        var assessment=Model.JSON.readTree(cipher.open(purpose,envelope));
+        change.accept((com.fasterxml.jackson.databind.node.ObjectNode)assessment.get("probe"));
+        try(Connection c=fixture.connection();PreparedStatement write=c.prepareStatement(
+                "UPDATE rivomesh_control.rmc_task_handoff SET envelope=? WHERE task_id='orders' AND request_id=?")){
+            write.setString(1,cipher.seal(purpose,Model.JSON.writeValueAsString(assessment)));
+            write.setString(2,request);
+            assertEquals(1,write.executeUpdate());
+        }
+    }
+
+    @Test void offlinePreflightIdentifiesAChangedAuthorityRevision()throws Exception{
+        var prior=a.invoke(assess("handoff_offline_review",null),fixture.admin);
+        assertFalse(prior.containsKey("offlinePreflight"));
+        var updated=fixture.a.update("orders",revision,YAML,"handoff_offline_revision",fixture.admin);
+        try(Connection c=fixture.connection();Statement s=c.createStatement()){
+            assertEquals(1,s.executeUpdate("UPDATE rivomesh_control.rmc_node SET lease_until=0 WHERE node_id='a'"));
+        }
+        var offline=Model.JSON.valueToTree(latest(b,fixture.admin).get("offlinePreflight"));
+        assertFalse(offline.path("authorityMatchesReview").asBoolean(true));
+        assertTrue(offline.path("historicalDrainedCut").asBoolean());
+        assertEquals("BLOCKED",offline.path("state").asText());
+        assertTrue(offline.path("blockers").toString().contains("HANDOFF_OFFLINE_REVIEW_CHANGED"));
+        assertEquals(updated.revision,fixture.b.get("orders",fixture.admin).revision);
     }
 
     @Test void deniesScopedCandidateAndMarksCapacityAndPendingCommands()throws Exception{

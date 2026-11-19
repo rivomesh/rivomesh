@@ -13368,5 +13368,109 @@
     "domLogSha256": "7b4d8ffae06a86ba5f23bad9be22687918d8f93335f5b60a009e2a41ad2bad6f",
     "configurationExamplesLogSha256": "69da7b0ae557e3a7d5c558ffec5e10c6f87388023bb3911ee4eec0465d9cb83a",
     "scope": "Full standard build and application tests after native Kafka readback, managed journal ACK timeout and PostgreSQL finite floating-point support. Native product results remain tied to their exact artifacts."
+  },
+  "rocketmqOptInControllerPublisherFailover": {
+    "status": "PASS",
+    "scope": "Opt-in product publisher over native 5.5.0 three-replica promotion. Retained receipt, new checked publication and refusal below the synchronized replica minimum. Full CDC Worker and security profiles are separate.",
+    "project": "rivomesh-rocketmq-controller-c27da0419a",
+    "artifactSha256": "60dc0e19ba2402e776e8739e56348a27753d3427c0fa0bfa503297e244bf3470",
+    "harnessSha256": "a067cc9f8351974d71dab63b51ffd2f7ed5999fbc6bd1a76d28db6a00f974146",
+    "testSourceSha256": "c21273cde2df2cf17f66f803f7ae8c39af94905afcbc8ad3602dc06cfee71495",
+    "brokerTemplateSha256": "5d6ee38300002a2b041badb5ce27f461f634a5b5cd57c9bbb88557423f4e9203",
+    "hostJava": [
+      "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+      "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+    ],
+    "images": {
+      "apache/rocketmq:5.5.0": "sha256:5d03a8947780befd063f0ff37776f82e9f75fc8c8f2b1382f6afac4eb8fab761 arm64",
+      "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64"
+    },
+    "testClassSha256": "81dd2b33e72a499e04980f042642e40180cb3be3a66a4a5241f107c8a8026366",
+    "original": {
+      "liveInSync": [
+        "rocket-replica-b:10911",
+        "rocket-primary:10911",
+        "rocket-replica-a:10911"
+      ],
+      "topicConfigurationReplicas": [
+        "rocket-replica-b:10911",
+        "rocket-primary:10911",
+        "rocket-replica-a:10911"
+      ],
+      "masterId": 1,
+      "master": "rocket-primary:10911",
+      "epoch": 1,
+      "syncStateEpoch": 3,
+      "retained": {
+        "queueOffset": 1,
+        "commitLogOffset": 451,
+        "contentSha256": "2bb30760a840a0188a86baa6a49a5e6a5c140858dd1bc109ae5902d39d15908d"
+      }
+    },
+    "promoted": {
+      "epoch": 2,
+      "topicConfigurationReplicas": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
+      "syncStateEpoch": 5,
+      "master": "rocket-replica-b:10911",
+      "masterId": 2,
+      "liveInSync": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
+      "retained": {
+        "queueOffset": 1,
+        "commitLogOffset": 451,
+        "contentSha256": "2bb30760a840a0188a86baa6a49a5e6a5c140858dd1bc109ae5902d39d15908d"
+      },
+      "appended": {
+        "queueOffset": 2,
+        "commitLogOffset": 906,
+        "contentSha256": "f665cdaecee97bc423d1d691eb92310a5b6146127fac84bbe610e29ec793c2b7"
+      },
+      "adapterOutcome": "CONTROLLER_PROFILE_PUBLISHED"
+    },
+    "minimumRefusal": {
+      "confirmed": {
+        "queueOffset": 2,
+        "commitLogOffset": 906,
+        "contentSha256": "f665cdaecee97bc423d1d691eb92310a5b6146127fac84bbe610e29ec793c2b7"
+      },
+      "status": "PASS"
+    },
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "manifestSha256": "cc2bd3eda3e990214decde979a9f09e4d4de4398a887d8bb955c5b7ff87cd9ef",
+    "engineeringCandidateSha256": "b39eeb6c66d86039f0e530a1cb5c3a7850cbca391a6a811f6b69dad56f994ec9",
+    "javaFocusedPassed": 46,
+    "domPassed": 163,
+    "integrationArtifactSha256": "fba330c1f5306588c86a3bfd2e408a1476306a2c7ea34c062c9c591929334321",
+    "integrationJavaFocusedPassed": 112,
+    "integrationDomPassed": 164,
+    "defaultIdentityUnchanged": {
+      "priorArtifact": "0af9fa94a901e4dbd696ce03382648d7d8bfc587aa285ad31f1626c184508eb",
+      "priorLog": "legacy-fingerprint.log",
+      "candidateLog": "candidate-default-fingerprint.log",
+      "matched": true
+    },
+    "reproduce": "tests/rocketmq/controller-promotion.md"
+  },
+  "originalAgentOfflinePreflight": {
+    "artifactSha256": "84c4f438174bf9ddafaa274f91b58cde2dbeab851e4e521ecb794e2c42103e16",
+    "patchSha256": "4cc72a6016edffcdbccba8d39d7e37f4a12eff78a2598c0a7e69e58a69cbf535",
+    "exactJavaFocusedPassed": 78,
+    "exactDomPassed": 163,
+    "integrationArtifactSha256": "fba330c1f5306588c86a3bfd2e408a1476306a2c7ea34c062c9c591929334321",
+    "integrationSourceTree": "c77774074164d11b746bf7564b51f723a4fae857",
+    "integrationJavaFocusedPassed": 112,
+    "integrationDomPassed": 164,
+    "scope": "Existing Admin handoff receipt and bilingual dialog show recorded STOPPED cut, active configuration/revision match and historical report/receipt inventory during original Agent outage. Preserved read-only behavior, durable seal and execution remain unavailable."
   }
 }

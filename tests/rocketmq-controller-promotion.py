@@ -34,7 +34,7 @@ def sha(path):
     return digest.hexdigest()
 
 
-def render(home, artifact):
+def render(home, artifact, product=False):
     source = dict(line.split("=", 1) for line in TEMPLATE.read_text().splitlines() if line)
     del source["brokerRole"], source["brokerId"]
     source.update(enableControllerMode="true", controllerAddr="rocketnamesrv:9877",
@@ -76,6 +76,8 @@ def render(home, artifact):
                     str(home / "markers") + ":/markers"],
         "entrypoint": ["java", "-Xmx192m", "-XX:ActiveProcessorCount=2", "-cp", "/app.jar:/classes", CLASS, "/markers"],
     }
+    if product:
+        services["tests"]["entrypoint"].append("--product")
     config = home / "compose.json"
     config.write_text(json.dumps(dict(services=services, volumes=volumes)))
     return config
@@ -100,7 +102,7 @@ def acceptance(args, home, report):
     run(args.java_home / "bin/javac", "--release", "21", "-cp", args.artifact, "-d", classes, SOURCE)
     report["testClassSha256"] = sha(classes / (CLASS.replace(".", "/") + ".class"))
     compose = ("docker", "compose", "--env-file", "/dev/null", "-p", report["project"], "-f",
-               str(render(home, args.artifact)))
+               str(render(home, args.artifact, args.product)))
     runner = None
     log = args.output / "sdk.log"
 
@@ -138,10 +140,21 @@ def acceptance(args, home, report):
             assert set(promoted["topicConfigurationReplicas"]) == set(promoted["liveInSync"])
             assert promoted["appended"]["queueOffset"] == original["retained"]["queueOffset"] + 1
             assert promoted["appended"]["commitLogOffset"] > original["retained"]["commitLogOffset"]
-            assert promoted["adapterOutcome"] == "ROCKETMQ_REPLICATION_PROFILE_REQUIRES_PLAN"
-            assert runner.wait(timeout=25) == 0
+            assert promoted["adapterOutcome"] == ("CONTROLLER_PROFILE_PUBLISHED" if args.product
+                                                  else "ROCKETMQ_REPLICATION_PROFILE_REQUIRES_PLAN")
             print("The original surviving replica takes over without operator election and confirms the next position with its follower", flush=True)
-            print("The current Rivomesh adapter refuses Controller mode before and after promotion", flush=True)
+            if args.product:
+                remaining = next(member for member in BROKERS[1:] if member != new_master)
+                run(*compose, "kill", "-s", "SIGKILL", remaining)
+                assert not run(*compose, "ps", "-q", remaining).stdout.strip()
+                (marks / "remaining-follower-killed").touch()
+                refusal = read_cut(marks / "minimum-refused.json", runner, 150)
+                assert refusal == {"status": "PASS", "confirmed": promoted["appended"]}
+                report["minimumRefusal"] = refusal
+                print("The opt-in publisher retains its saved receipt and makes no write with only one live synchronized replica", flush=True)
+            else:
+                print("The current Rivomesh adapter without opt-in refuses Controller mode before and after promotion", flush=True)
+            assert runner.wait(timeout=25) == 0
     finally:
         traces = run(*compose, "logs", "--no-color", "--tail", "90", check=False)
         (args.output / "brokers.log").write_text(traces.stdout + traces.stderr)
@@ -167,6 +180,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for key in ("artifact", "java-home", "output"):
         parser.add_argument("--" + key, required=True, type=lambda value: Path(value).resolve())
+    parser.add_argument("--product", action="store_true", help="Exercise the opt-in Rivomesh publisher through promotion")
     args = parser.parse_args()
     java = run(args.java_home / "bin/java", "-version").stderr
     if not re.search(r'version "21(?:[."]|$)', java) or "Temurin" not in java:
@@ -174,7 +188,8 @@ def main():
     args.output.mkdir(mode=0o700)
     digest = sha(args.artifact)
     report = {
-        "status": "FAIL", "scope": "Broker-native Controller promotion and current Rivomesh adapter refusal",
+        "status": "FAIL", "scope": ("Opt-in publisher through Controller promotion and minimum replica refusal" if args.product
+                                    else "Broker-native Controller promotion and default Rivomesh adapter refusal"),
         "project": "rivomesh-rocketmq-controller-" + secrets.token_hex(5), "artifactSha256": digest,
         "harnessSha256": sha(Path(__file__)), "testSourceSha256": sha(SOURCE), "brokerTemplateSha256": sha(TEMPLATE),
         "hostJava": java.splitlines(),

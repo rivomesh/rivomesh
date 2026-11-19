@@ -240,11 +240,36 @@ Redis references: [WAITAOF same-connection semantics and returned counts](https:
 
 ## RocketMQ native TCP profile
 
-The `ROCKETMQ` publisher is implemented using Java-8-compatible native client 5.5.1 with isolated dependencies. Real native-broker confirmation, client/broker restart, unsafe flush refusal and lost-topic protection passed (`target/rocketmq-transport-cached.log`); mixed snapshot/CDC, worker kill and three broker restart rounds passed (`target/messaging-rocketmq-mixed.log`, 49 executions). Cluster, ACL and TLS support are not claimed. The first profile is a single `ASYNC_MASTER` broker group with **one local synchronous disk copy**, not a synchronous replicated or Raft guarantee. `replicas` must be 1; username/password/token are rejected until an authenticated profile is verified. Use a trusted network for this profile.
+The `ROCKETMQ` publisher is implemented using Java-8-compatible native client 5.5.1 with isolated dependencies. Real native-broker confirmation, client/broker restart, unsafe flush refusal and lost-topic protection passed (`target/rocketmq-transport-cached.log`); mixed snapshot/CDC, worker kill and three broker restart rounds passed (`target/messaging-rocketmq-mixed.log`, 49 executions). The earlier single-broker acceptance leaves ACL and TLS for separate verification. The default profile is a single `ASYNC_MASTER` broker group with **one local synchronous disk copy**, not a synchronous replicated or Raft guarantee. The default profile uses `replicas: 1`. Username, password and token remain reserved for an authenticated profile. Use a trusted network for this profile.
 
 Configure `rocketmq://nameserver:9876`, optional additional NameServers in `messaging.endpoints`, `cluster`, `broker`, `topic` and `minimumRetentionHours`. The URI is a native TCP NameServer, not a 5.x gRPC Proxy. `topic` is a prefix of 1–48 characters (letter first, then letters/digits/underscore/hyphen). The physical topic is `<prefix>_<64-hex task/subscription/generation binding>`. The UI exposes that actual name once the journal generation exists. New generations receive different names; restarting the same generation reuses its name. Reserve these names exclusively for Rivomesh and prohibit external creation, deletion, expansion or writes.
 
-Preparation reads broker configuration and creates exactly one read/write queue on the selected broker group. The broker must have `flushDiskType=SYNC_FLUSH`, `transientStorePoolEnable=false`, `autoCreateTopicEnable=false`, `cleanFileForciblyEnable=false`, and `fileReservedTime >= minimumRetentionHours` (default 87600 hours). DLedger/controller/replicated profiles are rejected. Deploy these durability settings at broker startup; do not change storage mode live. The client sends persistent synchronous messages with waitStoreMsgOK and accepts only `SEND_OK`; disk/slave timeout statuses do not advance the journal checkpoint. Retries can duplicate events with the same stable ID.
+### Opt in to Controller broker promotion
+
+Set `messaging.rocketmqControllerEndpoints` to the trusted native Controller addresses and `messaging.replicas` to `2`. The target URL and additional `messaging.endpoints` continue to be NameServer addresses. In the console's RocketMQ target settings, enter the Controller addresses with ports, separated by commas. The wizard sets the minimum copy count to two. Leaving the field empty uses the original single asynchronous-master profile.
+
+```yaml
+url: rocketmq://rocketnamesrv:9876
+messaging:
+  cluster: BusinessCluster
+  broker: broker-a
+  topic: sales_events
+  replicas: 2
+  rocketmqControllerEndpoints:
+    - rocketmq://rocketnamesrv:9877
+```
+
+Prepare one broker group with exactly three configured data replicas and independent storage. The trusted Controller must use clean election. Before publication, its current master address and replica ID must agree with the NameServer's active route and the live broker settings. Every active SyncStateSet member must be live, and at least two must remain. Use Controller mode with `SYNC_MASTER` on the active broker, `SYNC_FLUSH`, `allAckInSyncStateSet=true`, `minInSyncReplicas=2`, `syncFromLastFile=false` and `asyncLearner=false`. Apply the retention, forced-cleanup and automatic-topic settings below to all replicas. This profile uses the AutoSwitch CommitLog, with DLedger CommitLog disabled. [RocketMQ Controller deployment](https://rocketmq.apache.org/docs/deploymentOperations/03autofailover/)
+
+Each physical topic includes its journal generation. An uninitialized binding can create its topic on the proven active broker. The adapter waits for the exact one-queue configuration to become visible on the safe SyncStateSet before writing the owner or events. An initialized binding always checks retained metadata and its native history. If topic configuration or a safe route is still catching up after promotion, the publisher retries and keeps the last durable confirmation. Fewer than two live synchronized copies prevent publication.
+
+When the confirmed master or term changes, the adapter closes the old SDK connection. It sends synchronously directly to the validated active address, verifies the native message and checks the same Controller and replica view before accepting the receipt. It retains the existing topic generation and `ROCKETMQ_OFFSET_V1` coordinates. A lost or uncertain acknowledgement can still replay an event ID. A confirmed payload mismatch requires investigation before recovery. Conversion between durability profiles requires an explicit migration plan because the Controller profile has its own configuration fingerprint.
+
+The RocketMQ 5.5.0 acceptance used a running embedded Controller and three independent Broker volumes. The production publisher retained queue offset 1 and physical offset 451 through master epoch 1 to 2, confirmed the next event at 2 / 906, and reopened from its native receipt. After the remaining follower stopped, the confirmed receipt and the broker queue tail stayed unchanged. Controller outage, broker-data loss, DLedger CommitLog, TLS, ACL and a full CDC Worker switchover have separate acceptance requirements. Keep NameServer, Controller and broker traffic on the trusted network. [Native fixture and reproduction](../../tests/rocketmq/controller-promotion.md)
+
+### Topic and retention settings
+
+Preparation reads broker configuration and creates exactly one read/write queue on the selected broker group. The broker must have `flushDiskType=SYNC_FLUSH`, `transientStorePoolEnable=false`, `autoCreateTopicEnable=false`, `cleanFileForciblyEnable=false`, and `fileReservedTime >= minimumRetentionHours` (default 87600 hours). The default mode rejects replicated groups. The optional Controller profile requires the live checks above. Deploy these durability settings at broker startup; do not change storage mode live. The client sends persistent synchronous messages with waitStoreMsgOK and accepts only `SEND_OK`; disk/slave timeout statuses do not advance the journal checkpoint. Retries can duplicate events with the same stable ID.
 
 Queue offset 0 contains an ownership manifest identified by user property `rivomesh_publication_manifest`. Consumers must filter this manifest before decoding JSON envelopes. Subsequent messages use the common event envelope and `rivomesh_event_id`, `rivomesh_channel`, `rivomesh_key` properties. All logical tables/control channels share queue 0. Consumers still deduplicate and verify SNAPSHOT_END / COMMIT and row counts; native broker confirmation does not mean application completion.
 
@@ -254,7 +279,7 @@ Run `bash tests/rocketmq-transport-run.sh` for the actual release-JAR/broker tes
 
 A matching manifest alone does not prove retained confirmed history. RocketMQ now also persists and verifies a native confirmation receipt as described below. Other message transports still need their own rollback-detection profiles; do not infer that this protects every broker product.
 
-RocketMQ broker-native promotion is verified. The current adapter refuses Controller mode pending integrated failover acceptance. [Native evidence](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
+RocketMQ broker-native promotion is verified. The original default profile refused Controller mode. The optional profile uses the requirements above. [Native evidence](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
 
 ### RocketMQ native confirmation receipts
 

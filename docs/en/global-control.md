@@ -151,6 +151,8 @@ Offline STOP waits for the original owner. Restore its private directory or volu
 
 The control lease and journal capture lease each have their own native fence. The original Agent registers a new control generation when it reuses its directory, and the Worker acquires a new capture generation on start. Lease expiry alone is insufficient evidence of a drained Worker, complete private recovery evidence or the reviewed cut on both targets. The atomic handoff with control and journal in the same PostgreSQL database still requires current original Agent, source and target proofs and administrator approval. If the original Agent cannot return or the partition persists, keep the existing assignment while you recover that evidence.
 
+For an unreachable original Agent, the handoff receipt shows the last recorded drain cut, original report/receipt custody and whether the review still matches the current task. The offline panel is read-only. A complete independent archive and durable writer freeze are required to make such an outage eligible for future transfer.
+
 ### Asymmetric control-network partition
 
 For a managed writer with control and journal in the same PostgreSQL database, the Agent and its targets can remain reachable while the Agent loses its database path. Both management entries report the shared control lease as `STALE` after it expires. The Worker, run intent and capture lease are `UNKNOWN` while the entries lack a current signed observation.

@@ -148,6 +148,40 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('offline handoff receipt displays historical checks and blockers without adding an action',async()=>{
+  let reads=0;
+  let latest={...reviewed('offline-assessment',false),state:'STALE',originalControlState:'STALE',
+   offlinePreflight:{state:'BLOCKED',authorityMatchesReview:true,historicalDrainedCut:true,historicalReportsAndReceipts:false,
+    blockers:['HANDOFF_OFFLINE_DURABLE_FREEZE_REQUIRED','HANDOFF_OFFLINE_COMPLETE_ARCHIVE_REQUIRED',
+     'HANDOFF_OFFLINE_REPORT_RECEIPT_CUSTODY_UNRECORDED']}};
+  delete latest.preparationEvidenceSha256;
+  const ui=fixture({read:()=>{reads++;return reply(latest);},
+   readPreparation:()=>reply(preparation('offline-reservation','offline-assessment')),
+   taskState:{formatVersion:undefined,statusAvailable:false,ownerControlState:'STALE',
+    workerState:'UNKNOWN',desired:'UNKNOWN',captureLeaseState:'UNKNOWN'}});
+  const preflight=()=>receipt(ui).querySelector('[data-handoff-offline-preflight]');
+  try{
+   await open(ui);
+   assert.equal(reads,1);assert.equal(receipt(ui).hidden,false);
+   assert.equal(ui.d.getElementById(preflight().getAttribute('aria-labelledby')).textContent,'离线接管预检');
+   assert.match(preflight().textContent,/离线接管受阻.*任务与已审查配置匹配.*历史排空切点已记录.*历史报告和结案回执未记录/s);
+   assert.match(preflight().textContent,/缺少已持久化的原写入者冻结证明.*缺少可独立访问的完整恢复归档/s);
+   assert.equal(preflight().querySelectorAll('button,input,select,a').length,0);
+   assert.deepEqual([...dialog(ui).querySelectorAll('button')].filter(b=>!b.closest('[hidden]')).map(b=>b.textContent),
+    ['关闭','刷新交接状态']);
+   ui.d.getElementById('language').click();
+   assert.match(preflight().textContent,/Offline handoff blocked.*Historical drained checkpointRecorded.*Historical reports and closed receiptsMissing/s);
+   assert.match(preflight().textContent,/A durable freeze for the original writer is missing/);
+   latest={...latest,offlinePreflight:{...latest.offlinePreflight,historicalDrainedCut:'true'}};
+   button(ui,'reload').click();await flush();
+   assert.equal(reads,2);assert.equal(preflight(),null);
+   assert.match(receipt(ui).textContent,/Assessment receipt/);
+   assert.equal(ui.requests.length+ui.probes.length+ui.reserves.length+ui.releases.length+ui.stages.length+
+    ui.fences.length+ui.starts.length+ui.commits.length,0);
+   assert.equal(ui.task.ownerNodeId,'original-agent');assert.equal(ui.task.revision,revision);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff verifies bound evidence, reviews reservation impact, reserves capacity and releases the original task',async()=>{
   let latest={...snapshot('fresh-assessment'),originalCut:{checkpointHash:'7'.repeat(64)}};
   let planned,checks=0;

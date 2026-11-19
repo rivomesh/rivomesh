@@ -25,6 +25,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
   - [x] An asymmetric same-store partition fences the former Worker. The original process reconnects, completes queued STOP and explicitly restarts with both former generations rejected.
   - [x] An in-flight target row lock rolls back after fencing. Explicit resume fills the PostgreSQL delivery once and preserves the MySQL receipt.
   - [x] Both SQL targets pass committed-but-unacknowledged recovery with the original Agent and PostgreSQL journal, 15 native checks per case.
+  - [x] The offline handoff dialog reports historical cut, reports and receipt custody, plus missing freeze and archive evidence.
   - [ ] Permanent original Agent loss, split-store fencing and broader drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
@@ -178,7 +179,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Pulsar two-broker private TLS and Token with a native ZooKeeper leader election and fresh metadata commit.
   - [x] Native Artemis shared-store backup activated after primary SIGKILL. The stable endpoint reused the receipt and broker/queue identity.
   - [x] ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive.
-  - [x] RocketMQ 5.5.0 broker-native promotion preserves original offsets and independently verified topic configuration. Adapter integration remains in progress.
+  - [x] RocketMQ 5.5.0 opt-in publisher passed native receipt reuse, actual promotion and unchanged progress below two synchronized replicas.
   - [ ] Cross-host failure domains, internal network cryptography, capacity and remaining messaging profiles.
 - [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.

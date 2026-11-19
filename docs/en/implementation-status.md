@@ -46,7 +46,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Transaction compensation | Administrator review and approval for PostgreSQL and MySQL with atomic target receipts and original transaction replay. See the [operator guide](transaction-compensation.md) |
 | Relational targets | MySQL, PostgreSQL and openGauss have native profiles. DM, Kingbase, GBase8c and OceanBase MySQL mode have bounded native transaction and mixed restart profiles. Distributed GaussDB and other vendor modes remain open. |
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
-| Messaging | Eight broker profiles use confirmed at-least-once delivery. Native profiles include Kafka signed receipt readback, ActiveMQ Classic and Artemis shared-store failover, NATS TLS/quorum, RabbitMQ quorum and externally promoted Redis Streams. [Messaging guide](messaging-v3.md) |
+| Messaging | Eight broker profiles use confirmed at-least-once delivery. Native profiles include Kafka signed receipt readback, ActiveMQ Classic and Artemis shared-store failover, NATS TLS/quorum, RabbitMQ quorum and externally promoted Redis Streams. RocketMQ 5.5.0 opt-in publisher failover passed with three data replicas and a minimum of two synchronized replicas. [Messaging guide](messaging-v3.md) |
 | Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
 | Java | Eclipse Temurin 21 LTS is the sole supported build and runtime. Connector, deployment and security protocol acceptance uses the exact Java 21 candidate. |
 

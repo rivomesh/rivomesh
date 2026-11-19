@@ -107,6 +107,42 @@ class PipelineConfigTest {
         target.messaging.adminUrl="http://broker:8080";
         assertEquals("PULSAR_TLS_TRUST_CONFIG_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
     }
+
+    @Test void rocketControllerIsOptInAndItsDurabilityClassCannotBeEditedIntoAnEstablishedTask()throws Exception{
+        PipelineConfig config=config();
+        PipelineConfig.Target rocket=config.targets.get(0);
+        rocket.product=TargetProduct.ROCKETMQ;
+        rocket.url="rocketmq://nameserver:9876";
+        rocket.username=null;
+        rocket.messaging=new PipelineConfig.Messaging();
+        rocket.messaging.topic="sales";
+        rocket.messaging.cluster="business";
+        rocket.messaging.broker="broker-a";
+        config.validate();
+        String standalone=config.fingerprint();
+        rocket.messaging.rocketmqControllerEndpoints=java.util.List.of("rocketmq://controller-1:9877");
+        assertEquals("ROCKETMQ_PROFILE_REQUIRES_PLAN",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        rocket.messaging.replicas=2;
+        config.validate();
+        String controller=config.fingerprint();
+        assertNotEquals(standalone,controller);
+        rocket.messaging.rocketmqControllerEndpoints=java.util.List.of("rocketmq://controller-2:9877","rocketmq://controller-3:9877");
+        config.validate();
+        assertEquals(controller,config.fingerprint(),"Endpoint rotation retains the same attested durability class");
+        for(String endpoint:java.util.List.of("http://controller-1:9877","rocketmq://user@controller:9877",
+                "rocketmq://controller","rocketmq://controller:0","rocketmq://controller:9877/path",
+                "rocketmq://controller:9877?redirect=other","rocketmq://controller:9877#fragment")){
+            rocket.messaging.rocketmqControllerEndpoints=java.util.List.of(endpoint);
+            assertEquals("ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        }
+        rocket.messaging.rocketmqControllerEndpoints=java.util.List.of("rocketmq://controller:9877","rocketmq://controller:9877");
+        assertEquals("ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID",assertThrows(IllegalArgumentException.class,config::validate).getMessage());
+        rocket.messaging.rocketmqControllerEndpoints=null;
+        rocket.messaging.replicas=1;
+        config.validate();
+        assertEquals(standalone,config.fingerprint());
+    }
+
     @Test void rocketUsesGenerationBoundNamesAndRejectsUnverifiedDurabilityAndCredentials(){
         PipelineConfig c=config();PipelineConfig.Target t=c.targets.get(0);t.product=TargetProduct.ROCKETMQ;t.url="rocketmq://nameserver:9876";t.username=null;t.messaging=new PipelineConfig.Messaging();t.messaging.topic="sales";t.messaging.cluster="business";t.messaging.broker="broker-a";c.validate();String original=c.fingerprint();t.messaging.endpoints.add("rocketmq://standby:9876");t.messaging.connectTimeoutMillis=8000;assertEquals(original,c.fingerprint());t.messaging.minimumRetentionHours++;assertNotEquals(original,c.fingerprint());t.messaging.minimumRetentionHours--;t.messaging.broker="broker-b";assertNotEquals(original,c.fingerprint());t.messaging.replicas=2;assertThrows(IllegalArgumentException.class,c::validate);t.messaging.replicas=1;t.password="unsupported-secret";assertThrows(IllegalArgumentException.class,c::validate);t.password=null;t.url="rocketmq://nameserver:9876/path";assertThrows(IllegalArgumentException.class,c::validate);
         String first=MessagePublishers.binding(c.pipelineId,t.id,"first"),second=MessagePublishers.binding(c.pipelineId,t.id,"second");assertNotEquals(io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first),io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",second));assertEquals(io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first),io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic("sales",first));

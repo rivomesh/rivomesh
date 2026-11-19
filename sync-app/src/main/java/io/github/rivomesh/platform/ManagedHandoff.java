@@ -19,9 +19,16 @@ final class ManagedHandoff {
     }
     private record OriginalCut(String leaseState,String journalEpoch,String sequence,String checkpointHash){}
     private record ProbeResult(long checkedAt,Map<String,Object> candidate,Map<String,Object> originalEvidence,
-                               Map<String,Object> sharedReportCustody,
+                               Object sharedReportCustody,
                                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                               Map<String,Object> sharedRawCaptureCustody){}
+                               Object sharedRawCaptureCustody){
+        Map<?,?> reportCustody(){return sharedReportCustody instanceof Map<?,?> custody?custody:null;}
+        Map<?,?> rawCustody(){return sharedRawCaptureCustody instanceof Map<?,?> custody?custody:null;}
+        void requireCustodyShape(){
+            if(sharedReportCustody!=null&&reportCustody()==null||sharedRawCaptureCustody!=null&&rawCustody()==null)
+                throw new TaskService.Conflict("HANDOFF_ARCHIVE_DESCRIPTOR_INVALID");
+        }
+    }
     record ProbeRoute(String revision,String activeVersion,AgentDirectory.Binding original,AgentDirectory.Binding candidate,
                       JournalWriterAssignment.ExpectedCut cut){}
     record StageRoute(HandoffStaging.Binding binding,AgentDirectory.Binding candidate,HandoffPreparations.Plan plan,
@@ -100,7 +107,7 @@ final class ManagedHandoff {
                     Agent.of(original),Agent.of(candidate.binding()),candidate.taskSlots(),candidate.workerSlots(),
                     candidate.assignedTasks(),actor.id,actor.authorizationRevision,assessedAt,originalCut,List.copyOf(blockers),null);
             save(c,next,prior==null,actor,"MANAGED_HANDOFF_ASSESSED");
-            return summary(next,false,assessedAt,views.ownerControlState(c,original.node));
+            return summary(task,next,false,assessedAt,views.ownerControlState(c,original.node));
         });
     }
 
@@ -130,7 +137,7 @@ final class ManagedHandoff {
             Assessment proved=new Assessment(a.version,a.task,a.request,a.replaces,a.revision,a.activeVersion,a.original,
                     a.candidate,a.taskSlots,a.workerSlots,a.assigned,a.actor,a.actorRevision,a.assessedAt,a.originalCut,a.blockers,result);
             save(c,proved,false,current,"MANAGED_HANDOFF_PROBED");
-            return summary(proved,false,now,views.ownerControlState(c,proved.original.node));
+            return summary(task,proved,false,now,views.ownerControlState(c,proved.original.node));
         });
     }
 
@@ -230,7 +237,7 @@ final class ManagedHandoff {
             requireCandidateReadiness(plan,actor,assessment,db.now(c));
             HandoffPreparations.requireExecution(plan,request.requestId);
         }
-        Map<String,Object> custody=assessment.probe.sharedReportCustody;
+        Map<?,?> custody=assessment.probe.reportCustody();
         SharedHandoffEvidence.Archive archive=custody==null?null:
                 Model.JSON.convertValue(custody.get("archive"),SharedHandoffEvidence.Archive.class);
         if(archive==null||!"VERIFIED".equals(custody.get("state"))||!evidence.custody().equals(archive.sha256()))
@@ -248,7 +255,7 @@ final class ManagedHandoff {
     private static RawCaptureHandoffStaging.Binding rawCaptureStage(Assessment assessment,HandoffPreparations.Plan plan,
                                                                    SharedHandoffEvidence.Scope scope){
         Object witness=assessment.probe.originalEvidence.get("rawCaptureEvidence");
-        Map<String,Object> candidate=assessment.probe.sharedRawCaptureCustody;
+        Map<?,?> candidate=assessment.probe.rawCustody();
         if(!(witness instanceof Map<?,?> original)||!"ARCHIVED".equals(original.get("state"))
                 ||candidate==null||!"VERIFIED".equals(candidate.get("state")))return null;
         var published=Model.JSON.convertValue(original.get("archive"),SharedHandoffEvidence.Archive.class);
@@ -400,7 +407,7 @@ final class ManagedHandoff {
 
     private static int verifiedFailureRecords(Assessment assessment,HandoffPreparations.Plan plan){
         Object original=assessment.probe.originalEvidence.get("historicalFailureEvidence");
-        Map<String,Object> candidate=assessment.probe.sharedReportCustody;
+        Map<?,?> candidate=assessment.probe.reportCustody();
         if(!(original instanceof Map<?,?> witnessed)||!"ARCHIVED".equals(witnessed.get("state"))
                 ||candidate==null||!"VERIFIED".equals(candidate.get("state")))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
@@ -547,22 +554,32 @@ final class ManagedHandoff {
         return a.probe!=null&&a.probe.checkedAt>=now-freshness&&a.probe.checkedAt<=now;
     }
     private HandoffPreparations.Evidence preparationEvidence(Assessment a,long now)throws Exception{
-        if(!probeFresh(a,now)||a.originalCut==null||!"VERIFIED".equals(a.probe.candidate.get("state"))
-                ||!(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> originalReceipts)
-                ||!"ARCHIVED".equals(originalReceipts.get("state"))||a.probe.sharedReportCustody==null
-                ||!"VERIFIED".equals(a.probe.sharedReportCustody.get("state")))return null;
-        SharedHandoffEvidence.Archive receipt=Model.JSON.convertValue(originalReceipts.get("archive"),SharedHandoffEvidence.Archive.class);
-        SharedHandoffEvidence.Archive candidate=Model.JSON.convertValue(a.probe.sharedReportCustody.get("archive"),SharedHandoffEvidence.Archive.class);
-        if(receipt==null||!receipt.equals(candidate)||candidate.closedReceipts()==0)return null;
-        if(!(a.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory))return null;
-        if(!"ABSENT".equals(inventory.get("validationReports"))&&!("PRESENT".equals(inventory.get("validationReports"))&&candidate.reports()>0))
-            return null;
+        if(!probeFresh(a,now)||a.originalCut==null||a.probe.candidate==null
+                ||!"VERIFIED".equals(a.probe.candidate.get("state")))return null;
+        a.probe.requireCustodyShape();
+        var custody=reviewedReportReceiptCustody(a);
+        if(custody==null)return null;
         String proof=AuditStore.hash(Model.JSON.writeValueAsString(a));
         return new HandoffPreparations.Evidence(a.request,a.revision,a.activeVersion,
                 new HandoffPreparations.Binding(a.original.node,a.original.directory,a.original.incarnation,a.original.epoch),
                 new HandoffPreparations.Binding(a.candidate.node,a.candidate.directory,a.candidate.incarnation,a.candidate.epoch),
                 new HandoffPreparations.JournalCut(a.originalCut.journalEpoch,a.originalCut.sequence,a.originalCut.checkpointHash),
-                proof,candidate.sha256());
+                proof,custody.sha256());
+    }
+
+    private static SharedHandoffEvidence.Archive reviewedReportReceiptCustody(Assessment a){
+        if(a.probe==null||a.probe.originalEvidence==null
+                ||!(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> originalReceipts)
+                ||!"ARCHIVED".equals(originalReceipts.get("state")))return null;
+        Map<?,?> shared=a.probe.reportCustody();
+        if(shared==null||!"VERIFIED".equals(shared.get("state")))return null;
+        SharedHandoffEvidence.Archive receipt=Model.JSON.convertValue(originalReceipts.get("archive"),SharedHandoffEvidence.Archive.class);
+        SharedHandoffEvidence.Archive candidate=Model.JSON.convertValue(shared.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(receipt==null||!receipt.equals(candidate)||candidate.closedReceipts()==0)return null;
+        if(!(a.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory))return null;
+        if(!"ABSENT".equals(inventory.get("validationReports"))&&!("PRESENT".equals(inventory.get("validationReports"))&&candidate.reports()>0))
+            return null;
+        return candidate;
     }
 
     private static void requireGrants(AccessControl.Principal actor,String original,String candidate){
@@ -586,7 +603,7 @@ final class ManagedHandoff {
     }
 
     private Map<String,Object> view(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
-        return summary(a,stale(c,task,actor,a),db.now(c),views.ownerControlState(c,a.original.node));
+        return summary(task,a,stale(c,task,actor,a),db.now(c),views.ownerControlState(c,a.original.node));
     }
     private boolean stale(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
         boolean stale=!task.revision.equals(a.revision)||!Objects.equals(task.activeConfigurationVersion,a.activeVersion)
@@ -607,7 +624,8 @@ final class ManagedHandoff {
         return stale;
     }
 
-    private Map<String,Object> summary(Assessment a,boolean stale,long now,String originalControlState)throws Exception{
+    private Map<String,Object> summary(GlobalTaskStore.Record task,Assessment a,boolean stale,long now,
+                                       String originalControlState)throws Exception{
         Map<String,Object> result=new LinkedHashMap<>();
         result.put("id",a.request);result.put("taskId",a.task);result.put("taskRevision",a.revision);
         result.put("activeConfigurationVersion",a.activeVersion);
@@ -622,24 +640,71 @@ final class ManagedHandoff {
         List<String> blockers=new ArrayList<>(a.blockers);
         if(a.probe!=null){
             boolean applicable=!stale&&probeFresh(a,now);
-            if(applicable&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
-            Map<String,Object> probe=new LinkedHashMap<>(Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
-                    "current",applicable,"candidate",a.probe.candidate,"originalEvidence",a.probe.originalEvidence));
-            if(a.probe.sharedReportCustody!=null){
-                if(a.probe.originalEvidence.get("shareableReports") instanceof Map<?,?> reports&&"ARCHIVED".equals(reports.get("state")))
-                    probe.put("sharedReportCustody",a.probe.sharedReportCustody);
-                if(a.probe.originalEvidence.get("closedReceipts") instanceof Map<?,?> receipts&&"ARCHIVED".equals(receipts.get("state")))
-                    probe.put("sharedReceiptCustody",a.probe.sharedReportCustody);
-                if(a.probe.originalEvidence.get("historicalFailureEvidence") instanceof Map<?,?> failures&&"ARCHIVED".equals(failures.get("state")))
-                    probe.put("sharedFailureEvidenceCustody",a.probe.sharedReportCustody);
+            if(applicable&&a.probe.candidate!=null&&"VERIFIED".equals(a.probe.candidate.get("state")))blockers.remove(CANDIDATE_ACCESS);
+            Map<String,Object> original=a.probe.originalEvidence==null?Map.of():a.probe.originalEvidence;
+            if(!applicable){
+                original=new LinkedHashMap<>(original);
+                for(String name:List.of("shareableReports","closedReceipts","historicalFailureEvidence","rawCaptureEvidence")){
+                    var retained=historicalCustody(original.get(name),"ARCHIVED");
+                    if(retained==null)original.remove(name);else original.put(name,retained);
+                }
             }
-            if(a.probe.sharedRawCaptureCustody!=null)probe.put("sharedRawCaptureCustody",a.probe.sharedRawCaptureCustody);
+            Map<String,Object> probe=new LinkedHashMap<>(Map.of("checkedAt",Instant.ofEpochMilli(a.probe.checkedAt).toString(),
+                    "current",applicable,"candidate",a.probe.candidate==null?Map.of():a.probe.candidate,"originalEvidence",original));
+            Map<?,?> sharedReports=applicable?a.probe.reportCustody():historicalCustody(a.probe.sharedReportCustody,"VERIFIED");
+            if(visibleCustody(original.get("shareableReports"),sharedReports,applicable))
+                probe.put("sharedReportCustody",sharedReports);
+            if(visibleCustody(original.get("closedReceipts"),sharedReports,applicable))
+                probe.put("sharedReceiptCustody",sharedReports);
+            if(visibleCustody(original.get("historicalFailureEvidence"),sharedReports,applicable))
+                probe.put("sharedFailureEvidenceCustody",sharedReports);
+            Map<?,?> sharedRaw=applicable?a.probe.rawCustody():historicalCustody(a.probe.sharedRawCaptureCustody,"VERIFIED");
+            if(sharedRaw!=null&&(applicable||visibleCustody(original.get("rawCaptureEvidence"),sharedRaw,false)))
+                probe.put("sharedRawCaptureCustody",sharedRaw);
             result.put("probe",probe);
             HandoffPreparations.Evidence prepared=applicable?preparationEvidence(a,now):null;
             if(prepared!=null)result.put("preparationEvidenceSha256",prepared.proof());
         }
         result.put("blockers",blockers);result.put("executionAuthorized",false);
+        if(task.owner.equals(a.original.node)&&Set.of("STALE","STOPPED","UNKNOWN").contains(originalControlState))
+            result.put("offlinePreflight",offlinePreflight(task,a));
         return result;
+    }
+
+    private Map<String,Object> offlinePreflight(GlobalTaskStore.Record task,Assessment a)throws Exception{
+        boolean currentAuthority=task.directory.equals(a.original.directory)&&task.revision.equals(a.revision)
+                &&Objects.equals(task.activeConfigurationVersion,a.activeVersion)
+                &&Objects.equals(task.configurationVersion,a.activeVersion);
+        boolean historicalCut=a.originalCut!=null&&a.blockers.stream()
+                .noneMatch(code->code.startsWith("ORIGINAL_")&&!code.equals(RECOVERY_EVIDENCE));
+        boolean historicalCustody;
+        try{historicalCustody=reviewedReportReceiptCustody(a)!=null;}
+        catch(IllegalArgumentException malformed){historicalCustody=false;}
+        List<String> blockers=new ArrayList<>(List.of("HANDOFF_OFFLINE_DURABLE_FREEZE_REQUIRED",
+                "HANDOFF_OFFLINE_COMPLETE_ARCHIVE_REQUIRED"));
+        if(!currentAuthority)blockers.add("HANDOFF_OFFLINE_REVIEW_CHANGED");
+        if(!historicalCut)blockers.add("HANDOFF_OFFLINE_STOPPED_CUT_UNRECORDED");
+        if(!historicalCustody)blockers.add("HANDOFF_OFFLINE_REPORT_RECEIPT_CUSTODY_UNRECORDED");
+        return Map.of("state","BLOCKED","authorityMatchesReview",currentAuthority,"historicalDrainedCut",historicalCut,
+                "historicalReportsAndReceipts",historicalCustody,"blockers",List.copyOf(blockers));
+    }
+
+    private static boolean visibleCustody(Object witness,Map<?,?> shared,boolean current){
+        return shared!=null&&witness instanceof Map<?,?> original&&"ARCHIVED".equals(original.get("state"))
+                &&(current||"REFUSED".equals(shared.get("state"))||Objects.equals(original.get("archive"),shared.get("archive")));
+    }
+
+    private static Map<?,?> historicalCustody(Object stored,String acceptedState){
+        if(!(stored instanceof Map<?,?> custody))return null;
+        Object state=custody.get("state");
+        if("REFUSED".equals(state))
+            return custody.get("code") instanceof String code&&code.matches("[A-Z][A-Z0-9_]{2,119}")
+                    ?Map.of("state","REFUSED","code",code):null;
+        if(!acceptedState.equals(state))return null;
+        try{
+            var archive=Model.JSON.convertValue(custody.get("archive"),SharedHandoffEvidence.Archive.class);
+            return archive==null?null:Map.of("state",state,"archive",archive);
+        }catch(IllegalArgumentException malformed){return null;}
     }
 
     private static boolean supported(String yaml)throws Exception{

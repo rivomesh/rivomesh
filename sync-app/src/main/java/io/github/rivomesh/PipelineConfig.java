@@ -65,6 +65,8 @@ public final class PipelineConfig {
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public String tlsTrustCertsFilePath;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public List<String> rocketmqControllerEndpoints;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public KafkaNotice recoveryNotice;
     }
     public static final class KafkaNotice {
@@ -168,7 +170,20 @@ public final class PipelineConfig {
         }
         if(target.product==TargetProduct.ROCKETMQ){
             if(m.topic==null||!m.topic.matches("[A-Za-z][A-Za-z0-9_-]{0,47}")||m.cluster==null||!m.cluster.matches("[A-Za-z0-9_-]{1,127}")||m.broker==null||!m.broker.matches("[A-Za-z0-9_-]{1,127}")||m.minimumRetentionHours<1)throw new IllegalArgumentException("ROCKETMQ_TOPIC_CLUSTER_BROKER_REQUIRED");
-            if(m.replicas!=1||target.username!=null&&!target.username.isEmpty()||target.password!=null&&!target.password.isEmpty()||m.token!=null&&!m.token.isEmpty())throw new IllegalArgumentException("ROCKETMQ_PROFILE_REQUIRES_PLAN");
+            int requiredReplicas=m.rocketmqControllerEndpoints==null?1:2;
+            if(m.replicas!=requiredReplicas||target.username!=null&&!target.username.isEmpty()
+                    ||target.password!=null&&!target.password.isEmpty()||m.token!=null&&!m.token.isEmpty())
+                throw new IllegalArgumentException("ROCKETMQ_PROFILE_REQUIRES_PLAN");
+        }
+        if(m.rocketmqControllerEndpoints!=null){
+            if(target.product!=TargetProduct.ROCKETMQ||m.rocketmqControllerEndpoints.isEmpty()
+                    ||m.rocketmqControllerEndpoints.size()>5)
+                throw new IllegalArgumentException("ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID");
+            Set<String> nativeAddresses=new HashSet<>();
+            for(String endpoint:m.rocketmqControllerEndpoints){
+                if(!nativeAddresses.add(rocketmqControllerAddress(endpoint)))
+                    throw new IllegalArgumentException("ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID");
+            }
         }
         if(m.tlsTrustCertsFilePath!=null){
             try{
@@ -187,6 +202,20 @@ public final class PipelineConfig {
             if(m.topic==null||!m.topic.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,248}")||m.topic.equals(".")||m.topic.equals(".."))throw new IllegalArgumentException("KAFKA_TOPIC_REQUIRED");
             if(!Arrays.asList("PLAINTEXT","SSL","SASL_PLAINTEXT","SASL_SSL").contains(m.securityProtocol)||!Arrays.asList("PLAIN","SCRAM-SHA-256","SCRAM-SHA-512").contains(m.saslMechanism))throw new IllegalArgumentException("KAFKA_SECURITY_INVALID");
             if(m.securityProtocol.startsWith("SASL_")&&(target.username==null||target.username.isEmpty()||target.password==null))throw new IllegalArgumentException("KAFKA_CREDENTIALS_REQUIRED");
+        }
+    }
+    public static String rocketmqControllerAddress(String endpoint){
+        try{
+            if(endpoint==null||endpoint.length()>384)throw new IllegalArgumentException();
+            java.net.URI uri=java.net.URI.create(endpoint);
+            if(!"rocketmq".equals(uri.getScheme())||uri.getHost()==null||uri.getRawUserInfo()!=null
+                    ||!uri.getRawPath().isEmpty()||uri.getRawQuery()!=null||uri.getRawFragment()!=null
+                    ||uri.getPort()<1||uri.getPort()>65535)throw new IllegalArgumentException();
+            String host=uri.getHost();
+            if(host.indexOf(':')>=0&&!host.startsWith("["))host="["+host+"]";
+            return host+":"+uri.getPort();
+        }catch(IllegalArgumentException invalid){
+            throw new IllegalArgumentException("ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID");
         }
     }
     public Config legacy(){Config c=new Config();c.jobId=pipelineId;c.nodeId=nodeId;c.source=Codec.decode(Codec.encode(source),Config.Source.class);c.source.database=databases.isEmpty()?null:databases.get(0);c.chunkSize=chunkSize;c.maxTransactionRows=maxTransactionRows;c.leaseMillis=leaseMillis;c.heartbeatMillis=heartbeatMillis;c.pollIntervalMillis=pollIntervalMillis;c.retryDelayMillis=retryDelayMillis;c.maxRetryDelayMillis=Math.max(60000,retryDelayMillis);c.target.type="POSTGRESQL";c.target.url="jdbc:postgresql://unused/unused";c.target.username="unused";c.target.schema="unused";return c;}
@@ -228,7 +257,7 @@ public final class PipelineConfig {
             identity.put("sourceTables",new TreeSet<>(source.oracle.tables));
             if(source.oracle.allowVirtualNumericColumns)identity.put("oracleVirtualNumericColumns",true);
         }
-        Map<String,Object> outputs=new TreeMap<>();for(Target t:targets){Map<String,Object> output=new TreeMap<>();output.put("product",t.product);output.put("url",t.url);output.put("metadataSchema",t.metadataSchema);output.put("mappings",new TreeMap<>(t.mappings));output.put("uniquePolicy",t.uniquePolicy);if(t.product==TargetProduct.DM)output.put("storageProfile","DM_LOSSLESS_V1");if(t.product==TargetProduct.HIVE)output.put("materializationProfile","HIVE_ACID_HISTORY_V1");if(t.product==TargetProduct.DORIS){output.put("materializationProfile","DORIS_MOW_SEQUENCE_V1");output.put("secondaryIndexes",t.doris.secondaryIndexes);output.put("replicas",t.doris.replicas);output.put("buckets",t.doris.buckets);}if(t.product==TargetProduct.CLICKHOUSE){output.put("materializationProfile","CLICKHOUSE_REPLACING_V1");if(t.clickhouse!=null&&t.clickhouse.secondaryIndexes==ClickHouseIndexPlan.Mode.DATA_SKIPPING)output.put("secondaryIndexes","DATA_SKIPPING_V1");}if(t.product!=null&&t.product.messaging()){Map<String,Object> messaging=new TreeMap<>();messaging.put("stream",t.messaging.stream);messaging.put("queueType",t.messaging.queueType);if(t.product==TargetProduct.KAFKA)messaging.put("topic",t.messaging.topic);if(t.product==TargetProduct.REDIS_STREAMS||t.product==TargetProduct.PULSAR)messaging.put("replicas",t.messaging.replicas);if(t.product==TargetProduct.PULSAR){messaging.put("topic",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);}if(t.product==TargetProduct.ROCKETMQ){messaging.put("topicPrefix",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);messaging.put("broker",t.messaging.broker);messaging.put("minimumRetentionHours",t.messaging.minimumRetentionHours);}if(t.product==TargetProduct.ACTIVEMQ_CLASSIC){messaging.put("queuePrefix",t.messaging.stream);messaging.put("broker",t.messaging.broker);messaging.put("profile","CLASSIC_LOCAL_TX_V1");}if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS){messaging.put("broker",t.messaging.broker==null||t.messaging.broker.isEmpty()?null:t.messaging.broker);messaging.put("replicas",t.messaging.replicas);}output.put("messaging",messaging);}outputs.put(t.id,output);}identity.put("targets",outputs);return Codec.sha256(Codec.encode(identity));
+        Map<String,Object> outputs=new TreeMap<>();for(Target t:targets){Map<String,Object> output=new TreeMap<>();output.put("product",t.product);output.put("url",t.url);output.put("metadataSchema",t.metadataSchema);output.put("mappings",new TreeMap<>(t.mappings));output.put("uniquePolicy",t.uniquePolicy);if(t.product==TargetProduct.DM)output.put("storageProfile","DM_LOSSLESS_V1");if(t.product==TargetProduct.HIVE)output.put("materializationProfile","HIVE_ACID_HISTORY_V1");if(t.product==TargetProduct.DORIS){output.put("materializationProfile","DORIS_MOW_SEQUENCE_V1");output.put("secondaryIndexes",t.doris.secondaryIndexes);output.put("replicas",t.doris.replicas);output.put("buckets",t.doris.buckets);}if(t.product==TargetProduct.CLICKHOUSE){output.put("materializationProfile","CLICKHOUSE_REPLACING_V1");if(t.clickhouse!=null&&t.clickhouse.secondaryIndexes==ClickHouseIndexPlan.Mode.DATA_SKIPPING)output.put("secondaryIndexes","DATA_SKIPPING_V1");}if(t.product!=null&&t.product.messaging()){Map<String,Object> messaging=new TreeMap<>();messaging.put("stream",t.messaging.stream);messaging.put("queueType",t.messaging.queueType);if(t.product==TargetProduct.KAFKA)messaging.put("topic",t.messaging.topic);if(t.product==TargetProduct.REDIS_STREAMS||t.product==TargetProduct.PULSAR)messaging.put("replicas",t.messaging.replicas);if(t.product==TargetProduct.PULSAR){messaging.put("topic",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);}if(t.product==TargetProduct.ROCKETMQ){messaging.put("topicPrefix",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);messaging.put("broker",t.messaging.broker);messaging.put("minimumRetentionHours",t.messaging.minimumRetentionHours);if(t.messaging.rocketmqControllerEndpoints!=null)messaging.put("replicationProfile","ROCKETMQ_CONTROLLER_SYNC_V1");}if(t.product==TargetProduct.ACTIVEMQ_CLASSIC){messaging.put("queuePrefix",t.messaging.stream);messaging.put("broker",t.messaging.broker);messaging.put("profile","CLASSIC_LOCAL_TX_V1");}if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS){messaging.put("broker",t.messaging.broker==null||t.messaging.broker.isEmpty()?null:t.messaging.broker);messaging.put("replicas",t.messaging.replicas);}output.put("messaging",messaging);}outputs.put(t.id,output);}identity.put("targets",outputs);return Codec.sha256(Codec.encode(identity));
     }
     public List<String> subscribers(){List<String> ids=new ArrayList<>();for(Target target:targets)ids.add(target.id);return ids;}
     public Path localDirectory(){return localPath();}
