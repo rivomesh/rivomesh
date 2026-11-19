@@ -90,7 +90,7 @@ Run `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh` after compiling t
 
 Supply the PostgreSQL JDBC driver separately to run the Java 21 pipeline against HiveServer2 4.0.1, a standalone Hive Metastore and a dedicated PostgreSQL 17.12 catalog. The stock Hive schema tool initializes and validates the disposable catalog. The port probe waits for HiveServer2 to accept connections and Rivomesh then runs its normal JDBC checks.
 
-The native run passed the snapshot and CDC phases. It stopped HiveServer2, Metastore and the catalog while the separate PostgreSQL business destination continued writing. After restart, the PostgreSQL system identifier, Hive metadata table ID, owner, resource UUID and warehouse location matched the original values. Hive caught up and returned both the original and the next batch receipt. The host went to sleep during the Worker-restart phase and that assertion timed out. Worker restart and SQL error recovery still need a full run in this external Metastore profile.
+The completed native run passed seven checks. HiveServer2, Metastore and the catalog stopped together while the separate PostgreSQL business destination advanced. After restart, the PostgreSQL system identifier, Hive table ID, resource UUID, owner and warehouse location matched the original catalog. Worker SIGKILL resumed the original snapshot and four Hive batch receipts remained tied to the same resource. Replaying an independent PostgreSQL constraint error preserved the Hive receipts. [Verification record](../verification/README.md#hive-external-postgresql-metastore-full-restart-and-recovery)
 
 ```sh
 RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh --postgres-metastore /path/to/postgresql-42.7.14.jar

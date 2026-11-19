@@ -80,7 +80,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 |---|---|---|---|
 | LG-01 | P1 / PARTIAL | 国产事务库兼容矩阵 | OceanBase CE 4.3.5.6 MySQL 租户已通过原生事务和联合重启恢复。分布式 GaussDB、OceanBase Oracle 模式及 GBase 8a/8s 待验收。 |
 | LG-02 | P1 / DONE | 非空接管、约束恢复、切换回切 | 限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。更广产品及写后逆向迁移分别跟踪。 |
-| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse 已有实库档案。Java 21 实测 Doris 4.1.3 和 Hive 4.0.1 停机追平、原回执保留和 PostgreSQL 对照故障重放。Hive 外置 Metastore、分布式存储及其他生产集群、TLS、容量待验。 |
+| LG-03 | P1 / PARTIAL | ClickHouse/Doris/Hive生产档案 | ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 通过全量、增量、原目录身份、整组重启、Worker 原快照续传、四批回执与独立 SQL 错误重放。分布式仓库、生产集群、旧备份恢复和容量仍在验收。 |
 | LG-04 | P1 / PARTIAL | 全部消息目标的集群与恢复协议 | NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原 AOF 副本及消费恢复均有原生档案。其余集群、TLS 和容量待验。 |
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选本地/外部日志及双 Agent 证据核验已实测。候选私有暂存报告和回执保持原字节，原始证据签名密钥留在原 Agent。完整状态接管及多产品验证待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |

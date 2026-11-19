@@ -15,7 +15,7 @@
   "inProgress": [
     "CP-04 candidate activation following the completed internal signed dual-Agent proof. Live recovery evidence adoption and public operator authorization are still open.",
     "CP-04 managed evidence staging is published and its exact dual-entry stage and release passed six real Chrome checks as part of the 20-case native profile.",
-    "LG-03 external Hive Metastore proof passed stock catalog, snapshot/CDC, original catalog identity and three-service outage recovery. Complete Worker and SQL-only recovery require stable-host verification.",
+    "LG-03 external PostgreSQL Hive Metastore recovery passed its bounded native profile. Distributed warehouse, production HA, backup and capacity coverage remain.",
     "RC-10 internal Kafka dedicated-topic notice is natively verified. Operator plan, approved dispatch and final durability semantics remain."
   ],
   "reportContents": [
@@ -53,7 +53,8 @@
     "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes.",
     "The published evidence staging console passed 20 exact dual-Controller native checks including six real Chrome cases. Entry A staged and revalidated, entry B checked and released. Task revision and all cuts remained exact.",
     "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development.",
-    "The exact bbe4fc8 Temurin 21 normal packaging reactor passed 576 app and two isolated transport Java tests. Thirty-five explicitly optional external-profile tests skipped. Binary package gate passed."
+    "The exact bbe4fc8 Temurin 21 normal packaging reactor passed 576 app and two isolated transport Java tests. Thirty-five explicitly optional external-profile tests skipped. Binary package gate passed.",
+    "LG-03 stable external PostgreSQL Hive Metastore rerun passed all seven native markers plus stock schema validation. Worker SIGKILL preserved the original snapshot and four exact catalog-bound Hive receipts. The isolated PostgreSQL constraint recovery did not alter Hive receipts. All disposable resources were cleared."
   ],
   "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
   "lastVerifiedReactor": {

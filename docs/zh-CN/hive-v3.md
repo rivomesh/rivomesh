@@ -90,7 +90,7 @@ ARM64 夹具从 MySQL 8.4.13 同步到 PostgreSQL 17.12 和 HiveServer2 4.0.1。
 
 另行提供 PostgreSQL JDBC 驱动，使用 Java 21 流水线验收 HiveServer2 4.0.1、独立 Hive Metastore 和专用 PostgreSQL 17.12 目录库。夹具使用 Hive 自带的工具初始化并校验临时目录库。HiveServer2 端口可连接后，Rivomesh 执行正常的 JDBC 预检查。
 
-本次实库运行通过快照与增量阶段。HiveServer2、Metastore 和目录库同时停机期间，独立的 PostgreSQL 业务目标继续写入。重启后的 PostgreSQL 系统标识、Hive 元数据表 ID、所有者、资源 UUID 和仓库位置均与原值一致，Hive 追平并读回原批次和后续批次回执。宿主机在 Worker 重启阶段进入休眠，该阶段等待超时。外置 Metastore 档案的 Worker 重启及 SQL 错误恢复仍需完整复验。
+完整实库复验通过七项检查。HiveServer2、Metastore 和目录库同时停机期间，独立的 PostgreSQL 业务目标继续推进。重启后复用原 PostgreSQL 系统标识、Hive 表 ID、资源 UUID、所有者和仓库位置。Worker 强制终止后沿用原快照，四批 Hive 回执均与原目录资源一致。修复并重放独立 PostgreSQL 订阅的约束错误后，Hive 回执保持原值。[验收记录](../verification/README.md#hive-external-postgresql-metastore-full-restart-and-recovery)
 
 ```sh
 RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh --postgres-metastore /path/to/postgresql-42.7.14.jar

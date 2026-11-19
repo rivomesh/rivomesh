@@ -1515,8 +1515,8 @@
         "en": "ClickHouse/Doris/Hive production profiles"
       },
       "gap": {
-        "zh-CN": "ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 实测全量、增量、目录身份及整组重启追平；Worker 续传和 SQL 错误联验受宿主休眠中断。分布式仓库、生产集群和容量待验。",
-        "en": "ClickHouse, Doris and embedded Hive have native recovery evidence. External PostgreSQL Hive Metastore passed snapshot, CDC, catalog identity and three-service restart catch-up. Host sleep interrupted Worker restart and subsequent SQL-error checks. Distributed storage, production cluster and capacity remain."
+        "zh-CN": "ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 通过全量、增量、原目录身份、整组重启、Worker 原快照续传、四批回执与独立 SQL 错误重放。分布式仓库、生产集群、旧备份恢复和容量仍在验收。",
+        "en": "ClickHouse, Doris and embedded Hive have native recovery evidence. Hive 4.0.1 with an external PostgreSQL Metastore passed snapshot, CDC, original catalog identity, service restart, original-snapshot Worker recovery, four batch receipts and isolated SQL error replay. Distributed storage, production clusters, old backup recovery and capacity remain."
       },
       "acceptance": {
         "zh-CN": "各产品按真实可见水位、去重/批次回执验证重启、旧备份、集群故障和缺口；不能承诺普通SQL跨表事务语义。",
