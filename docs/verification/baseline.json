@@ -11759,5 +11759,89 @@
     },
     "scope": "Durable approval record without publish authorization. Fresh owner evidence is required when creating the receipt. The native fixture did not configure an independent writer and therefore retained both the writer missing and historical ownership blockers. The current task, topic, authorization and audit proofs are bound to the approval. No business or control event was written by the approval.",
     "reproduce": "python3 tests/kafka-cluster-run.py --artifact /path/to/rivomesh.jar --output target/kafka-conditional-approval --java-home /path/to/jdk --only-managed-notice-plan"
+  },
+  "openGaussLocalIndexesNative": {
+    "baselineGitCommit": "c9901bf",
+    "artifactBuildTree": "0c1a0e0432e12cadd9c0baa4fc2e88a930ec420c",
+    "artifactEquivalence": "Gauss JDBC/POM and non-platform Java equal at c9901bf.",
+    "publicationCandidateTree": "2a674b7b0295b56e88bf4e5ea87d5d56cc482c15",
+    "scopedPatchSha256": "8e3155c94240954079db4df387dc62214339f6003b378c18814a21addd4d7803",
+    "native": {
+      "status": "PASS",
+      "checks": [
+        "Exact openGauss version and SQL compatibility mode recorded",
+        "Source MySQL continues enforcing UNIQUE(email) while accepting multiple SQL NULLs",
+        "Read-only v3 check plans a nonunique email index and ordered two-column secondary index",
+        "Catalog matches the reviewed nonunique indexes and preserves business and receipt primary keys",
+        "One source transaction updates and moves only the intended composite keys",
+        "Original openGauss data keeps the native receipt, completed snapshot and physical index OIDs",
+        "Worker reopens the original journal and advances exactly one native transaction without creating indexes",
+        "Unsupported MySQL prefix index is reported and the writer refuses business DDL"
+      ],
+      "images": {
+        "mysql:8.4": {
+          "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+          "architecture": "arm64"
+        },
+        "opengauss/opengauss-server:latest": {
+          "id": "sha256:e2f3d328094322c94d1f815c0d5b58b9bfa12d75cffadfe96288f5c29097d566",
+          "architecture": "arm64"
+        }
+      },
+      "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+      "scriptSha256": "bcad6cc80fb6f8b5d1cbb0b73e86c65cde6661fd2eaf90438081380c24ab794f",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "gaussDriver": {
+        "class": "io.github.rivomesh.gaussdb.jdbc.Driver",
+        "version": "5.0.0-htrunk3.csi.gaussdb_kernel.opengaussjdbc.r3",
+        "classSha256": "80e8bc6de1db6042136207b19f007b4bb588ad5523f1214db73e27a4e1736eba"
+      },
+      "versions": {
+        "source": "8.4.13",
+        "target": "(openGauss 7.0.0-RC3 build f08516a2) compiled at 2026-03-26 10:29:14 commit 0 last mr 9119  on aarch64-unknown-linux-gnu, compiled by g++ (GCC) 10.3.1, 64-bit",
+        "targetMode": "A"
+      },
+      "cleanupExitCode": 0
+    },
+    "nativeFilesSha256": {
+      "native-resume.json": "b37a005938539c47a069e6ade27cc1df6307851c5e8a17435a91d9e1a58b77d9",
+      "manifest.json": "262ce2e32ad2b28a19bc8cbf47a833d314f81894625d57e9defe4c5980a073d3",
+      "native-indexes-initial.json": "4ab6ff55ef08665089df5a0b72f004b5f85ce9f712ff01fff462256244bf2ecd",
+      "index-check.json": "b0660b0bede01ce574b1281af9ab49de2a7dc39dc3fee32e1537d002c990fd26",
+      "blocked-index-check.json": "6e1c677f83a1e50ca6fd7d10055022d7d4f08e6a52b0916640bd266b4ada4bd8"
+    },
+    "previousFixtureAttempts": [
+      {
+        "directory": "native",
+        "manifestSha256": "c6fa79d03797b5299b8138452a9546247159ab3551d37ef5ad49e0d46be7f2ec",
+        "fixtureSha256": "7595484a4597747decc71854d3af1bd8525b7ab66c0ca122c8c02334a8f791a9",
+        "diagnosis": "MySQL entrypoint inherited MYSQL_PWD before its root password was set.",
+        "passedChecks": 0
+      },
+      {
+        "directory": "native-retry",
+        "manifestSha256": "d56cf5f5b55ae106395f66014357f0b437aee01e0a6e24c250a0a1a30f178957",
+        "fixtureSha256": "0e34b82e028a9bc82d96fd68a71c981499d4df035e4b91f95392ca51d031066b",
+        "diagnosis": "openGauss initdb enforces a 32 character maximum for that password.",
+        "passedChecks": 0
+      },
+      {
+        "directory": "native-final",
+        "manifestSha256": "585237014a478dd84a6e48b144fe11644742b6b9211e8b2d3ed8d5b8451b908d",
+        "fixtureSha256": "8e91f332d8f6e154d2736835d64943296767410025e3e1e823ba7b7a835d80aa",
+        "diagnosis": "Docker changed the ephemeral target port across restart. Six native markers passed before the reopened Worker retried its original, now unreachable port.",
+        "passedChecks": 6
+      }
+    ],
+    "cleanup": {
+      "composeExitCode": 0,
+      "remainingContainers": 0,
+      "remainingNetworks": 0,
+      "remainingVolumes": 0
+    },
+    "reproduce": "python3 tests/opengauss-index-native.py --artifact /path/to/rivomesh.jar --gauss-image opengauss/opengauss-server:latest --gauss-version 7.0.0-RC3 --output target/opengauss-index-native",
+    "scope": "Single-node openGauss new-table index plan, catalog and original journal/endpoint recovery. Commercial distributed GaussDB and GSI require independent verification.",
+    "status": "PASS",
+    "evidenceSha256": "640ba95c970e519e6aa6eb836f800f5931ec2a789238b5826328d1e45c46a76c"
   }
 }

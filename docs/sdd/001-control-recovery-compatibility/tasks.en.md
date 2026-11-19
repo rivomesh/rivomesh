@@ -157,6 +157,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-01 · Domestic transactional database matrix · P1 · Depends on: JV-01
   Deliver: Record sync/recovery/manual capabilities by product,version,mode,distribution/index/driver/JDK;commercial distributed hardware is separately accepted,not inferred from PG protocol connectivity.
   Acceptance: AC-LG-01
+  - [x] openGauss 7.0.0-RC3 mode A verifies nonunique index mapping, business and receipt primary keys, and original-cut continuation after a target restart.
 - [x] T-LG-02 · Nonempty adoption,constraints,cutover/failback · P1 · Depends on: RC-09, SO-01
   Deliver: Implement adoption/difference planning,constraint restoration,final source cut,write handoff and failback conditions;dual-write/bidirectional conflict policy is separately specified.
   Acceptance: AC-LG-02

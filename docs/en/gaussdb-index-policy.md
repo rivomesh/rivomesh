@@ -37,6 +37,20 @@ The counts cover all discovered index decisions across Gauss mappings, so the sa
 
 A successful connection check can still report `REQUIRES_PLAN`. The live writer recalculates the same policy at startup and stops before business DDL for a blocked index. This check does not execute DDL, inspect existing target indexes or confirm distribution capabilities. Validate openGauss catalog and writer behavior separately. For commercial distributed GaussDB, perform the multi-CN/DN acceptance below on the exact build, compatibility mode, GTM mode and JDBC driver you will deploy.
 
+### Reproduce the openGauss catalog check
+
+The disposable fixture compares the v3 `check` plan to the physical openGauss indexes, including names, column order and uniqueness. It checks that `UNIQUE(email)` becomes an ordinary index on the target while MySQL enforces the original constraint. It verifies the composite business primary key, the native receipt keys and recovery from the same target data and journal. Use the sync Worker as the only writer of the selected target tables until the required constraints have been restored. [openGauss PG_INDEX](https://docs.opengauss.org/en/docs/latest/database_reference/pg_index.html)
+
+The native run used MySQL 8.4.13, openGauss 7.0.0-RC3 build `f08516a2` in compatibility mode A on ARM64, and Temurin 21 with bundled Gauss JDBC. The target restart and Worker restart retained the original snapshot, receipt and all five index OIDs. The next source transaction advanced the native checkpoint by one. The separate prefix-index case returned `REQUIRES_PLAN` and the writer stopped before creating the mapped schema.
+
+```bash
+python3 tests/opengauss-index-native.py --artifact /path/to/rivomesh.jar \
+  --gauss-image opengauss/opengauss-server:latest --gauss-version 7.0.0-RC3 \
+  --output target/opengauss-index-native
+```
+
+The fixture uses local Docker images and records their IDs, the database versions and the bundled JDBC driver. Commercial distributed GaussDB and physical GSI require separate acceptance.
+
 ## What UNIQUE(email) means
 
 Example source definition:

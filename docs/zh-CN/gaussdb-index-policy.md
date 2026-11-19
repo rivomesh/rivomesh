@@ -37,6 +37,20 @@ MySQL 是数据权威源。同步期间目标仅由同步服务写入，业务�
 
 连接检查成功时仍可能返回 `REQUIRES_PLAN`。实际写入端启动时按同一策略重新判断，遇到阻断索引会在业务 DDL 前停止。预检不执行 DDL、不读取既有目标索引，也不验证分布能力。请单独验收 openGauss 的目录与写入行为。商业分布式 GaussDB 需用准备部署的确切版本、兼容模式、GTM 模式及 JDBC 驱动完成下文的多 CN/DN 实机验收。
 
+### 复现 openGauss 目录检查
+
+临时实库夹具比对 v3 `check` 的索引方案和 openGauss 系统目录，覆盖名称、列顺序和唯一性。夹具验证 `UNIQUE(email)` 在目标成为普通索引并在 MySQL 保持原约束，也检查复合业务主键、原生收据主键，以及基于原目标数据和日志续传。恢复必要约束之前，所选目标表仅由同步 Worker 写入。[openGauss PG_INDEX](https://docs.opengauss.org/en/docs/latest/database_reference/pg_index.html)
+
+原生验收使用 MySQL 8.4.13、ARM64 openGauss 7.0.0-RC3 构建 `f08516a2` 的 A 兼容模式，以及 Temurin 21 和内置 Gauss JDBC。目标和 Worker 重启后保留原快照、原收据和五个索引 OID，下一源事务使原生断点推进一次。独立的前缀索引场景返回 `REQUIRES_PLAN`，写入端在创建业务映射 schema 前停止。
+
+```bash
+python3 tests/opengauss-index-native.py --artifact /path/to/rivomesh.jar \
+  --gauss-image opengauss/opengauss-server:latest --gauss-version 7.0.0-RC3 \
+  --output target/opengauss-index-native
+```
+
+夹具使用本地 Docker 镜像，记录镜像 ID、数据库版本和制品内 JDBC 驱动。商业分布式 GaussDB 和真实 GSI 另行验收。
+
 ## UNIQUE(email) 的含义
 
 源表示意：

@@ -659,3 +659,7 @@ Corretto 17.0.19 packaged the `5a4a26bb861e33217050a22555ae4d449470b089fff864553
 ### Durable conditional Kafka notice approval
 
 The `b29d9a8a50dc31d2208ccc7ae013f54014183b36bc9cdd383a3d80754f0dac7c` candidate passed four checks on Kafka 3.9.2 with four brokers and two packaged Controllers. An exact blocked approval replayed from both entries and survived owner loss. A replaced authorization revision was refused. The dedicated control topic stayed empty. The business topic end offset and committed consumer offset remained 9 and 1. The native profile retains the missing writer and historic ownership blockers. The exact package passed 106 Java and 157 DOM checks. The combined Java 17 package passed 51 focused Java and 157 DOM tests. [Operations](../en/messaging-v3.md) · [Manifest](baseline.json)
+
+### Native openGauss index catalog and restart
+
+The `0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb` package passed eight native checks from MySQL 8.4.13 to single-node openGauss 7.0.0-RC3 mode A on ARM64. The read-only plan and five native catalog indexes agreed. The source-enforced email uniqueness mapped to a regular target index, while the composite business key and receipt primary keys remained in place. A same-endpoint target restart preserved snapshots, receipts and index OIDs. The Worker reopened its journal and applied one new transaction. A source prefix index blocked business DDL. Commercial distributed GaussDB and GSI remain separate acceptance profiles. [Operations](../en/gaussdb-index-policy.md) · [Manifest](baseline.json)
