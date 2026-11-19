@@ -36,6 +36,8 @@ The V3 wizard reads `GET /api/capabilities` for source availability and limits d
 
 Build, run and accept new candidates on Temurin 21 LTS. Record the real JVM version, architecture and artifact SHA on each live profile. The source and destination tables above include results from their tested development artifact. Earlier records are available as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [verification manifests](../verification/baseline.json). Use the matching Java 21 fixture for unverified source, destination, journal or recovery combinations. [Reproduction commands](performance.md)
 
+The release uses Java 21 class files and requires Java 21 or later. Temurin 25.0.5 on ARM64 has passed a bounded MySQL 8.4.13 profile with two Controllers, an Agent and a Worker. PostgreSQL and MySQL targets received initial and incremental data, then resumed from the original GTID after external replica promotion. Controller and Agent rolling replacement also passed with the original snapshots. [Verification and reproduction](../verification/baseline.json)
+
 ## Management requests
 
 Use Bearer credentials for CLI or an HttpOnly browser session. Browser writes supply the configured Origin and `X-CSRF-Token`. VIEWER reads task-scoped status, OPERATOR can issue routine commands within its grants, and ADMIN can configure, inspect sensitive row evidence and authorize data repair. [Browser sessions](browser-sessions.md) · [Grants](task-authorization.md)

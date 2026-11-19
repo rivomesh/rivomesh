@@ -10824,5 +10824,103 @@
     "integratedDomTestsPassed": 156,
     "scope": "Approved stopped-and-drained same-store transfer. The candidate revalidates exact source and target cuts, then parks the new assignment after the accepting Controller exits. This execution used the profile without raw capture custody. The final package also contains the separately verified Oracle arithmetic and JDBC index protections.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/native-handoff-auto --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-auto-resume"
+  },
+  "temurin25Mysql84Recovery": {
+    "artifactSha256": "c69e00d9d33d0a5f95bc1b828565c106bda7a471324c6243b156379a62467880",
+    "harnessSourceSha256": "65876ba919a860e311c14af3d35fab76bb7653f013a2bb659cbb9851985f0ecb",
+    "runtimeProcesses": [
+      {
+        "role": "CONTROLLER",
+        "node": "node-a",
+        "version": "25.0.5",
+        "architecture": "aarch64",
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+      },
+      {
+        "role": "CONTROLLER",
+        "node": "node-b",
+        "version": "25.0.5",
+        "architecture": "aarch64",
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+      },
+      {
+        "role": "AGENT",
+        "node": "node-worker",
+        "version": "25.0.5",
+        "architecture": "aarch64",
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+      },
+      {
+        "role": "WORKER",
+        "node": "node-worker",
+        "version": "25.0.5",
+        "architecture": "aarch64",
+        "imageId": "sha256:08a5ae0a17a55ce7340de0840cc9630b964eafc6b736b15a97cecd8cf50d25f3"
+      }
+    ],
+    "nativeSourceVersion": "8.4.13",
+    "controlStore": "POSTGRESQL",
+    "sourcePromotion": {
+      "status": "PASS",
+      "checks": [
+        "The GTID replica starts read-only and MySQL denies promotion privileges to the Rivomesh capture account",
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "The original source UUID, GTID, snapshot and both target receipts agree before the replica is eligible",
+        "A primary SIGKILL leaves both controllers waiting, the replica read-only and capture/target positions unchanged",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 25",
+        "After external promotion both SQL destinations commit the promoted GTID and match all rows without a configuration change or resnapshot"
+      ],
+      "manifestSha256": "72b25829a649974c687e39968a356ac94af07423a2b2148d14b7f7090210c55f",
+      "cleanupExitCode": 0,
+      "sameGeneration": true,
+      "bothTargetsObservePromotedGtid": true,
+      "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --runtime-jdk 25 --mysql-async-failover --output target/java25-native-failover"
+    },
+    "rollingRestart": {
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 25",
+        "Actual Java 25 Controllers, Agent and Worker share the task, commands and initial CDC",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 25",
+        "Replacing one Java 25 Controller leaves the other management entry and original Worker available",
+        "The drained Agent opens the same task directory on Java 25 with the prior GTID and STOP receipt",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 25",
+        "Java 25 Worker replays native CDC to both SQL targets from original snapshots and checkpoint",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 25"
+      ],
+      "manifestSha256": "15570d0e986c2193dc2eb28564591eb7f2edba92abb17b8ad3dad5c25df5e0e0",
+      "cleanupExitCode": 0,
+      "observedStages": [
+        "initial",
+        "controllerReplaced",
+        "agentReplaced"
+      ],
+      "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --runtime-jdk 25 --rolling-restart --output target/java25-native-rolling"
+    },
+    "earlierRollingFailure": {
+      "manifestSha256": "f9c4e90beccc980a294b76a85d1ca1d70058e385a7d9aac223dfe150c02ca281",
+      "diagnosticsSha256": "063252870087e2282436cc5c3780c369cb527e104b2194e2fba8bf8adbf78b15",
+      "logSha256": "ab91236042fb146b46b5109195e3bba62ec3d069126f964b6c81436392823bca"
+    },
+    "standaloneLocalJournalProbe": {
+      "status": "PASS",
+      "claimedEpochs": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "manifestSha256": "2fc64b797a5ab420cef227d08326279cfdbdb83c0cccd928106f2dcec881f429"
+    },
+    "scope": "ARM64 Temurin 25.0.5 in the two Controller JVMs, execution Agent and Worker. MySQL 8.4.13 asynchronous GTID failover with separately promoted replica and PostgreSQL/MySQL targets. Full release compatibility uses the recorded Java 21 matrix."
   }
 }

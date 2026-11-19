@@ -112,8 +112,6 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-SO-07
   - [x] Native Flashback, archive replay and original-snapshot restart for bounded virtual integer multiplication and two-column sums and differences.
   - [ ] Other expressions, binary JSON, LOB and RAC promotion.
-  - [x] Oracle 26ai integer virtual columns through snapshot, archived CDC and original-snapshot restart.
-  - [ ] Additional generated expressions, native binary JSON, LOB and RAC failover.
 ## Java runtime compatibility
 
 - [x] T-JV-01 · Temurin 21 first-release runtime · P0 · Depends on: none
@@ -122,6 +120,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
   Deliver: On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product.
   Acceptance: AC-JV-02
+  - [x] Supplementary Java 25 profile verifies dual-target continuation after MySQL 8.4.13 async promotion.
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03

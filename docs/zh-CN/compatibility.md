@@ -36,6 +36,8 @@ V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引�
 
 新候选统一在 Temurin 21 LTS 构建、运行和验收。实库档案同时记录真实 JVM 版本、架构和包 SHA。上述源和目标表保留各自实测候选的结果，历史档案可查[验收记录](../verification/baseline.json)中的 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix` 和 `postgresqlStoredGenerated`。待核验组合使用对应的 Java 21 源、目标、日志与恢复用例。[复现命令](performance.md)
 
+发布包使用 Java 21 字节码，运行需要 Java 21 或更新版本。另在 ARM64 Temurin 25.0.5 验证了两个 Controller、Agent 和 Worker。MySQL 8.4.13 全量及增量写入 PostgreSQL 与 MySQL 两个目标，备用库经外部提升后从原 GTID 自动续传。Controller 与 Agent 滚动替换也通过实库，保留原快照。 [验收证据和复现命令](../verification/baseline.json)
+
 ## 管理端请求
 
 CLI 通过 Bearer 凭据访问，浏览器使用 HttpOnly 会话。浏览器写操作提供匹配的 Origin 与 `X-CSRF-Token`。VIEWER 按授权读取状态，OPERATOR 在授权范围内发出常规命令，ADMIN 配置任务、审阅敏感证据和批准恢复。[浏览器会话](browser-sessions.md) · [任务授权](task-authorization.md)
