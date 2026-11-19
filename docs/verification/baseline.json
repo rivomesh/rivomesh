@@ -14044,6 +14044,9 @@
     "fixtureScope": "The JVM used by the Agent initially attempted a hostname on an isolated route. Immediate reuse after network attachment refused while independent fresh Worker/JDBC checks passed. The same artifact passed with the actual isolated IPv4 endpoint. The native proof uses an ordinary MySQL V3 task with PostgreSQL and MySQL targets and an external PostgreSQL journal.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --verified-placement --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/placement-native",
     "integratedArtifactSha256": "2905f5a4dc9ac3d0fd1070f3d4797720b32998befd5b56c242c3b2e0c9442469",
+    "publishedArtifactNativeManifestSha256": "24b0d0bc9c60b2a0f24d36bacb6ee8899c7e5b1eb7bd7f41673a1ce045eb5c0a",
+    "publishedArtifactNativeFixtureSha256": "d566226a7e3f51e88f3b0aecc9339efc60cf0c6c151dcc8e9ddd0c1167be28fc",
+    "publishedArtifactNativeChecksPassed": 4,
     "integratedFocusedJavaTestsPassed": 125,
     "integratedDomTestsPassed": 167,
     "integratedSourceTree": "e6490ceedb3c66f77a1ed00179f525f6e701b87e"

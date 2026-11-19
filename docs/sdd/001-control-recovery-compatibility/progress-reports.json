@@ -2,26 +2,29 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T17:58:16+08:00",
-  "nextReportAt": "2026-11-19T18:58:16+08:00",
+  "lastReportAt": "2026-11-19T18:58:16+08:00",
+  "nextReportAt": "2026-11-19T19:58:16+08:00",
   "completedSincePrevious": [
-    "With a PostgreSQL journal, both MySQL and PostgreSQL targets passed the interrupted native ACK scenarios. After reconnection and explicit START only the selected ACK advances. Pushed ff01d25.",
-    "Oracle 26ai native binary JSON lacks the required archived before and after images in the tested profile. Thirteen checks distinguish readable JDBC Flashback values from incomplete CDC and keep unsupported table preflight in place. Pushed 0e97900.",
-    "PostgreSQL 17.12 finite REAL and DOUBLE PRECISION passed nine native checks with PostgreSQL and MySQL targets. Non-finite transactions preserve the prior LSN. Pushed 309feaf.",
-    "Keycloak 26.7.4 passed eight checks, including five real Chrome checks. Shared Controller state preserves login, roles and both-entry revocation across HTTPS. Pushed d26fc66.",
-    "The full Temurin 21 reactor passed 654 application tests, 162 DOM checks, 14 Chrome checks and 25 supplied configurations. Thirty-five optional scenarios are tracked separately. Pushed ef8fe36.",
-    "RocketMQ 5.5.0 opt-in publisher failover passed native three-replica promotion with original receipt preservation and the two-replica durability guard. The handoff console now exposes original-offline evidence in read-only form. Pushed ea05140.",
-    "Oracle native AL32UTF8 and AL16UTF16 archive diagnostics matched 40 changes and 60 required images. Pushed 6e6385f.",
-    "Oracle CHAR, NCHAR and NVARCHAR2 passed 15 native checks with two PostgreSQL subscriptions retaining original snapshot and SCN through abrupt restart. The tested charset and 4000-byte admission limits are documented. Pushed bb3353b.",
-    "One exact Temurin 21 artifact passed async GTID recovery on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. Tests cover a real replication SQL-thread error, physical primary shutdown, external promotion, original-snapshot reuse and uncaptured binlog gap refusal. Pushed 6491ea3.",
-    "Oracle archive DDL read-only review passed 16 native checks. The last durable SCN and target receipts remain fixed across two catalog versions and an unsupported current column type. Pushed c8f8f32."
+    "The license inventory now blocks project-level LICENSE/NOTICE slots occupied by verified dependency documents. Normal and external vendor artifacts were audited. Pushed e9ff2fd.",
+    "Kafka notice approval gained an original-approver sender prerequisites check and exact native-read requirement on prototype receipt replay. The focused package passed 137 Java and 165 DOM cases. Pushed d7e84c6.",
+    "The exact Temurin 21 full regression record now includes 664 passing application cases, 35 optional skips, 164 DOM, 14 actual Chrome and 25 configuration examples. Pushed 4e579ca.",
+    "Shared PostgreSQL durable writer freeze and independent closed receipt custody passed 18 native checks with two live SQL targets. Restart, ordinary and direct CLI writer refusal, and a stopped same-directory cancellation preserve the exact cuts. Pushed 7d04628.",
+    "Real Redis 8.0.2 TLS/ACL checks preserved the exact stream across AOF cold restart. Untrusted CA, absent SAN and bad credentials are refused before writing. Pushed 9ebfe11.",
+    "Real Kafka 3.9.2 three-node TLS/SCRAM verified a single conditional approval and both Controller views. Same-name UUID replacement and a later configuration are rejected. All broker offsets and both ACKs remain unchanged. Pushed 18e79e4.",
+    "Two actual shaded packages started after synthetic release document assembly. The reviewed-input preparer retains dependency documents and removes known blocker collisions in the candidate's outer project slots. Rights verification remains independent. Pushed 6e1e159.",
+    "Oracle 26ai archived DDL fingerprint fixes the exact blocked SCN, record set and SQL hash. Eighteen native checks demonstrate that later DDL/DML leaves the original failure, snapshot and target receipts stable. Pushed 6306238.",
+    "The exact released offline ownership transition passed 22 native checks. Two SQL target fences and explicit candidate START resume the three original journal snapshots. Current grants remain valid after an unrelated account change, and the former original cannot reclaim ownership. Pushed 2bb7f1e.",
+    "A frozen handoff displays its authenticated freeze time in either language. Both ordinary and frozen display cases passed in 167 DOM checks. Pushed 138f224.",
+    "The full Temurin 21 package passed 683 application cases, 167 DOM checks, 14 real Chrome checks and 25 provided configuration examples. Thirty-five optional integration cases were skipped. Pushed ca11b8c.",
+    "Native MySQL V3 automatic placement refuses both unreachable Agents without writing authority. After making the external PostgreSQL journal reachable to only one Agent, it commits once across two entrances. Only explicit START initializes and writes the selected journal. Pushed 98d8a60."
   ],
   "inProgress": [
-    "CP-04 and LG-05 retain complete independent evidence for a stopped original Agent. Durable writer sealing and actual bounded offline ownership transfer are still under implementation. Cross-database control and journal authority has its own durability requirement.",
-    "SO-07 and LG-08 have published read-only Oracle archive DDL review at the preserved SCN. Reviewed schema application, native Oracle binary JSON and LOB capture, and RAC remain open.",
-    "RC-10 implements an exact Kafka notice sender preflight and verifies native broker receipts before replay. Full route-history coverage and release-grade dispatch remain open.",
-    "LG-04 and LG-01 native validation faced insufficient Docker disk space. RocketMQ stopped before the full Worker cutover and OceanBase bootstrap requires 11 GiB free. The supported RocketMQ publisher proof is separate.",
-    "LG-10 is reviewing the exact distributed package obligations. Local real IdP and MinIO evidence are retained separately from production AWS and rights approval."
+    "CP-04 native frozen-offline transfer now passes, including separate SQL fence and START and prior original-directory return. Bounded automatic placement with PostgreSQL journal passes and is published. Abrupt loss before sealing, other adapters and broader topology remain.",
+    "LG-05 independent control/journal storage and unsealed abrupt prior loss still require durable independent evidence. The same-database closed-receipt archive is verified.",
+    "SO-07 and LG-08 Oracle DDL review now binds the original archived record to its fault generation. Reviewed apply, native binary JSON and LOB images, and RAC remain.",
+    "RC-10 native Kafka sender prerequisites pass. Complete historical route evidence is required before a publish action. Other destination recovery protocols remain under development.",
+    "LG-01 and LG-04 the remaining RocketMQ full Worker and OceanBase native attempts need more Docker VM storage.",
+    "LG-10 package preparation now accepts only reviewed, digest-bound inputs. Actual project rights and required notices, commercial test systems and AWS remain independent."
   ],
   "reportContents": [
     "Current totals",
@@ -36,16 +39,18 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "ff01d25",
-    "0e97900",
-    "309feaf",
-    "d26fc66",
-    "ef8fe36",
-    "ea05140",
-    "6e6385f",
-    "bb3353b",
-    "6491ea3",
-    "c8f8f32"
+    "e9ff2fd",
+    "d7e84c6",
+    "4e579ca",
+    "7d04628",
+    "9ebfe11",
+    "18e79e4",
+    "6e1e159",
+    "6306238",
+    "2bb7f1e",
+    "138f224",
+    "ca11b8c",
+    "98d8a60"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -53,21 +58,24 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue implementing and validating the same-PostgreSQL durable freeze and candidate takeover against exact retained evidence.",
-    "Continue Oracle reviewed DDL execution design and the Kafka native-receipt gates. Re-run the complete RocketMQ Worker profile and OceanBase once sufficient Docker space exists.",
-    "Record additional warehouse production topologies, commercial multi-CN/DN GaussDB, Oracle RAC, AWS/production ingress and required distribution rights in their exact environments."
+    "Retain exact release-artifact automatic placement proof and extend remaining profiles where preflight can safely prove connectivity and runnable components.",
+    "Extend the bounded handoff, connector recovery, and reviewed source DDL across their remaining profiles where exact native environments are available.",
+    "Repeat native RocketMQ and OceanBase runs with enough Docker VM storage. Verify distributed commercial GaussDB, Oracle RAC and cloud security deployments in their actual environments."
   ],
-  "currentCandidateArtifact": "fba330c1f5306588c86a3bfd2e408a1476306a2c7ea34c062c9c591929334321",
-  "currentCandidateScope": "Integrated Temurin 21 RocketMQ and handoff-status artifact passed 112 focused Java, 164 DOM, 14 native Chrome checks, 25 configurations and four MySQL async failover scenarios. The subsequently published Oracle character package has separate native provenance.",
+  "currentCandidateArtifact": "2905f5a4dc9ac3d0fd1070f3d4797720b32998befd5b56c242c3b2e0c9442469",
+  "currentCandidateScope": "Published automatic placement passed 125 focused Java, 167 DOM and four exact uninstrumented native checks. Frozen offline ownership passed 22 native checks using its distinct exact package. The full runtime reactor holds separate exact digests.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [],
-  "lastScheduledReportAt": "2026-11-19T17:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-19T18:58:16+08:00",
   "lastVerifiedReactor": {
-    "baseCommit": "6491ea3a51967a024b02983fe0dc8f7bbcf57090",
-    "artifactSha256": "33c95ba4ab9c39ed98a7d6cba377fa236aa493a4846019c04cb2d3d8ea7d585c",
-    "javaTestsPassed": 664,
+    "baseCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
+    "artifactSha256": "2a2c91cf1837a037e0c6da547b957f96929bb3d74be37947509bb06bca475966",
+    "javaTestsPassed": 683,
     "optionalSkips": 35,
-    "scope": "Full standard Eclipse Temurin 21 reactor and exact Java 21 artifact gate. The separately accepted browser and configuration runs have different artifact hashes."
+    "domTestsPassed": 167,
+    "nativeChromeChecksPassed": 14,
+    "configurationExamplesPassed": 25,
+    "scope": "Full Temurin 21 release reactor and exact browser/configuration checks."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
@@ -94,7 +102,7 @@
   "runtimeScope": {
     "supported": "Eclipse Temurin 21 LTS",
     "policyCommit": "0727c95",
-    "priorReportCommit": "bc78f11dd47e97c8bb1a411c2fa0ec5682ed45d1"
+    "priorReportCommit": "5a1d19d263db5dc3975b39c14a01d3c1b3efad54"
   },
   "remainingRequirements": [
     "CP-04",
@@ -111,9 +119,10 @@
     "LG-10"
   ],
   "cleanupSincePrevious": {
-    "approximateLocalDuplicateBytes": 192489823,
-    "reportedReclaimedDockerBuildCacheMB": 566.7,
-    "scope": "Duplicate APP and JUnit console JARs were matched by SHA-256 before removal. Three Rivomesh-only stale BuildKit records and unused Java 8/11/17/25 fixture tags were removed. Active projects and the Java 21 artifact were retained."
+    "retiredApplicationJarsRemoved": 3,
+    "intermediateSdkCopiesRemoved": 50,
+    "logicalBytesRemoved": 2750603330,
+    "scope": "Removed only old Java 17 application builds and intermediate Hive SDK copies with duplicate bytes in both Maven cache and retained app archives. Native fixture resources were cleaned after each isolated run."
   },
   "previousVerifiedReactor": {
     "baseCommit": "309feaf6e902f4ebdc9d9d0c47f1007aa988d019",
