@@ -94,8 +94,8 @@ async function taskPage(direction){if(taskLoading)return;const before=taskAfter,
  try{if(await loadTaskPage(after)){taskHistory=direction==='first'?[]:direction==='previous'?history.slice(0,-1):[...history,before];render();}}catch(error){notify(error.message);}
 }
 let activeView='tasks';
-Object.assign(messages.zh,{skipToContent:'跳到主要内容',darkTheme:'深色外观'});
-Object.assign(messages.en,{skipToContent:'Skip to main content',darkTheme:'Dark theme'});
+Object.assign(messages.zh,{skipToContent:'跳到主要内容',darkTheme:'深色外观',loginOidc:'使用组织账号登录'});
+Object.assign(messages.en,{skipToContent:'Skip to main content',darkTheme:'Dark theme',loginOidc:'Sign in with your organization'});
 let lang=localStorage.getItem('rivomesh-language')||(navigator.language.startsWith('zh')?'zh':'en'),selected='',latest={tasks:[],invalidConfigs:[]},capabilities=[],session=null,sessionGeneration=0,busy=null,step=0;
 let failureDialog=null,failureTicket=0;
 const $=id=>document.getElementById(id),t=key=>messages[lang][key]||key;
@@ -873,6 +873,11 @@ $('clear-task-filter').onclick=()=>{
 $('nodes-nav').onclick=()=>{if(!can('ACCOUNT_ADMIN'))return;view('nodes');loadNodes();};$('nodes-reload').onclick=()=>loadNodes('');$('nodes-next').onclick=()=>{if(nodePage?.next)loadNodes(nodePage.next);};$('tasks-nav').onclick=()=>view('tasks');$('adapters-nav').onclick=()=>view('adapters');
 translate();
 restoreSession();
+const oidcEntry=$('login-oidc');
+if(oidcEntry)fetch('/auth/oidc/available',{credentials:'omit'})
+ .then(response=>response.ok?response.json():null)
+ .then(profile=>oidcEntry.classList.toggle('hidden',profile?.enabled!==true))
+ .catch(()=>{});
 setInterval(pollConsole,3000);
 document.addEventListener('visibilitychange',pollConsole);
 

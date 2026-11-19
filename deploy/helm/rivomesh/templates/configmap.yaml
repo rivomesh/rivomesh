@@ -12,6 +12,9 @@
 {{- if not .Values.cluster.url }}{{ fail "cluster.url is required" }}{{ end }}
 {{- if not .Values.cluster.existingSecret }}{{ fail "cluster.existingSecret is required" }}{{ end }}
 {{- end }}
+{{- if .Values.oidc.enabled }}
+{{- if not (and .Values.cluster.enabled .Values.cluster.sharedAccess .Values.cluster.sharedTasks .Values.sessions.enabled .Values.sessions.secureCookie (hasPrefix "https://" .Values.sessions.publicOrigin) (ne .Values.cluster.role "AGENT")) }}{{ fail "oidc requires a shared-task Controller, browser sessions, a Secure cookie and an HTTPS public origin" }}{{ end }}
+{{- end }}
 {{- if gt (int .Values.sessions.idleSeconds) (int .Values.sessions.absoluteSeconds) }}{{ fail "sessions.absoluteSeconds must be at least idleSeconds" }}{{ end }}
 {{- if gt (int .Values.platform.maxRunningTasks) (int .Values.platform.maxTasks) }}
 {{- fail "platform.maxRunningTasks must not exceed platform.maxTasks" }}
@@ -84,6 +87,16 @@ data:
       {{- if .Values.sessions.publicOrigin }}
       publicOrigin: {{ .Values.sessions.publicOrigin | quote }}
       {{- end }}
+    {{- if .Values.oidc.enabled }}
+    oidc:
+      issuer: {{ required "oidc.issuer is required" .Values.oidc.issuer | quote }}
+      authorizationEndpoint: {{ required "oidc.authorizationEndpoint is required" .Values.oidc.authorizationEndpoint | quote }}
+      tokenEndpoint: {{ required "oidc.tokenEndpoint is required" .Values.oidc.tokenEndpoint | quote }}
+      clientId: {{ required "oidc.clientId is required" .Values.oidc.clientId | quote }}
+      keyId: {{ required "oidc.keyId is required" .Values.oidc.keyId | quote }}
+      rsaPublicKey: {{ required "oidc.rsaPublicKey is required" .Values.oidc.rsaPublicKey | quote }}
+      clientSecret: "${RIVOMESH_OIDC_CLIENT_SECRET}"
+    {{- end }}
     {{- if .Values.cluster.enabled }}
     cluster:
       sharedAccess: {{ .Values.cluster.sharedAccess }}

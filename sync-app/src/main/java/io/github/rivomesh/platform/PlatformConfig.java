@@ -39,6 +39,11 @@ public final class PlatformConfig {
     }
     public ClusterConfig cluster;
     public Sessions sessions = new Sessions();
+    public Oidc oidc;
+    public static final class Oidc {
+        public String issuer, authorizationEndpoint, tokenEndpoint, clientId, clientSecret, keyId, rsaPublicKey;
+    }
+
     public static final class Sessions {
         public boolean enabled = true;
         public boolean secureCookie = true;
@@ -66,6 +71,10 @@ public final class PlatformConfig {
         c.protectReference(c.authToken);c.authToken=resolveToken(c.authToken);
         if(c.users!=null)for(User user:c.users)if(user!=null){c.protectReference(user.token);user.token=resolveToken(user.token);}
         if(c.cluster!=null){c.protectReference(c.cluster.url);c.protectReference(c.cluster.username);c.protectReference(c.cluster.password);c.protectReference(c.cluster.taskKey);c.cluster.url=resolveToken(c.cluster.url);c.cluster.nodeId=resolveToken(c.cluster.nodeId);c.cluster.advertiseUrl=resolveToken(c.cluster.advertiseUrl);c.cluster.username=resolveToken(c.cluster.username);c.cluster.password=resolveToken(c.cluster.password);c.cluster.taskKey=resolveToken(c.cluster.taskKey);}
+        if(c.oidc!=null){
+            c.protectReference(c.oidc.clientSecret);
+            c.oidc.clientSecret=resolveToken(c.oidc.clientSecret);
+        }
         if(c.kafkaNoticeWriters!=null)for(KafkaNoticeWriter writer:c.kafkaNoticeWriters)if(writer!=null){
             c.protectReference(writer.username);c.protectReference(writer.password);
             writer.username=resolveToken(writer.username);writer.password=resolveToken(writer.password);
@@ -91,6 +100,7 @@ public final class PlatformConfig {
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");
         sessions.validate();
         if(cluster!=null)cluster.validate();
+        if(oidc!=null)OidcBrowserLogin.validate(this);
         if (bind == null || bind.isEmpty()) throw new IllegalArgumentException("BIND_REQUIRED");
         InetAddress.getByName(bind);
         if (port < 0 || port > 65535 || maxTasks < 1 || maxTasks > 200 || maxRunningTasks < 1 || maxRunningTasks > maxTasks || workerHeapMiB < 64

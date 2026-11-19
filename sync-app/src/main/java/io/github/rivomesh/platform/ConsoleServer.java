@@ -21,13 +21,18 @@ public final class ConsoleServer implements AutoCloseable {
     private final GlobalControl global;
     private final PlatformConfig.Sessions sessionConfig;
     private final BrowserSessions sessions;
+    private final OidcBrowserLogin oidc;
     private final boolean agentOnly;
     private static final class AuditScope {final AuditStore.Event begin;boolean done;AuditScope(AuditStore.Event begin){this.begin=begin;}}
     private final ThreadLocal<AuditScope> auditScope=new ThreadLocal<>();
     private final java.util.concurrent.atomic.AtomicBoolean closed=new java.util.concurrent.atomic.AtomicBoolean();
     public ConsoleServer(PlatformConfig config,TaskService tasks) throws Exception {this(config,tasks,null);}
     ConsoleServer(PlatformConfig config,TaskService tasks,TaskControlPlane control) throws Exception {
+        this(config,tasks,control,null);
+    }
+    ConsoleServer(PlatformConfig config,TaskService tasks,TaskControlPlane control,java.net.http.HttpClient oidcTransport) throws Exception {
         this.tasks=tasks;
+        oidc=config.oidc==null?null:new OidcBrowserLogin(config,tasks.sharedAccess(),oidcTransport,java.time.Clock.systemUTC());
         agentOnly=config.cluster!=null&&config.cluster.role==ClusterConfig.Role.AGENT;
         sessionConfig=config.sessions;sessions=agentOnly?null:new BrowserSessions(sessionConfig,tasks.sessionStore(),java.time.Clock.systemUTC());
         server=HttpServer.create(new InetSocketAddress(config.bind,config.port),32);
@@ -48,6 +53,12 @@ public final class ConsoleServer implements AutoCloseable {
             String path=exchange.getRequestURI().getPath(),method=exchange.getRequestMethod();
             if((path.equals("/healthz")||path.equals("/readyz"))&&method.equals("GET")){boolean ready=!path.equals("/readyz")||nodes.ready()&&tasks.accessReady()&&(global==null||global.ready());json(exchange,ready?200:503,Collections.singletonMap("status",ready?"UP":"CONTROL_STORE_UNAVAILABLE"));return;}
             if(agentOnly){error(exchange,404,"AGENT_PROBE_ONLY");return;}
+            if(path.equals(OidcBrowserLogin.ROOT+"available")&&method.equals("GET")){
+                json(exchange,200,Collections.singletonMap("enabled",oidc!=null));return;
+            }
+            if(path.equals(OidcBrowserLogin.START)||path.equals(OidcBrowserLogin.CALLBACK)){
+                oidcLogin(exchange,path,method);return;
+            }
             if(!path.startsWith("/api/")) {
                 if(!method.equals("GET")){error(exchange,405,"METHOD_NOT_ALLOWED");return;}
                 String resource=switch(path) {
@@ -122,6 +133,8 @@ public final class ConsoleServer implements AutoCloseable {
                 String[] accountPath=path.split("/");
                 if(accountPath.length>=4&&accountPath[3].matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")){
                     String action=accountPath.length==4&&method.equals("PUT")?"UPDATE":accountPath.length==4&&method.equals("DELETE")?"DELETE":accountPath.length==5&&accountPath[4].equals("token")&&method.equals("POST")?"TOKEN":null;
+                    if(accountPath.length==5&&accountPath[4].equals("external-identity"))
+                        action=switch(method){case "PUT" -> "EXTERNAL_BIND";case "DELETE" -> "EXTERNAL_REVOKE";default -> null;};
                     if(action!=null){json(exchange,200,tasks.mutateAccounts(action,accountPath[3],body(exchange),exchange.getRequestHeaders().getFirst("X-Request-ID"),principal));return;}
                 }
                 error(exchange,404,"NOT_FOUND");return;
@@ -406,7 +419,9 @@ public final class ConsoleServer implements AutoCloseable {
                 if(body.hasNonNull("captureExclusion"))request.captureExclusion=Model.JSON.treeToValue(body.get("captureExclusion"),CaptureExclusionRequest.class);json(exchange,202,control.invoke(request,principal));return;
             }
             error(exchange,404,"NOT_FOUND");
-        }catch(ControlStore.Unavailable e){error(exchange,503,"CONTROL_STORE_UNAVAILABLE");}
+        }catch(OidcBrowserLogin.Denied e){error(exchange,401,"OIDC_LOGIN_DENIED");}
+        catch(OidcBrowserLogin.Unavailable e){error(exchange,502,"OIDC_PROVIDER_UNAVAILABLE");}
+        catch(ControlStore.Unavailable e){error(exchange,503,"CONTROL_STORE_UNAVAILABLE");}
         catch(AuditStore.Unavailable e){exchange.getResponseHeaders().remove("Set-Cookie");rawJson(exchange,503,Collections.singletonMap("code","AUDIT_UNAVAILABLE"));}
         catch(TaskService.Conflict e){
             if("DIAGNOSTICS_RATE_LIMITED".equals(e.getMessage())){
@@ -425,6 +440,38 @@ public final class ConsoleServer implements AutoCloseable {
         catch(com.fasterxml.jackson.core.JsonProcessingException e){error(exchange,400,"CONFIG_INVALID");}
         catch(Exception e){error(exchange,500,TaskService.safeCode(e));}
         finally{auditScope.remove();exchange.close();}
+    }
+    private void oidcLogin(HttpExchange exchange,String path,String method)throws Exception {
+        if(oidc==null){error(exchange,404,"NOT_FOUND");return;}
+        if(!method.equals("GET")){error(exchange,405,"METHOD_NOT_ALLOWED");return;}
+        boolean start=OidcBrowserLogin.START.equals(path);
+        String peer=exchange.getRemoteAddress().getAddress().getHostAddress();
+        AuditStore.Event event=tasks.auditBegin(start?"GET_OIDC_START":"GET_OIDC_CALLBACK",null,null,peer,null);
+        auditScope.set(new AuditScope(event));
+        List<String> cookies=exchange.getRequestHeaders().get("Cookie");
+        String query=exchange.getRequestURI().getRawQuery();
+        Headers response=exchange.getResponseHeaders();
+        if(start){
+            if(query!=null)throw new OidcBrowserLogin.Denied();
+            OidcBrowserLogin.Start login=oidc.begin(sessions.cookieId(cookies));
+            finishAudit(302,null);
+            response.set("Set-Cookie",OidcBrowserLogin.setBinding(login.binding()));
+            response.set("Location",login.location());
+            exchange.sendResponseHeaders(302,-1);
+            return;
+        }
+        OidcBrowserLogin.Login login=oidc.finish(query,BrowserSessions.readCookie(cookies,OidcBrowserLogin.COOKIE));
+        AccessControl.Principal principal=tasks.oidcPrincipal(login.identity());
+        if(principal==null)throw new OidcBrowserLogin.Denied();
+        BrowserSessions.Issued issued=sessions.create(principal,login.expiresAt());
+        sessions.revoke(login.previousSession());
+        event.actorId=principal.id;
+        event.actorRole=principal.role.name();
+        finishAudit(303,null);
+        response.add("Set-Cookie",OidcBrowserLogin.setBinding(null));
+        response.add("Set-Cookie",sessions.credentialCookie(issued));
+        response.set("Location","/");
+        exchange.sendResponseHeaders(303,-1);
     }
     private static void correctionInput(TaskRequest request,JsonNode input)throws Exception{
         JsonNode error=input.path("errorCount");
@@ -486,8 +533,13 @@ public final class ConsoleServer implements AutoCloseable {
     }
     private void error(HttpExchange e,int status,String code) throws IOException {json(e,status,Collections.singletonMap("code",code));}
     private void json(HttpExchange e,int status,Object value) throws IOException {
-        AuditScope scope=auditScope.get();if(scope!=null&&!scope.done){String code=status>=400&&value instanceof Map?String.valueOf(((Map<?,?>)value).get("code")):null;tasks.auditComplete(scope.begin,status,code);scope.done=true;}
+        String code=status>=400&&value instanceof Map?String.valueOf(((Map<?,?>)value).get("code")):null;
+        finishAudit(status,code);
         rawJson(e,status,value);
+    }
+    private void finishAudit(int status,String code)throws AuditStore.Unavailable {
+        AuditScope scope=auditScope.get();
+        if(scope!=null&&!scope.done){tasks.auditComplete(scope.begin,status,code);scope.done=true;}
     }
     private static void rawJson(HttpExchange e,int status,Object value) throws IOException {
         byte[] bytes=Model.JSON.writeValueAsBytes(value);e.getResponseHeaders().set("Content-Type","application/json; charset=utf-8");

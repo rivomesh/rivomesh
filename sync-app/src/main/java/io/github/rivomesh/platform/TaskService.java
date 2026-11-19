@@ -458,13 +458,31 @@ public final class TaskService implements AutoCloseable {
         else if(version!=state.version||!Objects.equals(anchor.get("identity"),state.identity)||!Objects.equals(anchor.get("revision"),state.revision))throw new IOException("ACCOUNT_AUDIT_ANCHOR_MISMATCH");
     }
     synchronized AccessControl.Principal authenticate(String header){return AccountDirectory.authenticate(accounts(),header);}
+    synchronized AccessControl.Principal oidcPrincipal(AccountDirectory.ExternalIdentity identity){
+        return AccountDirectory.externalPrincipal(accounts(),identity);
+    }
     synchronized boolean sessionCurrent(AccessControl.Principal actor){
         AccountDirectory.State state=accounts();AccountDirectory.User user=state.users.get(actor.id);
         return user!=null&&user.enabled&&!user.deleted&&Objects.equals(actor.authorizationRevision,state.revision);
     }
-    synchronized Map<String,Object> accountView(AccessControl.Principal actor){AccountDirectory.current(accounts(),actor);if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");Map<String,Object> view=AccountDirectory.view(accounts());view.put("authority",sharedAccess==null?"LOCAL":"SHARED");return view;}
+    synchronized Map<String,Object> accountView(AccessControl.Principal actor){
+        AccountDirectory.State state=accounts();
+        AccountDirectory.current(state,actor);
+        if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");
+        Map<String,Object> view=AccountDirectory.view(state);
+        view.put("authority",sharedAccess==null?"LOCAL":"SHARED");
+        return accountProfile(view);
+    }
+    private Map<String,Object> accountProfile(Map<String,Object> view){
+        if(config.oidc!=null)view.put("externalIdentityIssuer",config.oidc.issuer);
+        return view;
+    }
     synchronized Map<String,Object> mutateAccounts(String action,String id,com.fasterxml.jackson.databind.JsonNode body,String request,AccessControl.Principal actor)throws Exception{
-        flushAudit();if(sharedAccess!=null)return sharedAccess.mutate(action,id,body,request,actor);if(body.hasNonNull("nodeIds"))throw new IllegalArgumentException("ACCOUNT_NODE_SCOPE_SHARED_REQUIRED");verifyAccessAnchor();AccountDirectory.Change change=AccountDirectory.mutate(accounts(),action,id,body,request,actor);
+        if(("EXTERNAL_BIND".equals(action)||"EXTERNAL_REVOKE".equals(action))&&sharedAccess==null)
+            throw new Conflict("SHARED_ACCESS_REQUIRED");
+        if("EXTERNAL_BIND".equals(action)&&(config.oidc==null||!config.oidc.issuer.equals(body.path("issuer").textValue())))
+            throw new IllegalArgumentException("ACCOUNT_EXTERNAL_ISSUER_UNTRUSTED");
+        flushAudit();if(sharedAccess!=null)return accountProfile(sharedAccess.mutate(action,id,body,request,actor));if(body.hasNonNull("nodeIds"))throw new IllegalArgumentException("ACCOUNT_NODE_SCOPE_SHARED_REQUIRED");verifyAccessAnchor();AccountDirectory.Change change=AccountDirectory.mutate(accounts(),action,id,body,request,actor);
         if(!change.replayed){Registry next=copy();next.version=2;next.accounts=change.state;next.auditOutbox.add(change.audit);persist(next);flushAudit();verifyAccessAnchor();}
         Map<String,Object> result=AccountDirectory.view(accounts());result.put("replayed",change.replayed);result.put("subjectId",change.userId);return result;
     }

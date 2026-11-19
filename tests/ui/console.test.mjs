@@ -31,6 +31,10 @@ function setup(initial=[],role='ADMIN',browser={authenticated:false}){
   w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
   w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};
   w.fetch=async(path,options={})=>{
+    if(path==='/auth/oidc/available'){
+      assert.equal(options.credentials,'omit');
+      return{ok:true,status:200,json:async()=>({enabled:browser.oidc===true})};
+    }
     const authRoute=path==='/api/session'||path==='/api/session/logout';
     (authRoute?authCalls:calls).push({path,...options});
     const denied=()=>({ok:false,status:401,json:async()=>({code:'UNAUTHORIZED'})});
@@ -999,11 +1003,133 @@ function setupAccounts(mode='MANAGED'){
  const ui=setup(),base=ui.w.fetch;let revision=1;const control={lose:false,defer:null,calls:0,invalidate:false,shared:false};let page={mode,revision:'accounts-1',version:1,users:[{id:'test-user',role:'ADMIN',enabled:true,deleted:false,taskIds:null},{id:'limited',role:'VIEWER',enabled:true,deleted:false,taskIds:['future-task']}]};
  ui.w.fetch=async(path,options={})=>{
   if(!path.startsWith('/api/accounts'))return base(path,options);ui.calls.push({path,...options});if(!options.method&&control.defer)return control.defer();
-  if(options.method){control.calls++;if(control.lose){control.lose=false;throw new Error('Lost response');}const body=JSON.parse(options.body);if(control.invalidate){ui.browser.authenticated=false;if(path.endsWith('/token'))ui.browser.token=body.token;}page={...page,mode:'MANAGED',revision:'accounts-'+(++revision),version:revision};if(path==='/api/accounts'&&options.method==='POST')page.users=[...page.users,{...body,token:undefined,enabled:true,deleted:false}];}
-  return{ok:true,status:200,json:async()=>structuredClone({...page,authority:control.shared?"SHARED":"LOCAL",users:page.users.map(user=>user.id==='limited'&&control.nodeIds!==undefined?{...user,nodeIds:control.nodeIds}:user)})};
+  if(options.method){
+   control.calls++;
+   if(control.lose){control.lose=false;throw new Error('Lost response');}
+   if(control.reject)return{ok:false,status:409,json:async()=>({code:control.reject})};
+   const body=JSON.parse(options.body);
+   if(control.invalidate){ui.browser.authenticated=false;if(path.endsWith('/token'))ui.browser.token=body.token;}
+   page={...page,mode:'MANAGED',revision:'accounts-'+(++revision),version:revision};
+   if(path==='/api/accounts'&&options.method==='POST')page.users=[...page.users,{...body,token:undefined,enabled:true,deleted:false}];
+   if(path.endsWith('/external-identity')){
+    const user=page.users.find(user=>user.id===path.split('/')[3]);
+    if(options.method==='PUT')user.externalIdentity={issuer:body.issuer,subjectSha256:'a'.repeat(64)};
+    else delete user.externalIdentity;
+   }
+  }
+  return{ok:true,status:200,json:async()=>structuredClone({...page,authority:control.shared?'SHARED':'LOCAL',
+   externalIdentityIssuer:control.externalIssuer,users:page.users.map(user=>user.id==='limited'&&control.nodeIds!==undefined?{...user,nodeIds:control.nodeIds}:user)})};
  };return Object.assign(ui,{accounts:control});
 }
 async function openAccounts(ui){await login(ui);ui.d.getElementById('accounts-nav').click();await flush();}
+function accountAction(ui,label){
+ const card=ui.d.querySelectorAll('#accounts-list .subscription-card')[1];
+ return [...card.querySelectorAll('button')].find(button=>button.textContent===label);
+}
+function submitAccount(ui){ui.d.getElementById('account-form').dispatchEvent(new ui.w.Event('submit',{cancelable:true,bubbles:true}));}
+test('an administrator binds and revokes an organization identity with the current directory revision and CSRF',async()=>{
+ const ui=setupAccounts();
+ try{
+  const issuer='https://identity.example.test/tenant',subject='department/Person:+Case';
+  ui.accounts.shared=true;
+  ui.accounts.externalIssuer=issuer;
+  await openAccounts(ui);
+  assert.equal(accountAction(ui,'撤销组织身份'),undefined);
+  accountAction(ui,'绑定组织身份').click();
+  const input=ui.d.getElementById('account-external-subject'),source=ui.d.getElementById('account-external-issuer');
+  assert.equal(input.type,'password');
+  assert.equal(source.readOnly,true);
+  assert.equal(source.value,issuer);
+  submitAccount(ui);
+  assert.match(ui.d.getElementById('account-error').textContent,/1 至 255/);
+  assert.equal(ui.accounts.calls,0);
+  input.value=subject;
+  input.dispatchEvent(new ui.w.Event('input'));
+  const preview=JSON.parse(ui.d.getElementById('account-preview').textContent);
+  assert.equal(preview.issuer,issuer);
+  assert.equal(preview.subjectProvided,true);
+  assert.equal('subject' in preview,false);
+  ui.accounts.lose=true;
+  submitAccount(ui);
+  await flush();
+  assert.match(ui.d.getElementById('account-error').textContent,/结果尚未确认/);
+  submitAccount(ui);
+  await flush();
+  const requests=ui.calls.filter(req=>req.path.endsWith('/external-identity'));
+  assert.equal(requests.length,2);
+  for(const req of requests){
+   assert.equal(req.method,'PUT');
+   assert.equal(req.headers['X-CSRF-Token'],'test-csrf');
+   assert.deepEqual(JSON.parse(req.body),{expectedRevision:'accounts-1',issuer,subject});
+  }
+  assert.equal(requests[0].headers['X-Request-ID'],requests[1].headers['X-Request-ID']);
+  assert.equal(input.value,'');
+  assert.equal(ui.d.getElementById('account-preview').textContent,'');
+  assert.equal(ui.d.getElementById('accounts-list').textContent.includes(subject),false);
+  const identities=[...ui.d.querySelectorAll('.account-external-identity')].map(node=>node.textContent);
+  assert.equal(identities.length,2);
+  assert.ok(identities[0].includes(issuer));
+  assert.ok(identities[1].includes('a'.repeat(64)));
+  assert.equal(ui.w.localStorage.length,1);
+  assert.equal(ui.w.sessionStorage.length,0);
+  ui.d.getElementById('language').click();
+  assert.ok(accountAction(ui,'Replace organization identity'));
+  accountAction(ui,'Revoke organization identity').click();
+  assert.equal(ui.d.getElementById('account-external-bind').classList.contains('hidden'),true);
+  assert.match(ui.d.getElementById('account-external-revoke').textContent,/Local tokens stay valid/);
+  submitAccount(ui);
+  await flush();
+  const revoke=ui.calls.find(req=>req.method==='DELETE');
+  assert.equal(revoke.path,'/api/accounts/limited/external-identity');
+  assert.equal(revoke.headers['X-CSRF-Token'],'test-csrf');
+  assert.deepEqual(JSON.parse(revoke.body),{expectedRevision:'accounts-2'});
+  assert.notEqual(revoke.headers['X-Request-ID'],requests[1].headers['X-Request-ID']);
+  assert.equal(ui.d.querySelectorAll('.account-external-identity').length,0);
+  assert.ok(accountAction(ui,'Bind organization identity'));
+ }finally{ui.dom.window.close();}
+});
+test('organization identity controls handle unavailable login, stale revision and global sign-out',async()=>{
+ const ui=setupAccounts();
+ try{
+  await openAccounts(ui);
+  assert.equal(accountAction(ui,'绑定组织身份'),undefined);
+  ui.accounts.shared=true;
+  ui.d.getElementById('accounts-reload').click();
+  await flush();
+  assert.equal(accountAction(ui,'绑定组织身份'),undefined);
+  ui.accounts.externalIssuer='https://identity.example.test/tenant';
+  ui.d.getElementById('accounts-reload').click();
+  await flush();
+  accountAction(ui,'绑定组织身份').click();
+  const input=ui.d.getElementById('account-external-subject');
+  input.value='fixture-operator';
+  ui.accounts.reject='ACCOUNTS_REVISION_CHANGED';
+  submitAccount(ui);
+  await flush();
+  assert.match(ui.d.getElementById('account-error').textContent,/账号目录已被其他管理员修改/);
+  ui.d.getElementById('accounts-reload').click();
+  await flush();
+  assert.equal(input.value,'');
+  delete ui.accounts.reject;
+  accountAction(ui,'绑定组织身份').click();
+  input.value='fixture-operator';
+  submitAccount(ui);
+  await flush();
+  delete ui.accounts.externalIssuer;
+  ui.d.getElementById('accounts-reload').click();
+  await flush();
+  assert.equal(accountAction(ui,'替换组织身份'),undefined);
+  assert.ok(ui.d.querySelector('.account-external-identity'));
+  accountAction(ui,'撤销组织身份').click();
+  ui.accounts.invalidate=true;
+  submitAccount(ui);
+  await flush();
+  assert.equal(ui.d.getElementById('accounts-dialog').open,false);
+  assert.equal(ui.d.getElementById('accounts-list').textContent,'');
+  assert.equal(input.value,'');
+  assert.equal(ui.d.getElementById('login-dialog').open,true);
+ }finally{ui.dom.window.close();}
+});
 test('account activation is explicit and newly generated tokens stay out of previews and storage',async()=>{
  const ui=setupAccounts('CONFIG');try{await openAccounts(ui);assert.equal(ui.d.getElementById('accounts-new').disabled,true);assert.equal(ui.d.getElementById('accounts-activate').disabled,true);ui.d.getElementById('accounts-activation-ack').checked=true;ui.d.getElementById('accounts-activation-ack').dispatchEvent(new ui.w.Event('change'));ui.d.getElementById('accounts-activate').click();await flush();assert.equal(ui.d.getElementById('accounts-new').disabled,false);ui.d.getElementById('accounts-new').click();ui.d.getElementById('account-id').value='new-viewer';ui.d.getElementById('account-generate').click();const secret=ui.d.getElementById('account-token').value;assert.match(secret,/^[a-f0-9]{64}$/);assert.equal(ui.d.getElementById('account-token').type,'password');assert.doesNotMatch(ui.d.getElementById('account-preview').textContent,new RegExp(secret));ui.d.getElementById('account-form').dispatchEvent(new ui.w.Event('submit',{cancelable:true,bubbles:true}));await flush();assert.equal(ui.calls.filter(c=>c.path==='/api/accounts'&&c.method==='POST').length,0);ui.d.getElementById('account-token-saved').checked=true;ui.d.getElementById('account-form').dispatchEvent(new ui.w.Event('submit',{cancelable:true,bubbles:true}));await flush();const call=ui.calls.find(c=>c.path==='/api/accounts'&&c.method==='POST');assert.equal(JSON.parse(call.body).token,secret);assert.deepEqual(JSON.parse(call.body).taskIds,[]);assert.equal(ui.d.getElementById('account-token').value,'');assert.equal(ui.w.localStorage.length,1);assert.equal(ui.w.sessionStorage.length,0);assert.doesNotMatch(ui.d.getElementById('accounts-list').textContent,new RegExp(secret));}finally{ui.dom.window.close();}
 });
@@ -1097,6 +1223,19 @@ test('refresh and another page restore a cookie session without resubmitting the
  }finally{first.dom.window.close();}
 });
 
+test('organization sign-in is offered only where the Controller enables it',async()=>{
+ for(const enabled of [false,true]){
+  const ui=setup([],'VIEWER',{authenticated:false,oidc:enabled});try{
+   await flush();
+   const link=ui.d.getElementById('login-oidc');
+   assert.equal(link.getAttribute('href'),'/auth/oidc/start');
+   assert.equal(link.classList.contains('hidden'),!enabled);
+   assert.equal(link.textContent,'使用组织账号登录');
+   assert.equal(ui.d.getElementById('login-dialog').open,true);
+   assert.equal(ui.calls.length,0);
+  }finally{ui.dom.window.close();}
+ }
+});
 test('an expired startup session shows login without sending control or creation requests',async()=>{
  const ui=setup();try{await flush();assert.equal(ui.d.getElementById('login-dialog').open,true);assert.equal(ui.d.getElementById('new-task').disabled,true);assert.equal(ui.calls.length,0);assert.equal(ui.authCalls.length,1);assert.equal(ui.authCalls[0].path,'/api/session');}finally{ui.dom.window.close();}
 });

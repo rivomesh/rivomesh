@@ -35,6 +35,16 @@ sessions:
   absoluteSeconds: 28800
   maximum: 1000
   publicOrigin: "" # Set https://console.example when TLS terminates upstream.
+oidc:
+  enabled: false
+  issuer: ""
+  authorizationEndpoint: ""
+  tokenEndpoint: ""
+  clientId: ""
+  keyId: ""
+  rsaPublicKey: "" # Canonical base64 of DER SubjectPublicKeyInfo.
+  existingSecret: ""
+  clientSecretKey: client-secret
 # Use separate Helm releases/PVCs per node; sharedTasks opts into fixed-owner global control.
 cluster:
   enabled: false

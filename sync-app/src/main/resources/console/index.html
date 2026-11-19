@@ -73,6 +73,7 @@
     <label><span data-i18n="accessToken"></span><input id="token" type="password" autocomplete="off" required minlength="24" autofocus></label>
     <p id="login-error" class="error" role="alert"></p>
     <button class="primary" type="submit" data-i18n="connect"></button>
+    <a id="login-oidc" class="hidden" href="/auth/oidc/start" data-i18n="loginOidc"></a>
   </form>
 </dialog>
 <dialog id="create-dialog"><form id="create-form" novalidate><div class="dialog-heading"><div><h2 data-i18n="createTitle"></h2></div><button type="button" id="close-create" class="quiet" aria-label="Close">×</button></div><div class="steps"><span id="step-label-0"></span><span id="step-label-1"></span><span id="step-label-2"></span></div>
@@ -130,6 +131,12 @@
 <section id="account-grants"><label><span data-accounts-i18n="accountScope"></span><select id="account-scope"><option value="SELECTED" data-accounts-i18n="accountSelected"></option><option value="ALL" data-accounts-i18n="accountAll"></option></select></label><div id="account-task-options" class="account-grants"></div><label id="account-extra-label"><span data-accounts-i18n="accountExtraTasks"></span><textarea id="account-extra-tasks" rows="3"></textarea></label><p class="subtle" data-accounts-i18n="accountScopeHelp"></p></section>
 <section id="account-node-grants" class="hidden"><label><span data-accounts-i18n="accountNodeScope"></span><select id="account-node-scope"><option value="SELECTED" data-accounts-i18n="accountSelectedNodes"></option><option value="ALL" data-accounts-i18n="accountAllNodes"></option></select></label><label id="account-node-list-label"><span data-accounts-i18n="accountNodeIds"></span><textarea id="account-node-ids" rows="3"></textarea></label><p class="subtle" data-accounts-i18n="accountNodeHelp"></p></section>
 <section id="account-token-section"><label><span data-accounts-i18n="accountNewToken"></span><input id="account-token" type="password" autocomplete="new-password" minlength="32" maxlength="4096"></label><div class="detail-actions"><button id="account-generate" type="button" data-accounts-i18n="accountGenerate"></button><button id="account-show-token" type="button" data-accounts-i18n="accountShowToken"></button></div><p class="subtle" data-accounts-i18n="accountTokenHelp"></p><label><input id="account-token-saved" type="checkbox"><span data-accounts-i18n="accountTokenSaved"></span></label></section>
+<section id="account-external-bind" class="hidden">
+<label><span data-accounts-i18n="accountExternalIssuer"></span><input id="account-external-issuer" readonly></label>
+<label><span data-accounts-i18n="accountExternalSubject"></span><input id="account-external-subject" type="password" autocomplete="off" maxlength="255" aria-describedby="account-external-bind-help"></label>
+<p id="account-external-bind-help" class="subtle" data-accounts-i18n="accountExternalBindHelp"></p>
+</section>
+<p id="account-external-revoke" class="callout hidden" data-accounts-i18n="accountExternalRevokeHelp"></p>
 <p id="account-delete-help" class="callout hidden" data-accounts-i18n="accountDeleteHelp"></p><pre id="account-preview"></pre><p id="account-error" class="error" role="alert"></p><div class="detail-actions"><button id="account-cancel" type="button" data-accounts-i18n="accountCancel"></button><button id="account-save" type="submit" class="primary" data-accounts-i18n="accountSave"></button></div>
 </fieldset></form></dialog>
 </body></html>

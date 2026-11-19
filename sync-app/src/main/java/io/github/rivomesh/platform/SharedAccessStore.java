@@ -25,9 +25,18 @@ final class SharedAccessStore {
             db.bootstrapLock(c);String suffix=db.mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":"";
             JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("access_root")+" (cluster_id VARCHAR(128) PRIMARY KEY,store_id VARCHAR(36) NOT NULL,policy_hash VARCHAR(64) NOT NULL,state_payload "+(db.mysql()?"LONGTEXT":"TEXT")+" NOT NULL,state_hash VARCHAR(64) NOT NULL)"+suffix);
             JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("session")+" (cluster_id VARCHAR(128) NOT NULL,session_hash VARCHAR(64) NOT NULL,user_id VARCHAR(64) NOT NULL,authorization_revision VARCHAR(64) NOT NULL,csrf VARCHAR(43) NOT NULL,issued_at BIGINT NOT NULL,last_seen BIGINT NOT NULL,expires_at BIGINT NOT NULL,PRIMARY KEY(cluster_id,session_hash))"+suffix);
+            if(config.oidc!=null){
+                JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("oidc_attempt")
+                        +" (cluster_id VARCHAR(128) NOT NULL,state_hash VARCHAR(64) NOT NULL,expires_at BIGINT NOT NULL,"
+                        +"PRIMARY KEY(cluster_id,state_hash))"+suffix);
+            }
             audit.initialize(c);
-            if(db.mysql())try(PreparedStatement p=db.prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ('rmc_access_root','rmc_session','rmc_audit_head','rmc_audit_event','rmc_audit_receipt')",config.cluster.namespace);ResultSet r=p.executeQuery()){
-                int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new TaskService.Conflict("CONTROL_STORE_ENGINE_INVALID");if(!"utf8mb4_bin".equalsIgnoreCase(r.getString(2)))throw new TaskService.Conflict("CONTROL_STORE_COLLATION_INVALID");}if(count!=5)throw new TaskService.Conflict("CONTROL_STORE_TABLES_MISSING");
+            String expectedTables="'rmc_access_root','rmc_session','rmc_audit_head','rmc_audit_event','rmc_audit_receipt'";
+            if(config.oidc!=null)expectedTables+=",'rmc_oidc_attempt'";
+            if(db.mysql())try(PreparedStatement p=db.prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES "
+                    +"WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ("+expectedTables+")",config.cluster.namespace);ResultSet r=p.executeQuery()){
+                int count=0;while(r.next()){count++;if(!"InnoDB".equalsIgnoreCase(r.getString(1)))throw new TaskService.Conflict("CONTROL_STORE_ENGINE_INVALID");if(!"utf8mb4_bin".equalsIgnoreCase(r.getString(2)))throw new TaskService.Conflict("CONTROL_STORE_COLLATION_INVALID");}
+                if(count!=(config.oidc==null?5:6))throw new TaskService.Conflict("CONTROL_STORE_TABLES_MISSING");
             }
             c.setAutoCommit(false);
             try(PreparedStatement p=db.prepare(c,"SELECT store_id FROM "+db.table("access_root")+" WHERE cluster_id=? FOR UPDATE",cluster);ResultSet r=p.executeQuery()){
@@ -104,6 +113,33 @@ final class SharedAccessStore {
     }
     void append(AuditStore.Event event)throws AuditStore.Unavailable{audit.append(event);}
     Map<String,Object> auditPage(long after,long through,int limit)throws AuditStore.Unavailable{return audit.page(after,through,limit);}
+    void beginOidc(String stateHash,long lifetimeMillis){
+        try(Connection c=db.connect()){
+            c.setAutoCommit(false);
+            root(c,true,identity);
+            long now=db.now(c);
+            db.update(c,"DELETE FROM "+db.table("oidc_attempt")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
+            try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("oidc_attempt")+" WHERE cluster_id=?",cluster);ResultSet rows=p.executeQuery()){
+                rows.next();
+                if(rows.getInt(1)>=256)throw new TaskService.Conflict("OIDC_LOGIN_CAPACITY_REACHED");
+            }
+            db.update(c,"INSERT INTO "+db.table("oidc_attempt")+" (cluster_id,state_hash,expires_at) VALUES (?,?,?)",
+                    cluster,stateHash,Math.addExact(now,lifetimeMillis));
+            c.commit();
+        }catch(TaskService.Conflict conflict){throw conflict;}
+        catch(Exception failure){throw new ControlStore.Unavailable();}
+    }
+    boolean consumeOidc(String stateHash){
+        try(Connection c=db.connect()){
+            c.setAutoCommit(false);
+            root(c,true,identity);
+            boolean consumed=db.update(c,"DELETE FROM "+db.table("oidc_attempt")+" WHERE cluster_id=? AND state_hash=? AND expires_at>?",
+                    cluster,stateHash,db.now(c))==1;
+            c.commit();
+            return consumed;
+        }catch(TaskService.Conflict conflict){throw conflict;}
+        catch(Exception failure){throw new ControlStore.Unavailable();}
+    }
     BrowserSessions.Store sessions(){return new Sessions();}
     private final class Sessions implements BrowserSessions.Store {
         public BrowserSessions.Session insert(String hash,BrowserSessions.Session proposed){
@@ -112,7 +148,9 @@ final class SharedAccessStore {
                 if(user==null||!user.enabled||user.deleted)throw new TaskService.Conflict("AUTHORIZATION_CHANGED");long now=db.now(c),idle=config.sessions.idleSeconds*1000L;
                 db.update(c,"DELETE FROM "+db.table("session")+" WHERE cluster_id=? AND (expires_at<=? OR last_seen<=?)",cluster,now,now-idle);
                 try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("session")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getInt(1)>=config.sessions.maximum)throw new TaskService.Conflict("SESSION_CAPACITY_REACHED");}
-                BrowserSessions.Session saved=new BrowserSessions.Session(proposed.principal,proposed.csrf,now,config.sessions.absoluteSeconds*1000L,idle);
+                BrowserSessions.Session saved=new BrowserSessions.Session(proposed.principal,proposed.csrf,now,
+                        config.sessions.absoluteSeconds*1000L,idle,proposed.credentialExpiresAt);
+                if(saved.expiresAt<=now)throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
                 db.update(c,"INSERT INTO "+db.table("session")+" (cluster_id,session_hash,user_id,authorization_revision,csrf,issued_at,last_seen,expires_at) VALUES (?,?,?,?,?,?,?,?)",cluster,hash,user.id,state.revision,saved.csrf,now,now,saved.expiresAt);c.commit();return saved;
             }catch(TaskService.Conflict conflict){throw conflict;}catch(Exception failure){throw new ControlStore.Unavailable();}
         }

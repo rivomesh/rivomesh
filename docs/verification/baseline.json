@@ -12695,5 +12695,19 @@
     "packageGateSha256": "43bd5e1a08062bfdea674d25684be345562c3b182ff80afb7bd06aaeff041501",
     "scope": "Single supported Java 21 build, release bytecode and product fixtures. Native ARM64 rolling Controller and Agent replacement preserves shared access, STOP and two target snapshots/checkpoints.",
     "reproduce": "mvn -B -s build/settings.xml package && python3 tests/verify-artifact.py && python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-java21-only --runtime-jdk 21 --rolling-restart --separate-execution --control-product POSTGRESQL --source-expected-version 8.4.13"
+  },
+  "externalOidcSharedBrowserSessions": {
+    "status": "PASS",
+    "artifactSha256": "cd0a765bc3bb84a811d41a39b316f0dbb0ab402455698399e4d0ec38ff7c6e52",
+    "sourceTree": "ec1814ced9b02f338280958e5d958688297c641d",
+    "runtime": "Eclipse Temurin 21.0.13+9 ARM64",
+    "integratedJavaPassed": 48,
+    "integratedDomPassed": 161,
+    "applicationGate": true,
+    "helmLint": true,
+    "baseEvidenceSha256": "d9703bd2fa80de4356d8fc8c769ae5edcb94c514260c3eb20eb1fc6f957a4d93",
+    "accountConsoleEvidenceSha256": "dea70971e293880ddbd5dff2ba02adc9a83244334549ebeeacf15e5da862fbcf",
+    "scope": "Two real loopback Controller HTTP endpoints share an H2 control database and use an HTTPS mock IdP. One fixed issuer and RSA public key, authorization code and S256 PKCE, browser-bound one-time state and nonce. ADMIN mapping to a preexisting local account and prompt local cross-entry revocation. Accounts UI binds, replaces and revokes with current revision and CSRF. Production identity-provider and ingress, automated remote provider revocation and key rotation require separate coverage.",
+    "reproduce": "mvn -B -s build/settings.xml -pl sync-app -am -Dtest=OidcBrowserLoginTest,BrowserSessionsTest,AccountManagementTest,TaskAuthorizationTest,PlatformTest,OwnerRuntimeTest,PlatformAuditTest -Dsurefire.failIfNoSpecifiedTests=false package && npm --prefix tests/ui test && helm lint deploy/helm/rivomesh"
   }
 }

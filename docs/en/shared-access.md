@@ -14,6 +14,8 @@ A login at A resumes at B and survives A shutdown/kill/restart. Logout revokes i
 
 Members must agree on enabled/Secure/remember policy, idle/absolute expiry, session capacity and audit retention. publicOrigin can differ by direct endpoint; a common HTTPS frontend uses the same external origin. Limits:200accounts,10000task grants per account and4MiB serialized directory. Capacity rejects a change without changing prior state. Sessions share one global maximum. Audit uses auditMaxEvents; non-HTTP idempotency receipts are retained separately without automatic cleanup yet, so monitor disk growth. Retention governance remains LG-09.
 
+Organization sign-in with an explicitly bound OIDC identity uses this same session and access authority. [Configure organization sign-in](oidc-login.md)
+
 ## Worker credential references
 
 An Agent can opt in to a task-scoped environment allowlist in its platform configuration:

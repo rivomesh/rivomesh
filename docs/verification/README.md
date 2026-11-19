@@ -689,3 +689,7 @@ The `393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24` bundle pa
 ### Single Temurin 21 release baseline
 
 Eclipse Temurin 21 LTS is the supported build and runtime for the Controller, Agent and Worker. The `512742f469edf00f544911937cbc6013e988e2544d9519501aaec3f8ae777dca` bundle passed the Java 21 class-file gate and 41 focused application tests. Twelve native checks observed the three roles on ARM64 Temurin 21. The Worker resumed MySQL 8.4.13 events to PostgreSQL and MySQL after rolling replacement with the original GTID, snapshots and STOP receipt. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
+
+### External OIDC login and shared account controls
+
+The `cd0a765bc3bb84a811d41a39b316f0dbb0ab402455698399e4d0ec38ff7c6e52` package passed 48 Java and 161 DOM tests, Helm lint and the Java 21 artifact gate. Two actual Controller HTTP entries sharing H2 completed code login against an HTTPS fixture. Invalid signatures and claims, wrong browser binding, replayed state and unmapped subjects were rejected. The Accounts panel uses the existing revision and CSRF checks for binding and revoking an identity. Both entries revoke the previous session and retain local roles and task restrictions. The fixture covers a pinned issuer and key. [Operations](../en/oidc-login.md) · [Manifest](baseline.json)

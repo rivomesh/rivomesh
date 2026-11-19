@@ -513,6 +513,21 @@
         }
       ]
     },
+    "oidc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "issuer": { "type": "string" },
+        "authorizationEndpoint": { "type": "string" },
+        "tokenEndpoint": { "type": "string" },
+        "clientId": { "type": "string" },
+        "keyId": { "type": "string" },
+        "rsaPublicKey": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "clientSecretKey": { "type": "string" }
+      }
+    },
     "controllerHeapMiB": {
       "type": "integer",
       "minimum": 128,

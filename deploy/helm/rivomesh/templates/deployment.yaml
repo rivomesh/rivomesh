@@ -42,6 +42,13 @@ spec:
                   name: {{ .Values.auth.existingSecret }}
                   key: {{ .Values.auth.key }}
             {{- end }}
+            {{- if .Values.oidc.enabled }}
+            - name: RIVOMESH_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "oidc.existingSecret is required" .Values.oidc.existingSecret | quote }}
+                  key: {{ required "oidc.clientSecretKey is required" .Values.oidc.clientSecretKey | quote }}
+            {{- end }}
             {{- range $index, $user := .Values.auth.users }}
             - name: RIVOMESH_USER_TOKEN_{{ $index }}
               valueFrom:

@@ -263,6 +263,7 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 .login-brand img { width: 154px; }
 #login-dialog h2 { font-size: 23px; }
 #login-dialog .primary { width: 100%; min-height: 44px; }
+#login-oidc { margin-top: 14px; justify-self: center; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0; }
 label span { display: block; margin-bottom: 4px; }
 input:not([type="checkbox"], [type="radio"]), select, textarea {
@@ -322,7 +323,7 @@ progress{display:block;width:100%;height:10px;margin:12px 0;accent-color:var(--a
 #audit-dialog{width:min(1200px,96vw)}.audit-events{overflow:auto;max-height:60vh}.audit-events table{width:100%;min-width:950px}.audit-events td{vertical-align:top;overflow-wrap:anywhere}.audit-events code{font-size:.75rem}#audit-proof{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .audit-events td{white-space:pre-line}
-#accounts-dialog{width:min(1000px,94vw)}#accounts-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:18px 0}#account-form{border-top:1px solid var(--border);padding-top:16px}#account-fields{border:0;padding:0;min-width:0}.account-grants{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:6px}#accounts-dialog label:has(input[type=checkbox]){display:flex;align-items:center;gap:8px}#accounts-dialog input[type=checkbox]{width:auto}#accounts-dialog textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--border);border-radius:7px}
+#accounts-dialog{width:min(1000px,94vw)}#accounts-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:18px 0}#account-form{border-top:1px solid var(--border);padding-top:16px}.account-external-identity{overflow-wrap:anywhere}#account-fields{border:0;padding:0;min-width:0}.account-grants{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:6px}#accounts-dialog label:has(input[type=checkbox]){display:flex;align-items:center;gap:8px}#accounts-dialog input[type=checkbox]{width:auto}#accounts-dialog textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--border);border-radius:7px}
 
 .node-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}.node-card{border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0}.node-card dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px}.node-card dt{color:var(--muted)}.node-card dd{margin:0;overflow-wrap:anywhere}.node-card li{overflow-wrap:anywhere}
 

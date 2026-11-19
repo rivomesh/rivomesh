@@ -36,10 +36,15 @@ final class BrowserSessions implements AutoCloseable {
     static final class Session {
         final AccessControl.Principal principal;
         final String csrf;
-        final long expiresAt, idleMillis;
+        final long expiresAt, idleMillis, credentialExpiresAt;
         long lastSeen;
         Session(AccessControl.Principal principal, String csrf, long now, long absoluteMillis, long idleMillis) {
-            this.principal = principal; this.csrf = csrf; lastSeen = now; expiresAt = now + absoluteMillis; this.idleMillis = idleMillis;
+            this(principal,csrf,now,absoluteMillis,idleMillis,Long.MAX_VALUE);
+        }
+        Session(AccessControl.Principal principal, String csrf, long now, long absoluteMillis, long idleMillis, long credentialExpiresAt) {
+            this.principal = principal; this.csrf = csrf; lastSeen = now;
+            this.credentialExpiresAt=credentialExpiresAt; expiresAt=Math.min(now+absoluteMillis,credentialExpiresAt);
+            this.idleMillis=idleMillis;
         }
         Map<String,Object> view() {
             Map<String,Object> view = principal.view(); view.put("authentication", "COOKIE"); view.put("csrfToken", csrf);
@@ -57,7 +62,13 @@ final class BrowserSessions implements AutoCloseable {
     BrowserSessions(PlatformConfig.Sessions config) { this(config, new MemoryStore(config.maximum), Clock.systemUTC()); }
     BrowserSessions(PlatformConfig.Sessions config, Store store, Clock clock) { this.config = config; this.store = store; this.clock = clock; }
     Issued create(AccessControl.Principal principal) {
-        String id = secret(); Session session = new Session(principal, secret(), clock.millis(), config.absoluteSeconds * 1000L, config.idleSeconds * 1000L);
+        return create(principal,Long.MAX_VALUE);
+    }
+    Issued create(AccessControl.Principal principal,long credentialExpiresAt) {
+        long now=clock.millis();
+        if(credentialExpiresAt<=now)throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        String id=secret();
+        Session session=new Session(principal,secret(),now,config.absoluteSeconds*1000L,config.idleSeconds*1000L,credentialExpiresAt);
         session=store.insert(AccountDirectory.hash(id), session); return new Issued(id, session);
     }
     Session find(String id) { return valid(id) ? store.find(AccountDirectory.hash(id), clock.millis(), config.idleSeconds * 1000L) : null; }
@@ -69,15 +80,20 @@ final class BrowserSessions implements AutoCloseable {
         return session != null && valid(value) && MessageDigest.isEqual(session.csrf.getBytes(StandardCharsets.US_ASCII), value.getBytes(StandardCharsets.US_ASCII));
     }
     String cookieName() { return config.secureCookie ? "__Host-rivomesh-session" : "rivomesh-dev-session"; }
-    String cookie(String id) {
-        return cookieName() + "=" + (id == null ? "" : id) + "; Path=/; HttpOnly; SameSite=Strict" + (config.secureCookie ? "; Secure" : "")
-                + (id == null ? "; Max-Age=0" : config.rememberBrowser ? "; Max-Age=" + config.absoluteSeconds : "");
+    String cookie(String id) {return cookie(id,config.absoluteSeconds);}
+    String credentialCookie(Issued issued){
+        return cookie(issued.id,Math.max(0,(issued.session.expiresAt-clock.millis())/1000));
     }
-    String cookieId(List<String> headers) {
+    private String cookie(String id,long seconds) {
+        return cookieName() + "=" + (id == null ? "" : id) + "; Path=/; HttpOnly; SameSite=Strict" + (config.secureCookie ? "; Secure" : "")
+                + (id == null ? "; Max-Age=0" : config.rememberBrowser ? "; Max-Age=" + seconds : "");
+    }
+    String cookieId(List<String> headers) {return readCookie(headers,cookieName());}
+    static String readCookie(List<String> headers,String name) {
         String found = null;
         if (headers != null) for (String header : headers) for (String part : header.split(";")) {
             String[] pair = part.trim().split("=", 2);
-            if (pair.length == 2 && pair[0].equals(cookieName())) { if (found != null) throw new IllegalArgumentException("SESSION_COOKIE_AMBIGUOUS"); found = pair[1]; }
+            if (pair.length == 2 && pair[0].equals(name)) { if (found != null) throw new IllegalArgumentException("SESSION_COOKIE_AMBIGUOUS"); found = pair[1]; }
         }
         return found;
     }
