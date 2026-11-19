@@ -9,6 +9,7 @@ import re
 from zipfile import BadZipFile, ZipFile
 
 PACKAGE_LICENSE_FILES = ('META-INF/LICENSE', 'META-INF/NOTICE')
+OUTER_PACKAGE_DOCUMENTS = (*PACKAGE_LICENSE_FILES, 'LICENSE', 'NOTICE')
 VENDOR_DRIVERS = {
     'gsjdbc4:gsjdbc4:1.1': (
         'io/github/rivomesh/gaussdb/jdbc/Driver.class',
@@ -55,10 +56,22 @@ VENDOR_JDBC_MARKERS = {
         b'dm.jdbc.driver.DmDriver', 'com.dameng:DmJdbcDriver18:8.1.3.140',
     ),
 }
+MYSQL_CONNECTOR_J_LICENSE_SHA256 = '8f1e56c81a8eb0f9eb12efd5b722bf068efb9db8decc85bebe02fb58a0ec7bbf'
 JDBC_NOTICE_OWNERS = {
-    '8f1e56c81a8eb0f9eb12efd5b722bf068efb9db8decc85bebe02fb58a0ec7bbf': 'mysql',
+    MYSQL_CONNECTOR_J_LICENSE_SHA256: 'mysql',
     VENDOR_DRIVERS['gsjdbc4:gsjdbc4:1.1'][2]: 'gaussdb',
     VENDOR_DRIVERS['GBase8c vendor JDBC 3.0.0B02'][2]: 'gbase8c',
+}
+# Exact comparisons with the specified upstream binaries. Common license templates are not component fingerprints.
+DEPENDENCY_DOCUMENTS = {
+    MYSQL_CONNECTOR_J_LICENSE_SHA256: ('com.mysql:mysql-connector-j:8.4.0', 'LICENSE'),
+    VENDOR_DRIVERS['GBase8c vendor JDBC 3.0.0B02'][2]: ('GBase8c vendor JDBC 3.0.0B02', 'META-INF/LICENSE'),
+    '78075a3bdb38465bd07593c3275aaf228e3fca79380fff37cfea14d2accd637c': (
+        'org.apache.activemq:activemq-client:5.16.8', 'META-INF/NOTICE',
+    ),
+    '52259722ac65cc34187cdbbb846a074b060ce9fa9510100c7ffab1848a071a22': (
+        'org.apache.kafka:kafka-clients:3.9.2', 'NOTICE',
+    ),
 }
 GAUSSDB_UNRELOCATED_DRIVER_SHA256 = 'c140b8a47715d13a206f9db1d66a58a514745e48c12bd5a5a15c20f33bf2a53c'
 # These upstream JARs omit Maven properties. Each key is the release .jar.sha256 from Maven Central.
@@ -200,7 +213,19 @@ def declared_terms(component):
     return sorted(terms)
 
 
-def asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars):
+def package_dependency_documents(notices):
+    matches = []
+    for entry in OUTER_PACKAGE_DOCUMENTS:
+        checksum = notices.get(entry)
+        upstream = DEPENDENCY_DOCUMENTS.get(checksum)
+        if upstream:
+            component, upstream_entry = upstream
+            matches.append({'entry': entry, 'sha256': checksum, 'referenceComponent': component,
+                            'referenceEntry': upstream_entry})
+    return matches
+
+
+def asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars, package_documents):
     blockers = []
     # The shipped 8.4.0 community connector uses GPLv2 with the Universal FOSS
     # Exception, which is not an ASF policy exception for bundled software.
@@ -209,6 +234,8 @@ def asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_j
     blockers.extend('MISSING_OR_CHANGED_VENDOR_LICENSE: ' + item['requiredLicenseEntry']
                     for item in vendors if not item['licenseMatchesUpstream'])
     blockers.extend('MISSING_PACKAGE_LICENSE_FILE: ' + entry for entry in PACKAGE_LICENSE_FILES if entry not in notices)
+    blockers.extend(f"PACKAGE_DOCUMENT_MATCHES_DEPENDENCY: {item['entry']} (component={item['referenceComponent']}, "
+                    f"upstreamEntry={item['referenceEntry']}, sha256={item['sha256']})" for item in package_documents)
     blockers.extend(f"UNIDENTIFIED_NESTED_JAR: {item['location']} (sha256={item['sha256']})"
                     for item in unidentified_nested_jars)
     return blockers
@@ -304,6 +331,7 @@ def main():
             _, _, component = VENDOR_JDBC_MARKERS[driver]
             reviews.setdefault(component, declared_terms(dependencies.get(tuple(component.split(':')), {})))
     unidentified_nested_jars = [item for item in nested_jars if not item['componentCoordinates']]
+    package_documents = package_dependency_documents(notices)
     report = {
         'artifactSha256': artifact_sha256,
         'mavenBomSha256': sha256(bom_data).hexdigest(),
@@ -322,13 +350,15 @@ def main():
         'unidentifiedNestedJars': [item['location'] for item in unidentified_nested_jars],
         'vendoredBinaryMarkers': vendors,
         'embeddedLicenseAndNoticeFiles': [{'entry': name, 'sha256': value} for name, value in notices.items()],
+        'outerPackageDocumentDependencyMatches': package_documents,
         'embeddedBinaryFiles': [{'entry': name, 'sha256': value} for name, value in binaries.items()],
         'mysqlConnectorJLocations': mysql_locations,
         'vendorJdbcLocations': jdbc_locations,
         'requiredComponentReviews': reviews,
         'asfDistributionReview': {
             'status': 'NOT_RECORDED',
-            'blockingFindings': asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars),
+            'blockingFindings': asf_review_blockers(notices, vendors, mysql_locations, unidentified_nested_jars,
+                                                 package_documents),
         },
     }
     review_status = report['asfDistributionReview']

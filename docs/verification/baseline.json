@@ -13632,5 +13632,60 @@
     "nativeReviewSha256": "61f3f82102e20c9f3a0d54f1a9a50d9fe49c9938354a4037ec87608a5536458d",
     "scope": "Oracle Free single PDB archived DDL and PostgreSQL target. Two successive current definitions have distinct advisory digests, and an unsupported definition returns its domain cause. Original captured SCN, failure generation, PostgreSQL snapshots and receipts stay fixed. Read-only review has no Oracle DDL execution or bypass.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --logminer --pipeline --ddl-review --output target/oracle-ddl-proof"
+  },
+  "releasePackageLicensingDocumentProvenance": {
+    "status": "PASS",
+    "releaseDisposition": "BLOCKED",
+    "evidenceSha256": "9424a71b9c7ca78d5dad2d98f9151d6fd87e429aa4f85043d88f7a96e188c8a0",
+    "sourceCommit": "6491ea3a51967a024b02983fe0dc8f7bbcf57090",
+    "artifactSha256": "33c95ba4ab9c39ed98a7d6cba377fa236aa493a4846019c04cb2d3d8ea7d585c",
+    "bomSha256": "5af703c8df65db5544097f32c233934fb51043084f1a42dd4263e17ceaac8492",
+    "bomComponents": 175,
+    "packagedCoordinates": 155,
+    "packagedCoordinatesOutsideMavenBom": 48,
+    "reviewsWithoutMavenDeclaredLicense": 50,
+    "normalOuterDependencyDocuments": [
+      {
+        "entry": "META-INF/LICENSE",
+        "sha256": "5be1f67a4d62692cc2fc8b81a71088943fc4c1462bd76fd2f04bc0e965ca6d53",
+        "referenceComponent": "GBase8c vendor JDBC 3.0.0B02",
+        "referenceEntry": "META-INF/LICENSE"
+      },
+      {
+        "entry": "META-INF/NOTICE",
+        "sha256": "78075a3bdb38465bd07593c3275aaf228e3fca79380fff37cfea14d2accd637c",
+        "referenceComponent": "org.apache.activemq:activemq-client:5.16.8",
+        "referenceEntry": "META-INF/NOTICE"
+      },
+      {
+        "entry": "LICENSE",
+        "sha256": "8f1e56c81a8eb0f9eb12efd5b722bf068efb9db8decc85bebe02fb58a0ec7bbf",
+        "referenceComponent": "com.mysql:mysql-connector-j:8.4.0",
+        "referenceEntry": "LICENSE"
+      },
+      {
+        "entry": "NOTICE",
+        "sha256": "52259722ac65cc34187cdbbb846a074b060ce9fa9510100c7ffab1848a071a22",
+        "referenceComponent": "org.apache.kafka:kafka-clients:3.9.2",
+        "referenceEntry": "NOTICE"
+      }
+    ],
+    "externalVendorArtifactSha256": "02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3",
+    "externalVendorOuterDependencyDocuments": [
+      {
+        "entry": "META-INF/NOTICE",
+        "sha256": "78075a3bdb38465bd07593c3275aaf228e3fca79380fff37cfea14d2accd637c",
+        "referenceComponent": "org.apache.activemq:activemq-client:5.16.8",
+        "referenceEntry": "META-INF/NOTICE"
+      },
+      {
+        "entry": "NOTICE",
+        "sha256": "52259722ac65cc34187cdbbb846a074b060ce9fa9510100c7ffab1848a071a22",
+        "referenceComponent": "org.apache.kafka:kafka-clients:3.9.2",
+        "referenceEntry": "NOTICE"
+      }
+    ],
+    "scannerTestsPassed": 5,
+    "scope": "Normal and previously verified external-vendor JARs stop distribution review at recognized reused dependency licensing files. The external-vendor regression uses a synthetic complete review record. Source rights, project notices and undeclared license terms still require review."
   }
 }

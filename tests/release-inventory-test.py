@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Exercise package inventory evidence and distribution review on small synthetic JARs."""
 
+from contextlib import redirect_stdout
 from hashlib import sha256
-from io import BytesIO
+import importlib.util
+from io import BytesIO, StringIO
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from zipfile import ZipFile
 
 
 SCANNER = Path(__file__).with_name('release-inventory.py')
+SPEC = importlib.util.spec_from_file_location('release_inventory', SCANNER)
+inventory = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(inventory)
 
 
 def jar(entries):
@@ -62,7 +68,8 @@ class ReleaseInventoryTest(unittest.TestCase):
             'formatVersion': 1, 'artifactSha256': report['artifactSha256'],
             'mavenBomSha256': report['mavenBomSha256'],
             'sourceRightsEvidence': 'synthetic test', 'packagedContentsEvidence': 'synthetic test',
-            'packageLicenseFiles': {item['entry']: item['sha256'] for item in report['embeddedLicenseAndNoticeFiles']},
+            'packageLicenseFiles': {item['entry']: item['sha256'] for item in report['embeddedLicenseAndNoticeFiles']
+                                    if item['entry'] in inventory.PACKAGE_LICENSE_FILES},
             'componentReviews': {component: {'license': 'synthetic', 'evidence': 'synthetic test'}
                                  for component in components},
         }))
@@ -145,6 +152,40 @@ class ReleaseInventoryTest(unittest.TestCase):
         self.assertEqual('BLOCKED', review['status'])
         self.assertEqual([finding], review['blockingFindings'])
         self.assertEqual([], review['recordErrors'])
+
+    def test_known_dependency_document_blocks_outer_package_slots_only(self):
+        raw = b'synthetic dependency notice with its own attribution\n'
+        checksum = sha256(raw).hexdigest()
+        component = 'example:outer:1.0'
+        namespaced = 'META-INF/rivomesh-licenses/synthetic-dependency.txt'
+        command = [str(SCANNER), '--artifact', str(self.artifact), '--maven-bom', str(self.bom),
+                   '--output', str(self.report), '--asf-review', str(self.review)]
+        for outer in ('NOTICE', 'META-INF/NOTICE', None):
+            with self.subTest(outer=outer):
+                entries = {namespaced: raw}
+                if outer:
+                    entries[outer] = raw
+                result, report = self.scan(entries)
+                self.assertEqual(0, result.returncode)
+                self.write_synthetic_review(report, report['requiredComponentReviews'])
+                with patch.dict(inventory.DEPENDENCY_DOCUMENTS, {checksum: (component, 'META-INF/NOTICE')}):
+                    with patch.object(sys, 'argv', command), redirect_stdout(StringIO()):
+                        result = inventory.main()
+                checked = json.loads(self.report.read_text())
+                review = checked['asfDistributionReview']
+                self.assertEqual([], review['recordErrors'])
+                self.assertEqual(1 if outer else 0, result)
+                if outer:
+                    self.assertEqual([{'entry': outer, 'sha256': checksum,
+                                       'referenceComponent': component, 'referenceEntry': 'META-INF/NOTICE'}],
+                                     checked['outerPackageDocumentDependencyMatches'])
+                    self.assertEqual('BLOCKED', review['status'])
+                    self.assertEqual([f'PACKAGE_DOCUMENT_MATCHES_DEPENDENCY: {outer} (component={component}, '
+                                      f'upstreamEntry=META-INF/NOTICE, sha256={checksum})'], review['blockingFindings'])
+                else:
+                    self.assertEqual([], checked['outerPackageDocumentDependencyMatches'])
+                    self.assertEqual([], review['blockingFindings'])
+                    self.assertEqual('RECORDED', review['status'])
 
 
 if __name__ == '__main__':

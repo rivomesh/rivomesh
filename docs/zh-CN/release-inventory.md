@@ -19,7 +19,7 @@ python3 tests/release-inventory.py \
 
 清单读取 Hive SDK 内层 Maven properties，按 Maven Central 公布的 SHA-256 识别三个 Bouncy Castle 1.86 JAR，并在存在 Kafka 客户端类时读取其构建属性。SHA-256 为 `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3` 的外置厂商候选包识别出 151 个包内坐标，其中 46 个未列入含 175 个组件的 Maven BOM。新识别的组件也进入 `requiredComponentReviews`。许可列表为空时需要核查上游，未识别的内容仍需人工审核。Oracle 源预检使用部署方提供的驱动。[Hive JDBC 构建](https://github.com/apache/hive/blob/rel/release-4.0.1/jdbc/pom.xml) · [Bouncy Castle 下载](https://www.bouncycastle.org/download/bouncy-castle-java/) · [Kafka 构建属性](https://github.com/apache/kafka/blob/3.9.2/clients/src/main/java/org/apache/kafka/common/utils/AppInfoParser.java)
 
-Temurin 21 候选包 `cf103fa235ea3fca9b67d0100b3328b0e219426a775a1c337258b8e4cf25bf40` 有 109 个内嵌坐标，其中 6 个未列入含 175 个组件的 Maven BOM。清单识别出 111 个原生二进制文件及嵌套 JAR、20 个许可证和通知文件。该包的 `META-INF/LICENSE` 和 `META-INF/NOTICE` 来自单个依赖。当前源码在 `META-INF/rivomesh-licenses/` 保留 GaussDB 与 GBase8c 的上游许可原文。识别到对应驱动标记时，清单会核对内嵌许可的字节摘要。
+`6491ea3` 的 Temurin 21 普通 JAR 的 SHA-256 为 `33c95ba4ab9c39ed98a7d6cba377fa236aa493a4846019c04cb2d3d8ea7d585c`。对应的 CycloneDX 1.6 Maven BOM 包含 175 个组件，SHA-256 为 `5af703c8df65db5544097f32c233934fb51043084f1a42dd4263e17ceaac8492`。清单识别出 155 个随包分发的坐标，其中 48 个未列入 Maven BOM，另有 21 个外层许可或通知文件。需要审核的 151 个组件中，有 50 项未在 Maven BOM 声明许可，需要单独补充证据。源码在 `META-INF/rivomesh-licenses/` 保留 GaussDB 与 GBase8c 的上游许可原文。识别到对应驱动标记时，清单会核对内嵌许可的字节摘要。
 
 ## ASF 分发审查
 
@@ -112,7 +112,7 @@ unzip -p "$candidate" rivomesh-sdk/hive-jdbc-4.0.1-standalone.jar > target/hive-
 unzip -Z1 target/hive-jdbc-review.jar
 ```
 
-外层 `NOTICE` 与 Kafka Clients 3.9.2 原包逐字节相同。`META-INF/NOTICE` 来自 ActiveMQ Classic Client 5.16.8。Kafka 版本标记和一个消费者类也与上游包一致，清单用这一版本标记将 Kafka 纳入 `requiredComponentReviews`。将通知来源与嵌套及重定位依赖一起记入 `packagedContentsEvidence`，再按已审内容及源码权利准备分发包的 LICENSE 与 NOTICE。[ASF 许可文档要求](https://www.apache.org/legal/release-policy.html#licensing)
+外层 `NOTICE` 与 Kafka Clients 3.9.2 原包逐字节相同，`META-INF/NOTICE` 与 ActiveMQ Classic Client 5.16.8 原包相同。Kafka 版本标记和一个消费者类也与上游包一致，清单用这一版本标记将 Kafka 纳入 `requiredComponentReviews`。普通构建的 `LICENSE` 还包含 Connector/J 许可手册，`META-INF/LICENSE` 与 GBase8c 上游许可文件相同。清单的 `outerPackageDocumentDependencyMatches` 记录每项已识别匹配的包内路径、SHA-256、上游组件及上游路径。匹配表示文件字节相同。通用许可证模板可能在多种制品中出现，不计入此项匹配。[ASF 许可文档要求](https://www.apache.org/legal/release-policy.html#licensing)
 
 ### 分发审核记录
 
@@ -127,11 +127,11 @@ unzip -Z1 target/hive-jdbc-review.jar
 | `packageLicenseFiles` | 对象，键为 `META-INF/LICENSE` 和 `META-INF/NOTICE`，值为 JAR 内已审核文件的 SHA-256 |
 | `componentReviews` | 对象，键与 `requiredComponentReviews` 一致。每项含适用许可条款字符串 `license` 及证据引用字符串 `evidence` |
 
-指定 `--asf-review` 时，审查记录缺项、摘要不匹配、分发包许可文件缺失、厂商通知缺失或修改、包内仍含 Connector/J，或存在无法识别的嵌套 JAR，都会输出 `ASF_DISTRIBUTION_REVIEW_BLOCKED` 并返回退出码 1。`UNIDENTIFIED_NESTED_JAR` 会给出完整嵌套路径和 JAR 的 SHA-256。可以直接生成普通清单取得这些信息，再按可核验的元数据或已公布的二进制摘要确认组件身份。
+指定 `--asf-review` 时，审查记录缺项、摘要不匹配、分发包许可文件缺失、厂商通知缺失或修改、包内仍含 Connector/J，或存在无法识别的嵌套 JAR，都会输出 `ASF_DISTRIBUTION_REVIEW_BLOCKED` 并返回退出码 1。即使审核记录完整，JAR 根目录或 `META-INF/LICENSE`、`META-INF/NOTICE` 使用已识别的单一依赖文档时，也会由 `PACKAGE_DOCUMENT_MATCHES_DEPENDENCY` 阻断。单独保存在依赖声明路径下的上游文档继续用于审阅。`UNIDENTIFIED_NESTED_JAR` 会给出完整嵌套路径和 JAR 的 SHA-256。可以直接生成普通清单取得这些信息，再按可核验的元数据或已公布的二进制摘要确认组件身份。
 
 `ASF_DISTRIBUTION_REVIEW_RECORDED` 表示记录与实际 JAR 匹配且扫描未发现已知阻断项。适用许可和完整内容由审核人员核对。每个对外分发的源码包、二进制包和镜像都分别审查。[ASF 分发包许可要求](https://www.apache.org/legal/release-policy.html#licensing)
 
-项目级 LICENSE 和 NOTICE 取决于源码权利审查。准备这两个文件前，先记录代码、素材和厂商组件的来源及贡献权。新孵化项目的初始代码按 Incubator 的 podling IP 指南办理。[Podling IP 审查指南](https://incubator.apache.org/guides/ip_clearance.html)
+源码仍需在权利人审查后补齐项目级 LICENSE 和 NOTICE。准备这两个文件前，先记录代码、素材和厂商组件的来源及贡献权。再核对实际分发 JAR 中的包级文档及需要随包附带的依赖声明。新孵化项目的初始代码按 Incubator 的 podling IP 指南办理。[Podling IP 审查指南](https://incubator.apache.org/guides/ip_clearance.html)
 
 准备阶段使用项目名 **Rivomesh** 和命名空间 `io.github.rivomesh`。后续提案、名称和品牌审查以 ASF 指南为准。[提案指南](https://incubator.apache.org/guides/proposal.html) · [名称检索](https://incubator.apache.org/guides/names.html) · [品牌指南](https://incubator.apache.org/guides/branding.html)
 
