@@ -14172,5 +14172,35 @@
     "reproduce": "RIVOMESH_TEST_PREBUILT=1 SYNC_V3_GROUP_SQL_TARGETS=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 SYNC_MYSQL_TARGET_IMAGE=mysql:8.4 SYNC_POSTGRES_IMAGE=postgres:17.12 bash tests/v3-group-run.sh",
     "mysql57Env": "SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7",
     "scopeLimit": "Source graceful shutdown with three members and two SQL targets. MySQL 8.4.13 SIGKILL, stale primary restart and retained completed snapshots have a separate native proof."
+  },
+  "clickHouseJava21OlderNonemptyRestoreRefusal": {
+    "scope": "Single ClickHouse 25.8.33.6 physical data volume and direct production materializer with a LOCAL H2 journal on Temurin 21.",
+    "artifactSha256": "f39cf9cc1c65711cae5f0e02368a5beb924f31bf059fdb7de743e01aee6bf6d5",
+    "fixtureInputSha256": {
+      "tests/clickhouse-materializer-run.sh": "d7596f1532999ee32ea3fbd20c2721972cc9901c4caa95ba83ce244b1ad7bfae",
+      "tests/clickhouse-materializer-in-container.sh": "a1350ddbefde67c0e86b3dc9c4ca828c22b7c76ae7cded9a476dbd52acfab49b",
+      "sync-app/src/test/java/io/github/rivomesh/cdc/ClickHouseMaterializerAcceptance.java": "d5bc195a7ea74f47790c69dd3641c3049417bddc41c0c1fdb661f31746d5548b"
+    },
+    "composeSha256": "ff7404edc1d862996c6df476f82eb95f0aaea20a81ecb7ce9f391e44792c2a59",
+    "fixtureImageIds": [
+      "clickhouse/clickhouse-server:25.8.33.6 sha256:a1304f616cd2a6ed51a616da1cd2e897850b520c3ebfbc2bcfba8d65581998ad arm64",
+      "maven:3.9-eclipse-temurin-21 sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64"
+    ],
+    "logSha256": "028f7f50966090534b22fe5e02fa2bdce65f2bc56ca57dcd1d319008be127e59",
+    "nativeChecks": [
+      "Read-only check does not create the target database.",
+      "NONE creates and reopens the layout without indexes. Native BTREE/GSI conversion creates two skipping indexes and FINAL hides an older row version.",
+      "Primary-key movement, keyless multiplicity, deletion and duplicate replay preserve visible rows and confirmed receipts.",
+      "After on-disk restart, the original cut accepts sequence 3. A physical restore of the older nonempty volume leaves one old visible row.",
+      "Preparation fails with CLICKHOUSE_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED and the original journal-backed checkpoint remains at sequence 3."
+    ],
+    "exitCode": 0,
+    "fixtureRemaining": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "reproduce": "bash tests/clickhouse-materializer-run.sh",
+    "pending": "Replicated ClickHouse failover, distributed writers and independent TLS profiles."
   }
 }
