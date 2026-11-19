@@ -502,6 +502,30 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('handoff shows a masked start blocker and uses a new request only when reapproval is authorized',async()=>{
+  let plan=completed('START_PENDING',{targetFence:{requestId:'approved-fence',destinationsFenced:2},
+   workerStart:{requestId:'prior-start-approval'},adoptedEvidence:{validationReports:2,closedReceipts:5},
+   pendingProblem:{code:'HANDOFF_TARGET_FENCE_CHANGED',observedAt:'2026-11-18T09:05:00Z',secret:'private-data'}});
+  const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(plan),start:options=>{
+   plan={...plan,workerStart:{requestId:options.headers['X-Request-ID']},workerStartAvailable:undefined,pendingProblem:undefined};
+   return reply(plan,202);
+  }});
+  try{
+   await open(ui);
+   assert.match(reservation(ui).textContent,/最近一次核验受阻.*目标检查点和已签名的隔离回执不一致/s);
+   assert.doesNotMatch(reservation(ui).textContent,/private-data/);
+   assert.equal(reservation(ui).querySelector('time').dateTime,'2026-11-18T09:05:00Z');
+   assert.ok(button(ui,'fence').disabled);
+   plan={...plan,workerStartAvailable:true,pendingProblem:{...plan.pendingProblem,code:'AUTHORIZATION_CHANGED'}};
+   button(ui,'reload').click();await flush();assert.match(button(ui,'fence').textContent,/重新审批启动/);
+   button(ui,'fence').click();await flush();
+   assert.equal(ui.starts.length,1);
+   assert.notEqual(ui.starts[0].headers['X-Request-ID'],'prior-start-approval');
+   assert.doesNotMatch(reservation(ui).textContent,/最近一次核验受阻/);
+   assert.ok(button(ui,'fence').disabled);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff refuses transferred status with wrong authority, adoption shape or missing original grant',async()=>{
   for(const invalid of [
    {committedRevision:revision},{committedConfigurationVersion:revision},{candidateNodeId:'offline-agent'},

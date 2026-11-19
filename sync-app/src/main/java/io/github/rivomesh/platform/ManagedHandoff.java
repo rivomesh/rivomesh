@@ -265,7 +265,12 @@ final class ManagedHandoff {
             HandoffPreparations.Plan plan=tasks.preparations().latest(c,id,db.now(c));
             if(plan==null)throw new NoSuchElementException("HANDOFF_PREPARATION_NOT_FOUND");
             requirePlanGrants(actor,task,plan);
-            return HandoffPreparations.summary(plan);
+            Map<String,Object> receipt=HandoffPreparations.summary(plan);
+            if("FENCE_PENDING".equals(plan.phase())&&!plan.targetFence().actorRevision().equals(actor.authorizationRevision))
+                receipt.put("targetFenceAvailable",true);
+            if("START_PENDING".equals(plan.phase())&&!plan.workerStart().actorRevision().equals(actor.authorizationRevision))
+                receipt.put("workerStartAvailable",true);
+            return receipt;
         });
     }
 

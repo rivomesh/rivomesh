@@ -111,7 +111,7 @@ After the candidate has adopted the signed report and receipt history, an admini
 
 The first profile uses a MySQL source, one shared PostgreSQL control and journal database, and at most eight PostgreSQL or MySQL targets at a common original epoch. The candidate independently verifies its installed configuration, archived evidence, source log coverage, and original target checkpoints and snapshots. Each target transaction advances its writer epoch under its checkpoint row lock. Transaction receipts, snapshot IDs and source position remain at the reviewed cut. The journal stays parked and the Worker stays stopped.
 
-Keep the same request ID to read the receipt from either Controller. If the candidate or a database stops during execution, the approved request stays pending and the candidate resumes from the native target epochs when it returns. A different request cannot replace a current approval. If account authorization has changed while fencing is pending, an eligible administrator can explicitly approve again with a fresh request ID. A changed cut or lost snapshot keeps the request pending. Check the sanitized `HANDOFF_TARGET_FENCE` diagnostic on the candidate. Worker activation requires separate admission.
+Keep the same request ID to read the receipt from either Controller. If the candidate or a database stops during execution, the approved request stays pending and the candidate resumes from the native target epochs when it returns. A different request cannot replace a current approval. If account authorization changes while fencing is pending, refresh and select **Approve SQL fencing again**. Use a fresh request ID when approving through the API. A changed cut or lost snapshot keeps the request pending. The handoff panel shows the latest verified blocker and its timestamp. The Agent log also records the `HANDOFF_TARGET_FENCE` diagnostic. Worker activation requires separate admission.
 
 ### Start the candidate Worker
 
@@ -119,13 +119,13 @@ After **Targets fenced**, select **Start candidate Worker**. The API uses `POST 
 
 | Handoff state | What to check |
 | --- | --- |
-| `START_PENDING` | The approval is durable. The candidate checks the source cut and each native target checkpoint again. If a check fails, the Worker remains stopped and the candidate logs `HANDOFF_START_PENDING` with the reason. |
+| `START_PENDING` | The approval is durable. The candidate checks the source cut and each native target checkpoint again. If a check fails, the Worker remains stopped. Refresh the handoff panel to see the latest blocker and when the candidate observed it. |
 | `WORKER_ADMITTED` | The shared PostgreSQL transaction opened the journal to the candidate assignment and recorded the approved request. The candidate still needs to save the local start intent. |
 | `WORKER_PROJECTED` | The candidate saved the start intent. Check the Worker state and capture lease in task details to confirm actual execution. |
 
 Journal formats 19–22 mark the admitted assignment, preserve enabled recovery features and fence older runtimes. The candidate still acquires the normal exclusive lease and respects available Worker slots. It consumes the original source checkpoint and snapshot generation. Once the start intent is saved, use the ordinary task controls. Replaying the handoff approval preserves a later operator stop. Task and node grants govern access to original report history and closed receipts. New reports are stored in the candidate’s ordinary workspace.
 
-During the pending approval, a changed target receipt, unavailable source logs or a revoked administrator authorization leaves the task parked. Check the candidate log and restore the reviewed database state before retry. An eligible administrator can submit a fresh approval after the authorization revision changes. This profile covers the same PostgreSQL control/journal store and the same MySQL and PostgreSQL target profiles as the fencing step. Automatic host takeover and partition recovery have separate acceptance criteria.
+During the pending approval, a changed target receipt, unavailable source logs or a revoked administrator authorization leaves the task parked. Check the candidate log and restore the reviewed database state before retry. If authorization changes, an eligible administrator can refresh the handoff panel and select **Approve Worker start again**. The panel allocates a fresh request ID. API callers should use a fresh request ID and the existing preparation and committed revision. This profile covers the same PostgreSQL control/journal store and the same MySQL and PostgreSQL target profiles as the fencing step. Automatic host takeover and partition recovery have separate acceptance criteria.
 
 ## Admission and recovery
 

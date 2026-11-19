@@ -18,6 +18,9 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
 - [ ] T-CP-04 · Failover,fencing and placement · P0 · Depends on: CP-03, JV-01, LG-05
   Deliver: Power loss,partition and stale-node return never permit dual writers;unconfirmed stops remain unknown/fenced;placement respects JDK,adapter,storage reachability and quotas;drain/move preserves progress.
   Acceptance: AC-CP-04
+  - [x] Same-store ownership transfer, native target fencing and candidate continuation to both original SQL targets.
+  - [x] Durable handoff blockers in the console and reapproval after an authorization change.
+  - [ ] Native automatic takeover, partitions and drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
   Acceptance: AC-CP-05
@@ -104,6 +107,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Oracle 26ai integer virtual columns through snapshot, archived CDC and original-snapshot restart.
+  - [ ] Additional generated expressions, native binary JSON, LOB and RAC failover.
 ## Java runtime compatibility
 
 - [x] T-JV-01 · Temurin 21 first-release runtime · P0 · Depends on: none
@@ -152,6 +157,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05
+  - [x] Adopted reports and closed receipts, and private MySQL capture ZIP staging with offline verification.
+  - [ ] Live adoption of raw capture archives and historical failure evidence, with further storage profiles.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06

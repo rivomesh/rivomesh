@@ -65,6 +65,8 @@ parser.add_argument('--handoff-public-owner-browser', type=Path,
                     help='Commit the prepared owner change using the actual console in Chrome')
 parser.add_argument('--handoff-worker-start', action='store_true',
                     help='Resume the recorded cut after a separately approved and revalidated Worker start')
+parser.add_argument('--handoff-approval-diagnostics', action='store_true',
+                    help='Check durable parked diagnostics and reapproval after the shared authorization revision changes')
 parser.add_argument('--previous-handoff-runtime', type=Path,
                     help='Compare a prior runtime at the parked journal, or at the admitted journal with --handoff-worker-start')
 parser.add_argument('--handoff-preparation-browser', type=Path,
@@ -173,6 +175,8 @@ if args.handoff_public_owner_browser and (not args.handoff_public_owner
     parser.error('--handoff-public-owner-browser requires --handoff-public-owner and executable Chrome')
 if args.handoff_worker_start and not args.handoff_target_fence:
     parser.error('--handoff-worker-start requires --handoff-target-fence')
+if args.handoff_approval_diagnostics and not args.handoff_worker_start:
+    parser.error('--handoff-approval-diagnostics requires --handoff-worker-start')
 if args.previous_handoff_runtime and (not args.handoff_private_writer or not args.previous_handoff_runtime.is_file()
         or args.previous_handoff_runtime.resolve()==args.artifact.resolve()):
     parser.error('--previous-handoff-runtime requires --handoff-private-writer and a distinct prior JAR')
@@ -308,6 +312,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffAdoptedBrowser': bool(args.handoff_adopted_browser),
             'handoffTargetFence': args.handoff_target_fence,
             'handoffWorkerStart': args.handoff_worker_start,
+            'handoffApprovalDiagnostics': args.handoff_approval_diagnostics,
             'handoffPublicOwner': args.handoff_public_owner,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
@@ -2698,9 +2703,40 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                     assert approved['workerStart']=={'requestId':start_id}
                                     refused=http('node-b',start_url,fence_input,request='gc_other_'+uuid.uuid4().hex,expected=409)
                                     assert refused['code']=='HANDOFF_WORKER_START_REQUEST_CHANGED'
-                                    assert approved==http('node-b',start_url,fence_input,request=start_id,expected=202)
-                                    wait(lambda:'HANDOFF_START_PENDING HANDOFF_TARGET_FENCE_CHANGED'
-                                         in compose('logs','--no-color',candidate).stdout,'candidate rejects changed native SQL receipt')
+                                    replayed_approval=http('node-b',start_url,fence_input,request=start_id,expected=202)
+                                    assert replayed_approval['state']=='START_PENDING' and replayed_approval['workerStart']==approved['workerStart']
+
+                                    def pending_problem(code):
+                                        result=http('node-b',preparation)
+                                        problem=result.get('pendingProblem',{})
+                                        return result if problem.get('code')==code and problem.get('observedAt') else None
+
+                                    if args.handoff_approval_diagnostics:
+                                        observed=wait(lambda:pending_problem('HANDOFF_TARGET_FENCE_CHANGED'),
+                                                      'second Controller reads a durable checkpoint refutation')
+                                        assert observed==http('node-a',preparation)
+                                        assert not observed.get('workerStartAvailable',False) and observed['workerStart']==approved['workerStart']
+                                        accounts=http('node-a','/api/accounts')
+                                        if accounts['mode']=='CONFIG':
+                                            http('node-a','/api/accounts/activate',{'expectedRevision':accounts['revision']})
+                                        else:
+                                            http('node-a','/api/accounts',{
+                                                'expectedRevision':accounts['revision'],'id':'fixture-handoff-observer',
+                                                'role':'VIEWER','enabled':True,'taskIds':[],
+                                                'token':secrets.token_urlsafe(48),
+                                            },expected=201)
+                                        changed=wait(lambda:pending_problem('AUTHORIZATION_CHANGED'),
+                                                     'second Controller reads the revoked approval cause')
+                                        assert changed.get('workerStartAvailable') is True and changed['workerStart']==approved['workerStart']
+                                        assert http('node-b',start_url,fence_input,request=start_id,expected=409)['code']=='AUTHORIZATION_CHANGED'
+                                        start_id='gc_worker_reapproval_'+uuid.uuid4().hex
+                                        replaced=http('node-b',start_url,fence_input,request=start_id,expected=202)
+                                        assert replaced['state']=='START_PENDING' and replaced['workerStart']=={'requestId':start_id}
+                                        assert 'pendingProblem' not in replaced and not replaced.get('workerStartAvailable',False)
+                                        passed('Both entries report the native mismatch and authorization change, then accept exactly one fresh approval')
+                                    else:
+                                        wait(lambda:'HANDOFF_START_PENDING HANDOFF_TARGET_FENCE_CHANGED'
+                                             in compose('logs','--no-color',candidate).stdout,'candidate rejects changed native SQL receipt')
                                     assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
                                     assert task()['workerState']=='STOPPED' and data_cut()[0]==current[0] and rows_match()
                                     compose('kill','-s','SIGKILL',candidate)
@@ -2721,6 +2757,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 installed=wait(started,'approved candidate reopens native journal and starts one Worker')
                                 resumed=data_cut()
                                 assert installed['executionAuthorized'] is True and installed['workerStart']=={'requestId':start_id}
+                                assert 'pendingProblem' not in installed and not installed.get('workerStartAvailable',False)
                                 assert sql('store',parked_status).split('|')[-1]=='19'
                                 assert int(resumed[0].split('|',1)[0])>parked
                                 assert resumed[0].split('|',1)[1]==current[0].split('|',1)[1]

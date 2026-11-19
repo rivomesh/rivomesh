@@ -571,3 +571,7 @@ The `4d81f927ee7000af9b948e4842c51127e873f091a17602175ae8712b0ef603a7` package p
 ### Authenticated private staging of MySQL raw capture archives
 
 The `446030732f40c563137f1bcdec9c663d2502434f02f1926bb15434c1a11acf02` package passed 23 native checks, 76 Java tests and 155 DOM tests. The original Agent retained bytes from a real row-limit failure and replayed the same GTID after review. The candidate staged the exact signed raw ZIP beside completed validation reports and closed receipts. Both shared files were temporarily unavailable when the other Controller reverified the local files. The native journal, targets and task ownership stayed at the reviewed cut. [Capture recovery](../en/capture-recovery.md) · [Manifest](baseline.json)
+
+### Durable handoff blockers and explicit reapproval
+
+The `05d34f775a4e30c522070a3379b3c0bfe2c626112ec3b1a7bba78a9f9f5f4d4d` package passed 29 native checks, 91 Java tests and 156 DOM tests. Both Controllers read the same sanitized checkpoint mismatch and later authorization change while the candidate remained stopped. The old approval was refused. A fresh approval resumed from the same source checkpoint with the original snapshots. The console displayed the last verification time and enabled the reapproval action when the latest signed plan allowed it. [Operator workflow](../en/global-control.md#start-the-candidate-worker) · [Manifest](baseline.json)

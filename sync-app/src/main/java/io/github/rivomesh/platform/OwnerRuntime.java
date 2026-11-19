@@ -191,13 +191,30 @@ final class OwnerRuntime implements AutoCloseable {
                     if(finishing){
                         handoffRetries.put(id,System.nanoTime()+TimeUnit.SECONDS.toNanos(6));
                         String operation="FENCE_PENDING".equals(task.phase())?"HANDOFF_TARGET_FENCE":"HANDOFF_"+task.phase();
-                        System.err.println(operation+" "+code(deferred));
+                        String problem=HandoffPreparations.safeProblem(code(deferred));
+                        System.err.println(operation+" "+problem);
+                        if(task.approval()!=null)rememberPendingProblem(task,problem);
                     }
                     // The committed receipt stays pending and new generic commands remain blocked.
                 }
                 finally{queued.remove(id);}
             });}catch(RejectedExecutionException full){queued.remove(id);}
         }
+    }
+    private void rememberPendingProblem(HandoffPreparations.PendingRecipient task,String problem){
+        try{
+            ControlStore.Lease current=leases.get();
+            authority.service((c,accounts)->{
+                agents.require(c,current,directory);
+                var record=authority.record(c,task.task());
+                if(!record.owner.equals(current.nodeId)||!record.directory.equals(directory))throw new ControlStore.Fenced();
+                var plans=authority.preparations();
+                long now=authority.database().now(c);
+                var plan=plans.latest(c,task.task(),now);
+                plans.recordPendingProblem(c,plan,task,problem,now);
+                return null;
+            });
+        }catch(Exception unavailable){queryProblem=code(unavailable);}
     }
     private void queries(){
         if(closed.get())return;

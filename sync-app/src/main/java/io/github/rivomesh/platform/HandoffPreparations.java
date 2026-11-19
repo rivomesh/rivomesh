@@ -16,9 +16,19 @@ final class HandoffPreparations {
     record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
                             String nativeEvidenceSha256,boolean checkedInControlTransaction){}
     record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){}
-    record TargetFenceRequest(String id,String actor,String actorRevision,
-                              JournalWriterAssignment.TargetFence result){}
-    record WorkerStart(String id,String actor,String actorRevision){}
+    record PendingProblem(String code,long observedAt){}
+    record TargetFenceRequest(String id,String actor,String actorRevision,JournalWriterAssignment.TargetFence result,
+                              @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                              PendingProblem problem){
+        TargetFenceRequest(String id,String actor,String actorRevision,JournalWriterAssignment.TargetFence result){
+            this(id,actor,actorRevision,result,null);
+        }
+    }
+    record WorkerStart(String id,String actor,String actorRevision,
+                       @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                       PendingProblem problem){
+        WorkerStart(String id,String actor,String actorRevision){this(id,actor,actorRevision,null);}
+    }
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -183,7 +193,7 @@ final class HandoffPreparations {
         return complete;
     }
 
-    record PendingRecipient(String task,String preparation,String phase){}
+    record PendingRecipient(String task,String preparation,String phase,String approval){}
     List<PendingRecipient> pendingRecipient(Connection c,String candidate,String directory,String after,int limit)throws Exception{
         List<PendingRecipient> pending=new ArrayList<>();
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
@@ -192,7 +202,12 @@ final class HandoffPreparations {
             while(rows.next()){
                 Plan p=read(rows);
                 if(!directory.equals(p.evidence.candidate.directory))throw new ControlStore.Fenced();
-                pending.add(new PendingRecipient(p.task,p.id,p.phase));
+                String approval=switch(p.phase){
+                    case "FENCE_PENDING" -> p.targetFence.id;
+                    case "START_PENDING" -> p.workerStart.id;
+                    default -> null;
+                };
+                pending.add(new PendingRecipient(p.task,p.id,p.phase,approval));
             }
         }
         return pending;
@@ -247,6 +262,7 @@ final class HandoffPreparations {
         if(request==null||!validExecutionId(plan,request.id)||request.id.equals(plan.executionRequest)
                 ||request.actor==null||request.actorRevision==null)return false;
         JournalWriterAssignment.TargetFence result=request.result;
+        if(!validProblem(request.problem,"FENCE_PENDING".equals(plan.phase())))return false;
         return "FENCE_PENDING".equals(plan.phase())?result==null:result!=null&&result.epoch()==plan.writerCommit.journalEpoch()
                 &&plan.activation.nativeEvidenceSha256().equals(result.cutSha256())&&result.destinations()!=null
                 &&!result.destinations().isEmpty()&&result.destinations().size()<=8
@@ -291,7 +307,28 @@ final class HandoffPreparations {
         if(!expected)return start==null;
         return start!=null&&validExecutionId(plan,start.id)&&!start.id.equals(plan.executionRequest)
                 &&plan.targetFence!=null&&!start.id.equals(plan.targetFence.id)
-                &&start.actor!=null&&start.actorRevision!=null;
+                &&start.actor!=null&&start.actorRevision!=null&&validProblem(start.problem,"START_PENDING".equals(plan.phase));
+    }
+    private static boolean validProblem(PendingProblem problem,boolean pending){
+        return problem==null||pending&&problem.observedAt>0&&Objects.equals(problem.code,safeProblem(problem.code));
+    }
+    static String safeProblem(String code){
+        return code!=null&&code.matches("(?:HANDOFF|WRITER_ASSIGNMENT|JOURNAL|SOURCE|SINK|PIPELINE)_[A-Z0-9_]{1,90}"
+                +"|AUTHORIZATION_CHANGED|FORBIDDEN|OWNER_RUNTIME_UNAVAILABLE")?code:"OWNER_RUNTIME_UNAVAILABLE";
+    }
+    void recordPendingProblem(Connection c,Plan plan,PendingRecipient attempt,String code,long now)throws Exception{
+        if(plan==null||!plan.id.equals(attempt.preparation)||!plan.phase.equals(attempt.phase)||attempt.approval==null)return;
+        String sanitized=safeProblem(code);
+        var problem=new PendingProblem(sanitized,now);
+        if("FENCE_PENDING".equals(plan.phase)){
+            var request=plan.targetFence;
+            if(!attempt.approval.equals(request.id)||request.problem!=null&&sanitized.equals(request.problem.code))return;
+            updateTargetFence(c,plan,plan.phase,new TargetFenceRequest(request.id,request.actor,request.actorRevision,null,problem));
+        }else if("START_PENDING".equals(plan.phase)){
+            var request=plan.workerStart;
+            if(!attempt.approval.equals(request.id)||request.problem!=null&&sanitized.equals(request.problem.code))return;
+            updateWorkerStart(c,plan,plan.phase,new WorkerStart(request.id,request.actor,request.actorRevision,problem));
+        }
     }
     Plan bindWorkerStart(Connection c,Plan plan,String request,AccessControl.Principal actor)throws Exception{
         WorkerStart bound=plan.workerStart;
@@ -309,7 +346,8 @@ final class HandoffPreparations {
     }
     Plan recordWorkerAdmitted(Connection c,Plan plan)throws Exception{
         if(!"START_PENDING".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
-        return updateWorkerStart(c,plan,"WORKER_ADMITTED",plan.workerStart);
+        var start=plan.workerStart;
+        return updateWorkerStart(c,plan,"WORKER_ADMITTED",new WorkerStart(start.id,start.actor,start.actorRevision));
     }
     Plan recordWorkerProjected(Connection c,Plan plan)throws Exception{
         if(!"WORKER_ADMITTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
@@ -363,6 +401,12 @@ final class HandoffPreparations {
         if(p.workerStart!=null)view.put("workerStart",Map.of("requestId",p.workerStart.id()));
         if(p.targetFence!=null)view.put("targetFence",Map.of("requestId",p.targetFence.id(),
                 "destinationsFenced",p.targetFence.result()==null?0:p.targetFence.result().destinations().size()));
+        PendingProblem problem=switch(p.phase){
+            case "FENCE_PENDING" -> p.targetFence.problem;
+            case "START_PENDING" -> p.workerStart.problem;
+            default -> null;
+        };
+        if(problem!=null)view.put("pendingProblem",Map.of("code",problem.code,"observedAt",Instant.ofEpochMilli(problem.observedAt).toString()));
         if(p.activation!=null)view.put("writerActivation",Map.of(
                 "checkedInControlTransaction",p.activation.checkedInControlTransaction,
                 "activationSha256",AuditStore.hash(p.id+"\n"+e.proof+"\n"+p.activation.nextAssignment),

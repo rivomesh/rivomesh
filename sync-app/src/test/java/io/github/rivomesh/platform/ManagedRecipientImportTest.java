@@ -124,7 +124,7 @@ class ManagedRecipientImportTest {
             store.preparations().recordProjected(c,committed,receipt);
             HandoffPreparations.Plan projected=store.preparations().latest(c,TASK,now);
             assertEquals("PROJECTED",projected.phase());
-            assertEquals(List.of(new HandoffPreparations.PendingRecipient(TASK,source.id(),"PROJECTED")),
+            assertEquals(List.of(new HandoffPreparations.PendingRecipient(TASK,source.id(),"PROJECTED",null)),
                     store.preparations().pendingRecipient(c,CANDIDATE,fixture.directory,"",10));
             HandoffEvidenceAdoption.Receipt stranger=adoption(projected,"4".repeat(64),source.evidence().original());
             assertEquals("HANDOFF_RECIPIENT_EVIDENCE_CHANGED",assertThrows(TaskService.Conflict.class,()->
