@@ -41,7 +41,7 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | RC-07 | P0 / DONE | 界面手工补数据与修正 | 首批 SQL 档案通过。逐行录入和 JSON 导入支持管理员审阅前后值、精确行定位、原子批次和原事务恢复。PostgreSQL 通过真实 CDC，MySQL 通过原生检查。其他目标由 RC-10 跟踪。 |
 | RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
 | RC-09 | P0 / DONE | 补偿作业的跨节点持久化和恢复 | 首批 SQL 档案通过跨节点计划、审批、取消与原请求恢复。真实提交边界测试以 PostgreSQL 17 为恢复目标。 |
-| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 TLS/SCRAM Broker 已验证双入口查询、同名 Topic 更换 UUID、旧故障及旧修订拒绝。历史全量归属、正式发送与恢复、跨适配器补偿待验。 |
+| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 TLS/SCRAM Broker 已验证双入口查询、同名 Topic 更换 UUID、旧故障及旧修订拒绝。三个 TLS/SCRAM Broker 已验收条件审批与双入口发送前检查。控制 Topic 更换或配置变更时拒绝原范围，原两路 ACK 和消费位点保持。历史全量归属、正式发送与恢复、跨适配器补偿待验。 |
 
 ## 源数据库兼容
 

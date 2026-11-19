@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Run the read-only Kafka writer entitlement checks on one disposable TLS/SCRAM broker."""
+"""Run read-only Kafka writer and receipt checks on disposable TLS/SCRAM brokers."""
 import argparse
 import base64
+from contextlib import ExitStack
 import hashlib
 import os
 from pathlib import Path
@@ -35,16 +36,18 @@ def provision_tls(home, keytool):
     return trust, password
 
 
-def start(home, port, password, name):
-    cluster = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip('=')
+def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093', network=None):
+    internal_host = name if network else '127.0.0.1'
+    internal_bind = '' if network else '127.0.0.1'
+    replicas = '3' if network else '1'
     settings = {
-        'CLUSTER_ID': cluster, 'KAFKA_NODE_ID': '1', 'KAFKA_PROCESS_ROLES': 'broker,controller',
+        'CLUSTER_ID': cluster, 'KAFKA_NODE_ID': str(node), 'KAFKA_PROCESS_ROLES': 'broker,controller',
         'KAFKA_LOG_DIRS': '/tmp/kafka-test-data',
-        'KAFKA_CONTROLLER_QUORUM_VOTERS': '1@127.0.0.1:9093',
+        'KAFKA_CONTROLLER_QUORUM_VOTERS': voters,
         'KAFKA_CONTROLLER_LISTENER_NAMES': 'CONTROLLER',
         'KAFKA_LISTENER_SECURITY_PROTOCOL_MAP': 'INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:SASL_SSL',
-        'KAFKA_LISTENERS': 'INTERNAL://127.0.0.1:9092,CONTROLLER://127.0.0.1:9093,EXTERNAL://:9094',
-        'KAFKA_ADVERTISED_LISTENERS': f'INTERNAL://127.0.0.1:9092,EXTERNAL://127.0.0.1:{port}',
+        'KAFKA_LISTENERS': f'INTERNAL://{internal_bind}:9092,CONTROLLER://{internal_bind}:9093,EXTERNAL://:9094',
+        'KAFKA_ADVERTISED_LISTENERS': f'INTERNAL://{internal_host}:9092,EXTERNAL://127.0.0.1:{port}',
         'KAFKA_INTER_BROKER_LISTENER_NAME': 'INTERNAL',
         'KAFKA_AUTHORIZER_CLASS_NAME': 'org.apache.kafka.metadata.authorizer.StandardAuthorizer',
         'KAFKA_SUPER_USERS': 'User:ANONYMOUS;User:fixture-admin', 'KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND': 'false',
@@ -52,16 +55,21 @@ def start(home, port, password, name):
         'KAFKA_SSL_KEYSTORE_LOCATION': '/fixture/broker.jks', 'KAFKA_SSL_KEYSTORE_TYPE': 'JKS',
         'KAFKA_SSL_KEYSTORE_PASSWORD': password, 'KAFKA_SSL_KEY_PASSWORD': password,
         'KAFKA_OPTS': '-Djava.security.auth.login.config=/fixture/jaas.conf',
-        'KAFKA_HEAP_OPTS': '-Xms128m -Xmx512m -XX:ActiveProcessorCount=2',
-        'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR': '1', 'KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS': '3',
-        'KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR': '1', 'KAFKA_TRANSACTION_STATE_LOG_MIN_ISR': '1',
+        'KAFKA_HEAP_OPTS': '-Xms128m -Xmx' + ('320m' if network else '512m') + ' -XX:ActiveProcessorCount=2',
+        'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR': replicas, 'KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS': '3',
+        'KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR': replicas,
+        'KAFKA_TRANSACTION_STATE_LOG_MIN_ISR': '2' if network else '1',
         'KAFKA_AUTO_CREATE_TOPICS_ENABLE': 'false',
     }
-    command = ['docker', 'run', '--rm', '-d', '--name', name, '--memory', '1280m', '--cpus', '2',
+    command = (['docker', 'create', '--rm'] if network else ['docker', 'run', '--rm', '-d']) + [
+               '--name', name, '--memory', '1024m' if network else '1280m',
+               '--cpus', '1.25' if network else '2',
                '-p', f'127.0.0.1:{port}:9094', '-v', f'{home}:/fixture:ro']
+    if network:
+        command.extend(['--network', network])
     for key, value in settings.items():
         command.extend(['-e', f'{key}={value}'])
-    run(*command, 'apache/kafka:3.9.2', capture_output=True)
+    run(*command, 'apache/kafka:3.9.2', capture_output=True, timeout=30)
 
 
 def provision_users(name, secret):
@@ -89,6 +97,7 @@ def main():
     mode = options.add_mutually_exclusive_group()
     mode.add_argument('--physical-ownership', action='store_true')
     mode.add_argument('--managed-physical-receipt', action='store_true')
+    mode.add_argument('--managed-notice-preflight', action='store_true', help='Use a three-broker TLS/SCRAM control Topic')
     options.add_argument('--artifact-sha256', help='Require this SHA-256 of the normal application JAR')
     options.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), help='Eclipse Temurin 21 JDK')
     options.add_argument('--preflight', action='store_true', help='Compile the fixture without starting Docker')
@@ -111,9 +120,12 @@ def main():
     fixtures = ['KafkaNoticeWriterAcceptance']
     if args.physical_ownership:
         fixtures = ['KafkaPhysicalOwnershipAcceptance']
-    if args.managed_physical_receipt:
+    managed = args.managed_physical_receipt or args.managed_notice_preflight
+    if managed:
         fixtures = ['KafkaManagedPhysicalReceiptAcceptance', 'KafkaPhysicalOwnershipAcceptance']
     name = f'rivomesh-kafka-writer-{secrets.token_hex(6)}'
+    names = [f'{name}-{node}' for node in (1,2,3)] if args.managed_notice_preflight else [name]
+    network = name+'-net' if args.managed_notice_preflight else None
     secret = secrets.token_hex(24)
     with tempfile.TemporaryDirectory(prefix='rivomesh-kafka-writer-') as directory:
         home = Path(directory)
@@ -125,34 +137,50 @@ def main():
         classpath = os.pathsep.join((str(artifact), str(classes)))
         environment = dict(os.environ, RIVOMESH_KAFKA_FIXTURE_SECRET=secret)
         if args.preflight:
-            if args.managed_physical_receipt:
+            if managed:
                 run(str(java_home / 'java'), '-Xmx384m', '-cp', classpath,
-                    f'io.github.rivomesh.cdc.{fixtures[0]}', '--control-preflight', str(home), env=environment, timeout=65)
+                    f'io.github.rivomesh.cdc.{fixtures[0]}', '--control-preflight', str(home),
+                    *(['--notice-preflight'] if args.managed_notice_preflight else []), env=environment, timeout=65)
             print('Fixture compiled against the supplied application. No broker started.', flush=True)
             return
-        with socket.socket() as reservation:
-            reservation.bind(('127.0.0.1', 0))
-            port = reservation.getsockname()[1]
+        with ExitStack() as reservations:
+            sockets = [reservations.enter_context(socket.socket()) for _ in names]
+            for reservation in sockets:
+                reservation.bind(('127.0.0.1', 0))
+            ports = [reservation.getsockname()[1] for reservation in sockets]
         trust, password = provision_tls(home, str(java_home / 'keytool'))
+        cluster = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip('=')
         try:
-            start(home, port, password, name)
-            provision_users(name, secret)
-            fixture_arguments = [f'127.0.0.1:{port}']
-            if args.managed_physical_receipt:
+            if network:
+                run('docker', 'network', 'create', network, capture_output=True, timeout=15)
+                voters = ','.join(f'{node}@{broker}:9093' for node, broker in enumerate(names, 1))
+                for node, (broker, port) in enumerate(zip(names, ports), 1):
+                    start(home, port, password, broker, cluster, node, voters, network)
+                run('docker', 'start', *names, capture_output=True, timeout=35)
+            else:
+                start(home, ports[0], password, name, cluster)
+            provision_users(names[0], secret)
+            fixture_arguments = [','.join(f'127.0.0.1:{port}' for port in ports)]
+            if managed:
                 fixture_arguments.append(str(home))
-            run(str(java_home / 'java'), '-Xmx384m' if args.managed_physical_receipt else '-Xmx256m',
+            if args.managed_notice_preflight:
+                fixture_arguments.append('--notice-preflight')
+            run(str(java_home / 'java'), '-Xmx384m' if managed else '-Xmx256m',
                 '-Dorg.slf4j.simpleLogger.defaultLogLevel=off',
                 f'-Djavax.net.ssl.trustStore={trust}', f'-Djavax.net.ssl.trustStorePassword={password}',
                 '-cp', classpath, f'io.github.rivomesh.cdc.{fixtures[0]}', *fixture_arguments,
-                env=environment, timeout=210 if args.managed_physical_receipt else 125)
+                env=environment, timeout=250 if args.managed_notice_preflight else 210 if managed else 125)
         except Exception:
-            logs = subprocess.run(['docker', 'logs', '--tail', '35', name], capture_output=True, text=True, timeout=10)
-            if logs.returncode == 0:
-                print((logs.stdout + logs.stderr).replace(secret, '[synthetic-secret]'), flush=True)
+            for broker in names:
+                logs = subprocess.run(['docker', 'logs', '--tail', '25', broker], capture_output=True, text=True, timeout=10)
+                if logs.returncode == 0:
+                    print((logs.stdout + logs.stderr).replace(secret, '[synthetic-secret]'), flush=True)
             raise
         finally:
-            subprocess.run(['docker', 'rm', '-f', name], check=False, capture_output=True, timeout=15)
-            remaining = subprocess.run(['docker', 'ps', '-a', '--filter', f'name=^{name}$', '--format', '{{.Names}}'],
+            subprocess.run(['docker', 'rm', '-f', *names], check=False, capture_output=True, timeout=20)
+            if network:
+                subprocess.run(['docker','network','rm',network],check=False,capture_output=True,timeout=15)
+            remaining = subprocess.run(['docker', 'ps', '-a', '--filter', f'name={name}', '--format', '{{.Names}}'],
                                        check=True, capture_output=True, text=True, timeout=15)
             if remaining.stdout.strip():
                 raise RuntimeError('Disposable Kafka fixture was not cleaned up')

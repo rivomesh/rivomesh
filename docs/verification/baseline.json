@@ -13815,5 +13815,42 @@
     "fixtureSha256": "4ed5ea4140343ad170d30c79664273b7cc2ab435a8e09429b14c8f938197b729",
     "scope": "One loopback Redis 8.0.2 process with private CA TLS and a password-protected restricted ACL in database 2. AOF restart retains native stream IDs, ownership and snapshot through a publisher JVM restart. TLS replication and client certificates require separate acceptance.",
     "reproduce": "python3 tests/redis-tls-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --java-home \"$JAVA_HOME\" --output target/redis-tls-proof"
+  },
+  "kafkaNoticeSenderPreflightThreeBrokerNative": {
+    "status": "PASS",
+    "artifactSha256": "c76e9858a72f144c3447b0fce3b3b9c732a19641fe4ed5a85a3e83e3f612c7a3",
+    "jdk": "Eclipse Temurin 21.0.13+9",
+    "releasedCommit": "d7e84c6",
+    "fixtureBaseCommit": "4e579caaa55b7738d7a8e241fca1fe2f2f0944d4",
+    "evidenceSha256": "2b6955768733ed63bdb07d5b73e80d8785fd24e23542c4cfa35409c2ab33488d",
+    "kafka": {
+      "image": "apache/kafka:3.9.2",
+      "image_id": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+      "architecture": "arm64",
+      "brokers": 3,
+      "control_replication_factor": 3,
+      "control_minimum_isr": 2,
+      "identity": "TLS/SCRAM-SHA-512"
+    },
+    "checks": [
+      "PASS RF3 TLS/SCRAM approval and both Controller preflight reads match exact original failure, topic and actor.",
+      "PASS both Controllers reject same-name replacement of the RF3 control Topic.",
+      "PASS updated configuration is rejected; control and business offsets, groups and both journal ACKs are unchanged."
+    ],
+    "nativeChecksPassed": 3,
+    "acknowledgedBeforeAndAfter": {
+      "selected": 1,
+      "peer": 2
+    },
+    "controlEndOffset": 0,
+    "consumerGroups": 0,
+    "remainingFixtures": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "firstFixtureFailure": "A real ACL changed asynchronously after setup. This was a fixture readiness error before product approval. The retained diagnostic redacts its ephemeral keystore password. The same application passed after only adding bounded fixture readiness checks.",
+    "scope": "two separate Controller/Agent roles in one acceptance JVM, shared H2, synthetic source and real Kafka; no sender or live source capture",
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-notice-preflight --java-home \"$JAVA_HOME\" --artifact-sha256 \"$RIVOMESH_ARTIFACT_SHA256\" \"$RIVOMESH_ARTIFACT\""
   }
 }
