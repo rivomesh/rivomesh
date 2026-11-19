@@ -14388,5 +14388,27 @@
     "browserPassed": 14,
     "browserManifestSha256": "a4e586b21890139fd2bb6c63e73653cca5b786d63ebf69d4e1bab34193ae2b9b",
     "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-notice-preflight --java-home <Temurin 21 directory> --artifact-sha256 <release SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+  },
+  "kafka41StandaloneTopicUuidTransactions": {
+    "scope": "Standalone protocol acceptance on official Kafka 4.1.2 with SASL_SSL and SCRAM. Java 21 test dependency runs apart from the Rivomesh application.",
+    "clientSha256": "afe861c05067f4018a3148d73c1ed1e5fc90808757c15b043527d7e535a5d431",
+    "brokerImageId": "sha256:20301fbff27d32572e4f6c1e39b1e2634267163d2c5245138ebf8b5e3f00d05e",
+    "architecture": "arm64",
+    "nativeChecks": [
+      "standard Kafka transaction committed through a v13-only Produce builder carrying the approved Topic UUID.",
+      "the same name resolved to a new UUID. The strict transactional sender refused before Produce and the replacement offset stayed zero.",
+      "the Kafka broker rejected an actual Produce v13 for the retired UUID, leaving the replacement offset zero."
+    ],
+    "nativeLogSha256": "8031d6c3c1e114569a0f1497da9cfd3d2225b58384018a1fa8dd624272be3e16",
+    "fixtureFilesSha256": {
+      "tests/kafka-topic-id-run.py": "e2012b6a4c54a4aadb70088d0f8d50e2051a57b504e74d63422b68a38a58b2d8",
+      "tests/kafka/TopicIdProducerAcceptance.java": "09c3cb645974d22607f9754c216323cef69425d26d7ba477ed5e2bf6e5449d94",
+      "tests/kafka-notice-writer-run.py": "9f84b0fc2387622b8f7c7424dee54d4cce1af390bfd556b4591c2ccb8d2b1d01"
+    },
+    "checkedBrokerResponse": "UNKNOWN_TOPIC_ID",
+    "replacementTopicEndOffset": 0,
+    "cleanupVerified": true,
+    "reproduce": "python3 tests/kafka-topic-id-run.py --java-home <Temurin 21 directory> --kafka-client <official kafka-clients 4.1.2 jar> --slf4j-api <official slf4j-api 1.7.36 jar>",
+    "pending": "Production integration with the approved notice ledger and independent whole-history evidence, higher-replica and failover acceptance, and unavailable v13 handling."
   }
 }

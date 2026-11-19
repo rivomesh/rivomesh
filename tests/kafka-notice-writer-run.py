@@ -38,7 +38,8 @@ def provision_tls(home, keytool):
     return trust, password
 
 
-def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093', network=None):
+def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093', network=None,
+          image='apache/kafka:3.9.2'):
     internal_host = name if network else '127.0.0.1'
     internal_bind = '' if network else '127.0.0.1'
     replicas = '3' if network else '1'
@@ -71,7 +72,7 @@ def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093'
         command.extend(['--network', network])
     for key, value in settings.items():
         command.extend(['-e', f'{key}={value}'])
-    run(*command, 'apache/kafka:3.9.2', capture_output=True, timeout=30)
+    run(*command, image, capture_output=True, timeout=30)
 
 
 def provision_users(name, secret):

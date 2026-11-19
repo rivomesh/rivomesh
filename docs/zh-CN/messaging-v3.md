@@ -114,6 +114,8 @@ Kafka 3.9.2 实库档案使用 TLS/SCRAM-SHA-512，两个 Controller 通过同�
 
 发送前检查还返回 `KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED`。当前打包的 Kafka 3.9.2 客户端按 Topic 名称发送。发送端须使用审批绑定的物理 UUID，防止写入同名重建的 Topic。Kafka 4.1 的 Produce v13 提供 UUID 寻址。单独升级 Broker 时，打包的发送端仍需相应实现。 [Kafka 3.9.2 请求格式](https://github.com/apache/kafka/blob/3.9.2/clients/src/main/resources/common/message/ProduceRequest.json) · [Kafka 4.1 协议](https://kafka.apache.org/41/design/protocol/)
 
+Kafka 4.1.2 独立夹具已用 Produce v13 提交实际事务并读回原记录。重建同名 Topic 后，受保护的发送端拒绝写入。使用退役 UUID 的直接请求也得到 `UNKNOWN_TOPIC_ID`，替换 Topic 保持为空。运行 `python3 tests/kafka-topic-id-run.py --help` 查看隔离的 Temurin 21 夹具参数。正式发送仍需集成审批和完整历史归属。 [确切验收记录](../verification/baseline.json)
+
 ### 登记条件审批
 
 预览通过当前管理目录核对后，管理员可选择 **登记条件审批**。审批封存本次核对的精确失败证据、任务配置修订、控制 Topic UUID、物理路由摘要、通知内容摘要和写入身份的权限观察，保留登记时的阻断原因。管理目录缺证或发现冲突时，无法登记。当前物理路由证据无法追认历史写入归属，因此登记始终保留该阻断项。写入身份通过新核对或配置发生变化后，需要重新预览和审批。
