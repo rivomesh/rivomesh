@@ -555,3 +555,7 @@ The `7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275` package p
 ### Approved native fencing of a parked Agent’s SQL targets
 
 The `4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a` package passed 22 native checks, 59 focused Java tests and 151 DOM tests. The administrator bound the approval while the candidate was offline and replayed it at the other Controller. PostgreSQL began at the parked epoch to model a previously committed first fence. The candidate rechecked both original checkpoints and completed the MySQL epoch update after restart. Both targets kept their original receipts and rows. The journal and candidate Worker stayed parked and stopped. A stale revision and replacement request were refused. All disposable resources were cleaned. [Operator guide](../en/global-control.md#fence-the-parked-sql-targets) · [Manifest](baseline.json)
+
+### Target fence approval in the managed handoff console
+
+The `f458c5f066ceceed95b451f8c1de5f12d5e2f1399c7edb3a431e791ef4711289` package passed 24 native checks, 59 Java tests and 152 DOM tests. Chrome at 390px and 320px observed the approved action from both management entries. The DOM fixture verified a lost approval response reuses its original request ID and committed task revision. Both SQL targets finished at the parked epoch and the candidate Worker remained stopped. [Global controller guide](../en/global-control.md#fence-the-parked-sql-targets) · [Manifest](baseline.json)

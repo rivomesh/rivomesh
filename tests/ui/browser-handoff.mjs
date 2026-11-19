@@ -159,7 +159,8 @@ try{
     [preparationId,taskId,'EVIDENCE_ADOPTED',owner,candidate,revision,configurationVersion,false,0,0],
     'The signed adoption is bound to the expected task, preparation and revision with no execution authority');
    assert.notEqual(summary.taskRevision,revision);
-   expectKeys(summary,summaryFields);
+   const fenceOffered=summary.targetFenceAvailable===true;
+   expectKeys(summary,fenceOffered?[...summaryFields,'targetFenceAvailable']:summaryFields);
    expectKeys(summary.cut,['epoch','sequence','checkpointSha256']);
    expectKeys(summary.writerActivation,activationFields);
    expectMasked(summary.adoptedEvidence,adoption,'The receipt exposes only the exact adopted evidence counts');
@@ -194,8 +195,9 @@ try{
    expectMasked(visible.facts,names.map((name,index)=>[name,[
     owner,candidate,summary.activatedJournalEpoch,String(adoption.validationReports),String(adoption.closedReceipts)
    ][index]]),'The dialog shows exact node names, decimal journal epoch and counts');
-   expectMasked(visible.controls,light?['关闭','刷新交接状态']:['Close','Refresh handoff status'],
-    'Only close and read-only refresh controls are visible');
+   const allowed=light?['关闭','刷新交接状态']:['Close','Refresh handoff status'];
+   if(fenceOffered)allowed.push(light?'隔离 SQL 目标':'Fence SQL targets');
+   expectMasked(visible.controls,allowed,'Only the signed approval and read-only controls are visible');
    assert.equal(visible.editable,false);
    expectMasked(visible.codes,[preparationId,revision,configurationVersion],'The expanded receipt shows only public IDs');
    assert.equal(visible.theme,theme);assert.equal(visible.accent,light?'#2859a6':'#94bcfa');
@@ -207,7 +209,7 @@ try{
    await key('Escape',27);
    assert(await evaluate(`!document.querySelector(".handoff-dialog")&&document.activeElement===${launcher}`));
    checks.push(light?'The first Controller shows the parked candidate, exact adopted counts and readable original evidence in the light console':
-    'The second Controller shows the same masked receipt and only read-only controls in the dark narrow console');
+    'The second Controller shows the same masked receipt and authorized controls in the dark narrow console');
   }
  }
 

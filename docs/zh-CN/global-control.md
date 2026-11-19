@@ -99,7 +99,7 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 ### 隔离已停驻任务的 SQL 目标
 
-候选 Agent 接收签名报告和回执历史后，管理员可审批目标隔离。提交 `POST /api/tasks/{id}/handoff/preparation/fence-targets`，携带 `X-Request-ID`，请求体传入 `expectedPreparation` 和 `expectedRevision`。使用交接面板里的准备 ID 和**已提交的任务修订**。返回 `202` 表示审批已持久化。刷新交接面板或调用 `GET /api/tasks/{id}/handoff/preparation`，可查看 `FENCE_PENDING` 和 `TARGETS_FENCED`。
+候选 Agent 接收签名报告和回执历史后，管理员可在交接面板选择 **隔离 SQL 目标**。通过 API 审批时，提交 `POST /api/tasks/{id}/handoff/preparation/fence-targets`，携带 `X-Request-ID`，请求体传入 `expectedPreparation` 和 `expectedRevision`。使用交接面板里的准备 ID 和**已提交的任务修订**。返回 `202` 表示审批已持久化。刷新交接面板或调用 `GET /api/tasks/{id}/handoff/preparation`，可查看 `FENCE_PENDING` 和 `TARGETS_FENCED`。
 
 首个档案覆盖 MySQL 源、同一个 PostgreSQL 控制与日志库，以及最多八个原纪元相同的 PostgreSQL 或 MySQL 目标。候选 Agent 独立核对已安装配置、归档证据、源日志覆盖、原目标断点和快照。每个目标在自己的断点行锁下提高写入纪元。目标事务回执、快照 ID、源断点都保留在原切点。日志继续停驻，候选 Worker 保持停止。
 

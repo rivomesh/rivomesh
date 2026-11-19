@@ -305,6 +305,7 @@ final class HandoffPreparations {
         }
         if(p.evidenceAdoption!=null)view.put("adoptedEvidence",Map.of(
                 "validationReports",p.evidenceAdoption.reports(),"closedReceipts",p.evidenceAdoption.closedReceipts()));
+        if("EVIDENCE_ADOPTED".equals(p.phase))view.put("targetFenceAvailable",true);
         if(p.targetFence!=null)view.put("targetFence",Map.of("requestId",p.targetFence.id(),
                 "destinationsFenced",p.targetFence.result()==null?0:p.targetFence.result().destinations().size()));
         if(p.activation!=null)view.put("writerActivation",Map.of(

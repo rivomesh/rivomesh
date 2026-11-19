@@ -32,11 +32,11 @@ export function registerHandoffTests({setup,flush,login}){
    expiresAt:expiration,reservedTaskSlots:slots,reservedWorkerSlots:slots,...(releaseId?{releaseId}:{})};
  }
  function fixture({role='ADMIN',scope=['original-agent','target-agent','offline-agent'],mode='GLOBAL',
-  read,submit,probe,readPreparation,prepare,release,stage,taskState}={}){
+  read,submit,probe,readPreparation,prepare,release,stage,fence,taskState}={}){
   const task={id:'handoff-task',revision,ownerNodeId:'original-agent',formatVersion:3,
    workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[],...taskState};
   const ui=setup([task],role,{authenticated:false,taskControlScope:mode,nodeRole:'CONTROLLER',nodeIds:scope}),fallback=ui.w.fetch;
-  const requests=[],reserves=[],releases=[],probes=[],stages=[];
+  const requests=[],reserves=[],releases=[],probes=[],stages=[],fences=[];
   ui.w.fetch=async(path,options={})=>{
    if(path.startsWith('/api/nodes?')){
     if(path.includes('after='))return reply({nodes:[agent('target-agent'),agent('offline-agent','AGENT','STALE')],next:null});
@@ -63,6 +63,11 @@ export function registerHandoffTests({setup,flush,login}){
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
     return release(options);
    }
+   if(path===preparationRoute+'/fence-targets'){
+    fences.push(options);
+    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+    return fence(options);
+   }
    if(path===preparationRoute+'/stage'){
     stages.push(options);
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
@@ -70,7 +75,7 @@ export function registerHandoffTests({setup,flush,login}){
    }
    return fallback(path,options);
   };
-  return{...ui,task,requests,reserves,releases,probes,stages};
+  return{...ui,task,requests,reserves,releases,probes,stages,fences};
  }
  const launcher=ui=>ui.d.querySelector('[data-handoff-task]');
  const dialog=ui=>ui.d.querySelector('.handoff-dialog');
@@ -349,6 +354,32 @@ export function registerHandoffTests({setup,flush,login}){
    assert.match(reservation(ui).textContent,new RegExp(committedConfiguration));
    assert.doesNotMatch(reservation(ui).textContent,/private|activeConfigurationVersion|executionAuthorized/);
    await post(ui);assertReadOnly(ui);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff approves the exact parked target fence and retries an uncertain request without starting the Worker',async()=>{
+  let plan=completed('EVIDENCE_ADOPTED',{targetFenceAvailable:true}),attempts=0;
+  const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(plan),fence:options=>{
+   if(++attempts===1)throw new TypeError('disconnected');
+   plan=completed('FENCE_PENDING',{adoptedEvidence:{validationReports:2,closedReceipts:5},
+    targetFence:{requestId:options.headers['X-Request-ID'],destinationsFenced:0}});
+   return reply(plan,202);
+  }});
+  try{
+   await open(ui);assert.equal(button(ui,'fence').disabled,false);
+   assert.match(button(ui,'fence').textContent,/隔离 SQL 目标/);
+   button(ui,'fence').click();await flush();
+   assert.match(feedback(ui),/审批结果未知/);
+   assert.match(button(ui,'fence').textContent,/重试同一隔离审批/);
+   button(ui,'fence').click();await flush();
+   assert.equal(ui.fences.length,2);
+   const [first,retry]=ui.fences;
+   assert.deepEqual(JSON.parse(first.body),{expectedPreparation:'completed-handoff',expectedRevision:newRevision});
+   assert.equal(retry.body,first.body);
+   assert.equal(retry.headers['X-Request-ID'],first.headers['X-Request-ID']);
+   assert.match(reservation(ui).textContent,/等待目标隔离.*Worker 保持停止/s);
+   assert.ok(button(ui,'fence').closest('[hidden]'));assert.ok(button(ui,'fence').disabled);
+   assertReadOnly(ui);
   }finally{ui.dom.window.close();}
  });
 

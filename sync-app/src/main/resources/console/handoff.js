@@ -153,6 +153,8 @@ window.RivomeshHandoff=(()=>{
   handoffFencePending:'等待目标隔离',handoffTargetsFenced:'目标已隔离',
   handoffFencePendingHelp:'候选 Agent 正在核验并提高目标端纪元。Worker 保持停止。',
   handoffTargetsFencedHelp:'目标端已拒绝旧纪元写入。候选 Worker 保持停止。',handoffFencedCount:'已隔离的目标数',
+  handoffFence:'隔离 SQL 目标',handoffFenceHelp:'隔离会提高 SQL 目标的写入纪元。候选 Worker 保持停止。',
+  handoffFenceRetry:'重试同一隔离审批',handoffFenceUnknown:'审批结果未知。请重试同一审批或刷新状态。',
   handoffCommittedRevision:'已提交任务修订',handoffCommittedConfig:'已提交配置版本',handoffJournalEpoch:'已提交日志代次',
   handoffFormerOwner:'原 Agent',handoffCurrentOwner:'当前归属 Agent',handoffTransferId:'交接准备 ID',handoffRefreshProgress:'刷新交接状态'
  },{
@@ -164,6 +166,8 @@ window.RivomeshHandoff=(()=>{
   handoffFencePending:'Target fencing pending',handoffTargetsFenced:'Targets fenced',
   handoffFencePendingHelp:'The candidate is verifying and advancing the target epochs. The Worker remains stopped.',
   handoffTargetsFencedHelp:'The targets reject writes from the previous epoch. The candidate Worker remains stopped.',handoffFencedCount:'Fenced targets',
+  handoffFence:'Fence SQL targets',handoffFenceHelp:'Fencing advances the SQL target writer epochs. The candidate Worker remains stopped.',
+  handoffFenceRetry:'Retry the same fence approval',handoffFenceUnknown:'Approval outcome unknown. Retry the same approval or refresh the status.',
   handoffCommittedRevision:'Committed task revision',handoffCommittedConfig:'Committed configuration version',handoffJournalEpoch:'Committed journal epoch',
   handoffFormerOwner:'Original Agent',handoffCurrentOwner:'Current owner Agent',handoffTransferId:'Preparation ID',handoffRefreshProgress:'Refresh handoff status'
  });
@@ -236,6 +240,7 @@ window.RivomeshHandoff=(()=>{
    ||!revisionId.test(preparation.committedConfigurationVersion||'')||typeof preparation.activatedJournalEpoch!=='string'
    ||!/^[1-9][0-9]{0,18}$/.test(preparation.activatedJournalEpoch))return false;
   const evidence=preparation.adoptedEvidence;
+  if(preparation.targetFenceAvailable!=null&&(preparation.state!=='EVIDENCE_ADOPTED'||preparation.targetFenceAvailable!==true))return false;
   const fence=preparation.targetFence;
   if(['FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)){
    if(!requestPattern.test(fence?.requestId||'')||!Number.isSafeInteger(fence.destinationsFenced)
@@ -244,6 +249,10 @@ window.RivomeshHandoff=(()=>{
   return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)?evidence!=null
     &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
     &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0:evidence==null;
+ }
+ function fenceAvailable(v){
+  return v.preparationLoaded&&v.preparation?.state==='EVIDENCE_ADOPTED'&&v.preparation.targetFenceAvailable===true
+   &&preparationScope(v,v.preparation);
  }
  function activeReservation(v){return v.preparation?.state==='PREPARED';}
  function stagePreparation(v){
@@ -418,7 +427,7 @@ window.RivomeshHandoff=(()=>{
  }
  function update(v){
   if(!current(v)){if(view===v)close();return;}
-  const busy=v.posting||v.reading||v.probing||v.preparationReading||v.preparationPosting||v.staging;
+  const busy=v.posting||v.reading||v.probing||v.preparationReading||v.preparationPosting||v.staging||v.fencing;
   v.dialog.setAttribute('aria-busy',String(Boolean(busy||v.loadingNodes)));
   for(const option of [...v.select.options])if(option.value&&!nodeGrant(option.value)){
    v.nodes.delete(option.value);option.remove();
@@ -457,6 +466,10 @@ window.RivomeshHandoff=(()=>{
   renderReceipt(v);
   renderPreparation(v,readonly);
   renderStaging(v,busy,readonly);
+  const offer=fenceAvailable(v);
+  v.fencePanel.hidden=!offer;v.fence.disabled=busy||!offer;
+  v.fence.textContent=t(v.fenceAttempt?'handoffFenceRetry':'handoffFence');
+  if(!offer&&focused===v.fence&&!v.reload.disabled)v.reload.focus({preventScroll:true});
   if((focused===v.reserve&&!reserveShown)||(focused===v.release&&!releaseShown)){
    const next=releaseShown?v.release:reserveShown?v.reserve:v.reload;
    if(!next.disabled)next.focus({preventScroll:true});
@@ -495,6 +508,7 @@ window.RivomeshHandoff=(()=>{
    v.unverifiedTransfer=false;v.preparation=value;v.preparationLoaded=true;
    if(transferred(value)){
     v.attempt=null;v.preparationAttempt=null;
+    if(!fenceAvailable(v)||v.fenceAttempt?.preparation!==value.id)v.fenceAttempt=null;
    }else if(v.preparationAttempt&&matchesPreparation(value,v.preparationAttempt)){
     v.preparationAttempt=null;v.feedback.textContent=t('handoffReservationSaved');
    }
@@ -565,6 +579,28 @@ window.RivomeshHandoff=(()=>{
    v.feedback.textContent=error.message;
    await reconcile(v,error);
   }finally{if(current(v)){v.preparationPosting=false;update(v);}}
+ }
+ async function fenceTargets(v){
+  if(!current(v)||v.fence.disabled||!fenceAvailable(v))return;
+  const plan=v.preparation;
+  const attempt=v.fenceAttempt??={preparation:plan.id,id:requestId(),body:JSON.stringify({expectedPreparation:plan.id,
+   expectedRevision:plan.committedRevision})};
+  v.fencing=true;v.feedback.textContent='';update(v);
+  try{
+   const response=verifiedPreparation(v,await api(preparationEndpoint(v)+'/fence-targets',postOptions(attempt.body,attempt.id)));
+   if(!current(v)||v.fenceAttempt!==attempt)return;
+   if(response.id!==attempt.preparation||!['FENCE_PENDING','TARGETS_FENCED'].includes(response.state)
+      ||response.targetFence?.requestId!==attempt.id)throw new Error(t('handoffReservationInvalid'));
+   v.preparation=response;v.fenceAttempt=null;
+  }catch(error){
+   if(!current(v)||v.fenceAttempt!==attempt)return;
+   if(!(error.status>=400&&error.status<500)||[408,429].includes(error.status)){
+    v.feedback.textContent=t('handoffFenceUnknown');return;
+   }
+   v.fenceAttempt=null;v.feedback.textContent=error.message;
+   await reconcile(v,error);
+   if(current(v))await readPreparation(v);
+  }finally{if(current(v)){v.fencing=false;update(v);}}
  }
  async function stageEvidence(v){
   if(!current(v)||v.stage.disabled)return;
@@ -666,16 +702,17 @@ window.RivomeshHandoff=(()=>{
    probeButton=node('button',t('handoffProbe')),reserve=node('button',t('handoffReserve'),'primary'),
    release=node('button',t('handoffRelease')),preparationPanel=node('section','','recovery-retry'),
    preparationResult=node('div'),stagePanel=node('div'),stageStatus=node('p','','subtle'),
-   stageButton=node('button',t('handoffStage')),help=node('p',t('handoffHelp'),'callout');
+   stageButton=node('button',t('handoffStage')),help=node('p',t('handoffHelp'),'callout'),
+   fencePanel=node('div'),fence=node('button',t('handoffFence'),'primary');
   const v={dialog,taskId:task.id,owner:task.ownerNodeId,actor:bridge.session().id,select,candidateMessage,
    feedback,result,more,reload,submit:submitButton,probe:probeButton,reserve,release,preparationPanel,preparationResult,
-   stage:stageButton,stagePanel,stageStatus,header:heading,help,original,field,nodes:new Map()};
+   stage:stageButton,stagePanel,stageStatus,fencePanel,fence,header:heading,help,original,field,nodes:new Map()};
   view=v;
   heading.id='handoff-title';dialog.setAttribute('aria-labelledby',heading.id);
   select.name='candidateNodeId';field.append(node('span',t('handoffCandidate')),select);
   feedback.setAttribute('role','status');result.setAttribute('aria-live','polite');
   preparationResult.setAttribute('aria-live','polite');
-  for(const button of [more,reload,exit,probeButton,reserve,release,stageButton])button.type='button';
+  for(const button of [more,reload,exit,probeButton,reserve,release,stageButton,fence])button.type='button';
   submitButton.type='submit';submitButton.dataset.handoffAssess='';
   reload.dataset.handoffReload='';more.dataset.handoffMore='';result.dataset.handoffReceipt='';
   probeButton.dataset.handoffProbe='';reserve.dataset.handoffPrepare='';release.dataset.handoffRelease='';
@@ -689,10 +726,12 @@ window.RivomeshHandoff=(()=>{
   probeButton.onclick=()=>probe(v);reserve.onclick=()=>mutatePreparation(v,false);
   release.onclick=()=>mutatePreparation(v,true);
   stageButton.onclick=()=>stageEvidence(v);
+  fence.dataset.handoffFence='';fence.onclick=()=>fenceTargets(v);
   actions.append(exit,more,reload,submitButton);
   form.append(field,candidateMessage,actions);
   stagePanel.append(node('p',t('handoffStageHelp'),'subtle'),stageButton,stageStatus);
-  preparationPanel.append(preparationResult,stagePanel,reserve,release);
+  fencePanel.append(node('p',t('handoffFenceHelp'),'subtle'),fence);
+  preparationPanel.append(preparationResult,stagePanel,reserve,release,fencePanel);
   dialog.append(heading,node('p',task.id,'subtle'),help,original,form,feedback,
    result,probeButton,preparationPanel);
   document.body.append(dialog);update(v);dialog.showModal();

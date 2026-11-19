@@ -43,4 +43,12 @@ The same transaction parks the journal and advances its managed format to the co
 
 A separate administrator request binds its identity and current authorization revision to the signed adopted preparation. The candidate verifies the same source position and snapshot set. It compares each destination’s recent checkpoint and writing epoch against the signed original evidence, then raises the destination epoch under its local transaction lock. Retry can accept a destination already at the parked epoch only when the original receipt and snapshots still match the signed cut. The published fence receipt covers every configured SQL target. This bounded operation leaves the journal parked for the independent Worker admission step.
 
+The native target verification uses a 20-second deadline on the shared control transaction. A stalled verification leaves the approval pending and can temporarily delay concurrent management changes. The current evidence covers the bounded handoff profile.
+
+### Planned Worker admission after fencing
+
+Worker admission requires a separate administrator request and a current candidate lease. Bind the request to the committed configuration, the adopted evidence receipt, and the exact native fence receipt for every configured SQL destination. Reopen each target at the fenced epoch and compare its original transaction receipt and snapshot before changing journal admission. Persist the candidate’s admission and the approved desired state together in the shared control and journal transaction. The local scheduler must read that shared receipt before starting the Worker, including after an interrupted local projection.
+
+Verify process loss before any target fence, after a subset of target fences, after shared admission commits, and after the first Worker claims the journal. The same approval must recover the same admission across Controllers. A later ordinary restart must reuse the original snapshot and source position. Once the Worker is admitted, the operator must be able to stop or pause it through the standard command path. Historical report access must still require the original and candidate node grants.
+
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

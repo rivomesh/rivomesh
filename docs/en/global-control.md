@@ -99,7 +99,7 @@ The verified same-store profile installs original reports and closed receipts af
 
 ### Fence the parked SQL targets
 
-An administrator can approve target fencing after a candidate has adopted the signed report and receipt history. Use `POST /api/tasks/{id}/handoff/preparation/fence-targets` with `X-Request-ID` and the JSON fields `expectedPreparation` and `expectedRevision`. Use the preparation ID and the **committed** task revision displayed in the handoff panel. `202` acknowledges durable approval. Read `GET /api/tasks/{id}/handoff/preparation` or refresh the handoff panel to follow `FENCE_PENDING` and `TARGETS_FENCED`.
+After the candidate has adopted the signed report and receipt history, an administrator can select **Fence SQL targets** in the handoff panel. For API approval, use `POST /api/tasks/{id}/handoff/preparation/fence-targets` with `X-Request-ID` and the JSON fields `expectedPreparation` and `expectedRevision`. Use the preparation ID and the **committed** task revision displayed in the handoff panel. `202` acknowledges durable approval. Read `GET /api/tasks/{id}/handoff/preparation` or refresh the handoff panel to follow `FENCE_PENDING` and `TARGETS_FENCED`.
 
 The first profile uses a MySQL source, one shared PostgreSQL control and journal database, and at most eight PostgreSQL or MySQL targets at a common original epoch. The candidate independently verifies its installed configuration, archived evidence, source log coverage, and original target checkpoints and snapshots. Each target transaction advances its writer epoch under its checkpoint row lock. Transaction receipts, snapshot IDs and source position remain at the reviewed cut. The journal stays parked and the Worker stays stopped.
 

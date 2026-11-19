@@ -47,11 +47,12 @@
     "Bind explicit Worker admission to the current candidate and all native SQL fence receipts.",
     "Verify the restarted Worker reuses the original journal, snapshot and destination receipts."
   ],
-  "currentCandidateArtifact": "4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a",
-  "currentCandidateScope": "Exact approved parked target fencing package. 59 Java, 151 DOM and 22 native checks.",
+  "currentCandidateArtifact": "f458c5f066ceceed95b451f8c1de5f12d5e2f1399c7edb3a431e791ef4711289",
+  "currentCandidateScope": "Exact parked target fence console package. 59 Java, 152 DOM and 24 native checks including dual-entry Chrome.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "CP-04 administrator-approved target epoch fences passed 22 native checks. Same request across both Controllers, candidate offline approval, restart, first target already fenced, and preserved original cut. 59 Java and 151 DOM passed."
+    "CP-04 administrator-approved target epoch fences passed 22 native checks. Same request across both Controllers, candidate offline approval, restart, first target already fenced, and preserved original cut. 59 Java and 151 DOM passed.",
+    "Handoff SQL target fence approval is available in the console. Two real Chrome checks cover the visible action across both Controllers. A DOM case verifies same-request network retry."
   ],
   "lastScheduledReportAt": "2026-11-19T09:58:16+08:00",
   "lastVerifiedReactor": {
