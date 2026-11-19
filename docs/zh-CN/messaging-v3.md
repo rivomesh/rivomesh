@@ -94,6 +94,8 @@ Kafka 业务身份需要 READ 权限才能回读确认偏移。只有 WRITE 权�
 
 管理员可以通过任一受管入口查询留存的证据。任务仍处于暂停状态时，打开成功的 Kafka 回执核对结果并选择 **查验物理收据**。API 客户端向 `POST /api/tasks/<task>/kafka-physical-receipt` 提交 `{"expectedRevision":"<当前任务修订号>","predecessorRequestId":"<成功的 Kafka 回执核对请求 ID>"}`。所属节点核对当前失败、签名、确切前序 ACK 和 Kafka Topic 的物理标识。`VERIFIED` 返回收据摘要及日志库时间。`MISSING` 表示未留证、签名未核实、物理 Topic 已变化，或旧收据只覆盖较早的 ACK。`UNREACHABLE` 表示所属节点、日志库或 Broker 的读取未完成。任务或失败变化后请刷新前序核对。查询不授予通知发布权限。
 
+Kafka 3.9.2 实库档案使用 TLS/SCRAM-SHA-512，两个 Controller 通过同一个 Agent 查验。重建同名 Topic 会提示缺证。使用 Temurin 21 运行 `python3 tests/kafka-notice-writer-run.py --managed-physical-receipt <应用JAR>` 可复验。[实库证据](../verification/README.md#managed-signed-receipt-queries-with-a-native-kafka-broker)
+
 预览的 `catalogCoverage` 显示受管任务的物理归属。`VERIFIED_SINGLETON` 表示一项任务、一个配置版本和一个 Kafka 目标。目录最多四项任务、八个保留配置版本、十二条 Kafka 路由时，`VERIFIED_AT_REVIEW` 表示已按原生 Kafka 集群 ID 和 Topic UUID 核对每条业务路由，范围包括已停止的任务和配置历史中可回退的版本。由当前所属节点按各版本的配置读取 Broker 元数据。即使连接地址使用不同的别名，只要业务目标和通知 Topic 的物理标识相同，就返回 `CONFLICT`。
 
 超过核对上限、Broker 或所属节点不可达、历史配置无法解析时，归属状态为 `INCOMPLETE`。目录或配置在核对期间变化时，需要重新核对。所属节点先按当前 Worker 的凭据引用授权和受保护环境规则检查历史配置。已撤销的引用会阻止该路由发起探测。核对结果描述当前恢复这些配置会连接到哪里。发布仍需历史物理归属、完整的 Kafka 授权和审批证据，所有预览仍会阻止发布。

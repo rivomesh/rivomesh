@@ -27,7 +27,7 @@ import static org.apache.kafka.common.acl.AclOperation.*;
 public final class KafkaPhysicalOwnershipAcceptance {
     private static final String TOPIC="physical.owner.readable",WRITE_ONLY="physical.owner.write-only";
     private static final String ROLE="fixture-reviewer",PIPELINE="physical-owner",GENERATION="evidence-generation";
-    private static final Map<String,String> KAFKA_CONFIG=Map.of("cleanup.policy","delete","retention.ms","-1","retention.bytes","-1",
+    static final Map<String,String> KAFKA_CONFIG=Map.of("cleanup.policy","delete","retention.ms","-1","retention.bytes","-1",
             "min.insync.replicas","1","unclean.leader.election.enable","false","max.message.bytes","69632");
 
     public static void main(String... args)throws Exception{
@@ -105,13 +105,13 @@ public final class KafkaPhysicalOwnershipAcceptance {
         }
     }
 
-    private static java.util.Properties adminProperties(PipelineConfig.Target target,String secret)throws Exception{
+    static java.util.Properties adminProperties(PipelineConfig.Target target,String secret)throws Exception{
         var props=KafkaMessagePublisher.connectionProperties(target);
         KafkaMessagePublisher.configureSasl(props,"SCRAM-SHA-512","fixture-admin",secret+"-admin");
         return props;
     }
 
-    private static PipelineConfig.Target target(String endpoint,String secret,String name){
+    static PipelineConfig.Target target(String endpoint,String secret,String name){
         var target=new PipelineConfig.Target();target.id="kafka";target.product=TargetProduct.KAFKA;
         target.url="kafka://"+endpoint;target.username=ROLE;target.password=secret+"-reviewer";
         target.messaging=new PipelineConfig.Messaging();target.messaging.securityProtocol="SASL_SSL";
@@ -119,7 +119,7 @@ public final class KafkaPhysicalOwnershipAcceptance {
         target.messaging.replicas=1;target.messaging.autoCreate=false;target.mappings.put("sales","orders");return target;
     }
 
-    private static AclBinding acl(ResourceType type,String name,AclOperation op){
+    static AclBinding acl(ResourceType type,String name,AclOperation op){
         return new AclBinding(new ResourcePattern(type,name,PatternType.LITERAL),
                 new AccessControlEntry("User:"+ROLE,"*",op,AclPermissionType.ALLOW));
     }

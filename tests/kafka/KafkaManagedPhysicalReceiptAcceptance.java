@@ -1,0 +1,318 @@
+package io.github.rivomesh.cdc;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.rivomesh.PipelineConfig;
+import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.platform.ClusterConfig;
+import io.github.rivomesh.platform.ConsoleServer;
+import io.github.rivomesh.platform.PlatformConfig;
+import io.github.rivomesh.platform.TaskBackend;
+import io.github.rivomesh.platform.TaskService;
+import io.github.rivomesh.platform.TaskWorker;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.ResourceType;
+import static io.github.rivomesh.cdc.KafkaPhysicalOwnershipAcceptance.*;
+import static org.apache.kafka.common.acl.AclOperation.*;
+
+/** Real managed roles and native Kafka readback. The fixture injects synthetic transactions after Worker admission. */
+public final class KafkaManagedPhysicalReceiptAcceptance {
+    private static final String TASK="managed-physical",SUBSCRIPTION="kafka",OWNER="receipt-agent";
+    private static final String TOPIC="managed.receipt.business",GENERATION="native-managed-receipt";
+    private static final String TASK_ROUTE="/api/tasks/"+TASK,RECEIPTS=TASK_ROUTE+"/recovery-receipts/";
+    private static final String PHYSICAL=TASK_ROUTE+"/kafka-physical-receipt";
+    private static final String REVIEW="managed_physical_predecessor";
+    private static final TopicPartition PARTITION=new TopicPartition(TOPIC,0);
+    private static final TableSchema TABLE=schema();
+
+    public static void main(String[] args)throws Exception{
+        String secret=System.getenv("RIVOMESH_KAFKA_FIXTURE_SECRET");
+        if(secret==null||!secret.matches("[a-f0-9]{48}"))throw new IllegalArgumentException("Fixture credentials are required");
+        Path home=Path.of(args[1]);
+        if("--control-preflight".equals(args[0])){
+            runManagement(home,secret,target("127.0.0.1:1",secret,TOPIC),null);
+            return;
+        }
+        var destination=target(args[0],secret,TOPIC);
+        try(Admin broker=Admin.create(adminProperties(destination,secret))){
+            createTopic(broker);
+            broker.createAcls(List.of(acl(ResourceType.TOPIC,TOPIC,READ),acl(ResourceType.TOPIC,TOPIC,WRITE),
+                    acl(ResourceType.TOPIC,TOPIC,DESCRIBE_CONFIGS),acl(ResourceType.CLUSTER,Resource.CLUSTER_NAME,DESCRIBE_CONFIGS),
+                    acl(ResourceType.CLUSTER,Resource.CLUSTER_NAME,IDEMPOTENT_WRITE))).all().get(15,TimeUnit.SECONDS);
+            awaitBusinessAccess(destination);
+            runManagement(home,secret,destination,broker);
+        }
+    }
+
+    private static void runManagement(Path home,String secret,PipelineConfig.Target destination,Admin broker)throws Exception{
+        String token=secret+"-controller",operator=secret+"-operator",store="jdbc:h2:mem:managed-"+secret+";DB_CLOSE_DELAY=-1";
+        byte[] controlSecret=new byte[32];new SecureRandom().nextBytes(controlSecret);
+        String key=Base64.getEncoder().encodeToString(controlSecret);
+        var a=management(home,"controller-a",ClusterConfig.Role.CONTROLLER,store,key,token);
+        var b=management(home,"controller-b",ClusterConfig.Role.CONTROLLER,store,key,token);
+        var owner=management(home,OWNER,ClusterConfig.Role.AGENT,store,key,token);
+        owner.kafkaPhysicalOwnershipEvidence=true;
+        var worker=new SyntheticWorkerFactory();
+        try(TaskService aService=new TaskService(a);TaskService bService=new TaskService(b);
+            TaskService agentService=new TaskService(owner,new TaskBackend.Database(),worker);
+            ConsoleServer one=new ConsoleServer(a,aService);ConsoleServer two=new ConsoleServer(b,bService);
+            ConsoleServer agent=new ConsoleServer(owner,agentService)){
+            one.start();two.start();agent.start();
+            var first=new Management(one,token);var second=new Management(two,token);
+            require("CONTROLLER".equals(first.read("/api/session").path("nodeRole").asText())
+                    &&"CONTROLLER".equals(second.read("/api/session").path("nodeRole").asText()),"Controllers must use separate execution");
+            new Management(agent,token).exchange("GET","/api/tasks",null,null,404);
+            first.createOperator(operator);
+            first.create(destination);
+            first.action("START","start_physical_fixture");
+            var launched=worker.worker.poll(12,TimeUnit.SECONDS);
+            require(launched!=null&&OWNER.equals(launched.grant().member().member().node()),"Agent did not issue its real member grant");
+            require(first.task().path("activeConfigurationVersion").asText().equals(launched.grant().scope().configurationVersion()),
+                    "Worker grant used a different active configuration");
+            if(broker==null){
+                first.action("STOP","stop_control_preflight");
+                System.out.println("PASS actual Controller/Controller/Agent HTTP routes, shared authority and Worker grant before broker startup.");
+                return;
+            }
+
+            PipelineConfig workerConfig=PipelineConfig.load(launched.configuration());
+            var settings=workerConfig.existingJournalSettings();settings.kafkaPhysicalGrant=launched.grant();
+            try(JdbcJournal journal=new JdbcJournal(settings)){
+                var physical=seedFailure(journal,workerConfig,launched.grant());
+                var topic=topicId(broker);
+                require(physical.receipt().observation().topic().topicId().equals(topic.toString()),"Retained receipt does not identify the business Topic");
+                first.action("PAUSE","pause_physical_fixture");
+                var previous=first.review();
+                String revision=first.task().path("revision").asText();
+                var lookup=Codec.JSON.createObjectNode().put("expectedRevision",revision).put("predecessorRequestId",REVIEW);
+                new Management(two,operator).exchange("POST",PHYSICAL,null,lookup,403);
+                long before=offset(broker);
+                JsonNode checked=first.lookup(lookup,200);
+                require(checked.equals(second.lookup(lookup,200))&&checked.equals(first.lookup(lookup,200)),
+                        "Replaying the read through either Controller changed its receipt");
+                require("VERIFIED".equals(checked.path("status").asText())
+                        &&"1".equals(checked.path("acknowledgedSequence").asText())
+                        &&launched.grant().scope().configurationVersion().equals(checked.path("configurationVersion").asText())
+                        &&Codec.sha256(Codec.encode(physical)).equals(checked.path("receiptSha256").asText()),
+                        "Controller did not verify the exact retained Agent receipt");
+                require(!Instant.parse(checked.path("acknowledgedAt").asText()).isBefore(Instant.parse(checked.path("publishedAt").asText()))
+                        &&!checked.has("signature")&&!checked.has("nativeReceipts")&&!checked.has("executionAuthorized")
+                        &&!checked.toString().contains(secret),"Receipt response is not redacted and read-only");
+                require(before==offset(broker)&&broker.listConsumerGroups().all().get(10,TimeUnit.SECONDS).isEmpty()
+                        &&journal.subscriptions().getFirst().acknowledged==1,"Query advanced a Kafka or journal checkpoint");
+
+                broker.deleteTopics(List.of(TOPIC)).all().get(15,TimeUnit.SECONDS);
+                await(()->broker.listTopics().names().get(5,TimeUnit.SECONDS),topics->!topics.contains(TOPIC));
+                createTopic(broker);
+                awaitBusinessAccess(destination);
+                Uuid replacement=await(()->topicId(broker),id->!topic.equals(id));
+                require(!topic.equals(replacement)&&offset(broker)==0,"Replacement Topic was not independently recreated");
+                var missing=second.lookup(lookup,200);
+                require("MISSING".equals(missing.path("status").asText())
+                        &&"KAFKA_PHYSICAL_RECEIPT_TOPIC_CHANGED".equals(missing.path("code").asText())
+                        &&!missing.has("receiptSha256")&&missing.equals(first.lookup(lookup,200)),"Replacement Topic received old evidence");
+                require(previous.equals(second.read(RECEIPTS+REVIEW))
+                        &&physical.equals(new JdbcPublicationStore(journal,SUBSCRIPTION,null).kafkaPhysicalReceipt(GENERATION,launched.grant())),
+                        "The lookup changed either retained receipt");
+
+                journal.resumePipeline(1);
+                require("KAFKA_PHYSICAL_RECEIPT_FAILURE_CHANGED".equals(second.lookup(lookup,409).path("code").asText()),
+                        "A resumed journal used the old retained failure scope");
+                first.action("STOP","physical_new_revision_stop");
+                require(!revision.equals(first.task().path("revision").asText()),"The fixture did not change the task revision");
+                require("REVISION_CHANGED".equals(first.lookup(lookup,409).path("code").asText()),"The old task revision was accepted");
+                require(offset(broker)==0&&broker.listConsumerGroups().all().get(10,TimeUnit.SECONDS).isEmpty()
+                        &&journal.subscriptions().getFirst().acknowledged==1,"Recovery query moved data after Topic replacement");
+                System.out.println("PASS two Controllers and one Agent verified the exact TLS/SCRAM receipt; replay, changed Topic, stale failure/revision and RBAC passed.");
+            }
+        }
+    }
+
+    private static KafkaPhysicalReceipt.Signed seedFailure(JdbcJournal journal,PipelineConfig config,
+                                                           KafkaPhysicalReceipt.Grant grant)throws Exception{
+        journal.initialize(config.fingerprint(),GENERATION,config.subscribers());
+        var lease=journal.claim("synthetic-source",120000);
+        var store=new JdbcPublicationStore(journal,SUBSCRIPTION,lease);
+        var target=config.targets.getFirst();
+        try(var sink=new MessageSink(SUBSCRIPTION,target.mappings,store,()->new KafkaMessagePublisher(target),target.messaging.maxMessageBytes,grant)){
+            sink.activate(lease.epoch);
+            journal.saveSchema(lease,TABLE);
+            var snapshot=journal.beginSnapshot(lease,"source",TABLE,position(0));
+            journal.finishSnapshot(lease,snapshot);
+            sink.prepare(lease.epoch,TABLE);
+            sink.beginSnapshot(lease.epoch,TABLE,snapshot);
+            sink.finishSnapshot(lease.epoch,TABLE,snapshot);
+            for(int sequence=1;sequence<=2;sequence++){
+                var input=transaction(sequence);
+                journal.append(lease,input);
+                var normalized=journal.normalize(lease,journal.read(SUBSCRIPTION,1).getFirst(),
+                        Map.of(TABLE.id,TABLE),Map.of(TABLE.id,position(0)),(position,id)->false);
+                if(sequence==1){
+                    sink.apply(lease.epoch,sequence,normalized);
+                    journal.acknowledge(lease,SUBSCRIPTION,sequence);
+                }else{
+                    try{sink.apply(lease.epoch,sequence,normalized);throw new AssertionError("Expected oversize publication refusal");}
+                    catch(IllegalStateException refused){require("MESSAGE_TOO_LARGE".equals(refused.getMessage()),"Wrong native publication refusal");}
+                    var diagnostic=new SubscriberFailure();diagnostic.phase=SubscriberFailure.Phase.TARGET_APPLY;
+                    diagnostic.sequence=2;diagnostic.transactionId=input.id;diagnostic.projectedHash=Codec.sha256(Codec.encode(normalized));
+                    journal.pauseFailure(lease,SUBSCRIPTION,"MESSAGE_TOO_LARGE",diagnostic);
+                }
+            }
+            var proof=store.kafkaPhysicalReceipt(GENERATION,grant);
+            require(proof!=null&&grant.verifies(proof)&&proof.receipt().sequence()==1,"The publication did not retain a signed exact receipt");
+            return proof;
+        }finally{journal.release(lease);}
+    }
+
+    private static PlatformConfig management(Path base,String id,ClusterConfig.Role role,String store,String key,String token){
+        var config=new PlatformConfig();config.port=0;config.pollMillis=100;config.authToken=token;
+        config.tasksDirectory=base.resolve(id).resolve("tasks").toString();config.dataDirectory=base.resolve(id).resolve("data").toString();
+        var cluster=new ClusterConfig();cluster.id="kafka-physical-query";cluster.nodeId=id;cluster.driver="org.h2.Driver";cluster.url=store;
+        cluster.username="sa";cluster.password="";cluster.taskKey=key;cluster.sharedAccess=true;cluster.sharedTasks=true;
+        cluster.recoveryReview=true;cluster.separateExecution=true;cluster.role=role;cluster.heartbeatMillis=250;cluster.leaseMillis=10000;
+        config.cluster=cluster;return config;
+    }
+
+    private static final class SyntheticWorkerFactory implements TaskWorker.Factory {
+        record Launch(Path configuration,KafkaPhysicalReceipt.Grant grant){}
+        final ArrayBlockingQueue<Launch> worker=new ArrayBlockingQueue<>(2);
+        @Override public TaskWorker start(Path config,Path log,int heap){throw new AssertionError("Agent did not provide an ownership grant");}
+        @Override public TaskWorker start(Path config,Path log,int heap,KafkaPhysicalReceipt.Grant supplied)throws Exception{
+            var grant=KafkaPhysicalReceipt.Grant.open(supplied.encode(),TASK,Files.readAllBytes(config));
+            worker.add(new Launch(config,grant));
+            return new TaskWorker(){
+                private volatile boolean active=true;
+                @Override public boolean alive(){return active;}
+                @Override public int exitCode(){return 0;}
+                @Override public void stop(){active=false;}
+                @Override public void requestStop(){active=false;}
+            };
+        }
+    }
+
+    private static final class Management {
+        private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        private final String url,token;
+        Management(ConsoleServer console,String token){url="http://127.0.0.1:"+console.port();this.token=token;}
+        JsonNode exchange(String method,String route,String id,JsonNode body,int status)throws Exception{
+            var builder=HttpRequest.newBuilder(URI.create(url+route)).timeout(Duration.ofSeconds(35)).header("Authorization","Bearer "+token);
+            if(id!=null)builder.header("X-Request-ID",id);
+            if(body!=null)builder.header("Content-Type","application/json");
+            var reply=client.send(builder.method(method,body==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofString(body.toString()))
+                    .build(),HttpResponse.BodyHandlers.ofString());
+            var json=Codec.JSON.readTree(reply.body());
+            require(reply.statusCode()==status,"Unexpected "+method+" "+route+" status "+reply.statusCode()+" code "+json.path("code").asText());
+            return json;
+        }
+        JsonNode read(String route)throws Exception{return exchange("GET",route,null,null,200);}
+        JsonNode task()throws Exception{return read(TASK_ROUTE);}
+        void createOperator(String operator)throws Exception{
+            var body=Codec.JSON.createObjectNode().put("id","fixture-reader").put("role","OPERATOR").put("enabled",true)
+                    .put("token",operator).put("expectedRevision",read("/api/accounts").path("revision").asText());
+            body.putArray("taskIds").add(TASK);body.putArray("nodeIds").add(OWNER);
+            exchange("POST","/api/accounts","create_fixture_operator",body,201);
+        }
+        void create(PipelineConfig.Target target)throws Exception{
+            var config=new PipelineConfig();config.pipelineId=TASK;config.source.username="fixture-source";config.databases=List.of("sales");
+            config.targets.add(target);
+            ObjectNode document=Codec.JSON.valueToTree(config);((ObjectNode)document.path("journal")).remove("path");
+            ObjectNode body=Codec.JSON.createObjectNode().put("ownerNodeId",OWNER);body.set("config",document);
+            exchange("POST","/api/tasks","create_physical_fixture",body,202);
+            operation("create_physical_fixture");
+            require(OWNER.equals(task().path("ownerNodeId").asText())&&!task().path("configurationPending").asBoolean(true),"Agent configuration was not applied");
+        }
+        void action(String action,String id)throws Exception{
+            exchange("POST",TASK_ROUTE+"/actions",id,actionBody(action),202);operation(id);
+        }
+        JsonNode review()throws Exception{
+            var body=actionBody("REVIEW_KAFKA_RECEIPTS").put("subscriptionId",SUBSCRIPTION).put("errorCount",1);
+            exchange("POST",TASK_ROUTE+"/actions",REVIEW,body,202);operation(REVIEW);
+            JsonNode receipt=read(RECEIPTS+REVIEW);
+            require(KafkaRecoveryReview.VERIFIED.equals(receipt.path("code").asText())&&OWNER.equals(receipt.path("ownerNodeId").asText()),
+                    "Actual Agent native predecessor verification failed");
+            return receipt;
+        }
+        private ObjectNode actionBody(String action)throws Exception{
+            return Codec.JSON.createObjectNode().put("action",action).put("expectedRevision",task().path("revision").asText());
+        }
+        JsonNode lookup(JsonNode body,int status)throws Exception{return exchange("POST",PHYSICAL,null,body,status);}
+        private void operation(String id)throws Exception{
+            JsonNode operation=await(()->{
+                for(JsonNode item:task().path("operations"))if(id.equals(item.path("id").asText()))return item;
+                return Codec.JSON.createObjectNode();
+            },item->Set.of("SUCCEEDED","FAILED","REJECTED").contains(item.path("status").asText()));
+            require("SUCCEEDED".equals(operation.path("status").asText()),"Fixture operation failed "+id+" code "+operation.path("code").asText());
+        }
+    }
+
+    private static void createTopic(Admin broker)throws Exception{
+        broker.createTopics(List.of(new NewTopic(TOPIC,1,(short)1).configs(KAFKA_CONFIG))).all().get(15,TimeUnit.SECONDS);
+    }
+    private static Uuid topicId(Admin broker)throws Exception{
+        return broker.describeTopics(List.of(TOPIC)).allTopicNames().get(5,TimeUnit.SECONDS).get(TOPIC).topicId();
+    }
+    private static long offset(Admin broker)throws Exception{
+        return broker.listOffsets(Map.of(PARTITION,OffsetSpec.latest())).all().get(10,TimeUnit.SECONDS).get(PARTITION).offset();
+    }
+    private static void awaitBusinessAccess(PipelineConfig.Target target)throws Exception{
+        try(Admin business=Admin.create(KafkaMessagePublisher.connectionProperties(target))){
+            await(()->business.describeTopics(List.of(TOPIC),new DescribeTopicsOptions().includeAuthorizedOperations(true))
+                    .allTopicNames().get(5,TimeUnit.SECONDS).get(TOPIC).authorizedOperations(),
+                    allowed->allowed.containsAll(Set.of(READ,WRITE)));
+        }
+    }
+    private static TableSchema schema(){
+        var table=new TableSchema();table.id=TableSchema.identity("sales","","orders");table.database="sales";table.name="orders";
+        var column=new TableSchema.Column();column.name="id";column.type=TableSchema.Type.STRING;table.columns.add(column);
+        var payload=new TableSchema.Column();payload.name="payload";payload.type=TableSchema.Type.STRING;table.columns.add(payload);
+        table.primaryKey.add("id");return table;
+    }
+    private static SourceTransaction transaction(int sequence){
+        var tx=new SourceTransaction();tx.id="fixture-tx-"+sequence;tx.streamGeneration=GENERATION;tx.position=position(sequence);
+        var row=new Change();row.eventId=tx.id+"-insert";row.tableId=TABLE.id;row.operation=Change.Operation.INSERT;
+        row.after=List.of(Cell.value(Integer.toString(sequence)),Cell.value(sequence==1?"retained-fixture":"x".repeat(66536)));
+        tx.changes.add(row);return tx;
+    }
+    private static SourcePosition position(int sequence){
+        String uuid="25b043c4-e42d-41ad-960f-53a7f0958a73";
+        String gtid=sequence<=1?uuid+":1":uuid+":1-"+sequence;
+        return new SourcePosition(1,"MYSQL","fixture-source",Map.of("gtidSet",gtid,"serverUuid",uuid,
+                "file","binlog.000001","offset",Integer.toString(104+sequence)));
+    }
+    @FunctionalInterface interface Read<T>{T get()throws Exception;}
+    private static <T>T await(Read<T> read,Predicate<T> condition)throws Exception{
+        long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(18);
+        while(System.nanoTime()<until){
+            try{
+                T value=read.get();if(condition.test(value))return value;
+            }catch(java.util.concurrent.ExecutionException retry){
+                if(!(retry.getCause() instanceof org.apache.kafka.common.errors.UnknownTopicOrPartitionException))throw retry;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Fixture did not reach the expected state");
+    }
+    private static void require(boolean valid,String message){if(!valid)throw new AssertionError(message);}
+}

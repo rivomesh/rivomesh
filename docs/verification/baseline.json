@@ -12916,5 +12916,36 @@
     "kafkaReadbackPriorArtifactSha256": "21bcdcb382b4210d34c77707382ce115f06efc419406c5117c8893b0a2399886",
     "kafkaNativeReadbackVerified": false,
     "scope": "Two real Controller HTTP entries and owner routing test exact task revision, active configuration, failure and signed preceding ACK. Broker metadata is replaced by a controlled test double in this readback profile. Native Kafka receipt publication has separate evidence."
+  },
+  "managedKafkaPhysicalReceiptNativeReadback": {
+    "verified_at": "2026-11-19T16:49:04+08:00",
+    "exit_code": 0,
+    "published_commit": "2f35c5e",
+    "app_sha256": "fbc17326c8ee8fedb9d22710f175b6fbd9540e58e7ab7f1554e26745d13a12f5",
+    "fixture": "rivomesh-kafka-writer-67f1a730ddb7",
+    "broker_count": 1,
+    "transport": "TLS/SCRAM-SHA-512",
+    "control_database": "H2 shared by deployed roles in an acceptance JVM",
+    "source": "synthetic input after the real Agent issued its Worker grant",
+    "checks": [
+      "both Controller endpoints return the real signed Kafka receipt saved under the routed Agent",
+      "exact repeated lookup preserves offsets, group and journal ACK",
+      "scoped Operator is denied",
+      "same-name Kafka Topic replacement has a new UUID and returns MISSING",
+      "stale paused failure and older management revision are rejected independently",
+      "former signed receipt and durable predecessor remain unchanged"
+    ],
+    "remaining_containers": 0,
+    "remaining_fixture_volumes": 0,
+    "remaining_fixture_networks": 0,
+    "nativeEvidenceSha256": "9a513ee5d3f210e1bea4dcc79589a489e60fe1dd2a42aaae79501d97325a565c",
+    "nativeLogSha256": "1c7dfa8b63c23c2e19dd0841dbc28c4a097c13aa575458f9133a640632818188",
+    "brokerImage": {
+      "repository": "apache/kafka:3.9.2",
+      "architecture": "arm64",
+      "image_id": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f"
+    },
+    "runtime": "Eclipse Temurin 21.0.13+9",
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-physical-receipt sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
   }
 }

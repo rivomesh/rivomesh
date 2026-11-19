@@ -2,8 +2,10 @@
 """Run the read-only Kafka writer entitlement checks on one disposable TLS/SCRAM broker."""
 import argparse
 import base64
+import hashlib
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import subprocess
@@ -84,33 +86,65 @@ def provision_users(name, secret):
 def main():
     options = argparse.ArgumentParser(description=__doc__)
     options.add_argument('artifact', type=Path)
-    options.add_argument('--physical-ownership', action='store_true')
+    mode = options.add_mutually_exclusive_group()
+    mode.add_argument('--physical-ownership', action='store_true')
+    mode.add_argument('--managed-physical-receipt', action='store_true')
+    options.add_argument('--artifact-sha256', help='Require this SHA-256 of the normal application JAR')
+    options.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), help='Eclipse Temurin 21 JDK')
+    options.add_argument('--preflight', action='store_true', help='Compile the fixture without starting Docker')
     args = options.parse_args()
     artifact = args.artifact.resolve(strict=True)
     root = Path(__file__).resolve().parent
-    java_home = Path(os.environ['JAVA_HOME']) / 'bin'
-    fixture = 'KafkaPhysicalOwnershipAcceptance' if args.physical_ownership else 'KafkaNoticeWriterAcceptance'
+    if args.java_home is None:
+        options.error('Set JAVA_HOME or --java-home to Eclipse Temurin 21 LTS')
+    java_home = args.java_home / 'bin'
+    version = run(str(java_home / 'java'), '-version', capture_output=True, timeout=10).stderr
+    if 'Temurin' not in version or not re.search(r'version "21(?:[.+"]|$)', version):
+        options.error('This fixture requires Eclipse Temurin 21 LTS')
+    if args.artifact_sha256:
+        digest = hashlib.sha256()
+        with artifact.open('rb') as jar:
+            for chunk in iter(lambda: jar.read(1024 * 1024), b''):
+                digest.update(chunk)
+        if digest.hexdigest() != args.artifact_sha256:
+            options.error('Artifact SHA-256 differs from --artifact-sha256')
+    fixtures = ['KafkaNoticeWriterAcceptance']
+    if args.physical_ownership:
+        fixtures = ['KafkaPhysicalOwnershipAcceptance']
+    if args.managed_physical_receipt:
+        fixtures = ['KafkaManagedPhysicalReceiptAcceptance', 'KafkaPhysicalOwnershipAcceptance']
     name = f'rivomesh-kafka-writer-{secrets.token_hex(6)}'
     secret = secrets.token_hex(24)
-    with socket.socket() as reservation:
-        reservation.bind(('127.0.0.1', 0))
-        port = reservation.getsockname()[1]
     with tempfile.TemporaryDirectory(prefix='rivomesh-kafka-writer-') as directory:
         home = Path(directory)
         home.chmod(0o755)
-        trust, password = provision_tls(home, str(java_home / 'keytool'))
         classes = home / 'classes'
         classes.mkdir()
         run(str(java_home / 'javac'), '-cp', str(artifact), '-d', str(classes),
-            str(root / 'kafka' / f'{fixture}.java'), timeout=25)
+            *(str(root / 'kafka' / f'{fixture}.java') for fixture in fixtures), timeout=35)
+        classpath = os.pathsep.join((str(artifact), str(classes)))
+        environment = dict(os.environ, RIVOMESH_KAFKA_FIXTURE_SECRET=secret)
+        if args.preflight:
+            if args.managed_physical_receipt:
+                run(str(java_home / 'java'), '-Xmx384m', '-cp', classpath,
+                    f'io.github.rivomesh.cdc.{fixtures[0]}', '--control-preflight', str(home), env=environment, timeout=65)
+            print('Fixture compiled against the supplied application. No broker started.', flush=True)
+            return
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            port = reservation.getsockname()[1]
+        trust, password = provision_tls(home, str(java_home / 'keytool'))
         try:
             start(home, port, password, name)
             provision_users(name, secret)
-            environment = dict(os.environ, RIVOMESH_KAFKA_FIXTURE_SECRET=secret)
-            run(str(java_home / 'java'), '-Xmx256m', '-Dorg.slf4j.simpleLogger.defaultLogLevel=off',
+            fixture_arguments = [f'127.0.0.1:{port}']
+            if args.managed_physical_receipt:
+                fixture_arguments.append(str(home))
+            run(str(java_home / 'java'), '-Xmx384m' if args.managed_physical_receipt else '-Xmx256m',
+                '-Dorg.slf4j.simpleLogger.defaultLogLevel=off',
                 f'-Djavax.net.ssl.trustStore={trust}', f'-Djavax.net.ssl.trustStorePassword={password}',
-                '-cp', os.pathsep.join((str(artifact), str(classes))),
-                f'io.github.rivomesh.cdc.{fixture}', f'127.0.0.1:{port}', env=environment, timeout=125)
+                '-cp', classpath, f'io.github.rivomesh.cdc.{fixtures[0]}', *fixture_arguments,
+                env=environment, timeout=210 if args.managed_physical_receipt else 125)
         except Exception:
             logs = subprocess.run(['docker', 'logs', '--tail', '35', name], capture_output=True, text=True, timeout=10)
             if logs.returncode == 0:
@@ -122,6 +156,11 @@ def main():
                                        check=True, capture_output=True, text=True, timeout=15)
             if remaining.stdout.strip():
                 raise RuntimeError('Disposable Kafka fixture was not cleaned up')
+            for kind in ('volume','network'):
+                leftovers = run('docker', kind, 'ls', '--filter', f'name={name}', '--format', '{{.Name}}',
+                                capture_output=True, timeout=15)
+                if leftovers.stdout.strip():
+                    raise RuntimeError(f'Disposable Kafka fixture {kind} was not cleaned up')
             print('Scoped Kafka fixture cleanup verified.', flush=True)
 
 

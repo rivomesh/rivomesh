@@ -863,8 +863,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 Kafka 查询、历史全量归属、正式发送与恢复、跨适配器补偿待验。",
-        "en": "Both Kafka entries review physical topics and replay the blocked approval. A managed Worker records the Topic UUID, native offset, Agent membership lease and journal UTC for the first eligible newly observed COMMIT. Native Kafka with PostgreSQL, MySQL and H2 journals passed. Both management entries can verify the signed receipt of the current failure's exact preceding ACK. Joint native Kafka readback, complete historical coverage, dispatch and recovery, and cross-adapter compensation remain."
+        "zh-CN": "Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 TLS/SCRAM Broker 已验证双入口查询、同名 Topic 更换 UUID、旧故障及旧修订拒绝。历史全量归属、正式发送与恢复、跨适配器补偿待验。",
+        "en": "Both Kafka entries review physical topics and replay the blocked approval. A managed Worker records the Topic UUID, native offset, Agent membership lease and journal UTC for the first eligible newly observed COMMIT. Native Kafka with PostgreSQL, MySQL and H2 journals passed. Both management entries can verify the signed receipt of the current failure's exact preceding ACK. Native TLS/SCRAM Kafka readback verifies both entries, Topic UUID replacement and rejection of stale failure or revision. Complete historical coverage, dispatch and recovery, and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -893,7 +893,8 @@
         "tests/kafka/KafkaPhysicalOwnershipAcceptance.java",
         "tests/kafka-journal-durability-run.py",
         "docs/verification/README.md",
-        "sync-app/src/test/java/io/github/rivomesh/cdc/KafkaPhysicalReceiptReviewTest.java"
+        "sync-app/src/test/java/io/github/rivomesh/cdc/KafkaPhysicalReceiptReviewTest.java",
+        "tests/kafka/KafkaManagedPhysicalReceiptAcceptance.java"
       ]
     },
     {
