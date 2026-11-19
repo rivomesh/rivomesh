@@ -274,6 +274,12 @@ Broker 必须开启持久化、事务和非事务 journal sync，准备阶段读
 
 `target/artemis-native-progress-final.log` 已通过实际发布 JAR 验收：首条确认后停隔离 Broker 复制数据卷，随后确认新记录，再还原旧非空卷；证明 node/queue ID 未变，并以较新回执拒绝续传。正确回执可恢复；摘要改变、格式错误和空替换队列均拒绝，空队列保持为空。`target/ui-artemis-native-progress.log` 17 项 DOM 通过。七种消息目标联合恢复在此前主机休眠期间出现源 SQL/HTTP 超时后另行重跑。上述结果不代表集群、TLS、分页压力或断电验收。
 
+### 共享存储主备
+
+为同一 Artemis 共享存储主备对配置一个稳定的 TCP 入口，只把新连接转发给当前接受 Core 连接的 Broker。两个实例共享 Bindings、消息日志、分页和大消息目录。发布端继续使用单个 `artemis://` 入口及原队列身份。[Artemis 共享存储主备](https://artemis.apache.org/components/artemis/documentation/latest/ha)
+
+Artemis 2.57.0 双 Broker 实测使用一个本地命名卷和固定回环入口。主进程强制终止后，原备进程接管。入口中断期间发布确认留在原位。恢复转发后，发布端核对原生回执以及 Broker、队列身份，再确认同一个待重试事件。普通消费 ACK 后，两个事件仍在保留队列内。部署时需独立核验存储故障域、Broker 间 TLS、自动回切和容量。[实测证据](../verification/README.md#artemis-shared-store-primary-and-backup)
+
 ## 管理接口重试诊断与定点恢复重验
 
 `PULSAR_ADMIN_TIMEOUT` 表示客户端管理请求超时，`PULSAR_ADMIN_CONNECT_RETRY` 表示连接失败。SDK 可能把它们包成默认状态 500 的异常，即使并未收到 HTTP 500 响应；诊断服务端错误前应核对 Broker 访问日志。`PULSAR_ADMIN_REQUEST_FAILED` 保留无法确定的通用 SDK 失败，不虚构 HTTP 响应；实际 HTTP 错误仍保留状态码。凭据提供器/TLS 拒绝作为永久配置故障处理，这种分类本身不等于 TLS 互通已验收。

@@ -272,6 +272,12 @@ The service binds the broker's persistent node ID and queue ID in the journal af
 
 `target/artemis-native-progress-final.log` passed against the actual release JAR: snapshot the stopped isolated broker volume after one confirmed record, publish a later record, restore the older nonempty volume, prove node/queue IDs are unchanged, and reject the later receipt. Matching receipts resume; altered digests, malformed receipts and empty replacement queues are rejected. The empty replacement remains empty. `target/ui-artemis-native-progress.log` passed 17 DOM cases. Seven-product mixed recovery is being rerun separately after a previous run recorded source/HTTP timeouts during host sleep. These results do not prove cluster, TLS, paging pressure or power-loss behavior.
 
+### Shared-store primary and backup
+
+Configure one stable TCP entry for the active member of the same shared-store pair. Share the bindings, message journal, paging and large-message directories. Route new connections only to the active Core broker. The publisher still uses one `artemis://` endpoint and the retained queue identity. [Artemis shared-store HA](https://artemis.apache.org/components/artemis/documentation/latest/ha)
+
+The Artemis 2.57.0 fixture uses two processes, one local named volume and a stable loopback entry. The standby activated after primary SIGKILL. The publisher kept the previous confirmation while the entry was isolated. After rerouting, it verified the native receipt, broker and queue identity and confirmed the same pending event. Ordinary consumer ACK left both events in the retained queue. Validate storage failure domains, broker TLS, automatic failback and capacity in the deployment. [Native evidence](../verification/README.md#artemis-shared-store-primary-and-backup)
+
 ## Admin retry diagnostics and focused recovery reruns
 
 `PULSAR_ADMIN_TIMEOUT` means a client-side admin timeout; `PULSAR_ADMIN_CONNECT_RETRY` means a failed connection. The SDK can wrap either in an exception whose default status is 500, without receiving an HTTP 500 response. Check broker access logs before diagnosing a server error. `PULSAR_ADMIN_REQUEST_FAILED` preserves an ambiguous generic SDK failure without inventing an HTTP response. Actual HTTP response failures retain their status codes. Credential-provider/TLS rejections are permanent configuration faults; this classification does not constitute TLS interoperability acceptance.

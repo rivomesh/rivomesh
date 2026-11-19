@@ -671,3 +671,7 @@ The `dc88c6399ced052299f10159df0b765a8f56978f040922f01a7564c090619be6` package p
 ### Exact outer and nested package component inventory
 
 The scanner verified the external-driver candidate `02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3`. It identified 151 package coordinates, 46 missing from the Maven BOM, and recorded locations and digests for Hive, the three Bouncy Castle JARs and Kafka metadata. An old-coverage fixture omitted 46 required reviews. Four Python regressions confirm that explicit review rejects unidentified nested JARs, with exact nested location and digest. The external JDBC check passed. Project licensing and distribution approval remain open. [Review procedure](../en/release-inventory.md) · [Manifest](baseline.json)
+
+### Artemis shared-store primary and backup
+
+The `b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3` package passed four native Artemis 2.57.0 checks. The passive backup opened its Core listener after the primary was killed. The publisher kept its existing receipt when its stable loopback ingress was isolated. After the ingress routed to the active backup, the publisher verified the original native receipt, identity and bytes, then confirmed the same pending event. The first fixture failed at JVM initialization. Both test projects were cleaned up. [Operations](../en/messaging-v3.md#shared-store-primary-and-backup) · [Manifest](baseline.json)

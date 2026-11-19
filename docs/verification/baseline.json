@@ -12185,5 +12185,40 @@
     "scope": "Package component identification and review gate only. Application authorship, redistribution terms, the final project LICENSE and NOTICE, and approval require separate review.",
     "evidenceSha256": "f61ac77fdaba1f8dd828eb7622abd594bb77c0700b7a5236b595d6f57ef9efa9",
     "reproduce": "python3 tests/release-inventory.py --artifact /path/to/external-vendor.jar --maven-bom /path/to/rivomesh-cyclonedx.json --output target/exact-inventory.json --expect-external-vendor-jdbc"
+  },
+  "artemisSharedStorePromotionNative": {
+    "status": "PASS",
+    "native": {
+      "status": "PASS",
+      "checks": [
+        "The primary accepts CORE while the original backup process remains passive",
+        "The original Core event is confirmed and remains readable after consumer ACK",
+        "The isolated publisher retains its previous confirmation",
+        "The backup accepts the same endpoint and identity and confirms the exact retry after checking history"
+      ],
+      "artifactSha256": "b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3",
+      "harnessSha256": "f5fa19c28d361ffc4d7100fa3771d95010fbff86719368617fa70ebc12821fcd",
+      "testClassSha256": "83f84182f11250ca52429ad33e5e2d1418ad3c1f33b8c3b9f062e601677b3314",
+      "testHelperSha256": "2e414727a271a294190241ebf6b6e43022e34f31baf638a02717c571d84e8b24",
+      "brokerConfigSha256": "91f80922657dc5be9ae2293e758536da48565a8dec86014464de82ab015972f1",
+      "brokerImage": "apache/artemis:2.57.0",
+      "brokerImageDetails": "sha256:cbd6651fd7d1cd6a558aa60dfa80bf86039066796af4bcb92f0ae127f915a024 arm64",
+      "cleanupExitCode": 0,
+      "remaining": {
+        "containers": 0,
+        "volumes": 0,
+        "networks": 0
+      }
+    },
+    "nativeManifestSha256": "c85fd6c0f3bea49a12f5a015fc2ed998a73340e30b4f0bb6e990a39310252c4d",
+    "priorFixture": {
+      "manifestSha256": "007c36eef3ab20f5f26a8fa29f854eb2856c2e2035ee6748a7065372f2aeed93",
+      "harnessSha256": "b6f3e1f647644a968ba808509e7aaceeaf9f8f74d085972d2a3764c29a444251",
+      "status": "FAIL",
+      "cleanupExitCode": 0,
+      "reason": "Fixture max heap was smaller than the broker image default initial heap."
+    },
+    "scope": "Artemis 2.57.0 shared NIO journal primary and backup with a stable loopback entry. Standby automatically opens its Core listener after the primary is killed. The receipt, broker and queue identities and original event bytes survive; the same retry confirms after route restoration. Separate hosts, storage loss, TLS and automatic failback remain separate profiles.",
+    "reproduce": "python3 tests/artemis-shared-store-run.py --artifact /path/to/rivomesh.jar --test-classes artemis-transport/target/test-classes --java-home /path/to/jdk --output target/artemis-shared-store"
   }
 }
