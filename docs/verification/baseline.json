@@ -12867,6 +12867,6 @@
       }
     ],
     "scope": "Single-PDB Oracle Free with one archived redo thread. Real LogMiner filters seven canceled writes and seven compensation rows. Two independent PostgreSQL subscriptions use distinct data and metadata schemas on one PostgreSQL instance, direct Controller/Worker restart and unchanged snapshots. Both cuts match native Flashback.",
-    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --driver \"$ORACLE_JDBC\" --logminer --savepoint-evidence --pipeline --savepoint-pipeline --output target/oracle-savepoint-proof"
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --savepoint-evidence --pipeline --savepoint-pipeline --output target/oracle-savepoint-proof"
   }
 }
