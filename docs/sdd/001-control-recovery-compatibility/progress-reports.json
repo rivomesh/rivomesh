@@ -2,23 +2,27 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T14:58:16+08:00",
-  "nextReportAt": "2026-11-19T15:58:16+08:00",
+  "lastReportAt": "2026-11-19T15:58:16+08:00",
+  "nextReportAt": "2026-11-19T16:58:16+08:00",
   "completedSincePrevious": [
-    "LG-08 Gauss index preview shares the JDBC write policy, reports complete counts and bounds blockers. 43 Java and 156 DOM checks. Pushed 853a1e2.",
-    "CP-04 Native original Agent SIGKILL, same-directory restart, queued STOP, exact backlog and former generation fencing. 9 native, 61 Java and 157 DOM checks. Pushed da11cde.",
-    "RC-10 Native current physical Kafka route proof across active and restorable configurations. Four brokers, two Controllers, three retained versions and four routes. Pushed b7f3d70.",
-    "LG-04 Pulsar 4.0.14 with two brokers and three bookies recovered the original topic and retry ID after quorum loss. 4 native checks. Pushed 7e0a523.",
-    "LG-05 Original signed failure history and closed recovery receipt survive approved same-store handoff and candidate restart. 29 native checks including 3 Chrome checks. Pushed 89598e1.",
-    "LG-04 TLS, Token authentication and ZooKeeper majority election with 2 brokers, 3 bookies and 3 ZooKeeper nodes. 6 native checks. Pushed 3df2a02.",
-    "CP-04 Native asymmetric same-store path loss stops the former Worker, preserves a settled cut on both targets and replays queued STOP after same-process reconnect. Explicit START applies the backlog once. 11 native and 57 Java checks. Pushed 09393c5."
+    "Oracle Free LOB archive limitations and distinct BasicFiles/SecureFiles preflight. 12 native and 14 Java. Pushed 31d5369.",
+    "Approved same-store raw capture and signed failure archive adoption. 37 native checks including Chrome, 96 Java and 157 DOM. Pushed 68ce1bb.",
+    "Immutable full audit event windows with signed continuity. 11 native MinIO and 21 Python checks. Pushed a948341.",
+    "PostgreSQL extended NUMERIC preserves precision and keyless multiplicity to PostgreSQL and MySQL. 11 native and 37 Java. Pushed b264be0.",
+    "Optional Java 17 bundle passed 627 application tests with 35 optional skips and 12 ARM64 native rolling checks. Pushed d533a99.",
+    "Kafka blocked approval binds configuration, physical routes, authorization and audit. 4 native and 106 exact Java checks. Pushed 5018320.",
+    "Native openGauss 7.0.0-RC3 mode A index mapping and same-endpoint restart. 8 native checks. Pushed 1d353da.",
+    "Independent journal reachability, same-process recovery and blocked cross-store writer transfer. 21 native checks including Chrome, 96 Java and 158 DOM. Pushed a1d3ef0.",
+    "Exact external package review identifies 151 packaged coordinates and 46 BOM omissions. 4 Python regressions. Pushed 08691d4.",
+    "Native Artemis shared-store primary failure retains the queue, prior record, receipt and retry. 4 native checks. Pushed 07a9203.",
+    "In-flight row lock partition rolls back the incomplete PostgreSQL commit and fills it once. 13 native checks and 50 Java. Pushed 0ae5542.",
+    "Java 17 native MySQL 8.4.13 asynchronous primary failure, external promotion and automatic dual-target GTID continuation. 9 native checks. Pushed 7aabd72."
   ],
   "inProgress": [
-    "SO-07 Oracle Free 23.26.4 verified 12 native checks and 14 focused Java tests. BasicFiles and SecureFiles locator history lacks reversible row images. Restricted accounts receive the correct storage-mode preflight. Bilingual documentation and review are in progress.",
-    "LG-05 Combined raw MySQL archive and signed failure history custody. 94 focused Java and 157 DOM tests passed. The exact package is running in the isolated live fixture.",
-    "RC-10 Immutable conditional Kafka notice approval with current dependency and audit-anchor verification. 90 exact HTTP tests, 30 focused Java and 157 DOM tests pass. Native four-broker acceptance is queued.",
-    "JV-02 Optional Java 17 build. Actual Corretto 17 packaged the application and passed 78 focused tests with 6 optional skips and the class-file gate. Live Controller, Agent and Worker profile is queued.",
-    "SO-06 PostgreSQL signed and extended NUMERIC scale. A supported source declaration is currently rejected. Work has started on lossless bounded mapping and two-target tests."
+    "JV-02 Java 11 prototype built with release 11, booted on Corretto 11 and entered native rolling validation. Record rewrites passed 62 focused Java 17 tests; default release sources are unchanged.",
+    "RC-10 Kafka Worker physical receipt passed native TLS/SCRAM against the exact 5018320-integrated candidate. Independent startup-lock and journal-preflight fixes passed focused tests and are being integrated. Membership and journal-time evidence remain in progress.",
+    "LG-10 OIDC mock identity provider and two Controller HTTP acceptance are in development. Existing local account authority remains unchanged.",
+    "CP-04 The in-flight row-lock profile passed. Permanent original Agent loss, committed-but-unacknowledged outcomes and broader draining remain."
   ],
   "reportContents": [
     "Current totals",
@@ -33,13 +37,18 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "853a1e2",
-    "da11cde",
-    "b7f3d70",
-    "7e0a523",
-    "89598e1",
-    "3df2a02",
-    "09393c5"
+    "31d5369",
+    "68ce1bb",
+    "a948341",
+    "b264be0",
+    "d533a99",
+    "5018320",
+    "1d353da",
+    "a1d3ef0",
+    "08691d4",
+    "07a9203",
+    "0ae5542",
+    "7aabd72"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -47,26 +56,23 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish Oracle archive proof, combined history adoption and immutable Kafka approval in the serialized native queue.",
-    "Verify Java 17 with the packaged Controller, Agent and Worker across native SQL and a rolling replacement.",
-    "CP-04 permanent original Agent loss, in-flight outcomes and independently reachable stores.",
-    "LG-04 internal TLS and broader message-system cluster or failure-domain profiles.",
-    "LG-08 commercial distributed GaussDB CN/DN acceptance."
+    "Finish Java 11 rolling verification and a maintainable build profile; evaluate Java 8 API differences.",
+    "Integrate and verify Kafka receipt safeguards. Keep historical ownership and dispatch tracked separately.",
+    "Verify cross-entry external identity mapping and revocation.",
+    "Advance broader cutover, lost-node and missing-log profiles; commercial GaussDB, Oracle RAC and live AWS require their matching environments."
   ],
-  "currentCandidateArtifact": "e37f3e3cb70c0399fc7c8d507c0ba6b51f6c5da1e98f86b2aae072422f7d11e6",
-  "currentCandidateScope": "Exact native asymmetric partition package. Source, fixture and application scope matched the published commit; the most recent full reactor is listed separately.",
+  "currentCandidateArtifact": "393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24",
+  "currentCandidateScope": "Optional Java 17 native asynchronous MySQL promotion. Latest full standard reactor is recorded separately.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [],
-  "lastScheduledReportAt": "2026-11-19T14:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-19T15:58:16+08:00",
   "lastVerifiedReactor": {
-    "baseCommit": "7e0a523201967748c51e7c0b515b0bb4e0cc96af",
-    "candidateTree": "de4cd5f09aaf77780fba50e4d66080b3681de20d",
-    "verifiedAppTree": "1388826190b349eb238f344da42fc7e327865877",
-    "artifactSha256": "81888b8f09d266cc45f3a7bfbff435667f25351f77ed8c2cb0f08a775513522c",
-    "javaTestsPassed": 627,
+    "baseCommit": "5018320504ac4ded545c8a142b2a87940d814423",
+    "artifactSha256": "b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3",
+    "javaTestsPassed": 630,
     "optionalSkips": 35,
     "domTestsPassed": 157,
-    "scope": "Normal Maven reactor and product gate. Rivomesh classes and console resources match the combined native candidate bytes."
+    "scope": "Temurin 21 standard Maven application package gate; later split-store merged candidate passed 96 focused Java and 158 DOM tests."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
