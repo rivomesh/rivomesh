@@ -180,8 +180,6 @@ if args.handoff_private_writer and (not args.handoff_managed_writer or not args.
     parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes')
 if args.handoff_private_writer and (args.handoff_raw_custody or args.handoff_failure_custody) and not args.handoff_public_owner:
     parser.error('official historical evidence acceptance requires --handoff-public-owner')
-if args.handoff_private_writer and args.handoff_raw_custody and args.handoff_failure_custody:
-    parser.error('official handoff tests raw and failure history in separate profiles')
 if args.handoff_auto_resume and (not args.handoff_private_writer or args.handoff_public_owner or args.handoff_raw_custody):
     parser.error('--handoff-auto-resume requires --handoff-private-writer without public or raw-history ownership approval')
 if args.handoff_target_fence and not args.handoff_private_writer:
@@ -1963,7 +1961,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert sql(journal_service,identity_sql)==original_identity and sql(journal_service,snapshot_sql)==snapshots
         assert sql('mysql','SELECT COUNT(*) FROM sales.items WHERE id BETWEEN 201 AND 209')=='9'
         passed('The original Agent retains real binlog bytes and replays the same GTID after a reviewed budget increase without a gap or new generation')
-        return original,file,content,witness
+        return original,file,content,witness,retained
 
     def run_capture_exclusion(retention, checkpoint, archive, original_bytes):
         plan = retention['exclusionPlan']
@@ -2535,12 +2533,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             print('GLOBAL_CONTROL_COMMAND_ROUTING_ACCEPTED artifact=' + digest)
             raise SystemExit(0)
         if args.handoff_assessment:
+            combined_history=args.handoff_raw_custody and args.handoff_failure_custody
             endpoint=route+'/handoff'
             candidate='node-worker-alt'
             wait(lambda: all(task(n).get('status',{}).get('phase')=='STREAMING' for n in ('node-a','node-b')),
                  'both entries see the original drained data stream')
             if args.handoff_raw_custody:
-                raw_origin,raw_file,raw_bytes,raw_witness=retain_and_recover_handoff_capture()
+                raw_origin,raw_file,raw_bytes,raw_witness,raw_retain_request=retain_and_recover_handoff_capture()
             if args.handoff_custody:
                 validation,_=action('VALIDATE',complete=not args.handoff_auto_resume,
                                     validation={'targets':['pg','my'],'gateMillis':15000,'sourceMillis':60000,
@@ -2750,9 +2749,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert len(closed)==receipts['archive']['closedReceipts']
                             assert any(r['request']==validation and r['phase']=='SUCCEEDED' for r in closed)
                             assert all(set(r)=={'request','signature','actor','role','kind','phase','code'} for r in closed)
+                        closed_ids={row['request'] for row in closed if row['phase']=='SUCCEEDED'}
                         if args.handoff_failure_custody:
-                            closed_ids={row['request'] for row in closed if row['phase']=='SUCCEEDED'}
                             assert {review,resolved}<=closed_ids
+                        if args.handoff_raw_custody:
+                            assert raw_retain_request in closed_ids
                         assert validation not in json.dumps(good)
                         passed('Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records')
                         if args.handoff_preparation_browser:
@@ -2857,11 +2858,32 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                         assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
                                     finally:
                                         held_stage.rename(raw_stage)
+                                    if combined_history:
+                                        staged_zip=raw_stage/'capture.zip'
+                                        damaged_zip=exact_raw_zip[:-1]+bytes([exact_raw_zip[-1]^1])
+                                        staged_zip.write_bytes(damaged_zip)
+                                        try:
+                                            refused=http('node-b',commit_url,stage_input,request=request,expected=409)
+                                            assert refused['code']=='HANDOFF_ARCHIVE_BYTES_CHANGED'
+                                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                        finally:
+                                            staged_zip.write_bytes(exact_raw_zip)
+                                        passed('One corrupt raw ZIP refuses the same ownership approval even with a valid staged failure history')
                                     raw_zip.rename(raw_zip.with_name('raw-unavailable-after-staging.held'))
                                     passed('An authenticated raw proof requires its exact candidate private staging before the native writer changes')
                                 if args.handoff_failure_custody:
                                     staged_record=staged_failures/(evidence+'.json')
                                     expected_record=failure_bytes[staged_record.name]
+                                    if combined_history:
+                                        held_record=staged_record.with_name(staged_record.name+'.held')
+                                        staged_record.rename(held_record)
+                                        try:
+                                            refused=http('node-b',commit_url,stage_input,request=request,expected=409)
+                                            assert refused['code']=='HANDOFF_STAGING_ENTRY_INVALID'
+                                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                        finally:
+                                            held_record.rename(staged_record)
+                                        passed('Missing historical failure bytes refuse the same ownership approval even with a valid staged raw ZIP')
                                     damaged=expected_record[:-1]+bytes([expected_record[-1]^1])
                                     staged_record.write_bytes(damaged)
                                     try:
@@ -2984,9 +3006,15 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                                       'archiveBytes':len(exact_raw_zip),'rawCaptures':1,'executionAuthorized':False}
                                     received=http('node-a',raw_history_path)
                                     assert received==http('node-b',raw_history_path)
-                                    assert re.fullmatch(r'[0-9a-f]{64}',received.pop('adoptionSha256'))
+                                    raw_adoption_sha256=received.pop('adoptionSha256')
+                                    assert re.fullmatch(r'[0-9a-f]{64}',raw_adoption_sha256)
                                     assert received==expected_history and not raw_zip.exists()
                                     assert http('node-b',raw_history_path,expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
+                                    if combined_history:
+                                        for controller in ('node-a','node-b'):
+                                            retention=http(controller,route+'/recovery-receipts/'+raw_retain_request)
+                                            assert retention['id']==raw_retain_request and retention['status']=='SUCCEEDED'
+                                            assert retention['candidateCustody']=='VERIFIED'
                                 if args.handoff_failure_custody:
                                     history=adopted_directory/'historical-failures'
                                     assert {file.name for file in history.iterdir()}==set(failure_names)
@@ -2998,7 +3026,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                     entry=failure_bytes[evidence+'.json']
                                     catalog=http('node-a',failure_history_path)
                                     assert catalog==http('node-b',failure_history_path)
-                                    assert re.fullmatch(r'[0-9a-f]{64}',catalog.pop('adoptionSha256'))
+                                    failure_adoption_sha256=catalog.pop('adoptionSha256')
+                                    assert re.fullmatch(r'[0-9a-f]{64}',failure_adoption_sha256)
                                     assert catalog=={'state':'READ_ONLY_HISTORY','preparationId':prepared_id,'executionAuthorized':False,
                                                      'failureRecords':1,'records':[{'id':evidence,'sha256':hashlib.sha256(entry).hexdigest(),
                                                                                    'bytes':len(entry)}]}
@@ -3010,8 +3039,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 if additional_report is None:
                                     assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert all((local_report/name).read_bytes()==payload for name,payload in saved_bytes.items())
+                                if combined_history:
+                                    assert raw_adoption_sha256==failure_adoption_sha256
+                                    return raw_adoption_sha256
 
-                            adopted_reads()
+                            before_restart_adoption=adopted_reads()
                             passed('Both Controllers read exact adopted report history and verify the candidate closed receipt without exposing signatures')
                             if args.handoff_raw_custody:
                                 raw_stage.rename(raw_stage.with_name(raw_stage.name+'.offline'))
@@ -3025,9 +3057,17 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             wait(lambda:http(candidate,'/readyz',expected=(200,503)).get('status')=='UP','adopted candidate reopens')
                             wait(lambda:task().get('ownerState')=='HEALTHY' and task().get('workerState')=='STOPPED',
                                  'adopted candidate publishes its stopped state')
-                            adopted_reads()
+                            after_restart_adoption=adopted_reads()
                             assert task()['ownerNodeId']==candidate and data_cut()==actual
                             passed('A candidate restart reopens immutable adopted history with the same native cut and Worker stopped')
+                            if combined_history:
+                                assert before_restart_adoption==after_restart_adoption
+                                manifest['combinedHistoryAdoption']={'adoptionSha256':after_restart_adoption,
+                                    'rawArchiveSha256':raw_result['archive']['sha256'],'failureArchiveSha256':failures['archive']['sha256'],
+                                    'independentStagingRefusals':4,'singleApprovalAndAdoption':True,
+                                    'candidateRestartWithoutSharedOrStagedEvidence':True,'bothOriginalKeysPreserved':True,
+                                    'bothClosedReceiptsVerified':True,'workerStopped':True}
+                                passed('Both read-only histories retain one approval and adoption digest across candidate restart with unchanged checkpoints')
                             if args.handoff_raw_custody:
                                 manifest['rawHistoryAdoption']={'archiveSha256':raw_result['archive']['sha256'],
                                     'archiveBytes':len(exact_raw_zip),'nativeCaptures':1,'crossControllerQueries':True,

@@ -336,10 +336,11 @@ final class OwnerQueries {
     }
 
     private static Map<String,Object> readinessResponse(Entry entry,Map<String,Object> response){
-        Set<String> keys=Set.of("preparation","binding","desired","configurationSha256","stagingSha256");
-        if(response==null||!(response.keySet().equals(keys)
-                ||response.size()==keys.size()+1&&response.keySet().containsAll(keys)
-                    &&(response.get("rawCapture")!=null||response.get("failureRecords") instanceof Integer count&&count>0)))
+        Set<String> required=Set.of("preparation","binding","desired","configurationSha256","stagingSha256");
+        Set<String> allowed=Set.of("preparation","binding","desired","configurationSha256","stagingSha256","rawCapture","failureRecords");
+        if(response==null||!response.keySet().containsAll(required)||!allowed.containsAll(response.keySet())
+                ||response.containsKey("rawCapture")&&response.get("rawCapture")==null
+                ||response.containsKey("failureRecords")&&!(response.get("failureRecords") instanceof Integer count&&count>0))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         ManagedHandoff.CandidateAdmission ready;
         try{ready=Model.JSON.convertValue(response,ManagedHandoff.CandidateAdmission.class);}

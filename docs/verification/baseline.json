@@ -11312,5 +11312,101 @@
     "status": "PASS",
     "evidenceManifestSha256": "6780f22109400d8302b6c266b7ac4235a76f6d7dcd9008b62e29168c98bc0135",
     "reproduce": "python3 tests/oracle-source-probe.py --output target/oracle-lob-profile --logminer --lob-evidence --lob-preflight --artifact /path/to/rivomesh.jar --jdbc-driver /path/to/ojdbc8.jar"
+  },
+  "combinedRawAndFailureHistoryAdoption": {
+    "status": "PASS",
+    "native": {
+      "artifactSha256": "9253e3ad29f17697bda9a9a1471c2516606ae96625542f67c4ee78e434284cc2",
+      "harnessSourceSha256": "647e9668f970ec004a557000ff3c1593f65496aa9d5f21316aeea43e63bd3979",
+      "testClassesSha256": "7ed23ba7582ed2a6a30be79cf615598afa5c0d6727894c4c8888c171395ace38",
+      "sourceImage": "mysql:8.4",
+      "sourceVersion": "8.4.13",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "controlProduct": "POSTGRESQL",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Only the original Agent can admit the explicitly initialized managed writer",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "The original Agent retains real binlog bytes and replays the same GTID after a reviewed budget increase without a gap or new generation",
+        "A native constraint failure is signed and retained before the original task drains through replay",
+        "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+        "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+        "Concurrent refreshes against the same receipt allow exactly one replacement",
+        "Controller restart retains the assessed placement, original owner and masked cut proof",
+        "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+        "Candidate with a disjoint private mount cannot claim custody of the original completed report",
+        "Candidate lacking the shared raw archive refuses custody even when the signed original still exists",
+        "A candidate with no archive mount access refuses custody of retained failure evidence",
+        "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+        "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+        "Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain",
+        "Candidate verifies the exact native raw archive and authenticated witness, with original ownership, key and cut preserved",
+        "Candidate verifies exact archived authority and failure record bytes while source key and owner stay private",
+        "Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records",
+        "One corrupt raw ZIP refuses the same ownership approval even with a valid staged failure history",
+        "An authenticated raw proof requires its exact candidate private staging before the native writer changes",
+        "Missing historical failure bytes refuse the same ownership approval even with a valid staged raw ZIP",
+        "Damaged staged historical failure evidence refuses ownership while the original cut remains exact",
+        "Chrome: The second Controller stages signed custody and commits the already bound owner transfer by keyboard at 390px, keeping the Worker stopped",
+        "Scoped public ownership API uses the signed bind from another Controller and rejects injected YAML or replacement intent",
+        "Both Controllers read exact adopted report history and verify the candidate closed receipt without exposing signatures",
+        "A candidate restart reopens immutable adopted history with the same native cut and Worker stopped",
+        "Both read-only histories retain one approval and adoption digest across candidate restart with unchanged checkpoints",
+        "Candidate restart reads the offline adopted native MySQL ZIP from both Controllers with its original HMAC and live recovery scope untouched",
+        "Candidate restart reopens exact signed historical failure evidence and closed review receipts without shared or staged copies",
+        "Direct candidate Worker launch and generic resume cannot open the parked journal or move source and destination cuts",
+        "The other Controller replays one native transfer and sees durable stopped evidence adoption after a discarded response",
+        "The retired former Agent reopens without reclaiming the journal or changing target data",
+        "Chrome: The first Controller shows the parked candidate, exact adopted counts and readable original evidence in the light console",
+        "Chrome: The second Controller shows the same masked receipt and authorized controls in the dark narrow console"
+      ],
+      "combinedHistoryAdoption": {
+        "adoptionSha256": "26a2e0757cb58cb558226c965395225a3f8bd5a392c8f36a8a281dc9d4de39b4",
+        "rawArchiveSha256": "fdd95b10d3ed7bed689ff424ac635ae5e9016c02f1fcc814dc258d7e798b4b70",
+        "failureArchiveSha256": "9ea1696bb58e8d97fc6b1ecad877147f02435179347d7cb000d8922b334da79f",
+        "independentStagingRefusals": 4,
+        "singleApprovalAndAdoption": true,
+        "candidateRestartWithoutSharedOrStagedEvidence": true,
+        "bothOriginalKeysPreserved": true,
+        "bothClosedReceiptsVerified": true,
+        "workerStopped": true
+      },
+      "browserHandoffAdopted": {
+        "status": "PASS",
+        "scenario": "handoff-adopted",
+        "browser": "Chrome/157.0.8103.79",
+        "checks": [
+          "The first Controller shows the parked candidate, exact adopted counts and readable original evidence in the light console",
+          "The second Controller shows the same masked receipt and authorized controls in the dark narrow console"
+        ],
+        "sourceSha256": {
+          "browser-handoff.mjs": "7858efab7d2c84d8d69d0e9cb9a60353d3a6a9e8e650c3fc5dd467baa16e5beb",
+          "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+        }
+      },
+      "browserHandoffOwnerCommit": {
+        "status": "PASS",
+        "scenario": "handoff-owner-commit",
+        "browser": "Chrome/157.0.8103.79",
+        "checks": [
+          "The second Controller stages signed custody and commits the already bound owner transfer by keyboard at 390px, keeping the Worker stopped"
+        ],
+        "sourceSha256": {
+          "browser-handoff.mjs": "7858efab7d2c84d8d69d0e9cb9a60353d3a6a9e8e650c3fc5dd467baa16e5beb",
+          "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f"
+        }
+      },
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "a6e55cea96c9c6902798382b4514abc1ba7ac69ef14aa41c550197378098b207",
+    "integratedPackageSha256": "2d4e6bf5f6ebc06ad06fbae16461a6f6a4934e2e3d187649eb6fbe56d53063a3",
+    "integratedTree": "6b7c81b47d43052a9675ff4c21a767113c428ab7",
+    "integratedJavaPassed": 96,
+    "integratedDomPassed": 157,
+    "integratedHarnessSha256": "bf3e276d1b3eb59123582510aaa575d07f946847d0ced0db85cc4840a555b77f",
+    "scope": "A single explicit ownership approval in the same PostgreSQL database with four independent staging failures, a live MySQL raw binlog ZIP, a signed PostgreSQL failed-transaction record, dual target cuts, both closed receipts and a candidate restart. Executable recovery, automatic commit after Controller loss, other storage and target profiles require separate acceptance.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/combined-history-native --test-classes sync-app/target/test-classes --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-failure-custody --handoff-raw-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-public-owner --handoff-public-owner-browser /path/to/chrome --handoff-adopted-browser /path/to/chrome --source-image mysql:8.4 --source-expected-version 8.4.13"
   }
 }

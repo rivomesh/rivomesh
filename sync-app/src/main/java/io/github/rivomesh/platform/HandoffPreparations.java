@@ -100,7 +100,7 @@ final class HandoffPreparations {
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
                     case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor)
-                            &&validFailureCount(p.writerCommit)
+                            &&HandoffFailureHistory.bounded(p.writerCommit.failureRecords())
                             &&(p.writerCommit.rawCapture()==null||p.writerCommit.rawCapture().matches(p)
                                 &&cluster.equals(p.writerCommit.rawCapture().binding().scope().cluster()));
                     default->false;
@@ -199,7 +199,7 @@ final class HandoffPreparations {
 
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
         if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires
-                ||!validFailureCount(receipt)||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
+                ||!HandoffFailureHistory.bounded(receipt.failureRecords())||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
                 null,null,Math.max(now,p.created),p.activation,receipt,p.executionRequest,null);
@@ -244,10 +244,6 @@ final class HandoffPreparations {
 
     static boolean evidenceEligible(Plan plan){
         return plan!=null&&("PROJECTED".equals(plan.phase)||evidenceInstalled(plan));
-    }
-
-    private static boolean validFailureCount(WriterCommit commit){
-        return HandoffFailureHistory.bounded(commit.failureRecords())&&(commit.failureRecords()==0||commit.rawCapture()==null);
     }
 
     private static boolean validAdoption(Plan plan,HandoffEvidenceAdoption.Receipt receipt){

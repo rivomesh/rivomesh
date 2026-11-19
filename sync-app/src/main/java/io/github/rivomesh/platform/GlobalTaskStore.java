@@ -255,7 +255,7 @@ final class GlobalTaskStore {
             AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successorYaml,
             String candidateStagingSha256,String executionRequest,RawCaptureHandoffStaging.Proof rawCapture,int failureRecords)throws Exception{
         HandoffPreparations.requireExecution(plan,executionRequest);
-        if(!HandoffFailureHistory.bounded(failureRecords)||failureRecords>0&&rawCapture!=null)
+        if(!HandoffFailureHistory.bounded(failureRecords))
             throw new TaskService.Conflict("HANDOFF_FAILURE_HISTORY_SCOPE_CHANGED");
         if(rawCapture!=null&&!rawCapture.matches(plan))throw new TaskService.Conflict("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
         if(candidateStagingSha256==null||!candidateStagingSha256.matches("[a-f0-9]{64}"))

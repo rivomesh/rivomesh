@@ -264,7 +264,7 @@ final class HandoffEvidenceAdoption {
         Seal seal=Model.JSON.readValue(cipher.open(purpose(task,preparation),new String(envelope,StandardCharsets.US_ASCII)),Seal.class);
         if(seal==null||seal.version()!=1||seal.originalNode()==null||seal.candidate()==null||seal.files()==null||seal.reports()<0||seal.reports()>32
                 ||seal.closedReceipts()<1||seal.closedReceipts()>SharedHandoffEvidence.MAX_RECEIPTS
-                ||!HandoffFailureHistory.bounded(seal.failureRecords())||seal.failureRecords()>0&&seal.rawCapture()!=null
+                ||!HandoffFailureHistory.bounded(seal.failureRecords())
                 ||seal.files().size()!=1+2*seal.reports()+(seal.rawCapture()==null?0:1)+HandoffFailureHistory.fileCount(seal.failureRecords())
                 ||!seal.files().containsKey(RECEIPTS)
                 ||seal.rawCapture()!=null&&!rawSeal(seal.rawCapture()).equals(seal.files().get(RAW_CAPTURE))

@@ -310,8 +310,7 @@ final class ManagedHandoff {
             this(preparation,binding,desired,configurationSha256,stagingSha256,rawCapture,0);
         }
         boolean valid(){return preparation!=null&&binding!=null&&"STOPPED".equals(desired)
-                &&digest(configurationSha256)&&digest(stagingSha256)&&HandoffFailureHistory.bounded(failureRecords)
-                &&(rawCapture==null||failureRecords==0);}
+                &&digest(configurationSha256)&&digest(stagingSha256)&&HandoffFailureHistory.bounded(failureRecords);}
     }
 
     // Commits only after the authenticated candidate has verified its private staged files.
@@ -384,11 +383,11 @@ final class ManagedHandoff {
         if(!plan.evidence().equals(active))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
         if(!(assessment.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        if("PRESENT".equals(inventory.get("failureEvidence"))&&"ABSENT".equals(inventory.get("sourceEvidence")))
-            return new RecoveryCustody(null,verifiedFailureRecords(assessment,plan));
-        if(!"ABSENT".equals(inventory.get("failureEvidence")))
-            throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        if("ABSENT".equals(inventory.get("sourceEvidence")))return new RecoveryCustody(null,0);
+        int failures;
+        if("PRESENT".equals(inventory.get("failureEvidence")))failures=verifiedFailureRecords(assessment,plan);
+        else if("ABSENT".equals(inventory.get("failureEvidence")))failures=0;
+        else throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        if("ABSENT".equals(inventory.get("sourceEvidence")))return new RecoveryCustody(null,failures);
         if(!"PRESENT".equals(inventory.get("sourceEvidence")))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
         var e=plan.evidence();
@@ -396,7 +395,7 @@ final class ManagedHandoff {
                 e.original().directory(),e.candidate().directory());
         RawCaptureHandoffStaging.Binding raw=rawCaptureStage(assessment,plan,scope);
         if(raw==null)throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        return new RecoveryCustody(raw,0);
+        return new RecoveryCustody(raw,failures);
     }
 
     private static int verifiedFailureRecords(Assessment assessment,HandoffPreparations.Plan plan){

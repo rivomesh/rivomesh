@@ -1590,8 +1590,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志、原报告和已办结回执已通过限定实库。批准的 PostgreSQL 同库归属交接支持候选 Agent 接收原始 MySQL ZIP 或原签名故障历史。共享来源和暂存离线后，两个管理入口仍可在候选重启后核验只读摘要。原始采集和故障证据共存的归属交接、跨存储及其他目标档案待验。",
-        "en": "Bounded native tests cover optional journals, original reports and closed receipts. An approved PostgreSQL same-database transfer accepts original MySQL capture ZIPs or original signed failure history. Both Controllers verify read-only metadata after candidate restart and loss of shared and staging copies. Combined custody of raw and failure evidence and other storage and destination profiles remain."
+        "zh-CN": "可选日志、原报告和已办结回执已通过限定实库。已审批的 PostgreSQL 同库交接支持同时保留原始 MySQL ZIP 和签名故障记录。四种私有暂存缺失或篡改都拒绝变更归属。候选重启后，两个入口仍核验共同接收摘要和原回执。跨存储、扩展目标及更多故障路径待验。",
+        "en": "Bounded native tests cover optional journals, original reports and closed receipts. An approved PostgreSQL same-database transfer adopts the original MySQL ZIP and signed failure history together. Four missing or damaged private staging cases refuse ownership change. Both entries verify the common adoption digest and original receipts after candidate restart. Independent stores, further destinations and broader faults remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",

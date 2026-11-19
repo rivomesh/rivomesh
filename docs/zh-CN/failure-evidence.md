@@ -32,7 +32,7 @@
 
 管理员需要任务和两个 Agent 的访问权限，可从任一 Controller 请求 `GET /api/tasks/{taskId}/handoff/failure-history`。接口返回接收摘要，以及每份证据的 ID、字节数和 SHA-256。受支持的已办结操作回执仍可用请求 ID 通过 `/api/tasks/{taskId}/recovery-receipts/{requestId}` 查询。界面显示暂存和接收数量。历史查询会核验候选副本，候选重启后，即使共享归档和暂存目录不可用，也可继续查询。
 
-原 Agent 保管 HMAC 密钥。候选把原签名字节保存在 `handoff-adopted/<id>/historical-failures`，与在线故障证据目录分开。接口只返回摘要和元数据。补数、跳过、写入目标和启动 Worker 各自使用原有审批流程。若归属提交前 Controller 中断，可从任一入口重试同一归属请求。准备同时包含原始采集档案和故障证据时，归属提交会被拒绝。对于旧版本未保存故障记录的暂存，先释放准备，再重新评估和暂存。 [受管理交接](global-control.md)
+原 Agent 保管 HMAC 密钥。候选把原签名字节保存在 `handoff-adopted/<id>/historical-failures`，与在线故障证据目录分开。接口只返回摘要和元数据。补数、跳过、写入目标和启动 Worker 各自使用原有审批流程。若归属提交前 Controller 中断，可从任一入口重试同一归属请求。任务同时保留两类历史时，用同一份准备暂存 MySQL 原始采集 ZIP 和签名故障记录。归属提交按同一批准切点核验两份私有暂存，缺失或损坏任一份都会拒绝。正式接收后，两个历史接口返回相同的准备 ID 和接收摘要。对于旧版本未保存故障记录的暂存，先释放准备，再重新评估和暂存。 [受管理交接](global-control.md)
 
 ## FAQ
 

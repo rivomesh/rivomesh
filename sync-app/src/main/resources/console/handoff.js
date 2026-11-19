@@ -302,7 +302,7 @@ window.RivomeshHandoff=(()=>{
   return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED',...startStates].includes(preparation.state)?evidence!=null
     &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
     &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0
-    &&(evidence.rawCaptures==null||evidence.failureRecords==null&&evidenceCount(evidence.rawCaptures))
+    &&(evidence.rawCaptures==null||evidenceCount(evidence.rawCaptures))
     &&(evidence.failureRecords==null||evidenceCount(evidence.failureRecords))
     :evidence==null;
  }
@@ -742,7 +742,7 @@ window.RivomeshHandoff=(()=>{
      &&sha256.test(raw.archiveSha256||'')&&raw.archiveSha256!==result.archiveSha256&&sha256.test(raw.stagedSealSha256||'')
      &&Number.isSafeInteger(raw.archiveBytes)&&raw.archiveBytes>0&&Number.isSafeInteger(raw.rawCaptures)&&raw.rawCaptures>0;
    const failures=result?.failureRecords;
-   if(!rawValid||(failures!=null&&(raw!=null||!evidenceCount(failures)))||result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
+   if(!rawValid||(failures!=null&&!evidenceCount(failures))||result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
      ||result.taskRevision!==plan.taskRevision||result.candidateNodeId!==plan.candidateNodeId
      ||result.evidenceSha256!==plan.evidenceSha256||result.archiveSha256!==plan.custodySha256
      ||!Number.isSafeInteger(result.reports)||result.reports<0
