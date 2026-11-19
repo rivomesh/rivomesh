@@ -15,6 +15,9 @@ public final class JdbcJournal implements NormalizedJournal {
         public String writerAssignment,writerNode;
         public boolean managedWriter;
         public boolean deliveryTiming;
+        public Set<String> kafkaPublicationTargets=Set.of();
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public KafkaPhysicalReceipt.Grant kafkaPhysicalGrant;
         public long maxPendingBytes=1024L*1024*1024;
     }
     public static final class Busy extends IllegalStateException { public Busy(){super("JOURNAL_BUSY");} }
@@ -48,6 +51,22 @@ public final class JdbcJournal implements NormalizedJournal {
     private String q(String name){return dialect==Dialect.MYSQL?"`"+name+"`":"\""+name+"\"";}
     String table(String name){return q(settings.namespace)+"."+q("rm3_"+name);}
     String text(){return dialect==Dialect.MYSQL?"LONGTEXT":dialect==Dialect.H2?"CLOB":"TEXT";}
+    boolean localH2(){return dialect==Dialect.H2;}
+    void requirePhysicalEvidenceTable(Connection c,String name)throws SQLException{
+        String sql=switch(dialect){
+            case MYSQL -> "SELECT ENGINE='InnoDB' AND TABLE_COLLATION='utf8mb4_bin' FROM information_schema.TABLES "
+                    +"WHERE TABLE_SCHEMA=? AND TABLE_NAME=?";
+            case POSTGRES -> "SELECT r.relkind='r' AND r.relpersistence='p' AND NOT r.relhasrules FROM pg_catalog.pg_class r "
+                    +"JOIN pg_catalog.pg_namespace n ON r.relnamespace=n.oid WHERE n.nspname=? AND r.relname=?";
+            case H2 -> "SELECT TABLE_TYPE='BASE TABLE' FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?";
+        };
+        try(PreparedStatement p=c.prepareStatement(sql)){
+            p.setQueryTimeout(5);p.setString(1,settings.namespace);p.setString(2,"rm3_"+name);
+            try(ResultSet r=p.executeQuery()){
+                if(!r.next()||!r.getBoolean(1)||r.next())throw new SQLException("Receipt storage requires a durable ordinary table","42P16");
+            }
+        }
+    }
     static int execute(Connection c,String sql,Object... values)throws SQLException{
         try(PreparedStatement p=c.prepareStatement(sql)){for(int i=0;i<values.length;i++)p.setObject(i+1,values[i]);return p.executeUpdate();}
     }
@@ -92,6 +111,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 if(generation!=null&&!generation.equals(job.get("generation")))
                     throw new IllegalStateException("JOURNAL_IDENTITY_MISMATCH");
                 c.commit();
+                if(settings.kafkaPhysicalGrant!=null)JdbcKafkaPhysicalHistory.prepare(this,c,false);
             }
         }else initializeStorage(fingerprint,generation,subscribers);
     }
@@ -122,7 +142,12 @@ public final class JdbcJournal implements NormalizedJournal {
         }
     }
     void createStorage(Connection c)throws Exception{
-        ddl(c,(dialect==Dialect.MYSQL?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(settings.namespace));
+        try{ddl(c,(dialect==Dialect.MYSQL?"CREATE DATABASE IF NOT EXISTS ":"CREATE SCHEMA IF NOT EXISTS ")+q(settings.namespace));}
+        catch(SQLException rejected){
+            if(settings.kafkaPhysicalGrant!=null)throw JdbcKafkaPhysicalHistory.notReady(rejected);
+            throw rejected;
+        }
+        if(settings.kafkaPhysicalGrant!=null)JdbcKafkaPhysicalHistory.prepare(this,c,true);
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("subscription")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,acknowledged BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128),PRIMARY KEY(pipeline_id,subscription_id))");
@@ -367,13 +392,15 @@ public final class JdbcJournal implements NormalizedJournal {
     }
     private void acknowledge(Lease lease,String subscription,long sequence,Instant confirmedAt)throws Exception{
         try(Connection c=connect()){
-            c.setAutoCommit(false);fence(c,lease);Subscription sub=subscription(c,subscription,true);
+            c.setAutoCommit(false);Map<String,Object> fenced=fence(c,lease);Subscription sub=subscription(c,subscription,true);
             if(sequence>=0&&sequence<=sub.acknowledged){c.commit();return;}if(!"RUNNING".equals(sub.state))throw new Paused();
             if(sequence!=Math.addExact(sub.acknowledged,1))throw new IllegalStateException("ACK_WOULD_SKIP_TRANSACTION");
             try(PreparedStatement p=c.prepareStatement("SELECT 1 FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq=?")){
                 p.setString(1,settings.pipelineId);p.setLong(2,sequence);try(ResultSet rs=p.executeQuery()){if(!rs.next())throw new IllegalStateException("JOURNAL_SEQUENCE_GAP");}
             }
             if(confirmedAt!=null)JdbcDeliveryTiming.confirm(this,c,subscription,sequence,confirmedAt);
+            if(settings.kafkaPhysicalGrant!=null&&settings.kafkaPublicationTargets.contains(subscription))
+                JdbcKafkaPhysicalHistory.acknowledge(this,c,subscription,(String)fenced.get("generation"),lease.epoch,sequence);
             execute(c,"UPDATE "+table("subscription")+" SET acknowledged=? WHERE pipeline_id=? AND subscription_id=?",sequence,settings.pipelineId,subscription);c.commit();
         }
     }

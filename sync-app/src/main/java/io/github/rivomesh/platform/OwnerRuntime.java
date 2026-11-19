@@ -2,6 +2,8 @@ package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
@@ -42,6 +44,7 @@ final class OwnerRuntime implements AutoCloseable {
         if(closed.get()||!started.compareAndSet(false,true))throw new TaskService.Conflict("OWNER_RUNTIME_ALREADY_STARTED");
         try{
             local.bindOwnerWorkerLease(workerLease);
+            if(config.kafkaPhysicalOwnershipEvidence)local.bindKafkaGrantIssuer(this::kafkaPhysicalGrant);
             if(!restoreWorkerLease(leases.get()))throw new ControlStore.Fenced();
             publish();
             long monitorMillis=Math.min(250,config.cluster.heartbeatMillis);
@@ -50,6 +53,29 @@ final class OwnerRuntime implements AutoCloseable {
             commandLoop.scheduleWithFixedDelay(this::commands,0,Math.max(100,Math.min(config.pollMillis,1000)),TimeUnit.MILLISECONDS);
             queryLoop.scheduleWithFixedDelay(this::queries,0,100,TimeUnit.MILLISECONDS);
         }catch(Exception failure){commandProblem=code(failure);close();throw failure;}
+    }
+    private KafkaPhysicalReceipt.Grant kafkaPhysicalGrant(String task,String projected)throws Exception{
+        return authority.service((c,accounts)->{
+            ControlStore.Lease lease=leases.get();
+            agents.require(c,lease,directory);
+            GlobalTaskStore.Record record=authority.record(c,task);
+            if(!lease.nodeId.equals(record.owner)||!directory.equals(record.directory)||record.activeConfigurationVersion==null
+                    ||!record.activeConfigurationVersion.equals(record.configurationVersion))
+                throw new TaskService.Conflict("KAFKA_PHYSICAL_CONFIGURATION_NOT_ACTIVE");
+            TaskDefinition expected=TaskDefinition.parse(authority.activeYaml(c,record),Paths.get(config.tasksDirectory),
+                    Paths.get(config.dataDirectory),lease.nodeId);
+            ObjectMapper yaml=new ObjectMapper(new YAMLFactory());
+            if(!yaml.readTree(expected.workerYaml).equals(yaml.readTree(projected)))
+                throw new TaskService.Conflict("KAFKA_PHYSICAL_WORKER_PROJECTION_CHANGED");
+            KafkaPhysicalReceipt.Scope scope=new KafkaPhysicalReceipt.Scope(authority.identity,task,directory,
+                    record.activeConfigurationVersion,Codec.sha256(projected.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            var live=agents.require(c,lease,directory);
+            var member=new KafkaPhysicalReceipt.Member(scope,lease.nodeId,lease.incarnation,lease.epoch,
+                    live.observedUtcMillis(),live.expiresUtcMillis());
+            var cipher=authority.commandCipher();
+            var witness=new KafkaPhysicalReceipt.MemberWitness(member,cipher.signature(member.signatureDomain()));
+            return new KafkaPhysicalReceipt.Grant(scope,cipher.signature(scope.keyDomain()),witness);
+        });
     }
     private void importCommittedWriter(String task,ControlStore.Lease lease)throws Exception{
         ManagedRecipientImport.Receipt imported=ManagedRecipientImport.install(authority,agents,local,lease,directory,task,plan->{

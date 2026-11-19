@@ -193,12 +193,17 @@ public final class PipelineConfig {
     private Path localPath(){if(journal.path==null||journal.path.trim().isEmpty())throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_REQUIRED");return base.resolve(journal.path).normalize().toAbsolutePath();}
     public JdbcJournal.Settings journalSettings(){JdbcJournal.Settings s=new JdbcJournal.Settings();s.pipelineId=pipelineId;s.namespace=journal.namespace;s.maxPendingBytes=journal.maxBytes;
         s.writerAssignment=journal.writerAssignment;s.writerNode=nodeId;s.managedWriter=journal.managedWriter;
+        s.kafkaPublicationTargets=targets.stream().filter(target->target.product==TargetProduct.KAFKA)
+                .map(target->target.id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        s.kafkaPhysicalGrant=kafkaPhysicalGrant;
         String type=effectiveSourceType();
         s.deliveryTiming="POSTGRESQL".equals(type)||"MYSQL".equals(type)&&journal.writerAssignment==null
                 &&MysqlCdcSource.originalTimingProfile(source);
         if("LOCAL".equals(journal.mode)){s.driver="org.h2.Driver";s.url="jdbc:h2:file:"+localPath().resolve("rivomesh")+";AUTO_SERVER=TRUE;CACHE_SIZE=4096;WRITE_DELAY=0;LOCK_TIMEOUT=10000";}
         else{s.driver=driver(journal.product);s.url=journal.url;s.username=journal.username;s.password=journal.password;}return s;
     }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    KafkaPhysicalReceipt.Grant kafkaPhysicalGrant;
     public JdbcSink.Settings targetSettings(Target target,String generation){JdbcSink.Settings s=new JdbcSink.Settings();s.id=target.id;s.pipelineId=pipelineId;s.generation=generation;s.fingerprint=fingerprint();s.driver=driver(target.product);s.product=target.product;s.url=target.url;s.username=target.username;s.password=target.password;s.metadataSchema=target.metadataSchema;s.uniquePolicy=target.uniquePolicy;s.acknowledgeTextConversions=target.dm!=null&&target.dm.acknowledgeTextConversions;s.databases=new TreeMap<>(target.mappings);return s;}
     public static ClickHouseHttpClient.Settings clickHouseHttp(Target target){ClickHouse o=target.clickhouse==null?new ClickHouse():target.clickhouse;ClickHouseHttpClient.Settings s=new ClickHouseHttpClient.Settings();s.url=target.url;s.username=target.username;s.password=target.password;s.connectTimeoutMillis=o.connectTimeoutMillis;s.requestTimeoutMillis=o.requestTimeoutMillis;s.maximumRequestBytes=o.maximumRequestBytes;s.maximumResponseBytes=o.maximumResponseBytes;return s;}
     public ClickHouseMaterializer.Settings clickHouseSettings(Target target,String generation){ClickHouseMaterializer.Settings s=new ClickHouseMaterializer.Settings();s.http=clickHouseHttp(target);s.pipelineId=pipelineId;s.subscriptionId=target.id;s.generation=generation;s.fingerprint=fingerprint();s.metadataDatabase=target.metadataSchema;s.mappings=new TreeMap<>(target.mappings);s.autoCreate=target.clickhouse==null||target.clickhouse.autoCreate;s.secondaryIndexes=target.clickhouse==null?ClickHouseIndexPlan.Mode.NONE:target.clickhouse.secondaryIndexes;return s;}

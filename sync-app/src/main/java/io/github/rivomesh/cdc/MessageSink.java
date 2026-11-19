@@ -17,9 +17,19 @@ public final class MessageSink implements SinkAdapter {
     private ConfirmedPublisher publisher;
     private String transportProgress;
     private long activeEpoch;
+    private final KafkaPhysicalReceipt.Grant ownershipGrant;
+    private boolean physicalRecorded;
+    private long lastPhysicalAttempt;
     public MessageSink(String id,Map<String,String> mappings,PublicationStore store,Factory factory,int maximumMessageBytes)throws Exception{
+        this(id,mappings,store,factory,maximumMessageBytes,null);
+    }
+    public MessageSink(String id,Map<String,String> mappings,PublicationStore store,Factory factory,int maximumMessageBytes,
+                       KafkaPhysicalReceipt.Grant ownershipGrant)throws Exception{
         if(id==null||mappings==null||mappings.isEmpty()||maximumMessageBytes<1024)throw new IllegalArgumentException("MESSAGE_SINK_CONFIG_INVALID");
+        if(ownershipGrant!=null&&(!(store instanceof JdbcPublicationStore)||!store.pipelineId().equals(ownershipGrant.scope().task())))
+            throw new IllegalArgumentException("KAFKA_PHYSICAL_STORE_REQUIRED");
         this.id=id;this.mappings=new TreeMap<>(mappings);this.store=store;this.factory=factory;this.maximumMessageBytes=maximumMessageBytes;generation=store.generation();
+        this.ownershipGrant=ownershipGrant;
     }
     @Override public String id(){return id;}
     @Override public boolean includes(TableSchema table){return mappings.containsKey(table.database);}
@@ -71,6 +81,7 @@ public final class MessageSink implements SinkAdapter {
             TableSchema table=schemas.get(change.tableId);if(table==null||table.version!=change.schemaVersion)throw new IllegalStateException("PUBLICATION_SCHEMA_NOT_PREPARED");if(checkedTables.add(table.id)){SnapshotCheckpoint snapshot=store.snapshot(table.id);if(snapshot==null||!"COMPLETE".equals(snapshot.state))throw new IllegalStateException("PUBLICATION_SNAPSHOT_INCOMPLETE");}
             rowMessage(epoch,sequence,tx,change,validatedOrdinal);
         }validatedOrdinal++;}
+        KafkaPhysicalPublisher observation=beginPhysicalObservation(namespaces);
         for(String namespace:namespaces){MessageEvent begin=transactionEvent("BEGIN",namespace,tx,sequence);send(epoch,Collections.singletonList(message(begin,namespace+".__transactions",tx.id,epoch)));}
         List<ConfirmedPublisher.Message> batch=new ArrayList<>();int ordinal=0;
         for(Change change:tx.changes){
@@ -78,7 +89,22 @@ public final class MessageSink implements SinkAdapter {
             batch.add(rowMessage(epoch,sequence,tx,change,ordinal++));if(batch.size()==100){send(epoch,batch);batch=new ArrayList<>();}
         }if(!batch.isEmpty())send(epoch,batch);
         for(String namespace:namespaces){MessageEvent commit=transactionEvent("COMMIT",namespace,tx,sequence);commit.contentHash=hash;send(epoch,Collections.singletonList(message(commit,namespace+".__transactions",tx.id,epoch)));}
-        store.committed(epoch,sequence,tx.id,hash);
+        KafkaPhysicalReceipt.Observation proof=observation==null?null:observation.finishPhysicalObservation();
+        if(proof==null)store.committed(epoch,sequence,tx.id,hash);
+        else{
+            var receipt=ownershipGrant.sign(id,generation,epoch,sequence,hash,proof);
+            ((JdbcPublicationStore)store).committed(epoch,sequence,tx.id,hash,receipt);
+        }
+    }
+    private KafkaPhysicalPublisher beginPhysicalObservation(Set<String> namespaces)throws Exception{
+        if(ownershipGrant==null||physicalRecorded||namespaces.size()>KafkaPhysicalReceipt.MAX_WIRE)return null;
+        long now=System.nanoTime();
+        if(lastPhysicalAttempt!=0&&now-lastPhysicalAttempt<java.util.concurrent.TimeUnit.SECONDS.toNanos(30))return null;
+        if(((JdbcPublicationStore)store).kafkaPhysicalReceipt(generation,ownershipGrant)!=null){physicalRecorded=true;return null;}
+        if(!(publisher() instanceof KafkaPhysicalPublisher kafka))throw new IllegalStateException("KAFKA_PHYSICAL_PUBLISHER_REQUIRED");
+        lastPhysicalAttempt=now;
+        kafka.beginPhysicalObservation(namespaces);
+        return kafka;
     }
     private MessageEvent transactionEvent(String kind,String namespace,SourceTransaction tx,long sequence){MessageEvent event=event(kind,namespace,transactionEventKey(tx.id,namespace,kind));event.transactionId=tx.id;event.transactionKind=tx.kind.name();event.attributes=new TreeMap<>(tx.attributes);event.sequence=sequence;event.position=tx.position;for(String mapped:new TreeSet<>(mappings.values()))event.expectedChanges.put(mapped,0);int ordinal=0;for(Change change:tx.changes){if(change.operation==Change.Operation.BARRIER)event.controls.put(ordinal,change);else{String mapped=namespace(schemas.get(change.tableId));event.expectedChanges.put(mapped,event.expectedChanges.get(mapped)+1);event.totalChanges++;}ordinal++;}return event;}
     private ConfirmedPublisher.Message rowMessage(long epoch,long sequence,SourceTransaction tx,Change change,int ordinal){

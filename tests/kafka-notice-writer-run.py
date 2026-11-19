@@ -84,10 +84,12 @@ def provision_users(name, secret):
 def main():
     options = argparse.ArgumentParser(description=__doc__)
     options.add_argument('artifact', type=Path)
+    options.add_argument('--physical-ownership', action='store_true')
     args = options.parse_args()
     artifact = args.artifact.resolve(strict=True)
     root = Path(__file__).resolve().parent
     java_home = Path(os.environ['JAVA_HOME']) / 'bin'
+    fixture = 'KafkaPhysicalOwnershipAcceptance' if args.physical_ownership else 'KafkaNoticeWriterAcceptance'
     name = f'rivomesh-kafka-writer-{secrets.token_hex(6)}'
     secret = secrets.token_hex(24)
     with socket.socket() as reservation:
@@ -100,7 +102,7 @@ def main():
         classes = home / 'classes'
         classes.mkdir()
         run(str(java_home / 'javac'), '-cp', str(artifact), '-d', str(classes),
-            str(root / 'kafka' / 'KafkaNoticeWriterAcceptance.java'), timeout=25)
+            str(root / 'kafka' / f'{fixture}.java'), timeout=25)
         try:
             start(home, port, password, name)
             provision_users(name, secret)
@@ -108,7 +110,7 @@ def main():
             run(str(java_home / 'java'), '-Xmx256m', '-Dorg.slf4j.simpleLogger.defaultLogLevel=off',
                 f'-Djavax.net.ssl.trustStore={trust}', f'-Djavax.net.ssl.trustStorePassword={password}',
                 '-cp', os.pathsep.join((str(artifact), str(classes))),
-                'io.github.rivomesh.cdc.KafkaNoticeWriterAcceptance', f'127.0.0.1:{port}', env=environment, timeout=125)
+                f'io.github.rivomesh.cdc.{fixture}', f'127.0.0.1:{port}', env=environment, timeout=125)
         except Exception:
             logs = subprocess.run(['docker', 'logs', '--tail', '35', name], capture_output=True, text=True, timeout=10)
             if logs.returncode == 0:

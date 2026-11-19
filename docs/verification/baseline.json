@@ -12709,5 +12709,51 @@
     "accountConsoleEvidenceSha256": "dea70971e293880ddbd5dff2ba02adc9a83244334549ebeeacf15e5da862fbcf",
     "scope": "Two real loopback Controller HTTP endpoints share an H2 control database and use an HTTPS mock IdP. One fixed issuer and RSA public key, authorization code and S256 PKCE, browser-bound one-time state and nonce. ADMIN mapping to a preexisting local account and prompt local cross-entry revocation. Accounts UI binds, replaces and revokes with current revision and CSRF. Production identity-provider and ingress, automated remote provider revocation and key rotation require separate coverage.",
     "reproduce": "mvn -B -s build/settings.xml -pl sync-app -am -Dtest=OidcBrowserLoginTest,BrowserSessionsTest,AccountManagementTest,TaskAuthorizationTest,PlatformTest,OwnerRuntimeTest,PlatformAuditTest -Dsurefire.failIfNoSpecifiedTests=false package && npm --prefix tests/ui test && helm lint deploy/helm/rivomesh"
+  },
+  "kafkaFirstPhysicalCommitMembership": {
+    "nativeArtifactSha256": "31cd403ccdf60664533d0a4b3e5a837445af7eb18ae4a23f2acb300f77c37af3",
+    "nativeFocusedJavaPassed": 121,
+    "nativeEvidenceSha256": "d99cd3140b968eb9f0f1c4c3ecf26da737f5138ac21898725eab8d7641108bc2",
+    "nativeCombinedLogSha256": "830074b92855445f3410a71c21b0b4f278463bf6b04cfdd717724f1e21aa14c0",
+    "nativeMySqlRerunLogSha256": "fba71d806be8599d0defd8a0beac56f79e80d88eebc61aa7966d7dd1d2eec31a",
+    "integratedArtifactSha256": "529e323460aa3247a0d0749bd0e97a4b3e95830531a8a9b426ef7424c4de2c21",
+    "integratedSourceTree": "13cb2f5615a0b0b43a2a7e8af3d1afeaf9c139e2",
+    "integratedFocusedJavaPassed": 91,
+    "integratedPackageGate": true,
+    "portableFixtureCompiledAgainstIntegratedArtifact": true,
+    "runtime": "Temurin 21.0.13+9 LTS",
+    "profiles": {
+      "kafka": {
+        "result": "PASS",
+        "version": "3.9.2",
+        "transport": "TLS/SCRAM-SHA-512",
+        "journal": "H2",
+        "scope": "physical Topic UUID, exact COMMIT offset, signed member/time receipt, write-only business ACK without evidence, no duplicate records or consumer groups"
+      },
+      "postgres": {
+        "result": "PASS",
+        "version": "17.12",
+        "scope": "original/default startup and ACK, correct native signed ACK, actual restricted SQL identity, UNLOGGED storage rejected"
+      },
+      "mysql": {
+        "result": "PASS",
+        "version": "8.4.13",
+        "scope": "original/default startup and ACK, correct native signed ACK, actual restricted SQL identity, MyISAM storage rejected",
+        "fixture_retry": "initial compound run exited 1 because its limited fixture principal connected with the wrong default schema. Retried only MySQL against the same app, same permissions, and corrected the selected schema."
+      }
+    },
+    "remainingFixtureResources": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "scope": [
+      "authority-signed Agent node, incarnation, lease epoch and same-control-database UTC issue window",
+      "same journal UTC publication and acknowledgement observations bound to the receipt, including acknowledgement lease epoch",
+      "backward journal time keeps ordinary ACK and discards proof",
+      "legacy proof immutable and no dispatch authority"
+    ],
+    "sqlFixture": "tests/kafka-journal-durability-run.py",
+    "kafkaFixture": "tests/kafka-notice-writer-run.py"
   }
 }

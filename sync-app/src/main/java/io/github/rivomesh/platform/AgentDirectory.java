@@ -141,10 +141,11 @@ final class AgentDirectory {
             return new HandoffCapacity(binding,declared.taskCapacity,declared.runningCapacity,r.getLong(2),tasks.preparations().reserved(c,node));
         }
     }
-    void require(Connection c,ControlStore.Lease lease,String directory)throws Exception{
-        directory(directory);db.requireLiveOwnLease(c,lease);db.requireExecutionRole(c,lease.nodeId);root(c);Binding b=read(c,lease.nodeId);
+    JdbcControlStore.LiveLease require(Connection c,ControlStore.Lease lease,String directory)throws Exception{
+        directory(directory);var live=db.requireLiveOwnLease(c,lease);db.requireExecutionRole(c,lease.nodeId);root(c);Binding b=read(c,lease.nodeId);
         if(b==null)throw new TaskService.Conflict("AGENT_NOT_REGISTERED");
         if(!directory.equals(b.directory))throw new TaskService.Conflict("AGENT_DIRECTORY_CHANGED");
         if(lease.epoch!=b.epoch||!lease.incarnation.equals(b.incarnation))throw new ControlStore.Fenced();
+        return live;
     }
 }

@@ -104,15 +104,19 @@ final class JdbcControlStore implements ControlStore {
             Lease lease=new Lease(node.id,node.incarnation,epoch);publish(c,lease,node,tasks,now(c));c.commit();return lease;
         }catch(SQLException failure){throw new Unavailable();}
     }
-    private void fence(Connection c,Lease lease,long now,boolean requireLive)throws SQLException{
+    record LiveLease(long observedUtcMillis,long expiresUtcMillis){}
+    private LiveLease fence(Connection c,Lease lease,boolean requireLive)throws SQLException{
         try(PreparedStatement p=prepare(c,"SELECT incarnation,epoch,lease_until,lifecycle FROM "+table("node")+" WHERE cluster_id=? AND node_id=? FOR UPDATE",config.id,lease.nodeId);ResultSet rs=p.executeQuery()){
             if(!rs.next()||!lease.incarnation.equals(rs.getString(1))||lease.epoch!=rs.getLong(2)||!"RUNNING".equals(rs.getString(4)))throw new Fenced();
-            if(requireLive&&rs.getLong(3)<=now(c))throw new Expired();
+            if(!requireLive)return null;
+            long observed=now(c),expires=rs.getLong(3);
+            if(expires<=observed)throw new Expired();
+            return new LiveLease(observed,expires);
         }
     }
-    void requireLiveOwnLease(Connection c,Lease lease)throws SQLException{
+    LiveLease requireLiveOwnLease(Connection c,Lease lease)throws SQLException{
         if(lease==null||!config.nodeId.equals(lease.nodeId))throw new Fenced();
-        fence(c,lease,now(c),true);
+        return fence(c,lease,true);
     }
     void requireExecutionRole(Connection c,String node)throws Exception{
         try(PreparedStatement p=prepare(c,"SELECT metadata FROM "+table("node")+" WHERE cluster_id=? AND node_id=? FOR UPDATE",config.id,node);ResultSet r=p.executeQuery()){
@@ -121,10 +125,10 @@ final class JdbcControlStore implements ControlStore {
     }
     public void heartbeat(Lease lease,Node node,List<Task> tasks)throws Exception{
         validate(node,tasks);if(!node.id.equals(lease.nodeId)||!node.incarnation.equals(lease.incarnation))throw new Fenced();
-        try(Connection c=connect()){c.setAutoCommit(false);fence(c,lease,now(c),true);publish(c,lease,node,tasks,now(c));c.commit();}catch(SQLException failure){throw new Unavailable();}
+        try(Connection c=connect()){c.setAutoCommit(false);fence(c,lease,true);publish(c,lease,node,tasks,now(c));c.commit();}catch(SQLException failure){throw new Unavailable();}
     }
     public void stopped(Lease lease)throws Exception{
-        try(Connection c=connect()){c.setAutoCommit(false);long now=now(c);fence(c,lease,now,false);update(c,"UPDATE "+table("node")+" SET lifecycle='STOPPED',seen_at=?,lease_until=? WHERE cluster_id=? AND node_id=?",now,now,config.id,lease.nodeId);c.commit();}catch(SQLException failure){throw new Unavailable();}
+        try(Connection c=connect()){c.setAutoCommit(false);long now=now(c);fence(c,lease,false);update(c,"UPDATE "+table("node")+" SET lifecycle='STOPPED',seen_at=?,lease_until=? WHERE cluster_id=? AND node_id=?",now,now,config.id,lease.nodeId);c.commit();}catch(SQLException failure){throw new Unavailable();}
     }
     public Map<String,Object> page(String after,int limit)throws Exception{
         if(after==null||!after.isEmpty()&&!after.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")||limit<1||limit>50)throw new IllegalArgumentException("NODE_CURSOR_INVALID");

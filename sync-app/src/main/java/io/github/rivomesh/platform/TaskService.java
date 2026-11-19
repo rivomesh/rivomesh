@@ -3,6 +3,7 @@ package io.github.rivomesh.platform;
 import io.github.rivomesh.*;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.KafkaNoticePlanning;
+import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
 import io.github.rivomesh.cdc.KafkaNoticeWriterReview;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import io.github.rivomesh.cdc.TargetProduct;
@@ -118,6 +119,8 @@ public final class TaskService implements AutoCloseable {
     private final Set<String> ownerRequests=new HashSet<>();
     private final Set<String> ownerStartBlocks=new HashSet<>(),retiredOwners=new HashSet<>();
     private volatile OwnerWorkerLease ownerWorkerLease;
+    @FunctionalInterface interface KafkaGrantIssuer {KafkaPhysicalReceipt.Grant issue(String task,String projection)throws Exception;}
+    private volatile KafkaGrantIssuer kafkaGrantIssuer;
     private final List<Map<String,String>> invalid=new ArrayList<>();
     private final Path statePath, logDirectory, workerDirectory;
     private final FileChannel lockChannel;
@@ -132,7 +135,7 @@ public final class TaskService implements AutoCloseable {
     private final AccountDirectory.State configuredAccounts;
 
     public TaskService(PlatformConfig c) throws Exception {
-        this(c,new TaskBackend.Database(),(path,log,heap)->new TaskWorker.Jvm(path,log,heap,c.protectedEnvironment,c.workerSecretReferences));
+        this(c,new TaskBackend.Database(),TaskWorker.Jvm.factory(c));
     }
     public TaskService(PlatformConfig c,TaskBackend backend,TaskWorker.Factory workers) throws Exception {
         this(c,backend,workers,true);
@@ -199,6 +202,14 @@ public final class TaskService implements AutoCloseable {
     }
     synchronized void beginOwnerScheduling(){ensureOpen();if(config.cluster!=null&&!config.cluster.executes())throw new Conflict("OWNER_ROLE_REQUIRED");if(!schedulingStarted){scheduler.scheduleWithFixedDelay(this::schedule,0,config.pollMillis,TimeUnit.MILLISECONDS);schedulingStarted=true;}}
     void bindOwnerWorkerLease(OwnerWorkerLease lease){ownerWorkerLease=Objects.requireNonNull(lease);}
+    void bindKafkaGrantIssuer(KafkaGrantIssuer issuer){kafkaGrantIssuer=Objects.requireNonNull(issuer);}
+
+    private KafkaPhysicalReceipt.Grant kafkaGrant(Entry entry)throws Exception{
+        KafkaGrantIssuer issuer=kafkaGrantIssuer;
+        return issuer!=null&&entry.config.pipeline!=null
+                &&entry.config.pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.KAFKA)
+                ?issuer.issue(entry.config.jobId,entry.config.workerYaml):null;
+    }
 
     private OwnerWorkerLease managedWorkerLease(Entry entry){
         return entry.config.pipeline!=null&&entry.config.pipeline.journal.managedWriter?ownerWorkerLease:null;
@@ -1028,8 +1039,9 @@ public final class TaskService implements AutoCloseable {
                             else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));
                             entry.config.holdLocalJournal();
                             Path log=logDirectory.resolve(id+".log");
-                            entry.worker=workerLease==null?workers.start(entry.path,log,config.workerHeapMiB)
-                                    :workerLease.launch(()->workers.start(entry.path,log,config.workerHeapMiB));
+                            entry.worker=workerLease==null?workers.start(entry.path,log,config.workerHeapMiB,kafkaGrant(entry))
+                                    :workerLease.prepareAndLaunch(()->kafkaGrant(entry),
+                                            grant->workers.start(entry.path,log,config.workerHeapMiB,grant));
                             if(entry.worker==null){slots.release();entry.permit=false;}
                             else entry.workerState="RUNNING";
                         }

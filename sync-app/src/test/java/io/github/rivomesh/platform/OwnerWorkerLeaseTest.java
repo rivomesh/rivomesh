@@ -1,6 +1,9 @@
 package io.github.rivomesh.platform;
 
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -61,5 +64,40 @@ class OwnerWorkerLeaseTest {
         assertEquals(1,launched.fences);
         assertFalse(guard.permitsStart());
         assertFalse(guard.admit(current.get()));
+    }
+
+    @Test void monitorFencesExistingWorkerWhileGrantPreparationIsBlocked()throws Exception{
+        var initial=new ControlStore.Lease("owner",UUID.randomUUID().toString(),1);
+        var replacement=new ControlStore.Lease("owner",UUID.randomUUID().toString(),2);
+        var current=new AtomicReference<>(initial);
+        var guard=new OwnerWorkerLease(current::get);
+        assertTrue(guard.admit(initial));
+        Worker former=(Worker)guard.launch(Worker::new);
+        var preparing=new CountDownLatch(1);
+        var release=new CountDownLatch(1);
+        var starts=new AtomicInteger();
+        var threads=Executors.newFixedThreadPool(2);
+        try{
+            var pending=threads.submit(()->guard.prepareAndLaunch(()->{
+                preparing.countDown();
+                assertTrue(release.await(10,TimeUnit.SECONDS));
+                return "prepared";
+            },grant->{starts.incrementAndGet();return new Worker();}));
+            assertTrue(preparing.await(3,TimeUnit.SECONDS));
+            current.set(replacement);
+            threads.submit(guard::monitor).get(3,TimeUnit.SECONDS);
+            assertEquals(1,former.fences);
+            former.stop();
+            assertTrue(guard.admit(replacement));
+            release.countDown();
+            assertNull(pending.get(3,TimeUnit.SECONDS));
+            assertEquals(0,starts.get());
+            assertNotNull(guard.prepareAndLaunch(()->"fresh",grant->{
+                assertEquals("fresh",grant);return new Worker();
+            }));
+        }finally{
+            release.countDown();
+            threads.shutdownNow();
+        }
     }
 }

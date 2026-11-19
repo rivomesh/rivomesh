@@ -24,7 +24,13 @@ public interface TaskWorker {
             this.code=code;
         }
     }
-    interface Factory { TaskWorker start(Path config, Path log, int heapMiB) throws Exception; }
+    interface Factory {
+        TaskWorker start(Path config, Path log, int heapMiB) throws Exception;
+        default TaskWorker start(Path config,Path log,int heapMiB,io.github.rivomesh.cdc.KafkaPhysicalReceipt.Grant grant)throws Exception{
+            if(grant!=null)throw new IllegalStateException("KAFKA_PHYSICAL_WORKER_REQUIRED");
+            return start(config,log,heapMiB);
+        }
+    }
 
     final class Jvm implements TaskWorker {
         private final Process process;
@@ -44,10 +50,29 @@ public interface TaskWorker {
         }
         Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,List<String>> grants,
             Map<String,String> parent,String main)throws Exception{
+            this(config,log,heapMiB,protectedNames,grants,parent,main,null);
+        }
+        static Factory factory(PlatformConfig deployment){
+            return new Factory(){
+                @Override public TaskWorker start(Path config,Path log,int heapMiB)throws Exception{return start(config,log,heapMiB,null);}
+                @Override public TaskWorker start(Path config,Path log,int heapMiB,io.github.rivomesh.cdc.KafkaPhysicalReceipt.Grant grant)throws Exception{
+                    return new Jvm(config,log,heapMiB,deployment.protectedEnvironment,deployment.workerSecretReferences,
+                            System.getenv(),"io.github.rivomesh.Main",grant);
+                }
+            };
+        }
+        private Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,List<String>> grants,
+                    Map<String,String> parent,String main,io.github.rivomesh.cdc.KafkaPhysicalReceipt.Grant grant)throws Exception{
             String cp = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
             ProcessBuilder builder=new ProcessBuilder(Paths.get(System.getProperty("java.home"),"bin","java").toString(),"-Xmx"+heapMiB+"m","-cp",cp,main,"run",config.toAbsolutePath().toString()).redirectErrorStream(true);
-            String definition=new String(PrivateFiles.read(config,1024*1024),StandardCharsets.UTF_8);
+            byte[] projection=PrivateFiles.read(config,1024*1024);
+            String definition=new String(projection,StandardCharsets.UTF_8);
             Map<String,String> environment=environment(parent,definition,protectedNames,grants);
+            if(grant!=null){
+                if(!io.github.rivomesh.cdc.Codec.sha256(projection).equals(grant.scope().workerProjectionSha256()))
+                    throw new IllegalStateException("KAFKA_PHYSICAL_WORKER_PROJECTION_CHANGED");
+                environment.put(io.github.rivomesh.cdc.KafkaPhysicalReceipt.GRANT_ENV,grant.encode());
+            }
             builder.environment().clear();builder.environment().putAll(environment);process=builder.start();
             output = new Thread(() -> {
                 try (InputStream in = process.getInputStream()) {

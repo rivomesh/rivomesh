@@ -2,6 +2,8 @@ package io.github.rivomesh;
 
 import io.github.rivomesh.cdc.*;
 import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import io.github.rivomesh.validation.ValidationStore;
 
@@ -9,7 +11,15 @@ import io.github.rivomesh.validation.ValidationStore;
 final class PipelineMain {
     private PipelineMain(){}
     static void execute(String[] args)throws Exception{
-        PipelineConfig config=PipelineConfig.load(Paths.get(args[1]));
+        var path=Paths.get(args[1]).toAbsolutePath().normalize();
+        String ownership=args.length==2&&"run".equals(args[0])?System.getenv(KafkaPhysicalReceipt.GRANT_ENV):null;
+        PipelineConfig config;
+        if(ownership==null)config=PipelineConfig.load(path);
+        else{
+            byte[] projected=Files.readAllBytes(path);
+            config=PipelineConfig.parse(new String(projected,StandardCharsets.UTF_8),path.getParent());
+            config.kafkaPhysicalGrant=KafkaPhysicalReceipt.Grant.open(ownership,config.pipelineId,projected);
+        }
         if(args.length==2&&args[0].equals("run")){
             try(PipelineEngine engine=new PipelineEngine(config)){
                 Thread hook=new Thread(engine::close,"v3-shutdown");Runtime.getRuntime().addShutdownHook(hook);

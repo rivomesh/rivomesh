@@ -42,6 +42,7 @@ final class WorkerSecretReferences {
 
     static boolean protectedName(String name,Set<String> protectedNames){
         return protectedNames.contains(name)||name.equals("RIVOMESH_TOKEN")||name.equals("RIVOMESH_PREVIEW_TOKEN")
+                ||name.equals(io.github.rivomesh.cdc.KafkaPhysicalReceipt.GRANT_ENV)
                 ||name.startsWith("RIVOMESH_CONTROL_");
     }
 

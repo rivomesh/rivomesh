@@ -32,8 +32,26 @@ final class OwnerWorkerLease {
         return same(admitted,live());
     }
 
+    @FunctionalInterface interface PreparedStart<T>{TaskWorker start(T prepared)throws Exception;}
+
+    <T> TaskWorker prepareAndLaunch(Callable<T> prepare,PreparedStart<T> start)throws Exception{
+        ControlStore.Lease generation=launchGeneration();
+        if(generation==null)return null;
+        // Remote admission can stall. The monitor must still fence already running workers.
+        T prepared=prepare.call();
+        return launch(generation,()->start.start(prepared));
+    }
+
+    private synchronized ControlStore.Lease launchGeneration(){
+        return permitsStart()?admitted:null;
+    }
+
     synchronized TaskWorker launch(Callable<TaskWorker> start)throws Exception{
-        if(!permitsStart())return null;
+        return launch(admitted,start);
+    }
+
+    private synchronized TaskWorker launch(ControlStore.Lease expected,Callable<TaskWorker> start)throws Exception{
+        if(!same(admitted,expected)||!permitsStart())return null;
         TaskWorker worker=start.call();
         workers.put(worker,false);
         monitor();

@@ -32,6 +32,7 @@ public final class PlatformConfig {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
     public Map<String,List<String>> workerSecretReferences;
+    public boolean kafkaPhysicalOwnershipEvidence;
     public List<KafkaNoticeWriter> kafkaNoticeWriters=new ArrayList<>();
     public static final class KafkaNoticeWriter {
         public String taskId,targetId,clusterSha256,topicId,username,password;

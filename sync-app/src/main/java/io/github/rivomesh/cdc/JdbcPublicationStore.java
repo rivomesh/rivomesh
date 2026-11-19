@@ -71,10 +71,19 @@ public final class JdbcPublicationStore implements PublicationStore {
             if(hash==null)execute(c,"INSERT INTO "+t("publication_schema")+" (pipeline_id,subscription_id,table_id,schema_version,payload_hash) VALUES (?,?,?,?,?)",pipeline,subscription,table.id,table.version,expected);c.commit();}
     }
     @Override public void committed(long epoch,long sequence,String transactionId,String hash)throws Exception{
-        try(Connection c=journal.connect()){c.setAutoCommit(false);fence(c,epoch);SinkAdapter.Checkpoint cp=checkpoint(c);
+        committed(epoch,sequence,transactionId,hash,null);
+    }
+    void committed(long epoch,long sequence,String transactionId,String hash,KafkaPhysicalReceipt.Signed evidence)throws Exception{
+        try(Connection c=journal.connect()){c.setAutoCommit(false);var job=fence(c,epoch);SinkAdapter.Checkpoint cp=checkpoint(c);
             if(cp.epoch!=epoch)throw new JdbcJournal.Fenced();if(cp.sequence==sequence&&transactionId.equals(cp.transactionId)&&hash.equals(cp.transactionHash)){c.commit();return;}
             if(sequence!=cp.sequence+1)throw new IllegalStateException("PUBLICATION_SEQUENCE_GAP");
+            if(evidence!=null)JdbcKafkaPhysicalHistory.stage(journal,c,subscription,(String)job.get("generation"),epoch,sequence,hash,evidence);
             execute(c,"UPDATE "+t("publication")+" SET stream_seq=?,transaction_id=?,transaction_hash=? WHERE pipeline_id=? AND subscription_id=?",sequence,transactionId,hash,pipeline,subscription);c.commit();}
+    }
+    KafkaPhysicalReceipt.Signed kafkaPhysicalReceipt(String generation,KafkaPhysicalReceipt.Grant grant)throws Exception{
+        try(Connection c=journal.connect()){
+            return JdbcKafkaPhysicalHistory.verified(journal,c,subscription,generation,grant);
+        }
     }
     private SinkAdapter.SnapshotCheckpoint snapshot(Connection c,String tableId)throws Exception{
         try(PreparedStatement p=c.prepareStatement("SELECT snapshot_id,run_state,next_part,row_count FROM "+t("publication_snapshot")+" WHERE pipeline_id=? AND subscription_id=? AND table_id=?")){

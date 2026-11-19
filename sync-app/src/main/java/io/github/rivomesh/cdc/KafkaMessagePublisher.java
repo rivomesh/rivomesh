@@ -13,11 +13,12 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /** One dedicated, ordered topic per subscription; receipts follow all acks, not an XA claim. */
-public final class KafkaMessagePublisher implements ConfirmedPublisher {
+public final class KafkaMessagePublisher implements KafkaPhysicalPublisher {
     private final PipelineConfig.Target target;
     private final AdminClient admin;
     private final KafkaProducer<String,byte[]> producer;
     private boolean verified;
+    private KafkaPhysicalObservation physical;
     public KafkaMessagePublisher(PipelineConfig.Target target)throws Exception{
         this.target=target;Properties properties=properties(target);admin=AdminClient.create(properties);
         try{producer=new KafkaProducer<>(properties);}catch(Exception failure){admin.close(Duration.ZERO);throw failure;}
@@ -70,8 +71,20 @@ public final class KafkaMessagePublisher implements ConfirmedPublisher {
         if(description.partitions().size()!=1||description.partitions().get(0).replicas().size()!=target.messaging.replicas||!"delete".equals(config.get("cleanup.policy").value())||!"-1".equals(config.get("retention.ms").value())||!"-1".equals(config.get("retention.bytes").value())||!"false".equals(config.get("unclean.leader.election.enable").value())||Integer.parseInt(config.get("min.insync.replicas").value())!=target.messaging.replicas/2+1||Integer.parseInt(config.get("max.message.bytes").value())<target.messaging.maxMessageBytes+4096)throw new SyncFailure("KAFKA_TOPIC_CONFIGURATION_REQUIRES_PLAN","MESSAGE_PUBLICATION",false,"Topic partition/replica/retention/ISR/size policy differs");verified=true;
     }
     @Override public void publish(List<Message> messages)throws Exception{
-        List<Future<RecordMetadata>> confirmations=new ArrayList<>();try{for(Message message:messages){ProducerRecord<String,byte[]> record=new ProducerRecord<>(target.messaging.topic,0,message.key,message.body);for(Map.Entry<String,String> header:message.headers.entrySet())record.headers().add(header.getKey(),header.getValue().getBytes(StandardCharsets.UTF_8));record.headers().add("rivomesh_channel",message.destination.getBytes(StandardCharsets.UTF_8));confirmations.add(producer.send(record));}for(Future<RecordMetadata> confirmation:confirmations)await(confirmation);}
+        List<Future<RecordMetadata>> confirmations=new ArrayList<>();try{for(Message message:messages){ProducerRecord<String,byte[]> record=new ProducerRecord<>(target.messaging.topic,0,message.key,message.body);for(Map.Entry<String,String> header:message.headers.entrySet())record.headers().add(header.getKey(),header.getValue().getBytes(StandardCharsets.UTF_8));record.headers().add("rivomesh_channel",message.destination.getBytes(StandardCharsets.UTF_8));confirmations.add(producer.send(record));}
+            for(int at=0;at<confirmations.size();at++){
+                RecordMetadata metadata=await(confirmations.get(at));
+                if(physical!=null)try{physical.confirmed(target.messaging.topic,messages.get(at),metadata);}
+                catch(RuntimeException unavailable){physical=null;}
+            }}
         catch(Exception e){throw failure(e);}
+    }
+    @Override public void beginPhysicalObservation(Set<String> namespaces)throws InterruptedException{
+        physical=KafkaPhysicalObservation.begin(admin,target,namespaces);
+    }
+    @Override public KafkaPhysicalReceipt.Observation finishPhysicalObservation()throws InterruptedException{
+        KafkaPhysicalObservation observed=physical;physical=null;
+        return observed==null?null:observed.finish(admin,target);
     }
     @Override public void close(){producer.close(Duration.ofMillis(1000));admin.close(Duration.ofMillis(1000));}
 }

@@ -80,6 +80,16 @@ messaging:
 
 可用 `tests/kafka-cluster-run.py --only-managed-notice-plan` 在两个管理入口和真实 Kafka 集群上验证只读计划流程。
 
+### 为新的业务发布保留物理归属证据
+
+在所属 Agent 的启动配置设置 `kafkaPhysicalOwnershipEvidence: true`，即可核对新的 Kafka 业务发布。Agent 在 Worker 启动时检查共享库的生效配置及投影文件，只交给 Worker 在该配置及所属目录下可用的签名密钥。同一生效配置与日志代次下，首个成功核对的 COMMIT 记录 Kafka Topic UUID、Broker 确认偏移和精确内容摘要。发布检查点先暂存证据，成功 ACK 与正式证据在同一个日志库事务提交。
+
+启用后，Worker 在发布前检查收据表及对应的 SQL 权限。有建表权限时，Worker 可补建缺失的收据表。遇到 `KAFKA_PHYSICAL_JOURNAL_NOT_READY` 时，请检查日志库 schema、暂存表的 SELECT、INSERT、DELETE 权限和历史表的 SELECT、INSERT 权限。MySQL 收据表使用 InnoDB 和 utf8mb4_bin 排序规则，PostgreSQL 协议的日志库使用持久普通表。关闭此选项时，现有日志库可继续处理业务 ACK，无需收据表。
+
+共享控制库为签发授权的 Agent 节点、进程实例、租约代次和租约窗口独立签名，证明授权签发时观察到的成员租约。日志库给发布检查点和订阅 ACK 记录 UTC 毫秒并签名，只比较同一日志库的两个时间值。控制库、日志库和 Kafka 的时钟差异无法证明事件先后。两次写入之间如遇日志库时钟回拨，业务 ACK 仍提交，该条 COMMIT 保持缺证。同一配置重启后可在待入库收据中保留原 Agent 见证。早期物理收据缺少新增的成员及时序证明，同一配置后续新观察到的 COMMIT 可以生成新证明。
+
+Kafka 业务身份需要 READ 权限才能回读确认偏移。只有 WRITE 权限时，业务仍正常发布和 ACK，物理归属保持缺证。该配置最多核对 16 个命名空间，读取不可用时，每个 Worker 最多每 30 秒重试一次。证据从记录对应的 ACK 起算，早期写入和未留证的历史配置仍缺证。此流程不回填过去的证据，通知发布仍受阻。
+
 预览的 `catalogCoverage` 显示受管任务的物理归属。`VERIFIED_SINGLETON` 表示一项任务、一个配置版本和一个 Kafka 目标。目录最多四项任务、八个保留配置版本、十二条 Kafka 路由时，`VERIFIED_AT_REVIEW` 表示已按原生 Kafka 集群 ID 和 Topic UUID 核对每条业务路由，范围包括已停止的任务和配置历史中可回退的版本。由当前所属节点按各版本的配置读取 Broker 元数据。即使连接地址使用不同的别名，只要业务目标和通知 Topic 的物理标识相同，就返回 `CONFLICT`。
 
 超过核对上限、Broker 或所属节点不可达、历史配置无法解析时，归属状态为 `INCOMPLETE`。目录或配置在核对期间变化时，需要重新核对。所属节点先按当前 Worker 的凭据引用授权和受保护环境规则检查历史配置。已撤销的引用会阻止该路由发起探测。核对结果描述当前恢复这些配置会连接到哪里。发布仍需历史物理归属、完整的 Kafka 授权和审批证据，所有预览仍会阻止发布。
