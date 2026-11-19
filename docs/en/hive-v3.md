@@ -84,4 +84,18 @@ Disabling cache only on the writer cannot protect other readers. Do not re-enabl
 
 The ARM64 fixture uses MySQL 8.4.13 with PostgreSQL 17.12 and HiveServer2 4.0.1 destinations. When Hive stops, PostgreSQL continues and Hive keeps its journal acknowledgement and exact batch receipt. The fixture reads the original and later receipts directly from Hive and checks the same owner, resource UUID and warehouse location after HiveServer2 and Worker restart. Worker restart reuses the original snapshot. After a PostgreSQL constraint violation, replay to that subscription leaves the Hive receipt unchanged.
 
-Run `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh` after compiling the Java 21 JAR and test classes. The fixture restarts a single HiveServer2 with its embedded Derby Metastore and local warehouse volumes. External Metastore, distributed storage and service failover require separate acceptance. [Hive transactions](https://hive.apache.org/docs/latest/user/hive-transactions/) · [Verification record](../verification/README.md)
+Run `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh` after compiling the Java 21 JAR and test classes. The fixture restarts a single HiveServer2 with its embedded Derby Metastore and local warehouse volumes. [Hive transactions](https://hive.apache.org/docs/latest/user/hive-transactions/) · [Verification record](../verification/README.md)
+
+## External PostgreSQL Metastore fixture
+
+Supply the PostgreSQL JDBC driver separately to run the Java 21 pipeline against HiveServer2 4.0.1, a standalone Hive Metastore and a dedicated PostgreSQL 17.12 catalog. The stock Hive schema tool initializes and validates the disposable catalog. The port probe waits for HiveServer2 to accept connections and Rivomesh then runs its normal JDBC checks.
+
+The native run passed the snapshot and CDC phases. It stopped HiveServer2, Metastore and the catalog while the separate PostgreSQL business destination continued writing. After restart, the PostgreSQL system identifier, Hive metadata table ID, owner, resource UUID and warehouse location matched the original values. Hive caught up and returned both the original and the next batch receipt. The host went to sleep during the Worker-restart phase and that assertion timed out. Worker restart and SQL error recovery still need a full run in this external Metastore profile.
+
+```sh
+RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh --postgres-metastore /path/to/postgresql-42.7.14.jar
+```
+
+HiveServer2 and Metastore share a local warehouse volume in this fixture. The restart retains the same PostgreSQL catalog and warehouse volumes. Distributed warehouse storage and automatic Metastore or PostgreSQL failover require their own tests. [Apache Hive Docker setup](https://hive.apache.org/docs/latest/admin/setting-up-hive-with-docker/)
+
+The isolated Metastore's Hadoop `core-site.xml` grants its notification API to the `hive` identity from the HiveServer2 Compose hostname. Without that entry, HiveServer2 can fail at startup with `get_current_notificationEventId` authorization errors even when the PostgreSQL schema has passed validation. [Hive 4.0.1 notification authorization](https://github.com/apache/hive/blob/rel/release-4.0.1/standalone-metastore/metastore-server/src/main/java/org/apache/hadoop/hive/metastore/HMSHandler.java#L8993-L9027)

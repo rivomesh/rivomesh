@@ -8579,5 +8579,61 @@
     "appTestsPassed": 565,
     "isolatedTransportTestsPassed": 2,
     "earlierInvocation": "The test-only Maven reactor did not package relocated vendor driver classes. A clean normal package lifecycle on the 18d7a77 application passed the driver coexistence check and all enabled tests."
+  },
+  "hiveExternalPostgresMetastorePartial": {
+    "native": {
+      "status": "PARTIAL",
+      "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+      "driverSha256": "73914527305a40cce504b0d3d90b23caf565136912d607ae8ae7c5895512332c",
+      "launcherSha256": "2e7b549f4d044f6adc309d5e0c5c49eeaaa7a35b8e42bf4260ff90094add7c01",
+      "fixtureSha256": "1eae31581e0e25b828813ee3758e5521d621c6887ec0a256d60a1f36d90e3c6a",
+      "composeSha256": "db878d1f19e2d9b77bd132438760904122f6cae0abdbf31116c4e7dfc7181e87",
+      "configGeneratorSha256": "934057bb0edb8bc407bad0ee449f71d0010335ba8868addbb53f5fefbdd6214e",
+      "coreSiteSha256": "19f6be5a6f63a267c587a8bb8c210944ab6a7cbefd701ae5d7f6967785762bf5",
+      "catalogBeforeSha256": "fa0d18b7ab4bb10187db41ad5970e4aae99ae8e9d299d51997ad9e55de2f30d6",
+      "catalogAfterSha256": "fa0d18b7ab4bb10187db41ad5970e4aae99ae8e9d299d51997ad9e55de2f30d6",
+      "catalogRestartObserved": true,
+      "nativeLogSha256": "acf695aa568c486e046f85c7d036a3d623628562c5bef29847dd06ba32338d69",
+      "sourceVersion": "MySQL 8.4.13",
+      "sqlTargetVersion": "PostgreSQL 17.12",
+      "catalogVersion": "PostgreSQL 17.12",
+      "hiveVersion": "HiveServer2 and standalone Hive Metastore 4.0.1",
+      "runtimeVersion": "Temurin 21.0.12.1+1 arm64",
+      "checks": [
+        "HIVE_PIPELINE_SNAPSHOT_ACCEPTED",
+        "HIVE_PIPELINE_CDC_ACCEPTED",
+        "HIVE_POSTGRES_METASTORE_CATALOG_ACCEPTED: PostgreSQL catalog restarted with its original system, table, resource, owner and warehouse location",
+        "HIVE_PIPELINE_OUTAGE_RECOVERY_ACCEPTED"
+      ],
+      "failure": "Host Clamshell Sleep interrupted the Worker restart/catch-up phase, whose 600-second assertion timed out",
+      "fixtureExitCode": 1,
+      "remainingFixtureContainers": 0,
+      "remainingFixtureNetworks": 0,
+      "remainingFixtureVolumes": 0,
+      "stockSchemaValidation": {
+        "status": "PASS",
+        "schema": "4.0.0",
+        "vendorSqlModified": false
+      },
+      "postgresBusinessTargetIndependent": true,
+      "hostInterruption": {
+        "sleepEvent": "Clamshell Sleep",
+        "at": "2026-11-19T00:51:00+08:00",
+        "phase": "Worker restart and catch-up"
+      },
+      "authorizationScope": {
+        "principal": "hive",
+        "host": "hive Compose service",
+        "source": "disposable Metastore core-site.xml",
+        "productionPrivilegesChanged": false
+      },
+      "disposableProjectsCleaned": 4,
+      "privateFixtureConfigsRemoved": true,
+      "fixturePatchSha256": "30af21290e191f867fbe3afc14c7bd1b053f27e3fba5867c896f633eff346ee5",
+      "scopedPatchBase": "18d7a77044dd88bc38d75b2dd4b8a7d56d53b240",
+      "scopedPatchTree": "910e935ee452adbd3678ff9399ccf908594d81fe"
+    },
+    "scope": "HiveServer2 and a separate Hive Metastore with a dedicated PostgreSQL 17.12 catalog, stock schema 4.0.0 initialization and validation, MySQL 8.4.13 to Hive and independent PostgreSQL destination. Tested native snapshot, CDC, coordinated Hive-side restart, original native catalog and catch-up. Worker-restart deadline expired across documented host sleep; later checks require rerun.",
+    "reproduce": "Follow the external PostgreSQL Metastore profile in docs/en/hive-v3.md."
   }
 }

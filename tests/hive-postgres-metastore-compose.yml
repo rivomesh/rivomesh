@@ -1,0 +1,56 @@
+services:
+  hive:
+    volumes:
+      - ${RIVOMESH_HIVE_META_CONF:?}:/opt/hive/conf/hive-site.xml:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", ": </dev/tcp/127.0.0.1/10000"]
+      interval: 5s
+      timeout: 5s
+      retries: 45
+  metastore-db:
+    image: postgres:17.12
+    environment:
+      POSTGRES_DB: hive_metastore
+      POSTGRES_USER: hive_catalog
+      POSTGRES_PASSWORD: ${RIVOMESH_HIVE_META_PASSWORD:?}
+    volumes:
+      - hive-postgres-catalog:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U hive_catalog -d hive_metastore"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+  metastore-init:
+    image: apache/hive:4.0.1
+    user: root
+    volumes:
+      - hive-data:/opt/hive/data/warehouse
+      - ${RIVOMESH_HIVE_META_SERVER_CONF:?}:/opt/hive/conf/hive-site.xml:ro
+      - ${RIVOMESH_HIVE_META_JDBC:?}:/opt/hive/lib/postgres.jar:ro
+    entrypoint: ["bash", "-euc"]
+    command:
+      - |
+        chown hive:hive /opt/hive/data/warehouse
+        su hive -s /bin/bash -c 'schematool -dbType postgres -initSchema'
+  metastore:
+    image: apache/hive:4.0.1
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      IS_RESUME: "true"
+      HADOOP_CONF_DIR: /opt/hadoop/etc/hadoop
+    mem_limit: 2g
+    cpus: 1.5
+    volumes:
+      - hive-data:/opt/hive/data/warehouse
+      - ${RIVOMESH_HIVE_META_SERVER_CONF:?}:/opt/hive/conf/hive-site.xml:ro
+      - ${RIVOMESH_HIVE_META_JDBC:?}:/opt/hive/lib/postgres.jar:ro
+      - ./hive/postgres-metastore-core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", ": </dev/tcp/127.0.0.1/9083"]
+      interval: 5s
+      timeout: 5s
+      retries: 45
+    stop_grace_period: 30s
+volumes:
+  hive-postgres-catalog:

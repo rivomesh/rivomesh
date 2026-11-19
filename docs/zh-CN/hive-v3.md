@@ -84,4 +84,18 @@ Journal 按目标 ACK 回收不等于 Hive 历史自动清理。历史、墓碑�
 
 ARM64 夹具从 MySQL 8.4.13 同步到 PostgreSQL 17.12 和 HiveServer2 4.0.1。Hive 停机期间 PostgreSQL 继续同步，Hive 保留 Journal 确认位点和精确批次回执。HiveServer2 和 Worker 重启后，夹具直接从 Hive 核对原回执和后续回执，并确认元数据所有者、资源 UUID 和仓库位置一致。Worker 重启复用原快照。修复 PostgreSQL 约束错误后，单独重放该订阅不会改变 Hive 回执。
 
-构建 Java 21 JAR 和测试类后，运行 `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh`。本场景使用单个 HiveServer2、嵌入式 Derby Metastore 和本地仓库数据卷。外置 Metastore、分布式存储及服务故障切换需单独验收。[Hive 事务](https://hive.apache.org/docs/latest/user/hive-transactions/) · [验收记录](../verification/README.md)
+构建 Java 21 JAR 和测试类后，运行 `RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh`。本场景使用单个 HiveServer2、嵌入式 Derby Metastore 和本地仓库数据卷。[Hive 事务](https://hive.apache.org/docs/latest/user/hive-transactions/) · [验收记录](../verification/README.md)
+
+## 外置 PostgreSQL Metastore 夹具
+
+另行提供 PostgreSQL JDBC 驱动，使用 Java 21 流水线验收 HiveServer2 4.0.1、独立 Hive Metastore 和专用 PostgreSQL 17.12 目录库。夹具使用 Hive 自带的工具初始化并校验临时目录库。HiveServer2 端口可连接后，Rivomesh 执行正常的 JDBC 预检查。
+
+本次实库运行通过快照与增量阶段。HiveServer2、Metastore 和目录库同时停机期间，独立的 PostgreSQL 业务目标继续写入。重启后的 PostgreSQL 系统标识、Hive 元数据表 ID、所有者、资源 UUID 和仓库位置均与原值一致，Hive 追平并读回原批次和后续批次回执。宿主机在 Worker 重启阶段进入休眠，该阶段等待超时。外置 Metastore 档案的 Worker 重启及 SQL 错误恢复仍需完整复验。
+
+```sh
+RIVOMESH_TEST_PREBUILT=1 bash tests/hive-pipeline-run.sh --postgres-metastore /path/to/postgresql-42.7.14.jar
+```
+
+本夹具的 HiveServer2 和 Metastore 共用本地仓库卷，重启复用原 PostgreSQL 目录库和仓库卷。分布式仓库、Metastore 或 PostgreSQL 自动故障切换需单独验收。[Apache Hive Docker 配置](https://hive.apache.org/docs/latest/admin/setting-up-hive-with-docker/)
+
+隔离夹具在 Metastore 的 Hadoop `core-site.xml` 中，只给来自 HiveServer2 Compose 主机名的 `hive` 身份授予通知接口所需的权限。缺少此配置时，PostgreSQL 目录结构即使校验通过，HiveServer2 仍可能因 `get_current_notificationEventId` 授权失败而无法启动。[Hive 4.0.1 通知接口授权](https://github.com/apache/hive/blob/rel/release-4.0.1/standalone-metastore/metastore-server/src/main/java/org/apache/hadoop/hive/metastore/HMSHandler.java#L8993-L9027)

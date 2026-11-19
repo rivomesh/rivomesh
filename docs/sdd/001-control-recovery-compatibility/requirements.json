@@ -1514,8 +1514,8 @@
         "en": "ClickHouse/Doris/Hive production profiles"
       },
       "gap": {
-        "zh-CN": "ClickHouse 已有实库档案。Java 21 实测 Doris 4.1.3 和 Hive 4.0.1 停机追平、原回执保留和 PostgreSQL 对照故障重放。Hive 外置 Metastore、分布式存储及其他生产集群、TLS、容量待验。",
-        "en": "ClickHouse has native evidence. Java 21 verified Doris 4.1.3 and Hive 4.0.1 outage catch-up, original receipt retention and isolated PostgreSQL fault replay. External Hive Metastore, distributed storage, further production clusters, TLS and capacity remain."
+        "zh-CN": "ClickHouse、Doris 和内置目录 Hive 已有原生恢复档案。Hive 4.0.1 外置 PostgreSQL Metastore 实测全量、增量、目录身份及整组重启追平；Worker 续传和 SQL 错误联验受宿主休眠中断。分布式仓库、生产集群和容量待验。",
+        "en": "ClickHouse, Doris and embedded Hive have native recovery evidence. External PostgreSQL Hive Metastore passed snapshot, CDC, catalog identity and three-service restart catch-up. Host sleep interrupted Worker restart and subsequent SQL-error checks. Distributed storage, production cluster and capacity remain."
       },
       "acceptance": {
         "zh-CN": "各产品按真实可见水位、去重/批次回执验证重启、旧备份、集群故障和缺口；不能承诺普通SQL跨表事务语义。",
@@ -1529,7 +1529,8 @@
         "docs/zh-CN/doris-v3.md",
         "docs/zh-CN/hive-v3.md",
         "docs/verification/baseline.json",
-        "tests/hive/HivePipelineAcceptance.java"
+        "tests/hive/HivePipelineAcceptance.java",
+        "tests/hive-postgres-metastore-compose.yml"
       ]
     },
     {
