@@ -82,6 +82,10 @@ messaging:
 
 预览的 `catalogCoverage` 单独描述管理目录的物理归属证据。`VERIFIED_SINGLETON` 表示目录仅登记一项任务，该任务唯一保留的配置仅包含一个 Kafka 目标。任务当前所属节点会按 Kafka 集群和 Topic UUID 核对业务与通知 Topic 的物理标识，管理面会再次核对所属节点、修订号和生效配置。标识相同返回 `CONFLICT`。存在多项任务、多个 Kafka 目标、历史配置或所属节点缺少证据时，返回 `INCOMPLETE`。这些状态反映核对当时的管理目录，所有预览仍会阻止发布。
 
+所属 Controller 可在私有启动配置中设置 `kafkaNoticeWriters`，核对独立通知写入身份。每项包含 `taskId`、`targetId`、`clusterSha256`、`topicId`、`bootstrapServers`、`username` 和 `password`。凭据引用只交给 Controller，连接地址使用可信的 Kafka `host:port` 列表。任务使用其他别名时，独立身份仍连接 Controller 配置的地址。两个身份的用户名和密码均须不同。两个会话都使用 Kafka 目标的 SCRAM 机制，经 `SASL_SSL` 和 Controller JVM 信任的 CA 校验证书与主机名。
+
+预览的 `writerEntitlement` 来自 Broker 返回的有效权限。业务身份须能读取两个 Topic 的元数据，且对通知 Topic 只有只读权限。独立身份在通知 Topic 需要 `WRITE` 及其隐含的 `DESCRIBE`，对该业务 Topic 至少要有 `DESCRIBE`，且不能修改它。两个身份均须取得 Broker 的有效操作列表。可用 `python3 tests/kafka-notice-writer-run.py <应用包>` 验证该权限规则。核对结果适用于当前身份和 Topic，发布仍需完整的管理目录、Broker 授权证据与审批后的事务发送流程。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh

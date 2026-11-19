@@ -10580,5 +10580,84 @@
     "domTestsPassed": 156,
     "scope": "Java 21 application package and Pulsar 4.0.14 with one TLS-only broker, a private trust CA, native HTTPS checks and Token authorization. Preflight rejects an untrusted CA, a wrong endpoint name and absent authentication. Reopening after broker restart reuses the exact topic and reads confirmed messages.",
     "reproduce": "python3 tests/pulsar-tls-run.py --artifact /path/to/rivomesh.jar --test-classes pulsar-transport/target/test-classes --output target/native-pulsar-tls"
+  },
+  "kafkaManagedNoticeWriterNative": {
+    "baseCommit": "1ff8de26e6238a69fc64b563ad52a02cf14b28e9",
+    "patchSha256": "f540ac67faf017759b50331edcbc5153894ec9377abedc1cef3d191ba35d8fab",
+    "packagedAppSha256": "fb7fd290fbccabc7dcf7a565a89fac3dbaad77262b2aa14f4c896590aedff72a",
+    "nativeAppSha256": "bae709a7c0d6aec3e1cd2755ff9f3d19fbfa4962df39112ea9e1aa60371a8bab",
+    "nativeAndFinalJavaClassesExact": true,
+    "finalConsoleResourceMatchesTestedSource": true,
+    "junitPassed": 12,
+    "domPassed": 156,
+    "nativePassed": 6,
+    "native": {
+      "mode": "KRaft 3.9.2 single broker, SASL_SSL, SCRAM-SHA-512",
+      "binding": "loopback-only TLS exposure, temporary truststore, separate credentials per role",
+      "effectiveAuthorization": [
+        "verified scoped roles",
+        "writer can mutate business",
+        "business DESCRIBE hidden despite WRITE",
+        "reviewer can mutate control",
+        "invalid writer authentication",
+        "restored verified scoped roles"
+      ],
+      "businessTopicEndOffsetBeforeAndAfter": [
+        0,
+        0
+      ],
+      "controlTopicEndOffsetBeforeAndAfter": [
+        0,
+        0
+      ],
+      "consumerGroupsCreated": 0,
+      "cleanupVerified": true
+    },
+    "nativeOutputSha256": "f56ccf278dae215d74eb6b7936ae503b22957234dc8597e6a35fe5dbd63a47fb",
+    "publication": "unconditionally blocked by existing managed preview",
+    "boundary": "two authenticated principals and two exact physical topics at the observed cut",
+    "status": "PASS",
+    "manifestSha256": "2c689d1a4c5b37a65b16f32371c2e9dae4db40f0f162cd722baeb4d8ae1f0a9b",
+    "scope": "Read-only controller preflight for separately authenticated, controller-scoped SCRAM credentials. Kafka checks effective operations twice on the same identified business and control topics. This does not dispatch notices.",
+    "reproduce": "JAVA_HOME=/path/to/jdk21 python3 tests/kafka-notice-writer-run.py /path/to/rivomesh.jar"
+  },
+  "signedAuditCheckpointObjectLock": {
+    "inputCommit": "1ff8de26e6238a69fc64b563ad52a02cf14b28e9",
+    "candidateTree": "fc47f809ec1ec665d816e1d3fac7fd3b4868fbfd",
+    "patch": {
+      "path": "publication.patch",
+      "sha256": "147200a53529b6398b178ceb20e1dc41c01950917e873432d24d79963383a51c",
+      "scope": [
+        "docs/en/security-audit.md",
+        "docs/zh-CN/security-audit.md",
+        "tests/audit-retain-s3-native.py",
+        "tests/audit-retain-s3-test.py",
+        "tools/audit-retain-s3.py"
+      ]
+    },
+    "offline": {
+      "newTestsPassed": 5,
+      "existingAuditTestsPassed": 13,
+      "sddDocsPassed": true,
+      "log": "offline-acceptance.log"
+    },
+    "native": {
+      "protocolAssertionsPassed": 7,
+      "provider": "Disposable loopback MinIO on Darwin ARM64 with synthetic test credentials",
+      "upstreamCommit": "9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a",
+      "buildCommand": "GOTOOLCHAIN=go1.26.11 go install github.com/minio/minio@v0.0.0-20251015172955-9e49d5e7a648",
+      "minioBinarySha256": "887fae873a8d4ade4a34f49f2a084274ec28854bc036f654b6bd6f0fe2963b07",
+      "awsCli": "AWS CLI v2.32.24 signed and notarized macOS installer, unpacked without installation",
+      "awsCliInstallerSha256": "c70d7b25cb3da35ee421319b4161ea4954637d784f4d5d05e994f1d92a7afbf0",
+      "awsCliBinarySha256": "28414f1f1e69209c0b80c8f0ef12f93ec6f0fde589c6fb0fa2c7597c31747c0e",
+      "testCommand": "python3 -B tests/audit-retain-s3-native.py --minio /path/to/minio --aws /path/to/aws",
+      "log": "native-acceptance.log",
+      "providerBoundary": "Loopback verifies Object Lock operations and byte custody; no live AWS IAM, account owner, or bucket policy execution"
+    },
+    "diffCheck": "PASS",
+    "privateIndexApplyCheck": "PASS",
+    "status": "PASS",
+    "manifestSha256": "fa8a82df915d1d59be6d6b6129c03460675fe05ce87d20a1006c2850d56a5ae4",
+    "scope": "The independently signed audit checkpoint can be retained externally with a confirmed COMPLIANCE lock, SHA-256 and exact object version. The acceptance includes same-content retry and early delete/shortening refusal. Full audit event retention and AWS deployment validation remain separate."
   }
 }

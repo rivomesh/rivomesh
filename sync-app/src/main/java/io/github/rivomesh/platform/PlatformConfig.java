@@ -32,6 +32,11 @@ public final class PlatformConfig {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public final Set<String> protectedEnvironment=new LinkedHashSet<>();
     public Map<String,List<String>> workerSecretReferences;
+    public List<KafkaNoticeWriter> kafkaNoticeWriters=new ArrayList<>();
+    public static final class KafkaNoticeWriter {
+        public String taskId,targetId,clusterSha256,topicId,username,password;
+        public List<String> bootstrapServers;
+    }
     public ClusterConfig cluster;
     public Sessions sessions = new Sessions();
     public static final class Sessions {
@@ -61,6 +66,10 @@ public final class PlatformConfig {
         c.protectReference(c.authToken);c.authToken=resolveToken(c.authToken);
         if(c.users!=null)for(User user:c.users)if(user!=null){c.protectReference(user.token);user.token=resolveToken(user.token);}
         if(c.cluster!=null){c.protectReference(c.cluster.url);c.protectReference(c.cluster.username);c.protectReference(c.cluster.password);c.protectReference(c.cluster.taskKey);c.cluster.url=resolveToken(c.cluster.url);c.cluster.nodeId=resolveToken(c.cluster.nodeId);c.cluster.advertiseUrl=resolveToken(c.cluster.advertiseUrl);c.cluster.username=resolveToken(c.cluster.username);c.cluster.password=resolveToken(c.cluster.password);c.cluster.taskKey=resolveToken(c.cluster.taskKey);}
+        if(c.kafkaNoticeWriters!=null)for(KafkaNoticeWriter writer:c.kafkaNoticeWriters)if(writer!=null){
+            c.protectReference(writer.username);c.protectReference(writer.password);
+            writer.username=resolveToken(writer.username);writer.password=resolveToken(writer.password);
+        }
         Path parent = path.toAbsolutePath().normalize().getParent();
         c.tasksDirectory = parent.resolve(c.tasksDirectory).normalize().toString();
         c.dataDirectory = parent.resolve(c.dataDirectory).normalize().toString();
@@ -78,6 +87,7 @@ public final class PlatformConfig {
         if(validationArchiveReclaim&&validationArchiveDirectory==null)
             throw new IllegalArgumentException("VALIDATION_ARCHIVE_PATH_INVALID");
         WorkerSecretReferences.validate(workerSecretReferences,protectedEnvironment);
+        validateKafkaNoticeWriters();
         if (sessions == null) throw new IllegalArgumentException("SESSION_CONFIG_REQUIRED");
         sessions.validate();
         if(cluster!=null)cluster.validate();
@@ -89,6 +99,19 @@ public final class PlatformConfig {
         if (tasksDirectory == null || dataDirectory == null || Paths.get(tasksDirectory).toAbsolutePath().normalize().equals(Paths.get(dataDirectory).toAbsolutePath().normalize()))
             throw new IllegalArgumentException("PLATFORM_DIRECTORIES_INVALID");
     }
+    private void validateKafkaNoticeWriters(){
+        if(kafkaNoticeWriters==null||kafkaNoticeWriters.size()>200)
+            throw new IllegalArgumentException("KAFKA_NOTICE_WRITER_CONFIG_INVALID");
+        Set<String> scopes=new HashSet<>();
+        for(KafkaNoticeWriter writer:kafkaNoticeWriters){
+            if(writer==null||!validNoticeId(writer.taskId)||!validNoticeId(writer.targetId)
+                    ||!scopes.add(writer.taskId+"/"+writer.targetId)
+                    ||!io.github.rivomesh.cdc.KafkaNoticeWriterReview.validConfiguration(writer.clusterSha256,writer.topicId,
+                            writer.bootstrapServers,writer.username,writer.password))
+                throw new IllegalArgumentException("KAFKA_NOTICE_WRITER_CONFIG_INVALID");
+        }
+    }
+    private static boolean validNoticeId(String value){return value!=null&&value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");}
     private void protectReference(String value){if(value!=null){Matcher m=Pattern.compile("^\\$\\{([A-Za-z_][A-Za-z0-9_]*)}$").matcher(value);if(m.matches())protectedEnvironment.add(m.group(1));}}
     private static String resolveToken(String value){if(value==null)return null;Matcher m=Pattern.compile("^\\$\\{([A-Za-z_][A-Za-z0-9_]*)}$").matcher(value);return m.matches()?System.getenv(m.group(1)):value;}
     private static void validateToken(String value){if(value==null||value.getBytes(StandardCharsets.UTF_8).length<24||value.length()>4096||value.contains("${")||!value.chars().allMatch(ch->ch>=33&&ch<=126))throw new IllegalArgumentException("RIVOMESH_TOKEN_REQUIRED_MIN_24_BYTES");}

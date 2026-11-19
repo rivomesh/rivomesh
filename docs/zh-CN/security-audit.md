@@ -79,6 +79,35 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 `AUDIT_ANCHOR_SIGNATURE_VERIFIED` 表示签名有效，且签名检查点与预期的审计库及已核验的导出一致。签名参数缺失、签名无效、公钥错误、审计库改变或签名验证器不可用时，命令失败且不写出下一检查点。核验后可由保管方另行签名。签名检查点认证到其对应序号的历史摘要，后续记录的摘要在保管方签署更新的检查点后获得独立认证。
 
+### 用 S3 Object Lock 留存签名检查点
+
+独立保管方签署已核验的导出末尾检查点后，可通过定时任务运行 `tools/audit-retain-s3.py`。执行环境需要 Python 3、OpenSSL，以及支持 `put-object --if-none-match` 和 `head-object --checksum-mode` 的 AWS CLI v2。应独立登记 AWS 区域、桶名、12 位桶所有者账号、审计 `storeId` 及 PEM 验证公钥。使用已启用 Object Lock 的 AWS S3 通用桶及 IAM 工作负载身份。工具会忽略 CLI 配置中的自定义端点。[AWS S3 Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)
+
+将归档任务的 `s3:PutObject`、`s3:PutObjectRetention`、`s3:GetObject`、`s3:GetObjectVersion` 和 `s3:GetObjectRetention` 权限限制在归档前缀。若使用 SSE-KMS，另行授予任务所需的 KMS 权限。使用桶策略强制归档写入携带 `If-None-Match`。删除、绕过治理保留和桶管理权限应归任务身份之外的角色保管。命令参数、检查点和回执均不携带签名私钥或 AWS 凭据。[条件写入桶策略](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes-enforce.html)
+
+```sh
+python3 tools/audit-retain-s3.py \
+  --export /private/rivomesh-audit-later.jsonl \
+  --checkpoint /custodian/checkpoints/rivomesh-head-later.json \
+  --signature /custodian/checkpoints/rivomesh-head-later.sig \
+  --public-key /trusted/audit-public.pem --store-id your-enrolled-store-id \
+  --region us-east-1 --bucket your-enrolled-audit-bucket --bucket-owner 123456789012 \
+  --prefix rivomesh/audit --retain-until 2030-01-01T00:00:00Z
+```
+
+为本次归档选定一个未来的 UTC 保留截止时间，与原始签名文件一起保管供重试。Linux 定时器和 Kubernetes CronJob 都可以给每批签名导出执行这一命令。工具写入前核验完整导出、分离签名、审计库标识和末尾检查点，每个审计库的每个序号对应一个带 `COMPLIANCE` 保留和 SHA-256 校验值的对象。写入完成或写入响应丢失后，工具核对 S3 精确对象版本的摘要、保留模式和截止时间，再输出 `AUDIT_CHECKPOINT_RETAINED` JSON 回执。将回执中的对象键和 `versionId` 存入独立目录，对非零退出告警。重试只接受字节一致且保留期限满足要求的版本。内容冲突或版本不可验证时，需要人工核对。[S3 条件写入](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html) [S3 版本元数据](https://docs.aws.amazon.com/cli/latest/reference/s3api/head-object.html)
+
+恢复时将 `RIVOMESH_ARCHIVE_KEY` 和 `RIVOMESH_ARCHIVE_VERSION` 分别设为回执的 `key` 和 `versionId`，读取回执指定的版本。
+
+```sh
+umask 077
+aws s3api get-object --region us-east-1 --bucket your-enrolled-audit-bucket \
+  --expected-bucket-owner 123456789012 --key "$RIVOMESH_ARCHIVE_KEY" \
+  --version-id "$RIVOMESH_ARCHIVE_VERSION" --checksum-mode ENABLED /private/retained-audit.json
+```
+
+对象的 JSON 字段为 `formatVersion`、`checkpoint` 和 `signature`。将后两个 Base64 字段解码成原始 JSON 和分离签名，然后按前面的签名检查点流程验证。对象保存检查点及其签名，完整审计事件导出依照留存政策另行归档。
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`：ADMIN查询，返回events、next、storeId及链边界。
@@ -88,6 +117,6 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 ## 安全及验收边界
 
-本地链和注册表可检测普通损坏、缺行和新空库替换。离线核验依赖独立保管的最新可信检查点。签名验证检查点字节，旧检查点的签名也可能仍然有效。应独立维护最新接受的序号及档案留存策略。自动写入外部不可变存储仍待实现。精确任务授权见[授权手册](task-authorization.md)，实际验证范围见[验收记录](../verification/README.md)。
+本地链和注册表可检测普通损坏、缺行和新空库替换。离线核验依赖独立保管的最新可信检查点。签名验证检查点字节，旧检查点的签名也可能仍然有效。S3 在回执记录的到期时间前保护已确认的 `COMPLIANCE` 对象版本。运维方独立维护存储策略及最新可信序号。精确任务授权见[授权手册](task-authorization.md)，实际验证范围见[验收记录](../verification/README.md)。
 
 本地账号变更记录 ACCOUNT_COMMITTED，包含目标账号 subjectId 与目录版本；界面显示“任务 / 账号”。账号变更与审计待写记录原子保存，目录版本另有持久锚点，审计保留清理不删除该锚点；旧载荷导出保留原字节/哈希，见[账号管理](account-management.md)。

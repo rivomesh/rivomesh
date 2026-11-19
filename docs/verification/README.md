@@ -579,3 +579,11 @@ The `05d34f775a4e30c522070a3379b3c0bfe2c626112ec3b1a7bba78a9f9f5f4d4d` package p
 ### Pulsar private CA and Token restart
 
 The `1a352fe2ac8f2a318dad914104a2425a6a6fe50888d6504c26699171ecc51706` package passed three native Pulsar 4.0.14 TLS scenarios, 54 Java tests and 156 DOM tests. Both the administrative connection and the publisher verified the CA and broker hostname. Invalid certificates and absent credentials failed before provisioning. After the authenticated broker restarted, the original topic returned both confirmed messages in order. [Messaging configuration](../en/messaging-v3.md#pulsar) · [Manifest](baseline.json)
+
+### Managed Kafka notice writer permissions
+
+The `fb7fd290fbccabc7dcf7a565a89fac3dbaad77262b2aa14f4c896590aedff72a` package passed 12 focused Java tests and 156 DOM tests. Its product classes matched the package used in six native Kafka 3.9.2 KRaft cases with TLS and separate SCRAM credentials. The read-only preview checked both topic identities and the broker's actual permissions. It rejected extra write permissions, failures to see the business topic and invalid credentials. Both topics stayed at offset zero and no consumer group was created. [Operations](../en/messaging-v3.md) · [Manifest](baseline.json)
+
+### External Object Lock for signed audit checkpoints
+
+The retention tool verifies the signed export checkpoint before it writes an S3 object. Five transport tests and 13 signature export regressions passed. In seven loopback MinIO checks, it confirmed the same SHA-256 and locked version after a retry. Conditional overwrite, early version deletion and shortening the COMPLIANCE retention deadline were refused. An exact-version read preserved the signed bytes. This fixture verifies the compatible Object Lock operations. AWS account permissions and bucket policy require deployment validation. [Operator guide](../en/security-audit.md) · [Manifest](baseline.json)

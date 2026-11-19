@@ -3,6 +3,7 @@ package io.github.rivomesh.platform;
 import io.github.rivomesh.*;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.KafkaNoticePlanning;
+import io.github.rivomesh.cdc.KafkaNoticeWriterReview;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.validation.ValidationArchive;
@@ -1400,11 +1401,12 @@ public final class TaskService implements AutoCloseable {
         TaskDefinition definition;
         String localRevision;
         KafkaNoticePlanning.TopicReservation reservation;
+        PipelineConfig.Target target;
         synchronized(this){
             definition=kafkaNoticeTask(request,actor).config;
             localRevision=registry.tasks.get(request.taskId).revision;
             String targetId=predecessor.receipt().observation().target();
-            PipelineConfig.Target target=definition.pipeline.targets.stream().filter(item->item.id.equals(targetId)
+            target=definition.pipeline.targets.stream().filter(item->item.id.equals(targetId)
                             &&item.product==TargetProduct.KAFKA).findFirst()
                     .orElseThrow(()->new Conflict("KAFKA_NOTICE_TARGET_UNSUPPORTED"));
             PipelineConfig.KafkaNotice notice=target.messaging.recoveryNotice;
@@ -1420,18 +1422,24 @@ public final class TaskService implements AutoCloseable {
                 throw new Conflict(code);
             throw failed;
         }
+        if(plan==null||!predecessor.task().equals(plan.task())||!predecessor.administrator().equals(plan.administrator())
+                ||!request.reference.equals(plan.predecessorRequestId())||!reservation.equals(plan.controlTopic()))
+            throw new Conflict("KAFKA_NOTICE_PLAN_CHANGED");
+        PlatformConfig.KafkaNoticeWriter identity=config.kafkaNoticeWriters.stream()
+                .filter(item->request.taskId.equals(item.taskId)&&target.id.equals(item.targetId)).findFirst().orElse(null);
+        KafkaNoticeWriterReview.Result writerEntitlement=identity==null?KafkaNoticeWriterReview.Result.notConfigured():
+                KafkaNoticeWriterReview.inspect(target,plan,identity.clusterSha256,identity.topicId,identity.bootstrapServers,
+                        identity.username,identity.password);
         synchronized(this){
             if(kafkaNoticeTask(request,actor).config!=definition||!localRevision.equals(registry.tasks.get(request.taskId).revision))
                 throw new Conflict("REVISION_CHANGED");
-            if(plan==null||!predecessor.task().equals(plan.task())||!predecessor.administrator().equals(plan.administrator())
-                    ||!request.reference.equals(plan.predecessorRequestId())||!reservation.equals(plan.controlTopic()))
-                throw new Conflict("KAFKA_NOTICE_PLAN_CHANGED");
             AuditStore.Event event=new AuditStore.Event();
             event.kind="KAFKA_NOTICE_PLAN_READ";event.action="READ_KAFKA_NOTICE_PLAN";event.taskId=request.taskId;
             event.subjectId=request.reference;event.actorId=actor.id;event.actorRole=actor.role.name();
             event.operationHash=plan.approvalSha256();event.status="RESPONSE_PREPARED";appendAudit(event);
             return Map.of("status","KAFKA_NOTICE_PLAN_REVIEWED","plan",plan,"approvalSha256",plan.approvalSha256(),
-                    "executionAuthorized",false,"publicationBlockCode","KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED");
+                    "executionAuthorized",false,"publicationBlockCode","KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",
+                    "writerEntitlement",writerEntitlement);
         }
     }
 

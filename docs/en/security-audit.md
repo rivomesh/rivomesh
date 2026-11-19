@@ -79,6 +79,35 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 `AUDIT_ANCHOR_SIGNATURE_VERIFIED` confirms signature validation and that the signed checkpoint matched the expected store and verified export. A missing required option, invalid signature, wrong key, changed store, or unavailable verifier fails the command without writing the next checkpoint. Once verification succeeds, the custodian can sign the new checkpoint separately. The signed checkpoint establishes the history hash at its sequence. A later portion of the export gains an independently authenticated hash when the custodian signs a newer checkpoint.
 
+### Retain signed checkpoints in S3 Object Lock
+
+Run `tools/audit-retain-s3.py` from the custodian's scheduled job after signing the verified export head. The job needs Python 3, OpenSSL, and AWS CLI v2 that supports `put-object --if-none-match` and `head-object --checksum-mode`. Configure the enrolled AWS Region, bucket name, 12-digit bucket owner account, audit `storeId`, and PEM verification key independently of the export. Use a general-purpose AWS S3 bucket with Object Lock enabled and an IAM workload identity. The tool ignores configured custom endpoints. [AWS S3 Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)
+
+Scope the job identity to its archive prefix with `s3:PutObject`, `s3:PutObjectRetention`, `s3:GetObject`, `s3:GetObjectVersion`, and `s3:GetObjectRetention`. With SSE-KMS, authorize the job's required KMS operations separately. Apply a bucket policy that requires `If-None-Match` on archive writes. Restrict deletion, governance bypass, and bucket administration to identities outside the scheduled job. Keep the signing key and AWS credentials outside job arguments, the checkpoint, and the receipt. [Conditional-write bucket policies](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes-enforce.html)
+
+```sh
+python3 tools/audit-retain-s3.py \
+  --export /private/rivomesh-audit-later.jsonl \
+  --checkpoint /custodian/checkpoints/rivomesh-head-later.json \
+  --signature /custodian/checkpoints/rivomesh-head-later.sig \
+  --public-key /trusted/audit-public.pem --store-id your-enrolled-store-id \
+  --region us-east-1 --bucket your-enrolled-audit-bucket --bucket-owner 123456789012 \
+  --prefix rivomesh/audit --retain-until 2030-01-01T00:00:00Z
+```
+
+Choose a future UTC retention deadline for each cut and retain that choice with the original signed files for retries. A Linux timer or Kubernetes CronJob can invoke the command for each signed export. The tool checks the export, detached signature, store identity, and exact export head before writing. It uploads one object per store and sequence, with `COMPLIANCE` retention and a SHA-256 checksum. After a write or a lost response, it confirms the exact S3 version's checksum, lock mode, and retention deadline before printing an `AUDIT_CHECKPOINT_RETAINED` JSON receipt. Store the receipt's object key and `versionId` with the independent archive catalog and alert on a nonzero exit. Retries accept the identical retained pair and sufficient retention. A conflicting body or unverifiable version needs review. [S3 conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html) [S3 version metadata](https://docs.aws.amazon.com/cli/latest/reference/s3api/head-object.html)
+
+For recovery, set `RIVOMESH_ARCHIVE_KEY` and `RIVOMESH_ARCHIVE_VERSION` to the receipt's `key` and `versionId` and retrieve that version.
+
+```sh
+umask 077
+aws s3api get-object --region us-east-1 --bucket your-enrolled-audit-bucket \
+  --expected-bucket-owner 123456789012 --key "$RIVOMESH_ARCHIVE_KEY" \
+  --version-id "$RIVOMESH_ARCHIVE_VERSION" --checksum-mode ENABLED /private/retained-audit.json
+```
+
+The versioned object is a JSON envelope with `formatVersion`, `checkpoint`, and `signature`. Decode the two Base64 fields to recover the original JSON and detached signature, then use signed-checkpoint verification above. The object contains the checkpoint pair. Retain full audit-event exports separately according to the evidence policy.
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`: ADMIN pages, events/next/storeId and integrity boundaries.
@@ -88,6 +117,6 @@ Only those three nonnegative integer query parameters are accepted; limit is 1â€
 
 ## Security and acceptance boundaries
 
-The local chain and registry detect ordinary corruption, missing rows and replacement by an empty store. Offline comparison relies on independent custody of the latest trusted checkpoint. A signature authenticates checkpoint bytes and can remain valid on an older checkpoint. Keep the latest accepted sequence and enforce archive retention independently. Automated delivery to immutable external storage remains open. See the [authorization handbook](task-authorization.md) for task grants and [verification](../verification/README.md) for tested profiles.
+The local chain and registry detect ordinary corruption, missing rows and replacement by an empty store. Offline comparison relies on independent custody of the latest trusted checkpoint. A signature authenticates checkpoint bytes and can remain valid on an older checkpoint. Keep the latest accepted sequence and enforce archive retention independently. S3 protects each confirmed `COMPLIANCE` object version until its recorded deadline. Storage policy and custody of the latest trusted sequence remain the operator's responsibility. See the [authorization handbook](task-authorization.md) for task grants and [verification](../verification/README.md) for tested profiles.
 
 Local account changes record ACCOUNT_COMMITTED with subjectId and directory version; the UI shows the affected task/account. Directory mutation and audit outbox are saved together, with a separate durable version anchor unaffected by event retention. Legacy export payload/hash bytes are preserved; see [accounts](account-management.md).

@@ -95,6 +95,11 @@ window.RivomeshRecovery=(()=>{
     };
     if(coverage&&Object.hasOwn(coverageCodes,coverage.code)&&coverageCodes[coverage.code]===coverage.status)
      result.append(label('p',coverage.code));
+    const writer=data.writerEntitlement;
+    if(writer?.status==='VERIFIED_AT_REVIEW'&&writer.code==='KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED')
+     result.append(label('p','kafkaNoticeWriterVerified'));
+    if(writer?.status==='BLOCKED'&&/^KAFKA_NOTICE_WRITER_[A-Z_]{1,64}$/.test(writer.code||''))
+     result.append(label('p','kafkaNoticeWriterBlocked'),text('code',writer.code));
    }catch(error){if(current()&&section.isConnected)result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
   };
@@ -529,6 +534,8 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticePreview:'核对 Kafka 通知计划',kafkaNoticeControlTopic:'专用控制 Topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'通知内容摘要',kafkaNoticePlanSha:'计划摘要',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'发布受阻。专用 Topic 的全局归属尚未确认。',
+  kafkaNoticeWriterVerified:'已核对独立 Kafka 写入身份在这两个 Topic 上的有效权限。',
+  kafkaNoticeWriterBlocked:'独立 Kafka 写入身份的权限核对未通过。',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
   KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'业务 Topic 与专用通知 Topic 指向同一物理资源。',
   KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'所属节点未提供 Kafka 原生 Topic 标识。',
@@ -553,6 +560,8 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticePreview:'Review Kafka notice plan',kafkaNoticeControlTopic:'Dedicated control topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'Notice payload digest',kafkaNoticePlanSha:'Plan digest',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'Publication is blocked until dedicated topic ownership is verified globally.',
+  kafkaNoticeWriterVerified:'Verified the effective permissions of the dedicated Kafka writer on these two topics.',
+  kafkaNoticeWriterBlocked:'The effective permissions of the dedicated Kafka writer could not be verified.',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
   KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'The business topic and dedicated control topic identify the same physical resource.',
   KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'The task owner did not provide native Kafka topic identity evidence.',

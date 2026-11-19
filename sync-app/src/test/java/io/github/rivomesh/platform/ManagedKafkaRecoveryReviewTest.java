@@ -150,6 +150,12 @@ class ManagedKafkaRecoveryReviewTest {
         fixture.directory=directory;
         PlatformConfig controller=fixture.config("a"),owner=fixture.config("b");
         controller.cluster.recoveryReview=true;owner.cluster.recoveryReview=true;
+        var noticeWriter=new PlatformConfig.KafkaNoticeWriter();
+        noticeWriter.taskId="job";noticeWriter.targetId="kafka";
+        noticeWriter.clusterSha256=Codec.sha256("test Kafka cluster");noticeWriter.topicId=NOTICE_TOPIC_ID;
+        noticeWriter.bootstrapServers=List.of("private-controller-bootstrap:9094");
+        noticeWriter.username="private-fixture-writer";noticeWriter.password="private-fixture-password";
+        owner.kafkaNoticeWriters=List.of(noticeWriter);
         Backend backend=new Backend();
         try(TaskService first=new TaskService(controller,new PlatformTest.Backend(),new PlatformTest.Workers());
             TaskService second=new TaskService(owner,backend,new PlatformTest.Workers());
@@ -176,6 +182,11 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals("KAFKA_NOTICE_PLAN_REVIEWED",body.path("status").asText());
             assertFalse(body.path("executionAuthorized").asBoolean(true));
             assertEquals("KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",body.path("publicationBlockCode").asText());
+            assertEquals("BLOCKED",body.path("writerEntitlement").path("status").asText());
+            assertEquals("KAFKA_NOTICE_WRITER_SCRAM_TLS_REQUIRED",body.path("writerEntitlement").path("code").asText());
+            assertFalse(result.text.contains(noticeWriter.password));
+            assertFalse(result.text.contains(noticeWriter.username));
+            assertFalse(result.text.contains(noticeWriter.bootstrapServers.getFirst()));
             assertEquals("VERIFIED_SINGLETON",body.path("catalogCoverage").path("status").asText());
             assertEquals(Codec.sha256("test topic"),body.path("plan").path("catalogIdentity").path("businessTopicSha256").asText());
             assertEquals("legacy-admin",body.path("plan").path("administrator").path("actorId").asText());

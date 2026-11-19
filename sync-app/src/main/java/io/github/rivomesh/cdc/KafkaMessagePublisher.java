@@ -28,10 +28,14 @@ public final class KafkaMessagePublisher implements ConfirmedPublisher {
         for(String url:urls){URI uri=new URI(url);addresses.add(uri.getHost()+":"+(uri.getPort()<0?9092:uri.getPort()));}
         p.setProperty("bootstrap.servers",String.join(",",addresses));p.setProperty("client.id","rivomesh-"+target.id);p.setProperty("security.protocol",settings.securityProtocol);
         if(settings.securityProtocol.startsWith("SASL_")){
-            p.setProperty("sasl.mechanism",settings.saslMechanism);String module=settings.saslMechanism.equals("PLAIN")?"org.apache.kafka.common.security.plain.PlainLoginModule":"org.apache.kafka.common.security.scram.ScramLoginModule";
-            p.setProperty("sasl.jaas.config",module+" required username="+quote(target.username)+" password="+quote(target.password)+";");
+            configureSasl(p,settings.saslMechanism,target.username,target.password);
         }
         p.setProperty("request.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("default.api.timeout.ms",Integer.toString(settings.requestTimeoutMillis));p.setProperty("socket.connection.setup.timeout.ms",Integer.toString(settings.connectTimeoutMillis));p.setProperty("socket.connection.setup.timeout.max.ms",Integer.toString(settings.connectTimeoutMillis*2));return p;
+    }
+    static void configureSasl(Properties properties,String mechanism,String username,String password){
+        String module=mechanism.equals("PLAIN")?"org.apache.kafka.common.security.plain.PlainLoginModule":"org.apache.kafka.common.security.scram.ScramLoginModule";
+        properties.setProperty("sasl.mechanism",mechanism);
+        properties.setProperty("sasl.jaas.config",module+" required username="+quote(username)+" password="+quote(password)+";");
     }
     static Properties properties(PipelineConfig.Target target)throws Exception{
         PipelineConfig.Messaging settings=target.messaging;Properties p=connectionProperties(target);

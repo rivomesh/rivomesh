@@ -281,6 +281,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   return{ok:true,status:200,json:async()=>({status:'KAFKA_NOTICE_PLAN_REVIEWED',executionAuthorized:publishing,
    publicationBlockCode:'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
    catalogCoverage:{status:'INCOMPLETE',code:'KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING'},
+   writerEntitlement:{status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED'},
    plan:{task:{taskId:task.id},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
     controlTopic:{targetId:target,topicName:'control.events',topicId:'cKtKfC5KQGq-qM1RDCb_3w'},credential:'not sent to the DOM'}})};
  };
@@ -293,6 +294,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   assert.deepEqual(requests,[{expectedRevision:'task-revision',predecessorRequestId:id},{expectedRevision:'task-revision',predecessorRequestId:id}]);
   assert.match(section.textContent,/发布受阻.*control.events/s);
   assert.match(section.textContent,/历史配置仍需补齐物理 Topic 归属证据/);
+  assert.match(section.textContent,/已核对独立 Kafka 写入身份/);
   assert.ok(section.textContent.includes('d'.repeat(64)));
   assert.ok(!section.textContent.includes('not sent to the DOM'));
   assert.equal(section.querySelectorAll('button').length,1);
