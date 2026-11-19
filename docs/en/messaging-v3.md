@@ -254,6 +254,8 @@ Run `bash tests/rocketmq-transport-run.sh` for the actual release-JAR/broker tes
 
 A matching manifest alone does not prove retained confirmed history. RocketMQ now also persists and verifies a native confirmation receipt as described below. Other message transports still need their own rollback-detection profiles; do not infer that this protects every broker product.
 
+RocketMQ broker-native promotion is verified. The current adapter refuses Controller mode pending integrated failover acceptance. [Native evidence](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
+
 ### RocketMQ native confirmation receipts
 
 After a successful publication batch, the journal saves a generation-bound native receipt before schema/snapshot/transaction receipts advance. New table `publication_transport` contains one small row per subscription; this additive table is created when opening existing journals. Its update is lease-fenced and compares the previously read receipt, so a stale worker cannot replace a newer receipt. Confirmation loss or an uncertain metadata commit still replays stable IDs.

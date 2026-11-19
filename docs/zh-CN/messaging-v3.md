@@ -256,6 +256,8 @@ Redis 依据：[WAITAOF 同连接语义和返回计数](https://redis.io/docs/la
 
 仅归属清单匹配不能证明已确认历史仍保留。RocketMQ 已加入下述原生确认回执与回退检测；其他消息产品仍需各自的检测和故障验收，不能把这项保证外推到全部 Broker。
 
+RocketMQ 原生 Broker 选主已验证。Rivomesh 仍拒绝 Controller 模式，接入和端到端续传待验。 [原生证据](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
+
 ### RocketMQ 原生确认回执
 
 每批发布成功后，日志先保存按代次绑定的原生回执，再推进结构、快照和事务回执。新增 `publication_transport` 表，每个目标订阅一行；旧日志打开时增量创建，不改写已有日志。更新校验租约并比较先前回执，旧 Worker 不能覆盖新回执。确认丢失或元数据提交结果不确定时，仍按稳定事件 ID 重放。

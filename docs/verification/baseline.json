@@ -13024,5 +13024,80 @@
     "integratedJavaPassed": 101,
     "scope": "Two Controllers and an original Agent use PostgreSQL control and journal. PostgreSQL business target is committed with an interrupted journal ACK. MySQL confirms first. Network partition preserves data routes, the former journal session times out and STOP followed by START reconciles the same receipt.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --test-classes sync-app/target/test-classes --output target/pg-ack-interruption --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition --handoff-asymmetric-inflight --handoff-asymmetric-unacknowledged --partition-mysqlbinlog /path/to/mysqlbinlog"
+  },
+  "rocketmq55ControllerBrokerPromotion": {
+    "status": "PASS",
+    "scope": "Broker-native Controller promotion and current Rivomesh adapter refusal",
+    "project": "rivomesh-rocketmq-controller-73933d19ac",
+    "artifactSha256": "0af9fa942a901e4dbd696ce03382648d7d8bfc587aa285ad31f1626c184508eb",
+    "harnessSha256": "11174eb4e1f5e87163a913820c3db9a4816f51eb56dfcb9824be950d8ef21b92",
+    "testSourceSha256": "3c8cafda49839efda586ad2bbcf72f5f386da39a8b6dc2e8ee06a1ed521f1b63",
+    "brokerTemplateSha256": "5d6ee38300002a2b041badb5ce27f461f634a5b5cd57c9bbb88557423f4e9203",
+    "hostJava": [
+      "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+      "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+    ],
+    "images": {
+      "apache/rocketmq:5.5.0": "sha256:5d03a8947780befd063f0ff37776f82e9f75fc8c8f2b1382f6afac4eb8fab761 arm64",
+      "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64"
+    },
+    "testClassSha256": "741127441b4c77afff21131db5749a14722e806bc3493a39faadc4b489745a1c",
+    "original": {
+      "epoch": 1,
+      "syncStateEpoch": 3,
+      "retained": {
+        "queueOffset": 1,
+        "commitLogOffset": 451,
+        "contentSha256": "2bb30760a840a0188a86baa6a49a5e6a5c140858dd1bc109ae5902d39d15908d"
+      },
+      "liveInSync": [
+        "rocket-replica-a:10911",
+        "rocket-replica-b:10911",
+        "rocket-primary:10911"
+      ],
+      "topicConfigurationReplicas": [
+        "rocket-replica-a:10911",
+        "rocket-replica-b:10911",
+        "rocket-primary:10911"
+      ],
+      "masterId": 1,
+      "master": "rocket-primary:10911"
+    },
+    "promoted": {
+      "adapterOutcome": "ROCKETMQ_REPLICATION_PROFILE_REQUIRES_PLAN",
+      "epoch": 2,
+      "topicConfigurationReplicas": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
+      "syncStateEpoch": 5,
+      "master": "rocket-replica-a:10911",
+      "masterId": 2,
+      "liveInSync": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
+      "retained": {
+        "queueOffset": 1,
+        "commitLogOffset": 451,
+        "contentSha256": "2bb30760a840a0188a86baa6a49a5e6a5c140858dd1bc109ae5902d39d15908d"
+      },
+      "appended": {
+        "queueOffset": 2,
+        "commitLogOffset": 906,
+        "contentSha256": "f665cdaecee97bc423d1d691eb92310a5b6146127fac84bbe610e29ec793c2b7"
+      }
+    },
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "firstFailureManifestSha256": "7640e2e70b9f0d6b9f02387284822cf2cf1e116d91b66031f061b1b9ce5f4056",
+    "firstFailureReason": "The promoted CommitLog contained the confirmed bytes but both surviving brokers lacked the separate topic configuration; native read returned TOPIC_NOT_EXIST.",
+    "manifestSha256": "01194558e6acf49fba6e028dadffe3e976cb0f36f51b96b406fa745451892c6a",
+    "reproduce": "tests/rocketmq/controller-promotion.md"
   }
 }

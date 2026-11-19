@@ -721,3 +721,16 @@ The `fbc17326c8ee8fedb9d22710f175b6fbd9540e58e7ab7f1554e26745d13a12f5` Temurin 2
 ### PostgreSQL target commit with an interrupted journal ACK
 
 The `c998862b85bb3da84c081de9de06e3d0bcd4567762ccf824e338b28a86440914` Temurin 21 package passed 15 native checks. Both business targets commit once, then the original Agent loses its control and journal route with PostgreSQL ACK still missing. PostgreSQL expires the stale ACK session while the Agent is still partitioned. The test observes the exact backend and locked row, confirms shorter DBA timeouts still apply and verifies no stale ACK. On the original Agent's return, queued STOP completes before explicit START. The Worker reconciles only PostgreSQL ACK using its original receipt and leaves MySQL ACK, source position and native writes unchanged. The first integrated run retained a temporary audit failure and cleaned all resources. The final run needed no retry. The latest integrated `1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8` package passed 101 focused tests and the release gate. [Operations](../en/global-control.md#asymmetric-control-network-partition) · [Manifest](baseline.json)
+
+### RocketMQ broker Controller promotion and topic metadata
+
+The RocketMQ 5.5.0 fixture used three independent broker data stores and the
+`0af9fa942a901e4dbd696ce03382648d7d8bfc587aa285ad31f1626c184508eb` Temurin 21 application. Controller promotion kept the
+old event at queue offset 1 and CommitLog offset 451, with identical bytes.
+The new event was present on the two live synchronized members. In the first
+run, the surviving CommitLog retained the bytes while both brokers lacked the
+topic configuration. The corrected run explicitly proved topic configuration on
+the three initial members before SIGKILL and on both survivors after promotion.
+The current Rivomesh adapter refused the Controller profile before and after
+promotion. Both fixture projects were cleaned up.
+[Reproduce](../../tests/rocketmq/controller-promotion.md) · [Manifest](baseline.json)
