@@ -2,21 +2,23 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T13:58:00+08:00",
-  "nextReportAt": "2026-11-19T14:58:16+08:00",
+  "lastReportAt": "2026-11-19T14:58:16+08:00",
+  "nextReportAt": "2026-11-19T15:58:16+08:00",
   "completedSincePrevious": [
-    "LG-05 original native MySQL capture ZIP survives candidate restart as private read-only history. 29 native checks including three Chrome checks, 61 integrated Java and 156 DOM; pushed c6bfd93.",
-    "LG-08 explicitly global primary and exact-column identity GSI require a reviewed distribution plan before JDBC business DDL, with reordered key columns protected. 31 integrated Java checks; pushed 044b77e.",
-    "SO-07 bounded virtual integer sums and differences survived Oracle Free archive recovery to PostgreSQL with original snapshot IDs. 18 native and 45 integrated Java checks; pushed 29e790d.",
-    "CP-04 the candidate completes one preapproved and drained handoff after its accepting Controller exits. Both native cuts are rechecked before parking the assignment. 18 native, 70 integrated Java and 156 DOM; pushed b8ca754.",
-    "Temurin 25.0.5 on ARM64 passed external MySQL asynchronous GTID promotion and Controller and Agent rolling replacement on the integrated package."
+    "LG-08 Gauss index preview shares the JDBC write policy, reports complete counts and bounds blockers. 43 Java and 156 DOM checks. Pushed 853a1e2.",
+    "CP-04 Native original Agent SIGKILL, same-directory restart, queued STOP, exact backlog and former generation fencing. 9 native, 61 Java and 157 DOM checks. Pushed da11cde.",
+    "RC-10 Native current physical Kafka route proof across active and restorable configurations. Four brokers, two Controllers, three retained versions and four routes. Pushed b7f3d70.",
+    "LG-04 Pulsar 4.0.14 with two brokers and three bookies recovered the original topic and retry ID after quorum loss. 4 native checks. Pushed 7e0a523.",
+    "LG-05 Original signed failure history and closed recovery receipt survive approved same-store handoff and candidate restart. 29 native checks including 3 Chrome checks. Pushed 89598e1.",
+    "LG-04 TLS, Token authentication and ZooKeeper majority election with 2 brokers, 3 bookies and 3 ZooKeeper nodes. 6 native checks. Pushed 3df2a02.",
+    "CP-04 Native asymmetric same-store path loss stops the former Worker, preserves a settled cut on both targets and replays queued STOP after same-process reconnect. Explicit START applies the backlog once. 11 native and 57 Java checks. Pushed 09393c5."
   ],
   "inProgress": [
-    "CP-04 asymmetric network partition with managed Worker fencing and queued STOP.",
-    "LG-05 combined raw MySQL archive and failure-history handoff.",
-    "RC-10 immutable conditional Kafka notice approval.",
-    "SO-07 Oracle BasicFiles and SecureFiles LOB archive and preflight.",
-    "JV-02 Java 17 optional package and native runtime acceptance."
+    "SO-07 Oracle Free 23.26.4 verified 12 native checks and 14 focused Java tests. BasicFiles and SecureFiles locator history lacks reversible row images. Restricted accounts receive the correct storage-mode preflight. Bilingual documentation and review are in progress.",
+    "LG-05 Combined raw MySQL archive and signed failure history custody. 94 focused Java and 157 DOM tests passed. The exact package is running in the isolated live fixture.",
+    "RC-10 Immutable conditional Kafka notice approval with current dependency and audit-anchor verification. 90 exact HTTP tests, 30 focused Java and 157 DOM tests pass. Native four-broker acceptance is queued.",
+    "JV-02 Optional Java 17 build. Actual Corretto 17 packaged the application and passed 78 focused tests with 6 optional skips and the class-file gate. Live Controller, Agent and Worker profile is queued.",
+    "SO-06 PostgreSQL signed and extended NUMERIC scale. A supported source declaration is currently rejected. Work has started on lossless bounded mapping and two-target tests."
   ],
   "reportContents": [
     "Current totals",
@@ -31,11 +33,13 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "c6bfd93",
-    "044b77e",
-    "29e790d",
-    "b8ca754",
-    "a72ff69af63b5623426c7152a5d2869b990526f2"
+    "853a1e2",
+    "da11cde",
+    "b7f3d70",
+    "7e0a523",
+    "89598e1",
+    "3df2a02",
+    "09393c5"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -43,24 +47,17 @@
     "NEW": 0
   },
   "nextTasks": [
-    "CP-04 conflicting network partitions and candidate promotion after original directory loss.",
-    "LG-05 combined raw and failure archive custody and further storage profiles.",
-    "RC-10 historical write custody, approved dispatch and loss recovery.",
-    "LG-04 Pulsar cluster TLS, metadata quorum and capacity.",
+    "Finish Oracle archive proof, combined history adoption and immutable Kafka approval in the serialized native queue.",
+    "Verify Java 17 with the packaged Controller, Agent and Worker across native SQL and a rolling replacement.",
+    "CP-04 permanent original Agent loss, in-flight outcomes and independently reachable stores.",
+    "LG-04 internal TLS and broader message-system cluster or failure-domain profiles.",
     "LG-08 commercial distributed GaussDB CN/DN acceptance."
   ],
-  "currentCandidateArtifact": "81888b8f09d266cc45f3a7bfbff435667f25351f77ed8c2cb0f08a775513522c",
-  "currentCandidateScope": "Integrated Gauss index review, Agent outage, Kafka retained topic proof, Pulsar quorum acceptance and signed failure-history adoption. The app and console entries match the exact combined native failure-history candidate.",
+  "currentCandidateArtifact": "e37f3e3cb70c0399fc7c8d507c0ba6b51f6c5da1e98f86b2aae072422f7d11e6",
+  "currentCandidateScope": "Exact native asymmetric partition package. Source, fixture and application scope matched the published commit; the most recent full reactor is listed separately.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [
-    "LG-08 Gauss v3 index preview shares the write policy, reports complete counts and bounds blocker details. 43 Java and 156 DOM tests. Pushed 853a1e2.",
-    "CP-04 Native Agent SIGKILL, same-directory restart with queued STOP, exact backlog and former-generation fencing. Nine native, 61 Java and 157 DOM tests. Pushed da11cde.",
-    "RC-10 Bounded current physical Kafka route proof for active and restorable configurations. Four brokers, two Controllers, three retained versions and four routes. The current secret policy blocks withdrawn references before any connection. Pushed b7f3d70.",
-    "LG-04 Pulsar 4.0.14 with two brokers, three bookies and one ZooKeeper node passed four outage and recovery checks. Pushed 7e0a523.",
-    "LG-05 Signed original failure history and recovery receipt survive approved PostgreSQL same-database transfer and candidate restart. 29 native checks, including 3 Chrome checks.",
-    "LG-04 Pulsar two-broker private TLS/Token, three BookKeeper nodes, ZooKeeper leadership change and fresh metadata commit passed six native cases."
-  ],
-  "lastScheduledReportAt": "2026-11-19T13:58:16+08:00",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T14:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "7e0a523201967748c51e7c0b515b0bb4e0cc96af",
     "candidateTree": "de4cd5f09aaf77780fba50e4d66080b3681de20d",
