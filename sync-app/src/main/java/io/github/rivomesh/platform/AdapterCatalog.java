@@ -42,6 +42,7 @@ public final class AdapterCatalog {
             row.put("failureReceiptReview",switch(id){
                 case "KAFKA"->"NATIVE_KAFKA_PRECEDING_COMMIT";
                 case "CLICKHOUSE","DORIS","HIVE"->"NATIVE_MATERIALIZED_PRECEDING_COMMIT";
+                case "ACTIVEMQ_ARTEMIS","ACTIVEMQ_CLASSIC","ROCKETMQ"->"NATIVE_BROKER_PRECEDING_COMMIT";
                 default->"UNAVAILABLE";
             });
             row.put("gapNotification","KAFKA".equals(id)?"MANAGED_PHYSICAL_KAFKA":"UNAVAILABLE");

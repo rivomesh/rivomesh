@@ -603,6 +603,7 @@ Object.assign(messages.zh,{
  adapterRecoveryReceipt:'故障回执',adapterRecoveryNotice:'缺口通知',
  adapterRecovery_NATIVE_KAFKA_PRECEDING_COMMIT:'Kafka 原生前序 COMMIT',
  adapterRecovery_NATIVE_MATERIALIZED_PRECEDING_COMMIT:'分析目标原生前序 COMMIT',
+ adapterRecovery_NATIVE_BROKER_PRECEDING_COMMIT:'消息代理原生前序 COMMIT',
  adapterRecovery_MANAGED_PHYSICAL_KAFKA:'托管 Kafka 物理 Topic 审批发送',
  reviewMaterializedReceipt:'核对目标回执',materializedReceiptVerified:'已核对故障前最近一笔已确认回执。',
  materializedReceiptSequence:'已确认序列',materializedReceiptDigest:'原生回执摘要'
@@ -611,6 +612,7 @@ Object.assign(messages.en,{
  adapterRecoveryReceipt:'Failure receipt',adapterRecoveryNotice:'Gap notice',
  adapterRecovery_NATIVE_KAFKA_PRECEDING_COMMIT:'Native Kafka preceding COMMIT',
  adapterRecovery_NATIVE_MATERIALIZED_PRECEDING_COMMIT:'Native analytical preceding COMMIT',
+ adapterRecovery_NATIVE_BROKER_PRECEDING_COMMIT:'Native broker preceding COMMIT',
  adapterRecovery_MANAGED_PHYSICAL_KAFKA:'Approved dispatch to a managed physical Kafka Topic',
  reviewMaterializedReceipt:'Check destination receipt',materializedReceiptVerified:'Verified the exact receipt preceding the failure.',
  materializedReceiptSequence:'Acknowledged sequence',materializedReceiptDigest:'Native receipt digest'
@@ -863,7 +865,7 @@ function renderDeliveryTiming(card,task,sub){
  const label=text('p',caption+' · '+detail,'subtle');label.dataset.deliveryTiming='';card.append(label);
 }
 function appendMaterializedReceipt(card,task,sub,destination,pending){
- if(!['CLICKHOUSE','DORIS','HIVE'].includes(destination?.product)||task.formatVersion!==3||task.statusAvailable===false
+ if(!['CLICKHOUSE','DORIS','HIVE','ACTIVEMQ_ARTEMIS','ACTIVEMQ_CLASSIC','ROCKETMQ'].includes(destination?.product)||task.formatVersion!==3||task.statusAvailable===false
   ||task.desired!=='PAUSED'||task.status?.run_state!=='PAUSED'||sub.failurePhase!=='TARGET_APPLY'
   ||!session?.recoveryReview||!can('TASK_CONFIG')||!Number.isSafeInteger(sub.errorGeneration)||sub.errorGeneration<1)return;
  const check=text('button',t('reviewMaterializedReceipt'),'quiet'),result=text('div');
@@ -876,7 +878,7 @@ function appendMaterializedReceipt(card,task,sub,destination,pending){
   if(check.disabled||!sameScope())return;
   check.disabled=true;result.replaceChildren();
   try{
-   const receipt=await api('/tasks/'+encodeURIComponent(task.id)+'/materialization-receipt',{
+   const receipt=await api('/tasks/'+encodeURIComponent(task.id)+'/destination-receipt',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({expectedRevision:task.revision,subscriptionId:sub.id,errorGeneration:sub.errorGeneration})});
    if(!sameScope())return;

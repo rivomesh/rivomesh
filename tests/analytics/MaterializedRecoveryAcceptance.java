@@ -64,7 +64,7 @@ public final class MaterializedRecoveryAcceptance {
             var before = journal.inspectFailure(DESTINATION, 1, 100_000);
             String confirmed = paused.progress();
             require(!snapshotReceipt.equals(confirmed), "Incremental commit reused the snapshot receipt");
-            Map<String, Object> result = MaterializedRecoveryReview.inspect(config, DESTINATION, 1);
+            Map<String, Object> result = DestinationReceiptReview.inspect(config, DESTINATION, 1);
             require("PRECEDING_RECEIPT_VERIFIED".equals(result.get("status"))
                     && product.name().equals(result.get("product"))
                     && "1".equals(result.get("acknowledgedSequence")) && "2".equals(result.get("failedSequence"))
@@ -75,10 +75,16 @@ public final class MaterializedRecoveryAcceptance {
             // Deliberately replace the fixture's transport pointer with another real batch from the same target.
             paused.progress(reviewEpoch, confirmed, snapshotReceipt);
             try {
-                MaterializedRecoveryReview.inspect(config, DESTINATION, 1);
+                DestinationReceiptReview.inspect(config, DESTINATION, 1);
                 throw new AssertionError("A receipt from a different batch was accepted");
-            } catch (IllegalStateException error) {
-                require((product.name() + "_RECOVERY_PUBLICATION_UNCERTAIN").equals(error.getMessage()), "Wrong refusal");
+            } catch (IllegalStateException | io.github.rivomesh.SyncFailure error) {
+                String code=error instanceof io.github.rivomesh.SyncFailure refused?refused.code:error.getMessage();
+                String name=switch(product){
+                    case ACTIVEMQ_ARTEMIS->"ARTEMIS";
+                    case ACTIVEMQ_CLASSIC->"CLASSIC";
+                    default->product.name();
+                };
+                require((name+"_RECOVERY_PUBLICATION_UNCERTAIN").equals(code),"Wrong refusal");
             } finally {
                 paused.progress(reviewEpoch, snapshotReceipt, confirmed);
             }
@@ -141,7 +147,36 @@ public final class MaterializedRecoveryAcceptance {
                 target.hive = new PipelineConfig.Hive();
                 target.hive.maxMessageBytes = MESSAGE_BYTES;
             }
-            default -> throw new IllegalArgumentException("Expected a materialized target");
+            case ACTIVEMQ_ARTEMIS -> {
+                target.url="artemis://artemis:61616";
+                target.username="rivomesh";
+                target.password="Artemis@Test123";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.stream="rivomesh";
+                target.messaging.broker="rivomesh-artemis";
+                target.messaging.requestTimeoutMillis=5000;
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            case ACTIVEMQ_CLASSIC -> {
+                target.url="activemq://classic:61616";
+                target.username="admin";
+                target.password="Classic@Test123";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.stream="rivomesh";
+                target.messaging.broker="rivomesh-core";
+                target.messaging.adminUrl="http://classic:8161/api/jolokia/";
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            case ROCKETMQ -> {
+                target.url="rocketmq://rocketnamesrv:9876";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.topic="receipt_events";
+                target.messaging.cluster="RivomeshTest";
+                target.messaging.broker="rivomesh-broker";
+                target.messaging.requestTimeoutMillis=5000;
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            default -> throw new IllegalArgumentException("Expected a destination with native receipt review");
         }
         var peer = new PipelineConfig.Target();
         peer.id = PEER;

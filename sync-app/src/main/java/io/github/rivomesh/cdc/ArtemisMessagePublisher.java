@@ -19,5 +19,13 @@ public final class ArtemisMessagePublisher implements ConfirmedPublisher {
     @Override public void prepare(Set<String> destinations)throws Exception{try{transport.prepare(target.messaging.autoCreate);}catch(Exception failure){throw translated(failure);}}
     @Override public void require(Set<String> destinations)throws Exception{try{transport.prepare(false);}catch(Exception failure){throw translated(failure);}}
     @Override public void publish(List<Message> messages)throws Exception{List<ArtemisTransport.Publication> batch=new ArrayList<>();for(Message message:messages){ArtemisTransport.Publication p=new ArtemisTransport.Publication();p.id=message.id;p.channel=message.destination;p.key=message.key;p.body=message.body;p.headers.putAll(message.headers);batch.add(p);}try{transport.publish(batch);}catch(Exception failure){throw translated(failure);}}
+    void verifyPrecedingCommit(String progress,String expectedIdentityHash,String expectedEventId)throws Exception{
+        try{
+            String physical=transport.verifyPrecedingCommit(progress,expectedEventId);
+            if(!expectedIdentityHash.equals(Codec.sha256(physical)))throw new IllegalStateException("ARTEMIS_RESOURCE_ID_CHANGED");
+        }catch(Exception failure){
+            throw translated(failure);
+        }
+    }
     @Override public void close(){transport.close();}
 }

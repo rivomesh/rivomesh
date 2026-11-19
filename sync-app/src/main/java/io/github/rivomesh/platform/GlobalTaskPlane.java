@@ -31,7 +31,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
             case RECOVERY_RECEIPT:return recoveryReceipt(request,actor);
-            case MATERIALIZED_RECEIPT:return queries.await(queries.submit(request,actor),actor);
+            case DESTINATION_RECEIPT:return queries.await(queries.submit(request,actor),actor);
             case HANDOFF_RAW_HISTORY:case HANDOFF_FAILURE_HISTORY:
                 try{return queries.await(queries.submit(request,actor),actor);}
                 catch(TaskService.Conflict rejected){

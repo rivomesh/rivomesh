@@ -40,7 +40,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
-            case MATERIALIZED_RECEIPT:return tasks.reviewMaterializedReceipt(r,actor);
+            case DESTINATION_RECEIPT:return tasks.reviewDestinationReceipt(r,actor);
             case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:case KAFKA_NOTICE_APPROVAL:case KAFKA_NOTICE_PREFLIGHT:case KAFKA_NOTICE_DISPATCH:case KAFKA_PHYSICAL_RECEIPT:
                 throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
             case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:case HANDOFF_FAILURE_HISTORY:

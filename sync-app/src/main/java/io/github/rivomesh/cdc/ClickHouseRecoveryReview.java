@@ -12,6 +12,6 @@ public final class ClickHouseRecoveryReview {
         PipelineConfig.Target target=config.targets.stream().filter(item->item.id.equals(targetId)).findFirst()
                 .orElseThrow(()->new IllegalArgumentException("CLICKHOUSE_RECOVERY_TARGET_UNKNOWN"));
         if(target.product!=TargetProduct.CLICKHOUSE)throw new IllegalArgumentException("CLICKHOUSE_RECOVERY_TARGET_UNSUPPORTED");
-        return MaterializedRecoveryReview.inspect(config,targetId,expectedErrorGeneration);
+        return DestinationReceiptReview.inspect(config,targetId,expectedErrorGeneration);
     }
 }

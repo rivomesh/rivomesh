@@ -29,11 +29,13 @@
 
 `MANUAL_NEW_BASELINE` 表示由操作人员规划的新基线工作。完成新基线核验前，保留原日志、目标回执和证据。恢复操作使用现有目标身份及断点。
 
-### 核对分析目标的前序回执
+### 核对目标的前序回执
 
-暂停任务，在失败的 ClickHouse、Doris 或 Hive 订阅上选择 **核对目标回执**。核对需要完整的失败增量事务及已确认的前序记录，检查原目标资源及确切的原生 COMMIT 回执。若位置指向未完成的后续批次或旧快照回执，会明确拒绝。核对保留原失败事务和各订阅位点。
+暂停任务，在失败的 ClickHouse、Doris、Hive、ActiveMQ Artemis、ActiveMQ Classic 或 RocketMQ 订阅上选择 **核对目标回执**。核对需要完整的失败增量事务及已确认的前序记录，检查原目标资源及确切的原生 COMMIT 回执。若位置指向未完成的后续批次或旧快照回执，会明确拒绝。核对保留原失败事务和各订阅位点。
 
-调用 `POST /api/tasks/<task>/materialization-receipt`，请求体传入 `expectedRevision`、`subscriptionId` 和 `errorGeneration`。授权管理员可以从任一管理入口核对。命令行对应 `java -jar rivomesh.jar review-materialized-recovery config.yml <目标> <错误代次>`。
+调用 `POST /api/tasks/<task>/destination-receipt`，请求体传入 `expectedRevision`、`subscriptionId` 和 `errorGeneration`。授权管理员可以从任一管理入口核对。命令行对应 `java -jar rivomesh.jar review-destination-receipt config.yml <目标> <错误代次>`。
+
+Classic 独立保留的回执同时绑定最后一条事件摘要和整批摘要。旧回执可继续普通业务同步，下一笔 COMMIT 确认后即可进行精确故障核对。Artemis 浏览原非破坏性队列，RocketMQ 按原提交日志位点读取，两者都不会提交消费位点。接口只返回核对范围与摘要。
 
 未修复缺口、待办跳过审阅和滞后目标都可能使日志在重启后继续保留。回收按各目标最小的已确认序列推进，保留未修复缺口的原始和规范化事务。增量采集达到配额时报告 `JOURNAL_BACKPRESSURE`，证据仍会保留。Kafka 通知记录故障，原同步位点保持不变。[Kafka 审批与恢复](messaging-v3.md#审批并发送缺口通知)
 

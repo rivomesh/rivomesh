@@ -71,7 +71,38 @@ public final class ClassicTransport implements AutoCloseable {
         for(String name:Arrays.asList(queue,receipts)){if(!management.exists(name))throw reject("MESSAGE_DESTINATION_MISSING_REBUILD_REQUIRED");TextMessage marker=marker(name);if(marker==null||!manifest().equals(marker.getText()))throw reject("CLASSIC_PUBLICATION_MANIFEST_MISSING_OR_CHANGED");}
         management.consumers(queue,receipts);
     }
-    private void verifyReceipt()throws Exception{if(receiptId!=null){String actual=management.text(receipts,receiptId);if(actual==null)throw reject("CLASSIC_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED");if(!("RIVOMESH_RECEIPT_V1:"+receiptHash).equals(actual))throw reject("CLASSIC_CONFIRMED_HISTORY_CHANGED_REBUILD_REQUIRED");}}
+    private String nativeReceipt()throws Exception{
+        String actual=management.text(receipts,receiptId);
+        if(actual==null)throw reject("CLASSIC_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED");
+        String prefix="RIVOMESH_RECEIPT_V2:"+receiptHash+":";
+        if(!("RIVOMESH_RECEIPT_V1:"+receiptHash).equals(actual)
+                &&!(actual.startsWith(prefix)&&actual.substring(prefix.length()).matches("[a-f0-9]{64}")))
+            throw reject("CLASSIC_CONFIRMED_HISTORY_CHANGED_REBUILD_REQUIRED");
+        return actual;
+    }
+    private void verifyReceipt()throws Exception{
+        if(receiptId!=null)nativeReceipt();
+    }
+    private static String boundReceipt(String hash,String eventId)throws Exception{
+        byte[] event=MessageDigest.getInstance("SHA-256").digest(eventId.getBytes(StandardCharsets.UTF_8));
+        return "RIVOMESH_RECEIPT_V2:"+hash+":"+java.util.HexFormat.of().formatHex(event);
+    }
+    /** The transactional receipt queue keeps the last event identity even after consumer ACK. */
+    public String verifyPrecedingCommit(String token,String expectedEventId)throws Exception{
+        resumeProgress(token);
+        if(receiptId==null)throw reject("CLASSIC_RECOVERY_PUBLICATION_UNCERTAIN");
+        try{
+            capabilities();
+            ownership();
+            if(!boundReceipt(receiptHash,expectedEventId).equals(nativeReceipt()))
+                throw reject("CLASSIC_RECOVERY_PUBLICATION_UNCERTAIN");
+            ownership();
+            capabilities();
+            return "CLASSIC_OWNER_V1:"+owner;
+        }catch(Exception failure){
+            throw classify(failure);
+        }
+    }
     public void prepare(boolean create)throws Exception{
         if(prepared)return;if(queue==null)throw reject("CLASSIC_BINDING_REQUIRED");
         try{capabilities();for(String name:Arrays.asList(queue,receipts))if(!management.exists(name)){if(!create||receiptId!=null)throw reject("MESSAGE_DESTINATION_MISSING_REBUILD_REQUIRED");management.create(name);}
@@ -89,7 +120,16 @@ public final class ClassicTransport implements AutoCloseable {
         for(Publication message:messages)if(message==null||message.id==null||message.id.isEmpty()||message.id.length()>512||message.channel==null||message.channel.length()>512||message.body==null||message.body.length>settings.maxMessageBytes)throw reject("CLASSIC_EVENT_INVALID");
         try{capabilities();ownership();verifyReceipt();String hash=digest(messages);
             for(Publication publication:messages){BytesMessage message=writes.createBytesMessage();message.writeBytes(publication.body);for(Map.Entry<String,String> header:publication.headers.entrySet())message.setStringProperty(header.getKey(),header.getValue());message.setStringProperty("rivomesh_record_type","EVENT");message.setStringProperty("rivomesh_event_id",publication.id);message.setStringProperty("rivomesh_channel",publication.channel);if(publication.key!=null)message.setStringProperty("rivomesh_key",publication.key);producer.send(writes.createQueue(queue),message,DeliveryMode.PERSISTENT,4,0);}
-            TextMessage confirmation=writes.createTextMessage("RIVOMESH_RECEIPT_V1:"+hash);confirmation.setStringProperty("rivomesh_record_type","RECEIPT");producer.send(writes.createQueue(receipts),confirmation,DeliveryMode.PERSISTENT,4,0);writes.commit();String id=confirmation.getJMSMessageID();if(id==null||!id.startsWith("ID:")||!("RIVOMESH_RECEIPT_V1:"+hash).equals(management.text(receipts,id)))throw reject("CLASSIC_RECEIPT_NOT_OBSERVED");ownership();receiptId=id;receiptHash=hash;
+            String bound=boundReceipt(hash,messages.get(messages.size()-1).id);
+            TextMessage confirmation=writes.createTextMessage(bound);
+            confirmation.setStringProperty("rivomesh_record_type","RECEIPT");
+            producer.send(writes.createQueue(receipts),confirmation,DeliveryMode.PERSISTENT,4,0);
+            writes.commit();
+            String id=confirmation.getJMSMessageID();
+            if(id==null||!id.startsWith("ID:")||!bound.equals(management.text(receipts,id)))throw reject("CLASSIC_RECEIPT_NOT_OBSERVED");
+            ownership();
+            receiptId=id;
+            receiptHash=hash;
         }catch(Exception error){try{writes.rollback();}catch(Exception ignored){}throw classify(error);}
     }
     static Exception classify(Exception error){

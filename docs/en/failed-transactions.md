@@ -29,11 +29,13 @@ Existing global task queries carry summaries through different management entrie
 
 `MANUAL_NEW_BASELINE` describes an operator-managed project. Keep the original journal, destination receipts and evidence until the new baseline has been checked. A resume action uses the existing destination identity and checkpoint.
 
-### Read the preceding receipt for an analytical destination
+### Read the preceding destination receipt
 
-Pause the task and select **Check destination receipt** on the failed ClickHouse, Doris or Hive subscription. The review requires a complete failed incremental transaction and a retained acknowledged predecessor. It verifies the original target resource and the exact native COMMIT receipt. A later partial batch or an older snapshot receipt fails verification. The review preserves the failed transaction and all subscription positions.
+Pause the task and select **Check destination receipt** on the failed ClickHouse, Doris, Hive, ActiveMQ Artemis, ActiveMQ Classic or RocketMQ subscription. The review requires a complete failed incremental transaction and a retained acknowledged predecessor. It verifies the original target resource and the exact native COMMIT receipt. A later partial batch or an older snapshot receipt fails verification. The review preserves the failed transaction and all subscription positions.
 
-Use `POST /api/tasks/<task>/materialization-receipt` with `expectedRevision`, `subscriptionId` and `errorGeneration`. A permitted administrator can submit the same read through either Controller. The CLI equivalent is `java -jar rivomesh.jar review-materialized-recovery config.yml <target> <error-generation>`.
+Use `POST /api/tasks/<task>/destination-receipt` with `expectedRevision`, `subscriptionId` and `errorGeneration`. A permitted administrator can submit the same read through either Controller. Use `java -jar rivomesh.jar review-destination-receipt config.yml <target> <error-generation>` from the CLI.
+
+Classic's independently retained receipt binds the last event digest as well as the batch digest. Older receipt records can resume normal synchronization. They become eligible for exact failure review after the next confirmed COMMIT. Artemis browses its original non-destructive queue, and RocketMQ reads the known commit-log offset without committing a consumer offset. The review exposes only the saved cut and digest.
 
 An open gap, a prepared skip review or a destination that has fallen behind can retain journal payloads past a restart. The collector checks the minimum acknowledged sequence across destinations and retains raw and normalized bytes for unresolved gaps. During incremental capture a full journal reports `JOURNAL_BACKPRESSURE` and preserves that evidence. The Kafka notice operation reports a failure and preserves original synchronization progress. [Kafka approvals and recovery](messaging-v3.md#approve-check-and-send-a-gap-notice)
 

@@ -14497,5 +14497,50 @@
       "kafkaManagedFixedTopicAbortRecovery"
     ],
     "note": "Native management dispatch and terminal abort have separately frozen Kafka artifacts. ClickHouse, Doris and Hive test the same compiled and resource archive entries as this grouped artifact."
+  },
+  "queueDestinationPrecedingReceiptsTemurin21": {
+    "scope": "Temurin 21, real single-broker transports, original native resource and preceding COMMIT in the LOCAL H2 journal. A deterministic failure isolates the chosen subscription; the peer ACK is simulated.",
+    "profiles": {
+      "ActiveMQ Classic 5.19.12": {
+        "artifactSha256": "d89094063e233afbd3655888fb136c44ee7e5185b4e7a4c96cde3d4fe099902e",
+        "nativeLogSha256": "63ff964dea6b0ac29fc1d2a5ca672fdd60eab65da4ccd75f178cd63c60a53ab0",
+        "nativeChecks": [
+          "ACTIVEMQ_CLASSIC verifies the exact native receipt on its original resource.",
+          "ACTIVEMQ_CLASSIC refuses a different native batch and preserves source and peer ACKs."
+        ]
+      },
+      "ActiveMQ Artemis 2.57.0": {
+        "artifactSha256": "d89094063e233afbd3655888fb136c44ee7e5185b4e7a4c96cde3d4fe099902e",
+        "nativeLogSha256": "63ff964dea6b0ac29fc1d2a5ca672fdd60eab65da4ccd75f178cd63c60a53ab0",
+        "nativeChecks": [
+          "ACTIVEMQ_ARTEMIS verifies the exact native receipt on its original resource.",
+          "ACTIVEMQ_ARTEMIS refuses a different native batch and preserves source and peer ACKs."
+        ]
+      },
+      "RocketMQ 5.5.0": {
+        "artifactSha256": "fe6198432ef4f7676b3a21c13ce83da180420ac9803cf80401091c1f9c2a8220",
+        "nativeLogSha256": "2f32cbaafe6648e08572ec91612405794a75dfdab12fceb6145010a7a1b4f47e",
+        "nativeChecks": [
+          "ROCKETMQ verifies the exact native receipt on its original resource.",
+          "ROCKETMQ refuses a different native batch and preserves source and peer ACKs."
+        ]
+      }
+    },
+    "nativeChecksPassed": 6,
+    "focusedJUnitPassed": 44,
+    "focusedJUnitLogSha256": "405b5e231d513246c5b05ecc926d5196f5d989e69a86e368db4260bbff75463a",
+    "focusedDomPassed": 4,
+    "focusedDomLogSha256": "50aeadfba7de401a96e40cc492fc2ba97393ba51c55de5dba719d9e20918cc1d",
+    "fixtureFilesSha256": {
+      "tests/analytics/MaterializedRecoveryAcceptance.java": "2322a05a8c2c548e5a6ab316616d00d12f7ca5e7582ef1ab1cd38c6141012896",
+      "tests/materialized-recovery-run.sh": "434a10c6ece207e73076a5692a530fb7ce8318fab42a5bcc48c49c4cadf199fe"
+    },
+    "remainingFixtureResources": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "reproduce": "RIVOMESH_RECEIPT_TEST_TMPFS=1 bash tests/materialized-recovery-run.sh classic artemis rocketmq",
+    "boundary": "The Artemis and RocketMQ read-on-reopen fixtures use isolated Docker tmpfs. Cluster failover and broker storage restart are separate profiles. The focused Java tests use the accepted RocketMQ artifact with the final CLI and HTTP alias classes compiled against it; a full Maven run was deferred."
   }
 }

@@ -53,11 +53,31 @@ public final class RocketTransport implements AutoCloseable {
     private static String contentHash(Message message)throws Exception{
         java.security.MessageDigest hash=java.security.MessageDigest.getInstance("SHA-256");String id=message.getUserProperty("rivomesh_event_id");byte[] identity=(id==null?"":id).getBytes(StandardCharsets.UTF_8);hash.update(ByteBuffer.allocate(4).putInt(identity.length).array());hash.update(identity);hash.update(message.getBody());StringBuilder result=new StringBuilder();for(byte value:hash.digest())result.append(String.format(Locale.ROOT,"%02x",value&255));return result.toString();
     }
-    private void verifyProgress()throws Exception{
-        if(confirmedHash==null)return;MessageExt message;
+    private MessageExt verifyProgress()throws Exception{
+        if(confirmedHash==null)return null;MessageExt message;
         try{message=api.viewMessage(master,topic,confirmedPhysical,settings.requestTimeoutMillis);}
         catch(MQBrokerException unavailable){if(unavailable.getResponseCode()==ResponseCode.SYSTEM_ERROR||unavailable.getResponseCode()==ResponseCode.QUERY_NOT_FOUND)throw reject("ROCKETMQ_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED");throw unavailable;}
         if(!matches(message,confirmedPhysical,confirmedOffset,confirmedHash))throw reject("ROCKETMQ_CONFIRMED_HISTORY_CHANGED_REBUILD_REQUIRED");
+        return message;
+    }
+
+    public String identity(){
+        return verified?"ROCKETMQ_ROUTE_V1:"+settings.cluster+":"+settings.broker+":"+topic:null;
+    }
+
+    /** Read the confirmed commit-log record without advancing a consumer or publishing. */
+    public String verifyPrecedingCommit(String progress,String expectedEventId)throws Exception{
+        resumeProgress(progress);
+        try{
+            prepare(false);
+            MessageExt preceding=verifyProgress();
+            if(preceding==null||!expectedEventId.equals(preceding.getUserProperty("rivomesh_event_id")))
+                throw reject("ROCKETMQ_RECOVERY_PUBLICATION_UNCERTAIN");
+            if(controllerRoute!=null)requireSameControllerRoute(controllerRoute);
+            return identity();
+        }catch(Exception failure){
+            throw classify(failure);
+        }
     }
     private boolean matches(MessageExt message,long physical,long offset,String hash)throws Exception{
         return message!=null&&topic.equals(message.getTopic())&&message.getQueueId()==0&&message.getQueueOffset()==offset

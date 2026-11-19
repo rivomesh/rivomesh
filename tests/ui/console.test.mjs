@@ -393,7 +393,7 @@ test('analytical receipt check is scoped to a paused target and displays its exa
  const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
  const requests=[];
  ui.w.fetch=async(path,options)=>{
-  if(path!=='/api/tasks/'+task.id+'/materialization-receipt')return fallback(path,options);
+  if(path!=='/api/tasks/'+task.id+'/destination-receipt')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
   requests.push(JSON.parse(options.body));
   return {ok:true,status:200,json:async()=>({status:'PRECEDING_RECEIPT_VERIFIED',target:'dw',product:'DORIS',

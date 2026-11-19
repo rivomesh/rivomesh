@@ -20,6 +20,15 @@ public final class RocketMessagePublisher implements ConfirmedPublisher {
     @Override public boolean requiresProgress(){return true;}
     @Override public void resumeProgress(String progress)throws Exception{try{transport.resumeProgress(progress);}catch(Exception failure){throw translated(failure);}}
     @Override public String confirmedProgress(){return transport.confirmedProgress();}
+    @Override public String identity(){return transport.identity();}
+    void verifyPrecedingCommit(String progress,String expectedIdentityHash,String expectedEventId)throws Exception{
+        try{
+            String identity=transport.verifyPrecedingCommit(progress,expectedEventId);
+            if(!expectedIdentityHash.equals(Codec.sha256(identity)))throw new IllegalStateException("ROCKETMQ_RESOURCE_ID_CHANGED");
+        }catch(Exception failure){
+            throw translated(failure);
+        }
+    }
     @Override public void prepare(Set<String> destinations)throws Exception{try{transport.prepare(target.messaging.autoCreate);}catch(Exception failure){throw translated(failure);}}
     @Override public void require(Set<String> destinations)throws Exception{try{transport.prepare(false);}catch(Exception failure){throw translated(failure);}}
     @Override public void publish(List<Message> messages)throws Exception{

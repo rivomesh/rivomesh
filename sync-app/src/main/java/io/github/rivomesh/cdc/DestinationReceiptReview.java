@@ -10,20 +10,29 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 
-/** A read-only proof of the last acknowledged materialization receipt before a paused failed head. */
-public final class MaterializedRecoveryReview {
+/** A read-only proof of the last acknowledged native receipt before a paused failed transaction. */
+public final class DestinationReceiptReview {
     private record Cut(String generation,long epoch,long acknowledged,long failedSequence,String failedRawHash,
                        String failedNormalizedHash,String precedingTransactionId,String precedingTransactionHash,
                        String progress,String nativeIdentityHash){}
 
-    private MaterializedRecoveryReview(){}
+    private DestinationReceiptReview(){}
+
+    public static boolean supports(TargetProduct product){
+        return product!=null&&(product.materialized()||product==TargetProduct.ACTIVEMQ_ARTEMIS
+                ||product==TargetProduct.ACTIVEMQ_CLASSIC||product==TargetProduct.ROCKETMQ);
+    }
 
     public static Map<String,Object> inspect(PipelineConfig config,String targetId,long expectedErrorGeneration)throws Exception{
-        if(config==null)throw new IllegalArgumentException("MATERIALIZED_RECOVERY_V3_REQUIRED");
+        if(config==null)throw new IllegalArgumentException("DESTINATION_RECEIPT_V3_REQUIRED");
         PipelineConfig.Target target=config.targets.stream().filter(item->item.id.equals(targetId)).findFirst()
-                .orElseThrow(()->new IllegalArgumentException("MATERIALIZED_RECOVERY_TARGET_UNKNOWN"));
-        if(target.product==null||!target.product.materialized())throw new IllegalArgumentException("MATERIALIZED_RECOVERY_TARGET_UNSUPPORTED");
-        String code=target.product.name()+"_RECOVERY_";
+                .orElseThrow(()->new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNKNOWN"));
+        if(!supports(target.product))throw new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNSUPPORTED");
+        String code=switch(target.product){
+            case ACTIVEMQ_ARTEMIS->"ARTEMIS_RECOVERY_";
+            case ACTIVEMQ_CLASSIC->"CLASSIC_RECOVERY_";
+            default->target.product.name()+"_RECOVERY_";
+        };
         try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){
             journal.verifyIdentity(config.fingerprint(),config.subscribers());
             Cut before=cut(journal,targetId,expectedErrorGeneration,code);
@@ -65,7 +74,25 @@ public final class MaterializedRecoveryReview {
                     materializer.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
                 }
             }
-            default -> throw new IllegalArgumentException("MATERIALIZED_RECOVERY_TARGET_UNSUPPORTED");
+            case ACTIVEMQ_ARTEMIS -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new ArtemisMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case ACTIVEMQ_CLASSIC -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new ClassicMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case ROCKETMQ -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new RocketMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            default -> throw new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNSUPPORTED");
         }
     }
 

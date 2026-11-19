@@ -85,6 +85,25 @@ public final class ArtemisTransport implements AutoCloseable {
             ownership();verifyProgress();identity="ARTEMIS_NODE_QUEUE_V1:"+node+":"+attribute("queue."+queue,"ID");verified=true;
         }catch(Exception failure){throw classify(failure);}
     }
+    /** Browse the saved message and verify that the queue retained its physical identity. */
+    public String verifyPrecedingCommit(String progress,String expectedEventId)throws Exception {
+        resumeProgress(progress);
+        if(!expectedEventId.equals(confirmedEventId))throw reject("ARTEMIS_RECOVERY_PUBLICATION_UNCERTAIN");
+        try {
+            String node=capabilities(queue);
+            shape(queue());
+            String physical="ARTEMIS_NODE_QUEUE_V1:"+node+":"+attribute("queue."+queue,"ID");
+            ownership();
+            verifyProgress();
+            shape(queue());
+            if(!physical.equals("ARTEMIS_NODE_QUEUE_V1:"+attribute("broker","nodeID")+":"+attribute("queue."+queue,"ID")))
+                throw reject("ARTEMIS_RESOURCE_ID_CHANGED");
+            return physical;
+        } catch(Exception failure) {
+            throw classify(failure);
+        }
+    }
+
     public String identity(){return verified?identity:null;}
     public void publish(List<Publication> messages)throws Exception{
         if(!verified||producer==null)throw new IllegalStateException("PUBLICATION_NOT_PREPARED");

@@ -234,12 +234,12 @@ public final class ConsoleServer implements AutoCloseable {
                 }
                 return;
             }
-            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("materialization-receipt")&&method.equals("POST")){
+            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&Set.of("destination-receipt","materialization-receipt").contains(parts[4])&&method.equals("POST")){
                 JsonNode input=body(exchange);
                 if(input.size()!=3||!input.path("expectedRevision").isTextual()||!input.path("subscriptionId").isTextual()
                         ||!input.path("errorGeneration").isIntegralNumber()||!input.path("errorGeneration").canConvertToLong())
-                    throw new IllegalArgumentException("MATERIALIZED_RECOVERY_REQUEST_INVALID");
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.MATERIALIZED_RECEIPT,parts[3]);
+                    throw new IllegalArgumentException("DESTINATION_RECEIPT_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.DESTINATION_RECEIPT,parts[3]);
                 request.revision=input.get("expectedRevision").textValue();request.subscriptionId=input.get("subscriptionId").textValue();
                 request.errorCount=input.get("errorGeneration").longValue();
                 json(exchange,200,control.invoke(request,principal));return;
@@ -582,8 +582,8 @@ public final class ConsoleServer implements AutoCloseable {
             return "POST_KAFKA_NOTICE_DISPATCH";
         if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-physical-receipt"))
             return "POST_KAFKA_PHYSICAL_RECEIPT";
-        if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/materialization-receipt"))
-            return "POST_MATERIALIZED_RECEIPT";
+        if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/(?:destination|materialization)-receipt"))
+            return "POST_DESTINATION_RECEIPT";
         String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/recovery-receipts/[A-Za-z0-9_-]{8,128}")?"RECOVERY_RECEIPT":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
         return (Arrays.asList("GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS").contains(method)?method:"OTHER")+"_"+action;
     }

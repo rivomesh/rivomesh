@@ -124,7 +124,7 @@ public final class ClassicSharedStoreAcceptance {
         String[] fields = progress.split(":", -1);
         require(fields.length == 4 && "CLASSIC_RECEIPT_V1".equals(fields[0]), "Invalid native progress");
         String messageId = new String(Base64.getUrlDecoder().decode(fields[2]), StandardCharsets.UTF_8);
-        require(("RIVOMESH_RECEIPT_V1:" + fields[3]).equals(admin.text(receipts, messageId)),
+        require(("RIVOMESH_RECEIPT_V2:" + fields[3] + ":[a-f0-9]{64}").matches(java.util.Objects.toString(admin.text(receipts, messageId), "")),
                 "The original native receipt and digest are not readable");
     }
 
