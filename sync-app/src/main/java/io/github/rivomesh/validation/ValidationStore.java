@@ -18,6 +18,7 @@ import java.util.*;
 public final class ValidationStore implements AutoCloseable {
     private static final String STAGED_DATABASE="rows.staged";
     public static final String STAGED_ROWS_FILE=STAGED_DATABASE+".mv.db";
+    public static final String HANDOFF_ADOPTION_SEAL="handoff-adoption.seal";
     private static final String SOURCE="_source";
     private static final Set<Path> LOCAL_WRITERS=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final class Limits {
@@ -56,16 +57,23 @@ public final class ValidationStore implements AutoCloseable {
     private boolean closed;
 
     public static ValidationStore create(Path root,String id,PipelineValidationBarrier.Certificate certificate,List<TableSchema> schemas,Map<String,Set<String>> targets,Limits limits)throws Exception{
-        limits.validate();Path directory=reportPath(root,id);
+        limits.validate();Path directory=reportPath(root,id);requireWritableRoot(directory.getParent());
         Manifest m=new Manifest();m.certificate=Codec.decode(Codec.encode(certificate),PipelineValidationBarrier.Certificate.class);m.limits=Codec.decode(Codec.encode(limits),Limits.class);
         if(!id.equals(m.certificate.id)||!targets.keySet().equals(certificate.selectedTargets))throw new IllegalArgumentException("VALIDATION_SCOPE_INVALID");
         for(TableSchema table:schemas){table.validate();if(!Objects.equals(certificate.schemas.get(table.id),Codec.sha256(Codec.encode(table))))throw new IllegalArgumentException("VALIDATION_SCHEMA_MISMATCH");m.schemas.put(table.id,Codec.decode(Codec.encode(table),TableSchema.class));}
         for(Map.Entry<String,Set<String>> entry:targets.entrySet()){if(!m.schemas.keySet().containsAll(entry.getValue()))throw new IllegalArgumentException("VALIDATION_SCOPE_INVALID");m.targetTables.put(entry.getKey(),new TreeSet<>(entry.getValue()));}
         if(m.targetTables.values().stream().allMatch(Set::isEmpty))throw new IllegalArgumentException("VALIDATION_NO_TABLES");
         boolean newRoot=!Files.exists(directory.getParent());Files.createDirectories(directory.getParent());if(newRoot)owner(directory.getParent(),true);Files.createDirectory(directory);owner(directory,true);
-        return new ValidationStore(directory,m);
+        return new ValidationStore(directory,m,false);
     }
-    public static ValidationStore open(Path root,String id)throws Exception{return new ValidationStore(reportPath(root,id),null);}
+    public static ValidationStore open(Path root,String id)throws Exception{return new ValidationStore(reportPath(root,id),null,false);}
+    public static ValidationStore openForRead(Path root,String id)throws Exception{return new ValidationStore(reportPath(root,id),null,true);}
+    static void requireWritableRoot(Path root)throws SyncFailure{
+        if(adoptedRoot(root))throw fail("VALIDATION_REPORT_HANDOFF_READ_ONLY");
+    }
+    private static boolean adoptedRoot(Path root){
+        return Files.exists(root.resolve(HANDOFF_ADOPTION_SEAL),LinkOption.NOFOLLOW_LINKS);
+    }
 
     /** Metadata only. This observer never acquires the report lock or opens its database. */
     public static Map<String,Object> storage(Path root,String id)throws Exception{
@@ -171,9 +179,17 @@ public final class ValidationStore implements AutoCloseable {
         }
     }
 
-    private ValidationStore(Path path,Manifest initial)throws Exception{
+    private ValidationStore(Path path,Manifest initial,boolean reading)throws Exception{
         if(!Files.isDirectory(path)||Files.isSymbolicLink(path))throw new IOException("VALIDATION_REPORT_MISSING");directory=path.toRealPath();path=directory;
         if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(c->c<32))throw new IOException("VALIDATION_PATH_INVALID");
+        Path root=directory.getParent();
+        boolean adopted=adoptedRoot(root);
+        if(adopted){
+            if(!reading)throw fail("VALIDATION_REPORT_HANDOFF_READ_ONLY");
+            if(root.getFileName().toString().endsWith(".pending")
+                    ||!Files.isRegularFile(root.resolve(HANDOFF_ADOPTION_SEAL),LinkOption.NOFOLLOW_LINKS))
+                throw fail("VALIDATION_REPORT_CUSTODY_STAGED");
+        }
         claimLocalWriter(directory);
         FileChannel channel=null;FileLock acquired=null;
         try{
@@ -187,6 +203,14 @@ public final class ValidationStore implements AutoCloseable {
                 throw fail("VALIDATION_REPORT_CUSTODY_STAGED");
             if(initial==null&&ValidationArchive.restoringRequired(directory,directory.getFileName().toString()))
                 throw fail("VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED");
+            if(adopted){
+                if(Files.isSymbolicLink(directory.resolve("rows.mv.db"))||Files.isSymbolicLink(directory.resolve("summary.json")))
+                    throw new IOException("VALIDATION_SYMLINK");
+                db=JdbcConnections.open("org.h2.Driver",readOnlyUrl(path,"rows"),"","");db.setAutoCommit(false);
+                load();manifest.limits.validate();
+                if(!manifest.sourceComplete||!"COMPLETE".equals(manifest.state))throw fail("VALIDATION_MANIFEST_CORRUPT");
+                return;
+            }
             try(DirectoryStream<Path> staging=Files.newDirectoryStream(directory,"summary-*.tmp")){
                 for(Path file:staging)
                     if(file.getFileName().toString().matches("summary-[0-9]+\\.tmp")
@@ -229,10 +253,12 @@ public final class ValidationStore implements AutoCloseable {
     private static Manifest readStoredManifest(Path directory,String name)throws Exception{
         if(directory.toString().indexOf(';')>=0||directory.toString().chars().anyMatch(ch->ch<32))
             throw fail("VALIDATION_PATH_INVALID");
-        String url="jdbc:h2:file:"+directory.resolve(name)+";IFEXISTS=TRUE;ACCESS_MODE_DATA=r;DB_CLOSE_ON_EXIT=FALSE;TRACE_LEVEL_FILE=0";
-        try(Connection database=JdbcConnections.open("org.h2.Driver",url,"","")){
+        try(Connection database=JdbcConnections.open("org.h2.Driver",readOnlyUrl(directory,name),"","")){
             return readManifest(database);
         }
+    }
+    private static String readOnlyUrl(Path directory,String name){
+        return "jdbc:h2:file:"+directory.resolve(name)+";IFEXISTS=TRUE;ACCESS_MODE_DATA=r;DB_CLOSE_ON_EXIT=FALSE;TRACE_LEVEL_FILE=0";
     }
     /** Verify a custody copy under its report lock, using the sealed manifest and no row projections. */
     public static void verifyStagedReport(Path directory,String id,String code)throws Exception{

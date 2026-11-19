@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 export function registerHandoffTests({setup,flush,login}){
  const revision='a1234567-aaaa-4abc-8abc-0123456789ab';
  const newRevision='b1234567-aaaa-4abc-8abc-0123456789ab';
+ const committedConfiguration='c1234567-aaaa-4abc-8abc-0123456789ab';
  const route='/api/tasks/handoff-task/handoff';
  const preparationRoute=route+'/preparation';
  const digest='a'.repeat(64);
@@ -31,9 +32,9 @@ export function registerHandoffTests({setup,flush,login}){
    expiresAt:expiration,reservedTaskSlots:slots,reservedWorkerSlots:slots,...(releaseId?{releaseId}:{})};
  }
  function fixture({role='ADMIN',scope=['original-agent','target-agent','offline-agent'],mode='GLOBAL',
-  read,submit,probe,readPreparation,prepare,release,stage}={}){
+  read,submit,probe,readPreparation,prepare,release,stage,taskState}={}){
   const task={id:'handoff-task',revision,ownerNodeId:'original-agent',formatVersion:3,
-   workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[]};
+   workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[],...taskState};
   const ui=setup([task],role,{authenticated:false,taskControlScope:mode,nodeRole:'CONTROLLER',nodeIds:scope}),fallback=ui.w.fetch;
   const requests=[],reserves=[],releases=[],probes=[],stages=[];
   ui.w.fetch=async(path,options={})=>{
@@ -298,6 +299,80 @@ export function registerHandoffTests({setup,flush,login}){
    ui.task.revision=newRevision;ui.w.RivomeshConfiguration.render();
    assert.ok(button(ui,'stage').parentElement.hidden);
    assert.equal(ui.stages.length,1);
+  }finally{ui.dom.window.close();}
+ });
+
+ const transferredTask={ownerNodeId:'target-agent',revision:newRevision,configurationVersion:committedConfiguration};
+ function completed(state,overrides={}){
+  return {...preparation('completed-handoff','fresh-assessment',state),activatedJournalEpoch:'9007199254740993',
+   committedRevision:newRevision,committedConfigurationVersion:committedConfiguration,
+   ...(state==='EVIDENCE_ADOPTED'?{adoptedEvidence:{validationReports:2,closedReceipts:5}}:{}),...overrides};
+ }
+ function assertReadOnly(ui){
+  for(const name of ['assess','probe','prepare','release','stage']){
+   const control=button(ui,name);
+   assert.ok(control.hidden||control.closest('[hidden]'),name+' is hidden');
+   assert.ok(control.disabled,name+' is disabled');
+   control.click();
+  }
+  assert.equal(ui.requests.length+ui.probes.length+ui.reserves.length+ui.releases.length+ui.stages.length,0);
+ }
+
+ test('handoff shows ownership commit before the candidate publishes a local task observation',async()=>{
+  const ui=fixture({taskState:{...transferredTask,formatVersion:undefined,statusAvailable:false,
+   workerState:'UNKNOWN',desired:'UNKNOWN'},read:()=>assert.fail('Read-only dialog does not load an assessment'),
+   readPreparation:()=>reply(completed('COMMITTED'))});
+  try{
+   await open(ui);
+   assert.match(launcher(ui).textContent,/查看 Agent 交接状态/);
+   assert.match(dialog(ui).querySelector('h2').textContent,/查看 Agent 交接状态/);
+   assert.match(reservation(ui).textContent,/归属已提交.*原 Agentoriginal-agent.*当前归属 Agenttarget-agent/s);
+   assert.match(reservation(ui).textContent,/已提交日志代次9007199254740993/);
+   assert.doesNotMatch(reservation(ui).textContent,/到期时间|已接收|已安装/);
+   assertReadOnly(ui);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff refreshes signed projection and evidence adoption as read-only masked status',async()=>{
+  let state='COMMITTED';
+  const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(completed(state,{
+   privatePath:'/private/original',
+   adoptedEvidence:state==='EVIDENCE_ADOPTED'?{validationReports:2,closedReceipts:5,privatePath:'/private/reports'}:null
+  }))});
+  try{
+   await open(ui);assert.match(reservation(ui).textContent,/归属已提交/);
+   state='PROJECTED';button(ui,'reload').click();await flush();
+   assert.match(reservation(ui).textContent,/候选配置已安装.*停止状态/s);
+   assert.doesNotMatch(reservation(ui).textContent,/证据已接收/);
+   state='EVIDENCE_ADOPTED';button(ui,'reload').click();await flush();
+   assert.match(reservation(ui).textContent,/证据已接收.*校验报告2.*已办结回执5/s);
+   assert.match(reservation(ui).textContent,new RegExp(committedConfiguration));
+   assert.doesNotMatch(reservation(ui).textContent,/private|activeConfigurationVersion|executionAuthorized/);
+   await post(ui);assertReadOnly(ui);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff refuses transferred status with wrong authority, adoption shape or missing original grant',async()=>{
+  for(const invalid of [
+   {committedRevision:revision},{committedConfigurationVersion:revision},{candidateNodeId:'offline-agent'},
+   {originalNodeId:'hidden-agent'},{executionAuthorized:true},{adoptedEvidence:{validationReports:2,closedReceipts:0}},
+   {activatedJournalEpoch:9007199254740992}
+  ]){
+   const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(completed('EVIDENCE_ADOPTED',invalid))});
+   try{
+    await open(ui);
+    assert.match(feedback(ui),/回执无法核验/);
+    assert.ok(reservation(ui).hidden);
+    assert.doesNotMatch(reservation(ui).textContent,/completed-handoff|hidden-agent/);
+    assertReadOnly(ui);
+   }finally{ui.dom.window.close();}
+  }
+  const ui=fixture({scope:['target-agent'],taskState:transferredTask,
+   readPreparation:()=>error('FORBIDDEN',403)});
+  try{
+   await open(ui);
+   assert.ok(reservation(ui).hidden);
+   assert.doesNotMatch(dialog(ui).textContent,/original-agent/);
   }finally{ui.dom.window.close();}
  });
 

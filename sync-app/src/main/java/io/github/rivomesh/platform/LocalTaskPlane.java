@@ -11,6 +11,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         if(request.kind==TaskRequest.Kind.KAFKA_NOTICE_PLAN)return tasks.planKafkaNotice(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)return tasks.stageHandoffEvidence(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
+        if(request.kind==TaskRequest.Kind.RECOVERY_RECEIPT)return tasks.adoptedHandoffReceipt(request.taskId,request.reference,actor,request.adoptedEvidence);
         if(request.handoffRpc())return tasks.handoffProbe(request,actor);
         if(request.readAtRevision())request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
     }
@@ -36,10 +37,10 @@ final class LocalTaskPlane implements TaskControlPlane {
             case CONFIG_UPDATE:return tasks.updateConfiguration(r.taskId,r.document,r.revision,r.requestId,actor);
             case RESTORE_PREVIEW:return tasks.previewRestoreConfiguration(r.taskId,r.reference,r.revision);
             case RESTORE:return tasks.restoreConfiguration(r.taskId,r.reference,r.revision,r.requestId,actor);
-            case VALIDATION_REPORTS:return tasks.validationReports(r.taskId,r.cursor,r.limit,actor);
-            case VALIDATION_REPORT:return tasks.validationReport(r.taskId,r.reportId,actor);
-            case VALIDATION_STORAGE:return tasks.validationStorage(r.taskId,r.reportId,actor);
-            case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor);
+            case VALIDATION_REPORTS:return tasks.validationReports(r.taskId,r.cursor,r.limit,actor,r.adoptedEvidence);
+            case VALIDATION_REPORT:return tasks.validationReport(r.taskId,r.reportId,actor,r.adoptedEvidence);
+            case VALIDATION_STORAGE:return tasks.validationStorage(r.taskId,r.reportId,actor,r.adoptedEvidence);
+            case VALIDATION_DIFFERENCES:return tasks.validationDifferences(r.taskId,r.reportId,r.target,r.tableId,r.after,r.limit,r.identityHash,actor,r.adoptedEvidence);
             case REPAIR_PLAN:return tasks.repairPlan(r.taskId,r.reportId,r.planId,actor);
             case CAPTURE_RECOVERY:return tasks.captureRecovery(r.taskId,actor);
             case CAPTURE_EXCLUSIONS:return tasks.captureExclusions(r.taskId,r.cursor,r.limit,actor);

@@ -65,11 +65,13 @@ final class OwnerQueries {
     String submit(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();readonly(request);if(Model.JSON.writeValueAsBytes(request).length>512*1024)throw new IllegalArgumentException("OWNER_QUERY_REQUEST_LIMIT");
         if(request.handoffRpc())throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        if(request.adoptedEvidence!=null)throw new IllegalArgumentException("HANDOFF_ADOPTED_SCOPE_CHANGED");
         if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");
         if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
         return tasks.transaction(request.taskId,actor,(c,task,current)->{
             authorize(request,current);if(request.readAtRevision()&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
             if(!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
+            if(request.readsAdoptedEvidence())request.adoptedEvidence=adoptedEvidence(c,task);
             return insert(c,request,current,owner,reserve(c,1),null);
         });
     }
@@ -159,6 +161,20 @@ final class OwnerQueries {
         requireHandoffAgent(entry,stage.candidate());
         return stage;
     }
+    private HandoffEvidenceAdoption.Receipt adoptedEvidence(Connection c,GlobalTaskStore.Record record)throws Exception{
+        HandoffPreparations.Plan plan=tasks.preparations().latest(c,record.id,db.now(c));
+        if(plan==null||!"EVIDENCE_ADOPTED".equals(plan.phase()))return null;
+        var receipt=plan.evidenceAdoption();
+        if(receipt==null||!record.revision.equals(receipt.committedRevision())||!record.owner.equals(receipt.candidate().node())
+                ||!record.directory.equals(receipt.candidate().directory())
+                ||!Objects.equals(record.activeConfigurationVersion,plan.writerCommit().configuration()))
+            throw new TaskService.Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
+        return receipt;
+    }
+    private void verifyAdoptedEvidence(Connection c,Entry entry)throws Exception{
+        if(entry.request.readsAdoptedEvidence()&&!Objects.equals(entry.request.adoptedEvidence,adoptedEvidence(c,tasks.record(c,entry.task))))
+            throw new TaskService.Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
+    }
     private static void requireHandoffAgent(Entry entry,AgentDirectory.Binding target){
         if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
                 ||!entry.incarnation.equals(target.incarnation)||!"HEALTHY".equals(target.state))
@@ -188,7 +204,10 @@ final class OwnerQueries {
         try{
             Execution execution=tasks.service((c,accounts)->{
                 agents.require(c,lease,directory);AccessControl.Principal actor=actor(accounts,entry);
-                if(!entry.request.handoffRpc())return new Execution(entry.request,actor);
+                if(!entry.request.handoffRpc()){
+                    verifyAdoptedEvidence(c,entry);
+                    return new Execution(entry.request,actor);
+                }
                 GlobalTaskStore.Record record=tasks.record(c,entry.task);
                 TaskRequest scoped=entry.request.snapshot();
                 if(scoped.preparedHandoffRpc()){
@@ -230,6 +249,7 @@ final class OwnerQueries {
                 if(current.request.preparedHandoffRpc())
                     verifyPreparedHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
+                else verifyAdoptedEvidence(c,current);
             }catch(SecurityException|TaskService.Conflict revoked){
                 current.phase="REJECTED";current.code=revoked instanceof SecurityException?"AUTHORIZATION_CHANGED":revoked.getMessage();
                 current.response=null;write(c,current);return null;
@@ -257,6 +277,7 @@ final class OwnerQueries {
             if(entry.request.preparedHandoffRpc())verifyPreparedHandoff(c,record,current,entry);
             else if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
             else{
+                verifyAdoptedEvidence(c,entry);
                 AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
                 if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
             }

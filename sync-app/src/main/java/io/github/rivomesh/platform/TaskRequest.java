@@ -39,6 +39,7 @@ final class TaskRequest {
     public HandoffStaging.Binding handoffStaging;
     public DurableCommands.KafkaNoticePredecessor kafkaNoticePredecessor;
     public HandoffPreparations.Plan handoffPreparation;
+    public HandoffEvidenceAdoption.Receipt adoptedEvidence;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
     boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_STAGE||kind==Kind.ACTION;}
@@ -93,6 +94,8 @@ final class TaskRequest {
                 throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
             validationArchive.validate(action);
         }else if(validationArchive!=null)throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
+        if(adoptedEvidence!=null&&(!readsAdoptedEvidence()||!taskId.equals(adoptedEvidence.task())))
+            throw new IllegalArgumentException("HANDOFF_ADOPTED_SCOPE_CHANGED");
         if(kind==Kind.RECOVERY_RECEIPT&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")))
             throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
         if(kind==Kind.KAFKA_NOTICE_PLAN){
@@ -160,6 +163,8 @@ final class TaskRequest {
     boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE
             ||kind==Kind.HANDOFF_CUSTODY_PROBE||preparedHandoffRpc();}
     boolean preparedHandoffRpc(){return kind==Kind.HANDOFF_STAGING_RPC||kind==Kind.HANDOFF_READINESS_RPC;}
+    boolean readsAdoptedEvidence(){return kind==Kind.VALIDATION_REPORTS||kind==Kind.VALIDATION_REPORT
+            ||kind==Kind.VALIDATION_STORAGE||kind==Kind.VALIDATION_DIFFERENCES||kind==Kind.RECOVERY_RECEIPT;}
     boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||kind==Kind.KAFKA_NOTICE_PLAN||correctionRead()||handoffRpc();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}

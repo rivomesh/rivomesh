@@ -57,8 +57,12 @@ parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
                     help='Exercise internal signed Agent transfer and paused local projection without granting execution')
+parser.add_argument('--previous-handoff-runtime', type=Path,
+                    help='Compare actual prior runtime refusal on a newly parked successor')
 parser.add_argument('--handoff-preparation-browser', type=Path,
                     help='Exercise preparation and release through both management entries in Chrome')
+parser.add_argument('--handoff-adopted-browser', type=Path,
+                    help='Verify installed read-only handoff evidence through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
 parser.add_argument('--runtime-jdk', type=int, choices=(21,),
@@ -152,9 +156,15 @@ if args.handoff_staging and not args.handoff_preparation:
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
         or not args.test_classes.is_dir() or args.handoff_failure_custody or args.handoff_raw_custody):
     parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with source/failure evidence absent')
+if args.previous_handoff_runtime and (not args.handoff_private_writer or not args.previous_handoff_runtime.is_file()
+        or args.previous_handoff_runtime.resolve()==args.artifact.resolve()):
+    parser.error('--previous-handoff-runtime requires --handoff-private-writer and a distinct prior JAR')
 if args.handoff_preparation_browser and (not args.handoff_closed_receipts or args.handoff_preparation
         or not os.access(args.handoff_preparation_browser.resolve(), os.X_OK)):
     parser.error('--handoff-preparation-browser requires --handoff-closed-receipts and cannot share --handoff-preparation')
+if args.handoff_adopted_browser and (not args.handoff_private_writer
+        or not os.access(args.handoff_adopted_browser.resolve(), os.X_OK)):
+    parser.error('--handoff-adopted-browser requires --handoff-private-writer and an executable Chrome path')
 if args.handoff_browser and (not args.handoff_assessment or args.handoff_probe
                              or not os.access(args.handoff_browser.resolve(), os.X_OK)):
     parser.error('--handoff-browser requires a Chrome executable and the --handoff-assessment profile')
@@ -278,6 +288,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffStaging': args.handoff_staging,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
+            'handoffAdoptedBrowser': bool(args.handoff_adopted_browser),
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'reportArchive': args.report_archive,
@@ -422,6 +433,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         for entry in sorted(classes.rglob('*')):
             if entry.is_file():test_hash.update(str(entry.relative_to(classes)).encode()+b'\0'+entry.read_bytes())
         manifest['testClassesSha256']=test_hash.hexdigest()
+    if args.previous_handoff_runtime:
+        previous_runtime=args.previous_handoff_runtime.resolve()
+        manifest['previousHandoffRuntimeSha256']=hashlib.sha256(previous_runtime.read_bytes()).hexdigest()
+        services['node-worker-alt']['volumes'].append(str(previous_runtime)+':/previous-handoff-runtime.jar:ro')
     if args.recovery_jobs:
         services[owner_node]['entrypoint'] = [
             'java', '-Xmx512m', '-cp', '/app/rivomesh.jar:/fixture-tests',
@@ -546,11 +561,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         options = dict(first=bases['node-a'], second=bases['node-b'], token=env['RM_GC_TOKEN'],
                        taskId='global_cdc', **state)
         preparation = scenario == 'handoff-preparation'
-        handoff = preparation or scenario == 'handoff'
+        adopted = scenario == 'handoff-adopted'
+        handoff = preparation or adopted or scenario == 'handoff'
         browser_test = ROOT / ('tests/ui/browser-handoff.mjs' if handoff else 'tests/ui/browser-recovery.mjs')
         sources = (browser_test, browser_test.with_name('chromium.mjs'))
         hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
-        chrome = args.handoff_preparation_browser if preparation else args.handoff_browser if handoff else args.browser
+        chrome = {'handoff-preparation':args.handoff_preparation_browser,'handoff-adopted':args.handoff_adopted_browser,
+                  'handoff':args.handoff_browser}.get(scenario,args.browser)
         command = ['node', str(browser_test), str(chrome.resolve()), scenario]
         result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
         if result.returncode:
@@ -561,7 +578,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert evidence['status'] == 'PASS' and evidence['scenario'] == scenario and evidence['checks']
         assert all(hashlib.sha256(path.read_bytes()).hexdigest()==hashes[path.name] for path in sources)
         evidence['sourceSha256'] = hashes
-        if handoff:
+        if adopted:
+            manifest['browserHandoffAdopted'] = evidence
+        elif handoff:
             manifest['browserHandoffPreparation' if preparation else 'browserHandoff'] = evidence
         else:
             manifest.setdefault('browserRecovery', {})[scenario] = evidence
@@ -2429,23 +2448,44 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert staged['state']=='STAGED'
                             request='gc_private_commit_'+uuid.uuid4().hex
 
-                            def private_writer(controller,mode,evidence=stage_input['expectedEvidenceSha256'],check=True):
-                                return compose('exec','-T',controller,'java','-cp','/app/rivomesh.jar:/fixture-tests',
+                            def private_writer(controller,mode,evidence=stage_input['expectedEvidenceSha256'],
+                                               execution=request,check=True):
+                                result=compose('exec','-T',controller,'java','-cp','/app/rivomesh.jar:/fixture-tests',
                                     'io.github.rivomesh.platform.ManagedHandoffPrivateFixture','/fixture/'+controller+'.json',
-                                    'global_cdc',prepared_id,stage_input['expectedRevision'],evidence,request,mode,check=check)
+                                    'global_cdc',prepared_id,stage_input['expectedRevision'],evidence,execution,mode,check=False)
+                                if check and result.returncode:
+                                    diagnostic=re.search(r'(?m)^Exception in thread "[^"]+" ([\w.$]+)(?:: ([A-Z0-9_]{1,120})$)?',result.stderr)
+                                    frame=re.search(r'(?m)^\s+at (io\.github\.rivomesh[\w.$]+)\([\w]+\.java:(\d+)\)$',result.stderr)
+                                    kind=diagnostic[1].rsplit('.',1)[-1] if diagnostic else 'UNKNOWN'
+                                    code=diagnostic[2] if diagnostic and diagnostic[2] else 'NO_DOMAIN_CODE'
+                                    location=frame[1]+':'+frame[2] if frame else 'unavailable'
+                                    raise AssertionError(f'Private Controller {mode} failed with {kind} {code} at {location}')
+                                return result
 
                             invalid=private_writer('node-a','observe',evidence='0'*64,check=False)
                             assert invalid.returncode and 'HANDOFF_PREPARATION_CHANGED' in invalid.stderr
                             assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
-                            assert private_writer('node-a','discard').stdout.strip()==''
+                            private_writer('node-a','bind')
+                            assert http('node-b',preparation)['state']=='PREPARED'
+                            replacement='gc_replacement_'+uuid.uuid4().hex
+                            refused=private_writer('node-b','observe',execution=replacement,check=False)
+                            assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
+                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                            passed('The same signed execution intent resumes at a different Controller after stopping before native commit')
+                            assert private_writer('node-b','discard').stdout.strip()==''
 
-                            def projected():
+                            def adopted():
                                 row=http('node-b',preparation)
-                                return row if row.get('state')=='PROJECTED' else None
+                                return row if row.get('state')=='EVIDENCE_ADOPTED' else None
 
-                            projected_receipt=wait(projected,'candidate persists and confirms exact stopped projection')
-                            replay=json.loads(private_writer('node-b','observe').stdout)
-                            assert replay==projected_receipt and replay['activatedJournalEpoch']==str(managed['epoch']+1)
+                            adopted_receipt=wait(adopted,'candidate adopts exact original private evidence while stopped')
+                            replay=json.loads(private_writer('node-a','observe').stdout)
+                            assert replay==adopted_receipt and replay['activatedJournalEpoch']==str(managed['epoch']+1)
+                            assert replay['adoptedEvidence']=={'validationReports':receipts['archive']['reports'],
+                                                              'closedReceipts':receipts['archive']['closedReceipts']}
+                            assert request not in json.dumps(replay)
+                            refused=private_writer('node-b','observe',execution=replacement,check=False)
+                            assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
                             assert replay['executionAuthorized'] is False and task()['ownerNodeId']==candidate
                             actual=data_cut()
                             assert actual[0].split('|',1)[1]==original_cut[0].split('|',1)[1] and actual[1:]==original_cut[1:]
@@ -2457,9 +2497,69 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert local['desired']=='STOPPED' and not local['operations']
                             assert local['recipientImport']['preparation']==prepared_id
                             assert local['configurationVersion']==replay['committedConfigurationVersion']
+
+                            def adopted_reads():
+                                expected_summary=json.loads(saved_bytes['summary.json'])
+                                for controller in ('node-a','node-b'):
+                                    catalog=http(controller,route+'/validations')
+                                    assert [item['id'] for item in catalog['reports']]==[report_id]
+                                    report=http(controller,route+'/validations/'+report_id)
+                                    assert report['id']==report_id and report['code']==expected_summary['code']
+                                    storage=http(controller,route+'/validations/'+report_id+'/storage')
+                                    assert storage['adoptedReadOnly'] is True and not storage.get('archiveEnabled',False)
+                                    history=http(controller,route+'/recovery-receipts/'+validation)
+                                    assert history['status']=='SUCCEEDED' and history['candidateCustody']=='VERIFIED'
+                                    assert all(r['signature'] not in json.dumps(history) for r in closed)
+                                candidate_data=home/candidate/'controller'
+                                adopted_directory,=[item for item in (candidate_data/'handoff-adopted').iterdir() if item.is_dir()]
+                                assert all((adopted_directory/report_id/name).read_bytes()==payload for name,payload in saved_bytes.items())
+                                assert json.loads((adopted_directory/'closed-receipts.json').read_text())==closed
+                                assert not (candidate_data/'validations'/'global_cdc').exists()
+                                assert all((local_report/name).read_bytes()==payload for name,payload in saved_bytes.items())
+
+                            adopted_reads()
+                            passed('Both Controllers read exact adopted report history and verify the candidate closed receipt without exposing signatures')
+                            compose('kill','-s','SIGKILL',candidate)
+                            wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                            " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','adopted candidate lease expires')
+                            compose('up','-d',candidate);address(candidate)
+                            wait(lambda:http(candidate,'/readyz',expected=(200,503)).get('status')=='UP','adopted candidate reopens')
+                            wait(lambda:task().get('ownerState')=='HEALTHY' and task().get('workerState')=='STOPPED',
+                                 'adopted candidate publishes its stopped state')
+                            adopted_reads()
+                            assert task()['ownerNodeId']==candidate and data_cut()==actual
+                            passed('A candidate restart reopens immutable adopted history with the same native cut and Worker stopped')
+                            parked_status="SELECT run_state,owner IS NULL,lease_until,format_version FROM transfer_journal.rm3_job"
+                            assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
+                            worker_config='/fixture/'+candidate+'/tasks/global_cdc.yml'
+                            generation=sql('store','SELECT error_generation FROM transfer_journal.rm3_job')
+                            if args.previous_handoff_runtime:
+                                for command in (('resume-pipeline',worker_config,generation),('run',worker_config)):
+                                    old_attempt=compose('exec','-T',candidate,'timeout','10s','java','-jar',
+                                                        '/previous-handoff-runtime.jar',*command,check=False)
+                                    assert old_attempt.returncode==1 and 'JOURNAL_IDENTITY_MISMATCH' in old_attempt.stderr
+                                    assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
+                                    assert data_cut()==actual and rows_match()
+                                assert hashlib.sha256(previous_runtime.read_bytes()).hexdigest()==manifest['previousHandoffRuntimeSha256']
+                                passed('The previous binary refuses both generic resume and Worker boot on the exact parked successor')
+                            direct_resume=compose('exec','-T',candidate,'java',*launch,'resume-pipeline',worker_config,generation,check=False)
+                            assert direct_resume.returncode and 'PIPELINE_PAUSED' in direct_resume.stderr
+                            direct_start=compose('exec','-T',candidate,'timeout','30s','java',*launch,'run',worker_config,check=False)
+                            parked_retry='PIPELINE_RETRY PipelinePaused' in direct_start.stderr
+                            if direct_start.returncode!=124 or not parked_retry:
+                                retry=re.search(r'(?m)^PIPELINE_RETRY ([A-Za-z][A-Za-z0-9]*)$',direct_start.stderr)
+                                manifest['parkedWorkerStartupFailure']={
+                                    'exitCode':direct_start.returncode,'parkedRetryObserved':parked_retry,
+                                    'typedPipelinePaused':'JdbcJournal$PipelinePaused: PIPELINE_PAUSED' in direct_start.stderr,
+                                    'identityMismatch':'JOURNAL_IDENTITY_MISMATCH' in direct_start.stderr,
+                                    'pipelineRetryType':retry[1] if retry else None}
+                                raise AssertionError('Current Worker did not reach and remain at the parked journal guard')
+                            assert data_cut()==actual and rows_match()
+                            assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
+                            passed('Direct candidate Worker launch and generic resume cannot open the parked journal or move source and destination cuts')
                             assert http('node-b',route+'/actions',{'action':'START','expectedRevision':task()['revision']},
                                         expected=409)['code']=='HANDOFF_RECIPIENT_IMPORT_REQUIRED'
-                            passed('The other Controller replays a discarded internal response and sees one native transfer and durable stopped projection')
+                            passed('The other Controller replays one native transfer and sees durable stopped evidence adoption after a discarded response')
                             compose('kill','-s','SIGKILL',owner_node)
                             wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                             " AND node_id='"+owner_node+"' AND lease_until>"+clock)=='0','former Agent lease expires')
@@ -2469,6 +2569,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert old_state['tasks']['global_cdc']['desired']=='STOPPED'
                             assert task()['ownerNodeId']==candidate and data_cut()==actual
                             passed('The retired former Agent reopens without reclaiming the journal or changing target data')
+                            if args.handoff_adopted_browser:
+                                browser_check('handoff-adopted',owner=owner_node,candidate=candidate,
+                                              revision=replay['committedRevision'],
+                                              configurationVersion=replay['committedConfigurationVersion'],
+                                              preparationId=replay['id'],adoption=replay['adoptedEvidence'],
+                                              validationReportId=report_id,closedReceiptId=validation)
+                                assert data_cut()==actual and rows_match()
                             manifest['status']='PASS'
                             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
                             print('GLOBAL_CONTROL_PRIVATE_HANDOFF_ACCEPTED artifact='+digest)

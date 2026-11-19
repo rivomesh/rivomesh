@@ -7,8 +7,9 @@ import io.github.rivomesh.api.SourcePosition;
 import java.sql.*;
 import java.util.*;
 
-/** Durable write admission for a standalone pipeline using a shared transactional journal. */
+/** Durable write admission for pipelines with an assigned writer on a shared transactional journal. */
 public final class JournalWriterAssignment {
+    private static final String MANAGED_PARKED="HANDOFF_PARKED";
     public record Placement(String assignment, String node, String previousAssignment, String generation,
                             long epoch, long sequence, String checkpointSha256, String evidenceSha256) {}
     public record ExpectedCut(long epoch,long sequence,String checkpointSha256){
@@ -78,9 +79,14 @@ public final class JournalWriterAssignment {
             if(j.settings.writerAssignment==null||j.settings.managedWriter!=JdbcJournal.managedWriter((int)job.get("format")))
                 throw new JdbcJournal.Fenced();
             Placement p=current(j,c);
+            long epoch=(long)job.get("epoch");
             if(!j.settings.writerAssignment.equals(p.assignment())||!j.settings.writerNode.equals(p.node())
-                    ||!p.generation().equals(job.get("generation"))||p.epoch()>(long)job.get("epoch"))
+                    ||!p.generation().equals(job.get("generation"))||p.epoch()>epoch)
                 throw new JdbcJournal.Fenced();
+            // Older managed transfers also left their first successor epoch unclaimed.
+            if(j.settings.managedWriter&&(MANAGED_PARKED.equals(job.get("state"))
+                    ||p.previousAssignment()!=null&&p.epoch()==epoch))
+                throw new JdbcJournal.PipelinePaused();
         }else if(j.settings.writerAssignment!=null)throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_ENROLLED");
     }
 
@@ -186,11 +192,12 @@ public final class JournalWriterAssignment {
         return Codec.sha256(Model.JSON.writeValueAsString(Codec.decode(captured,SourcePosition.class)));
     }
 
-    private record LockedControlCut(String generation,String captured){}
+    private record LockedControlCut(int format,String generation,String captured){}
+    private enum CutRole { ORIGINAL, RECIPIENT }
 
     /** Lock and check the same managed journal cut using the caller's PostgreSQL control transaction. */
     public static void verifyManagedControlCut(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
-        lockManagedControlCut(c,namespace,task,assignment,proof);
+        lockManagedControlCut(c,namespace,task,assignment,proof,CutRole.ORIGINAL);
     }
 
     /** Writes the journal half on the caller's control transaction. The caller must commit both halves together. */
@@ -201,7 +208,7 @@ public final class JournalWriterAssignment {
                 ||candidate.equals(proof.managedWriter().originalNode())||proof.managedWriter().epoch()>=Long.MAX_VALUE
                 ||!Objects.toString(proof.nativeEvidenceSha256(),"").matches("[a-f0-9]{64}"))
             throw new IllegalStateException("HANDOFF_MANAGED_PLACEMENT_INVALID");
-        LockedControlCut locked=lockManagedControlCut(c,namespace,task,previous,proof);
+        LockedControlCut locked=lockManagedControlCut(c,namespace,task,previous,proof,CutRole.ORIGINAL);
         ManagedCut cut=proof.managedWriter();
         long nextEpoch=Math.addExact(cut.epoch(),1);
         Placement placement=new Placement(next,candidate,previous,locked.generation,nextEpoch,cut.sequence(),
@@ -213,9 +220,10 @@ public final class JournalWriterAssignment {
                 placement.checkpointSha256(),placement.evidenceSha256());
         if(JdbcJournal.execute(c,"UPDATE "+schema+".rm3_writer_assignment SET assignment_id=?"
                 +" WHERE pipeline_id=? AND assignment_id=?",next,task,previous)!=1
-                ||JdbcJournal.execute(c,"UPDATE "+schema+".rm3_job SET epoch=?,owner=NULL,lease_until=0"
-                +" WHERE pipeline_id=? AND epoch=? AND generation=? AND next_seq=?",nextEpoch,task,cut.epoch(),
-                locked.generation,Math.addExact(cut.sequence(),1))!=1)
+                ||JdbcJournal.execute(c,"UPDATE "+schema+".rm3_job SET epoch=?,owner=NULL,lease_until=0,run_state=?,format_version=?"
+                +" WHERE pipeline_id=? AND epoch=? AND generation=? AND next_seq=? AND format_version=? AND run_state='RUNNING'",
+                nextEpoch,MANAGED_PARKED,JdbcJournal.withParkedAdmission(locked.format),task,cut.epoch(),locked.generation,
+                Math.addExact(cut.sequence(),1),locked.format)!=1)
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
         return placement;
     }
@@ -225,7 +233,7 @@ public final class JournalWriterAssignment {
                                                  String assignment,CutProof proof)throws Exception{
         if(!validId(previousAssignment)||Objects.equals(previousAssignment,assignment))
             throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
-        LockedControlCut locked=lockManagedControlCut(c,namespace,task,assignment,proof);
+        LockedControlCut locked=lockManagedControlCut(c,namespace,task,assignment,proof,CutRole.RECIPIENT);
         ManagedCut cut=proof.managedWriter();
         try(PreparedStatement statement=c.prepareStatement("SELECT previous_assignment,activated_epoch,last_sequence,checkpoint_hash,evidence_hash"
                 +" FROM "+Sql.pg(namespace)+".rm3_writer_assignment_history WHERE pipeline_id=? AND assignment_id=?")){
@@ -239,7 +247,8 @@ public final class JournalWriterAssignment {
         }
     }
 
-    private static LockedControlCut lockManagedControlCut(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
+    private static LockedControlCut lockManagedControlCut(Connection c,String namespace,String task,String assignment,
+                                                          CutProof proof,CutRole role)throws Exception{
         if(c.getAutoCommit()||!"PostgreSQL".equals(c.getMetaData().getDatabaseProductName())||proof==null
                 ||proof.managedWriter()==null||!validId(assignment)||!Codec.sha256(assignment).equals(proof.managedWriter().originalAssignmentSha256()))
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_INVALID");
@@ -257,11 +266,12 @@ public final class JournalWriterAssignment {
                 if(!row.next()||!JdbcJournal.managedWriter(row.getInt(1))||!proof.journalGenerationSha256().equals(Codec.sha256(row.getString(2)))
                         ||row.getLong(3)!=expected.epoch()||row.getLong(4)-1!=expected.sequence()||row.getLong(5)!=expected.sequence()
                         ||row.getString(6)==null||!expected.checkpointSha256().equals(checkpointDigest(row.getString(6)))
-                        ||row.getString(7)!=null&&row.getLong(8)>row.getLong(14)||!"RUNNING".equals(row.getString(9))
+                        ||!matchesLeaseAndState(row,role)
                         ||!assignment.equals(row.getString(10))||!expected.originalNode().equals(row.getString(11))
-                        ||!row.getString(2).equals(row.getString(12))||row.getLong(13)>expected.epoch())
+                        ||!row.getString(2).equals(row.getString(12))||row.getLong(13)>expected.epoch()
+                        ||role==CutRole.ORIGINAL&&row.getLong(13)==expected.epoch())
                     throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
-                locked=new LockedControlCut(row.getString(2),row.getString(6));
+                locked=new LockedControlCut(row.getInt(1),row.getString(2),row.getString(6));
             }
         }
         Set<String> destinations=new TreeSet<>();
@@ -279,6 +289,14 @@ public final class JournalWriterAssignment {
         if(!destinations.equals(new TreeSet<>(proof.destinations())))
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
         return locked;
+    }
+
+    private static boolean matchesLeaseAndState(ResultSet job,CutRole role)throws SQLException{
+        String owner=job.getString(7),state=job.getString(9);
+        long expiry=job.getLong(8);
+        if(role==CutRole.RECIPIENT)
+            return owner==null&&expiry==0&&(MANAGED_PARKED.equals(state)||"RUNNING".equals(state));
+        return "RUNNING".equals(state)&&(owner==null||expiry<=job.getLong(14));
     }
 
     private static long requireReadyCut(PipelineConfig candidate,JdbcJournal j,Connection c,Map<String,Object> job)throws Exception{

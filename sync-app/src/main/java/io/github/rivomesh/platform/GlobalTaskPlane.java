@@ -27,7 +27,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
         switch(request.kind){
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
-            case RECOVERY_RECEIPT:return commands.recoveryReceipt(request.taskId,request.reference,actor);
+            case RECOVERY_RECEIPT:return recoveryReceipt(request,actor);
             case KAFKA_NOTICE_PLAN:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
@@ -81,6 +81,29 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case FAILURE_EVIDENCE_SUMMARY:case FAILURE_EVIDENCE_EVENTS:case SKIP_PLAN:case SKIP_PLANS:case GAPS:case GAP_VERIFICATION:case CORRECTION_SCHEMA:case CORRECTION_PREVIEW:return queries.await(queries.submit(request,actor),actor);
             default:throw new TaskService.Conflict("GLOBAL_CONFIGURATION_WORKFLOW_PENDING");
         }
+    }
+    private Map<String,Object> recoveryReceipt(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        Map<String,Object> retained=commands.recoveryReceipt(request.taskId,request.reference,actor);
+        boolean adopted=tasks.transaction(request.taskId,actor,(c,task,current)->{
+            HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,tasks.database().now(c));
+            return plan!=null&&"EVIDENCE_ADOPTED".equals(plan.phase())
+                    &&task.revision.equals(plan.writerCommit().revision())
+                    &&task.owner.equals(plan.evidence().candidate().node())&&task.directory.equals(plan.evidence().candidate().directory())
+                    &&Objects.equals(retained.get("ownerNodeId"),plan.evidence().original().node());
+        });
+        if(!adopted)return retained;
+        try{
+            Map<String,Object> candidate=queries.await(queries.submit(request,actor),actor);
+            for(String field:List.of("id","status","code","actorRole"))
+                if(!Objects.equals(retained.get(field),candidate.get(field)))throw new TaskService.Conflict("HANDOFF_ADOPTED_RECEIPT_CHANGED");
+            retained.put("candidateCustody","VERIFIED");
+        }catch(ControlStore.Fenced|ControlStore.Unavailable deferred){
+            // The authenticated historical result remains available independently of the candidate lease.
+        }catch(TaskService.Conflict deferred){
+            if(!Set.of("OWNER_DATA_NOT_FOUND","OWNER_QUERY_UNAVAILABLE","OWNER_QUERY_TIMEOUT","OWNER_QUERY_EXPIRED",
+                    "OWNER_QUERY_CAPACITY").contains(deferred.getMessage()))throw deferred;
+        }
+        return retained;
     }
     private static JsonNode document(String yaml)throws Exception{return new ObjectMapper(new YAMLFactory()).readTree(yaml);}
     private Map<String,Object> preview(String id,JsonNode document,String revision,AccessControl.Principal actor)throws Exception{

@@ -373,7 +373,7 @@ class ManagedHandoffTest {
         var original=new HandoffPreparations.Binding("a",fixture.directory,aLease.incarnation,aLease.epoch);
         var candidate=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
         var cut=Model.JSON.valueToTree(reviewed.get("originalCut"));
-        HandoffPreparations.Plan plan=fixture.a.transaction("orders",fixture.admin,(c,task,actor)->{
+        fixture.a.transaction("orders",fixture.admin,(c,task,actor)->{
             // Native writer assignment is verified separately. This fixture seals its exact assessment for the transport.
             var proof=new HandoffPreparations.Evidence((String)reviewed.get("id"),revision,task.activeConfigurationVersion,
                     original,candidate,new HandoffPreparations.JournalCut(cut.path("journalEpoch").asText(),
@@ -386,6 +386,11 @@ class ManagedHandoffTest {
         assertEquals("HANDOFF_REQUEST_INVALID",assertThrows(IllegalArgumentException.class,
                 ()->aQueries.candidateReadiness(request,fixture.admin)).getMessage());
         request.yaml=null;
+        conflict("HANDOFF_EXECUTION_REQUEST_CHANGED",()->aQueries.candidateReadiness(request,fixture.admin));
+        assertNull(aHandoff.bindOrReplayExecution(request,fixture.admin));
+        HandoffPreparations.Plan plan=fixture.b.transaction("orders",fixture.admin,(c,task,actor)->
+                fixture.b.preparations().byRequest(c,request.reference,aNodes.now(c)));
+        assertEquals(request.requestId,plan.executionRequest());
         var ready=new ManagedHandoff.CandidateAdmission(plan.id(),candidate,"STOPPED","e".repeat(64),"f".repeat(64));
         Map<String,Object> masked=Model.JSON.convertValue(ready,Map.class);
         try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
@@ -523,12 +528,12 @@ class ManagedHandoffTest {
         HandoffPreparations.Binding binding=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
         String configuration="c".repeat(64),stage="d".repeat(64);
         conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED",()->aHandoff.commitAdmittedWriter("orders",
-                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STAGED",configuration,stage),fixture.admin));
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STAGED",configuration,stage),"handoff_guarded_execute",fixture.admin));
         conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED",()->aHandoff.commitAdmittedWriter("orders",
-                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STOPPED",configuration,stage),fixture.admin));
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,binding,"STOPPED",configuration,stage),"handoff_guarded_execute",fixture.admin));
         HandoffPreparations.Binding stranger=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch+1);
         conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED",()->aHandoff.commitAdmittedWriter("orders",
-                new ManagedHandoff.CandidateAdmission(prepared.requestId,stranger,"STOPPED",configuration,stage),fixture.admin));
+                new ManagedHandoff.CandidateAdmission(prepared.requestId,stranger,"STOPPED",configuration,stage),"handoff_guarded_execute",fixture.admin));
         assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
         assertEquals("PREPARED",entryB().invoke(currentPreparation(),fixture.admin).get("state"));
     }

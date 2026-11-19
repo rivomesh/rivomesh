@@ -43,6 +43,7 @@ public final class ValidationRetention {
     }
 
     public static Review review(Path root,Request request,String requestId,String actorId,int policyMinimumDays)throws Exception{
+        ValidationStore.requireWritableRoot(root);
         request.validate();
         if(!requestId(requestId)||actorId==null||!actorId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))
             throw new IllegalArgumentException("VALIDATION_RETENTION_REVIEW_INVALID");

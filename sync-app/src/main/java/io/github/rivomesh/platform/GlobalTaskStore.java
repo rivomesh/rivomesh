@@ -206,13 +206,16 @@ final class GlobalTaskStore {
     }
     HandoffPreparations.Plan commitPreparedWriter(Connection c,Record record,HandoffPreparations.Plan plan,
             AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successorYaml,
-            String candidateStagingSha256)throws Exception{
+            String candidateStagingSha256,String executionRequest)throws Exception{
+        HandoffPreparations.requireExecution(plan,executionRequest);
         if(candidateStagingSha256==null||!candidateStagingSha256.matches("[a-f0-9]{64}"))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED");
         HandoffPreparations.Evidence evidence=plan.evidence();
         HandoffPreparations.WriterActivation activation=plan.activation();
         if(!actor.administers()||!actor.node(evidence.original().node())||!actor.node(evidence.candidate().node()))
             throw new SecurityException("FORBIDDEN");
+        if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
         if(!record.id.equals(plan.task())||!record.owner.equals(evidence.original().node())
                 ||!record.directory.equals(evidence.original().directory())||!record.revision.equals(evidence.revision())
                 ||!evidence.configuration().equals(record.activeConfigurationVersion)
@@ -253,8 +256,23 @@ final class GlobalTaskStore {
     ManagedRecipientImport.Grant verifiedStoppedRecipient(Connection c,String task,ControlStore.Lease lease,String directory)throws Exception{
         Record current=read(c,task);
         HandoffPreparations.Plan plan=preparations.latest(c,task,db.now(c));
-        if(plan==null||plan.writerCommit()==null||!"COMMITTED".equals(plan.phase())||plan.activation()==null)
+        if(plan==null||!"COMMITTED".equals(plan.phase()))
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+        return verifiedStoppedRecipient(c,current,plan,lease,directory);
+    }
+    ManagedRecipientImport.Grant verifiedEvidenceRecipient(Connection c,String task,String preparation,
+                                                   ControlStore.Lease lease,String directory)throws Exception{
+        Record current=read(c,task);
+        HandoffPreparations.Plan plan=preparations.latest(c,task,db.now(c));
+        if(!HandoffPreparations.evidenceEligible(plan)||!plan.id().equals(preparation))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+        return verifiedStoppedRecipient(c,current,plan,lease,directory);
+    }
+    private ManagedRecipientImport.Grant verifiedStoppedRecipient(Connection c,Record current,HandoffPreparations.Plan plan,
+                                                            ControlStore.Lease lease,String directory)throws Exception{
+        if(plan.writerCommit()==null||plan.activation()==null)
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+        String task=current.id;
         HandoffPreparations.Binding candidate=plan.evidence().candidate();
         if(!current.owner.equals(lease.nodeId)||!current.directory.equals(directory)||!current.owner.equals(candidate.node())
                 ||!current.directory.equals(candidate.directory())||lease.epoch<candidate.epoch()
@@ -294,12 +312,22 @@ final class GlobalTaskStore {
                 ||!current.owner.equals(plan.evidence().candidate().node())||!current.directory.equals(plan.evidence().candidate().directory())
                 ||!current.revision.equals(plan.writerCommit().revision())
                 ||!Objects.equals(current.activeConfigurationVersion,plan.writerCommit().configuration()))throw new ControlStore.Fenced();
-        if("PROJECTED".equals(plan.phase())){preparations.recordProjected(c,plan,receipt);return;}
+        if(HandoffPreparations.evidenceEligible(plan)){preparations.recordProjected(c,plan,receipt);return;}
         verifiedStoppedRecipient(c,task,lease,directory);
         preparations.recordProjected(c,plan,receipt);
         AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_RECIPIENT_CONFIG_PROJECTED";event.taskId=task;
         event.subjectId=lease.nodeId;event.clientRequestHash=AuditStore.hash(plan.id());
         event.operationHash=plan.writerCommit().configurationSha256();event.status="STOPPED";
+        access.append(c,event);
+    }
+    void recordRecipientEvidence(Connection c,String task,ControlStore.Lease lease,String directory,
+                                 HandoffEvidenceAdoption.Receipt receipt)throws Exception{
+        HandoffPreparations.Plan plan=verifiedEvidenceRecipient(c,task,receipt.preparation(),lease,directory).committed();
+        preparations.recordEvidenceAdoption(c,plan,receipt);
+        if(plan.evidenceAdoption()!=null)return;
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_RECIPIENT_EVIDENCE_ADOPTED";event.taskId=plan.task();
+        event.subjectId=plan.evidence().candidate().node();event.clientRequestHash=AuditStore.hash(plan.id());
+        event.operationHash=receipt.adoptionSha256();event.status="STOPPED";
         access.append(c,event);
     }
     String retiredConfiguration(Connection c,Record current,String original,String directory)throws Exception{

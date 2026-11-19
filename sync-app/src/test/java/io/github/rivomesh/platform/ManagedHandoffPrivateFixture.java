@@ -8,7 +8,7 @@ import java.util.Map;
 public final class ManagedHandoffPrivateFixture {
     private ManagedHandoffPrivateFixture(){}
     public static void main(String[] args)throws Exception{
-        if(args.length!=7||!("discard".equals(args[6])||"observe".equals(args[6])))
+        if(args.length!=7||!("bind".equals(args[6])||"discard".equals(args[6])||"observe".equals(args[6])))
             throw new IllegalArgumentException("HANDOFF_FIXTURE_ARGUMENTS_INVALID");
         PlatformConfig config=PlatformConfig.load(Path.of(args[0]));
         ClusterConfig cluster=config.cluster;
@@ -25,6 +25,11 @@ public final class ManagedHandoffPrivateFixture {
         AccessControl.Principal admin=AccountDirectory.authenticate(access.accounts(),"Bearer "+config.authToken);
         TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,args[1]);
         request.reference=args[2];request.revision=args[3];request.identityHash=args[4];request.requestId=args[5];
+        if("bind".equals(args[6])){
+            if(workflow.bindOrReplayExecution(request,admin)!=null)
+                throw new IllegalStateException("HANDOFF_FIXTURE_EXPECTED_UNCOMMITTED_INTENT");
+            return;
+        }
         Map<String,Object> committed=workflow.orchestratePreparedWriter(request,admin,transport);
         if("observe".equals(args[6]))System.out.println(Model.JSON.writeValueAsString(committed));
     }

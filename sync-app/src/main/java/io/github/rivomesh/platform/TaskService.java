@@ -233,6 +233,36 @@ public final class TaskService implements AutoCloseable {
         Entry entry=new Entry(stored.document,path,parsed);entries.put(id,entry);
         return projectStoppedRecipient(entry,receipt);
     }
+    HandoffEvidenceAdoption.Receipt installAdoptedHandoffEvidence(ManagedRecipientImport.Grant grant)throws Exception{
+        ControlCipher guard;
+        synchronized(this){
+            requireEvidenceRecipient(grant);
+            guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        }
+        HandoffEvidenceAdoption.Receipt result=HandoffEvidenceAdoption.install(statePath.getParent(),grant.committed(),guard);
+        synchronized(this){requireEvidenceRecipient(grant);}
+        return result;
+    }
+    private void requireEvidenceRecipient(ManagedRecipientImport.Grant grant)throws Exception{
+        ensureOpen();
+        HandoffPreparations.Plan plan=grant.committed();
+        HandoffPreparations.WriterCommit commit=plan.writerCommit();
+        HandoffPreparations.Binding candidate=plan.evidence().candidate();
+        if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()
+                ||!candidate.node().equals(nodeId())||!grant.authority().equals(registry.globalTaskIdentity)
+                ||!candidate.directory().equals(registry.ownerDirectoryIdentity))throw new ControlStore.Fenced();
+        if(commit==null||!Set.of("PROJECTED","EVIDENCE_ADOPTED").contains(plan.phase()))
+            throw new Conflict("HANDOFF_RECIPIENT_PROJECTION_REQUIRED");
+        Control local=registry.tasks.get(plan.task());
+        Entry entry=entries.get(plan.task());
+        var expected=new ManagedRecipientImport.Receipt(plan.id(),commit.configurationSha256(),commit.stagingSha256());
+        if(local==null||entry==null||!expected.equals(local.recipientImport)||!"STOPPED".equals(local.desired)
+                ||entry.worker!=null&&entry.worker.alive()||entry.projectionPending
+                ||!commit.revision().equals(local.revision)||!commit.configuration().equals(local.configurationVersion)
+                ||!grant.successorYaml().equals(versions.read(plan.task(),local.configurationVersion,local.configurationHash).yaml))
+            throw new Conflict("HANDOFF_RECIPIENT_LOCAL_CONFIGURATION_CHANGED");
+        if(!Files.notExists(reports(plan.task()),LinkOption.NOFOLLOW_LINKS))throw new Conflict("HANDOFF_ADOPTED_PATH_OCCUPIED");
+    }
     private ManagedRecipientImport.Receipt projectStoppedRecipient(Entry entry,ManagedRecipientImport.Receipt receipt){
         project(entry);
         if(entry.projectionPending)throw new Conflict("HANDOFF_RECIPIENT_PROJECTION_PENDING");
@@ -1269,6 +1299,31 @@ public final class TaskService implements AutoCloseable {
         return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("capture-evidence").resolve(id);
     }
     private Path reports(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("validations").resolve(id);}
+    private Path reportsForRead(String id,String report,AccessControl.Principal actor,HandoffEvidenceAdoption.Receipt authorized)throws Exception{
+        Control task=registry.tasks.get(id);
+        Path live=reports(id);
+        if(authorized==null)return live;
+        if(task.recipientImport==null)throw new Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
+        ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        Path adopted=HandoffEvidenceAdoption.reports(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
+                task.revision,task.recipientImport,guard,report,actor::node,authorized);
+        if(adopted==null)throw new Conflict("HANDOFF_ADOPTED_CUSTODY_UNAVAILABLE");
+        if(!Files.notExists(live,LinkOption.NOFOLLOW_LINKS))throw new Conflict("HANDOFF_ADOPTED_PATH_OCCUPIED");
+        return adopted;
+    }
+    synchronized Map<String,Object> adoptedHandoffReceipt(String id,String request,AccessControl.Principal actor,
+                                                        HandoffEvidenceAdoption.Receipt authorized)throws Exception{
+        ensureOpen();currentActor(actor);
+        if(!actor.administers()||!actor.task(id)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        require(id);
+        Control task=registry.tasks.get(id);
+        if(task.recipientImport==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+        ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        var receipt=HandoffEvidenceAdoption.receipt(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
+                task.revision,task.recipientImport,guard,request,actor::node,authorized);
+        if(receipt==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+        return Map.of("id",receipt.request(),"status",receipt.phase(),"code",receipt.code(),"actorRole",receipt.role());
+    }
     private Path failureEvidenceDirectory(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("failure-evidence").resolve(id);}
     private io.github.rivomesh.recovery.FailureEvidence.Scope failureEvidenceScope(String id)throws Exception{
         io.github.rivomesh.recovery.FailureEvidence.Scope scope=new io.github.rivomesh.recovery.FailureEvidence.Scope();scope.taskId=id;scope.ownerNodeId=nodeId()==null?"local":nodeId();scope.ownerDirectoryId=ownerDirectoryIdentity();return scope;
@@ -1399,15 +1454,21 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){if(recoveryRead(id,actor).config!=definition)throw new Conflict("REVISION_CHANGED");if(!Objects.equals(authority,accounts().revision))throw new SecurityException("FORBIDDEN");AuditStore.Event event=new AuditStore.Event();event.kind=gaps?"DATA_GAPS_READ":"SKIP_PLANS_READ";event.action=gaps?"READ_DATA_GAPS":"READ_SKIP_PLANS";event.taskId=id;event.subjectId=subscription;event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;}
     }
     Map<String,Object> validationReports(String id,String after,int limit,AccessControl.Principal actor)throws Exception{
+        return validationReports(id,after,limit,actor,null);
+    }
+    Map<String,Object> validationReports(String id,String after,int limit,AccessControl.Principal actor,
+                                              HandoffEvidenceAdoption.Receipt authorized)throws Exception{
         TaskDefinition definition;
+        Path workspace;
         synchronized(this){
             ensureOpen();
             currentActor(actor);
             if(actor==null||!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
             definition=require(id).config;
+            workspace=reportsForRead(id,null,actor,authorized);
         }
         if(definition.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
-        Map<String,Object> page=io.github.rivomesh.validation.ValidationStore.catalog(reports(id),after,limit);
+        Map<String,Object> page=io.github.rivomesh.validation.ValidationStore.catalog(workspace,after,limit);
         synchronized(this){
             ensureOpen();
             currentActor(actor);
@@ -1419,25 +1480,35 @@ public final class TaskService implements AutoCloseable {
         }
         return page;
     }
-    synchronized Map<String,Object> validationReport(String id,String reportId,AccessControl.Principal actor)throws Exception{
+    Map<String,Object> validationReport(String id,String reportId,AccessControl.Principal actor)throws Exception{
+        return validationReport(id,reportId,actor,null);
+    }
+    synchronized Map<String,Object> validationReport(String id,String reportId,AccessControl.Principal actor,
+                                              HandoffEvidenceAdoption.Receipt authorized)throws Exception{
         currentActor(actor);if(actor==null||!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");Entry entry=require(id);
-        if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Map<String,Object> result=backend.validationReport(entry.config,reports(id),reportId);
+        if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId))throw new IllegalArgumentException("VALIDATION_ID_INVALID");Map<String,Object> result=backend.validationReport(entry.config,reportsForRead(id,reportId,actor,authorized),reportId);
         AuditStore.Event event=new AuditStore.Event();event.kind="VALIDATION_REPORT_READ";event.action="READ_VALIDATION_REPORT";event.taskId=id;event.subjectId=reportId;event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;
     }
-    synchronized Map<String,Object> validationStorage(String id,String reportId,AccessControl.Principal actor)throws Exception{
+    Map<String,Object> validationStorage(String id,String reportId,AccessControl.Principal actor)throws Exception{
+        return validationStorage(id,reportId,actor,null);
+    }
+    synchronized Map<String,Object> validationStorage(String id,String reportId,AccessControl.Principal actor,
+                                              HandoffEvidenceAdoption.Receipt authorized)throws Exception{
         ensureOpen();currentActor(actor);
         if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");
         if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
         if(require(id).config.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
         Map<String,Object> result;
         try{
-            result=io.github.rivomesh.validation.ValidationStore.storage(reports(id),reportId);
-            ValidationRetention.Review retained=ValidationRetention.observe(reports(id),reportId);
+            Path workspace=reportsForRead(id,reportId,actor,authorized);
+            result=io.github.rivomesh.validation.ValidationStore.storage(workspace,reportId);
+            if(!workspace.equals(reports(id)))result.put("adoptedReadOnly",true);
+            ValidationRetention.Review retained=ValidationRetention.observe(workspace,reportId);
             if(config.validationRetentionMinimumDays>0||retained!=null)result.put("retentionMinimumDays",config.validationRetentionMinimumDays);
             if(retained!=null)result.put("retention",retained);
-            if(validationArchiveRoot()!=null)result.put("archiveEnabled",true);
-            if(config.validationArchiveReclaim)result.put("reclaimEnabled",true);
-            ValidationArchive.Seal archive=ValidationArchive.observe(reports(id).resolve(reportId),reportId);
+            if(workspace.equals(reports(id))&&validationArchiveRoot()!=null)result.put("archiveEnabled",true);
+            if(workspace.equals(reports(id))&&config.validationArchiveReclaim)result.put("reclaimEnabled",true);
+            ValidationArchive.Seal archive=ValidationArchive.observe(workspace.resolve(reportId),reportId);
             if(archive!=null){
                 ValidationArchive.Scope scope=validationArchiveScope(id,reportId,true);
                 if(!scope.equals(archive.scope()))throw new Conflict("VALIDATION_ARCHIVE_SCOPE_INVALID");
@@ -1525,10 +1596,14 @@ public final class TaskService implements AutoCloseable {
         persist(next);
         return view(request.taskId);
     }
-    synchronized Map<String,Object> validationDifferences(String id,String reportId,String target,String table,String after,int limit,String identity,AccessControl.Principal actor)throws Exception{
+    Map<String,Object> validationDifferences(String id,String reportId,String target,String table,String after,int limit,String identity,AccessControl.Principal actor)throws Exception{
+        return validationDifferences(id,reportId,target,table,after,limit,identity,actor,null);
+    }
+    synchronized Map<String,Object> validationDifferences(String id,String reportId,String target,String table,String after,int limit,String identity,AccessControl.Principal actor,
+                                              HandoffEvidenceAdoption.Receipt authorized)throws Exception{
         currentActor(actor);if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");if(!actor.task(id))throw new NoSuchElementException("TASK_NOT_FOUND");Entry entry=require(id);
         if(reportId==null||!UUID.fromString(reportId).toString().equals(reportId)||target==null||table==null)throw new IllegalArgumentException("VALIDATION_DIFF_SCOPE_INVALID");
-        Map<String,Object> result=backend.validationDifferences(entry.config,reports(id),reportId,target,table,after,limit,identity);
+        Map<String,Object> result=backend.validationDifferences(entry.config,reportsForRead(id,reportId,actor,authorized),reportId,target,table,after,limit,identity);
         AuditStore.Event event=new AuditStore.Event();event.kind="VALIDATION_DIFFERENCE_READ";event.action=identity==null?"READ_VALIDATION_DIFFERENCES":"READ_VALIDATION_VALUES";event.taskId=id;event.subjectId=reportId;event.operationHash=AuditStore.hash(target+"\n"+table+"\n"+(identity==null?after:identity));event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;
     }
     synchronized Map<String,Object> repairPlan(String id,String report,String plan,AccessControl.Principal actor)throws Exception{

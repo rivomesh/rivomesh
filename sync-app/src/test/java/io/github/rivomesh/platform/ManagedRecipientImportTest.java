@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ManagedRecipientImportTest {
     private static final String TASK="sales",CANDIDATE="second",ORIGINAL="first",PREPARATION="recipient_preparation";
+    private static final String EXECUTION="recipient_original_execution";
     private static final ObjectMapper YAML=new ObjectMapper(new YAMLFactory());
     @TempDir Path directory;
 
@@ -94,7 +95,7 @@ class ManagedRecipientImportTest {
         }
     }
 
-    @Test void signedCommittedPlanRemainsBlockedAtGlobalAdmissionUntilEvidenceIsInstalled()throws Exception{
+    @Test void signedAdoptionContinuesOnlyTheBoundRequestAndPreservesGlobalStartGuard()throws Exception{
         GlobalTaskStoreTest fixture=new GlobalTaskStoreTest();fixture.initialize();
         GlobalTaskStore store=fixture.a;
         ManagedRecipientImport.Grant grant=grant(store.identity,fixture.directory);
@@ -103,15 +104,49 @@ class ManagedRecipientImportTest {
         store.transaction(TASK,fixture.admin,(c,record,actor)->{
             long now=store.database().now(c);
             HandoffPreparations.Plan preparation=store.preparations().prepare(c,record,source.id(),actor,source.evidence(),source.activation(),now);
+            store.preparations().bindExecution(c,preparation,EXECUTION);
+            return null;
+        });
+        fixture.b.transaction(TASK,fixture.admin,(c,record,actor)->{
+            long now=store.database().now(c);
+            HandoffPreparations.Plan preparation=store.preparations().latest(c,TASK,now);
+            assertEquals(EXECUTION,preparation.executionRequest());
+            assertEquals(preparation,store.preparations().bindExecution(c,preparation,EXECUTION));
+            assertEquals("HANDOFF_EXECUTION_REQUEST_CHANGED",assertThrows(TaskService.Conflict.class,()->
+                    store.preparations().bindExecution(c,preparation,"replacement_execution")).getMessage());
+            assertEquals(CANDIDATE,record.owner);
             HandoffPreparations.Plan committed=store.preparations().commitWriter(c,preparation,source.writerCommit(),now);
             ManagedRecipientImport.Receipt receipt=new ManagedRecipientImport.Receipt(committed.id(),source.writerCommit().configurationSha256(),
                     source.writerCommit().stagingSha256());
+            HandoffEvidenceAdoption.Receipt adoption=adoption(committed,"4".repeat(64),source.evidence().candidate());
+            assertEquals("HANDOFF_RECIPIENT_EVIDENCE_CHANGED",assertThrows(TaskService.Conflict.class,()->
+                    store.preparations().recordEvidenceAdoption(c,committed,adoption)).getMessage());
             store.preparations().recordProjected(c,committed,receipt);
             HandoffPreparations.Plan projected=store.preparations().latest(c,TASK,now);
             assertEquals("PROJECTED",projected.phase());
-            store.preparations().recordProjected(c,projected,receipt);
-            assertEquals(projected,store.preparations().retirement(c,TASK,source.evidence().original().node(),
+            assertEquals(List.of(new HandoffPreparations.PendingRecipient(TASK,source.id(),"PROJECTED")),
+                    store.preparations().pendingRecipient(c,CANDIDATE,fixture.directory,"",10));
+            HandoffEvidenceAdoption.Receipt stranger=adoption(projected,"4".repeat(64),source.evidence().original());
+            assertEquals("HANDOFF_RECIPIENT_EVIDENCE_CHANGED",assertThrows(TaskService.Conflict.class,()->
+                    store.preparations().recordEvidenceAdoption(c,projected,stranger)).getMessage());
+            store.preparations().recordEvidenceAdoption(c,projected,adoption);
+            return null;
+        });
+        store.transaction(TASK,fixture.admin,(c,record,actor)->{
+            long now=store.database().now(c);
+            HandoffPreparations.Plan adopted=store.preparations().latest(c,TASK,now);
+            HandoffEvidenceAdoption.Receipt adoption=adoption(adopted,"4".repeat(64),source.evidence().candidate());
+            assertEquals("EVIDENCE_ADOPTED",adopted.phase());
+            assertEquals(EXECUTION,adopted.executionRequest());
+            assertEquals(adoption,adopted.evidenceAdoption());
+            assertEquals(Map.of("validationReports",1,"closedReceipts",2),HandoffPreparations.summary(adopted).get("adoptedEvidence"));
+            assertFalse(HandoffPreparations.summary(adopted).toString().contains(adoption.adoptionSha256()));
+            store.preparations().recordEvidenceAdoption(c,adopted,adoption);
+            assertEquals("HANDOFF_RECIPIENT_EVIDENCE_CHANGED",assertThrows(TaskService.Conflict.class,()->
+                    store.preparations().recordEvidenceAdoption(c,adopted,adoption(adopted,"5".repeat(64),source.evidence().candidate()))).getMessage());
+            assertEquals(adopted,store.preparations().retirement(c,TASK,source.evidence().original().node(),
                     source.evidence().original().directory()));
+            assertTrue(store.preparations().pendingRecipient(c,CANDIDATE,fixture.directory,"",10).isEmpty());
             return null;
         });
         String revision=store.get(TASK,fixture.admin).revision;
@@ -176,11 +211,15 @@ class ManagedRecipientImportTest {
         HandoffPreparations.Evidence evidence=new HandoffPreparations.Evidence("recipient_assessment",UUID.randomUUID().toString(),
                 UUID.randomUUID().toString(),former,candidate,new HandoffPreparations.JournalCut("7","2","c".repeat(64)),
                 "d".repeat(64),"e".repeat(64));
-        HandoffPreparations.WriterCommit commit=new HandoffPreparations.WriterCommit("admin",staged,AuditStore.hash(successor),
+        HandoffPreparations.WriterCommit commit=new HandoffPreparations.WriterCommit("legacy-admin",staged,AuditStore.hash(successor),
                 UUID.randomUUID().toString(),UUID.randomUUID().toString(),8);
-        HandoffPreparations.Plan plan=new HandoffPreparations.Plan(PREPARATION,TASK,1,"COMMITTED","admin",UUID.randomUUID().toString(),evidence,
-                now,now+15*60_000,null,null,now,new HandoffPreparations.WriterActivation("f".repeat(64),next,"0".repeat(64),"1".repeat(64),true),commit);
+        HandoffPreparations.Plan plan=new HandoffPreparations.Plan(PREPARATION,TASK,1,"COMMITTED","legacy-admin",UUID.randomUUID().toString(),evidence,
+                now,now+15*60_000,null,null,now,new HandoffPreparations.WriterActivation("f".repeat(64),next,"0".repeat(64),"1".repeat(64),true),commit,EXECUTION,null);
         return new ManagedRecipientImport.Grant(identity,plan,successor);
+    }
+    private static HandoffEvidenceAdoption.Receipt adoption(HandoffPreparations.Plan plan,String digest,HandoffPreparations.Binding receiver){
+        return new HandoffEvidenceAdoption.Receipt(plan.id(),plan.task(),receiver,plan.writerCommit().revision(),
+                plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),digest,1,2);
     }
     private static ManagedRecipientImport.FrozenConfig frozen(ManagedRecipientImport.Grant grant){
         HandoffPreparations.Plan plan=grant.committed();

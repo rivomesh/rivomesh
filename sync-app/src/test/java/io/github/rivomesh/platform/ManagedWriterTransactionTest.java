@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledIfSystemProperty(named="sync.handoff.transaction.jdbc",matches="jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/[^?]+")
 class ManagedWriterTransactionTest {
     private static final String TASK="handoff-orders",PREPARATION="handoff_transaction_prepared",OWNER="first",CANDIDATE="second";
+    private static final String EXECUTION="handoff_transaction_execution";
     private final String url=System.getProperty("sync.handoff.transaction.jdbc");
     private final String username=System.getProperty("sync.handoff.transaction.username","postgres");
     private final String password=System.getenv().getOrDefault("RM_HANDOFF_FIXTURE_PASSWORD","");
@@ -57,8 +58,11 @@ class ManagedWriterTransactionTest {
                     new HandoffPreparations.Binding(CANDIDATE,nextDirectory,UUID.randomUUID().toString(),4),
                     new HandoffPreparations.JournalCut("9","2",checkpoint),"b".repeat(64),"c".repeat(64));
             String staged="d".repeat(64),successor=ManagedWriterDeclaration.successorYaml(active,OWNER,CANDIDATE,next);
-            store.transaction(TASK,actor,(c,row,current)->store.preparations().prepare(c,row,PREPARATION,current,evidence,
-                    new HandoffPreparations.WriterActivation(Codec.sha256(first),next,Codec.sha256(generation),nativeProof,true),database.now(c)));
+            store.transaction(TASK,actor,(c,row,current)->{
+                HandoffPreparations.Plan preparation=store.preparations().prepare(c,row,PREPARATION,current,evidence,
+                        new HandoffPreparations.WriterActivation(Codec.sha256(first),next,Codec.sha256(generation),nativeProof,true),database.now(c));
+                return store.preparations().bindExecution(c,preparation,EXECUTION);
+            });
             sql("UPDATE "+table("job")+" SET owner='fixture-live',lease_until=9223372036854775807");
             assertEquals("HANDOFF_MANAGED_CONTROL_CUT_CHANGED",assertThrows(IllegalStateException.class,()->
                     store.transaction(TASK,actor,(c,row,current)->commit(store,c,row,current,cut,successor,staged))).getMessage());
@@ -70,10 +74,13 @@ class ManagedWriterTransactionTest {
             assertEquals(OWNER,store.get(TASK,actor).owner);
             assertEquals(original.configurationVersion,store.get(TASK,actor).activeConfigurationVersion);
             assertEquals("9",value("SELECT epoch FROM "+table("job")));
+            assertEquals("RUNNING",value("SELECT run_state FROM "+table("job")));
+            assertEquals("11",value("SELECT format_version FROM "+table("job")));
             assertEquals(first,value("SELECT assignment_id FROM "+table("writer_assignment")));
             assertEquals("1",value("SELECT COUNT(*) FROM "+table("writer_assignment_history")));
             HandoffPreparations.Plan live=store.service((c,accounts)->store.preparations().byRequest(c,PREPARATION,database.now(c)));
             assertEquals("PREPARED",live.phase());
+            assertEquals(EXECUTION,live.executionRequest());
             HandoffPreparations.Plan moved=store.transaction(TASK,actor,(c,row,current)->commit(store,c,row,current,cut,successor,staged));
             GlobalTaskStore.Record installed=store.get(TASK,actor);
             assertEquals(CANDIDATE,installed.owner);
@@ -84,6 +91,8 @@ class ManagedWriterTransactionTest {
             assertEquals(installed.activeConfigurationVersion,moved.writerCommit().configuration());
             assertEquals(next,value("SELECT assignment_id FROM "+table("writer_assignment")));
             assertEquals("10",value("SELECT epoch FROM "+table("job")));
+            assertEquals("HANDOFF_PARKED",value("SELECT run_state FROM "+table("job")));
+            assertEquals("15",value("SELECT format_version FROM "+table("job")));
             assertEquals(generation,value("SELECT generation FROM "+table("job")));
             assertEquals("2",value("SELECT COUNT(*) FROM "+table("writer_assignment_history")));
             String retired=store.service((c,accounts)->store.retiredConfiguration(c,installed,OWNER,firstDirectory));
@@ -94,9 +103,17 @@ class ManagedWriterTransactionTest {
                 assertThrows(JdbcJournal.Fenced.class,()->stale.claim("former-worker",30000));
             }
             try(JdbcJournal admitted=new JdbcJournal(writerSettings(next,CANDIDATE))){
-                var lease=admitted.claim("candidate-worker",30000);
-                assertEquals(11,lease.epoch);admitted.release(lease);
+                assertThrows(JdbcJournal.PipelinePaused.class,()->admitted.claim("candidate-worker",30000));
+                assertThrows(JdbcJournal.PipelinePaused.class,()->admitted.resumePipeline(0));
             }
+            var recipientCut=new JournalWriterAssignment.CutProof(Codec.sha256(generation),nativeProof,List.of("pg"),true,
+                    new JournalWriterAssignment.ManagedCut(CANDIDATE,Codec.sha256(next),10,2,checkpoint));
+            store.service((c,accounts)->{
+                JournalWriterAssignment.verifyRecipientControlCut(c,journal,TASK,first,next,recipientCut);
+                return null;
+            });
+            assertEquals("10",value("SELECT epoch FROM "+table("job")));
+            assertEquals("2",value("SELECT normalized_seq FROM "+table("job")));
         }finally{
             sql("DROP SCHEMA IF EXISTS "+Sql.pg(journal)+" CASCADE");
             sql("DROP SCHEMA IF EXISTS "+Sql.pg(config.cluster.namespace)+" CASCADE");
@@ -106,7 +123,7 @@ class ManagedWriterTransactionTest {
     private HandoffPreparations.Plan commit(GlobalTaskStore store,Connection c,GlobalTaskStore.Record row,
             AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successor,String staged)throws Exception{
         HandoffPreparations.Plan plan=store.preparations().byRequest(c,PREPARATION,store.database().now(c));
-        return store.commitPreparedWriter(c,row,plan,actor,cut,successor,staged);
+        return store.commitPreparedWriter(c,row,plan,actor,cut,successor,staged,EXECUTION);
     }
     private PlatformConfig configuration(){
         PlatformConfig config=new PlatformConfig();config.authToken="handoff-txn-fixture-token-with-at-least-32-characters";

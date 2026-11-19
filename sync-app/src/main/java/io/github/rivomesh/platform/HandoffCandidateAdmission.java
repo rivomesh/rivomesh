@@ -8,13 +8,16 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /** The candidate validates and seals its STOPPED successor outside the live task directory. */
 final class HandoffCandidateAdmission {
     private static final int MAX_YAML=1024*1024,MAX_ENVELOPE=3*1024*1024;
     private static final String STOPPED="STOPPED";
+    private static final Set<String> COMMITTED_PHASES=Set.of("COMMITTED","PROJECTED","EVIDENCE_ADOPTED");
 
     @FunctionalInterface interface Validator { void validate(String successorYaml)throws Exception; }
+    @FunctionalInterface interface AdmittedEvidence<T>{ T accept(ReadyConfig ready,HandoffStaging.Verified staged)throws Exception; }
     record Ready(String preparation,HandoffPreparations.Binding binding,String desired,
                  String configurationSha256,String stagingSha256){}
     record ReadyConfig(Ready receipt,String successorYaml){
@@ -55,25 +58,29 @@ final class HandoffCandidateAdmission {
     }
 
     static ReadyConfig verifyCommitted(Path state,HandoffPreparations.Plan plan,ControlCipher cipher)throws Exception{
-        if(!"COMMITTED".equals(plan.phase())||plan.writerCommit()==null)
+        return withCommittedEvidence(state,plan,cipher,(ready,staged)->ready);
+    }
+    static <T> T withCommittedEvidence(Path state,HandoffPreparations.Plan plan,ControlCipher cipher,
+                                       AdmittedEvidence<T> read)throws Exception{
+        if(!COMMITTED_PHASES.contains(plan.phase())||plan.writerCommit()==null)
             throw refused("HANDOFF_CANDIDATE_COMMIT_REQUIRED");
         Path file=sealPath(state,plan,false);
         Seal observed=read(file,plan,cipher);
-        requireScope(plan,observed.stage(),"COMMITTED");
-        return HandoffStaging.withVerifiedStage(state,observed.stage(),cipher,stagingSha256->{
+        requireScope(plan,observed.stage(),plan.phase());
+        return HandoffStaging.withVerifiedFiles(state,observed.stage(),cipher,staged->{
             Seal current=read(file,plan,cipher);
             Ready expected=new Ready(plan.id(),plan.evidence().candidate(),STOPPED,
                     plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256());
             if(!current.equals(observed)||!current.original().equals(plan.evidence().original())
                     ||!current.activation().equals(plan.activation())||!expected.equals(current.receipt())
-                    ||!stagingSha256.equals(expected.stagingSha256())
+                    ||!staged.sealSha256().equals(expected.stagingSha256())
                     ||!Codec.sha256(current.successorYaml()).equals(expected.configurationSha256()))
                 throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
             ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(current.successorYaml());
             if(declaration==null||!declaration.node().equals(expected.binding().node())
                     ||!declaration.assignment().equals(plan.activation().nextAssignment()))
                 throw refused("HANDOFF_CANDIDATE_CONFIGURATION_CHANGED");
-            return new ReadyConfig(current.receipt(),current.successorYaml());
+            return read.accept(new ReadyConfig(current.receipt(),current.successorYaml()),staged);
         });
     }
 

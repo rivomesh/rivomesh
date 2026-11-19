@@ -116,6 +116,7 @@ public final class ValidationArchive {
     public static Seal execute(Path archiveRoot,Path reportRoot,Scope scope,Request request,String action,
                                String requestId,String actorId,ReclaimAudit audit)throws Exception{
         request.validate(action);
+        ValidationStore.requireWritableRoot(reportRoot);
         if(!scope.reportId().equals(request.reportId())||!id(requestId)
                 ||actorId==null||!actorId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))
             throw failure("VALIDATION_ARCHIVE_SCOPE_INVALID");

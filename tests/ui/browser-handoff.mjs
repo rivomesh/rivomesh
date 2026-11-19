@@ -2,18 +2,27 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {isDeepStrictEqual} from 'node:util';
 import {launchChrome,waitFor} from './chromium.mjs';
 
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['handoff','handoff-preparation'].includes(scenario));
+assert(binary&&['handoff','handoff-preparation','handoff-adopted'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
-const {first,second,taskId,token,owner,candidate,revision,previousReceiptId}=JSON.parse(Buffer.concat(chunks));
+const {first,second,taskId,token,owner,candidate,revision,previousReceiptId,
+ preparationId,configurationVersion,adoption,validationReportId,closedReceiptId}=JSON.parse(Buffer.concat(chunks));
 for(const address of [first,second]){
  const url=new URL(address);
  assert(url.protocol==='http:'&&url.hostname==='127.0.0.1'&&url.port);
 }
 assert.notEqual(first,second);
+if(scenario==='handoff-adopted'){
+ const receiptId=/^[A-Za-z0-9_-]{8,128}$/;
+ assert([preparationId,validationReportId,closedReceiptId].every(id=>typeof id==='string'&&receiptId.test(id)));
+ assert(typeof configurationVersion==='string'&&typeof revision==='string'&&owner!==candidate);
+ assert(Number.isSafeInteger(adoption?.validationReports)&&adoption.validationReports>0);
+ assert(Number.isSafeInteger(adoption?.closedReceipts)&&adoption.closedReceipts>0);
+}
 
 const profile=await mkdtemp(join(tmpdir(),'rivomesh-handoff-chrome-'));
 const checks=[];
@@ -114,37 +123,129 @@ try{
   checks.push('The second entry releases the same reservation, preserves ownership and revision, and restores focus after Escape');
  }
 
- await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
- await navigate(first,'node-a',true);
- await open(true);
- const ax=await cdp('Accessibility.getFullAXTree');
- assert(ax.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='评估 Agent 接管'));
- await poll(`${receipt}===${quote(previousReceiptId)}`,'existing receipt read from control store');
- assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
- checks.push('An administrator opens the named assessment dialog by keyboard after actual polling and reads the existing receipt');
+ async function adoptedFlow(){
+  const taskPath='/api/tasks/'+encodeURIComponent(taskId);
+  const preparationPath=taskPath+'/handoff/preparation';
+  const stage='document.querySelector("[data-handoff-preparation]")';
+  const summaryFields=[
+   'id','taskId','state','assessmentId','taskRevision','activeConfigurationVersion',
+   'originalNodeId','candidateNodeId','originalNodeEpoch','candidateNodeEpoch','cut','custodySha256','evidenceSha256',
+   'createdAt','expiresAt','executionAuthorized','reservedTaskSlots','reservedWorkerSlots','activatedJournalEpoch',
+   'committedRevision','committedConfigurationVersion','adoptedEvidence','writerActivation'
+  ];
+  const activationFields=['checkedInControlTransaction','activationSha256','originalAssignmentSha256',
+   'journalGenerationSha256','nativeEvidenceSha256'];
+  const expectMasked=(actual,expected,description)=>assert(isDeepStrictEqual(actual,expected),description);
+  const expectKeys=(data,fields)=>expectMasked(Object.keys(data).sort(),[...fields].sort(),'Public receipt fields match the masked schema');
+  const read=path=>evaluate(`fetch(${quote(path)}).then(async response=>response.ok?await response.json():null)`);
+  let firstSummary;
+  for(const [entry,url,theme,width] of [['node-a',first,'light',390],['node-b',second,'dark',320]]){
+   const light=theme==='light';
+   await cdp('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme}]});
+   await cdp('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:false});
+   await navigate(url,entry,light);
+   if(!light)await evaluate('if(document.documentElement.lang!=="en")document.querySelector("#language").click()');
 
- if(scenario==='handoff-preparation'){
-  await preparationFlow();
+   const [task,summary,storage,history]=await Promise.all([
+    read(taskPath),read(preparationPath),read(taskPath+'/validations/'+encodeURIComponent(validationReportId)+'/storage'),
+    read(taskPath+'/recovery-receipts/'+encodeURIComponent(closedReceiptId))
+   ]);
+   assert(task&&summary&&storage&&history,'Signed receipt and installed evidence are readable');
+   expectMasked([task.ownerNodeId,task.revision,task.configurationVersion,task.workerState,task.desired],
+     [candidate,revision,configurationVersion,'STOPPED','STOPPED'],'The current candidate owns the exact stopped task');
+   expectMasked([summary.id,summary.taskId,summary.state,summary.originalNodeId,summary.candidateNodeId,
+    summary.committedRevision,summary.committedConfigurationVersion,summary.executionAuthorized,
+    summary.reservedTaskSlots,summary.reservedWorkerSlots],
+    [preparationId,taskId,'EVIDENCE_ADOPTED',owner,candidate,revision,configurationVersion,false,0,0],
+    'The signed adoption is bound to the expected task, preparation and revision with no execution authority');
+   assert.notEqual(summary.taskRevision,revision);
+   expectKeys(summary,summaryFields);
+   expectKeys(summary.cut,['epoch','sequence','checkpointSha256']);
+   expectKeys(summary.writerActivation,activationFields);
+   expectMasked(summary.adoptedEvidence,adoption,'The receipt exposes only the exact adopted evidence counts');
+   assert(storage.adoptedReadOnly===true&&!storage.archiveEnabled);
+   expectMasked([history.id,history.status,history.candidateCustody],[closedReceiptId,'SUCCEEDED','VERIFIED'],
+    'Candidate custody verifies the exact inherited closed receipt');
+   if(firstSummary)expectMasked(summary,firstSummary,'Both Controllers return the same signed summary');
+   else firstSummary=summary;
+
+   await open(light);
+   const label=light?'查看 Agent 交接状态':'View Agent handoff status';
+   const adopted=light?'证据已接收':'Evidence received';
+   await poll(`${stage}?.textContent.includes(${quote(adopted)})`,'signed evidence adoption renders');
+   const ax=await cdp('Accessibility.getFullAXTree');
+   assert(ax.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value===label));
+   const visible=await evaluate(`(()=>{
+    const dialog=document.querySelector('.handoff-dialog'),panel=${stage};
+    panel.querySelector('details').open=true;
+    const facts=Array.from(panel.querySelectorAll('dl dt'),key=>[key.textContent,key.nextElementSibling.textContent]);
+    const controls=Array.from(dialog.querySelectorAll('button,a,[role=button]'))
+     .filter(control=>control.getClientRects().length).map(control=>control.textContent.trim());
+    const editable=Array.from(dialog.querySelectorAll('input,select,textarea,[contenteditable=true]'))
+     .some(control=>!control.disabled&&control.getClientRects().length);
+    const brand=document.querySelector('.sidebar ${light?'.brand-day':'.brand-night'}');
+    return {facts,controls,editable,codes:Array.from(panel.querySelectorAll('code'),code=>code.textContent),
+     theme:document.documentElement.dataset.theme,accent:getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+     brandVisible:brand?.naturalWidth>0&&getComputedStyle(brand).display!=='none',
+     contained:dialog.scrollWidth<=dialog.clientWidth&&document.documentElement.scrollWidth<=innerWidth};
+   })()`);
+   const names=light?['原 Agent','当前归属 Agent','已提交日志代次','校验报告','已办结回执']:
+    ['Original Agent','Current owner Agent','Committed journal epoch','Validation reports','Closed receipts'];
+   expectMasked(visible.facts,names.map((name,index)=>[name,[
+    owner,candidate,summary.activatedJournalEpoch,String(adoption.validationReports),String(adoption.closedReceipts)
+   ][index]]),'The dialog shows exact node names, decimal journal epoch and counts');
+   expectMasked(visible.controls,light?['关闭','刷新交接状态']:['Close','Refresh handoff status'],
+    'Only close and read-only refresh controls are visible');
+   assert.equal(visible.editable,false);
+   expectMasked(visible.codes,[preparationId,revision,configurationVersion],'The expanded receipt shows only public IDs');
+   assert.equal(visible.theme,theme);assert.equal(visible.accent,light?'#2859a6':'#94bcfa');
+   assert(visible.brandVisible&&visible.contained,'Branded signed-status dialog fits the mobile viewport');
+   await clickByKeyboard('[data-handoff-reload]');
+   await poll(`${stage}?.textContent.includes(${quote(adopted)})&&!document.querySelector("[data-handoff-reload]").disabled`,
+     'read-only refresh retains the signed state');
+   expectMasked(await read(preparationPath),summary,'Refresh preserves the exact signed summary');
+   await key('Escape',27);
+   assert(await evaluate(`!document.querySelector(".handoff-dialog")&&document.activeElement===${launcher}`));
+   checks.push(light?'The first Controller shows the parked candidate, exact adopted counts and readable original evidence in the light console':
+    'The second Controller shows the same masked receipt and only read-only controls in the dark narrow console');
+  }
+ }
+
+ if(scenario==='handoff-adopted'){
+  await adoptedFlow();
  }else{
-  const select='document.querySelector(".handoff-dialog select")';
-  await poll(`[...${select}.options].some(option=>option.value===${quote(candidate)})`,'candidate from live node directory');
-  const ids=await evaluate(`[...${select}.options].map(option=>option.value)`);
-  assert(!ids.includes(owner)&&!ids.includes('node-a')&&!ids.includes('node-b'));
-  await evaluate(`${select}.value=${quote(candidate)};${select}.dispatchEvent(new Event('change'))`);
-  const submit='document.querySelector("[data-handoff-assess]")';
-  await poll(`${submit}&&!${submit}.disabled`,'explicit assessment ready');
-  await evaluate(`${submit}.focus()`);await key('Enter',13);
-  const newId=await poll(`(()=>{const id=${receipt};return id&&id!==${quote(previousReceiptId)}&&id;})()`,'new assessment receipt');
-  await poll('document.querySelector("[data-handoff-receipt]")?.textContent.includes("待补证据")','evidence-required status');
-  checks.push('Submitting the selected live candidate replaces the known receipt and shows the additional evidence required');
+  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await navigate(first,'node-a',true);
+  await open(true);
+  const ax=await cdp('Accessibility.getFullAXTree');
+  assert(ax.nodes.some(node=>node.role?.value==='dialog'&&node.name?.value==='评估 Agent 接管'));
+  await poll(`${receipt}===${quote(previousReceiptId)}`,'existing receipt read from control store');
+  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
+  checks.push('An administrator opens the named assessment dialog by keyboard after actual polling and reads the existing receipt');
 
-  await navigate(second,'node-b');
-  await open();
-  await poll(`${receipt}===${quote(newId)}`,'same durable receipt from the second Controller');
-  const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
-   .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
-  assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
-  checks.push('The same cookie sees the updated receipt through the second Controller while the task keeps its original owner and revision');
+  if(scenario==='handoff-preparation'){
+   await preparationFlow();
+  }else{
+   const select='document.querySelector(".handoff-dialog select")';
+   await poll(`[...${select}.options].some(option=>option.value===${quote(candidate)})`,'candidate from live node directory');
+   const ids=await evaluate(`[...${select}.options].map(option=>option.value)`);
+   assert(!ids.includes(owner)&&!ids.includes('node-a')&&!ids.includes('node-b'));
+   await evaluate(`${select}.value=${quote(candidate)};${select}.dispatchEvent(new Event('change'))`);
+   const submit='document.querySelector("[data-handoff-assess]")';
+   await poll(`${submit}&&!${submit}.disabled`,'explicit assessment ready');
+   await evaluate(`${submit}.focus()`);await key('Enter',13);
+   const newId=await poll(`(()=>{const id=${receipt};return id&&id!==${quote(previousReceiptId)}&&id;})()`,'new assessment receipt');
+   await poll('document.querySelector("[data-handoff-receipt]")?.textContent.includes("待补证据")','evidence-required status');
+   checks.push('Submitting the selected live candidate replaces the known receipt and shows the additional evidence required');
+
+   await navigate(second,'node-b');
+   await open();
+   await poll(`${receipt}===${quote(newId)}`,'same durable receipt from the second Controller');
+   const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
+    .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
+   assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
+   checks.push('The same cookie sees the updated receipt through the second Controller while the task keeps its original owner and revision');
+  }
  }
  console.log(JSON.stringify({status:'PASS',scenario,browser:version,checks}));
 }catch(error){

@@ -36,12 +36,17 @@ final class HandoffStaging {
     }
     record FileSeal(long bytes,String sha256){}
     record Stage(int version,Binding binding,Map<String,FileSeal> files){}
+    record Verified(Path directory,Stage manifest,String sealSha256){}
 
     private HandoffStaging(){}
 
     @FunctionalInterface interface VerifiedStage<T>{ T accept(String sealSha256)throws Exception; }
+    @FunctionalInterface interface VerifiedFiles<T>{ T accept(Verified verified)throws Exception; }
 
-    static synchronized <T> T withVerifiedStage(Path state,Binding binding,ControlCipher cipher,VerifiedStage<T> use)throws Exception{
+    static <T> T withVerifiedStage(Path state,Binding binding,ControlCipher cipher,VerifiedStage<T> use)throws Exception{
+        return withVerifiedFiles(state,binding,cipher,verified->use.accept(verified.sealSha256()));
+    }
+    static synchronized <T> T withVerifiedFiles(Path state,Binding binding,ControlCipher cipher,VerifiedFiles<T> use)throws Exception{
         Path root=state.toRealPath().resolve("handoff-staging");
         secureDirectory(root);
         Path lockFile=root.resolve("staging.lock");
@@ -50,8 +55,7 @@ final class HandoffStaging {
             FileLock lock=channel.tryLock()){
             if(lock==null)throw refusal("HANDOFF_STAGING_BUSY");
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(12);
-            String evidenceSha256=verifyStage(root.resolve(binding.key()),binding,cipher,deadline);
-            return use.accept(evidenceSha256);
+            return use.accept(verifyStage(root.resolve(binding.key()),binding,cipher,deadline));
         }catch(OverlappingFileLockException busy){throw refusal("HANDOFF_STAGING_BUSY");}
     }
 
@@ -173,7 +177,7 @@ final class HandoffStaging {
         }
     }
 
-    private static String verifyStage(Path stage,Binding expected,ControlCipher cipher,long deadline)throws Exception{
+    private static Verified verifyStage(Path stage,Binding expected,ControlCipher cipher,long deadline)throws Exception{
         secureDirectory(stage);
         Path seal=stage.resolve(SEAL);
         byte[] sealedBytes=readFile(seal,MAX_SEAL);
@@ -181,7 +185,7 @@ final class HandoffStaging {
         Stage stored=Model.JSON.readValue(cipher.open("handoff-stage/"+expected.key(),envelope),Stage.class);
         if(stored==null||stored.version()!=1||!expected.equals(stored.binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
         checkFiles(stage,stored,deadline);
-        return Codec.sha256(sealedBytes);
+        return new Verified(stage,stored,Codec.sha256(sealedBytes));
     }
 
     private static void checkFiles(Path stage,Stage manifest,long deadline)throws Exception{
@@ -269,7 +273,7 @@ final class HandoffStaging {
         if(!names.contains(path.getFileName().toString()))throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         secureFile(path);Files.delete(path);
     }
-    private static void exactNames(Path path,Set<String> names)throws Exception{
+    static void exactNames(Path path,Set<String> names)throws Exception{
         Set<String> observed=new HashSet<>();
         try(var children=Files.newDirectoryStream(path)){
             for(Path child:children){
@@ -309,14 +313,14 @@ final class HandoffStaging {
             return readEntry(input,maximum);
         }
     }
-    private static void checkFile(Path path,FileSeal expected,long maximum,long deadline)throws Exception{
+    static void checkFile(Path path,FileSeal expected,long maximum,long deadline)throws Exception{
         secureFile(path);
         try(InputStream input=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS)){
             if(expected==null||!expected.equals(stream(input,null,maximum,deadline)))
                 throw refusal("HANDOFF_STAGING_BYTES_CHANGED");
         }
     }
-    private static FileSeal writeFile(Path path,InputStream input,long maximum,long deadline)throws Exception{
+    static FileSeal writeFile(Path path,InputStream input,long maximum,long deadline)throws Exception{
         try(FileChannel output=FileChannel.open(path,Set.of(StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE),
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))){
             FileSeal seal=stream(input,output,maximum,deadline);
@@ -348,7 +352,7 @@ final class HandoffStaging {
         if(!Files.isDirectory(path,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_STAGING_PATH_UNSAFE");
         checkPermissions(path);
     }
-    private static void secureFile(Path path)throws Exception{
+    static void secureFile(Path path)throws Exception{
         if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_STAGING_PATH_UNSAFE");
         checkPermissions(path);
     }

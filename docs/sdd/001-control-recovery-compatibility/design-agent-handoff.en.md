@@ -33,4 +33,10 @@ The [standalone pipeline workflow](../../en/pipeline-v3.md#standalone-writer-tra
 
 The managed handoff still needs durable control phases and verified access to original operation receipts and recovery documents. Bounded diagnostic rotations are operator observations. Plan their continued visibility through the original Agent or an archive, independently of whether the replacement can resume the stream. The first standalone path requires an expired or released lease, a complete snapshot, fully caught-up targets and intact journal and target metadata. Interrupted snapshots, unreachable targets, open operations, and recovery across stores require separate acceptance.
 
+## Installed evidence and parked journal
+
+The private same-store handoff binds one signed request before the placement transaction. A different Controller can replay the original request after a crash. The candidate confirms the stopped configuration and independently installs the privately staged original reports and closed receipts. The `EVIDENCE_ADOPTED` receipt gates authorized read-only access after restart.
+
+The same transaction parks the journal and advances its managed format to the corresponding 15–18 variant. This preserves enabled target-gap and source-exclusion features. Earlier binaries reject the new format during identity validation. The current runtime refuses both ordinary Worker claims and generic resume for the parked owner. Explicit activation needs fresh candidate evidence and target-native epoch fences before issuing one admission for the exact assignment.
+
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

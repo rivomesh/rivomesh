@@ -144,12 +144,31 @@ window.RivomeshHandoff=(()=>{
   ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN:'Custody of the original Agent’s private evidence still needs verification.'
  });
 
+ bridge.register({
+  handoffProgress:'查看 Agent 交接状态',handoffTransferReceipt:'交接回执',handoffNoPreparation:'该任务暂无交接准备记录。',
+  handoffCommitted:'归属已提交',handoffProjected:'候选配置已安装',handoffEvidenceAdopted:'证据已接收',
+  handoffCommittedHelp:'任务归属已变更。候选 Agent 正在等待安装已审阅的任务配置。',
+  handoffProjectedHelp:'候选 Agent 已保存停止状态的任务配置。接收报告和回执后会更新交接状态。',
+  handoffEvidenceAdoptedHelp:'候选 Agent 已接收经核验的报告和已办结回执。交接回执记录的任务状态为停止。',
+  handoffCommittedRevision:'已提交任务修订',handoffCommittedConfig:'已提交配置版本',handoffJournalEpoch:'已提交日志代次',
+  handoffFormerOwner:'原 Agent',handoffCurrentOwner:'当前归属 Agent',handoffTransferId:'交接准备 ID',handoffRefreshProgress:'刷新交接状态'
+ },{
+  handoffProgress:'View Agent handoff status',handoffTransferReceipt:'Handoff receipt',handoffNoPreparation:'This task has no handoff preparation.',
+  handoffCommitted:'Ownership committed',handoffProjected:'Candidate configuration installed',handoffEvidenceAdopted:'Evidence received',
+  handoffCommittedHelp:'Task ownership has changed. The candidate Agent is waiting to install the reviewed configuration.',
+  handoffProjectedHelp:'The candidate Agent saved the task configuration in a stopped state. Handoff status will update when it receives the reports and receipts.',
+  handoffEvidenceAdoptedHelp:'The candidate Agent received the verified reports and closed receipts. The handoff receipt records the task as stopped.',
+  handoffCommittedRevision:'Committed task revision',handoffCommittedConfig:'Committed configuration version',handoffJournalEpoch:'Committed journal epoch',
+  handoffFormerOwner:'Original Agent',handoffCurrentOwner:'Current owner Agent',handoffTransferId:'Preparation ID',handoffRefreshProgress:'Refresh handoff status'
+ });
+
  const nodeId=/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
  const revisionId=/^[0-9a-f-]{36}$/;
  const requestPattern=/^[A-Za-z0-9_-]{8,128}$/;
  const sha256=/^[0-9a-f]{64}$/;
  const stateLabels={BLOCKED:'handoffStateBlocked',EVIDENCE_REQUIRED:'handoffStateEvidence',STALE:'handoffStateStale'};
  const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired'};
+ const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted'};
  let view=null;
 
  function node(tag,value='',className){
@@ -163,7 +182,8 @@ window.RivomeshHandoff=(()=>{
  }
  function eligible(task){
   const session=bridge.session();
-  return task?.formatVersion===3&&session?.taskControlScope==='GLOBAL'&&session.role==='ADMIN'
+  const visibleTask=task?.formatVersion===3||task?.formatVersion==null&&task?.statusAvailable===false;
+  return visibleTask&&session?.taskControlScope==='GLOBAL'&&session.role==='ADMIN'
    &&can('TASK_CONFIG')&&nodeGrant(task.ownerNodeId);
  }
  function current(v){
@@ -192,6 +212,27 @@ window.RivomeshHandoff=(()=>{
  function reviewReady(v){
   return freshAssessment(v)&&v.receipt.state==='EVIDENCE_REQUIRED'&&v.receipt.probe?.current===true
    &&sha256.test(v.receipt.preparationEvidenceSha256||'');
+ }
+ function transferred(preparation){return Object.hasOwn(transferLabels,preparation?.state);}
+ function preparationScope(v,preparation){
+  if(!nodeGrant(preparation.originalNodeId)||!nodeGrant(preparation.candidateNodeId)
+   ||preparation.originalNodeId===preparation.candidateNodeId)return false;
+  if(!transferred(preparation))return preparation.originalNodeId===v.owner;
+  const task=bridge.task(v.taskId);
+  return preparation.candidateNodeId===v.owner&&preparation.committedRevision===task?.revision
+   &&preparation.committedConfigurationVersion===task?.configurationVersion;
+ }
+ function readOnly(v){
+  return bridge.task(v.taskId)?.formatVersion!==3||transferred(v.preparation)||v.unverifiedTransfer;
+ }
+ function validTransfer(preparation){
+  if(!revisionId.test(preparation.committedRevision||'')||preparation.committedRevision===preparation.taskRevision
+   ||!revisionId.test(preparation.committedConfigurationVersion||'')||typeof preparation.activatedJournalEpoch!=='string'
+   ||!/^[1-9][0-9]{0,18}$/.test(preparation.activatedJournalEpoch))return false;
+  const evidence=preparation.adoptedEvidence;
+  return preparation.state==='EVIDENCE_ADOPTED'?evidence!=null
+    &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
+    &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0:evidence==null;
  }
  function activeReservation(v){return v.preparation?.state==='PREPARED';}
  function stagePreparation(v){
@@ -225,11 +266,10 @@ window.RivomeshHandoff=(()=>{
  }
  function verifiedPreparation(v,response,attempt){
   const state=response?.state;
-  const active=state==='PREPARED';
-  if(response?.taskId!==v.taskId||response.originalNodeId!==v.owner||!nodeGrant(response.candidateNodeId)
-    ||response.candidateNodeId===v.owner||!requestPattern.test(response.id||'')
+  const active=state==='PREPARED',transferredState=transferred(response);
+  if(response?.taskId!==v.taskId||!preparationScope(v,response)||!requestPattern.test(response.id||'')
     ||!requestPattern.test(response.assessmentId||'')||!revisionId.test(response.taskRevision||'')
-    ||!Object.hasOwn(preparationLabels,state)||response.executionAuthorized!==false
+    ||!(Object.hasOwn(preparationLabels,state)||transferredState&&validTransfer(response))||response.executionAuthorized!==false
     ||response.reservedTaskSlots!==Number(active)||response.reservedWorkerSlots!==Number(active)
     ||!sha256.test(response.evidenceSha256||'')||!Number.isFinite(Date.parse(response.createdAt))
     ||!(Date.parse(response.expiresAt)>Date.parse(response.createdAt))
@@ -298,12 +338,18 @@ window.RivomeshHandoff=(()=>{
   v.result.append(details);
   renderProbe(v,receipt.probe);
  }
- function renderPreparation(v){
-  const preparation=v.preparation,proof=reviewReady(v)?v.receipt.preparationEvidenceSha256:null;
-  if(v.drawnPreparation?.receipt===preparation&&v.drawnPreparation?.proof===proof)return;
-  v.drawnPreparation={receipt:preparation,proof};
+ function renderPreparation(v,readonly){
+  const preparation=v.preparation,proof=!readonly&&reviewReady(v)?v.receipt.preparationEvidenceSha256:null;
+  const empty=readonly&&v.preparationLoaded&&!preparation;
+  if(v.drawnPreparation?.receipt===preparation&&v.drawnPreparation?.proof===proof&&v.drawnPreparation?.empty===empty)return;
+  v.drawnPreparation={receipt:preparation,proof,empty};
   v.preparationResult.replaceChildren();
+  if(empty)v.preparationResult.append(node('p',t('handoffNoPreparation'),'subtle'));
   if(!preparation&&!proof)return;
+  if(transferred(preparation)){
+   renderTransfer(v,preparation);
+   return;
+  }
   v.preparationResult.append(node('h3',t('handoffReservation')));
   if(preparation){
    const active=activeReservation(v),facts=node('dl');
@@ -329,12 +375,29 @@ window.RivomeshHandoff=(()=>{
    v.preparationResult.append(review,digest,node('p',t('handoffReserveImpact'),'callout warning'));
   }
  }
- function renderStaging(v,busy){
+ function renderTransfer(v,preparation){
+  const phase=transferLabels[preparation.state],facts=node('dl');
+  const values=[
+   ['handoffFormerOwner',preparation.originalNodeId],['handoffCurrentOwner',preparation.candidateNodeId],
+   ['handoffJournalEpoch',preparation.activatedJournalEpoch]
+  ];
+  if(preparation.state==='EVIDENCE_ADOPTED')values.push(
+   ['handoffStageReports',preparation.adoptedEvidence.validationReports],
+   ['handoffStageReceipts',preparation.adoptedEvidence.closedReceipts]);
+  for(const [label,value] of values)facts.append(node('dt',t(label)),node('dd',value));
+  const details=node('details');
+  details.append(node('summary',t('handoffTransferId')),node('code',preparation.id),
+   node('p',t('handoffCommittedRevision')),node('code',preparation.committedRevision),
+   node('p',t('handoffCommittedConfig')),node('code',preparation.committedConfigurationVersion));
+  v.preparationResult.append(node('h3',t('handoffTransferReceipt')),node('span',t(phase),'badge good'),
+   node('p',t(phase+'Help'),'callout'),facts,details);
+ }
+ function renderStaging(v,busy,readonly){
   const plan=stagePreparation(v);
   if(v.stageAttempt&&!sameStagePreparation(plan,v.stageAttempt.plan))v.stageAttempt=null;
   const attempted=v.stageAttempt;
-  v.stagePanel.hidden=!plan;
-  v.stage.disabled=busy||!!v.preparationAttempt||!v.preparationLoaded||!plan;
+  v.stagePanel.hidden=readonly||!plan;
+  v.stage.disabled=busy||readonly||!!v.preparationAttempt||!v.preparationLoaded||!plan;
   v.stage.textContent=t(attempted?.uncertain?'handoffStageRetry':attempted?.counts?'handoffStageAgain':'handoffStage');
   const counts=attempted?.counts;
   const status=counts?t('handoffStageDone')+' '+t('handoffStageReports')+' '+counts.reports+' · '
@@ -352,33 +415,36 @@ window.RivomeshHandoff=(()=>{
    v.receipt=null;v.loaded=false;
   }
   if(v.attempt&&!nodeGrant(v.attempt.candidate))v.attempt=null;
-  if(v.preparation&&!nodeGrant(v.preparation.candidateNodeId)){
+  if(v.preparation&&!preparationScope(v,v.preparation)){
    v.preparation=null;v.preparationLoaded=false;
   }
   if(v.preparationAttempt&&!nodeGrant(v.preparationAttempt.candidate))v.preparationAttempt=null;
-  const active=activeReservation(v),attempt=v.preparationAttempt;
-  const assessmentLocked=active||!!attempt;
+  const active=activeReservation(v),attempt=v.preparationAttempt,readonly=readOnly(v);
+  const assessmentLocked=readonly||active||!!attempt;
+  v.header.textContent=t(readonly?'handoffProgress':'handoffTitle');
+  for(const entry of [v.help,v.original,v.field,v.candidateMessage,v.submit,v.result])entry.hidden=readonly;
+  v.reload.textContent=t(readonly?'handoffRefreshProgress':'handoffReload');
   v.select.disabled=busy||v.loadingNodes||assessmentLocked||!!v.attempt||!v.nodes.size;
-  v.more.hidden=!v.next;
+  v.more.hidden=readonly||!v.next;
   v.more.disabled=busy||v.loadingNodes||assessmentLocked||!!v.attempt;
   v.reload.disabled=busy||v.loadingNodes;
   v.submit.textContent=t(v.attempt?'handoffRetry':v.receipt?'handoffReassess':'handoffAssess');
   v.submit.disabled=busy||v.loadingNodes||assessmentLocked||(!v.attempt&&(!v.loaded||!v.nodes.has(v.select.value)
     ||!revisionId.test(bridge.task(v.taskId)?.revision||'')));
-  v.probe.hidden=active||v.receipt?.state!=='EVIDENCE_REQUIRED'||!sha256.test(v.receipt.originalCut?.checkpointHash||'');
+  v.probe.hidden=readonly||active||v.receipt?.state!=='EVIDENCE_REQUIRED'||!sha256.test(v.receipt.originalCut?.checkpointHash||'');
   v.probe.disabled=busy||assessmentLocked||Boolean(v.attempt)||!freshAssessment(v);
-  const reserveShown=attempt?!attempt.release:reviewReady(v)&&!active;
-  const releaseShown=attempt?attempt.release:active;
+  const reserveShown=!readonly&&(attempt?!attempt.release:reviewReady(v)&&!active);
+  const releaseShown=!readonly&&(attempt?attempt.release:active);
   const focused=document.activeElement;
   v.reserve.hidden=!reserveShown;v.release.hidden=!releaseShown;
   v.reserve.textContent=t(attempt&&!attempt.release?'handoffRetryReserve':'handoffReserve');
   v.release.textContent=t(attempt?.release?'handoffRetryRelease':'handoffRelease');
-  v.reserve.disabled=busy||Boolean(v.attempt)||!attempt&&!reviewReady(v);
-  v.release.disabled=busy||!attempt&&!v.preparationLoaded;
-  v.preparationPanel.hidden=!v.preparation&&!reserveShown&&!releaseShown;
+  v.reserve.disabled=busy||readonly||Boolean(v.attempt)||!attempt&&!reviewReady(v);
+  v.release.disabled=busy||readonly||!attempt&&!v.preparationLoaded;
+  v.preparationPanel.hidden=!v.preparation&&!reserveShown&&!releaseShown&&!(readonly&&v.preparationLoaded);
   renderReceipt(v);
-  renderPreparation(v);
-  renderStaging(v,busy);
+  renderPreparation(v,readonly);
+  renderStaging(v,busy,readonly);
   if((focused===v.reserve&&!reserveShown)||(focused===v.release&&!releaseShown)){
    const next=releaseShown?v.release:reserveShown?v.reserve:v.reload;
    if(!next.disabled)next.focus({preventScroll:true});
@@ -407,20 +473,31 @@ window.RivomeshHandoff=(()=>{
   v.preparationReading=true;update(v);
   try{
    let value;
-   try{value=verifiedPreparation(v,await api(preparationEndpoint(v)));}
-   catch(error){if(error.code!=='HANDOFF_PREPARATION_NOT_FOUND')throw error;value=null;}
+   try{
+    const response=await api(preparationEndpoint(v));
+    if(!current(v))return;
+    v.unverifiedTransfer=transferred(response);
+    value=verifiedPreparation(v,response);
+   }catch(error){if(error.code!=='HANDOFF_PREPARATION_NOT_FOUND')throw error;value=null;}
    if(!current(v))return;
-   v.preparation=value;v.preparationLoaded=true;
-   if(v.preparationAttempt&&matchesPreparation(value,v.preparationAttempt)){
+   v.unverifiedTransfer=false;v.preparation=value;v.preparationLoaded=true;
+   if(transferred(value)){
+    v.attempt=null;v.preparationAttempt=null;
+   }else if(v.preparationAttempt&&matchesPreparation(value,v.preparationAttempt)){
     v.preparationAttempt=null;v.feedback.textContent=t('handoffReservationSaved');
    }
   }catch(error){
    if(!current(v))return;
    v.preparationLoaded=false;v.feedback.textContent=error.message;
-   if(error.code==='FORBIDDEN'||error.code==='TASK_NOT_FOUND'){
+   if(v.unverifiedTransfer||error.code==='FORBIDDEN'||error.code==='TASK_NOT_FOUND'){
     v.preparation=null;v.preparationAttempt=null;
    }
   }finally{if(current(v)){v.preparationReading=false;update(v);}}
+ }
+ async function refreshDialog(v){
+  v.feedback.textContent='';
+  await readPreparation(v);
+  if(current(v)&&!readOnly(v))await Promise.all([read(v),candidates(v)]);
  }
  async function reconcile(v,error){
   if(error.code==='REVISION_CHANGED')await bridge.refresh();
@@ -577,10 +654,10 @@ window.RivomeshHandoff=(()=>{
    probeButton=node('button',t('handoffProbe')),reserve=node('button',t('handoffReserve'),'primary'),
    release=node('button',t('handoffRelease')),preparationPanel=node('section','','recovery-retry'),
    preparationResult=node('div'),stagePanel=node('div'),stageStatus=node('p','','subtle'),
-   stageButton=node('button',t('handoffStage'));
+   stageButton=node('button',t('handoffStage')),help=node('p',t('handoffHelp'),'callout');
   const v={dialog,taskId:task.id,owner:task.ownerNodeId,actor:bridge.session().id,select,candidateMessage,
    feedback,result,more,reload,submit:submitButton,probe:probeButton,reserve,release,preparationPanel,preparationResult,
-   stage:stageButton,stagePanel,stageStatus,nodes:new Map()};
+   stage:stageButton,stagePanel,stageStatus,header:heading,help,original,field,nodes:new Map()};
   view=v;
   heading.id='handoff-title';dialog.setAttribute('aria-labelledby',heading.id);
   select.name='candidateNodeId';field.append(node('span',t('handoffCandidate')),select);
@@ -595,7 +672,7 @@ window.RivomeshHandoff=(()=>{
   exit.onclick=()=>close(true);dialog.addEventListener('cancel',event=>{event.preventDefault();close(true);});
   select.onchange=()=>update(v);
   more.onclick=()=>candidates(v,v.next);
-  reload.onclick=()=>{v.feedback.textContent='';read(v);readPreparation(v);candidates(v);};
+  reload.onclick=()=>refreshDialog(v);
   form.onsubmit=event=>{event.preventDefault();submit(v);};
   probeButton.onclick=()=>probe(v);reserve.onclick=()=>mutatePreparation(v,false);
   release.onclick=()=>mutatePreparation(v,true);
@@ -604,14 +681,14 @@ window.RivomeshHandoff=(()=>{
   form.append(field,candidateMessage,actions);
   stagePanel.append(node('p',t('handoffStageHelp'),'subtle'),stageButton,stageStatus);
   preparationPanel.append(preparationResult,stagePanel,reserve,release);
-  dialog.append(heading,node('p',task.id,'subtle'),node('p',t('handoffHelp'),'callout'),original,form,feedback,
+  dialog.append(heading,node('p',task.id,'subtle'),help,original,form,feedback,
    result,probeButton,preparationPanel);
-  document.body.append(dialog);dialog.showModal();
-  read(v);readPreparation(v);candidates(v);
+  document.body.append(dialog);update(v);dialog.showModal();
+  refreshDialog(v);
  }
  function button(task){
   if(!eligible(task))return null;
-  const control=node('button',t('handoffTitle'),'quiet');control.dataset.handoffTask=task.id;
+  const control=node('button',t(task.formatVersion===3?'handoffTitle':'handoffProgress'),'quiet');control.dataset.handoffTask=task.id;
   control.onclick=()=>open(bridge.task(task.id));return control;
  }
  function rememberFocus(root,taskId){

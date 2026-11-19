@@ -56,6 +56,21 @@ final class OwnerRuntime implements AutoCloseable {
             return null;
         });
     }
+    private void adoptRecipientEvidence(String task,String preparation,ControlStore.Lease lease)throws Exception{
+        ManagedRecipientImport.Grant grant=authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            ManagedRecipientImport.Grant verified=authority.verifiedEvidenceRecipient(c,task,preparation,lease,directory);
+            agents.require(c,lease,directory);
+            return verified;
+        });
+        HandoffEvidenceAdoption.Receipt adopted=local.installAdoptedHandoffEvidence(grant);
+        authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            authority.recordRecipientEvidence(c,task,lease,directory,adopted);
+            agents.require(c,lease,directory);
+            return null;
+        });
+    }
     private void verifyDefinitions()throws Exception{
         Map<String,String> documents=local.ownerDocuments();
         Set<String> retired=authority.service((c,accounts)->{
@@ -104,7 +119,11 @@ final class OwnerRuntime implements AutoCloseable {
             String id="handoff:"+task.preparation();
             if(!queued.add(id))continue;
             try{readers.execute(()->{
-                try{importCommittedWriter(task.task(),leases.get());}
+                try{
+                    ControlStore.Lease current=leases.get();
+                    if("PROJECTED".equals(task.phase()))adoptRecipientEvidence(task.task(),task.preparation(),current);
+                    else importCommittedWriter(task.task(),current);
+                }
                 catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
                 catch(Exception deferred){/* The committed receipt stays pending and all new commands remain blocked. */}
                 finally{queued.remove(id);}

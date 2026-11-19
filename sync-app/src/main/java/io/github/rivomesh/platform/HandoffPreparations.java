@@ -20,7 +20,11 @@ final class HandoffPreparations {
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                 WriterActivation activation,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                WriterCommit writerCommit){}
+                WriterCommit writerCommit,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                String executionRequest,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                HandoffEvidenceAdoption.Receipt evidenceAdoption){}
 
     private final JdbcControlStore db;
     private final ControlCipher cipher;
@@ -57,10 +61,12 @@ final class HandoffPreparations {
                     case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
-                    case "COMMITTED","PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
-                            &&p.activation!=null&&p.writerCommit!=null;
+                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
+                            &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor);
                     default->false;
-                }))throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
+                })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
+                ||("EVIDENCE_ADOPTED".equals(p.phase)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
     }
     private String seal(Plan p)throws Exception{return cipher.seal(purpose(p.id),Model.JSON.writeValueAsString(p));}
@@ -72,7 +78,7 @@ final class HandoffPreparations {
     }
     private Plan close(Connection c,Plan p,String phase,String release,String actor,long now)throws Exception{
         Plan closed=new Plan(p.id,p.task,p.sequence,phase,p.actor,p.actorRevision,p.evidence,p.created,p.expires,
-                release,actor,now,p.activation,null);
+                release,actor,now,p.activation,null,p.executionRequest,null);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,release_id=?,envelope=?"
                         +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",phase,release,seal(closed),cluster,p.id)!=1)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
@@ -113,7 +119,7 @@ final class HandoffPreparations {
         Plan latest=latest(c,task.id,now);
         if(latest!=null&&"PREPARED".equals(latest.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
         int next=latest==null?1:Math.addExact(latest.sequence,1);
-        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation,null);
+        Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation,null,null,null);
         db.update(c,"INSERT INTO "+db.table("task_handoff_plan")
                         +" (cluster_id,request_id,task_id,candidate_id,ordinal,phase,envelope) VALUES (?,?,?,?,?,?,?)",
                 cluster,p.id,p.task,p.evidence.candidate.node,p.sequence,p.phase,seal(p));
@@ -123,27 +129,49 @@ final class HandoffPreparations {
         if(!"PREPARED".equals(p.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         return close(c,p,"RELEASED",request,actor.id,Math.max(p.created,now));
     }
+    private static boolean validExecutionId(Plan plan,String request){
+        return request!=null&&request.matches("[A-Za-z0-9_-]{8,128}")&&!plan.id.equals(request);
+    }
+    Plan bindExecution(Connection c,Plan plan,String request)throws Exception{
+        if(!"PREPARED".equals(plan.phase)||!validExecutionId(plan,request))
+            throw new TaskService.Conflict("HANDOFF_EXECUTION_REQUEST_INVALID");
+        if(plan.executionRequest!=null){
+            requireExecution(plan,request);
+            return plan;
+        }
+        Plan bound=new Plan(plan.id,plan.task,plan.sequence,plan.phase,plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,null,null,0,plan.activation,null,request,null);
+        if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",seal(bound),cluster,plan.id)!=1)
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        return bound;
+    }
+    static void requireExecution(Plan plan,String request){
+        if(plan.executionRequest==null||!plan.executionRequest.equals(request))
+            throw new TaskService.Conflict("HANDOFF_EXECUTION_REQUEST_CHANGED");
+    }
+
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
         if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
-                null,null,Math.max(now,p.created),p.activation,receipt);
+                null,null,Math.max(now,p.created),p.activation,receipt,p.executionRequest,null);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",complete.phase,seal(complete),cluster,p.id)!=1)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         return complete;
     }
 
-    record PendingRecipient(String task,String preparation){}
+    record PendingRecipient(String task,String preparation,String phase){}
     List<PendingRecipient> pendingRecipient(Connection c,String candidate,String directory,String after,int limit)throws Exception{
         List<PendingRecipient> pending=new ArrayList<>();
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND candidate_id=? AND phase='COMMITTED' AND request_id>? ORDER BY request_id LIMIT ?",
+                +" WHERE cluster_id=? AND candidate_id=? AND phase IN ('COMMITTED','PROJECTED') AND request_id>? ORDER BY request_id LIMIT ?",
                 cluster,candidate,after,limit);ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
                 if(!directory.equals(p.evidence.candidate.directory))throw new ControlStore.Fenced();
-                pending.add(new PendingRecipient(p.task,p.id));
+                pending.add(new PendingRecipient(p.task,p.id,p.phase));
             }
         }
         return pending;
@@ -153,18 +181,45 @@ final class HandoffPreparations {
                 ||!plan.writerCommit.configurationSha256.equals(imported.configurationSha256())
                 ||!plan.writerCommit.stagingSha256.equals(imported.stagingSha256()))
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_PROJECTION_CHANGED");
-        if("PROJECTED".equals(plan.phase))return;
+        if(evidenceEligible(plan))return;
         if(!"COMMITTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
         Plan projected=new Plan(plan.id,plan.task,plan.sequence,"PROJECTED",plan.actor,plan.actorRevision,plan.evidence,
-                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit);
+                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,null);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase='COMMITTED'",projected.phase,seal(projected),cluster,plan.id)!=1)
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
     }
 
+    static boolean evidenceEligible(Plan plan){
+        return plan!=null&&("PROJECTED".equals(plan.phase)||"EVIDENCE_ADOPTED".equals(plan.phase));
+    }
+
+    private static boolean validAdoption(Plan plan,HandoffEvidenceAdoption.Receipt receipt){
+        return receipt!=null&&plan.writerCommit!=null&&plan.id.equals(receipt.preparation())
+                &&plan.task.equals(receipt.task())&&plan.evidence.candidate.equals(receipt.candidate())
+                &&plan.writerCommit.revision.equals(receipt.committedRevision())
+                &&plan.writerCommit.configurationSha256.equals(receipt.configurationSha256())
+                &&plan.writerCommit.stagingSha256.equals(receipt.stagingSha256())
+                &&receipt.adoptionSha256()!=null&&receipt.adoptionSha256().matches("[a-f0-9]{64}")
+                &&receipt.reports()>=0&&receipt.closedReceipts()>0&&receipt.closedReceipts()<=SharedHandoffEvidence.MAX_RECEIPTS;
+    }
+    void recordEvidenceAdoption(Connection c,Plan plan,HandoffEvidenceAdoption.Receipt receipt)throws Exception{
+        if(!evidenceEligible(plan)||!validAdoption(plan,receipt))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+        if(plan.evidenceAdoption!=null){
+            if(!plan.evidenceAdoption.equals(receipt))throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+            return;
+        }
+        Plan adopted=new Plan(plan.id,plan.task,plan.sequence,"EVIDENCE_ADOPTED",plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,receipt);
+        if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase='PROJECTED'",adopted.phase,seal(adopted),cluster,plan.id)!=1)
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+    }
+
     Plan retirement(Connection c,String task,String original,String directory)throws Exception{
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED') ORDER BY ordinal DESC",cluster,task);
+                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED','EVIDENCE_ADOPTED') ORDER BY ordinal DESC",cluster,task);
             ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
@@ -191,6 +246,8 @@ final class HandoffPreparations {
             view.put("committedRevision",p.writerCommit.revision);
             view.put("committedConfigurationVersion",p.writerCommit.configuration);
         }
+        if(p.evidenceAdoption!=null)view.put("adoptedEvidence",Map.of(
+                "validationReports",p.evidenceAdoption.reports(),"closedReceipts",p.evidenceAdoption.closedReceipts()));
         if(p.activation!=null)view.put("writerActivation",Map.of(
                 "checkedInControlTransaction",p.activation.checkedInControlTransaction,
                 "activationSha256",AuditStore.hash(p.id+"\n"+e.proof+"\n"+p.activation.nextAssignment),

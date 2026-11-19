@@ -99,9 +99,67 @@ class JournalTest {
             assertEquals(13,JdbcJournal.withSourceExclusions(11));
             assertEquals(14,JdbcJournal.withSourceExclusions(12));
             assertTrue(JdbcJournal.hasTargetGaps(14));assertTrue(JdbcJournal.hasSourceExclusions(14));
+            assertEquals(List.of(15,16,17,18),List.of(11,12,13,14).stream().map(JdbcJournal::withParkedAdmission).toList());
+            assertEquals(18,JdbcJournal.withParkedAdmission(18));
+            assertEquals(16,JdbcJournal.withTargetGaps(15));
+            assertEquals(17,JdbcJournal.withSourceExclusions(15));
+            assertEquals(18,JdbcJournal.withSourceExclusions(16));
+            assertEquals(18,JdbcJournal.withTargetGaps(17));
+            assertTrue(JdbcJournal.managedWriter(18));assertTrue(JdbcJournal.assignedWriter(18));
             Journal.Lease granted=authority.claim("origin-worker",30000);
             authority.append(granted,transaction(1));
             assertEquals(transaction(1).position,authority.captured());
+        }
+    }
+    @Test void managedRecipientCannotUseOrdinaryWriterEntryPointsBeforeActivation()throws Exception{
+        JdbcJournal.Settings origin=settings(),recipient=settings();
+        origin.writerAssignment=UUID.randomUUID().toString();
+        origin.writerNode="original";
+        origin.managedWriter=true;
+        recipient.writerAssignment=UUID.randomUUID().toString();
+        recipient.writerNode="candidate";
+        recipient.managedWriter=true;
+        try(JdbcJournal previous=new JdbcJournal(origin);JdbcJournal incoming=new JdbcJournal(recipient)){
+            previous.initializeStorage(Codec.sha256("config"),"generation",List.of("fast","slow"));
+            Journal.Lease oldLease=previous.claim("original-worker",30000);
+            previous.append(oldLease,transaction(1));
+            previous.release(oldLease);
+            long parked=oldLease.epoch+1;
+            try(Connection c=previous.connect()){
+                c.setAutoCommit(false);
+                JdbcJournal.execute(c,"INSERT INTO "+previous.table("writer_assignment_history")
+                                +" (pipeline_id,assignment_id,node_id,previous_assignment,generation,activated_epoch,last_sequence)"
+                                +" VALUES (?,?,?,?,?,?,?)",origin.pipelineId,recipient.writerAssignment,recipient.writerNode,
+                        origin.writerAssignment,"generation",parked,1);
+                JdbcJournal.execute(c,"UPDATE "+previous.table("writer_assignment")+" SET assignment_id=? WHERE pipeline_id=?",
+                        recipient.writerAssignment,origin.pipelineId);
+                JdbcJournal.execute(c,"UPDATE "+previous.table("job")+" SET epoch=?,format_version=15,run_state='HANDOFF_PARKED' WHERE pipeline_id=?",
+                        parked,origin.pipelineId);
+                c.commit();
+            }
+            assertThrows(JdbcJournal.Fenced.class,()->previous.claim("retired",30000));
+            for(int format:List.of(15,11)){
+                // The legacy transaction wrote RUNNING but left its exact first recipient epoch unclaimed.
+                String state=format==15?"HANDOFF_PARKED":"RUNNING";
+                try(Connection c=incoming.connect()){
+                    JdbcJournal.execute(c,"UPDATE "+incoming.table("job")+" SET format_version=?,run_state=? WHERE pipeline_id=?",
+                            format,state,recipient.pipelineId);
+                }
+                assertThrows(JdbcJournal.PipelinePaused.class,()->initialize(incoming));
+                assertThrows(JdbcJournal.PipelinePaused.class,()->incoming.claim("direct-worker",30000));
+                assertThrows(JdbcJournal.PipelinePaused.class,()->incoming.resumePipeline(0));
+                assertThrows(JdbcJournal.PipelinePaused.class,()->incoming.resume("fast",0));
+                assertEquals(state,incoming.status().get("run_state"));
+                assertEquals(format,incoming.status().get("dataFormat"));
+                assertEquals(parked,((Number)incoming.status().get("epoch")).longValue());
+                assertEquals(transaction(1).position,incoming.captured());
+            }
+            try(Connection c=incoming.connect()){
+                JdbcJournal.execute(c,"UPDATE "+incoming.table("job")+" SET epoch=? WHERE pipeline_id=?",parked+1,recipient.pipelineId);
+            }
+            // A legacy successor that already claimed an epoch before upgrade keeps its existing authority.
+            Journal.Lease continued=incoming.claim("existing-legacy-writer",30000);
+            assertEquals(parked+2,continued.epoch);
         }
     }
     @Test void byteBudgetLimitsBatchButKeepsAnOversizedHeadTransaction()throws Exception{

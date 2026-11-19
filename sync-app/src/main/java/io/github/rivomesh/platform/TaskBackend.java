@@ -143,7 +143,7 @@ public interface TaskBackend {
     }
     default Map<String,Object> validationReport(TaskDefinition task,java.nio.file.Path reports,String reportId)throws Exception{
         if(!java.nio.file.Files.isDirectory(reports.resolve(reportId)))throw new TaskService.Conflict("VALIDATION_REPORT_NOT_CREATED");
-        try(io.github.rivomesh.validation.ValidationStore store=io.github.rivomesh.validation.ValidationStore.open(reports,reportId)){
+        try(io.github.rivomesh.validation.ValidationStore store=io.github.rivomesh.validation.ValidationStore.openForRead(reports,reportId)){
             Map<String,Object> result=store.summary();java.util.List<Map<String,String>> tables=new java.util.ArrayList<>();
             for(io.github.rivomesh.cdc.TableSchema table:store.manifest().schemas.values()){Map<String,String> row=new LinkedHashMap<>();row.put("id",table.id);row.put("database",table.database);row.put("name",table.name);tables.add(row);}result.put("tables",tables);return result;
         }catch(SyncFailure failure){if("VALIDATION_REPORT_BUSY".equals(failure.code)||"VALIDATION_REPORT_ARCHIVE_RESTORE_REQUIRED".equals(failure.code))throw new TaskService.Conflict(failure.code);throw failure;}
@@ -151,7 +151,7 @@ public interface TaskBackend {
     default Map<String,Object> validationDifferences(TaskDefinition task,java.nio.file.Path reports,String reportId,String target,String table,String after,int limit,String identity)throws Exception{
         if(limit<1||limit>100||after==null||!after.isEmpty()&&!after.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("VALIDATION_DIFF_PAGE_INVALID");
         if(!java.nio.file.Files.isDirectory(reports.resolve(reportId)))throw new TaskService.Conflict("VALIDATION_REPORT_NOT_CREATED");
-        try(io.github.rivomesh.validation.ValidationStore store=io.github.rivomesh.validation.ValidationStore.open(reports,reportId)){
+        try(io.github.rivomesh.validation.ValidationStore store=io.github.rivomesh.validation.ValidationStore.openForRead(reports,reportId)){
             io.github.rivomesh.validation.ValidationStore.Manifest manifest=store.manifest();
             if(!manifest.targetTables.containsKey(target)||!manifest.targetTables.get(target).contains(table))throw new IllegalArgumentException("VALIDATION_DIFF_SCOPE_INVALID");
             Map<String,Object> result=new LinkedHashMap<>();result.put("reportId",reportId);result.put("target",target);result.put("tableId",table);

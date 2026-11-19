@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双 Agent 实库已验证签名准备、同库内部原子换权、候选 STOPPED 配置安装、丢回执跨入口重放与旧 Agent 重启隔离。正式恢复证据导入、候选 Worker 启用、公开切换操作和自动故障接管待验。",
-        "en": "Real dual-Agent native checks verified signed readiness, same-store internal authority transfer, exact STOPPED projection, lost-reply replay and prior-Agent restart fencing. Live evidence installation, Worker activation, public transition and automatic takeover remain."
+        "zh-CN": "双 Agent 同库换权、STOPPED 配置和证据安装、跨入口重放、日志停驻及原 Agent 重启隔离已通过限定实库。候选 Worker 启用、公开换权和自动故障接管待验。",
+        "en": "Native dual-Agent tests cover same-store transfer, STOPPED configuration and evidence installation, cross-entry replay, parked journal admission and original-Agent restart fencing. Worker activation, public transfer and automatic takeover remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -161,7 +161,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedWriterDeclaration.java",
         "sync-app/src/test/java/io/github/rivomesh/platform/ManagedWriterTransactionTest.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/HandoffStaging.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java"
       ]
     },
     {
@@ -1577,8 +1578,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志和两端证据核验、报告及闭合回执私有暂存、候选 STOPPED 配置安装已通过限定实库。原始证据的独立离线暂存已单测。故障证据正式安装、历史恢复访问与其他存储/产品待验。",
-        "en": "Optional journals, independent evidence proof, private report and closed receipt staging, and candidate STOPPED installation passed bounded native checks. Raw archive offline staging has local tests. Live evidence import, historical recovery access and other storage/product profiles remain."
+        "zh-CN": "可选日志、候选 Agent 原报告和闭合回执安装已通过限定实库。两入口读取原历史，重启保持原资料和断点。故障证据、原始档案的正式接管与更多存储和产品待验。",
+        "en": "Optional journals and candidate installation of original reports and closed receipts passed bounded native checks. Both entries read original history across restart at the preserved cut. Live failure and raw archive adoption, other storage and products remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1593,7 +1594,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/SharedHandoffEvidence.java",
         "sync-app/src/main/java/io/github/rivomesh/CaptureArchiveReceipt.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/HandoffStaging.java",
-        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java"
+        "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java"
       ]
     },
     {

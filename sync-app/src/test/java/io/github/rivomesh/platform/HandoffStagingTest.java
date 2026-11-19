@@ -102,7 +102,7 @@ class HandoffStagingTest {
     private static void add(ZipOutputStream archive,String name,byte[] content)throws Exception{
         archive.putNextEntry(new ZipEntry(name));archive.write(content);archive.closeEntry();
     }
-    private static String completedReport(Path root)throws Exception{
+    static String completedReport(Path root)throws Exception{
         TableSchema table=new TableSchema();table.database="sales";table.name="events";
         table.id=TableSchema.identity("sales","","events");table.primaryKey.add("id");
         TableSchema.Column id=new TableSchema.Column();id.name="id";id.type=TableSchema.Type.INT64;table.columns.add(id);

@@ -111,7 +111,7 @@ class HandoffCandidateAdmissionTest {
         var activation=new HandoffPreparations.WriterActivation(Codec.sha256(originalAssignment),successorAssignment,
                 "d".repeat(64),"e".repeat(64),true);
         var plan=new HandoffPreparations.Plan(staged.preparation(),scope.task(),1,"PREPARED","admin","actorRevision",
-                evidence,100,900_100,null,null,0,activation,null);
+                evidence,100,900_100,null,null,0,activation,null,null,null);
         HandoffStaging.stage(state,shared,staged,cipher());
         return new Fixture(state,state.resolve("handoff-staging").resolve(staged.key()),
                 SharedHandoffEvidence.stagingSource(shared,scope,archive),staged,plan);
@@ -120,7 +120,7 @@ class HandoffCandidateAdmissionTest {
         var commit=new HandoffPreparations.WriterCommit(plan.actor(),ready.stagingSha256(),configurationSha,
                 "revision_002","configuration_002",10);
         return new HandoffPreparations.Plan(plan.id(),plan.task(),plan.sequence(),"COMMITTED",plan.actor(),plan.actorRevision(),
-                plan.evidence(),plan.created(),plan.expires(),null,null,200,plan.activation(),commit);
+                plan.evidence(),plan.created(),plan.expires(),null,null,200,plan.activation(),commit,null,null);
     }
     private static Path readinessPath(Path state)throws Exception{
         try(var children=Files.list(state.resolve("handoff-admission"))){
