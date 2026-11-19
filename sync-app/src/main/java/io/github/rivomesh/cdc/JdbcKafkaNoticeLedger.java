@@ -79,7 +79,17 @@ final class JdbcKafkaNoticeLedger {
             Entry current=requireAttempt(c,plan,attempt,State.COMMIT_INTENT);
             if(current.offset()!=offset)throw changed();
             requireCurrent(c,job,plan,authority);
-            producer.commit();
+            authority.commit(producer::commit);
+            return null;
+        });
+    }
+
+    void retireAborted(Plan plan,Entry observed,Authority authority)throws Exception{
+        transact((c,job)->{
+            Entry current=load(c,plan);
+            if(!observed.equals(current)||current.state()!=State.COMMIT_INTENT)throw changed();
+            requireCurrent(c,job,plan,authority);
+            save(c,plan,current,new Entry(State.SENDING,current.number(),null));
             return null;
         });
     }

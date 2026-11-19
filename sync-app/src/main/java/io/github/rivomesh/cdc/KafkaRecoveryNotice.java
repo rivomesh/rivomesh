@@ -49,12 +49,19 @@ final class KafkaRecoveryNotice {
     record Receipt(String noticeId,Topic topic,long offset,String payloadSha256) {}
 
     @FunctionalInterface
-    interface Authority { void verify()throws Exception; }
+    interface Authority {
+        void verify()throws Exception;
+        default void commit(KafkaNoticePlanning.CommitAction action)throws Exception{
+            verify();
+            action.run();
+        }
+    }
 
     interface Broker {
         /** Reads a pre-owned topic without a producer. A null offset searches its bounded retained history. */
         Receipt read(Plan plan,Long offset)throws Exception;
         Attempt begin(Plan plan)throws Exception;
+        default boolean confirmedAborted(Plan plan,long offset)throws Exception{return false;}
     }
 
     interface Attempt extends AutoCloseable {
@@ -112,7 +119,11 @@ final class KafkaRecoveryNotice {
         authority.verify();
         // A JDBC row alone cannot establish a native receipt, even after a previous verified read.
         Receipt nativeReceipt=broker.read(plan,entry.offset());
-        if(nativeReceipt==null)return null;
+        if(nativeReceipt==null){
+            if(!entry.verified()&&broker.confirmedAborted(plan,entry.offset()))
+                ledger.retireAborted(plan,entry,authority);
+            return null;
+        }
         requireReceipt(plan,entry.offset(),nativeReceipt);
         return ledger.recordVerified(plan,nativeReceipt,authority);
     }

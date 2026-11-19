@@ -100,7 +100,7 @@ Kafka 3.9.2 实库档案使用 TLS/SCRAM-SHA-512，两个 Controller 通过同�
 
 超过核对上限、Broker 或所属节点不可达、历史配置无法解析时，归属状态为 `INCOMPLETE`。目录或配置在核对期间变化时，需要重新核对。所属节点先按当前 Worker 的凭据引用授权和受保护环境规则检查历史配置。已撤销的引用会阻止该路由发起探测。核对结果描述当前恢复这些配置会连接到哪里。发布仍需历史物理归属、完整的 Kafka 授权和审批证据，所有预览仍会阻止发布。
 
-所属 Controller 可在私有启动配置中设置 `kafkaNoticeWriters`，核对独立通知写入身份。每项包含 `taskId`、`targetId`、`clusterSha256`、`topicId`、`bootstrapServers`、`username` 和 `password`。凭据引用只交给 Controller，连接地址使用可信的 Kafka `host:port` 列表。任务使用其他别名时，独立身份仍连接 Controller 配置的地址。两个身份的用户名和密码均须不同。两个会话都使用 Kafka 目标的 SCRAM 机制，经 `SASL_SSL` 和 Controller JVM 信任的 CA 校验证书与主机名。
+所属 Agent 可在私有启动配置中设置 `kafkaNoticeWriters`，核对独立通知写入身份。每项包含 `taskId`、`targetId`、`clusterSha256`、`topicId`、`bootstrapServers`、`username` 和 `password`。凭据引用只交给 Agent，连接地址使用可信的 Kafka `host:port` 列表。任务使用其他别名时，独立身份仍连接 Controller 配置的地址。两个身份的用户名和密码均须不同。两个会话都使用 Kafka 目标的 SCRAM 机制，经 `SASL_SSL` 和 Agent JVM 信任的 CA 校验证书与主机名。
 
 预览的 `writerEntitlement` 来自 Broker 返回的有效权限。业务身份须能读取两个 Topic 的元数据，且对通知 Topic 只有只读权限。独立身份在通知 Topic 需要 `WRITE` 及其隐含的 `DESCRIBE`，对该业务 Topic 至少要有 `DESCRIBE`，且不能修改它。两个身份均须取得 Broker 的有效操作列表。可用 `python3 tests/kafka-notice-writer-run.py <应用包>` 验证该权限规则。核对结果适用于当前身份和 Topic，发布仍需完整的管理目录、Broker 授权证据与审批后的事务发送流程。
 
@@ -110,19 +110,44 @@ Kafka 3.9.2 实库档案使用 TLS/SCRAM-SHA-512，两个 Controller 通过同�
 
 任务创建时，共享控制库签署初始配置和分配的日志代次。首个 Worker 启动前，Agent 在本地一笔事务内写入任务、订阅、同一起点和空的首次发送记录，然后重新核对 Agent 租约和生效配置，才在控制库标记起点就绪。重启会校验原日志及代次。请同时保全所属 Agent 的数据目录和控制库备份。若已就绪任务的日志缺失或签名校验失败，应停止并检查原始存储。通过重启无法为替换日志重新登记同一起点。
 
-每个 Kafka 订阅的首批业务消息实际发送前，日志提交一条带签名的摘要，绑定生效投影、日志代次、订阅、租约代次和首批消息的准确内容，保存的只是摘要及必要元数据。每次结构、快照或增量发送都会核对起点。首次发送失败或结果不明时保留 `UNKNOWN`，普通业务重放或 ACK 成功也不会把它升级为已证。每个订阅只保留首批意图，后续发送和 Broker 内部重试没有逐笔记录。Kafka Produce 按名称定位 Topic，摘要无法确定实际的物理 Topic UUID。完整历史、独立恢复备份造成的回退识别和正式通知发送仍待实现。发送前置检查继续拒绝发布。
+每个 Kafka 订阅的首批业务消息实际发送前，日志提交一条带签名的摘要，绑定生效投影、日志代次、订阅、租约代次和首批消息的准确内容，保存的只是摘要及必要元数据。每次结构、快照或增量发送都会核对起点。首次发送失败或结果不明时保留 `UNKNOWN`，普通业务重放或 ACK 成功也不会把它升级为已证。每个订阅只保留首批意图，后续发送和 Broker 内部重试没有逐笔记录。没有配置物理 Topic 时，Produce 按 Topic 名称发送，首批意图本身无法确定完整的历史归属。恢复独立备份时应协调控制库与本地日志的时间点。
 
-发送前检查还返回 `KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED`。当前打包的 Kafka 3.9.2 客户端按 Topic 名称发送。发送端须使用审批绑定的物理 UUID，防止写入同名重建的 Topic。Kafka 4.1 的 Produce v13 提供 UUID 寻址。单独升级 Broker 时，打包的发送端仍需相应实现。 [Kafka 3.9.2 请求格式](https://github.com/apache/kafka/blob/3.9.2/clients/src/main/resources/common/message/ProduceRequest.json) · [Kafka 4.1 协议](https://kafka.apache.org/41/design/protocol/)
+### 为新任务绑定物理 Topic
 
-Kafka 4.1.2 独立夹具已用 Produce v13 提交实际事务并读回原记录。重建同名 Topic 后，受保护的发送端拒绝写入。使用退役 UUID 的直接请求也得到 `UNKNOWN_TOPIC_ID`，替换 Topic 保持为空。运行 `python3 tests/kafka-topic-id-run.py --help` 查看隔离的 Temurin 21 夹具参数。正式发送仍需集成审批和完整历史归属。 [确切验收记录](../verification/baseline.json)
+启用审批发送前，先创建各个业务 Topic，再创建托管任务。每个 Kafka 目标都要指定以下配置，并补充常规连接地址、凭据、映射和 Topic 策略。
 
-### 登记条件审批
+```yaml
+kafkaHistoryFromFirstSend: true
+targets:
+  - id: orders-kafka
+    product: KAFKA
+    messaging:
+      autoCreate: false
+      securityProtocol: SASL_SSL
+      saslMechanism: SCRAM-SHA-512
+      topic: orders.events
+      physicalTopic:
+        clusterSha256: "<将 KAFKA: 与原生集群 ID 拼接后计算 SHA-256>"
+        topicId: "<业务 Topic 的原生 UUID>"
+```
 
-预览通过当前管理目录核对后，管理员可选择 **登记条件审批**。审批封存本次核对的精确失败证据、任务配置修订、控制 Topic UUID、物理路由摘要、通知内容摘要和写入身份的权限观察，保留登记时的阻断原因。管理目录缺证或发现冲突时，无法登记。当前物理路由证据无法追认历史写入归属，因此登记始终保留该阻断项。写入身份通过新核对或配置发生变化后，需要重新预览和审批。
+从 Kafka Topic 描述和集群管理接口获取原生标识。托管任务把这些路由与初始配置和日志代次一起签名。Worker 用 Produce v13 按指定 UUID 发送结构、全量和增量数据，并逐目标逐配置保存最近一次已确认 COMMIT 的位点及摘要。管理员审阅故障时，所属 Agent 读回确切的 Kafka 原生记录。更换 UUID 需要新建登记任务并审核迁移。历史上曾按名称发送的配置仍会阻断完整历史审批。 [Kafka 4.1 协议](https://kafka.apache.org/41/design/protocol/)
 
-API 调用使用 `POST /api/tasks/<task>/kafka-notice-approvals`，携带固定的 `X-Request-ID`，请求体包含 `expectedRevision`、`predecessorRequestId` 和预览返回的 `approvalScopeSha256`。登记成功返回 `RECORDED_BLOCKED` 和 `executionAuthorized: false`。相关配置和审批人授权修订保持有效时，可在任一管理入口用原请求重放。已授权的管理员可用 `GET /api/tasks/<task>/recovery-receipts/<request-id>` 查询历史记录，任务所属节点离线时也可查询。
+审批发送需要 Kafka 4.1 或更新版本，并启用事务版本 2。应用包内的通知传输使用隔离的 Kafka 4.1.2 SDK。普通按名称同步使用独立的 Kafka 3.9.2 SDK。故障切换后检查管理接口返回的原生标识。同名重建会产生新 UUID，应先确定恢复方案。
 
-登记审批后，原审批人可选择 **核对发送条件**。API 客户端可从任一管理入口调用 `POST /api/tasks/<task>/kafka-notice-approvals/<request-id>/preflight` 并提交 `expectedRevision` 和 `approvalScopeSha256`。服务以只读方式检查原审批和审计记录，重新核对确切失败、Kafka Topic、配置目录和独立写入权限，再报告前序 ACK 的签名物理收据状态。如果审批范围、写入权限或物理路由变化，需要重新核对。已核实的前序 ACK 只覆盖一笔 COMMIT，历史归属仍是阻断条件。返回状态仍为 `SENDER_BLOCKED`，查询保留原审批、Kafka 消息和日志进度。
+在任务所属 Agent 配置通知写入身份。业务身份需要集群级 `DESCRIBE`，用来核对匹配控制 Topic 的权限。通知身份需要该 Topic 名称的精确 `WRITE` 授权，以及其负责通知所用 `rivomesh-kafka-notice-` 事务标识的权限。Kafka 超级管理员仍由 Broker 运维管控。专用控制 Topic 应隔离其他业务写入方。发送前检查覆盖匹配字面名称、通配符和前缀的授权。 [Kafka 授权](https://kafka.apache.org/41/security/authorization-and-acls/)
+
+### 审批并发送缺口通知
+
+暂停任务，在已完成的 Kafka 回执审阅中预览失败订阅。管理目录通过完整路由核对时，选择 **登记审批**。历史归属不完整时可以 **登记条件审批**。记录封存本次故障、审批人、配置修订、控制 Topic UUID、路由摘要和通知内容。配置、写入权限或物理 Topic 变化后应重新预览和审批。
+
+API 调用使用 `POST /api/tasks/<task>/kafka-notice-approvals`，携带固定的 `X-Request-ID`，请求体包含 `expectedRevision`、`predecessorRequestId` 和 `approvalScopeSha256`。条件齐备返回 `RECORDED`，缺证时返回 `RECORDED_BLOCKED`，两种响应均含 `executionAuthorized: false`。
+
+原审批人选择 **核对发送条件**，也可调用 `POST /api/tasks/<task>/kafka-notice-approvals/<request-id>/preflight` 并提交 `expectedRevision` 和 `approvalScopeSha256`。服务重新核对原审批、审计记录、路由、写入权限和故障前最近一笔 ACK。返回 `SENDER_READY` 后可选择 **发送缺口通知**。受阻时界面显示缺失证据或 Broker 条件。
+
+发送接口使用 `POST /api/tasks/<task>/kafka-notice-approvals/<request-id>/dispatch`，保留上述两个字段，并分配新的固定 `X-Request-ID`。两个管理入口都能通过 `GET /api/tasks/<task>/recovery-receipts/<dispatch-request-id>` 查看进度。HTTP 响应丢失时沿用原发送请求 ID。结果不明时保留原发送记录，所属 Agent 核对 Kafka 原生回执后再确认。通知成功记录物理 Topic、原生位点及内容摘要，发送期间保留原失败事务、两路订阅 ACK、业务 Topic 和消费者位点。
+
+所属 Agent 在 Kafka 提交前中断时，事务日志保留待确认的确切位点。只有 Broker 确认事务已中止且原消息仍可核对时才会补发。提交响应丢失时，Agent 从原位点找回已提交通知及回执。控制 Topic 缺失或更换时，操作保持待确认。
 
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 

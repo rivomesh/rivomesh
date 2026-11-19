@@ -102,7 +102,10 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Native MySQL to two Kafka targets verifies first-send UNKNOWN, subscription isolation, restart and fencing after the old Worker loses admission.
   - [x] Both entries report the separate prerequisite for Produce addressed to the approved physical Topic UUID. Three native brokers verify same-name Topic replacement and stale configuration refusal. Offsets and both ACKs stay unchanged.
   - [x] A standalone Kafka 4.1.2 fixture verifies a v13 transaction and readback. The broker rejects the retired UUID after same-name Topic replacement, which stays empty.
-  - [ ] historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
+  - [x] Bundled UUID-addressed transactions pass three Kafka 4.1.2 brokers. Lost commit responses recover the original receipt, same-name replacement refuses replay, and the source transaction and both ACKs are preserved.
+  - [x] Two entries verify fixed history for newly enrolled physical Kafka routes, approve one RF3 native notice, return the exact receipt, and refuse an invalid scope or replacement Topic.
+  - [x] Three native Kafka brokers verify lost-response readback and interruption before commit. Retry requires Kafka's terminal abort, and both ACKs remain fixed.
+  - [ ] Remaining messaging adapters and broader retention. ClickHouse, Doris and Hive pass exact native predecessor and older-batch refusal.
 ## Source compatibility
 
 - [x] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none

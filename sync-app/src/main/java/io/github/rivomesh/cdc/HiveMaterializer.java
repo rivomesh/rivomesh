@@ -67,6 +67,14 @@ public final class HiveMaterializer implements ConfirmedPublisher {
     @Override public void resumeProgress(String progress){if(rootIdentity!=null||receiptId!=null)throw new IllegalStateException("HIVE_PROGRESS_ALREADY_ACTIVE");if(progress==null)return;String[] parts=progress.split(":",-1);if(parts.length!=4||!parts[0].equals("HIVE_RECEIPT_V1")||!parts[1].matches("[a-f0-9]{32}")||!parts[2].matches("[a-f0-9]{64}")||!parts[3].matches("[a-f0-9]{64}"))throw new IllegalArgumentException("HIVE_PROGRESS_INVALID");rootIdentity=parts[1];receiptId=parts[2];receiptHash=parts[3];}
     @Override public String confirmedProgress(){return receiptId==null?null:"HIVE_RECEIPT_V1:"+rootIdentity+":"+receiptId+":"+receiptHash;}
     @Override public String identity(){return rootIdentity==null?null:"HIVE_RESOURCE_V1:"+rootIdentity;}
+    void verifyPrecedingCommit(String progress,String expectedIdentityHash,String expectedEventId)throws Exception{
+        resumeProgress(progress);
+        if(!Codec.sha256(expectedEventId).equals(receiptId))throw new IllegalStateException("HIVE_RECOVERY_PUBLICATION_UNCERTAIN");
+        root(false);
+        if(!Codec.sha256(identity()).equals(expectedIdentityHash))throw new IllegalStateException("HIVE_RESOURCE_ID_CHANGED");
+        root(false);
+    }
+
     private static boolean control(String channel){return channel.endsWith(".__schema")||channel.endsWith(".__transactions");}
     @Override public void prepare(Set<String> destinations)throws Exception{root(settings.autoCreate);for(String channel:destinations)if(!control(channel)){SchemaRecord record=schema(channel,false);if(record!=null)verify(record);}}
     @Override public void require(Set<String> destinations)throws Exception{root(false);for(String channel:destinations)if(!control(channel))verify(schema(channel,true));}

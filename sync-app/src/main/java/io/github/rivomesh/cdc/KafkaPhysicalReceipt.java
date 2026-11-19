@@ -44,8 +44,8 @@ public final class KafkaPhysicalReceipt {
         }
     }
 
-    record Topic(String clusterSha256,String topicId) {
-        Topic {
+    public record Topic(String clusterSha256,String topicId) {
+        public Topic {
             if(!FailureEvidence.hash(clusterSha256)||topicId==null||!topicId.matches("[A-Za-z0-9_-]{22}")
                     ||Uuid.ZERO_UUID.equals(Uuid.fromString(topicId)))throw invalid();
         }

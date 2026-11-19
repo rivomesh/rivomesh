@@ -3,6 +3,7 @@
   <parent><groupId>io.github.rivomesh</groupId><artifactId>rivomesh</artifactId><version>0.1.0-SNAPSHOT</version></parent>
   <artifactId>rivomesh-app</artifactId>
   <dependencies>
+    <dependency><groupId>io.github.rivomesh</groupId><artifactId>rivomesh-kafka-notice-transport</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.rivomesh</groupId><artifactId>rivomesh-gbase8c-driver</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.rivomesh</groupId><artifactId>rivomesh-hive-transport</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.rivomesh</groupId><artifactId>rivomesh-classic-transport</artifactId><version>${project.version}</version></dependency>

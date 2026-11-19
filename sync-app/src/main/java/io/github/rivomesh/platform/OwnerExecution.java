@@ -1,5 +1,6 @@
 package io.github.rivomesh.platform;
 
+import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -41,6 +42,7 @@ final class OwnerExecution {
         while(true){
             List<DurableCommands.Stored> page=commands.recoverable(agents,lease,directory,cursor);if(page.isEmpty())return;
             for(DurableCommands.Stored command:page){
+                if(command.request.kind==TaskRequest.Kind.KAFKA_NOTICE_DISPATCH)continue;
                 TaskService.OwnerReceipt receipt=command.localRequest==null?null:tasks.ownerReceipt(command.localRequest,command.actor,command.actorRole);
                 if(receipt!=null){tasks.pinOwnerRequest(command.id);step(command.id);}
                 else if("ACCEPTED".equals(command.phase)||"UNKNOWN".equals(command.phase))throw new TaskService.Conflict("OWNER_COMMAND_EVIDENCE_REQUIRED");
@@ -49,6 +51,10 @@ final class OwnerExecution {
     }
     synchronized void step(String id)throws Exception{
         ControlStore.Lease lease=leases.get();DurableCommands.Dispatch dispatch=commands.claim(id,agents,lease,directory);if(dispatch==null){releaseStartupStop(id);return;}
+        if(dispatch.command.request.kind==TaskRequest.Kind.KAFKA_NOTICE_DISPATCH){
+            deliverNotice(dispatch,lease);
+            return;
+        }
         tasks.pinOwnerRequest(id);
         try{
             TaskRequest request=dispatch.command.localRequest;
@@ -86,6 +92,32 @@ final class OwnerExecution {
         catch(NoSuchElementException absent){finish(dispatch,"DISPATCHED".equals(dispatch.command.phase)?"REJECTED":"UNKNOWN","OWNER_TASK_REQUIRED",lease);}
         catch(Exception uncertain){finish(dispatch,"UNKNOWN","OWNER_EXECUTION_UNCONFIRMED",lease);}
     }
+    private void deliverNotice(DurableCommands.Dispatch dispatch,ControlStore.Lease lease)throws Exception{
+        KafkaNoticePlanning.DispatchReceipt receipt;
+        try{
+            var retained=commands.verifyKafkaNoticeDispatch(dispatch,agents,lease,directory,null);
+            var fence=new KafkaNoticePlanning.DispatchFence(){
+                @Override public void verify()throws Exception{
+                    commands.verifyKafkaNoticeDispatch(dispatch,agents,lease,directory,null);
+                }
+                @Override public void commit(KafkaNoticePlanning.CommitAction action)throws Exception{
+                    commands.verifyKafkaNoticeDispatch(dispatch,agents,lease,directory,action);
+                }
+            };
+            receipt=tasks.dispatchKafkaNotice(retained,dispatch.actor,fence);
+        }catch(ControlStore.Unavailable|ControlStore.Fenced|ControlStore.Expired unavailable){
+            throw unavailable;
+        }catch(Exception unconfirmed){
+            String fallback="KAFKA_NOTICE_NATIVE_DELIVERY_UNCONFIRMED";
+            String code=safe(unconfirmed.getMessage(),fallback);
+            if(!code.startsWith("KAFKA_NOTICE_")&&!code.equals("AUTHORIZATION_CHANGED"))code=fallback;
+            commands.completeKafkaNoticeDispatch(dispatch,"UNKNOWN",code,null,agents,lease,directory);
+            return;
+        }
+        commands.completeKafkaNoticeDispatch(dispatch,receipt==null?"UNKNOWN":"SUCCEEDED",
+                receipt==null?"KAFKA_NOTICE_NATIVE_RECEIPT_PENDING":KafkaNoticeApproval.DISPATCHED,receipt,agents,lease,directory);
+    }
+
     private static String safe(String value,String fallback){return value!=null&&value.matches("[A-Z0-9_]{1,120}")?value:fallback;}
     private void finish(DurableCommands.Dispatch dispatch,String phase,String code,ControlStore.Lease lease)throws Exception{
         commands.complete(dispatch,phase,safe(code,"OWNER_OPERATION_RESULT"),agents,lease,directory);

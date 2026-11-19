@@ -5,6 +5,7 @@ import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
 import io.github.rivomesh.cdc.KafkaPhysicalReceiptReview;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
+import io.github.rivomesh.cdc.MaterializedRecoveryReview;
 import java.sql.*;
 import java.util.*;
 import java.util.function.BooleanSupplier;
@@ -21,6 +22,9 @@ public interface TaskBackend {
     default void resume(TaskDefinition task,long generation)throws Exception{if(task.pipeline==null)resume(task.legacy,generation);else PipelineBackend.resume(task.pipeline,generation);}
     default Map<String,Object> check(TaskDefinition task)throws Exception{return task.pipeline==null?check(task.legacy):PipelineEngine.check(task.pipeline);}
     default void subscription(TaskDefinition task,String id,String action,long generation)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SUBSCRIPTION_ACTION_INVALID");PipelineBackend.subscription(task.pipeline,id,action,generation);}
+    default Map<String,Object> reviewMaterializedReceipt(TaskDefinition task,String subscription,long errorGeneration)throws Exception{
+        return MaterializedRecoveryReview.inspect(task.pipeline,subscription,errorGeneration);
+    }
     default KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String subscription,long generation)throws Exception{
         return KafkaRecoveryReview.inspect(task.pipeline,subscription,generation);
     }

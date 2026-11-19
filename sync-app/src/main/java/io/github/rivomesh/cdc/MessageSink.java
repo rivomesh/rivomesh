@@ -18,6 +18,7 @@ public final class MessageSink implements SinkAdapter {
     private String transportProgress;
     private long activeEpoch;
     private final KafkaPhysicalReceipt.Grant ownershipGrant;
+    private final boolean fixedKafkaRoute;
     private boolean physicalRecorded;
     private long lastPhysicalAttempt;
     public MessageSink(String id,Map<String,String> mappings,PublicationStore store,Factory factory,int maximumMessageBytes)throws Exception{
@@ -30,6 +31,8 @@ public final class MessageSink implements SinkAdapter {
             throw new IllegalArgumentException("KAFKA_PHYSICAL_STORE_REQUIRED");
         this.id=id;this.mappings=new TreeMap<>(mappings);this.store=store;this.factory=factory;this.maximumMessageBytes=maximumMessageBytes;generation=store.generation();
         this.ownershipGrant=ownershipGrant;
+        this.fixedKafkaRoute=store instanceof JdbcPublicationStore jdbc&&jdbc.fixedKafkaRoute();
+        if(fixedKafkaRoute&&ownershipGrant==null)throw new IllegalArgumentException("KAFKA_PHYSICAL_ROUTE_ORIGIN_REQUIRED");
     }
     @Override public String id(){return id;}
     @Override public boolean includes(TableSchema table){return mappings.containsKey(table.database);}
@@ -104,10 +107,15 @@ public final class MessageSink implements SinkAdapter {
         }
     }
     private KafkaPhysicalPublisher beginPhysicalObservation(Set<String> namespaces)throws Exception{
-        if(ownershipGrant==null||physicalRecorded||namespaces.size()>KafkaPhysicalReceipt.MAX_WIRE)return null;
+        if(ownershipGrant==null||namespaces.size()>KafkaPhysicalReceipt.MAX_WIRE)return null;
         long now=System.nanoTime();
-        if(lastPhysicalAttempt!=0&&now-lastPhysicalAttempt<java.util.concurrent.TimeUnit.SECONDS.toNanos(30))return null;
-        if(((JdbcPublicationStore)store).kafkaPhysicalReceipt(generation,ownershipGrant)!=null){physicalRecorded=true;return null;}
+        if(!fixedKafkaRoute){
+            if(physicalRecorded||lastPhysicalAttempt!=0&&now-lastPhysicalAttempt<java.util.concurrent.TimeUnit.SECONDS.toNanos(30))return null;
+            if(((JdbcPublicationStore)store).kafkaPhysicalReceipt(generation,ownershipGrant)!=null){
+                physicalRecorded=true;
+                return null;
+            }
+        }
         if(!(publisher() instanceof KafkaPhysicalPublisher kafka))throw new IllegalStateException("KAFKA_PHYSICAL_PUBLISHER_REQUIRED");
         lastPhysicalAttempt=now;
         kafka.beginPhysicalObservation(namespaces);

@@ -19,7 +19,7 @@
 
 ## 按目标产品选择恢复方式
 
-管理界面的 **连接器能力** 显示各目标的恢复方式。`GET /api/capabilities` 在目标条目中返回 `transactionSkip`、`transactionCompensation` 和 `rebuildMode`。
+管理界面的 **连接器能力** 显示各目标的恢复方式。`GET /api/capabilities` 在目标条目中返回 `transactionSkip`、`transactionCompensation`、`failureReceiptReview`、`gapNotification` 和 `rebuildMode`。
 
 | 目标 | 事务跳过与补偿 | 重建 |
 |---|---|---|
@@ -28,6 +28,14 @@
 | 规划中的目标 | 不可用 | 不可用 |
 
 `MANUAL_NEW_BASELINE` 表示由操作人员规划的新基线工作。完成新基线核验前，保留原日志、目标回执和证据。恢复操作使用现有目标身份及断点。
+
+### 核对分析目标的前序回执
+
+暂停任务，在失败的 ClickHouse、Doris 或 Hive 订阅上选择 **核对目标回执**。核对需要完整的失败增量事务及已确认的前序记录，检查原目标资源及确切的原生 COMMIT 回执。若位置指向未完成的后续批次或旧快照回执，会明确拒绝。核对保留原失败事务和各订阅位点。
+
+调用 `POST /api/tasks/<task>/materialization-receipt`，请求体传入 `expectedRevision`、`subscriptionId` 和 `errorGeneration`。授权管理员可以从任一管理入口核对。命令行对应 `java -jar rivomesh.jar review-materialized-recovery config.yml <目标> <错误代次>`。
+
+未修复缺口、待办跳过审阅和滞后目标都可能使日志在重启后继续保留。回收按各目标最小的已确认序列推进，保留未修复缺口的原始和规范化事务。增量采集达到配额时报告 `JOURNAL_BACKPRESSURE`，证据仍会保留。Kafka 通知记录故障，原同步位点保持不变。[Kafka 审批与恢复](messaging-v3.md#审批并发送缺口通知)
 
 ## 源任务故障阶段
 

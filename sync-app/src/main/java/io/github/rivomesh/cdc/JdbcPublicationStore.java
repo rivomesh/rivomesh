@@ -90,6 +90,9 @@ public final class JdbcPublicationStore implements PublicationStore {
             if(evidence!=null)JdbcKafkaPhysicalHistory.stage(journal,c,subscription,(String)job.get("generation"),epoch,sequence,hash,evidence);
             execute(c,"UPDATE "+t("publication")+" SET stream_seq=?,transaction_id=?,transaction_hash=? WHERE pipeline_id=? AND subscription_id=?",sequence,transactionId,hash,pipeline,subscription);c.commit();}
     }
+    boolean fixedKafkaRoute(){
+        return journal.settings.kafkaFixedTopics.containsKey(subscription);
+    }
     KafkaPhysicalReceipt.Signed kafkaPhysicalReceipt(String generation,KafkaPhysicalReceipt.Grant grant)throws Exception{
         try(Connection c=journal.connect()){
             return JdbcKafkaPhysicalHistory.verified(journal,c,subscription,generation,grant);

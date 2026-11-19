@@ -599,13 +599,30 @@ function renderDetail(task){const root=$('task-detail');root.replaceChildren();i
 async function command(task,action,subscription){try{await api('/tasks/'+encodeURIComponent(task.id)+'/actions',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},body:JSON.stringify({action,expectedRevision:task.revision,errorCount:subscription?subscription.errorGeneration:(task.status.error_count??-1),...(subscription?{subscriptionId:subscription.id}:{})})});notify(t('accepted'));await refresh();}catch(e){notify(e.message);await refresh();}}
 Object.assign(messages.zh,{adapterRecoverySkip:'跳过事务',adapterRecoveryCompensation:'前镜像补偿',adapterRecoveryRebuild:'重建',adapterRecovery_REVIEWED_LOCAL_TRANSACTION:'需审阅的本地事务',adapterRecovery_REVIEWED_BEFORE_IMAGES:'使用已审阅的前镜像',adapterRecovery_MANUAL_NEW_BASELINE:'人工规划新基线',adapterRecovery_UNAVAILABLE:'不可用'});
 Object.assign(messages.en,{adapterRecoverySkip:'Skip transaction',adapterRecoveryCompensation:'Compensation',adapterRecoveryRebuild:'Rebuild',adapterRecovery_REVIEWED_LOCAL_TRANSACTION:'Reviewed local transaction',adapterRecovery_REVIEWED_BEFORE_IMAGES:'Reviewed before-images',adapterRecovery_MANUAL_NEW_BASELINE:'Plan a new baseline manually',adapterRecovery_UNAVAILABLE:'Unavailable'});
+Object.assign(messages.zh,{
+ adapterRecoveryReceipt:'故障回执',adapterRecoveryNotice:'缺口通知',
+ adapterRecovery_NATIVE_KAFKA_PRECEDING_COMMIT:'Kafka 原生前序 COMMIT',
+ adapterRecovery_NATIVE_MATERIALIZED_PRECEDING_COMMIT:'分析目标原生前序 COMMIT',
+ adapterRecovery_MANAGED_PHYSICAL_KAFKA:'托管 Kafka 物理 Topic 审批发送',
+ reviewMaterializedReceipt:'核对目标回执',materializedReceiptVerified:'已核对故障前最近一笔已确认回执。',
+ materializedReceiptSequence:'已确认序列',materializedReceiptDigest:'原生回执摘要'
+});
+Object.assign(messages.en,{
+ adapterRecoveryReceipt:'Failure receipt',adapterRecoveryNotice:'Gap notice',
+ adapterRecovery_NATIVE_KAFKA_PRECEDING_COMMIT:'Native Kafka preceding COMMIT',
+ adapterRecovery_NATIVE_MATERIALIZED_PRECEDING_COMMIT:'Native analytical preceding COMMIT',
+ adapterRecovery_MANAGED_PHYSICAL_KAFKA:'Approved dispatch to a managed physical Kafka Topic',
+ reviewMaterializedReceipt:'Check destination receipt',materializedReceiptVerified:'Verified the exact receipt preceding the failure.',
+ materializedReceiptSequence:'Acknowledged sequence',materializedReceiptDigest:'Native receipt digest'
+});
 function renderAdapters(){
  const root=$('adapter-list');root.replaceChildren();
  for(const adapter of capabilities){
   const box=text('article','',adapter.status==='PLANNED'?'planned':'');
   box.append(text('strong',adapter.id),badge(adapter.status),text('p',t(adapter.role)+(adapter.note?' · '+adapter.note:'')));
   if(adapter.role==='SINK'){
-   const recovery=[['transactionSkip','adapterRecoverySkip'],['transactionCompensation','adapterRecoveryCompensation'],['rebuildMode','adapterRecoveryRebuild']]
+   const recovery=[['transactionSkip','adapterRecoverySkip'],['transactionCompensation','adapterRecoveryCompensation'],['rebuildMode','adapterRecoveryRebuild'],
+    ['failureReceiptReview','adapterRecoveryReceipt'],['gapNotification','adapterRecoveryNotice']]
     .filter(([field])=>adapter[field]!=null)
     .map(([field,label])=>t(label)+' · '+t('adapterRecovery_'+adapter[field]));
    if(recovery.length)box.append(text('p',recovery.join(' / '),'subtle'));
@@ -845,6 +862,34 @@ function renderDeliveryTiming(card,task,sub){
  }
  const label=text('p',caption+' · '+detail,'subtle');label.dataset.deliveryTiming='';card.append(label);
 }
+function appendMaterializedReceipt(card,task,sub,destination,pending){
+ if(!['CLICKHOUSE','DORIS','HIVE'].includes(destination?.product)||task.formatVersion!==3||task.statusAvailable===false
+  ||task.desired!=='PAUSED'||task.status?.run_state!=='PAUSED'||sub.failurePhase!=='TARGET_APPLY'
+  ||!session?.recoveryReview||!can('TASK_CONFIG')||!Number.isSafeInteger(sub.errorGeneration)||sub.errorGeneration<1)return;
+ const check=text('button',t('reviewMaterializedReceipt'),'quiet'),result=text('div');
+ check.dataset.materializedReceiptReview=sub.id;check.disabled=pending;result.setAttribute('aria-live','polite');
+ const sameScope=()=>{
+  const current=latest.tasks.find(item=>item.id===task.id);
+  return card.isConnected&&current?.revision===task.revision&&can('TASK_CONFIG');
+ };
+ check.onclick=async()=>{
+  if(check.disabled||!sameScope())return;
+  check.disabled=true;result.replaceChildren();
+  try{
+   const receipt=await api('/tasks/'+encodeURIComponent(task.id)+'/materialization-receipt',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({expectedRevision:task.revision,subscriptionId:sub.id,errorGeneration:sub.errorGeneration})});
+   if(!sameScope())return;
+   if(receipt?.status!=='PRECEDING_RECEIPT_VERIFIED'||receipt.target!==sub.id||receipt.product!==destination.product
+    ||receipt.errorGeneration!==String(sub.errorGeneration)||!/^[0-9a-f]{64}$/.test(receipt.nativeReceiptSha256||'')
+    ||!/^[1-9][0-9]{0,18}$/.test(receipt.acknowledgedSequence||''))throw new Error(t('receiptMismatch'));
+   result.append(text('p',t('materializedReceiptVerified')),text('p',t('materializedReceiptSequence')+' · '+receipt.acknowledgedSequence),
+    text('p',t('materializedReceiptDigest')+' · '+receipt.nativeReceiptSha256));
+  }catch(error){if(sameScope())result.append(text('p',error.message,'error'));}
+  finally{check.disabled=false;}
+ };
+ card.append(check,result);
+}
 function renderSubscriptions(root,task,pending){
  const subscriptions=task.status.subscriptions||[];
  if(!subscriptions.length)return;
@@ -892,6 +937,7 @@ function renderSubscriptions(root,task,pending){
     review.onclick=()=>{review.disabled=true;command(task,'REVIEW_KAFKA_RECEIPTS',sub);};
     card.append(review);
    }
+   appendMaterializedReceipt(card,task,sub,destination,pending);
    const button=text('button',t('resume_target'));button.disabled=!can('TASK_CONTROL')||pending;
    button.onclick=()=>command(task,'RESUME_TARGET',sub);card.append(button);
   }

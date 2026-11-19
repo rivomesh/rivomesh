@@ -17,6 +17,7 @@ public final class JdbcJournal implements NormalizedJournal {
         public boolean deliveryTiming;
         public boolean oracleDdlEvidence;
         public Set<String> kafkaPublicationTargets=Set.of();
+        public Map<String,KafkaPhysicalReceipt.Topic> kafkaFixedTopics=Map.of();
         @com.fasterxml.jackson.annotation.JsonIgnore
         public KafkaPhysicalReceipt.Grant kafkaPhysicalGrant;
         public long maxPendingBytes=1024L*1024*1024;

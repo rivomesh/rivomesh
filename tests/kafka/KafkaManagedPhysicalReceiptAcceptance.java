@@ -63,7 +63,8 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
     public static void main(String[] args)throws Exception{
         String secret=System.getenv("RIVOMESH_KAFKA_FIXTURE_SECRET");
         if(secret==null||!secret.matches("[a-f0-9]{48}"))throw new IllegalArgumentException("Fixture credentials are required");
-        boolean notice=args.length==3&&"--notice-preflight".equals(args[2]);
+        boolean dispatch=args.length==3&&"--notice-dispatch".equals(args[2]);
+        boolean notice=dispatch||args.length==3&&"--notice-preflight".equals(args[2]);
         Path home=Path.of(args[1]);
         if("--control-preflight".equals(args[0])){
             String endpoint="127.0.0.1:1";
@@ -92,6 +93,15 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                 var control=await(()->describe(broker,CONTROL),d->d.partitions().getFirst().isr().size()==3);
                 String cluster=broker.describeCluster().clusterId().get(10,TimeUnit.SECONDS);
                 profile=configureNotice(destination,peer,bootstrap,secret,Codec.sha256("KAFKA:"+cluster),control.topicId());
+                if(dispatch){
+                    acls.add(acl(ResourceType.CLUSTER,Resource.CLUSTER_NAME,DESCRIBE));
+                    for(var target:List.of(destination,peer)){
+                        var topic=describe(broker,target.messaging.topic);
+                        target.messaging.physicalTopic=new KafkaPhysicalReceipt.Topic(Codec.sha256("KAFKA:"+cluster),topic.topicId().toString());
+                    }
+                    acls.add(new AclBinding(new ResourcePattern(ResourceType.TRANSACTIONAL_ID,"rivomesh-kafka-notice-",PatternType.PREFIXED),
+                            new AccessControlEntry("User:fixture-writer","*",WRITE,AclPermissionType.ALLOW)));
+                }
                 acls.addAll(List.of(acl(ResourceType.TOPIC,PEER_TOPIC,READ),acl(ResourceType.TOPIC,PEER_TOPIC,WRITE),
                         acl(ResourceType.TOPIC,PEER_TOPIC,DESCRIBE_CONFIGS),acl(ResourceType.TOPIC,CONTROL,READ),
                         acl(ResourceType.TOPIC,CONTROL,DESCRIBE_CONFIGS),writerAcl(CONTROL,WRITE),writerAcl(TOPIC,DESCRIBE)));
@@ -158,6 +168,7 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
             }
 
             PipelineConfig workerConfig=PipelineConfig.load(launched.configuration());
+            boolean fixed=destination.messaging.physicalTopic!=null;
             var settings=workerConfig.existingJournalSettings();settings.kafkaPhysicalGrant=launched.grant();
             try(JdbcJournal journal=new JdbcJournal(settings)){
                 var physical=seedFailure(journal,workerConfig,launched.grant());
@@ -173,7 +184,7 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                 require(checked.equals(second.lookup(lookup,200))&&checked.equals(first.lookup(lookup,200)),
                         "Replaying the read through either Controller changed its receipt");
                 require("VERIFIED".equals(checked.path("status").asText())
-                        &&"1".equals(checked.path("acknowledgedSequence").asText())
+                        &&Long.toString(physical.receipt().sequence()).equals(checked.path("acknowledgedSequence").asText())
                         &&launched.grant().scope().configurationVersion().equals(checked.path("configurationVersion").asText())
                         &&Codec.sha256(Codec.encode(physical)).equals(checked.path("receiptSha256").asText()),
                         "Controller did not verify the exact retained Agent receipt");
@@ -181,9 +192,10 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                         &&!checked.has("signature")&&!checked.has("nativeReceipts")&&!checked.has("executionAuthorized")
                         &&!checked.toString().contains(secret),"Receipt response is not redacted and read-only");
                 require(before==offset(broker)&&broker.listConsumerGroups().all().get(10,TimeUnit.SECONDS).isEmpty()
-                        &&journal.subscriptions().getFirst().acknowledged==1,"Query advanced a Kafka or journal checkpoint");
+                        &&journal.subscriptions().getFirst().acknowledged==physical.receipt().sequence(),"Query advanced a Kafka or journal checkpoint");
                 if(notice!=null){
-                    verifyNoticePreflight(first,second,new Management(two,operator),journal,broker,physical,previous,revision,secret);
+                    if(fixed)verifyDispatch(first,second,new Management(two,operator),journal,broker,physical,revision);
+                    else verifyNoticePreflight(first,second,new Management(two,operator),journal,broker,physical,previous,revision,secret);
                     return;
                 }
 
@@ -216,7 +228,10 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
 
     private static KafkaPhysicalReceipt.Signed seedFailure(JdbcJournal journal,PipelineConfig config,
                                                            KafkaPhysicalReceipt.Grant grant)throws Exception{
-        journal.initialize(config.fingerprint(),GENERATION,config.subscribers());
+        boolean fixed=config.targets.getFirst().messaging.physicalTopic!=null;
+        String generation=fixed?grant.historyOrigin().generation():GENERATION;
+        int acknowledged=fixed?2:1;
+        journal.initialize(config.fingerprint(),generation,config.subscribers());
         var lease=journal.claim("synthetic-source",120000);
         var store=new JdbcPublicationStore(journal,SUBSCRIPTION,lease);
         var target=config.targets.getFirst();
@@ -232,19 +247,19 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                 healthy.activate(lease.epoch);
                 publishSnapshot(healthy,lease.epoch,snapshot);
             }
-            for(int sequence=1;sequence<=2;sequence++){
-                var input=transaction(sequence);
+            for(int sequence=1;sequence<=acknowledged+1;sequence++){
+                var input=transaction(sequence,generation,sequence>acknowledged);
                 journal.append(lease,input);
                 var normalized=journal.normalize(lease,journal.read(SUBSCRIPTION,1).getFirst(),
                         Map.of(TABLE.id,TABLE),Map.of(TABLE.id,position(0)),(position,id)->false);
-                if(sequence==1){
+                if(sequence<=acknowledged){
                     sink.apply(lease.epoch,sequence,normalized);
                     journal.acknowledge(lease,SUBSCRIPTION,sequence);
                 }else{
                     try{sink.apply(lease.epoch,sequence,normalized);throw new AssertionError("Expected oversize publication refusal");}
                     catch(IllegalStateException refused){require("MESSAGE_TOO_LARGE".equals(refused.getMessage()),"Wrong native publication refusal");}
                     var diagnostic=new SubscriberFailure();diagnostic.phase=SubscriberFailure.Phase.TARGET_APPLY;
-                    diagnostic.sequence=2;diagnostic.transactionId=input.id;diagnostic.projectedHash=Codec.sha256(Codec.encode(normalized));
+                    diagnostic.sequence=sequence;diagnostic.transactionId=input.id;diagnostic.projectedHash=Codec.sha256(Codec.encode(normalized));
                     journal.pauseFailure(lease,SUBSCRIPTION,"MESSAGE_TOO_LARGE",diagnostic);
                 }
                 if(healthy!=null){
@@ -252,8 +267,8 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                     journal.acknowledge(lease,PEER,sequence);
                 }
             }
-            var proof=store.kafkaPhysicalReceipt(GENERATION,grant);
-            require(proof!=null&&grant.verifies(proof)&&proof.receipt().sequence()==1,"The publication did not retain a signed exact receipt");
+            var proof=store.kafkaPhysicalReceipt(generation,grant);
+            require(proof!=null&&grant.verifies(proof)&&proof.receipt().sequence()==acknowledged,"The publication did not retain a signed exact receipt");
             return proof;
         }finally{journal.release(lease);}
     }
@@ -330,6 +345,67 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
         System.out.println("PASS updated configuration is rejected; control and business offsets, groups and both journal ACKs are unchanged.");
     }
 
+    private static void verifyDispatch(Management first,Management second,Management other,JdbcJournal journal,
+                                       Admin broker,KafkaPhysicalReceipt.Signed physical,String revision)throws Exception{
+        require("3.9.2".equals(org.apache.kafka.common.utils.AppInfoParser.getVersion())
+                &&"4.1.2".equals(io.github.rivomesh.kafka.notice.internal.common.utils.AppInfoParser.getVersion()),
+                "Packed Kafka clients do not resolve separate build identities");
+        var original=describe(broker,CONTROL).topicId();
+        var baseline=offsets(broker);
+        var before=journal.inspectFailure(SUBSCRIPTION,1,200_000);
+        var planInput=Codec.JSON.createObjectNode().put("expectedRevision",revision).put("predecessorRequestId",REVIEW);
+        var preview=first.exchange("POST",PLAN,null,planInput,200);
+        require(preview.path("catalogCoverage").path("fixedHistorySha256").asText().matches("[0-9a-f]{64}")
+                &&preview.path("writerEntitlement").path("physicalTransactionsReady").asBoolean(),
+                "Missing independently signed route history or native transaction feature");
+        var plan=preview.path("plan");
+        String hash=preview.path("approvalScopeSha256").asText();
+        var approval=first.exchange("POST",APPROVALS,APPROVAL_ID,planInput.deepCopy().put("approvalScopeSha256",hash),200);
+        require("RECORDED".equals(approval.path("status").asText())&&approval.equals(second.read(RECEIPTS+APPROVAL_ID)),
+                "Approval must be recorded on both Controllers");
+        var input=Codec.JSON.createObjectNode().put("expectedRevision",revision).put("approvalScopeSha256",hash);
+        var ready=first.exchange("POST",PREFLIGHT,null,input,200);
+        require(ready.equals(second.exchange("POST",PREFLIGHT,null,input,200))&&"SENDER_READY".equals(ready.path("status").asText())
+                &&ready.path("blockers").isEmpty()&&"VERIFIED".equals(ready.path("precedingPhysicalReceipt").path("status").asText())
+                &&physical.receipt().sequence()==2&&baseline.equals(offsets(broker)),
+                "Approval preflight must preserve all offsets and use the last exact business ACK");
+        String dispatch=APPROVALS+"/"+APPROVAL_ID+"/dispatch",send="uuid_native_dispatch";
+        other.exchange("POST",dispatch,send,input,403);
+        first.exchange("POST",dispatch,send,input.deepCopy().put("approvalScopeSha256","0".repeat(64)),409);
+        require(baseline.equals(offsets(broker)),"Rejected authorization caused a native write");
+        System.out.println("PASS both Controllers verify broker capabilities, complete managed route history, and the exact latest ACK.");
+
+        first.exchange("POST",dispatch,send,input,200);
+        var receipt=await(()->second.read(RECEIPTS+send),row->"SUCCEEDED".equals(row.path("status").asText()));
+        require(receipt.equals(first.read(RECEIPTS+send))&&receipt.equals(second.exchange("POST",dispatch,send,input,200)),
+                "Cross-entry dispatch replay changed the retained receipt");
+        var nativeReceipt=receipt.path("nativeReceipt");
+        require("KAFKA_NOTICE_NATIVE_RECEIPT_VERIFIED".equals(receipt.path("code").asText())
+                &&plan.path("noticeId").equals(nativeReceipt.path("noticeId"))
+                &&plan.path("payloadSha256").equals(nativeReceipt.path("payloadSha256"))
+                &&original.toString().equals(nativeReceipt.path("topicId").asText())&&nativeReceipt.path("nativeOffset").asLong(-1)==0,
+                "Native receipt has the wrong approved identity");
+        var sent=offsets(broker);
+        require(sent.get(CONTROL_PARTITION)==2L&&sent.get(PARTITION).equals(baseline.get(PARTITION))
+                &&sent.get(PEER_PARTITION).equals(baseline.get(PEER_PARTITION)),
+                "The committed notice and its marker must be the only writes");
+        var post=journal.inspectFailure(SUBSCRIPTION,1,200_000);
+        require(before.rawHash.equals(post.rawHash)&&before.normalizedHash.equals(post.normalizedHash)
+                &&journal.subscriptions().stream().allMatch(row->row.acknowledged==(SUBSCRIPTION.equals(row.id)?2:3))
+                &&broker.listConsumerGroups().all().get(10,TimeUnit.SECONDS).isEmpty(),
+                "Notice changed a source transaction, journal ACK, or group");
+        System.out.println("PASS one approved RF3 notice commits; both Controllers replay the same exact receipt without advancing either business destination.");
+
+        broker.deleteTopics(List.of(CONTROL)).all().get(15,TimeUnit.SECONDS);
+        await(()->broker.listTopics().names().get(5,TimeUnit.SECONDS),names->!names.contains(CONTROL));
+        createControl(broker);
+        await(()->describe(broker,CONTROL),topic->!original.equals(topic.topicId()));
+        first.exchange("POST",dispatch,"uuid_native_replaced",input,409);
+        require(offsets(broker).get(CONTROL_PARTITION)==0L&&receipt.equals(second.read(RECEIPTS+send)),
+                "Replacement Topic had a write or changed the held receipt");
+        System.out.println("PASS a same-name control Topic replacement refuses later dispatch and preserves the original native receipt.");
+    }
+
     private static void assertNativeProgress(JdbcJournal journal,Admin broker,Map<TopicPartition,Long> baseline)throws Exception{
         var acknowledgments=new LinkedHashMap<String,Long>();
         for(var sub:journal.subscriptions())acknowledgments.put(sub.id,sub.acknowledged);
@@ -388,6 +464,7 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
         void create(List<PipelineConfig.Target> targets)throws Exception{
             var config=new PipelineConfig();config.pipelineId=TASK;config.source.username="fixture-source";config.databases=List.of("sales");
             config.targets.addAll(targets);
+            config.kafkaHistoryFromFirstSend=targets.getFirst().messaging.physicalTopic!=null;
             ObjectNode document=Codec.JSON.valueToTree(config);((ObjectNode)document.path("journal")).remove("path");
             ObjectNode body=Codec.JSON.createObjectNode().put("ownerNodeId",OWNER);body.set("config",document);
             exchange("POST","/api/tasks","create_physical_fixture",body,202);
@@ -476,10 +553,10 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
         var payload=new TableSchema.Column();payload.name="payload";payload.type=TableSchema.Type.STRING;table.columns.add(payload);
         table.primaryKey.add("id");return table;
     }
-    private static SourceTransaction transaction(int sequence){
-        var tx=new SourceTransaction();tx.id="fixture-tx-"+sequence;tx.streamGeneration=GENERATION;tx.position=position(sequence);
+    private static SourceTransaction transaction(int sequence,String generation,boolean oversized){
+        var tx=new SourceTransaction();tx.id="fixture-tx-"+sequence;tx.streamGeneration=generation;tx.position=position(sequence);
         var row=new Change();row.eventId=tx.id+"-insert";row.tableId=TABLE.id;row.operation=Change.Operation.INSERT;
-        row.after=List.of(Cell.value(Integer.toString(sequence)),Cell.value(sequence==1?"retained-fixture":"x".repeat(66536)));
+        row.after=List.of(Cell.value(Integer.toString(sequence)),Cell.value(oversized?"x".repeat(66536):"retained-fixture"));
         tx.changes.add(row);return tx;
     }
     private static SourcePosition position(int sequence){

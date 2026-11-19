@@ -16,7 +16,9 @@ final class JdbcKafkaHistoryOrigin {
 
     private record WireMessage(String id,String channel,String key,Map<String,String> headers,String bodySha256){}
     private record FirstIntent(KafkaPhysicalReceipt.Scope scope,String target,String generation,long epoch,
-                               Set<String> kinds,int count,String wireSha256,String result){}
+                               Set<String> kinds,int count,String wireSha256,String result,
+                               @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                               KafkaPhysicalReceipt.Topic physicalTopic){}
 
     private JdbcKafkaHistoryOrigin(){}
 
@@ -81,7 +83,7 @@ final class JdbcKafkaHistoryOrigin {
             wire.add(new WireMessage(message.id,message.destination,message.key,message.headers,Codec.sha256(message.body)));
         }
         String intent=Codec.encode(new FirstIntent(grant.scope(),target,generation,epoch,kinds,wire.size(),
-                Codec.sha256(Codec.encode(wire)),"UNKNOWN"));
+                Codec.sha256(Codec.encode(wire)),"UNKNOWN",journal.settings.kafkaFixedTopics.get(target)));
         if(JdbcJournal.execute(c,"UPDATE "+journal.table(FIRST)+" SET payload=?,signature=?"
                 +" WHERE pipeline_id=? AND subscription_id=? AND payload=?",intent,grant.signHistoryIntent(target+"\n"+intent),
                 origin.task(),target,"")!=1)throw refused();

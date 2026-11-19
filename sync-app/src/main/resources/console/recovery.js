@@ -27,7 +27,7 @@ window.RivomeshRecovery=(()=>{
  const receiptId=/^[A-Za-z0-9_-]{8,128}$/;
  const receiptActions=new Set([
   'VALIDATE','VALIDATE_RETRY','VALIDATE_CANCEL','REPAIR_PLAN','REPAIR_EXECUTE','REPAIR_CANCEL',
-  'FAILURE_REVIEW','REVIEW_KAFKA_RECEIPTS','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
+  'FAILURE_REVIEW','REVIEW_KAFKA_RECEIPTS','KAFKA_NOTICE_DISPATCH','CONFIRM_COMMIT','SKIP_TRANSACTION','SKIP_RETRY','SKIP_RECOVER','SKIP_CANCEL',
   'GAP_VERIFY_PLAN','GAP_VERIFY_EXECUTE','GAP_VERIFY_CANCEL','COMPENSATION_PLAN','COMPENSATION_EXECUTE',
   'CORRECTION_EXECUTE','RECOVERY_CANCEL','CAPTURE_RETAIN','CAPTURE_EXCLUDE','VALIDATION_RETENTION_REVIEW',
   'VALIDATION_ARCHIVE_COPY','VALIDATION_ARCHIVE_RESTORE','VALIDATION_ARCHIVE_RECLAIM'
@@ -101,6 +101,7 @@ window.RivomeshRecovery=(()=>{
  function kafkaNoticePreflight(task,approval,plan,current){
   const section=text('section'),button=label('button','kafkaNoticePreflight'),result=text('div');
   section.dataset.kafkaNoticePreflight='';result.setAttribute('aria-live','polite');
+  const dispatchId=requestId();
   button.onclick=async()=>{
    const revision=plan.task.revision;
    const eligible=()=>{
@@ -117,16 +118,44 @@ window.RivomeshRecovery=(()=>{
     if(!eligible())return;
     const states={VERIFIED:'kafkaPhysicalVerified',MISSING:'kafkaPhysicalMissing',UNREACHABLE:'kafkaPhysicalUnavailable'};
     const status=check?.precedingPhysicalReceipt?.status;
-    if(check?.status!=='SENDER_BLOCKED'||check.executionAuthorized!==false||check.approvalRequestId!==approval.id
+    const ready=check?.status==='SENDER_READY';
+    if((!ready&&check?.status!=='SENDER_BLOCKED')||check.executionAuthorized!==false||check.approvalRequestId!==approval.id
      ||check.approvalScopeSha256!==approval.approvalScopeSha256||check.task?.revision!==revision||check.task?.taskId!==task.id
      ||check.task?.configurationVersion!==plan.task.configurationVersion
      ||check.controlTopicId!==plan.controlTopic.topicId||check.payloadSha256!==plan.payloadSha256
      ||check.failure?.failedSequence!==plan.failure.failedSequence||check.failure?.targetId!==plan.controlTopic.targetId
      ||!Object.hasOwn(states,status)||status==='VERIFIED'&&!digest.test(check.precedingPhysicalReceipt.receiptSha256||'')
-     ||!Array.isArray(check.blockers)||!check.blockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'))
+     ||!Array.isArray(check.blockers)||(ready?(approval.status!=='RECORDED'||status!=='VERIFIED'||check.blockers.length!==0):check.blockers.length===0))
      throw new Error(t('receiptMismatch'));
-    result.append(label('p',states[status]),label('p','kafkaNoticePreflightBlocked'));
+    const historyMissing=check.blockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED');
+    result.append(label('p',states[status]),label('p',ready?'kafkaNoticeSenderReady':
+     historyMissing?'kafkaNoticePreflightBlocked':'kafkaNoticeSenderUnavailable'));
     if(check.blockers.includes('KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED'))result.append(label('p','kafkaNoticeTopicIdentityRequired'));
+    if(ready){
+     const send=label('button','kafkaNoticeSend'),feedback=text('div');
+     feedback.setAttribute('aria-live','polite');
+     send.onclick=async()=>{
+      if(!eligible()||send.disabled)return;
+      send.disabled=true;feedback.replaceChildren();
+      try{
+       const queued=await api(base(task)+'/kafka-notice-approvals/'+encodeURIComponent(approval.id)+'/dispatch',{
+        method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':dispatchId},
+        body:JSON.stringify({expectedRevision:revision,approvalScopeSha256:approval.approvalScopeSha256})});
+       if(!eligible()||!feedback.isConnected)return;
+       if(queued?.kind!=='KAFKA_NOTICE_DISPATCH'||queued.id!==dispatchId||queued.taskId!==task.id
+        ||queued.approvalRequestId!==approval.id||queued.approvalScopeSha256!==approval.approvalScopeSha256)
+        throw new Error(t('receiptMismatch'));
+       const view=label('button','receiptView');
+       view.onclick=()=>openReceipt(task,dispatchId);
+       feedback.append(text('p',t(queued.status),'badge'),view);
+       await refresh();
+      }catch(error){
+       if(eligible()&&feedback.isConnected)feedback.append(text('p',error.message,'error'));
+       send.disabled=false;
+      }
+     };
+     result.append(send,feedback);
+    }
    }catch(error){if(eligible())result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
   };
@@ -150,7 +179,7 @@ window.RivomeshRecovery=(()=>{
     if(!current()||!section.isConnected||!eligible(scope())||scope().revision!==activeTask.revision)return;
     const plan=data?.plan,topic=plan?.controlTopic,failure=plan?.failure;
     if(data?.status!=='KAFKA_NOTICE_PLAN_REVIEWED'||data?.executionAuthorized!==false
-     ||data?.publicationBlockCode!=='KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'
+     ||!['KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED','KAFKA_NOTICE_APPROVAL_REQUIRED'].includes(data?.publicationBlockCode)
      ||plan?.task?.taskId!==task.id||plan?.predecessorRequestId!==receipt.id
      ||topic?.targetId!==receipt.subscriptionId||failure?.failedSequence!==proof.failedSequence
      ||!digest.test(data.approvalSha256||'')||!digest.test(plan.payloadSha256||'')
@@ -160,7 +189,7 @@ window.RivomeshRecovery=(()=>{
     for(const [key,value] of [['kafkaNoticeControlTopic',topic.topicName],['kafkaNoticeTopicId',topic.topicId],
      ['kafkaReceiptFailed',failure.failedSequence],['kafkaNoticePayloadSha',plan.payloadSha256],['kafkaNoticePlanSha',data.approvalSha256]])
      details.append(label('dt',key),text('dd',value));
-    result.append(label('p','KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'),details);
+    result.append(label('p',data.publicationBlockCode),details);
     const coverage=data.catalogCoverage;
     const coverageCodes={
      KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'VERIFIED_SINGLETON',
@@ -178,9 +207,9 @@ window.RivomeshRecovery=(()=>{
      result.append(label('p','kafkaNoticeWriterVerified'));
     if(writer?.status==='BLOCKED'&&/^KAFKA_NOTICE_WRITER_[A-Z_]{1,64}$/.test(writer.code||''))
      result.append(label('p','kafkaNoticeWriterBlocked'),text('code',writer.code));
-    if(digest.test(data.approvalScopeSha256||'')&&Array.isArray(data.approvalBlockers)
-     &&data.approvalBlockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED')){
-     const approvalId=requestId(),approve=label('button','kafkaNoticeApprove'),approvalResult=text('div');
+    if(digest.test(data.approvalScopeSha256||'')&&Array.isArray(data.approvalBlockers)){
+     const fixed=digest.test(coverage?.fixedHistorySha256||'');
+     const approvalId=requestId(),approve=label('button',fixed?'kafkaNoticeApproveFixed':'kafkaNoticeApprove'),approvalResult=text('div');
      approvalResult.setAttribute('aria-live','polite');
      approve.onclick=async()=>{
       if(!current()||!eligible(scope())||scope().revision!==activeTask.revision||approve.disabled)return;
@@ -191,16 +220,16 @@ window.RivomeshRecovery=(()=>{
         body:JSON.stringify({expectedRevision:activeTask.revision,predecessorRequestId:receipt.id,
          approvalScopeSha256:data.approvalScopeSha256})});
        if(!current()||!approvalResult.isConnected)return;
-       if(recorded?.id!==approvalId||recorded?.taskId!==task.id||recorded?.status!=='RECORDED_BLOCKED'
+       if(recorded?.id!==approvalId||recorded?.taskId!==task.id||!['RECORDED','RECORDED_BLOCKED'].includes(recorded?.status)
         ||recorded.executionAuthorized!==false||recorded.approvalScopeSha256!==data.approvalScopeSha256)
         throw new Error(t('receiptMismatch'));
-       approvalResult.append(label('p','kafkaNoticeApprovalRecorded'),text('code',approvalId),kafkaNoticePreflight(task,recorded,plan,current));
+       approvalResult.append(label('p',recorded.status==='RECORDED'?'kafkaNoticeApprovedFixed':'kafkaNoticeApprovalRecorded'),text('code',approvalId),kafkaNoticePreflight(task,recorded,plan,current));
       }catch(error){
        if(current()&&approvalResult.isConnected)approvalResult.append(text('p',error.message,'error'));
        approve.disabled=false;
       }
      };
-     result.append(label('p','kafkaNoticeApprovalNote'),approve,approvalResult);
+     result.append(label('p',fixed?'kafkaNoticeApprovalFixedNote':'kafkaNoticeApprovalNote'),approve,approvalResult);
     }
    }catch(error){if(current()&&section.isConnected)result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
@@ -241,7 +270,7 @@ window.RivomeshRecovery=(()=>{
    try{
     const receipt=await api(base(task)+'/recovery-receipts/'+encodeURIComponent(id));
     if(!dialog.current())return;
-    if(receipt?.kind!=='CONTROL_OPERATION'||receipt.id!==id||receipt.taskId!==task.id||!receiptActions.has(receipt.action))
+    if(!['CONTROL_OPERATION','KAFKA_NOTICE_DISPATCH'].includes(receipt?.kind)||receipt.id!==id||receipt.taskId!==task.id||!receiptActions.has(receipt.action))
      throw new Error(t('receiptMismatch'));
     const nativeEvidence=kafkaReceipt(receipt);
     const facts=text('dl'),values=[
@@ -256,6 +285,16 @@ window.RivomeshRecovery=(()=>{
     result.append(text('p',t(receipt.status),'badge'));
     if(typeof receipt.code==='string'&&/^[A-Z0-9_]{1,120}$/.test(receipt.code))result.append(text('p',bridge.explain(receipt.code)));
     result.append(facts);
+    if(receipt.kind==='KAFKA_NOTICE_DISPATCH'&&receipt.status==='SUCCEEDED'){
+     const proof=receipt.nativeReceipt;
+     if(!digest.test(proof?.noticeId||'')||!digest.test(proof?.payloadSha256||'')||!/^[A-Za-z0-9_-]{22}$/.test(proof?.topicId||'')
+      ||!Number.isSafeInteger(proof?.nativeOffset)||proof.nativeOffset<0)throw new Error(t('receiptMismatch'));
+     const details=text('dl');
+     for(const [key,value] of [['receiptTarget',proof.targetId],['kafkaReceiptTopic',proof.topicId],
+      ['kafkaReceiptOffset',String(proof.nativeOffset)],['kafkaPhysicalDigest',proof.payloadSha256]])
+      details.append(label('dt',key),text('dd',value));
+     result.append(details);
+    }
     if(nativeEvidence){
      result.append(nativeEvidence);
      const physical=kafkaPhysicalReceipt(task,receipt,dialog.current);
@@ -647,7 +686,11 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprovalNote:'历史物理归属仍待核对。登记审批仅保存本次核对范围，通知不会发送。',
   kafkaNoticeApprovalRecorded:'审批已登记，通知仍未获准发送。',
   kafkaNoticePreflight:'核对发送条件',kafkaNoticePreflightBlocked:'控制 Topic 的历史归属仍待核实，通知继续受阻。',
-  kafkaNoticeTopicIdentityRequired:'发送端必须按已审批的物理 Topic UUID 写入。当前 Kafka 客户端按名称发送。',
+  kafkaNoticeTopicIdentityRequired:'发送端必须按已审批的物理 Topic UUID 写入，Broker 需支持 UUID 寻址的事务。',
+  KAFKA_NOTICE_APPROVAL_REQUIRED:'本次预览已完成，需登记审批后才能发送。',
+  kafkaNoticeApproveFixed:'登记审批',kafkaNoticeApprovedFixed:'审批已登记。',
+  kafkaNoticeApprovalFixedNote:'已核对历史路由。登记审批后，可单独核对发送条件。',
+  kafkaNoticeSenderReady:'已通过发送检查。',kafkaNoticeSenderUnavailable:'发送条件未全部通过。',kafkaNoticeSend:'发送缺口通知',kafka_notice_dispatch:'Kafka 缺口通知发送',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'已核对生效和可回退配置当前指向的 Kafka Topic。',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'管理目录超出这次只读核对的范围。',
@@ -683,7 +726,11 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprovalNote:'Historical topic ownership needs verification. Recording approval saves the reviewed scope and keeps publication blocked.',
   kafkaNoticeApprovalRecorded:'Approval recorded. Publication is still blocked.',
   kafkaNoticePreflight:'Check sender prerequisites',kafkaNoticePreflightBlocked:'The notice remains blocked until historical control Topic ownership is verified.',
-  kafkaNoticeTopicIdentityRequired:'The sender must address the approved physical Topic UUID. The current Kafka client sends by name.',
+  kafkaNoticeTopicIdentityRequired:'The Kafka broker must support transactional writes addressed to the physical Topic UUID.',
+  KAFKA_NOTICE_APPROVAL_REQUIRED:'Preview complete. Record approval before dispatch.',
+  kafkaNoticeApproveFixed:'Record approval',kafkaNoticeApprovedFixed:'Approval recorded.',
+  kafkaNoticeApprovalFixedNote:'Route history is verified. After recording approval, check the sender prerequisites.',
+  kafkaNoticeSenderReady:'Sender prerequisites passed.',kafkaNoticeSenderUnavailable:'Some sender prerequisites remain unmet.',kafkaNoticeSend:'Send gap notice',kafka_notice_dispatch:'Kafka gap notice dispatch',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'Verified where active and restorable Kafka configurations point at review time.',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'The managed catalog exceeds the scope of this read-only review.',

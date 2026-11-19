@@ -39,6 +39,12 @@ public final class AdapterCatalog {
             row.put("transactionSkip",reviewedSql?"REVIEWED_LOCAL_TRANSACTION":"UNAVAILABLE");
             row.put("transactionCompensation",reviewedSql?"REVIEWED_BEFORE_IMAGES":"UNAVAILABLE");
             row.put("rebuildMode","PLANNED".equals(status)?"UNAVAILABLE":"MANUAL_NEW_BASELINE");
+            row.put("failureReceiptReview",switch(id){
+                case "KAFKA"->"NATIVE_KAFKA_PRECEDING_COMMIT";
+                case "CLICKHOUSE","DORIS","HIVE"->"NATIVE_MATERIALIZED_PRECEDING_COMMIT";
+                default->"UNAVAILABLE";
+            });
+            row.put("gapNotification","KAFKA".equals(id)?"MANAGED_PHYSICAL_KAFKA":"UNAVAILABLE");
         }
         rows.add(row);
     }

@@ -864,8 +864,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 TLS/SCRAM Broker 已验证双入口查询、同名 Topic 更换 UUID、旧故障及旧修订拒绝。三个 TLS/SCRAM Broker 已验收条件审批与双入口发送前检查。控制 Topic 更换或配置变更时拒绝原范围，原两路 ACK 和消费位点保持。历史全量归属、正式发送与恢复、跨适配器补偿待验。 新建托管任务的 LOCAL 日志首发证据通过真实 MySQL 到双 Kafka 目标。A 首次发送失败留下 UNKNOWN，B 继续全量与增量，恢复 A 后双目标续传。Agent 重启保持原签名，旧 Worker 撤租退出后不能发送新源行或推进 ACK。",
-        "en": "Both Kafka entries review physical topics and replay the blocked approval. A managed Worker records the Topic UUID, native offset, Agent membership lease and journal UTC for the first eligible newly observed COMMIT. Native Kafka with PostgreSQL, MySQL and H2 journals passed. Both management entries can verify the signed receipt of the current failure's exact preceding ACK. Native TLS/SCRAM Kafka readback verifies both entries, Topic UUID replacement and rejection of stale failure or revision. Three TLS/SCRAM brokers verified the conditional approval and sender preflight through both entries. Topic replacement and configuration changes refuse the old scope, with both ACKs and broker offsets unchanged. Complete historical coverage, dispatch and recovery, and cross-adapter compensation remain. A new managed LOCAL journal passed native MySQL to two Kafka targets. The first failed send stays UNKNOWN while the peer completes snapshot and CDC. Explicit resume catches up the failed target. Agent restart preserves the signed origins, and the revoked Worker exits before a new source row can be sent or acknowledged."
+        "zh-CN": "新建 LOCAL 托管任务绑定 Kafka 物理 UUID。双入口已通过真实三 Broker 的审批、发送及确切回执。已验证丢响应只读回原记录，提交前中断等待原生中止并仅重试一次。ClickHouse、Doris、Hive 分别通过前序 COMMIT 原生回执和旧批次拒绝实机验证。后续继续验收其他消息协议及更广的保留和协调恢复组合。",
+        "en": "New managed LOCAL tasks bind Kafka physical UUIDs. Both entries pass scoped approval, dispatch and exact readback on three native brokers. Lost commit replies recover the earlier receipt. Interruption before commit waits for terminal native abort and retries once. ClickHouse, Doris and Hive pass native preceding COMMIT readback and older batch refusal. Remaining messaging adapters and broader retention and coordinated recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -895,7 +895,10 @@
         "tests/kafka-journal-durability-run.py",
         "docs/verification/README.md",
         "sync-app/src/test/java/io/github/rivomesh/cdc/KafkaPhysicalReceiptReviewTest.java",
-        "tests/kafka/KafkaManagedPhysicalReceiptAcceptance.java"
+        "tests/kafka/KafkaManagedPhysicalReceiptAcceptance.java",
+        "tests/kafka/KafkaTopicIdLedgerAcceptance.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/MaterializedRecoveryReview.java",
+        "tests/materialized-recovery-run.sh"
       ]
     },
     {

@@ -119,6 +119,17 @@ with zipfile.ZipFile(artifact) as jar:
     assert "org/apache/hive/jdbc/HiveDriver.class" not in names, "Hive SDK leaked into the core loader"
     with zipfile.ZipFile(io.BytesIO(sdk)) as private:
         assert struct.unpack(">H", private.read("org/apache/hive/jdbc/HiveDriver.class")[6:8])[0]<=class_major, "Hive driver exceeds Java 21"
+    notice_source = "kafka-notice-transport/src/main/java/io/github/rivomesh/kafka/notice/TopicIdTransactions.java"
+    if snapshot_sources is None or notice_source in snapshot_sources:
+        kafka_clients = {
+            "org/apache/kafka/": ("kafka/kafka-version.properties", "3.9.2"),
+            namespace + "kafka/notice/internal/": ("rivomesh-kafka-notice/kafka-version.properties", "4.1.2"),
+        }
+        for prefix, (version_resource, version) in kafka_clients.items():
+            assert prefix + "clients/producer/KafkaProducer.class" in names, "Missing Kafka SDK: " + version
+            assert "version=" + version in jar.read(version_resource).decode().splitlines(), "Kafka version resource collision"
+        for filename in ("LICENSE", "NOTICE"):
+            assert "META-INF/rivomesh-licenses/kafka-clients-4.1.2-" + filename in names, "Missing Kafka " + filename
     assert b"atDebug" not in jar.read("org/slf4j/Logger.class"), "Core SLF4J 1.7 API replaced"
     assert "Main-Class: io.github.rivomesh.Main" in jar.read("META-INF/MANIFEST.MF").decode(), "Wrong executable entry point"
     drivers = jar.read("META-INF/services/java.sql.Driver").decode().splitlines()

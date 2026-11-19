@@ -70,6 +70,8 @@ public final class PipelineConfig {
         public List<String> rocketmqControllerEndpoints;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public KafkaNotice recoveryNotice;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public KafkaPhysicalReceipt.Topic physicalTopic;
     }
     public static final class KafkaNotice {
         public String controlTopic,clusterSha256,topicId,reservationId;
@@ -116,6 +118,7 @@ public final class PipelineConfig {
         Set<String> ids=new HashSet<>(),destinations=new HashSet<>(),mapped=new TreeSet<>();
         Set<String> kafkaBusinessTopics=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         Set<String> kafkaControlTopics=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        Set<KafkaPhysicalReceipt.Topic> fixedBusinessTopics=new HashSet<>(),fixedControlTopics=new HashSet<>();
         for(Target t:targets){
             if(t==null)throw new IllegalArgumentException("TARGET_REQUIRED");id(t.id);if(!ids.add(t.id))throw new IllegalArgumentException("DUPLICATE_TARGET_ID");
             if(t.product!=TargetProduct.DM&&t.dm!=null)throw new IllegalArgumentException("DM_OPTIONS_ON_OTHER_TARGET");if(t.product==TargetProduct.DM&&t.dm==null)t.dm=new Dm();
@@ -123,13 +126,21 @@ public final class PipelineConfig {
             if((!messaging&&(t.username==null||t.username.isEmpty()))||t.uniquePolicy==null||t.mappings==null||t.mappings.isEmpty())throw new IllegalArgumentException("TARGET_CONFIG_INVALID");Sql.pg(t.metadataSchema);if(t.product==TargetProduct.CLICKHOUSE)ClickHouseMaterializer.q(t.metadataSchema);if(t.product==TargetProduct.DORIS)DorisMaterializer.databaseName(t.metadataSchema);if(t.product==TargetProduct.HIVE)HiveRows.name(t.metadataSchema);
             if((t.product==TargetProduct.KAFKA||t.product==TargetProduct.PULSAR)&&!destinations.add(t.product.name()+":"+t.url.toLowerCase(Locale.ROOT)+":"+t.messaging.topic))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");
             if(t.product==TargetProduct.KAFKA)kafkaBusinessTopics.add(t.messaging.topic);
+            if(t.messaging!=null&&t.messaging.physicalTopic!=null) {
+                if(t.product!=TargetProduct.KAFKA||!kafkaHistoryFromFirstSend||t.messaging.autoCreate
+                        ||!"SASL_SSL".equals(t.messaging.securityProtocol)||"PLAIN".equals(t.messaging.saslMechanism)
+                        ||!fixedBusinessTopics.add(t.messaging.physicalTopic))
+                    throw new IllegalArgumentException("KAFKA_PHYSICAL_ROUTE_CONFIG_INVALID");
+            }
             if(t.messaging!=null&&t.messaging.recoveryNotice!=null){
                 if(t.product!=TargetProduct.KAFKA)throw new IllegalArgumentException("KAFKA_NOTICE_CONFIG_INVALID");
                 KafkaNotice notice=t.messaging.recoveryNotice;
                 try{
                     new KafkaNoticePlanning.TopicReservation(notice.reservationId,pipelineId,t.id,notice.controlTopic,notice.clusterSha256,notice.topicId);
                 }catch(RuntimeException invalid){throw new IllegalArgumentException("KAFKA_NOTICE_CONFIG_INVALID");}
-                if(!kafkaControlTopics.add(notice.controlTopic))throw new IllegalArgumentException("KAFKA_NOTICE_TOPIC_COLLISION");
+                if(!kafkaControlTopics.add(notice.controlTopic)
+                        ||!fixedControlTopics.add(new KafkaPhysicalReceipt.Topic(notice.clusterSha256,notice.topicId)))
+                    throw new IllegalArgumentException("KAFKA_NOTICE_TOPIC_COLLISION");
             }
             if(t.product==TargetProduct.REDIS_STREAMS&&!destinations.add("REDIS_STREAMS:"+t.url.toLowerCase(Locale.ROOT)+":"+t.messaging.stream))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");
             Set<String> local=new HashSet<>();for(Map.Entry<String,String> mapping:t.mappings.entrySet()){
@@ -139,8 +150,11 @@ public final class PipelineConfig {
                 if(!t.product.singleMessageLog()&&!destinations.add(t.url.split("\\?",2)[0].toLowerCase(Locale.ROOT)+"\u0000"+mapping.getValue().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");mapped.add(mapping.getKey());
             }
         }
-        if(kafkaControlTopics.stream().anyMatch(kafkaBusinessTopics::contains))
+        if(kafkaControlTopics.stream().anyMatch(kafkaBusinessTopics::contains)
+                ||fixedControlTopics.stream().anyMatch(fixedBusinessTopics::contains))
             throw new IllegalArgumentException("KAFKA_NOTICE_TOPIC_COLLISION");
+        if(!fixedBusinessTopics.isEmpty()&&targets.stream().anyMatch(t->t.product==TargetProduct.KAFKA&&t.messaging.physicalTopic==null))
+            throw new IllegalArgumentException("KAFKA_PHYSICAL_ROUTE_REQUIRED_FOR_ALL_TARGETS");
         if(!mapped.equals(db))throw new IllegalArgumentException("SOURCE_DATABASE_WITHOUT_TARGET");
         if(kafkaHistoryFromFirstSend&&(!"LOCAL".equals(journal.mode)||kafkaBusinessTopics.isEmpty()))
             throw new IllegalArgumentException("KAFKA_HISTORY_ORIGIN_PROFILE_REQUIRED");
@@ -232,6 +246,8 @@ public final class PipelineConfig {
         s.leaseMillis=leaseMillis;
         s.kafkaPublicationTargets=targets.stream().filter(target->target.product==TargetProduct.KAFKA)
                 .map(target->target.id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        s.kafkaFixedTopics=targets.stream().filter(t->t.product==TargetProduct.KAFKA&&t.messaging.physicalTopic!=null)
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(t->t.id,t->t.messaging.physicalTopic));
         s.kafkaPhysicalGrant=kafkaPhysicalGrant;
         String type=effectiveSourceType();
         s.oracleDdlEvidence="ORACLE".equals(type);
@@ -266,7 +282,7 @@ public final class PipelineConfig {
             if(source.oracle.allowVirtualNumericColumns)identity.put("oracleVirtualNumericColumns",true);
         }
         if(kafkaHistoryFromFirstSend)identity.put("kafkaHistoryFromFirstSend",true);
-        Map<String,Object> outputs=new TreeMap<>();for(Target t:targets){Map<String,Object> output=new TreeMap<>();output.put("product",t.product);output.put("url",t.url);output.put("metadataSchema",t.metadataSchema);output.put("mappings",new TreeMap<>(t.mappings));output.put("uniquePolicy",t.uniquePolicy);if(t.product==TargetProduct.DM)output.put("storageProfile","DM_LOSSLESS_V1");if(t.product==TargetProduct.HIVE)output.put("materializationProfile","HIVE_ACID_HISTORY_V1");if(t.product==TargetProduct.DORIS){output.put("materializationProfile","DORIS_MOW_SEQUENCE_V1");output.put("secondaryIndexes",t.doris.secondaryIndexes);output.put("replicas",t.doris.replicas);output.put("buckets",t.doris.buckets);}if(t.product==TargetProduct.CLICKHOUSE){output.put("materializationProfile","CLICKHOUSE_REPLACING_V1");if(t.clickhouse!=null&&t.clickhouse.secondaryIndexes==ClickHouseIndexPlan.Mode.DATA_SKIPPING)output.put("secondaryIndexes","DATA_SKIPPING_V1");}if(t.product!=null&&t.product.messaging()){Map<String,Object> messaging=new TreeMap<>();messaging.put("stream",t.messaging.stream);messaging.put("queueType",t.messaging.queueType);if(t.product==TargetProduct.KAFKA)messaging.put("topic",t.messaging.topic);if(t.product==TargetProduct.REDIS_STREAMS||t.product==TargetProduct.PULSAR)messaging.put("replicas",t.messaging.replicas);if(t.product==TargetProduct.PULSAR){messaging.put("topic",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);}if(t.product==TargetProduct.ROCKETMQ){messaging.put("topicPrefix",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);messaging.put("broker",t.messaging.broker);messaging.put("minimumRetentionHours",t.messaging.minimumRetentionHours);if(t.messaging.rocketmqControllerEndpoints!=null)messaging.put("replicationProfile","ROCKETMQ_CONTROLLER_SYNC_V1");}if(t.product==TargetProduct.ACTIVEMQ_CLASSIC){messaging.put("queuePrefix",t.messaging.stream);messaging.put("broker",t.messaging.broker);messaging.put("profile","CLASSIC_LOCAL_TX_V1");}if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS){messaging.put("broker",t.messaging.broker==null||t.messaging.broker.isEmpty()?null:t.messaging.broker);messaging.put("replicas",t.messaging.replicas);}output.put("messaging",messaging);}outputs.put(t.id,output);}identity.put("targets",outputs);return Codec.sha256(Codec.encode(identity));
+        Map<String,Object> outputs=new TreeMap<>();for(Target t:targets){Map<String,Object> output=new TreeMap<>();output.put("product",t.product);output.put("url",t.url);output.put("metadataSchema",t.metadataSchema);output.put("mappings",new TreeMap<>(t.mappings));output.put("uniquePolicy",t.uniquePolicy);if(t.product==TargetProduct.DM)output.put("storageProfile","DM_LOSSLESS_V1");if(t.product==TargetProduct.HIVE)output.put("materializationProfile","HIVE_ACID_HISTORY_V1");if(t.product==TargetProduct.DORIS){output.put("materializationProfile","DORIS_MOW_SEQUENCE_V1");output.put("secondaryIndexes",t.doris.secondaryIndexes);output.put("replicas",t.doris.replicas);output.put("buckets",t.doris.buckets);}if(t.product==TargetProduct.CLICKHOUSE){output.put("materializationProfile","CLICKHOUSE_REPLACING_V1");if(t.clickhouse!=null&&t.clickhouse.secondaryIndexes==ClickHouseIndexPlan.Mode.DATA_SKIPPING)output.put("secondaryIndexes","DATA_SKIPPING_V1");}if(t.product!=null&&t.product.messaging()){Map<String,Object> messaging=new TreeMap<>();messaging.put("stream",t.messaging.stream);messaging.put("queueType",t.messaging.queueType);if(t.product==TargetProduct.KAFKA){messaging.put("topic",t.messaging.topic);if(t.messaging.physicalTopic!=null)messaging.put("physicalTopic",t.messaging.physicalTopic);}if(t.product==TargetProduct.REDIS_STREAMS||t.product==TargetProduct.PULSAR)messaging.put("replicas",t.messaging.replicas);if(t.product==TargetProduct.PULSAR){messaging.put("topic",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);}if(t.product==TargetProduct.ROCKETMQ){messaging.put("topicPrefix",t.messaging.topic);messaging.put("cluster",t.messaging.cluster);messaging.put("broker",t.messaging.broker);messaging.put("minimumRetentionHours",t.messaging.minimumRetentionHours);if(t.messaging.rocketmqControllerEndpoints!=null)messaging.put("replicationProfile","ROCKETMQ_CONTROLLER_SYNC_V1");}if(t.product==TargetProduct.ACTIVEMQ_CLASSIC){messaging.put("queuePrefix",t.messaging.stream);messaging.put("broker",t.messaging.broker);messaging.put("profile","CLASSIC_LOCAL_TX_V1");}if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS){messaging.put("broker",t.messaging.broker==null||t.messaging.broker.isEmpty()?null:t.messaging.broker);messaging.put("replicas",t.messaging.replicas);}output.put("messaging",messaging);}outputs.put(t.id,output);}identity.put("targets",outputs);return Codec.sha256(Codec.encode(identity));
     }
     public List<String> subscribers(){List<String> ids=new ArrayList<>();for(Target target:targets)ids.add(target.id);return ids;}
     public Path localDirectory(){return localPath();}

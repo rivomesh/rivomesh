@@ -9,6 +9,8 @@ import io.github.rivomesh.cdc.KafkaHistoryOrigin;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /** Signed enrollment and compare-and-set readiness share the task authority transaction. */
@@ -34,6 +36,26 @@ final class KafkaHistoryEnrollments {
         if(option.isMissingNode())return false;
         if(!option.isBoolean())throw new TaskService.Conflict("KAFKA_HISTORY_ORIGIN_CONFIG_INVALID");
         return option.booleanValue();
+    }
+
+    static void requireUnchangedRoutes(String previous,String desired)throws Exception {
+        if(!fixedRoutes(previous).equals(fixedRoutes(desired)))
+            throw new TaskService.Conflict("KAFKA_PHYSICAL_ROUTE_CREATE_ONLY");
+    }
+
+    record FixedRoute(String topic,String clusterSha256,String topicId) {}
+
+    static Map<String,FixedRoute> fixedRoutes(String yaml)throws Exception {
+        Map<String,FixedRoute> fixed=new TreeMap<>();
+        if(!requested(yaml))return fixed;
+        for(JsonNode target:YAML.readTree(yaml).path("targets")){
+            JsonNode messages=target.path("messaging");
+            JsonNode address=messages.path("physicalTopic");
+            if(address.isObject())
+                fixed.put(target.path("id").asText(),new FixedRoute(messages.path("topic").asText(),
+                        address.path("clusterSha256").asText(),address.path("topicId").asText()));
+        }
+        return fixed;
     }
 
     static void bootstrap(JdbcControlStore db,Connection c,String suffix)throws Exception {

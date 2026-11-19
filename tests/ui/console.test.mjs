@@ -278,7 +278,8 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  let approvalScope=null;
  const approvalRequests=[];
  const preflightRequests=[];
- let preflightAuthorizes=true;
+ let preflightAuthorizes=true,fixedHistory=false;
+ const dispatches=[];
  ui.w.fetch=async(path,options)=>{
   if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
    id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
@@ -290,25 +291,33 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
    const request={id:options.headers['X-Request-ID'],body:JSON.parse(options.body)};
    approvalRequests.push(request);
    if(approvalRequests.length===1)return{ok:false,status:503,json:async()=>({code:'CONTROL_STORE_UNAVAILABLE'})};
-   return{ok:true,status:200,json:async()=>({id:request.id,taskId:task.id,status:'RECORDED_BLOCKED',
+   return{ok:true,status:200,json:async()=>({id:request.id,taskId:task.id,status:fixedHistory?'RECORDED':'RECORDED_BLOCKED',
     executionAuthorized:false,approvalScopeSha256:approvalScope})};
   }
   if(path===base+'/kafka-notice-approvals/'+approvalRequests.at(-1)?.id+'/preflight'){
    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
    preflightRequests.push(JSON.parse(options.body));
-   return{ok:true,status:200,json:async()=>({status:'SENDER_BLOCKED',executionAuthorized:preflightAuthorizes,
+   return{ok:true,status:200,json:async()=>({status:fixedHistory?'SENDER_READY':'SENDER_BLOCKED',executionAuthorized:preflightAuthorizes,
     approvalRequestId:approvalRequests.at(-1).id,approvalScopeSha256:approvalScope,controlTopicId:topicId,payloadSha256:'d'.repeat(64),
     task:{taskId:task.id,revision:task.revision,configurationVersion:version},failure:{failedSequence:'7',targetId:target},
     precedingPhysicalReceipt:{status:'VERIFIED',receiptSha256:'f'.repeat(64),signature:'private display fixture'},
-    blockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED','KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED']})};
+    blockers:fixedHistory?[]:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED','KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED']})};
+  }
+  if(path===base+'/kafka-notice-approvals/'+approvalRequests.at(-1)?.id+'/dispatch'){
+   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+   const sent={id:options.headers['X-Request-ID'],body:JSON.parse(options.body)};
+   dispatches.push(sent);
+   if(dispatches.length===1)return{ok:false,status:503,json:async()=>({code:'CONTROL_STORE_UNAVAILABLE'})};
+   return{ok:true,status:200,json:async()=>({kind:'KAFKA_NOTICE_DISPATCH',id:sent.id,taskId:task.id,status:'PENDING',
+    approvalRequestId:approvalRequests.at(-1).id,approvalScopeSha256:approvalScope})};
   }
   if(path!==base+'/kafka-notice-plan')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
   requests.push(JSON.parse(options.body));
   return{ok:true,status:200,json:async()=>({status:'KAFKA_NOTICE_PLAN_REVIEWED',executionAuthorized:publishing,
-   publicationBlockCode:'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
+   publicationBlockCode:fixedHistory?'KAFKA_NOTICE_APPROVAL_REQUIRED':'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
    catalogCoverage:coverage,
-   approvalScopeSha256:approvalScope,approvalBlockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'],
+   approvalScopeSha256:approvalScope,approvalBlockers:fixedHistory?[]:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'],
    writerEntitlement:{status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED'},
    plan:{task:{taskId:task.id,revision:task.revision,configurationVersion:version},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
     controlTopic:{targetId:target,topicName:'control.events',topicId},credential:'not sent to the DOM'}})};
@@ -354,6 +363,51 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   assert.ok(!preflight.textContent.includes('private display fixture'));
   assert.equal(preflight.querySelectorAll('button').length,1);
   assert.deepEqual(preflightRequests,Array(2).fill({expectedRevision:task.revision,approvalScopeSha256:approvalScope}));
+  assert.deepEqual(dispatches,[]);
+
+  fixedHistory=true;approvalScope='f'.repeat(64);coverage.fixedHistorySha256='a'.repeat(64);
+  button.click();await flush();
+  const fixedApproval=section.querySelectorAll('button')[1];
+  assert.equal(fixedApproval.textContent,'登记审批');
+  fixedApproval.click();await flush();
+  const verified=section.querySelector('[data-kafka-notice-preflight]');
+  assert.equal(verified.querySelectorAll('button').length,1);
+  verified.querySelector('button').click();await flush();
+  const send=verified.querySelectorAll('button')[1];
+  assert.equal(send.textContent,'发送缺口通知');
+  send.click();await flush();
+  assert.ok(!send.disabled);
+  send.click();await flush();
+  assert.deepEqual(dispatches[0],dispatches[1]);
+  assert.deepEqual(dispatches[0].body,{expectedRevision:task.revision,approvalScopeSha256:approvalScope});
+  assert.ok(send.disabled);
+ }finally{ui.dom.window.close();}
+});
+
+test('analytical receipt check is scoped to a paused target and displays its exact digest',async()=>{
+ const task={id:'analytics-receipt',revision:'current-revision',formatVersion:3,desired:'PAUSED',workerState:'PAUSED',
+  statusAvailable:true,status:{run_state:'PAUSED',subscriptions:[
+   {id:'dw',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:7},
+   {id:'pg',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:8}]},
+  destinations:[{id:'dw',product:'DORIS'},{id:'pg',product:'POSTGRESQL'}],operations:[]};
+ const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
+ const requests=[];
+ ui.w.fetch=async(path,options)=>{
+  if(path!=='/api/tasks/'+task.id+'/materialization-receipt')return fallback(path,options);
+  assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+  requests.push(JSON.parse(options.body));
+  return {ok:true,status:200,json:async()=>({status:'PRECEDING_RECEIPT_VERIFIED',target:'dw',product:'DORIS',
+   errorGeneration:'3',acknowledgedSequence:'7',nativeReceiptSha256:'e'.repeat(64)})};
+ };
+ try{
+  await login(ui);
+  const buttons=ui.d.querySelectorAll('[data-materialized-receipt-review]');
+  assert.equal(buttons.length,1);
+  assert.equal(buttons[0].dataset.materializedReceiptReview,'dw');
+  buttons[0].click();await flush();
+  assert.deepEqual(requests,[{expectedRevision:task.revision,subscriptionId:'dw',errorGeneration:3}]);
+  assert.match(buttons[0].parentElement.textContent,/已核对故障前最近一笔已确认回执/);
+  assert.ok(buttons[0].parentElement.textContent.includes('e'.repeat(64)));
  }finally{ui.dom.window.close();}
 });
 

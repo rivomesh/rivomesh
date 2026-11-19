@@ -40,7 +40,7 @@ final class KafkaNoticeCatalog {
         String digest(){return Codec.sha256(Codec.encode(this));}
         int routes(){return versions.stream().mapToInt(item->item.kafkaTargets().size()).sum();}
     }
-    private record Snapshot(List<Selection> selections) {
+    private record Snapshot(List<Selection> selections,String fixedHistorySha256) {
         String digest(){return Codec.sha256(Codec.encode(selections.stream().map(Selection::digest).toList()));}
     }
 
@@ -91,7 +91,8 @@ final class KafkaNoticeCatalog {
             }
         }
         try{
-            if(!before.digest().equals(snapshot(tasks,plan,actor).digest()))throw changed();
+            Snapshot after=snapshot(tasks,plan,actor);
+            if(!before.digest().equals(after.digest())||!java.util.Objects.equals(before.fixedHistorySha256(),after.fixedHistorySha256()))throw changed();
         }catch(Limit exceeded){throw changed();}
         if(collision)return Map.of("status","CONFLICT","code","KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION");
         if(retainedMissing)return incomplete("KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING");
@@ -101,17 +102,27 @@ final class KafkaNoticeCatalog {
         if(routes!=nativeRoutes.size())throw changed();
         String cut=configurationCut(tasks,before);
         String routesProof=Codec.sha256(Codec.encode(List.of("kafka-notice-routes-v1",cut,identity.controlTopicSha256(),nativeRoutes)));
-        if(versions==1&&routes==1)return Map.of("status","VERIFIED_SINGLETON","code","KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED",
-                "configurationCutSha256",cut,"physicalRoutesSha256",routesProof);
-        return Map.of("status","VERIFIED_AT_REVIEW","code","KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED",
-                "configurationVersions",versions,"kafkaRoutes",routes,"configurationCutSha256",cut,"physicalRoutesSha256",routesProof);
+        boolean singleton=versions==1&&routes==1;
+        var result=new LinkedHashMap<String,Object>();
+        result.put("status",singleton?"VERIFIED_SINGLETON":"VERIFIED_AT_REVIEW");
+        result.put("code",singleton?"KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED":"KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED");
+        if(!singleton){
+            result.put("configurationVersions",versions);
+            result.put("kafkaRoutes",routes);
+        }
+        result.put("configurationCutSha256",cut);
+        result.put("physicalRoutesSha256",routesProof);
+        if(before.fixedHistorySha256()!=null)result.put("fixedHistorySha256",before.fixedHistorySha256());
+        return result;
     }
 
     /** Uses the same locked shared root as the approval insert. */
     static void requireConfigurationCut(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record selected,
-                                        Prepared plan,String expected)throws Exception{
+                                        Prepared plan,String expected,String fixedHistory)throws Exception{
         try{
-            if(!configurationCut(tasks,snapshot(tasks,c,selected,plan)).equals(expected))throw changed();
+            Snapshot snapshot=snapshot(tasks,c,selected,plan);
+            if(!configurationCut(tasks,snapshot).equals(expected)
+                    ||fixedHistory!=null&&!fixedHistory.equals(snapshot.fixedHistorySha256()))throw changed();
         }catch(Limit exceeded){throw changed();}
     }
 
@@ -131,6 +142,8 @@ final class KafkaNoticeCatalog {
                 throw new TaskService.Conflict("REVISION_CHANGED");
             List<Selection> catalog=new ArrayList<>();
             int versions=0,routes=0;
+            boolean historyComplete=true;
+            Map<String,String> history=new TreeMap<>();
             for(GlobalTaskStore.Record task:tasks.kafkaCatalogRecords(c,MAX_TASKS)){
                 Selection selection=selection(tasks,c,task,MAX_VERSIONS-versions);
                 versions+=selection.versions().size();routes+=selection.routes();
@@ -138,8 +151,37 @@ final class KafkaNoticeCatalog {
                 if(task.id.equals(selected.id)&&selection.versions().stream().noneMatch(v->v.id().equals(selected.activeConfigurationVersion)
                         &&v.kafkaTargets().contains(plan.controlTopic().targetId())))throw changed();
                 catalog.add(selection);
+                if(selection.routes()>0){
+                    String proof=fixedHistory(tasks,c,task,selection,plan);
+                    if(proof==null)historyComplete=false;
+                    else history.put(task.id,proof);
+                }
             }
-            return new Snapshot(List.copyOf(catalog));
+            String fixed=historyComplete&&!history.isEmpty()?Codec.sha256(tasks.commandCipher().signature(
+                    "kafka-notice-fixed-history-v1\n"+Codec.encode(List.of(plan.controlTopic(),history)))):null;
+            return new Snapshot(List.copyOf(catalog),fixed);
+    }
+
+    private static String fixedHistory(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record task,
+                                       Selection selection,Prepared plan)throws Exception{
+        Revision initial=selection.versions().getLast();
+        var born=KafkaHistoryEnrollments.fixedRoutes(initial.yaml());
+        if(born.isEmpty())return null;
+        for(Revision version:selection.versions()){
+            var declared=KafkaHistoryEnrollments.fixedRoutes(version.yaml());
+            if(!declared.equals(born)||!declared.keySet().equals(Set.copyOf(version.kafkaTargets())))return null;
+        }
+        var topic=plan.controlTopic();
+        if(born.values().stream().anyMatch(route->topic.kafkaClusterSha256().equals(route.clusterSha256())
+                &&topic.topicId().equals(route.topicId())))return null;
+        var enrollment=tasks.kafkaHistoryEnrollments.require(c,task);
+        if(!initial.id().equals(enrollment.origin().initialConfiguration()))return null;
+        if(task.id.equals(plan.task().taskId())){
+            var failedRoute=born.get(plan.failure().targetId());
+            if(!enrollment.ready()||failedRoute==null||!failedRoute.clusterSha256().equals(topic.kafkaClusterSha256())
+                    ||!enrollment.origin().generation().equals(plan.failure().journalGeneration()))return null;
+        }
+        return Codec.sha256(Codec.encode(List.of(task.id,enrollment.origin(),born)));
     }
 
     static Selection selection(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record task,int remaining)throws Exception{

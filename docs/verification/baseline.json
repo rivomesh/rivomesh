@@ -14410,5 +14410,92 @@
     "cleanupVerified": true,
     "reproduce": "python3 tests/kafka-topic-id-run.py --java-home <Temurin 21 directory> --kafka-client <official kafka-clients 4.1.2 jar> --slf4j-api <official slf4j-api 1.7.36 jar>",
     "pending": "Production integration with the approved notice ledger and independent whole-history evidence, higher-replica and failover acceptance, and unavailable v13 handling."
+  },
+  "kafkaManagedFixedTopicDispatch": {
+    "scope": "One managed LOCAL task, two Controllers, one real Agent admitting a synthetic source producer, two real business Topics and a native Kafka 4.1.2 TLS/SCRAM RF3 control Topic. The Java API and Kafka wire protocol exercised the actual sender.",
+    "artifactSha256": "0af03b9b5aa3c45817d0a1c9c57f33cbd701bf9e9b22aad2832c9d2977369da9",
+    "buildParent": "1fc8100",
+    "nativeLogSha256": "bbc5782a576bfa758e9b90d0525f3dc33561e0a7d40c2a35f584909e012bac5e",
+    "nativeChecks": [
+      "both Controllers verify broker capabilities, complete managed route history, and the exact latest ACK.",
+      "one approved RF3 notice commits; both Controllers replay the same exact receipt without advancing either business destination.",
+      "a same-name control Topic replacement refuses later dispatch and preserves the original native receipt."
+    ],
+    "focusedJavaPassed": 36,
+    "focusedConsoleScenariosPassed": 1,
+    "currentPackageGateSha256": "56e3182cb51153e96f180a26f2f91931e04c9307a0f7fd007c589a03bbc4460c",
+    "currentPackageGateNote": "The isolated SDK class namespaces, independent version resources and retained LICENSE/NOTICE pass the package gate. The approval dispatch evidence references its separate artifact above.",
+    "earlierNativeIssue": "The planned route initially changed the old journal cluster-identity hash and the real review refused it. The accepted run keeps the cluster identity stable and validates the bound Topic separately.",
+    "pending": "A production-shaped approval and abort-replay combined run and the remaining adapter/retention matrix. The fixture's source transactions are synthetic; broker writes and management authorization are native.",
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-notice-dispatch --java-home <Eclipse Temurin 21 directory> --artifact-sha256 <application SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+  },
+  "kafkaManagedFixedTopicAbortRecovery": {
+    "artifactSha256": "56e3182cb51153e96f180a26f2f91931e04c9307a0f7fd007c589a03bbc4460c",
+    "nativeBroker": "Kafka 4.1.2, three TLS/SCRAM brokers, control Topic RF3",
+    "nativeLogSha256": "2977965e5071030d5dad9294a5be794cf245db30ba5ac045af1c7c47275b1093",
+    "nativeChecks": [
+      "the packaged application's UUID transport recovers one native notice after a lost Kafka commit reply.",
+      "both journal ACKs and source hashes stay fixed. Same-name replacement cannot replay the old receipt.",
+      "an interrupted native Kafka transaction remains uncertain until broker abort, then the exact notice retries once."
+    ],
+    "scope": "Packaged native transport and durable LOCAL notice ledger. The fixture injects a fault at the commit boundary and keeps the actual broker calls, native records and transaction completion state.",
+    "earlierAttempts": {
+      "catalogReadinessTimeout": "3e1fe02ce0b2c5149ffcf292da407a0c9ddc0688f9d5855b0e2a1dc2e3816a3c",
+      "fixtureCheckedOngoingAfterClose": "47dc21a6f32bafdda723206696e770467593a1345330a334bdcb7e022fd6cdaf"
+    },
+    "cleanupVerified": true,
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-topic-id-ledger --java-home <Eclipse Temurin 21 directory> --artifact-sha256 <application SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+  },
+  "materializedDestinationPrecedingReceiptsTemurin21": {
+    "scope": "Real ClickHouse 25.8.33.6, Doris 4.1.3 and Hive 4.0.1. The release materializers and local H2 journal replay deterministic source transactions. The failure with an oversized event leaves the prior real COMMIT receipt observable.",
+    "artifactSha256": "0eaf226c5f7384c5e8e8721c7fcab66ebe4534c02d82ea05823da22a27032448",
+    "nativeLogSha256": "39fd3d5d45299c51f6182ccab3a57b453cedec0c400f5b49baffd84c14bf628c",
+    "nativeChecks": [
+      "CLICKHOUSE verifies the exact native receipt on its original resource.",
+      "CLICKHOUSE refuses a different native batch and preserves source and peer ACKs.",
+      "DORIS verifies the exact native receipt on its original resource.",
+      "DORIS refuses a different native batch and preserves source and peer ACKs.",
+      "HIVE verifies the exact native receipt on its original resource.",
+      "HIVE refuses a different native batch and preserves source and peer ACKs."
+    ],
+    "nativeChecksPassed": 6,
+    "fixtureFilesSha256": {
+      "tests/analytics/MaterializedRecoveryAcceptance.java": "1121d29d460c4872926b7678796ea61a5fda8f49e176904acc9a96af71cf1588",
+      "tests/materialized-recovery-run.sh": "a853c7efdfbcb58cd954ebbdc13fc7a6fdb7ee3b0c4b21ec88b259fcab70de38"
+    },
+    "fixtureCleanup": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "initialFixtureIssue": "The direct H2 pause increments the journal epoch; the fixture originally omitted publication fencing. The accepted run activates the publication checkpoint at the paused epoch just as PipelineControls.pause does.",
+    "reproduce": "bash tests/materialized-recovery-run.sh",
+    "boundary": "These checks cover receipt review of the preceding COMMIT. The peer ACK is simulated, and native target calls and persistence are real."
+  },
+  "temurin21GroupedKafkaAndMaterializedRecovery": {
+    "scope": "Clean Temurin 21 grouped verification for managed Kafka UUID approval, native recovery and three analytical preceding-receipt profiles.",
+    "buildParent": "1fc8100",
+    "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
+    "applicationJavaPassed": 698,
+    "optionalSkipped": 35,
+    "javaReactorLogSha256": "d4d4d1a67a1d80d652457cb426dd5c163944915fb5f7cc0f312b5150ca909d30",
+    "domPassed": 168,
+    "domLogSha256": "24d1310df39be29807463c0206b9f611be58253ad8718cabad1b444164404f16",
+    "chromePassed": 14,
+    "chromeManifestSha256": "a8d5f60a662e3c2af8d2b6e583bd939e46af7dbd0b72f31bbbdd7eff8c672058",
+    "configurationExamplesPassed": 25,
+    "configurationExamplesLogSha256": "8795bdb26d64a496477466d54b22514a73fde4635a5de5a31e9a00232b838940",
+    "nativeAnalyticsArtifactSha256": "0eaf226c5f7384c5e8e8721c7fcab66ebe4534c02d82ea05823da22a27032448",
+    "nativeAnalyticsArchiveComparison": {
+      "nonDirectoryFiles": 72681,
+      "differentContents": 0,
+      "logSha256": "f02f32784e89c6a68fd7a0f4af864ed86472e777674a2ff997897e117eee4f0e"
+    },
+    "nativeAnalyticsChecksPassed": 6,
+    "kafkaProfileReferences": [
+      "kafkaManagedFixedTopicDispatch",
+      "kafkaManagedFixedTopicAbortRecovery"
+    ],
+    "note": "Native management dispatch and terminal abort have separately frozen Kafka artifacts. ClickHouse, Doris and Hive test the same compiled and resource archive entries as this grouped artifact."
   }
 }

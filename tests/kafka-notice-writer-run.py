@@ -39,7 +39,7 @@ def provision_tls(home, keytool):
 
 
 def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093', network=None,
-          image='apache/kafka:3.9.2'):
+          image='apache/kafka:3.9.2', fast_abort_reaper=False):
     internal_host = name if network else '127.0.0.1'
     internal_bind = '' if network else '127.0.0.1'
     replicas = '3' if network else '1'
@@ -64,6 +64,8 @@ def start(home, port, password, name, cluster, node=1, voters='1@127.0.0.1:9093'
         'KAFKA_TRANSACTION_STATE_LOG_MIN_ISR': '2' if network else '1',
         'KAFKA_AUTO_CREATE_TOPICS_ENABLE': 'false',
     }
+    if fast_abort_reaper:
+        settings['KAFKA_TRANSACTION_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS'] = '1000'
     command = (['docker', 'create', '--rm'] if network else ['docker', 'run', '--rm', '-d']) + [
                '--name', name, '--memory', '1024m' if network else '1280m',
                '--cpus', '1.25' if network else '2',
@@ -161,6 +163,8 @@ def main():
     mode.add_argument('--managed-physical-receipt', action='store_true')
     mode.add_argument('--managed-first-send', action='store_true', help='Exercise the ordinary Worker with native MySQL and Kafka')
     mode.add_argument('--managed-notice-preflight', action='store_true', help='Use a three-broker TLS/SCRAM control Topic')
+    mode.add_argument('--managed-topic-id-ledger', action='store_true', help='Verify the packaged UUID sender with Kafka 4.1.2 RF3')
+    mode.add_argument('--managed-notice-dispatch', action='store_true', help='Exercise the approved management UI API and Kafka 4.1.2 RF3 dispatch')
     options.add_argument('--artifact-sha256', help='Require this SHA-256 of the normal application JAR')
     options.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), help='Eclipse Temurin 21 JDK')
     options.add_argument('--preflight', action='store_true', help='Compile the fixture without starting Docker')
@@ -183,14 +187,17 @@ def main():
     fixtures = ['KafkaNoticeWriterAcceptance']
     if args.physical_ownership:
         fixtures = ['KafkaPhysicalOwnershipAcceptance']
-    managed = args.managed_physical_receipt or args.managed_notice_preflight
+    managed = args.managed_physical_receipt or args.managed_notice_preflight or args.managed_notice_dispatch
     if managed:
         fixtures = ['KafkaManagedPhysicalReceiptAcceptance', 'KafkaPhysicalOwnershipAcceptance']
     if args.managed_first_send:
         fixtures = ['KafkaFirstSendAcceptance', 'KafkaPhysicalOwnershipAcceptance']
+    if args.managed_topic_id_ledger:
+        fixtures = ['KafkaTopicIdLedgerAcceptance', 'KafkaRecoveryNoticeAcceptance', 'KafkaPhysicalOwnershipAcceptance']
     name = f'rivomesh-kafka-writer-{secrets.token_hex(6)}'
-    names = [f'{name}-{node}' for node in (1,2,3)] if args.managed_notice_preflight else [name]
-    network = name+'-net' if args.managed_notice_preflight else None
+    replicated = args.managed_notice_preflight or args.managed_topic_id_ledger or args.managed_notice_dispatch
+    names = [f'{name}-{node}' for node in (1,2,3)] if replicated else [name]
+    network = name+'-net' if replicated else None
     mysqls = [name+'-mysql-source', name+'-mysql-control'] if args.managed_first_send else []
     secret = secrets.token_hex(24)
     with tempfile.TemporaryDirectory(prefix='rivomesh-kafka-writer-') as directory:
@@ -229,7 +236,9 @@ def main():
                 run('docker', 'network', 'create', network, capture_output=True, timeout=15)
                 voters = ','.join(f'{node}@{broker}:9093' for node, broker in enumerate(names, 1))
                 for node, (broker, port) in enumerate(zip(names, ports), 1):
-                    start(broker_home, port, password, broker, cluster, node, voters, network)
+                    broker_image = 'apache/kafka:4.1.2' if args.managed_topic_id_ledger or args.managed_notice_dispatch else 'apache/kafka:3.9.2'
+                    start(broker_home, port, password, broker, cluster, node, voters, network, image=broker_image,
+                          fast_abort_reaper=args.managed_topic_id_ledger)
                 run('docker', 'start', *names, capture_output=True, timeout=35)
             else:
                 start(broker_home, ports[0], password, name, cluster)
@@ -252,15 +261,17 @@ def main():
                 result.check_returncode()
                 return
             fixture_arguments = [','.join(f'127.0.0.1:{port}' for port in ports)]
-            if managed:
+            if managed or args.managed_topic_id_ledger:
                 fixture_arguments.append(str(home))
             if args.managed_notice_preflight:
                 fixture_arguments.append('--notice-preflight')
-            run(str(java_home / 'java'), '-Xmx384m' if managed else '-Xmx256m',
+            if args.managed_notice_dispatch:
+                fixture_arguments.append('--notice-dispatch')
+            run(str(java_home / 'java'), '-Xmx384m' if managed or args.managed_topic_id_ledger else '-Xmx256m',
                 '-Dorg.slf4j.simpleLogger.defaultLogLevel=off',
                 f'-Djavax.net.ssl.trustStore={trust}', f'-Djavax.net.ssl.trustStorePassword={password}',
                 '-cp', classpath, f'io.github.rivomesh.cdc.{fixtures[0]}', *fixture_arguments,
-                env=environment, timeout=250 if args.managed_notice_preflight else 210 if managed else 125)
+                env=environment, timeout=250 if replicated else 210 if managed else 125)
         except Exception:
             for member in names + mysqls:
                 logs = subprocess.run(['docker', 'logs', '--tail', '25', member], capture_output=True, text=True, timeout=10)

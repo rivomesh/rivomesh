@@ -11,6 +11,7 @@ COPY rocketmq-transport/ ./rocketmq-transport/
 COPY artemis-transport/ ./artemis-transport/
 COPY classic-transport/ ./classic-transport/
 COPY hive-transport/ ./hive-transport/
+COPY kafka-notice-transport/ ./kafka-notice-transport/
 COPY sync-app/ ./sync-app/
 RUN mvn -B -s build/settings.xml -DskipTests package
 

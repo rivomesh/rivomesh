@@ -83,6 +83,15 @@ public final class DorisMaterializer implements ConfirmedPublisher {
     @Override public void resumeProgress(String progress){if(rootIdentity!=null||receiptId!=null)throw new IllegalStateException("DORIS_PROGRESS_ALREADY_ACTIVE");if(progress==null)return;String[] fields=progress.split(":",-1);if(fields.length!=3||!fields[0].equals("DORIS_RECEIPT_V1")||!fields[1].matches("[a-f0-9]{64}")||!fields[2].matches("[a-f0-9]{64}"))throw new IllegalArgumentException("DORIS_PROGRESS_INVALID");receiptId=fields[1];receiptHash=fields[2];}
     @Override public String confirmedProgress(){return receiptId==null?null:"DORIS_RECEIPT_V1:"+receiptId+":"+receiptHash;}
     @Override public String identity(){return rootIdentity==null?null:"DORIS_TABLE_V1:"+rootIdentity;}
+    void verifyPrecedingCommit(String progress,String expectedIdentityHash,String expectedEventId)throws Exception{
+        resumeProgress(progress);
+        if(!Codec.sha256(expectedEventId).equals(receiptId))throw new IllegalStateException("DORIS_RECOVERY_PUBLICATION_UNCERTAIN");
+        root(false);
+        if(!Codec.sha256(identity()).equals(expectedIdentityHash))throw new IllegalStateException("DORIS_RESOURCE_ID_CHANGED");
+        verifyReceipt();
+        root(false);
+    }
+
     private static boolean control(String channel){return channel.endsWith(".__schema")||channel.endsWith(".__transactions");}
     @Override public void prepare(Set<String> destinations)throws Exception{root(settings.autoCreate);verifyReceipt();for(String channel:destinations)if(!control(channel)){SchemaRecord schema=schema(channel,false);if(schema!=null)verify(schema);}}
     @Override public void require(Set<String> destinations)throws Exception{root(false);verifyReceipt();for(String channel:destinations)if(!control(channel))verify(schema(channel,true));}

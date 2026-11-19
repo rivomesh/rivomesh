@@ -19,7 +19,7 @@ Existing global task queries carry summaries through different management entrie
 
 ## Recovery by target product
 
-**Adapter capabilities** shows the recovery modes supported by each destination. `GET /api/capabilities` returns `transactionSkip`, `transactionCompensation` and `rebuildMode` for target entries.
+**Adapter capabilities** shows the recovery modes supported by each destination. `GET /api/capabilities` returns `transactionSkip`, `transactionCompensation`, `failureReceiptReview`, `gapNotification` and `rebuildMode` for target entries.
 
 | Target | Transaction skip and compensation | Rebuild |
 |---|---|---|
@@ -28,6 +28,14 @@ Existing global task queries carry summaries through different management entrie
 | Planned destinations | Unavailable | Unavailable |
 
 `MANUAL_NEW_BASELINE` describes an operator-managed project. Keep the original journal, destination receipts and evidence until the new baseline has been checked. A resume action uses the existing destination identity and checkpoint.
+
+### Read the preceding receipt for an analytical destination
+
+Pause the task and select **Check destination receipt** on the failed ClickHouse, Doris or Hive subscription. The review requires a complete failed incremental transaction and a retained acknowledged predecessor. It verifies the original target resource and the exact native COMMIT receipt. A later partial batch or an older snapshot receipt fails verification. The review preserves the failed transaction and all subscription positions.
+
+Use `POST /api/tasks/<task>/materialization-receipt` with `expectedRevision`, `subscriptionId` and `errorGeneration`. A permitted administrator can submit the same read through either Controller. The CLI equivalent is `java -jar rivomesh.jar review-materialized-recovery config.yml <target> <error-generation>`.
+
+An open gap, a prepared skip review or a destination that has fallen behind can retain journal payloads past a restart. The collector checks the minimum acknowledged sequence across destinations and retains raw and normalized bytes for unresolved gaps. During incremental capture a full journal reports `JOURNAL_BACKPRESSURE` and preserves that evidence. The Kafka notice operation reports a failure and preserves original synchronization progress. [Kafka approvals and recovery](messaging-v3.md#approve-check-and-send-a-gap-notice)
 
 ## Source pipeline failure phases
 

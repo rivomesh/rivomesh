@@ -14,7 +14,13 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
+import org.apache.kafka.common.resource.ResourceType;
 
 /** Native effective permissions for the two reviewed principals and two exact physical topics. */
 public final class KafkaNoticeWriterReview {
@@ -24,8 +30,11 @@ public final class KafkaNoticeWriterReview {
 
     public record Result(String status,String code,
                          @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                         String evidenceSha256) {
-        public Result(String status,String code){this(status,code,null);}
+                         String evidenceSha256,
+                         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                         Boolean physicalTransactionsReady) {
+        public Result(String status,String code){this(status,code,null,null);}
+        public Result(String status,String code,String evidenceSha256){this(status,code,evidenceSha256,null);}
         public static Result notConfigured(){return new Result("NOT_CONFIGURED","KAFKA_NOTICE_WRITER_NOT_CONFIGURED");}
     }
 
@@ -87,7 +96,12 @@ public final class KafkaNoticeWriterReview {
                     target.username,username,target.messaging.saslMechanism,
                     before.reviewerControl().stream().sorted().toList(),before.writerControl().stream().sorted().toList(),
                     before.writerBusiness().stream().sorted().toList())));
-            return new Result(result.status(),result.code(),digest);
+            Boolean physical=null;
+            if(target.messaging.physicalTopic!=null){
+                exclusiveControlAcl(reviewer,plan.controlTopic().topicName(),username,deadline);
+                physical=physicalTransactions(reviewer,deadline)&&physicalTransactions(writer,deadline);
+            }
+            return new Result(result.status(),result.code(),digest,physical);
         }catch(Blocked failure){
             return blocked(failure.getMessage());
         }catch(InterruptedException interrupted){
@@ -99,6 +113,29 @@ public final class KafkaNoticeWriterReview {
             try{if(writer!=null)writer.close(CLOSE);}
             finally{if(reviewer!=null)reviewer.close(CLOSE);}
         }
+    }
+
+    private static void exclusiveControlAcl(Admin reviewer,String control,String writer,long deadline)throws Exception{
+        var filter=new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC,control,PatternType.MATCH),
+                AccessControlEntryFilter.ANY);
+        boolean exactWriter=false;
+        for(var binding:await(reviewer.describeAcls(filter).values(),deadline)){
+            var entry=binding.entry();
+            if(entry.permissionType()!=AclPermissionType.ALLOW||READ_ONLY.contains(entry.operation()))continue;
+            if(entry.operation()!=AclOperation.WRITE||!entry.principal().equals("User:"+writer)
+                    ||binding.pattern().patternType()!=PatternType.LITERAL||!control.equals(binding.pattern().name()))
+                throw new Blocked("KAFKA_NOTICE_WRITER_CONTROL_TOPIC_NOT_EXCLUSIVE");
+            exactWriter=true;
+        }
+        if(!exactWriter)throw new Blocked("KAFKA_NOTICE_WRITER_CONTROL_TOPIC_NOT_EXCLUSIVE");
+    }
+
+    private static boolean physicalTransactions(Admin admin,long deadline)throws Exception{
+        var features=await(admin.describeFeatures().featureMetadata(),deadline).finalizedFeatures();
+        var metadata=features.get("metadata.version");
+        var transaction=features.get("transaction.version");
+        // Kafka 4.1-IV0 or newer with Transaction V2. The sender independently enforces Produce v13.
+        return metadata!=null&&metadata.minVersionLevel()>=26&&transaction!=null&&transaction.minVersionLevel()>=2;
     }
 
     private static Permissions observe(Admin reviewer,Admin writer,String businessName,KafkaNoticePlanning.Prepared plan,

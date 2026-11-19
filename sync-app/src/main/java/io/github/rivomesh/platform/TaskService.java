@@ -1670,6 +1670,45 @@ public final class TaskService implements AutoCloseable {
         Map<String,Object> result=backend.failureEvidence(failureEvidenceDirectory(id),failureEvidenceScope(id),evidence,view,from,limit);
         AuditStore.Event event=new AuditStore.Event();event.kind=view==null?"FAILURE_EVIDENCE_SUMMARY_READ":"FAILURE_EVIDENCE_EVENTS_READ";event.action=view==null?"READ_FAILURE_SUMMARY":"READ_FAILURE_EVENTS";event.taskId=id;event.subjectId=evidence;event.operationHash=String.valueOf(result.get("hash"));event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;
     }
+    Map<String,Object> reviewMaterializedReceipt(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        TaskDefinition definition;
+        synchronized(this){
+            definition=materializedReviewTask(request,actor).config;
+        }
+        Map<String,Object> result;
+        try{
+            result=backend.reviewMaterializedReceipt(definition,request.subscriptionId,request.errorCount);
+        }catch(IllegalStateException|IllegalArgumentException invalid){
+            String code=invalid.getMessage();
+            if(code!=null&&code.matches("(?:CLICKHOUSE|DORIS|HIVE|MATERIALIZED)_[A-Z_]{3,100}"))
+                throw new Conflict(code);
+            throw invalid;
+        }
+        synchronized(this){
+            if(materializedReviewTask(request,actor).config!=definition)throw new Conflict("REVISION_CHANGED");
+            AuditStore.Event audit=new AuditStore.Event();
+            audit.kind="MATERIALIZED_RECEIPT_READ";audit.action="READ_MATERIALIZED_RECEIPT";audit.taskId=request.taskId;
+            audit.subjectId=request.subscriptionId;audit.actorId=actor.id;audit.actorRole=actor.role.name();
+            audit.operationHash=(String)result.get("nativeReceiptSha256");audit.status="RESPONSE_PREPARED";
+            appendAudit(audit);
+        }
+        return result;
+    }
+
+    private Entry materializedReviewTask(TaskRequest request,AccessControl.Principal actor){
+        ensureOpen();currentActor(actor);
+        if(actor==null||!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        if(!failureReviewEnabled())throw new Conflict("FAILURE_REVIEW_DISABLED");
+        Entry entry=require(request.taskId);
+        Control control=registry.tasks.get(request.taskId);
+        if(!request.revision.equals(control.revision))throw new Conflict("REVISION_CHANGED");
+        if(!"PAUSED".equals(control.desired))throw new Conflict("MATERIALIZED_RECOVERY_REQUIRES_PIPELINE_PAUSED");
+        if(entry.config.pipeline==null||entry.config.pipeline.targets.stream().noneMatch(
+                target->request.subscriptionId.equals(target.id)&&target.product.materialized()))
+            throw new Conflict("MATERIALIZED_RECOVERY_TARGET_UNSUPPORTED");
+        return entry;
+    }
+
     Map<String,Object> planKafkaNotice(TaskRequest request,AccessControl.Principal actor)throws Exception{
         DurableCommands.KafkaNoticePredecessor predecessor=request.kafkaNoticePredecessor;
         TaskDefinition definition;
@@ -1715,6 +1754,27 @@ public final class TaskService implements AutoCloseable {
                     "executionAuthorized",false,"publicationBlockCode","KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",
                     "writerEntitlement",writerEntitlement);
         }
+    }
+
+    KafkaNoticePlanning.DispatchReceipt dispatchKafkaNotice(DurableCommands.KafkaNoticePreflight retained,
+                                                            AccessControl.Principal actor,KafkaNoticePlanning.DispatchFence fence)throws Exception{
+        var approved=retained.approval();
+        var plan=approved.plan();
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PLAN,plan.task().taskId());
+        request.revision=plan.task().revision();request.reference=plan.predecessorRequestId();
+        request.kafkaNoticePredecessor=retained.predecessor();
+        var current=planKafkaNotice(request,actor);
+        if(!plan.equals(current.get("plan"))||!approved.writer().equals(current.get("writerEntitlement")))
+            throw new Conflict("KAFKA_NOTICE_APPROVAL_CHANGED");
+        PlatformConfig.KafkaNoticeWriter writer=config.kafkaNoticeWriters.stream()
+                .filter(item->request.taskId.equals(item.taskId)&&plan.failure().targetId().equals(item.targetId))
+                .findFirst().orElseThrow(()->new Conflict("KAFKA_NOTICE_WRITER_NOT_CONFIGURED"));
+        PipelineConfig pipeline;
+        synchronized(this){
+            Entry entry=kafkaNoticeTask(request,actor);
+            pipeline=parseTask(entry.config.workerYaml,entry.path.getParent()).pipeline;
+        }
+        return KafkaNoticePlanning.dispatch(pipeline,plan,writer.bootstrapServers,writer.username,writer.password,fence);
     }
 
     Map<String,Object> probeKafkaCatalog(KafkaNoticeCatalog.Selection selection,AccessControl.Principal actor)throws Exception{

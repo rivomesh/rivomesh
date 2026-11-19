@@ -252,7 +252,7 @@ public final class KafkaRecoveryNoticeAcceptance {
         return properties;
     }
 
-    private static void seed(JdbcJournal journal)throws Exception{
+    static void seed(JdbcJournal journal)throws Exception{
         journal.initialize(Codec.sha256("notice native fixture"),GENERATION,List.of(TARGET,HEALTHY));
         Journal.Lease writer=journal.claim("fixture-writer",30000);
         TableSchema table=new TableSchema();

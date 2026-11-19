@@ -218,11 +218,13 @@ public final class ConsoleServer implements AutoCloseable {
                 return;
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("kafka-notice-approvals")
-                    &&parts[6].equals("preflight")&&method.equals("POST")){
+                    &&Set.of("preflight","dispatch").contains(parts[6])&&method.equals("POST")){
+                boolean dispatch=parts[6].equals("dispatch");
                 JsonNode input=body(exchange);
                 if(input.size()!=2||!input.path("approvalScopeSha256").isTextual()||!input.path("expectedRevision").isTextual())
-                    throw new IllegalArgumentException("KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID");
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PREFLIGHT,parts[3]);
+                    throw new IllegalArgumentException(dispatch?"KAFKA_NOTICE_DISPATCH_REQUEST_INVALID":"KAFKA_NOTICE_PREFLIGHT_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(dispatch?TaskRequest.Kind.KAFKA_NOTICE_DISPATCH:TaskRequest.Kind.KAFKA_NOTICE_PREFLIGHT,parts[3]);
+                if(dispatch)request.requestId=singleHeader(exchange,"X-Request-ID");
                 request.reference=parts[5];request.revision=input.path("expectedRevision").asText();
                 request.identityHash=input.path("approvalScopeSha256").asText();
                 try{json(exchange,200,control.invoke(request,principal));}
@@ -231,6 +233,16 @@ public final class ConsoleServer implements AutoCloseable {
                     error(exchange,404,"RECOVERY_RECEIPT_NOT_FOUND");
                 }
                 return;
+            }
+            if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("materialization-receipt")&&method.equals("POST")){
+                JsonNode input=body(exchange);
+                if(input.size()!=3||!input.path("expectedRevision").isTextual()||!input.path("subscriptionId").isTextual()
+                        ||!input.path("errorGeneration").isIntegralNumber()||!input.path("errorGeneration").canConvertToLong())
+                    throw new IllegalArgumentException("MATERIALIZED_RECOVERY_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.MATERIALIZED_RECEIPT,parts[3]);
+                request.revision=input.get("expectedRevision").textValue();request.subscriptionId=input.get("subscriptionId").textValue();
+                request.errorCount=input.get("errorGeneration").longValue();
+                json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==5&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("kafka-physical-receipt")&&method.equals("POST")){
                 JsonNode input=body(exchange);
@@ -484,7 +496,7 @@ public final class ConsoleServer implements AutoCloseable {
         catch(SecurityException e){error(exchange,403,"FORBIDDEN");}
         catch(IllegalArgumentException e){
             String message=e.getMessage();
-            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("(CORRECTION|HANDOFF|KAFKA_RECOVERY|KAFKA_NOTICE|KAFKA_PHYSICAL_RECEIPT)_[A-Z_]+")
+            boolean known=message!=null&&("TASK_PLACEMENT_INVALID".equals(message)||message.matches("(CORRECTION|HANDOFF|KAFKA_RECOVERY|KAFKA_NOTICE|KAFKA_PHYSICAL_RECEIPT|MATERIALIZED_RECOVERY)_[A-Z_]+")
                     ||exchange.getRequestURI().getPath().startsWith("/api/accounts")&&message.matches("ACCOUNT_[A-Z_]+"));
             error(exchange,400,known?message:"REQUEST_INVALID");
         }
@@ -566,8 +578,12 @@ public final class ConsoleServer implements AutoCloseable {
             return "POST_KAFKA_NOTICE_APPROVAL";
         if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-notice-approvals/[A-Za-z0-9_-]{8,128}/preflight"))
             return "POST_KAFKA_NOTICE_PREFLIGHT";
+        if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-notice-approvals/[A-Za-z0-9_-]{8,128}/dispatch"))
+            return "POST_KAFKA_NOTICE_DISPATCH";
         if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/kafka-physical-receipt"))
             return "POST_KAFKA_PHYSICAL_RECEIPT";
+        if("POST".equals(method)&&path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/materialization-receipt"))
+            return "POST_MATERIALIZED_RECEIPT";
         String action=(path.equals("/api/accounts")||path.startsWith("/api/accounts/"))?"ACCOUNTS":path.equals("/api/nodes")?"NODES":path.equals("/api/audit/export")?"AUDIT_EXPORT":path.equals("/api/audit")?"AUDIT_READ":(path.equals("/api/session")||path.equals("/api/session/logout"))?"SESSION":path.equals("/api/capabilities")?"CAPABILITIES":path.equals("/api/tasks")?"TASKS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/configuration(?:/.*)?")?"CONFIGURATION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/actions")?"TASK_ACTION":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/validations(?:/.*)?")?"VALIDATION_READ":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/recovery-receipts/[A-Za-z0-9_-]{8,128}")?"RECOVERY_RECEIPT":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/diagnostics")?"TASK_DIAGNOSTICS":path.matches("/api/tasks/[A-Za-z0-9][A-Za-z0-9._-]{0,127}")?"TASK_READ":"UNKNOWN_API";
         return (Arrays.asList("GET","POST","PUT","DELETE","PATCH","HEAD","OPTIONS").contains(method)?method:"OTHER")+"_"+action;
     }

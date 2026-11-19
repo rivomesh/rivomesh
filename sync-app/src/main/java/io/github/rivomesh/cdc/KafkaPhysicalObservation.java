@@ -10,7 +10,6 @@ import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
@@ -29,24 +28,29 @@ final class KafkaPhysicalObservation {
 
     static KafkaPhysicalObservation begin(Admin admin,PipelineConfig.Target target,Set<String> namespaces)throws InterruptedException{
         if(namespaces.isEmpty()||namespaces.size()>KafkaPhysicalReceipt.MAX_WIRE)return null;
+        if(target.messaging.physicalTopic!=null)return new KafkaPhysicalObservation(target.messaging.physicalTopic,namespaces);
         try{return new KafkaPhysicalObservation(identity(admin,target,deadline()),namespaces);}
         catch(InterruptException interrupted){throw interrupted();}
         catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw interrupted;}
         catch(Exception unavailable){return null;}
     }
 
-    void confirmed(String topic,ConfirmedPublisher.Message message,RecordMetadata receipt){
+    void confirmed(String topic,ConfirmedPublisher.Message message,String actualTopic,int partition,long offset){
         if(!"COMMIT".equals(message.headers.get("rivomesh_kind")))return;
         final String suffix=".__transactions";
-        if(!message.destination.endsWith(suffix)||!topic.equals(receipt.topic())||receipt.partition()!=0
-                ||!receipt.hasOffset()||message.key==null||message.id==null)throw unavailable();
+        if(!message.destination.endsWith(suffix)||!topic.equals(actualTopic)||partition!=0
+                ||offset<0||message.key==null||message.id==null)throw unavailable();
         String namespace=message.destination.substring(0,message.destination.length()-suffix.length());
         if(!namespaces.contains(namespace)||commits.putIfAbsent(namespace,new Expected(message.key,message.id,
-                new KafkaPhysicalReceipt.Wire(namespace,receipt.offset(),Codec.sha256(message.body))))!=null)throw unavailable();
+                new KafkaPhysicalReceipt.Wire(namespace,offset,Codec.sha256(message.body))))!=null)throw unavailable();
     }
 
     KafkaPhysicalReceipt.Observation finish(Admin admin,PipelineConfig.Target target)throws InterruptedException{
         if(!namespaces.equals(commits.keySet()))return null;
+        // The UUID-bound producer already received all broker acknowledgements. The independent
+        // consumer reads these exact offsets at review time rather than adding a scan to each commit.
+        if(target.messaging.physicalTopic!=null)
+            return new KafkaPhysicalReceipt.Observation(before,commits.values().stream().map(Expected::wire).toList());
         try{
             long deadline=deadline();
             if(!before.equals(identity(admin,target,deadline)))return null;

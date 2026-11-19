@@ -34,7 +34,7 @@ if frozen:
     assert hashlib.sha256(source_manifest.read_bytes()).hexdigest()==manifest["sourceManifestSha256"], "Historical source manifest differs"
     print("FROZEN_RELEASE_INPUTS_ACCEPTED:",manifest["artifactSha256"],"; current work-in-progress Java is outside this acceptance scope")
 else:
-    for module in ("sync-app", "gaussdb-driver", "gbase8c-driver", "pulsar-transport", "rocketmq-transport", "artemis-transport", "classic-transport", "hive-transport"):
+    for module in ("sync-app", "gaussdb-driver", "gbase8c-driver", "pulsar-transport", "rocketmq-transport", "artemis-transport", "classic-transport", "hive-transport", "kafka-notice-transport"):
         for source in (root / module / "src/main/java").rglob("*.java"):
             assert source.stat().st_mtime <= jar.stat().st_mtime, "Rebuild after changed source: " + str(source)
     for source in (root / "sync-app/src/test/java").rglob("*.java"):

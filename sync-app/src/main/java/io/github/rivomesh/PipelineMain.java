@@ -38,6 +38,8 @@ final class PipelineMain {
             System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(CaptureRecoveryReview.inspect(config,true,Paths.get(args[3]))));
         else if(args.length==4&&args[0].equals("review-clickhouse-recovery"))
             System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(ClickHouseRecoveryReview.inspect(config,args[2],Long.parseLong(args[3]))));
+        else if(args.length==4&&args[0].equals("review-materialized-recovery"))
+            System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(MaterializedRecoveryReview.inspect(config,args[2],Long.parseLong(args[3]))));
         else if(args.length==4&&args[0].equals("review-kafka-recovery"))
             System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(KafkaRecoveryReview.inspect(config,args[2],Long.parseLong(args[3]))));
         else if(args.length==2&&args[0].equals("pause"))System.out.println(Codec.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(PipelineControls.pause(config)));

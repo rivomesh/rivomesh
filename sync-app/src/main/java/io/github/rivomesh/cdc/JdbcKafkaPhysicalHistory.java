@@ -80,6 +80,8 @@ final class JdbcKafkaPhysicalHistory {
                 ||!journal.settings.pipelineId.equals(receipt.scope().task())||!target.equals(receipt.target())
                 ||!generation.equals(receipt.generation())||receipt.epoch()!=epoch||receipt.sequence()!=sequence
                 ||!transactionHash.equals(receipt.transactionSha256()))throw mismatch();
+        var fixedTopic=journal.settings.kafkaFixedTopics.get(target);
+        if(fixedTopic!=null&&!fixedTopic.equals(receipt.observation().topic()))throw mismatch();
         if(grant.member()!=null){
             long publishedAt=journal.now(c);
             if(publishedAt<1)return;
@@ -135,10 +137,21 @@ final class JdbcKafkaPhysicalHistory {
         boolean attested=receipt.member()!=null;
         if(current!=null&&current.verifies(signed)&&(!attested||current.member()!=null)){
             var historical=attested?current.acknowledged(signed,journal.now(c),epoch):signed;
-            if(historical!=null&&read(journal,c,target,generation,version,attested)==null)
-                execute(c,"INSERT INTO "+journal.table(history(attested))
-                        +" (pipeline_id,subscription_id,generation,configuration_version,stream_seq,proof) VALUES (?,?,?,?,?,?)",
-                        pipeline,target,generation,version,sequence,Codec.encode(historical));
+            if(historical!=null){
+                var previous=read(journal,c,target,generation,version,attested);
+                if(previous==null){
+                    execute(c,"INSERT INTO "+journal.table(history(attested))
+                            +" (pipeline_id,subscription_id,generation,configuration_version,stream_seq,proof) VALUES (?,?,?,?,?,?)",
+                            pipeline,target,generation,version,sequence,Codec.encode(historical));
+                }else if(journal.settings.kafkaFixedTopics.containsKey(target)){
+                    if(previous.receipt().sequence()>=sequence||!current.verifies(previous)
+                            ||!previous.receipt().observation().topic().equals(receipt.observation().topic()))throw mismatch();
+                    if(execute(c,"UPDATE "+journal.table(history(attested))
+                            +" SET stream_seq=?,proof=? WHERE pipeline_id=? AND subscription_id=? AND generation=?"
+                            +" AND configuration_version=? AND stream_seq=?",sequence,Codec.encode(historical),pipeline,
+                            target,generation,version,previous.receipt().sequence())!=1)throw mismatch();
+                }
+            }
         }
         execute(c,"DELETE FROM "+journal.table(PENDING)+" WHERE pipeline_id=? AND subscription_id=? AND stream_seq=?",
                 pipeline,target,sequence);

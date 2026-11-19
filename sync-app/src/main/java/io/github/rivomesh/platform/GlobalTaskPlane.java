@@ -31,6 +31,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
             case RECOVERY_RECEIPT:return recoveryReceipt(request,actor);
+            case MATERIALIZED_RECEIPT:return queries.await(queries.submit(request,actor),actor);
             case HANDOFF_RAW_HISTORY:case HANDOFF_FAILURE_HISTORY:
                 try{return queries.await(queries.submit(request,actor),actor);}
                 catch(TaskService.Conflict rejected){
@@ -43,6 +44,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
                 return kafkaNoticePlan(request,actor).response();
             case KAFKA_NOTICE_APPROVAL:return kafkaNoticeApproval(request,actor);
             case KAFKA_NOTICE_PREFLIGHT:return kafkaNoticePreflight(request,actor);
+            case KAFKA_NOTICE_DISPATCH:return kafkaNoticeDispatch(request,actor);
             case KAFKA_PHYSICAL_RECEIPT:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_PHYSICAL_RECEIPT_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
@@ -114,7 +116,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
     }
     private Map<String,Object> recoveryReceipt(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> retained=commands.recoveryReceipt(request.taskId,request.reference,actor);
-        if("KAFKA_NOTICE_APPROVAL".equals(retained.get("kind")))return retained;
+        if(Set.of("KAFKA_NOTICE_APPROVAL","KAFKA_NOTICE_DISPATCH").contains(retained.get("kind")))return retained;
         boolean adopted=tasks.transaction(request.taskId,actor,(c,task,current)->{
             HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,tasks.database().now(c));
             return HandoffPreparations.evidenceInstalled(plan)
@@ -142,7 +144,22 @@ final class GlobalTaskPlane implements TaskControlPlane {
     private record KafkaNoticeReview(Map<String,Object> response,KafkaNoticeApproval.Scope approval){}
 
     private Map<String,Object> kafkaNoticePreflight(TaskRequest request,AccessControl.Principal actor)throws Exception{
-        var retained=commands.kafkaNoticePreflight(request,actor);
+        return verifyKafkaSender(request,actor,commands.kafkaNoticePreflight(request,actor));
+    }
+
+    private Map<String,Object> kafkaNoticeDispatch(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        Map<String,Object> replay=commands.replayKafkaNoticeDispatch(request,actor);
+        if(replay!=null)return replay;
+        TaskRequest preflight=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PREFLIGHT,request.taskId);
+        preflight.reference=request.reference;preflight.revision=request.revision;preflight.identityHash=request.identityHash;
+        var retained=commands.kafkaNoticePreflight(preflight,actor);
+        if(!"SENDER_READY".equals(verifyKafkaSender(preflight,actor,retained).get("status")))
+            throw new TaskService.Conflict("KAFKA_NOTICE_SENDER_BLOCKED");
+        return commands.enqueueKafkaNoticeDispatch(request,actor,retained);
+    }
+
+    private Map<String,Object> verifyKafkaSender(TaskRequest request,AccessControl.Principal actor,
+                                                DurableCommands.KafkaNoticePreflight retained)throws Exception{
         var predecessor=retained.predecessor();
         TaskRequest check=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PLAN,request.taskId);
         check.revision=request.revision;check.reference=predecessor.receipt().requestId();check.kafkaNoticePredecessor=predecessor;
@@ -208,6 +225,8 @@ final class GlobalTaskPlane implements TaskControlPlane {
         if(approval!=null){
             response.put("approvalScopeSha256",approval.digest());
             response.put("approvalBlockers",approval.blockers());
+            if(KafkaNoticeApproval.READY.equals(KafkaNoticeApproval.recordedCode(approval)))
+                response.put("publicationBlockCode","KAFKA_NOTICE_APPROVAL_REQUIRED");
         }
         return new KafkaNoticeReview(response,approval);
     }

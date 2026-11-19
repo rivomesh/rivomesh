@@ -2,21 +2,15 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T19:58:34+08:00",
-  "nextReportAt": "2026-11-19T20:58:16+08:00",
+  "lastReportAt": "2026-11-19T22:05:28+08:00",
+  "nextReportAt": "2026-11-19T22:58:16+08:00",
   "completedSincePrevious": [
-    "PostgreSQL 17.12 AUTO source placement passed four native cases with two Controllers and Agents. An unavailable journal leaves zero task, version and CREATE rows. The eligible node starts both SQL targets using the original logical slot. Pushed bab7e1e.",
-    "Aligned both languages for Hive external PostgreSQL Metastore and removed outdated multi-JDK coverage expectations from the Doris and Kingbase guides. Pushed 9f72f23.",
-    "The same Temurin 21 package passed four native three-member single-primary Group Replication profiles on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. Each elected a replacement after primary shutdown during a snapshot and caught up both SQL targets. Pushed 6c28138.",
-    "ClickHouse 25.8.33.6 on Temurin 21 refused a physically restored older nonempty target, preserving the journal-backed sequence 3. Native index, keyless row and replay checks passed. Pushed 0e2f631.",
-    "PostgreSQL 17.12 BYTEA/TOAST passed eight native checks on PostgreSQL and MySQL targets. Larger binary values and keyless multiplicity survive Worker SIGKILL using the original slot, generation and five snapshots. Pushed bc8898c.",
-    "Standard Temurin 21 full regression passed 691 application checks, 167 DOM, 14 real Chrome and 25 configurations. Thirty-five optional checks were skipped. The run recorded and corrected the macOS temporary directory symlink. Pushed 5947a1e.",
-    "A PostgreSQL source default of escape reproduced a CDC stall after snapshot on the old package. The logical session now sets its own hex format. Both escape and hex source configurations passed eight native checks each and retain both SQL target cuts. Pushed aa39de1.",
-    "Published the grouped completion conditions for all 12 unfinished SDD requirements and updated the bilingual implementation status with new native coverage. Pushed 7c9baf7.",
-    "Native MySQL and two real Kafka targets passed five managed LOCAL first-send and recovery checks. Scoped failure isolation, Agent restart, old Worker fencing and the full 698-case application regression passed. Pushed 3f11d21."
+    "Published separate Kafka physical-address preflight and standalone Kafka 4.1.2 v13 native refusal of a retired UUID.",
+    "The staged Temurin 21 candidate adds independently retained managed route history from task birth and exact latest ACK evidence. Both Controllers approved and delivered one native notice against three Kafka 4.1.2 TLS/SCRAM brokers. Authorization/stale scope and a same-name replacement were refused; source evidence and both business ACKs stayed fixed.",
+    "Targeted Java regression passed 36 cases. A focused console scenario verified the blocked and ready branches, CSRF and stable delivery request replay. The isolated client version resources pass the package gate."
   ],
   "inProgress": [
-    "RC-10 is the sole active requirement at the user's request. Native first-send isolation, explicit resume, restart and fencing are published. Complete historical attribution and physical Topic ID-addressed notices remain open."
+    "RC-10 only. Native Kafka approval and interruption recovery and all three analytical preceding receipts are verified. Other messaging adapters and broader retention remain."
   ],
   "reportContents": [
     "Current totals",
@@ -31,15 +25,8 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "bab7e1e",
-    "9f72f23",
-    "6c28138",
-    "0e2f631",
-    "bc8898c",
-    "5947a1e",
-    "aa39de1",
-    "7c9baf7",
-    "3f11d21"
+    "63ed397",
+    "1fc8100"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -47,22 +34,22 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue RC-10 only. Verify physical Topic ID addressing and independently retained route history before enabling approved recovery notices."
+    "Finish the remaining RC-10 messaging and retention cases one at a time."
   ],
-  "currentCandidateArtifact": "29052847a2b02d758a95abef41d7273859c6ff8bcb881895a5fc8aa7d632fbdc",
-  "currentCandidateScope": "Exact Temurin 21 release with native LOCAL Kafka first-send evidence, independent subscription recovery and revoked Worker fence.",
+  "currentCandidateArtifact": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
+  "currentCandidateScope": "Grouped Temurin 21 Kafka approval, interruption recovery, and exact preceding receipts for ClickHouse, Doris and Hive.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [],
-  "lastScheduledReportAt": "2026-11-19T19:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-19T21:58:16+08:00",
   "lastVerifiedReactor": {
-    "baseCommit": "aa39de119e4a5c04a6ab75403eca3908eb6c34b3",
-    "artifactSha256": "29052847a2b02d758a95abef41d7273859c6ff8bcb881895a5fc8aa7d632fbdc",
+    "baseCommit": "1fc8100",
+    "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
     "javaTestsPassed": 698,
     "optionalSkips": 35,
-    "domTestsPassed": 167,
+    "domTestsPassed": 168,
     "nativeChromeChecksPassed": 14,
     "configurationExamplesPassed": 25,
-    "scope": "Full standard release and browser/configuration checks on the exact packaged artifact."
+    "scope": "Grouped exact clean release artifact. All non-directory archive file contents match the independently tested analytical candidate."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
@@ -108,7 +95,7 @@
   "cleanupSincePrevious": {
     "checkedNamedFixtureResources": true,
     "logicalBytesRemoved": 0,
-    "scope": "Per-run named test containers, networks and volumes are removed. No unrelated Docker images or host data were pruned."
+    "scope": "Named brokers and fixture networks were removed after the runs."
   },
   "previousVerifiedReactor": {
     "baseCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
@@ -132,5 +119,9 @@
     "LG-05",
     "LG-08",
     "LG-10"
+  ],
+  "lastDelayedIntervals": [
+    "2026-11-19T20:58:16+08:00",
+    "2026-11-19T21:58:16+08:00"
   ]
 }

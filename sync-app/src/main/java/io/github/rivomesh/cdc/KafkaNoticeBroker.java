@@ -4,6 +4,7 @@ import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.cdc.KafkaRecoveryNotice.Attempt;
 import io.github.rivomesh.cdc.KafkaRecoveryNotice.Plan;
 import io.github.rivomesh.cdc.KafkaRecoveryNotice.Receipt;
+import io.github.rivomesh.kafka.notice.TopicIdTransactions;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -31,11 +33,26 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
     private static final Duration CLOSE=Duration.ofMillis(300),WINDOW=Duration.ofSeconds(6);
     private static final int MAXIMUM_OFFSETS=512,MAXIMUM_MESSAGE_BYTES=64*1024;
     private final PipelineConfig.Target target;
+    private final NoticeWriter writer;
 
     KafkaNoticeBroker(PipelineConfig.Target target){
+        this(target,null);
+    }
+
+    static KafkaNoticeBroker physicallyAddressed(PipelineConfig.Target target,List<String> endpoints,String username,String password){
+        return new KafkaNoticeBroker(target,new NoticeWriter(endpoints,username,password));
+    }
+
+    private KafkaNoticeBroker(PipelineConfig.Target target,NoticeWriter writer){
         if(target==null||target.product!=TargetProduct.KAFKA||target.messaging==null)
             throw rejected("KAFKA_NOTICE_TARGET_UNSUPPORTED");
         this.target=target;
+        this.writer=writer;
+    }
+
+    private record NoticeWriter(List<String> endpoints,String username,String password) {
+        NoticeWriter { endpoints=List.copyOf(endpoints); }
+        @Override public String toString(){return "Kafka notice writer";}
     }
 
     String inspectControlTopic(Plan plan)throws Exception{
@@ -81,12 +98,69 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
         }finally{admin.close(CLOSE);}
     }
 
+    @Override public boolean confirmedAborted(Plan plan,long offset)throws Exception{
+        if(writer==null)return false;
+        requireTarget(plan);
+        long deadline=until();
+        var writerSettings=KafkaMessagePublisher.connectionProperties(target);
+        writerSettings.setProperty("bootstrap.servers",String.join(",",writer.endpoints()));
+        writerSettings.setProperty("ssl.endpoint.identification.algorithm","https");
+        KafkaMessagePublisher.configureSasl(writerSettings,target.messaging.saslMechanism,writer.username(),writer.password());
+        var reviewer=Admin.create(KafkaMessagePublisher.connectionProperties(target));
+        Admin producerAdmin=null;
+        try{
+            producerAdmin=Admin.create(writerSettings);
+            requireTopic(reviewer,plan,true,deadline);
+            if(!plan.topic().clusterSha256().equals(Codec.sha256("KAFKA:"+await(producerAdmin.describeCluster().clusterId(),deadline))))
+                throw rejected("KAFKA_NOTICE_CONTROL_CLUSTER_CHANGED");
+            String id=plan.transactionalId();
+            var description=await(producerAdmin.describeTransactions(List.of(id)).description(id),deadline);
+            if(description.state()!=TransactionState.COMPLETE_ABORT)return false;
+            var partition=new TopicPartition(plan.topic().name(),0);
+            var partitions=Set.of(partition);
+            KafkaConsumer<String,byte[]> committed=new KafkaConsumer<>(consumerProperties("read_committed"));
+            KafkaConsumer<String,byte[]> uncommitted=null;
+            try{
+                uncommitted=new KafkaConsumer<>(consumerProperties("read_uncommitted"));
+                committed.assign(partitions);
+                uncommitted.assign(partitions);
+                long begin=committed.beginningOffsets(partitions,remaining(deadline)).get(partition);
+                long stable=committed.endOffsets(partitions,remaining(deadline)).get(partition);
+                if(offset<begin||offset>=stable)return false;
+                long past=Math.addExact(offset,1);
+                if(readRecords(committed,partition,plan,offset,past,true,deadline)!=null
+                        ||readRecords(uncommitted,partition,plan,offset,past,true,deadline)==null)return false;
+                requireTopic(reviewer,plan,false,deadline);
+                var after=await(producerAdmin.describeTransactions(List.of(id)).description(id),deadline);
+                return description.equals(after);
+            }finally{
+                try{if(uncommitted!=null)uncommitted.close(CLOSE);}
+                finally{committed.close(CLOSE);}
+            }
+        }finally{
+            try{if(producerAdmin!=null)producerAdmin.close(CLOSE);}
+            finally{reviewer.close(CLOSE);}
+        }
+    }
+
     @Override public Attempt begin(Plan plan)throws Exception{
         requireTarget(plan);
         Admin admin=Admin.create(KafkaMessagePublisher.connectionProperties(target));
         KafkaProducer<String,byte[]> producer=null;
         try{
             requireTopic(admin,plan,true,until());
+            if(writer!=null){
+                if(!"SASL_SSL".equals(target.messaging.securityProtocol)
+                        ||!Set.of("SCRAM-SHA-256","SCRAM-SHA-512").contains(target.messaging.saslMechanism))
+                    throw rejected("KAFKA_NOTICE_WRITER_SCRAM_TLS_REQUIRED");
+                var topic=plan.topic();
+                if(!KafkaNoticeWriterReview.validConfiguration(topic.clusterSha256(),topic.topicId(),writer.endpoints(),writer.username(),writer.password())
+                        ||writer.username().equals(target.username)||writer.password().equals(target.password))
+                    throw rejected("KAFKA_NOTICE_WRITER_SCOPE_UNVERIFIED");
+                var transaction=new TopicIdTransactions(writer.endpoints(),target.messaging.saslMechanism,writer.username(),
+                        writer.password(),topic.name(),topic.topicId(),topic.clusterSha256(),plan.transactionalId());
+                return new TopicIdAttempt(plan,admin,transaction);
+            }
             Properties settings=KafkaMessagePublisher.properties(target);
             settings.setProperty("transactional.id",plan.transactionalId());
             settings.setProperty("max.block.ms","5000");
@@ -99,6 +173,31 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
             try{if(producer!=null)producer.close(CLOSE);}
             finally{admin.close(CLOSE);}
             throw failure;
+        }
+    }
+
+    private final class TopicIdAttempt implements Attempt {
+        private final Plan plan;
+        private final Admin admin;
+        private final TopicIdTransactions transaction;
+
+        TopicIdAttempt(Plan plan,Admin admin,TopicIdTransactions transaction){
+            this.plan=plan;this.admin=admin;this.transaction=transaction;
+        }
+
+        @Override public long send(byte[] payload)throws Exception{
+            if(!Arrays.equals(plan.payload(),payload))throw rejected("KAFKA_NOTICE_PAYLOAD_CHANGED");
+            return transaction.send(plan.id(),payload,KafkaRecoveryNotice.KIND);
+        }
+
+        @Override public void commit()throws Exception{
+            requireTopic(admin,plan,false,System.nanoTime()+Duration.ofSeconds(2).toNanos());
+            transaction.commit();
+        }
+
+        @Override public void close(){
+            try{transaction.close();}
+            finally{admin.close(CLOSE);}
         }
     }
 

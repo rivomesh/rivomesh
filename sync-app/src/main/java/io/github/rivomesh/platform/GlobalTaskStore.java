@@ -213,6 +213,7 @@ final class GlobalTaskStore {
             ManagedWriterDeclaration.requireUnchanged(previousYaml,yaml);
             if(KafkaHistoryEnrollments.requested(previousYaml)!=KafkaHistoryEnrollments.requested(yaml))
                 throw new TaskService.Conflict("KAFKA_HISTORY_ORIGIN_CREATE_ONLY");
+            KafkaHistoryEnrollments.requireUnchangedRoutes(previousYaml,yaml);
             record.revision=UUID.randomUUID().toString();record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();record.configurationIndex=Math.addExact(record.configurationIndex,1);record.configurationAction=action;record.yaml=yaml;version(c,record,actor);
             db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,configuration_version=?,configuration_index=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,record.configurationVersion,record.configurationIndex,recordSignature(record),cluster,id);
             db.update(c,"INSERT INTO "+db.table("task_request")+" (cluster_id,request_id,task_id,actor_id,signature) VALUES (?,?,?,?,?)",cluster,request,id,actor.id,cipher.signature(signature));if(hook!=null)hook.commit(c,record,actor);access.append(c,event(record,request,actor,"GLOBAL_CONFIG_COMMITTED"));c.commit();return record;
