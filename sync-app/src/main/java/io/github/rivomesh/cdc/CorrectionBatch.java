@@ -2,6 +2,7 @@ package io.github.rivomesh.cdc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.MysqlDuration;
+import io.github.rivomesh.PostgresClock;
 import io.github.rivomesh.PostgresTimestamp;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -132,7 +133,7 @@ public final class CorrectionBatch {
                     value=value.replace('T',' ');
                     if(PostgresTimestamp.isColumn(column))value=PostgresTimestamp.format(PostgresTimestamp.localTime(value));
                     break;
-                case TIME: value=MysqlDuration.canonical(value);break;
+                case TIME: value=PostgresClock.isColumn(column)?PostgresClock.canonical(value):MysqlDuration.canonical(value);break;
                 case JSON: value=strictJson(value);break;
                 case BYTES: value=Base64.getEncoder().encodeToString(Base64.getDecoder().decode(value));break;
                 case GEOMETRY: throw invalid("CORRECTION_TYPE_UNSUPPORTED");

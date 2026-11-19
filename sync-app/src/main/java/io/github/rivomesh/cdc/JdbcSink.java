@@ -3,6 +3,7 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.JdbcConnections;
 import io.github.rivomesh.OracleDate;
 import io.github.rivomesh.PostgresDate;
+import io.github.rivomesh.PostgresClock;
 import io.github.rivomesh.PostgresTimestamp;
 import io.github.rivomesh.PipelineValidationBarrier;
 import io.github.rivomesh.TargetOwnership;
@@ -538,7 +539,7 @@ public final class JdbcSink implements SinkAdapter {
             case STRING:if(col.length>0&&col.length<=4000)return "VARCHAR("+(settings.product==TargetProduct.GAUSS?Math.multiplyExact(col.length,4):col.length)+")";return mysql()?"LONGTEXT":"TEXT";
             case DATE:return "DATE";
             case DATETIME:case TIMESTAMP:return mysql()?"DATETIME(6)":"TIMESTAMP(6)";
-            case TIME:return mysql()?"TIME(6)":settings.product==TargetProduct.H2?"VARCHAR(32)":"INTERVAL";
+            case TIME:return mysql()||nativePostgresClock(col)?"TIME(6)":settings.product==TargetProduct.H2?"VARCHAR(32)":"INTERVAL";
             case JSON:return mysql()?"JSON":settings.product==TargetProduct.H2?"CLOB":"JSONB";
             default:throw new IllegalArgumentException("TARGET_TYPE_UNSUPPORTED");
         }
@@ -588,7 +589,12 @@ public final class JdbcSink implements SinkAdapter {
                         matches=jdbc==Types.TIMESTAMP&&temporalPrecision(c,table,col,m.getScale(i+1))>=6
                                 &&(!OracleDate.isColumn(col)||actual.equals("timestamp"));
                         break;
-                    case TIME:matches=mysql()?jdbc==Types.TIME:settings.product==TargetProduct.H2?jdbc==Types.VARCHAR:dm()?actual.equals("interval day to second")&&m.getPrecision(i+1)>=2&&m.getScale(i+1)>=6:actual.equals("interval");break;
+                    case TIME:
+                        if(nativePostgresClock(col)||mysql()&&PostgresClock.isColumn(col))
+                            matches=jdbc==Types.TIME&&actual.equals("time")&&temporalPrecision(c,table,col,m.getScale(i+1))==6;
+                        else matches=mysql()?jdbc==Types.TIME:settings.product==TargetProduct.H2?jdbc==Types.VARCHAR:
+                                dm()?actual.equals("interval day to second")&&m.getPrecision(i+1)>=2&&m.getScale(i+1)>=6:actual.equals("interval");
+                        break;
                     default:matches=false;
                 }
                 if(dm()&&col.type==TableSchema.Type.STRING)matches=jdbc==Types.CLOB||jdbc==Types.VARCHAR&&col.length>0&&DmProfile.characterCapacity(c,destination(table),table.name,col.name)>=col.length;
@@ -608,6 +614,9 @@ public final class JdbcSink implements SinkAdapter {
         if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?")){
             p.setString(1,destination(table));p.setString(2,table.name);try(ResultSet rs=p.executeQuery()){if(!rs.next()||!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("TARGET_ENGINE_NOT_TRANSACTIONAL");}
         }
+    }
+    private boolean nativePostgresClock(TableSchema.Column column){
+        return settings.product==TargetProduct.POSTGRESQL&&PostgresClock.isColumn(column);
     }
     private int temporalPrecision(Connection c,TableSchema table,TableSchema.Column column,int reported)throws SQLException{
         if(!mysql())return reported;

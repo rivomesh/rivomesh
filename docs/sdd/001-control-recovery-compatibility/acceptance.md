@@ -33,7 +33,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-03 | SO-03 | 对本次发布包补验多库多目标、类型/生成列、事务、主备/MGR、失败恢复与人工操作；按拓扑和小版本注明范围。 | [PASS · MySQL 8.0.46, Java 8](../../verification/README.md) |
 | AC-SO-04 | SO-04 | 提供可复现8.2夹具/真实环境、版本探测、连接认证、状态命令、binlog事件和首个完整同步/恢复矩阵；不能只增加版本字符串或通过JDBC连接。 | [PASS · MySQL 8.2.0, Java 8](../../verification/README.md) |
 | AC-SO-05 | SO-05 | 在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。 | [PASS · MySQL 8.4.13](../../verification/README.md) |
-| AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收 |
+| AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收（逻辑槽切主、生成列和包括 TIME(6) 的双目标类型，动态 DDL 待验） |
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 部分验收（单 PDB 归档增量与 Worker 恢复实库） |
 | AC-JV-01 | JV-01 | 同一 Temurin 21 候选包的 Controller、Agent 和 Worker 须实际运行并完成全量与增量。记录 JVM 版本、架构、包 SHA、主类版本和依赖检查。 | 通过（Temurin 21 字节码、真实三类进程和 SQL 同步） |
 | AC-JV-02 | JV-02 | 各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。 | 待验收 |

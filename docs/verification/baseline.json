@@ -9119,5 +9119,80 @@
     "javaTestsPassed": 68,
     "scope": "One existing table, MySQL 8.4.13 utf8mb4_0900_bin NO PAD and PostgreSQL 17.12 built-in C, one single-column VARCHAR UNIQUE, matched declared widths up to 320 characters, exact native ordinary index, constraint restoration, role switch, pre-write failback and original-snapshot CDC.",
     "reproduce": "python3 tests/nonempty-target-preview.py --only-adopted-email-chain --artifact /path/to/rivomesh.jar --output target/adopted-email-native"
+  },
+  "postgresSourceClockNative": {
+    "nativeRetry": {
+      "manifest": {
+        "artifactSha256": "93b7860597bfd0ab93e2de2a708a00c2aaa0ffba57a8bb8f7ea44bf876db80cf",
+        "status": "PASS",
+        "checks": [
+          "TIMETZ is refused by native discovery before creating a logical slot",
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Both TIME(6) snapshots distinguish 00:00 and 24:00 and retain microseconds and NULL",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Native clock redo changes a one-microsecond key and removes one exact keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "Clock catch-up after SIGKILL reuses the original slot and both target snapshot sets"
+        ],
+        "jdk": 21,
+        "runtimeImage": "eclipse-temurin:21-jre-jammy",
+        "sourceImage": "postgres:17.12",
+        "failover": false,
+        "rejectOldPrimary": false,
+        "uuid": false,
+        "dateValues": false,
+        "timestampValues": false,
+        "clockValues": true,
+        "deliveryTiming": false,
+        "tls": false,
+        "harnessSha256": "6269f650ce3817f65f8748ca49da0b55b72cf5f11dbee0836619e97b717a8a0b",
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "mysqlVersion": "8.4.13",
+        "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "runtimeVersion": "21.0.13",
+        "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "runtimeArchitecture": "arm64",
+        "cleanupExitCode": 0
+      },
+      "manifestSha256": "8a6b85095f8814e53369eb74d593086167eabfe48f61aa0fd1c768467405f75e"
+    },
+    "initialObservation": {
+      "manifest": {
+        "artifactSha256": "93b7860597bfd0ab93e2de2a708a00c2aaa0ffba57a8bb8f7ea44bf876db80cf",
+        "status": "FAIL",
+        "checks": [
+          "TIMETZ is refused by native discovery before creating a logical slot"
+        ],
+        "jdk": 21,
+        "runtimeImage": "eclipse-temurin:21-jre-jammy",
+        "sourceImage": "postgres:17.12",
+        "failover": false,
+        "rejectOldPrimary": false,
+        "uuid": false,
+        "dateValues": false,
+        "timestampValues": false,
+        "clockValues": true,
+        "deliveryTiming": false,
+        "tls": false,
+        "harnessSha256": "957d840eb8a895ee3cf8ec60e655cad1006d24a5ec1bd61fa13cd82b749e3307",
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "mysqlVersion": "8.4.13",
+        "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "runtimeVersion": "21.0.13",
+        "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+        "runtimeArchitecture": "arm64",
+        "cleanupExitCode": 0
+      },
+      "manifestSha256": "4fcb6cb15a719071884d55c5214d04606d7c471a595b30bb7d67dbe55bac2bde"
+    },
+    "integratedPackageSha256": "6059f3aceeb7ef5babec33e5dcc8f4a975d4154c572ed5020f99d52da1add996",
+    "integratedJavaTestsPassed": 37,
+    "scope": "PostgreSQL 17.12 without time zone TIME(6) to native PostgreSQL 17.12 and MySQL 8.4.13 TIME(6), Temurin 21. Midnight and 24:00, microseconds, NULL, one key change, one duplicate deletion, two original snapshots and original slot restart. TIMETZ preflight refusal before slot creation.",
+    "firstRunNote": "First run timed out in the snapshot predicate despite native SQL showing the expected rows on all three endpoints. The same JAR passed after exact integer normalization of each server's native TIME text in the fixture. Both scopes cleared their Compose resources.",
+    "reproduce": "python3 tests/postgres-source-run.py --source-image postgres:17.12 --clock-values --artifact /path/to/rivomesh.jar --output target/pg-clock-proof"
   }
 }

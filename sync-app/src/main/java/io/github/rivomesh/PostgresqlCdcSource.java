@@ -322,6 +322,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 break;
             case 114:case 3802:column.type=TableSchema.Type.JSON;break;
             case PostgresDate.OID:column.type=TableSchema.Type.DATE;break;
+            case PostgresClock.OID:column.type=TableSchema.Type.TIME;break;
             case PostgresTimestamp.CIVIL_OID:column.type=TableSchema.Type.DATETIME;break;
             case PostgresTimestamp.INSTANT_OID:column.type=TableSchema.Type.TIMESTAMP;break;
             case 1700:

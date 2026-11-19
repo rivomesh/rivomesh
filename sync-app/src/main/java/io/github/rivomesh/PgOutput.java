@@ -166,6 +166,7 @@ final class PgOutput {
             case INT64:return Cell.value(Long.toString(Long.parseLong(text)));
             case DECIMAL:return Cell.value(new BigDecimal(text).toPlainString());
             case DATE:return Cell.value(PostgresDate.canonicalSource(text));
+            case TIME:return Cell.value(PostgresClock.canonical(text));
             case DATETIME:return Cell.value(PostgresTimestamp.canonicalSource(text,false));
             case TIMESTAMP:return Cell.value(PostgresTimestamp.canonicalSource(text,true));
             case BYTES:

@@ -52,7 +52,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
-| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 和微秒时间戳双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 |
+| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。 |
 
 ## Java运行时兼容

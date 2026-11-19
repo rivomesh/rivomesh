@@ -3,6 +3,7 @@ package io.github.rivomesh.cdc;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.OracleDate;
 import io.github.rivomesh.PostgresDate;
+import io.github.rivomesh.PostgresClock;
 import io.github.rivomesh.PostgresTimestamp;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +50,10 @@ final class JdbcNormalization {
                 case DATE:
                     value=PostgresDate.isColumn(table.columns.get(i))?LocalDate.parse(value).toString():java.sql.Date.valueOf(value).toString();
                     break;
-                case TIME:value=io.github.rivomesh.MysqlDuration.canonical(value);break;
+                case TIME:
+                    value=PostgresClock.isColumn(table.columns.get(i))?PostgresClock.canonical(value)
+                            :io.github.rivomesh.MysqlDuration.canonical(value);
+                    break;
                 case BOOLEAN:if(!Arrays.asList("true","false","0","1").contains(value))throw new IllegalArgumentException("BOOLEAN_VALUE_INVALID");value=(value.equals("true")||value.equals("1"))?"true":"false";break;
                 case BYTES:case GEOMETRY:value=Base64.getEncoder().encodeToString(Base64.getDecoder().decode(value));break;
                 default:break;

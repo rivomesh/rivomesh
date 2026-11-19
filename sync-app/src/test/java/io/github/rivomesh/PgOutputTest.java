@@ -93,6 +93,24 @@ class PgOutputTest {
         assertThrows(IllegalStateException.class, () -> PgOutput.value(instant, "2024-11-03 05:30:00"));
     }
 
+    @Test void civilClockKeepsDistinctMidnightEndpointsAndExactMicroseconds() {
+        TableSchema.Column clock = new TableSchema.Column();
+        clock.type = TableSchema.Type.TIME;
+        clock.sourceType = "1083";
+        TableSchema table = new TableSchema();
+        table.columns.add(clock);
+        assertEquals("00:00:00.000000", PgOutput.value(clock, "00:00:00").value);
+        assertEquals("12:34:56.123456", PgOutput.value(clock, "12:34:56.123456").value);
+        assertEquals("23:59:59.999999", PgOutput.value(clock, "23:59:59.999999").value);
+        assertEquals("24:00:00.000000", PgOutput.value(clock, "24:00:00").value);
+        assertNull(PgOutput.value(clock, null).value);
+        assertNotEquals(RowValues.canonical(table, java.util.List.of(PgOutput.value(clock, "00:00:00"))),
+                RowValues.canonical(table, java.util.List.of(PgOutput.value(clock, "24:00:00"))));
+        for(String invalid : new String[]{"-00:01:00", "24:00:00.000001", "12:00:00.1234567", "13:00:00-04"})
+            assertEquals("POSTGRESQL_TIME_OUT_OF_RANGE",
+                    assertThrows(IllegalArgumentException.class, () -> PgOutput.value(clock, invalid)).getMessage());
+    }
+
     @Test void pgoutputPublishesOnlyCompleteTransactionsAndChecksRelationMetadata()throws Exception{
         TableSchema table=new TableSchema();
         table.id=TableSchema.identity("database","sales","items");
