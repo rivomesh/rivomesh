@@ -88,10 +88,12 @@ window.RivomeshRecovery=(()=>{
     const coverage=data.catalogCoverage;
     const coverageCodes={
      KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'VERIFIED_SINGLETON',
+     KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'VERIFIED_AT_REVIEW',
      KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'CONFLICT',
      KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'INCOMPLETE',
      KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'INCOMPLETE',
-     KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING:'INCOMPLETE'
+     KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING:'INCOMPLETE',
+     KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'INCOMPLETE'
     };
     if(coverage&&Object.hasOwn(coverageCodes,coverage.code)&&coverageCodes[coverage.code]===coverage.status)
      result.append(label('p',coverage.code));
@@ -537,6 +539,8 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeWriterVerified:'已核对独立 Kafka 写入身份在这两个 Topic 上的有效权限。',
   kafkaNoticeWriterBlocked:'独立 Kafka 写入身份的权限核对未通过。',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
+  KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'已核对生效和可回退配置当前指向的 Kafka Topic。',
+  KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'管理目录超出这次只读核对的范围。',
   KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'业务 Topic 与专用通知 Topic 指向同一物理资源。',
   KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'所属节点未提供 Kafka 原生 Topic 标识。',
   KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'历史配置仍需补齐物理 Topic 归属证据。',
@@ -563,6 +567,8 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeWriterVerified:'Verified the effective permissions of the dedicated Kafka writer on these two topics.',
   kafkaNoticeWriterBlocked:'The effective permissions of the dedicated Kafka writer could not be verified.',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
+  KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'Verified where active and restorable Kafka configurations point at review time.',
+  KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'The managed catalog exceeds the scope of this read-only review.',
   KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'The business topic and dedicated control topic identify the same physical resource.',
   KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'The task owner did not provide native Kafka topic identity evidence.',
   KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'Historical configurations still require physical topic evidence.',

@@ -94,6 +94,45 @@ class GlobalTaskStoreTest {
         try(Connection c=connection();Statement s=c.createStatement()){s.executeUpdate("DELETE FROM rivomesh_control.rmc_task_authority");}
         assertEquals("GLOBAL_TASK_CATALOG_INCOMPLETE",assertThrows(TaskService.Conflict.class,()->b.create("replacement","a",directory,"other","request_create_02",admin)).getMessage());
     }
+    @Test void kafkaCatalogProbeBindsTheActivePointerAndEveryRetainedConfiguration()throws Exception{
+        String original="""
+                formatVersion: 3
+                pipelineId: task
+                targets:
+                  - id: destination
+                    product: KAFKA
+                """;
+        var first=a.create("task","a",directory,original,"catalog_first",admin);
+        a.transaction("task",admin,(c,task,actor)->{a.applied(c,task,first.configurationVersion);return null;});
+        var next=b.update("task",first.revision,original.replace("destination","new-target"),"catalog_next",admin);
+        var cut=a.transaction("task",admin,(c,task,actor)->KafkaNoticeCatalog.selection(a,c,task,8));
+        assertEquals(List.of(next.configurationVersion,first.configurationVersion),cut.versions().stream().map(KafkaNoticeCatalog.Revision::id).toList());
+        assertEquals(first.configurationVersion,cut.active());
+        assertEquals(2,cut.routes());
+        var query=TaskRequest.of(TaskRequest.Kind.KAFKA_CATALOG_PROBE,"task");
+        query.revision=next.revision;query.identityHash=cut.digest();
+        assertEquals(cut,b.transaction("task",admin,(c,task,actor)->KafkaNoticeCatalog.probeInput(b,c,query)));
+        b.transaction("task",admin,(c,task,actor)->{b.applied(c,task,next.configurationVersion);return null;});
+        assertEquals(next.revision,a.get("task",admin).revision);
+        assertEquals("KAFKA_NOTICE_CATALOG_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->a.transaction("task",admin,(c,task,actor)->KafkaNoticeCatalog.probeInput(a,c,query))).getMessage());
+    }
+
+    @Test void kafkaCatalogRefusesAMissingHistoricalVersionOrAnUncoveredTask()throws Exception{
+        String yaml="jobId: task\n";
+        var first=a.create("task","a",directory,yaml,"catalog_kept",admin);
+        b.update("task",first.revision,yaml,"catalog_changed",admin);
+        a.create("other","b",directory,"jobId: other\n","catalog_other",admin);
+        assertThrows(KafkaNoticeCatalog.Limit.class,()->a.transaction("task",admin,(c,task,actor)->a.kafkaCatalogRecords(c,1)));
+        assertThrows(KafkaNoticeCatalog.Limit.class,()->a.transaction("task",admin,(c,task,actor)->a.kafkaCatalogVersions(c,task,1)));
+        try(Connection c=connection();PreparedStatement drop=c.prepareStatement(
+                "DELETE FROM rivomesh_control.rmc_task_version WHERE version_id=?")){
+            drop.setString(1,first.configurationVersion);
+            assertEquals(1,drop.executeUpdate());
+        }
+        assertEquals("GLOBAL_CONFIG_REQUIRED",assertThrows(TaskService.Conflict.class,
+                ()->b.transaction("task",admin,(c,task,actor)->KafkaNoticeCatalog.selection(b,c,task,8))).getMessage());
+    }
     @Test void journalPlacementBindsToExplicitOwnerAndCannotChangeThroughConfiguration()throws Exception{
         String assignment=UUID.randomUUID().toString();
         String yaml="""

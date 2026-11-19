@@ -11023,5 +11023,54 @@
     "integratedDomPassed": 157,
     "scope": "Original Agent process and Worker terminate together. Both Controllers separate lease health from unknown task state, preserve fencing and hold a queued STOP. The original directory is recoverable. The previous Agent and capture epochs remain fenced after explicit restart.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --test-classes sync-app/target/test-classes --output target/native-original-outage --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage"
+  },
+  "kafkaRetainedPhysicalNoticeRoutesNative": {
+    "baseCommit": "a72ff69af63b5623426c7152a5d2869b990526f2",
+    "sameScopedFilesVerifiedOn": "853a1e2c6d3076bd6c25b0e1435faf4580531c28",
+    "scopedPatchSha256": "c215ee21b7e22bcecd0ea36409e808d94323282763c26ec40006811aad24bb52",
+    "appSha256": "e72df0b232ba5c8fa271b69c3e92ab18df8ac64bdbd6ac405b8489ac3f8b3cbc",
+    "exactFinalAppUsedInNativeFixture": true,
+    "finalConsoleResourceMatchesTestedSource": true,
+    "junitPassed": 30,
+    "uiPassed": 156,
+    "agentCredentialScope": "Current owner directory and ordinary task parser enforce present Worker grants and protected references before native reads.",
+    "revokedAndProtectedHistoricalReferences": {
+      "routedTcpConnections": 0,
+      "physicalEvidenceReturned": 0,
+      "referenceNameDisclosed": false
+    },
+    "nativeFixture": {
+      "profile": "4 Kafka 3.9.2 KRaft brokers, 2 packaged Controllers",
+      "manifestSha256": "111b99532fbb548bc4f71e149b09aab803814ebd089db98582d142dc875f4e23",
+      "phaseSha256": "acecc390010561eeec37412ee757dffaabde152b27d4206f8f90a6c6e2cb3eae",
+      "nativePassedAssertionsInManifest": 3,
+      "scope": {
+        "aliasConflict": "KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION",
+        "missing": "KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING",
+        "retainedVersions": 3,
+        "routes": 4
+      },
+      "controlTopicEnd": 0,
+      "businessTopicEndBeforeAfter": [
+        9,
+        9
+      ],
+      "consumerPositionBeforeAfter": [
+        1,
+        1
+      ],
+      "failedHealthyAcknowledgments": [
+        1,
+        2
+      ],
+      "cleanupExitCode": 0
+    },
+    "statement": "Current physical route observations for bounded immutable active and restorable configurations, with publication still blocked.",
+    "status": "PASS",
+    "integratedArtifactSha256": "501be13e9296e6f8368a06ea977345a84422663a9b5c9bd13d345522563811a0",
+    "integratedJavaPassed": 56,
+    "integratedDomPassed": 157,
+    "reproduce": "python3 tests/kafka-cluster-run.py --artifact /path/to/rivomesh.jar --output target/native-kafka-retained --java-home /path/to/jdk21 --only-managed-notice-plan",
+    "scope": "Authorized native identity review across a bounded catalog. Historical configurations are resolved under current Agent grants. The preview reports current physical broker routes; historical write custody and approved notification delivery remain open."
   }
 }

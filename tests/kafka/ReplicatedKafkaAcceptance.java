@@ -65,6 +65,7 @@ public final class ReplicatedKafkaAcceptance {
     private static final String TOPIC = "rivomesh-events";
     private static final String PEER_TOPIC = "rivomesh-recovery-peer";
     private static final String CONTROL_TOPIC = "rivomesh-plan-control";
+    private static final String CATALOG_TOPIC = "rivomesh-catalog-safe";
     private static final String GENERATION = "fixture-generation";
     private static final String UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private static final String FINGERPRINT = Codec.sha256("rivomesh-kafka-cluster-fixture");
@@ -108,6 +109,7 @@ public final class ReplicatedKafkaAcceptance {
             report.put("cluster", state);
             if (noticePlan) {
                 createTopic(admin, CONTROL_TOPIC, 32768);
+                createTopic(admin, CATALOG_TOPIC, 32768);
                 var topic = await(() -> get(admin.describeTopics(List.of(CONTROL_TOPIC)).allTopicNames()).get(CONTROL_TOPIC),
                         observed -> observed != null && observed.partitions().size()==1
                                 && ids(observed.partitions().getFirst().isr()).equals(expectedIsr));
@@ -424,6 +426,61 @@ public final class ReplicatedKafkaAcceptance {
             require(revision.equals(task().path("revision").asText()),"The notice plan advanced the task revision");
             return result;
         }
+
+        void createCatalogTask(String id,String address,String topic,long serverId)throws Exception{
+            PipelineConfig config=new PipelineConfig();
+            config.pipelineId=id;config.source.username="fixture";config.source.clusterId=id;
+            config.source.serverId=serverId;config.databases=List.of("sales");
+            PipelineConfig.Target target=configuredTarget();
+            target.url="kafka://"+address+":9092";target.messaging.endpoints=List.of();
+            target.messaging.topic=topic;target.mappings.put("sales",id.replace('-','_'));
+            config.targets.add(target);
+            ObjectNode document=Codec.JSON.valueToTree(config);
+            ((ObjectNode)document.get("journal")).remove("path");
+            ObjectNode create=Codec.JSON.createObjectNode().put("ownerNodeId","entry");
+            create.set("config",document);
+            request(entry,"/api/tasks","create_"+id,create);
+            await(()->request(entry,"/api/tasks/"+id,null,null),
+                    task->"entry".equals(task.path("ownerNodeId").asText())&&!task.path("configurationPending").asBoolean(true));
+        }
+
+        void updateCatalogCredential(String id)throws Exception{
+            String route="/api/tasks/"+id;
+            JsonNode saved=request(entry,route+"/configuration",null,null);
+            ObjectNode config=((ObjectNode)saved.path("config")).deepCopy();
+            ((ObjectNode)config.path("source")).put("password","retained-fixture-source");
+            ObjectNode edit=Codec.JSON.createObjectNode().put("expectedRevision",saved.path("revision").asText());
+            edit.set("config",config);
+            HttpRequest update=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+entry.port()+route+"/configuration"))
+                    .timeout(Duration.ofSeconds(5)).header("Authorization","Bearer "+FIXTURE_ADMIN)
+                    .header("X-Request-ID","update_"+id).header("Content-Type","application/json")
+                    .PUT(HttpRequest.BodyPublishers.ofString(edit.toString())).build();
+            var reply=http.send(update,HttpResponse.BodyHandlers.ofString());
+            require(reply.statusCode()==202,"Cannot edit fixture's retained configuration: "+reply.body());
+            await(()->request(entry,route,null,null),task->!task.path("configurationPending").asBoolean(true)
+                    &&!saved.path("activeConfigurationVersion").asText().equals(task.path("activeConfigurationVersion").asText()));
+        }
+
+        Map<String,Object> verifyCatalog(String predecessor)throws Exception{
+            createCatalogTask("catalog-healthy","kafka-catalog-a",CATALOG_TOPIC,910861);
+            updateCatalogCredential("catalog-healthy");
+            JsonNode retained=noticePlan(predecessor,200,true);
+            JsonNode coverage=retained.path("catalogCoverage");
+            require("VERIFIED_AT_REVIEW".equals(coverage.path("status").asText())
+                    &&coverage.path("configurationVersions").asInt()==3&&coverage.path("kafkaRoutes").asInt()==4
+                    &&!retained.path("executionAuthorized").asBoolean(true),"Could not verify the stopped task's active and retained routes: "+retained);
+            createCatalogTask("catalog-missing","kafka-catalog-b","catalog-unavailable-topic",910862);
+            JsonNode missing=noticePlan(predecessor,200,false);
+            require("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING".equals(missing.path("catalogCoverage").path("code").asText())
+                    &&!missing.path("executionAuthorized").asBoolean(true),"Unresolved native topic was not blocked");
+            createCatalogTask("catalog-collision","kafka-catalog-c",CONTROL_TOPIC,910863);
+            JsonNode collision=noticePlan(predecessor,200,true);
+            require("KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION".equals(collision.path("catalogCoverage").path("code").asText())
+                    &&!collision.path("executionAuthorized").asBoolean(true),"Alias hid the physical collision with the retired task");
+            return Map.of("retainedVersions",coverage.path("configurationVersions").asInt(),"routes",coverage.path("kafkaRoutes").asInt(),
+                    "missing",missing.path("catalogCoverage").path("code").asText(),
+                    "aliasConflict",collision.path("catalogCoverage").path("code").asText());
+        }
     }
 
     private static void reviewPredecessor(Path home,Map<String,Object> report,boolean managed,PipelineConfig.KafkaNotice control)throws Exception {
@@ -582,15 +639,15 @@ public final class ReplicatedKafkaAcceptance {
                             &&plan.path("payloadSha256").asText().matches("[0-9a-f]{64}")
                             &&planned.path("approvalSha256").asText().matches("[0-9a-f]{64}"),"Native notice authorization or failure scope changed");
                     JsonNode coverage=planned.path("catalogCoverage");
-                    require("INCOMPLETE".equals(coverage.path("status").asText())
-                            && "KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING".equals(coverage.path("code").asText()),
-                            "A second Kafka destination must retain the managed ownership publication block");
+                    require("VERIFIED_AT_REVIEW".equals(coverage.path("status").asText())&&coverage.path("kafkaRoutes").asInt()==2,
+                            "The active second Kafka destination must contribute its observed native identity");
                     require(plan.path("catalogIdentity").path("businessTopicSha256").asText()
                             .equals(proof.path("observedTopicIdentitySha256").asText())
                             && plan.path("catalogIdentity").path("controlTopicSha256").asText()
                                     .equals(Codec.sha256(((State)report.get("cluster")).clusterId()+"/"+control.topicId)),
                             "Managed Topic identity is not bound to the exact observed native UUIDs");
                     report.put("noticePlan",planned);
+                    report.put("catalogRecovery",managed.verifyCatalog(receiptId));
                 }
                 report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));
                 report.put("consumerOffsetAfterReview",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());

@@ -10,7 +10,11 @@ import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import io.github.rivomesh.cdc.TargetProduct;
 import java.nio.file.Path;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.SocketTimeoutException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -24,6 +28,41 @@ class ManagedKafkaRecoveryReviewTest {
     private static final String OPERATOR="kafka-recovery-operator-at-least-32-bytes";
     private static final String NOTICE_TOPIC_ID="cKtKfC5KQGq-qM1RDCb_3w";
     @TempDir Path directory;
+
+    @Test void retainedKafkaRouteWithRevokedOrProtectedWorkerSecretCannotConnect()throws Exception{
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("PATH")!=null);
+        GlobalControlHttpTest fixture=new GlobalControlHttpTest();
+        fixture.directory=directory;
+        PlatformConfig config=fixture.config("b");
+        config.cluster.recoveryReview=true;
+        config.workerSecretReferences=Map.of("retained",List.of("PATH"));
+        try(ServerSocket sentinel=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"));
+            TaskService service=new TaskService(config,new Backend(),new PlatformTest.Workers());
+            ConsoleServer owner=new ConsoleServer(config,service)){
+            owner.start();
+            PipelineConfig pipeline=kafkaPipeline("retained","kafka://127.0.0.1:"+sentinel.getLocalPort(),"retained.events");
+            PipelineConfig.Target target=pipeline.targets.getFirst();
+            target.username="fixture-worker";target.password="${PATH}";
+            target.messaging.securityProtocol="SASL_PLAINTEXT";
+            target.messaging.saslMechanism="SCRAM-SHA-512";
+            String yaml=Model.JSON.writeValueAsString(pipeline),version=UUID.randomUUID().toString();
+            assertTrue(TaskWorker.Jvm.environment(System.getenv(),yaml,config.protectedEnvironment,config.workerSecretReferences).containsKey("PATH"));
+            var selection=new KafkaNoticeCatalog.Selection("retained",UUID.randomUUID().toString(),"b",service.ownerDirectoryIdentity(),
+                    null,List.of(new KafkaNoticeCatalog.Revision(version,yaml,List.of(target.id))));
+            var actor=AccountDirectory.authenticate(service.sharedAccess().accounts(),"Bearer "+PlatformTest.TOKEN);
+            config.workerSecretReferences=Map.of("retained",List.of());
+            var revoked=service.probeKafkaCatalog(selection,actor);
+            assertEquals(Map.of(),revoked.get("topicIdentities"));
+            assertFalse(Model.JSON.writeValueAsString(revoked).contains("PATH"));
+            config.workerSecretReferences=null;
+            config.protectedEnvironment.add("PATH");
+            assertEquals(Map.of(),service.probeKafkaCatalog(selection,actor).get("topicIdentities"));
+            sentinel.setSoTimeout(300);
+            assertThrows(SocketTimeoutException.class,()->{
+                try(var unexpected=sentinel.accept()){}
+            });
+        }
+    }
 
     static final class Backend extends ManagedCommitTest.Backend {
         volatile boolean uncertain;
@@ -210,7 +249,7 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED",Model.JSON.readTree(changed.text).path("code").asText());
             backend.businessIdentity=Codec.sha256("test topic");
             fixture.create(api,"another","b");
-            assertEquals("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            assertEquals("KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
             String configuration=TASK+"/configuration";
             JsonNode before=fixture.get(api,configuration,PlatformTest.TOKEN);
             ObjectNode edit=Model.JSON.createObjectNode().put("expectedRevision",revision);

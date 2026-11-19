@@ -206,6 +206,16 @@ public final class KafkaRecoveryReview {
 
     static String topicIdentity(String clusterId,Uuid topicId){return Codec.sha256(clusterId+"/"+topicId);}
 
+    /** Owner-side metadata only. Both reads are made against the destination's configured connection. */
+    public static String inspectTopicIdentity(PipelineConfig.Target target,long deadline)throws Exception{
+        Admin admin=Admin.create(KafkaMessagePublisher.connectionProperties(target));
+        try{
+            Broker first=broker(admin,target,deadline);
+            if(!first.equals(broker(admin,target,deadline)))throw rejected("KAFKA_RECOVERY_NATIVE_VIEW_CHANGED");
+            return topicIdentity(first.clusterId(),first.topicId());
+        }finally{admin.close(CLOSE_LIMIT);}
+    }
+
     private static Broker broker(Admin admin,PipelineConfig.Target target,long until)throws Exception{
         String cluster=admin.describeCluster().clusterId().get(remaining(until).toNanos(),TimeUnit.NANOSECONDS);
         TopicDescription topic=admin.describeTopics(List.of(target.messaging.topic)).allTopicNames()

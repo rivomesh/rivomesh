@@ -147,29 +147,25 @@ final class GlobalTaskPlane implements TaskControlPlane {
             if(identity==null)return incompleteCatalog("KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING");
             if(!predecessor.receipt().observation().observedTopicIdentitySha256().equals(identity.businessTopicSha256()))
                 throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
-            int kafkaTargets=kafkaCatalogTargets(tasks.activeYaml(c,task),plan.controlTopic());
+            verifyKafkaNoticeReservation(tasks.activeYaml(c,task),plan.controlTopic());
             if(identity.businessTopicSha256().equals(identity.controlTopicSha256()))
                 return Map.of("status","CONFLICT","code","KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION");
-            if(task.configurationIndex!=1)return incompleteCatalog("KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING");
-            if(kafkaTargets!=1||!tasks.singleRegisteredTask(c,task))
-                return incompleteCatalog("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING");
-            return Map.of("status","VERIFIED_SINGLETON","code","KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED");
+            return null;
         });
+        if(coverage==null)coverage=KafkaNoticeCatalog.coverage(tasks,queries,plan,actor);
         response.put("catalogCoverage",coverage);
         return response;
     }
 
     private static Map<String,Object> incompleteCatalog(String code){return Map.of("status","INCOMPLETE","code",code);}
 
-    private static int kafkaCatalogTargets(String yaml,KafkaNoticePlanning.TopicReservation reservation)throws Exception{
+    private static void verifyKafkaNoticeReservation(String yaml,KafkaNoticePlanning.TopicReservation reservation)throws Exception{
         JsonNode config=document(yaml),targets=config.path("targets");
         if(config.path("formatVersion").asInt()!=3||!reservation.taskId().equals(config.path("pipelineId").asText())||!targets.isArray())
             throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
-        int count=0;
         boolean declared=false;
         for(JsonNode target:targets){
             if(!"KAFKA".equalsIgnoreCase(target.path("product").asText()))continue;
-            count++;
             if(!reservation.targetId().equals(target.path("id").asText()))continue;
             JsonNode notice=target.path("messaging").path("recoveryNotice");
             declared=reservation.reservationId().equals(notice.path("reservationId").asText())
@@ -178,7 +174,6 @@ final class GlobalTaskPlane implements TaskControlPlane {
                     &&reservation.topicId().equals(notice.path("topicId").asText());
         }
         if(!declared)throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
-        return count;
     }
 
     private static JsonNode document(String yaml)throws Exception{return new ObjectMapper(new YAMLFactory()).readTree(yaml);}

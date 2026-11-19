@@ -17,7 +17,9 @@ final class OwnerQueries {
         public Map<String,Object> response;
     }
     record HandoffQueries(String candidate,String originalEvidence){}
-    private record Execution(TaskRequest request,AccessControl.Principal actor){}
+    private record Execution(TaskRequest request,AccessControl.Principal actor,KafkaNoticeCatalog.Selection kafkaCatalog){
+        Execution(TaskRequest request,AccessControl.Principal actor){this(request,actor,null);}
+    }
     private record PreparedResume(Execution execution,ManagedHandoff.CandidateAdmission admission){}
     @FunctionalInterface interface PreparedRecheck {
         JournalWriterAssignment.CutProof verify(TaskRequest request,AccessControl.Principal actor,
@@ -218,6 +220,10 @@ final class OwnerQueries {
         try{
             Execution execution=tasks.service((c,accounts)->{
                 agents.require(c,lease,directory);AccessControl.Principal actor=actor(accounts,entry);
+                if(entry.request.kind==TaskRequest.Kind.KAFKA_CATALOG_PROBE){
+                    if(!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
+                    return new Execution(entry.request,actor,KafkaNoticeCatalog.probeInput(tasks,c,entry.request));
+                }
                 if(!entry.request.handoffRpc()){
                     verifyAdoptedEvidence(c,entry);
                     return new Execution(entry.request,actor);
@@ -238,7 +244,8 @@ final class OwnerQueries {
                 }
                 return new Execution(scoped,actor);
             });
-            Map<String,Object> returned=local.ownerQuery(execution.request,execution.actor);
+            Map<String,Object> returned=execution.kafkaCatalog==null?local.ownerQuery(execution.request,execution.actor)
+                    :local.ownerKafkaCatalog(execution.kafkaCatalog,execution.actor);
             response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC?readinessResponse(entry,returned):returned;
             if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
         }catch(TaskService.Conflict rejected){failure=rejected.getMessage()!=null&&rejected.getMessage().matches("[A-Z0-9_]{1,120}")?rejected.getMessage():"OWNER_QUERY_REJECTED";}

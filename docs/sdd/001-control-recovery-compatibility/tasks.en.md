@@ -87,7 +87,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Declare recovery capability per adapter;SQL uses local transactions,analytical/queue adapters verified receipts/gap notifications;other subscriptions are not silently skipped and unresolved evidence is retained with backpressure/alerts.
   Acceptance: AC-RC-10
   - [x] Verified broker-native permissions for an independent Kafka notice writer identity.
-  - [ ] Physical topic ownership across all targets, approved dispatch and failure recovery remain.
+  - [x] The bounded active and restorable catalog verifies present physical topic identity under current Agent credential grants.
+  - [ ] Historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
 ## Source compatibility
 
 - [x] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none

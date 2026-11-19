@@ -199,16 +199,46 @@ final class GlobalTaskStore {
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
     /** Called inside transaction(), with the validated authority root held for the entire check. */
-    boolean singleRegisteredTask(Connection c,Record task)throws SQLException {
-        if(task.sequence!=1)return false;
+    List<Record> kafkaCatalogRecords(Connection c,int maximumTasks)throws Exception {
+        long registered;
         try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);
             ResultSet r=p.executeQuery()){
-            if(!r.next()||r.getLong(1)!=1)return false;
+            if(!r.next())throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");
+            registered=r.getLong(1);
         }
-        try(PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("task_authority")+" WHERE cluster_id=? AND task_id<>? LIMIT 1",
-                cluster,task.id);ResultSet r=p.executeQuery()){
-            return !r.next();
+        if(registered>maximumTasks)throw new KafkaNoticeCatalog.Limit();
+        List<String> ids=new ArrayList<>();
+        try(PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("task_authority")+" WHERE cluster_id=? ORDER BY task_id LIMIT ?",
+                cluster,maximumTasks+1);ResultSet r=p.executeQuery()){
+            while(r.next())ids.add(r.getString(1));
         }
+        if(ids.size()!=registered)throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");
+        List<Record> rows=new ArrayList<>();
+        Set<Long> sequences=new HashSet<>();
+        for(String id:ids){
+            Record item=read(c,id);
+            if(item.sequence<1||item.sequence>registered||!sequences.add(item.sequence))
+                throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");
+            rows.add(item);
+        }
+        return rows;
+    }
+
+    List<Version> kafkaCatalogVersions(Connection c,Record record,int maximumVersions)throws Exception {
+        if(record.configurationIndex>maximumVersions)throw new KafkaNoticeCatalog.Limit();
+        List<Version> chain=new ArrayList<>();
+        boolean active=record.activeConfigurationVersion==null;
+        String next=record.configurationVersion;
+        for(long index=record.configurationIndex;index>0;index--){
+            if(next==null)throw new TaskService.Conflict("GLOBAL_CONFIG_CHAIN_INVALID");
+            Version item=version(c,record.id,next);
+            if(item.index!=index)throw new TaskService.Conflict("GLOBAL_CONFIG_CHAIN_INVALID");
+            active|=item.id.equals(record.activeConfigurationVersion);
+            chain.add(item);
+            next=item.parent;
+        }
+        if(next!=null||!active||chain.isEmpty())throw new TaskService.Conflict("GLOBAL_CONFIG_CHAIN_INVALID");
+        return chain;
     }
     HandoffPreparations preparations(){return preparations;}
     void advance(Connection c,Record record)throws Exception{preparations.requireCommandAllowed(c,record.id);record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}

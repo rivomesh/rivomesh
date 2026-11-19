@@ -80,7 +80,9 @@ messaging:
 
 可用 `tests/kafka-cluster-run.py --only-managed-notice-plan` 在两个管理入口和真实 Kafka 集群上验证只读计划流程。
 
-预览的 `catalogCoverage` 单独描述管理目录的物理归属证据。`VERIFIED_SINGLETON` 表示目录仅登记一项任务，该任务唯一保留的配置仅包含一个 Kafka 目标。任务当前所属节点会按 Kafka 集群和 Topic UUID 核对业务与通知 Topic 的物理标识，管理面会再次核对所属节点、修订号和生效配置。标识相同返回 `CONFLICT`。存在多项任务、多个 Kafka 目标、历史配置或所属节点缺少证据时，返回 `INCOMPLETE`。这些状态反映核对当时的管理目录，所有预览仍会阻止发布。
+预览的 `catalogCoverage` 显示受管任务的物理归属。`VERIFIED_SINGLETON` 表示一项任务、一个配置版本和一个 Kafka 目标。目录最多四项任务、八个保留配置版本、十二条 Kafka 路由时，`VERIFIED_AT_REVIEW` 表示已按原生 Kafka 集群 ID 和 Topic UUID 核对每条业务路由，范围包括已停止的任务和配置历史中可回退的版本。由当前所属节点按各版本的配置读取 Broker 元数据。即使连接地址使用不同的别名，只要业务目标和通知 Topic 的物理标识相同，就返回 `CONFLICT`。
+
+超过核对上限、Broker 或所属节点不可达、历史配置无法解析时，归属状态为 `INCOMPLETE`。目录或配置在核对期间变化时，需要重新核对。所属节点先按当前 Worker 的凭据引用授权和受保护环境规则检查历史配置。已撤销的引用会阻止该路由发起探测。核对结果描述当前恢复这些配置会连接到哪里。发布仍需历史物理归属、完整的 Kafka 授权和审批证据，所有预览仍会阻止发布。
 
 所属 Controller 可在私有启动配置中设置 `kafkaNoticeWriters`，核对独立通知写入身份。每项包含 `taskId`、`targetId`、`clusterSha256`、`topicId`、`bootstrapServers`、`username` 和 `password`。凭据引用只交给 Controller，连接地址使用可信的 Kafka `host:port` 列表。任务使用其他别名时，独立身份仍连接 Controller 配置的地址。两个身份的用户名和密码均须不同。两个会话都使用 Kafka 目标的 SCRAM 机制，经 `SASL_SSL` 和 Controller JVM 信任的 CA 校验证书与主机名。
 

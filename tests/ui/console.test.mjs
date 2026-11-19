@@ -269,6 +269,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
  const base='/api/tasks/'+task.id,requests=[];
  let publishing=true;
+ let coverage={status:'INCOMPLETE',code:'KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING'};
  ui.w.fetch=async(path,options)=>{
   if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
    id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
@@ -280,7 +281,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   requests.push(JSON.parse(options.body));
   return{ok:true,status:200,json:async()=>({status:'KAFKA_NOTICE_PLAN_REVIEWED',executionAuthorized:publishing,
    publicationBlockCode:'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
-   catalogCoverage:{status:'INCOMPLETE',code:'KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING'},
+   catalogCoverage:coverage,
    writerEntitlement:{status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED'},
    plan:{task:{taskId:task.id},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
     controlTopic:{targetId:target,topicName:'control.events',topicId:'cKtKfC5KQGq-qM1RDCb_3w'},credential:'not sent to the DOM'}})};
@@ -297,6 +298,11 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   assert.match(section.textContent,/已核对独立 Kafka 写入身份/);
   assert.ok(section.textContent.includes('d'.repeat(64)));
   assert.ok(!section.textContent.includes('not sent to the DOM'));
+  assert.equal(section.querySelectorAll('button').length,1);
+  coverage={status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED'};
+  button.click();await flush();
+  assert.match(section.textContent,/已核对生效和可回退配置当前指向的 Kafka Topic/);
+  assert.match(section.textContent,/发布受阻/);
   assert.equal(section.querySelectorAll('button').length,1);
  }finally{ui.dom.window.close();}
 });

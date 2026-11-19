@@ -1482,6 +1482,23 @@ public final class TaskService implements AutoCloseable {
         }
     }
 
+    Map<String,Object> probeKafkaCatalog(KafkaNoticeCatalog.Selection selection,AccessControl.Principal actor)throws Exception{
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            if(actor==null||!actor.administers()||!actor.task(selection.task())||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+            if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()||!failureReviewEnabled())
+                throw new Conflict("OWNER_QUERY_UNAVAILABLE");
+            if(!Objects.equals(selection.owner(),nodeId())||!Objects.equals(selection.directory(),registry.ownerDirectoryIdentity))
+                throw new Conflict("KAFKA_NOTICE_CATALOG_CHANGED");
+        }
+        return KafkaNoticeCatalog.observe(selection,yaml->{
+            TaskDefinition definition=parseTask(yaml);
+            if(!selection.task().equals(definition.jobId)||definition.pipeline==null)
+                throw new Conflict("KAFKA_NOTICE_CATALOG_CHANGED");
+            return definition.pipeline;
+        });
+    }
+
     private Entry kafkaNoticeTask(TaskRequest request,AccessControl.Principal actor){
         ensureOpen();currentActor(actor);
         if(actor==null||!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");

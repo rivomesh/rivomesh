@@ -6,6 +6,9 @@ import java.util.*;
 final class LocalTaskPlane implements TaskControlPlane {
     private final TaskService tasks;
     LocalTaskPlane(TaskService tasks){this.tasks=tasks;}
+    public Map<String,Object> ownerKafkaCatalog(KafkaNoticeCatalog.Selection selection,AccessControl.Principal actor)throws Exception{
+        return tasks.probeKafkaCatalog(selection,actor);
+    }
     public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
         if(request.kind==TaskRequest.Kind.KAFKA_NOTICE_PLAN)return tasks.planKafkaNotice(request,actor);

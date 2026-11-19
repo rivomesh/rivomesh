@@ -55,6 +55,7 @@ def compose_config(home, artifact, java_class):
                                   'KAFKA_AUTO_CREATE_TOPICS_ENABLE': 'false',
                                   'KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE': 'false',
                               })
+    services[BROKERS[1]]['networks'] = {'default': {'aliases': ['kafka-catalog-a', 'kafka-catalog-b', 'kafka-catalog-c']}}
     services['runner'] = dict(image=RUNTIME, user=f'{os.getuid()}:{os.getgid()}',
                               volumes=[str(home)+':/fixture',str(artifact)+':/app/rivomesh.jar:ro'],
                               entrypoint=['java','-Xmx256m','-XX:ActiveProcessorCount=2',
@@ -208,6 +209,10 @@ def main():
                 if args.only_managed_notice_plan:
                     assert not review['noticePlan']['executionAuthorized']
                     assert review['noticePlan']['publicationBlockCode']=='KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'
+                    catalog=review['catalogRecovery']
+                    assert catalog['retainedVersions']==3 and catalog['routes']==4
+                    assert catalog['missing']=='KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING'
+                    assert catalog['aliasConflict']=='KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION'
                     assert review['noticePlanPartialRefusal']=='KAFKA_RECOVERY_PUBLICATION_UNCERTAIN'
                     assert review['noticeControlEnd']==0
                     passed('Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched')
