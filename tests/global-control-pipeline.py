@@ -38,6 +38,8 @@ parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
 parser.add_argument('--verified-placement', action='store_true',
                     help='Check native PostgreSQL journal reachability before creating an automatic owner')
+parser.add_argument('--verified-placement-postgres-source', action='store_true',
+                    help='Run native verified placement and CDC with a published PostgreSQL source')
 parser.add_argument('--task-authority', action='store_true',
                     help='Exercise global revisions, unique task IDs, independent sources and standalone control')
 parser.add_argument('--command-routing', action='store_true',
@@ -178,6 +180,8 @@ if args.command_routing and (not args.separate_execution or not args.test_classe
 if args.verified_placement and (not args.automatic_placement or args.control_product!='POSTGRESQL'
         or any((args.handoff_assessment, args.handoff_original_outage, args.mysql_async_failover, args.task_authority))):
     parser.error('--verified-placement requires the native PostgreSQL automatic placement baseline')
+if args.verified_placement_postgres_source and not args.verified_placement:
+    parser.error('--verified-placement-postgres-source requires --verified-placement')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.handoff_probe and not args.handoff_assessment:
@@ -568,6 +572,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         services['placement-store']={'image':'postgres:17','networks':['placement-journal'],
             'environment':{'POSTGRES_PASSWORD':'${RM_GC_CONTROL}','POSTGRES_DB':'rivomesh_placement'}}
         compose_data['networks']={'default':{},'placement-journal':{}}
+    if args.verified_placement_postgres_source:
+        services['placement-source']={'image':'postgres:17','command':['-c','wal_level=logical'],
+            'environment':{'POSTGRES_PASSWORD':'${RM_GC_CONTROL}','POSTGRES_DB':'placement_source'}}
     if args.handoff_asymmetric_partition:
         compose_data['networks'] = {'default': {}, 'control': {}}
         services['store']['networks'] = ['control']
@@ -583,8 +590,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               capture_output=True, text=True, timeout=180)
 
     def sql(service, statement):
-        if service in ('postgres','journal-store','placement-store') or service == 'store' and args.control_product == 'POSTGRESQL':
-            database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal','placement-store':'rivomesh_placement'}[service]
+        if service in ('postgres','journal-store','placement-store','placement-source') or service == 'store' and args.control_product == 'POSTGRESQL':
+            database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal','placement-store':'rivomesh_placement','placement-source':'placement_source'}[service]
             result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d',
                              database, '-A', '-t', '-F', '|', '-c', statement)
         else:
@@ -2847,18 +2854,29 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             databases += (journal_service,)
         if args.verified_placement:
             databases += ('placement-store',)
+        if args.verified_placement_postgres_source:
+            databases=tuple(name for name in databases if name!='mysql')+('placement-source',)
         compose('up', '-d', *databases)
         for service in databases:
             wait(lambda s=service: sql(s, 'SELECT 1') == '1', service + ' SQL ready')
-        manifest['sourceVersion'] = sql('mysql','SELECT VERSION()')
-        manifest['sourceServerProfile'] = sql('mysql','SELECT @@global.gtid_mode,@@global.binlog_format,@@global.binlog_row_image')
-        manifest['sourceImageId'] = subprocess.check_output(['docker','image','inspect','--format','{{.Id}}',args.source_image],text=True).strip()
-        assert manifest['sourceServerProfile'] == 'ON|ROW|FULL'
+        if args.verified_placement_postgres_source:
+            manifest['sourceImage']='postgres:17'
+            manifest['sourceVersion']=sql('placement-source','SHOW server_version').split(' ',1)[0]
+            manifest['sourceServerProfile']=sql('placement-source','SHOW wal_level')
+            manifest['sourceImageId']=subprocess.check_output(
+                ['docker','image','inspect','--format','{{.Id}}','postgres:17'],text=True).strip()
+            assert manifest['sourceServerProfile']=='logical'
+        else:
+            manifest['sourceVersion'] = sql('mysql','SELECT VERSION()')
+            manifest['sourceServerProfile'] = sql('mysql','SELECT @@global.gtid_mode,@@global.binlog_format,@@global.binlog_row_image')
+            manifest['sourceImageId'] = subprocess.check_output(['docker','image','inspect','--format','{{.Id}}',args.source_image],text=True).strip()
+            assert manifest['sourceServerProfile'] == 'ON|ROW|FULL'
         if args.mysql_async_failover:
             configure_mysql_replica()
         # The business role is distinct from controller credentials and is allowed into Worker configuration.
         sql('postgres', "CREATE ROLE sync_target LOGIN PASSWORD '" + env['RM_GC_DATA'] + "'; GRANT CREATE ON DATABASE sync_test TO sync_target")
-        sql('mysql', "CREATE DATABASE sales; CREATE DATABASE billing; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,note VARCHAR(50),payload JSON,derived BIGINT GENERATED ALWAYS AS(id*2) VIRTUAL); INSERT INTO sales.items(id,note,payload) VALUES(1,'before',JSON_OBJECT('n',1)),(2,'second',JSON_OBJECT('n',2)); CREATE TABLE sales.duplicates(value INT,payload JSON); INSERT INTO sales.duplicates VALUES(7,JSON_OBJECT('n',7)),(7,JSON_OBJECT('n',7)); CREATE TABLE billing.ledger(id BIGINT PRIMARY KEY,amount DECIMAL(20,4)); INSERT INTO billing.ledger VALUES(1,123.4567)")
+        if not args.verified_placement_postgres_source:
+            sql('mysql', "CREATE DATABASE sales; CREATE DATABASE billing; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,note VARCHAR(50),payload JSON,derived BIGINT GENERATED ALWAYS AS(id*2) VIRTUAL); INSERT INTO sales.items(id,note,payload) VALUES(1,'before',JSON_OBJECT('n',1)),(2,'second',JSON_OBJECT('n',2)); CREATE TABLE sales.duplicates(value INT,payload JSON); INSERT INTO sales.duplicates VALUES(7,JSON_OBJECT('n',7)),(7,JSON_OBJECT('n',7)); CREATE TABLE billing.ledger(id BIGINT PRIMARY KEY,amount DECIMAL(20,4)); INSERT INTO billing.ledger VALUES(1,123.4567)")
         compose('up', '-d', *members)
         for node in ('node-a', 'node-b'):
             address(node)
@@ -2939,6 +2957,25 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'placement_journal',
                                  'url':f'jdbc:postgresql://{journal_ip}:5432/rivomesh_placement?connectTimeout=2&socketTimeout=4',
                                  'username':'placement_writer','password':env['RM_GC_DATA']}
+            postgres_placement=args.verified_placement_postgres_source
+            slot_count='SELECT COUNT(*) FROM pg_replication_slots'
+            if postgres_placement:
+                sql('placement-source',"CREATE ROLE capture_placement LOGIN REPLICATION PASSWORD '"+env['RM_GC_DATA']
+                    +"'; CREATE SCHEMA sales; CREATE SCHEMA billing; "
+                    "CREATE TABLE sales.items (id BIGINT PRIMARY KEY,note VARCHAR(40)); "
+                    "CREATE TABLE billing.ledger (id BIGINT PRIMARY KEY,amount DECIMAL(15,4)); "
+                    "INSERT INTO sales.items VALUES (1,'snapshot'); INSERT INTO billing.ledger VALUES (1,12.3456); "
+                    "ALTER TABLE sales.items REPLICA IDENTITY FULL; ALTER TABLE billing.ledger REPLICA IDENTITY FULL; "
+                    "GRANT USAGE ON SCHEMA sales,billing TO capture_placement; "
+                    "GRANT SELECT ON ALL TABLES IN SCHEMA sales,billing TO capture_placement; "
+                    "CREATE PUBLICATION placement_publication FOR TABLE sales.items,billing.ledger "
+                    "WITH (publish='insert,update,delete')")
+                document['source']={'type':'POSTGRESQL','clusterId':'placement-postgresql','database':'placement_source',
+                    'topology':'SINGLE','expectedVersion':'17.12','username':'capture_placement','password':env['RM_GC_DATA'],
+                    'postgresql':{'url':'jdbc:postgresql://placement-source:5432/placement_source',
+                                  'publication':'placement_publication','slotPrefix':'placement_native'}}
+                assert manifest['sourceVersion']=='17.12'
+                assert sql('placement-source',slot_count)=='0'
             placement_body={'placement':'AUTO','config':document}
             authority="SELECT COUNT(*) FROM global_control.rmc_task_authority WHERE task_id='global_cdc'"
             versions="SELECT COUNT(*) FROM global_control.rmc_task_version WHERE task_id='global_cdc'"
@@ -2968,14 +3005,31 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized')
 
             owner_node=chosen
+            if postgres_placement:
+                assert sql('placement-source',slot_count)=='0'
             action('START')
-            wait(rows_match,'actual selected Worker snapshots both targets')
-            sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(144,'verified placement',JSON_OBJECT('n',144))")
-            wait(rows_match,'actual selected Worker captures another native source transaction')
+            if postgres_placement:
+                def rows_have_note(note):
+                    return all(sql(product,'SELECT note FROM '+schema+'.items WHERE id=1')==note
+                               for product,schema in (('postgres','rm_pg_sales'),('mysql-target','rm_my_sales')))
+                wait(lambda:rows_have_note('snapshot'),'selected Agent writes the original PostgreSQL snapshot')
+                assert sql('placement-source',slot_count)=='1'
+                slot=sql('placement-source','SELECT slot_name FROM pg_replication_slots')
+                sql('placement-source',"UPDATE sales.items SET note='logical increment' WHERE id=1")
+                wait(lambda:rows_have_note('logical increment'),'selected Agent captures another native pgoutput transaction')
+                assert sql('placement-source','SELECT slot_name FROM pg_replication_slots')==slot
+            else:
+                wait(rows_match,'actual selected Worker snapshots both targets')
+                sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(144,'verified placement',JSON_OBJECT('n',144))")
+                wait(rows_match,'actual selected Worker captures another native source transaction')
             assert int(sql('placement-store',tables))>0
             assert task('node-b')['ownerNodeId']==chosen
             passed('Separate START initializes the selected journal and the eligible Agent delivers full and incremental data')
             manifest['verifiedPlacement']={'agents':2,'rejectedWithoutJournal':True,'selected':chosen,'beforeStartJournalTables':0}
+            if postgres_placement:
+                manifest['verifiedPlacement']['sourceType']='POSTGRESQL'
+                manifest['verifiedPlacement']['slotsBeforeStart']=0
+                manifest['verifiedPlacement']['sameSlotAfterIncrement']=True
             manifest['status']='PASS'
             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
             print('GLOBAL_CONTROL_VERIFIED_PLACEMENT_ACCEPTED artifact='+digest)

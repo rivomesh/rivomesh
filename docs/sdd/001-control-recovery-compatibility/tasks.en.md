@@ -29,6 +29,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
   - [x] The same-store closed-receipt profile durably freezes the original writer through Agent termination and restart. Explicit cancellation keeps the original owner and STOPPED state.
   - [x] An already frozen, same-store closed-receipt task transfers offline and resumes both original SQL snapshots after separate fencing and start. The old directory cannot reclaim ownership.
   - [x] Bounded AUTO placement verifies Java, bundled SQL components and native PostgreSQL journal connectivity before assigning an owner. Both Controller entries replay the accepted placement.
+  - [x] PostgreSQL 17.12 passes the same AUTO profile. Unreachable candidates create no task. The logical slot is created only at explicit START and serves both SQL snapshots and CDC.
   - [ ] Unsealed abrupt original loss, other placement profiles, split-store fencing and broader drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.

@@ -1,10 +1,18 @@
 package io.github.rivomesh.platform;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.rivomesh.Model;
+import io.github.rivomesh.PipelineConfig;
+import io.github.rivomesh.cdc.TargetProduct;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AutomaticPlacementTest {
@@ -34,10 +42,44 @@ class AutomaticPlacementTest {
     }
     @AfterEach void close(){if(registryB!=null)registryB.close();if(owner!=null)owner.registry.close();}
 
-    private TaskRequest automatic(){
+    private TaskRequest automatic(){return automatic("MYSQL");}
+    private TaskRequest automatic(String source){
         var input=TaskRequest.of(TaskRequest.Kind.CREATE,"orders");
         input.placement="AUTO";input.requestId="automatic_placement_01";
-        input.yaml="""
+        input.yaml="POSTGRESQL".equals(source)?"""
+                formatVersion: 3
+                pipelineId: orders
+                source:
+                  type: POSTGRESQL
+                  clusterId: placement_source
+                  database: accounting
+                  topology: SINGLE
+                  expectedVersion: "17"
+                  username: capture_user
+                  password: synthetic-private-placement-password
+                  postgresql:
+                    url: jdbc:postgresql://source.test/accounting
+                    publication: placement_publication
+                    slotPrefix: placement_slot
+                databases: [sales]
+                journal:
+                  mode: EXTERNAL
+                  product: POSTGRESQL
+                  url: jdbc:postgresql://unreachable.test/journal
+                  username: journal_writer
+                  password: synthetic-private-placement-password
+                targets:
+                - id: mysql_archive
+                  product: MYSQL
+                  url: jdbc:mysql://destination.test/
+                  username: destination_writer
+                  mappings: {sales: sales_archive}
+                - id: postgres_warehouse
+                  product: POSTGRESQL
+                  url: jdbc:postgresql://destination.test/warehouse
+                  username: destination_writer
+                  mappings: {sales: warehouse_sales}
+                """:"""
                 formatVersion: 3
                 pipelineId: orders
                 source:
@@ -54,8 +96,10 @@ class AutomaticPlacementTest {
         return input;
     }
 
-    @Test void noReachableCandidateCreatesNoTaskAndSecondCandidateCanBeAcceptedAndReplayed()throws Exception{
-        var request=automatic();
+    @ParameterizedTest
+    @ValueSource(strings={"MYSQL","POSTGRESQL"})
+    void noReachableCandidateCreatesNoTaskAndSecondCandidateCanBeAcceptedAndReplayed(String source)throws Exception{
+        var request=automatic(source);
         ExecutorService pool=Executors.newSingleThreadExecutor();
         try{
             var refused=pool.submit(()->entryA.invoke(request,fixture.admin));
@@ -98,13 +142,61 @@ class AutomaticPlacementTest {
     }
 
     @Test void theInstalledWorkerLauncherLoadsAndTheJournalProbeKeepsTlsWithBoundedTimeouts()throws Exception{
-        AutomaticPlacement.requireWorker(Map.of());
+        var pipeline=PipelineConfig.parse(automatic("POSTGRESQL").yaml,Path.of("."));
+        AutomaticPlacement.requireWorker(pipeline,Map.of());
         Properties values=org.postgresql.Driver.parseURL(AutomaticPlacement.journalProbeUrl(
                 "jdbc:postgresql://localhost/test?sslmode=verify-full&socketTimeout=90&loginTimeout=90"),new Properties());
         assertEquals("verify-full",values.getProperty("sslmode"));
         assertEquals("3",values.getProperty("connectTimeout"));
         assertEquals("4",values.getProperty("loginTimeout"));
         assertEquals("4",values.getProperty("socketTimeout"));
+    }
+
+    @Test void workerComponentsFollowSourceProtocolAndActualSqlDestinations()throws Exception{
+        var pipeline=PipelineConfig.parse(automatic("POSTGRESQL").yaml,Path.of("."));
+        String mysqlDriver="com.mysql.cj.jdbc.Driver",mysqlBinlog="com.github.shyiko.mysql.binlog.BinaryLogClient";
+        String postgresReplication="org.postgresql.replication.PGReplicationStream";
+        assertEquals("POSTGRESQL",pipeline.effectiveSourceType());
+        var mixed=AutomaticPlacement.workerComponents(pipeline);
+        assertTrue(mixed.containsAll(List.of("org.postgresql.Driver",postgresReplication,mysqlDriver)));
+        assertFalse(mixed.contains(mysqlBinlog));
+
+        pipeline.targets.removeIf(target->target.product==TargetProduct.MYSQL);
+        var postgresOnly=AutomaticPlacement.workerComponents(pipeline);
+        assertTrue(postgresOnly.containsAll(List.of("org.postgresql.Driver",postgresReplication)));
+        assertFalse(postgresOnly.contains(mysqlDriver));
+        assertFalse(postgresOnly.contains(mysqlBinlog));
+        AutomaticPlacement.requireWorker(pipeline,Map.of());
+
+        pipeline.source.type="MYSQL";
+        var mysqlSource=AutomaticPlacement.workerComponents(pipeline);
+        assertTrue(mysqlSource.containsAll(List.of("org.postgresql.Driver",mysqlDriver,mysqlBinlog)));
+        assertFalse(mysqlSource.contains(postgresReplication));
+    }
+
+    @Test void documentedPostgresSourceAliasWorksAndOtherProfilesKeepTheirExistingRouting()throws Exception{
+        var yaml=new ObjectMapper(new YAMLFactory());
+        var definition=(ObjectNode)yaml.readTree(automatic("POSTGRESQL").yaml);
+        ((ObjectNode)definition.get("source")).remove("type");
+        definition.put("sourceType","POSTGRESQL");
+        assertTrue(AutomaticPlacement.applies(definition));
+        var parsed=PipelineConfig.parse(yaml.writeValueAsString(definition),Path.of("."));
+        assertEquals("POSTGRESQL",parsed.effectiveSourceType());
+        definition.put("sourceType","ORACLE");
+        assertFalse(AutomaticPlacement.applies(definition));
+        definition.put("sourceType","POSTGRESQL");
+        ((ObjectNode)definition.get("journal")).put("mode","LOCAL");
+        assertFalse(AutomaticPlacement.applies(definition));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans={false,true})
+    void postgresLocalAutomaticAndExplicitPlacementDoNotEnqueueEligibilityProbes(boolean explicit)throws Exception{
+        var request=automatic("POSTGRESQL");
+        if(explicit){request.placement=null;request.ownerNodeId="b";}
+        else request.yaml=request.yaml.replace("mode: EXTERNAL","mode: LOCAL");
+        assertEquals(explicit?"b":"a",entryA.invoke(request,fixture.admin).get("ownerNodeId"));
+        assertEquals(0,count("owner_query"));
     }
 
     private void serve(OwnerQueries queries,ControlStore.Lease lease,String directory,boolean eligible)throws Exception{

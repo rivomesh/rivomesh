@@ -14050,5 +14050,54 @@
     "integratedFocusedJavaTestsPassed": 125,
     "integratedDomTestsPassed": 167,
     "integratedSourceTree": "e6490ceedb3c66f77a1ed00179f525f6e701b87e"
+  },
+  "automaticPlacementPostgresqlSourceTemurin21": {
+    "scope": "Ordinary managed AUTO PostgreSQL V3 with MySQL and PostgreSQL targets and an external PostgreSQL journal.",
+    "artifactSha256": "f39cf9cc1c65711cae5f0e02368a5beb924f31bf059fdb7de743e01aee6bf6d5",
+    "sourceTree": "365a81567a32d7291bacf7c197ab2b0e8fe43d71",
+    "nativeManifestSha256": "573abe1f862c918b9506630926a6a8dfd1ffe8176d65035c0d0068fd83355ac5",
+    "nativeFixtureSha256": "840de0456ae645def8d1e462d323f9eb963e656e1a271b393eb803a230801181",
+    "oldArtifactSha256": "2905f5a4dc9ac3d0fd1070f3d4797720b32998befd5b56c242c3b2e0c9442469",
+    "oldFailureManifestSha256": "0a10bf34b42bc4b7a09bd5e6e96cb40f5c8245bab5666966ab6a245478aa32e3",
+    "beforeNoRouteAuthorityRows": {
+      "authority": 1,
+      "version": 1,
+      "create": 1
+    },
+    "afterNoRouteAuthorityRows": {
+      "authority": 0,
+      "version": 0,
+      "create": 0
+    },
+    "sourceVersion": "17.12",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "sourceWalLevel": "logical",
+    "journalVersion": "PostgreSQL 17.12",
+    "targets": [
+      "PostgreSQL 17.12",
+      "MySQL 8.4.13"
+    ],
+    "nativeChecksPassed": 4,
+    "nativeChecks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Two live Agents without the external journal route leave no task, configuration or CREATE authority",
+      "Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized",
+      "Separate START initializes the selected journal and the eligible Agent delivers full and incremental data"
+    ],
+    "verifiedPlacement": {
+      "agents": 2,
+      "rejectedWithoutJournal": true,
+      "selected": "node-worker-alt",
+      "beforeStartJournalTables": 0,
+      "sourceType": "POSTGRESQL",
+      "slotsBeforeStart": 0,
+      "sameSlotAfterIncrement": true
+    },
+    "isolatedComponentChecksPassed": 5,
+    "isolatedComponentLogSha256": "fe4c8edacedc266e85edce2581c88f3522cf600e660647d5acd401108af9b42e",
+    "focusedJavaPassed": 85,
+    "cleanupExitCode": 0,
+    "pending": "Source or target connection checks, owner relocation, other adapters and journal profiles have separate acceptance.",
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --verified-placement --verified-placement-postgres-source --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-pg-verified-placement"
   }
 }

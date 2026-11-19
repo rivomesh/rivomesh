@@ -51,7 +51,7 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 创建向导或导入 YAML 时，可选择 **自动分配执行 Agent**。共享控制库在授权范围内选择在线且有任务容量的 Agent，按已分配任务占 `maxTasks` 的比例排序，并在保存任务的同一事务中预留一个槽。API 可向 `POST /api/tasks` 提供配置、`placement: "AUTO"` 和 `X-Request-ID`。指定 Agent 时填写 `ownerNodeId`。
 
-对于 MySQL 源、MySQL 或 PostgreSQL 目标及外部 PostgreSQL 日志的 V3 任务，自动放置按容量顺序检查最多三个符合资格的 Agent。各 Agent 核验实际 Java 21 Worker 启动器和本机 MySQL、PostgreSQL 组件，并使用配置中的凭据连接日志库，限时执行只读 `SELECT 1`。验证失败的候选不会获得任务归属。候选均失败时返回 `AGENT_PLACEMENT_UNAVAILABLE`，全局任务和日志保持原样。修复驱动、凭据或日志路由后可重试原创建请求。
+对于使用 MySQL 或 PostgreSQL 源、MySQL 或 PostgreSQL 目标及外部 PostgreSQL 日志的 V3 任务，自动放置按容量顺序检查最多三个符合资格的 Agent。各 Agent 核验实际 Java 21 Worker 启动器，以及源、目标和日志所需的本机组件，再使用配置中的凭据连接日志库，限时执行只读 `SELECT 1`。源或目标使用 MySQL 时需要 Connector/J，只有 MySQL 源需要 binlog 读取器。验证失败的候选不会获得任务归属。候选均失败时返回 `AGENT_PLACEMENT_UNAVAILABLE`，全局任务和日志保持原样。修复驱动、凭据或日志路由后可重试原创建请求。
 
 该检查确认放置时日志连接可以认证。创建后可通过 **检查连接与对象** 检查源及目标。其他连接器和日志档案沿用现有的容量分配规则。
 

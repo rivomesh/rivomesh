@@ -626,8 +626,8 @@ public final class TaskService implements AutoCloseable {
             if(!Files.notExists(configurationFile(candidate.jobId+".yml"),LinkOption.NOFOLLOW_LINKS))
                 throw new Conflict("PLACEMENT_LOCAL_CONFIGURATION_PRESENT");
         }
-        AutomaticPlacement.requireWorker(TaskWorker.Jvm.environment(System.getenv(),request.yaml,config.protectedEnvironment,
-                config.workerSecretReferences));
+        AutomaticPlacement.requireWorker(candidate.pipeline,TaskWorker.Jvm.environment(
+                System.getenv(),request.yaml,config.protectedEnvironment,config.workerSecretReferences));
         AutomaticPlacement.probeJournal(candidate.pipeline);
         return AutomaticPlacement.receipt(request);
     }

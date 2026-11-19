@@ -1,9 +1,13 @@
 package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.rivomesh.PipelineConfig;
+import io.github.rivomesh.cdc.TargetProduct;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -11,9 +15,9 @@ import java.util.concurrent.TimeUnit;
 
 /** A bounded candidate probe for automatic placement of SQL pipelines with a PostgreSQL journal. */
 final class AutomaticPlacement {
-    private static final Set<String> SQL_TARGETS=Set.of("MYSQL","POSTGRESQL");
-    private static final Set<String> WORKER_COMPONENTS=Set.of("io.github.rivomesh.Main","io.github.rivomesh.PipelineMain",
-            "com.mysql.cj.jdbc.Driver","com.github.shyiko.mysql.binlog.BinaryLogClient","org.postgresql.Driver");
+    private static final Set<String> SQL_PRODUCTS=Set.of("MYSQL","POSTGRESQL");
+    private static final List<String> WORKER_COMPONENTS=List.of("io.github.rivomesh.Main","io.github.rivomesh.PipelineMain",
+            "org.postgresql.Driver");
 
     private AutomaticPlacement(){}
 
@@ -21,11 +25,11 @@ final class AutomaticPlacement {
         if(definition.path("formatVersion").asInt()!=3)return false;
         JsonNode journal=definition.path("journal"),targets=definition.path("targets");
         String source=definition.path("source").path("type").asText(definition.path("sourceType").asText("MYSQL"));
-        if(!"MYSQL".equals(source)||!"EXTERNAL".equals(journal.path("mode").asText())
+        if(!SQL_PRODUCTS.contains(source)||!"EXTERNAL".equals(journal.path("mode").asText())
                 ||!"POSTGRESQL".equals(journal.path("product").asText("POSTGRESQL"))
                 ||journal.hasNonNull("writerAssignment")||journal.path("managedWriter").asBoolean()
                 ||!targets.isArray()||targets.isEmpty())return false;
-        for(JsonNode target:targets)if(!SQL_TARGETS.contains(target.path("product").asText()))return false;
+        for(JsonNode target:targets)if(!SQL_PRODUCTS.contains(target.path("product").asText()))return false;
         return true;
     }
 
@@ -33,13 +37,23 @@ final class AutomaticPlacement {
         return Map.of("state","ELIGIBLE","configurationSha256",probe.identityHash);
     }
 
-    static void requireWorker(Map<String,String> environment)throws Exception{
+    static List<String> workerComponents(PipelineConfig pipeline){
+        var components=new ArrayList<>(WORKER_COMPONENTS);
+        boolean mysqlSource="MYSQL".equals(pipeline.effectiveSourceType());
+        if(mysqlSource||pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.MYSQL))
+            components.add("com.mysql.cj.jdbc.Driver");
+        if(mysqlSource)components.add("com.github.shyiko.mysql.binlog.BinaryLogClient");
+        else components.add("org.postgresql.replication.PGReplicationStream");
+        return components;
+    }
+
+    static void requireWorker(PipelineConfig pipeline,Map<String,String> environment)throws Exception{
         if(Runtime.version().feature()!=21||!Files.isExecutable(TaskWorker.Jvm.javaExecutable()))
             throw new TaskService.Conflict("PLACEMENT_WORKER_UNAVAILABLE");
         requireLauncher(environment);
         ClassLoader loader=TaskWorker.class.getClassLoader();
         try{
-            for(String component:WORKER_COMPONENTS)Class.forName(component,false,loader);
+            for(String component:workerComponents(pipeline))Class.forName(component,false,loader);
         }catch(ClassNotFoundException|LinkageError unavailable){
             throw new TaskService.Conflict("PLACEMENT_WORKER_COMPONENT_UNAVAILABLE");
         }
@@ -69,7 +83,7 @@ final class AutomaticPlacement {
         }
     }
 
-    static void probeJournal(io.github.rivomesh.PipelineConfig pipeline)throws Exception{
+    static void probeJournal(PipelineConfig pipeline)throws Exception{
         var journal=pipeline.journal;
         Properties properties=new Properties();
         properties.setProperty("user",journal.username);
