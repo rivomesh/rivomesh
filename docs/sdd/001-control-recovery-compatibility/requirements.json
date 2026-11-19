@@ -1186,8 +1186,8 @@
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量及异步 GTID 切主。8.4.13 另通过异步 GTID 双目标续传和三节点单主组复制。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。",
-        "en": "Temurin 21 LTS is the sole first-release runtime. Native evidence covers standalone and async GTID failover on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. MySQL 8.4.13 also passed two-target async continuation and three-node single-primary Group Replication. PostgreSQL 17/18 and single-PDB Oracle have separate native results. Additional destinations, TLS and recovery profiles remain in the Temurin 21 matrix."
+        "zh-CN": "首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量、异步 GTID 切主和三节点单主组复制。四个组复制档案均在快照中途停主后自动续传至 MySQL 和 PostgreSQL。8.4.13 另通过异步 GTID 双目标续传与组复制旧主只读返回。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。",
+        "en": "Temurin 21 LTS is the sole first-release runtime. Native evidence covers standalone, async GTID failover and three-member single-primary Group Replication on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. All four group profiles resume to MySQL and PostgreSQL after the primary stops during a snapshot. MySQL 8.4.13 also passed two-target async continuation and refusal of the read-only former group primary. PostgreSQL 17/18 and single-PDB Oracle have separate native results. Additional destinations, TLS and recovery profiles remain in the Temurin 21 matrix."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",

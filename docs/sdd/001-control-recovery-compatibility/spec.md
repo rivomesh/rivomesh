@@ -60,7 +60,7 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | 首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量及异步 GTID 切主。8.4.13 另通过异步 GTID 双目标续传和三节点单主组复制。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。 |
+| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | 首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量、异步 GTID 切主和三节点单主组复制。四个组复制档案均在快照中途停主后自动续传至 MySQL 和 PostgreSQL。8.4.13 另通过异步 GTID 双目标续传与组复制旧主只读返回。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 Pulsar 4.0.14 已实测单 Broker 的私有 CA、Token、拒绝错误主机名和重启续传。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 

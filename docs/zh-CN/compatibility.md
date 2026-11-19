@@ -8,10 +8,10 @@
 
 | 配置 | 实库范围 | 配置与恢复 |
 |---|---|---|
-| `MYSQL` 5.7.44 | Temurin 21 单机到 MySQL 与 PostgreSQL 的全量及增量。历史档案覆盖 GTID 主从升主、单主组复制和日志缺失拒绝。 | [同步配置](pipeline-v3.md)、[日志缺失恢复](capture-recovery.md) |
-| `MYSQL` 8.0.46 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖 GTID 主从升主和单主组复制。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
-| `MYSQL` 8.2.0 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖 GTID 主从升主和单主组复制。 | [版本专项命令](pipeline-v3.md) |
-| `MYSQL` 8.4.13 | Temurin 21 单机到两个 SQL 目标的全量及增量。历史档案覆盖三种拓扑和 binlog 准入检查。 | [8.4 binlog 档案](pipeline-v3.md) |
+| `MYSQL` 5.7.44 | Temurin 21 单机及三节点单主组复制到 MySQL 与 PostgreSQL。异步 GTID 升主及缺失日志拒绝通过 PostgreSQL 目标验收。 | [同步配置](pipeline-v3.md)、[日志缺失恢复](capture-recovery.md) |
+| `MYSQL` 8.0.46 | Temurin 21 单机及三节点单主组复制到两个 SQL 目标。异步 GTID 升主通过 PostgreSQL 目标验收。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
+| `MYSQL` 8.2.0 | Temurin 21 单机及三节点单主组复制到两个 SQL 目标。异步 GTID 升主通过 PostgreSQL 目标验收。 | [版本专项命令](pipeline-v3.md) |
+| `MYSQL` 8.4.13 | Temurin 21 单机、异步 GTID 升主及三节点单主组复制到两个 SQL 目标。binlog 准入及组复制旧主只读返回另有实库验证。 | [8.4 binlog 档案](pipeline-v3.md) |
 | `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝，共同点对账待验收。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Temurin 21 实验档案。发布存储型生成列，PostgreSQL 17.12 目标物化为普通列。 | [源指南与发布](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |

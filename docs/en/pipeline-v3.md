@@ -93,6 +93,8 @@ python3 tests/mysql-group-failover-native.py --artifact rivomesh.jar \
   --java "$JAVA_HOME/bin/java" --output target/mysql-group-failover-proof
 ```
 
+A second Temurin 21 profile runs the same release JAR on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. It shuts down the original primary while a snapshot is still being built. After MySQL elects a replacement, Rivomesh rebuilds the unfinished snapshot and both SQL destinations receive the pre-election update and subsequent insert, delete and update. Both journal ACKs reach the captured sequence. Reproduce with the prebuilt JAR and compiled tests using `RIVOMESH_TEST_PREBUILT=1 SYNC_V3_GROUP_SQL_TARGETS=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 bash tests/v3-group-run.sh`. For MySQL 5.7 add `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7`. [Version-specific evidence](../verification/baseline.json)
+
 ### Verified TLS for MySQL capture and delivery
 
 Configure `source.sslMode: VERIFY_IDENTITY` for the binlog channel and include `sslMode=VERIFY_IDENTITY` in `source.jdbcOptions` for discovery and snapshots. Each MySQL target has its own JDBC URL and TLS options. Install the CA roots in the execution JDK trust store available to the Agent and its Worker JVMs. Use the certificate's DNS names in the source candidates and target URLs. The verified binlog modes negotiate through the JDK and can connect to a TLS 1.3-only MySQL endpoint. [Connector/J TLS properties](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)

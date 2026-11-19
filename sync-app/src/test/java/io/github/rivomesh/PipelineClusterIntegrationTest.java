@@ -12,9 +12,12 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledIfSystemProperty(named="sync.v3.ha",matches="true")
 class PipelineClusterIntegrationTest {
     static PipelineConfig pipeline(Config legacy){
+        return pipeline(legacy,!Boolean.getBoolean("sync.v3.ha.postgresOnly"));
+    }
+    static PipelineConfig pipeline(Config legacy,boolean includeGauss){
         PipelineConfig p=new PipelineConfig();p.pipelineId=legacy.jobId;p.source=legacy.source;p.databases=Collections.singletonList(legacy.source.database);p.chunkSize=5;p.leaseMillis=5000;p.heartbeatMillis=500;p.pollIntervalMillis=100;p.retryDelayMillis=200;
         p.journal.mode="EXTERNAL";p.journal.product=TargetProduct.POSTGRESQL;p.journal.url=System.getProperty("target.url");p.journal.username="sync_test";p.journal.password=ClusterHarness.PASSWORD;p.journal.namespace=legacy.jobId+"_journal";
-        for(boolean gauss:Boolean.getBoolean("sync.v3.ha.postgresOnly")?Collections.singletonList(false):Arrays.asList(true,false)){
+        for(boolean gauss:includeGauss?Arrays.asList(true,false):Collections.singletonList(false)){
             PipelineConfig.Target t=new PipelineConfig.Target();t.id=gauss?"gauss":"postgres";t.product=gauss?TargetProduct.GAUSS:TargetProduct.POSTGRESQL;t.url=gauss?"jdbc:postgresql://gaussdb:5432/sync_test?prepareThreshold=0&connectTimeout=3&socketTimeout=10":System.getProperty("target.url");t.username="sync_test";t.password=ClusterHarness.PASSWORD;t.metadataSchema=legacy.target.metadataSchema;t.mappings.put(legacy.source.database,legacy.target.schema);p.targets.add(t);
         }return p;
     }

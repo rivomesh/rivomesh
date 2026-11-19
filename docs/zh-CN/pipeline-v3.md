@@ -93,6 +93,8 @@ python3 tests/mysql-group-failover-native.py --artifact rivomesh.jar \
   --java "$JAVA_HOME/bin/java" --output target/mysql-group-failover-proof
 ```
 
+另一组 Temurin 21 档案用同一发布包验收 MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13。原主在快照构建中途关闭。MySQL 选出新主后，Rivomesh 重建未完成快照。两个 SQL 目标收到切主前的更新和切主后的插入、删除及更新，两路 ACK 追平共享日志。编译好发布包和测试类后运行 `RIVOMESH_TEST_PREBUILT=1 SYNC_V3_GROUP_SQL_TARGETS=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 bash tests/v3-group-run.sh`。MySQL 5.7 使用 `SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7`。 [分版本验收记录](../verification/baseline.json)
+
 ### MySQL 采集和投递的 TLS 验证
 
 在 `source.sslMode` 设置 `VERIFY_IDENTITY` 供 binlog 采集使用，在 `source.jdbcOptions` 加入 `sslMode=VERIFY_IDENTITY` 供发现和快照读取使用。每个 MySQL 目标单独设置 JDBC URL 和 TLS 参数。把签发证书的 CA 根证书加入执行 JDK 信任库，Agent 和它启动的 Worker 都应能读取。源候选节点和目标 URL 使用与证书匹配的 DNS 名称。binlog 的证书验证模式由 JDK 协商协议，可连接仅启用 TLS 1.3 的 MySQL。[Connector/J TLS 参数](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-security.html)

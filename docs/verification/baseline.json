@@ -14099,5 +14099,78 @@
     "cleanupExitCode": 0,
     "pending": "Source or target connection checks, owner relocation, other adapters and journal profiles have separate acceptance.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --verified-placement --verified-placement-postgres-source --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-pg-verified-placement"
+  },
+  "temurin21MySqlSinglePrimaryGroupReplicationMatrix": {
+    "scope": "Native three-member single-primary Group Replication with two Rivomesh Workers and MySQL and PostgreSQL SQL destinations on one Temurin 21 release JAR.",
+    "artifactSha256": "f39cf9cc1c65711cae5f0e02368a5beb924f31bf059fdb7de743e01aee6bf6d5",
+    "artifactBuildSourceTree": "365a81567a32d7291bacf7c197ab2b0e8fe43d71",
+    "javaVersion": "openjdk version \"21.0.12.1\" 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode, sharing)",
+    "runtimeImageId": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4",
+    "targetImages": {
+      "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de"
+    },
+    "journal": "PostgreSQL 17.12, external",
+    "profiles": [
+      {
+        "sourceVersion": "5.7.44",
+        "sourceImage": "mysql:5.7",
+        "sourceImageId": "sha256:5107333e08a87b836d48ff7528b1e84b9c86781cc9f1748bbc1b8c42a870d933",
+        "sourceArchitecture": "amd64",
+        "newPrimary": "mysql-2",
+        "testsPassed": 1,
+        "logSha256": "92eab60b213347aa4d89913649a38243f573df666af4ca61fcac710414515305"
+      },
+      {
+        "sourceVersion": "8.0.46",
+        "sourceImage": "mysql:8.0.46",
+        "sourceImageId": "sha256:b7e118f56c5963e079252e0d6e2978c9c010eb7fc7aaaec100e367796b5dd08f",
+        "sourceArchitecture": "arm64",
+        "newPrimary": "mysql-3",
+        "testsPassed": 1,
+        "logSha256": "506ef6d1faa0fe16c831b68eeb8c8b0d512ab83aa0a95368f408a95f930c105b"
+      },
+      {
+        "sourceVersion": "8.2.0",
+        "sourceImage": "mysql:8.2.0",
+        "sourceImageId": "sha256:a76e521c029290a5e42acd182b67a66b8bf1c42045e4a6977ee21e46a5fe6083",
+        "sourceArchitecture": "arm64",
+        "newPrimary": "mysql-2",
+        "testsPassed": 1,
+        "logSha256": "518c8710e2a62c06a87f7970202760de0f8ea76486b97f6463bb6abac2c88ccb"
+      },
+      {
+        "sourceVersion": "8.4.13",
+        "sourceImage": "mysql:8.4",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "sourceArchitecture": "arm64",
+        "newPrimary": "mysql-2",
+        "testsPassed": 1,
+        "logSha256": "56e91f7efec088bd76208cf025d316b2554b3856c50d2c44ec46fe00681aaf41"
+      }
+    ],
+    "nativeScenariosPassed": 4,
+    "fixtureSha256": {
+      "tests/v3-group-run.sh": "f62b1b71d61074e1d6a3c9675c3ac5d9e88a7647ec77bf45debe51a38a54d448",
+      "tests/compose.yml": "ab5c7c1c63be7653b398e721a384866171b4cea3805e33035046971f08789bba",
+      "tests/group-compose.yml": "f7283af657afa94d6ef97ca06805bd54c55c7873f881a8795356c790c449e97d",
+      "tests/mysql57-group-compose.yml": "8a7b4a7a18889ff37e180653ab6633e663ca4ae7ba70e61f7e9b6b5b3f7aaebb",
+      "tests/mysql57-compose.yml": "cdd9bead0e866bba1084b1b2649e3f615fea987bf8f9f320e1e45e745cc4433f",
+      "tests/postgres-compose.yml": "07fa5d4c10f4212f3500cc0c2f5348a6a44846cb5f0df8b1af537b1046900fc7",
+      "sync-app/src/test/java/io/github/rivomesh/PipelineGroupIntegrationTest.java": "fa6cf5033d2c5c8f0bf2f1a74a1622c3b2ac043c21e8a6fc82de5e80dae936dd",
+      "sync-app/src/test/java/io/github/rivomesh/PipelineClusterIntegrationTest.java": "9b140914788d292877a6594961a7b4d1787bb6dc46174145f60092aa31c8a47c"
+    },
+    "checks": [
+      "Wait for all three native members online and for the snapshot journal to retain a partially built table.",
+      "Stop the original database with SQL SHUTDOWN and wait for a different ONLINE primary elected by MySQL.",
+      "Verify the unfinished snapshot is rebuilt and pre-election and post-election changes reach both SQL destinations.",
+      "Verify 40 final rows, one inserted business key, a deletion, both expected updates and both ACKs at the captured sequence."
+    ],
+    "fixtureContainersRemaining": 0,
+    "fixtureNetworksRemaining": 0,
+    "fixtureVolumesRemaining": 0,
+    "reproduce": "RIVOMESH_TEST_PREBUILT=1 SYNC_V3_GROUP_SQL_TARGETS=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 SYNC_MYSQL_TARGET_IMAGE=mysql:8.4 SYNC_POSTGRES_IMAGE=postgres:17.12 bash tests/v3-group-run.sh",
+    "mysql57Env": "SYNC_MYSQL57=1 SYNC_MYSQL57_IMAGE=mysql:5.7",
+    "scopeLimit": "Source graceful shutdown with three members and two SQL targets. MySQL 8.4.13 SIGKILL, stale primary restart and retained completed snapshots have a separate native proof."
   }
 }
