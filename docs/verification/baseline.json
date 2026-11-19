@@ -14243,5 +14243,28 @@
       "networks": 0
     },
     "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-bytea --source-image postgres:17.12 --bytea-values --jdk 21"
+  },
+  "temurin21FullAfterPostgresqlAutomaticPlacement": {
+    "sourceCommit": "9f72f23f37cc9065641508ec48b9bba2c02cb579",
+    "additionalTestPaths": {
+      "tests/v3-group-run.sh": "f62b1b71d61074e1d6a3c9675c3ac5d9e88a7647ec77bf45debe51a38a54d448",
+      "sync-app/src/test/java/io/github/rivomesh/PipelineClusterIntegrationTest.java": "9b140914788d292877a6594961a7b4d1787bb6dc46174145f60092aa31c8a47c",
+      "sync-app/src/test/java/io/github/rivomesh/PipelineGroupIntegrationTest.java": "fa6cf5033d2c5c8f0bf2f1a74a1622c3b2ac043c21e8a6fc82de5e80dae936dd"
+    },
+    "runtime": "openjdk version \"21.0.13\" 2026-10-20 LTS\nOpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)",
+    "artifactSha256": "d3d36c1a450d29af54cce18be1dd8da22b0e81aadd27889dd4e4da6832259590",
+    "fullJavaTestsPassed": 691,
+    "fullJavaTestsSkippedOptional": 35,
+    "fullJavaResultsSha256": "229d9972121a9381ea80993945b6f15054e0751b0c75e4957b48308e01bdcf1e",
+    "firstRunEvidenceSha256": "892d2e0cd923383a53e879d27f38c353d6c422d428e3054f069d2d941b57e6d9",
+    "firstRunCorrection": "The forked JVM inherited the macOS /var symlink. Use a physical java.io.tmpdir supplied to Surefire argLine, leaving evidence-path safety checks in effect.",
+    "domPassed": 167,
+    "domResultsSha256": "bcbc54301580e1c04e971cdb6d00b545e0d1da396973c2b86efa4844892229ea",
+    "browser": "Chrome/157.0.8103.79",
+    "realBrowserChecksPassed": 14,
+    "browserManifestSha256": "8bdcab2ba6810dba8a0649ad333798439a5940dad8f97890cc674d3443b0eeae",
+    "configurationExamplesPassed": 25,
+    "configurationLogSha256": "e67ddac8a203fe5dbbe06740999e25b39703ec2ba1c4883d5ca452e80a4328fd",
+    "scope": "Standard build, packaged assets and Web console smoke after PostgreSQL eligibility, with the new optional MySQL group fixture compiled. Optional native tests retain their own exact manifests."
   }
 }
