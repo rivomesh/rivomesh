@@ -65,3 +65,9 @@ Oracle `DATE` maps to PostgreSQL `timestamp(6) without time zone` and preserves 
 The profile accepts dates from 1582-10-15 through 9999-12-31. A value before that range, including BCE, raises `ORACLE_DATE_VALUE_OUT_OF_RANGE` when its era and format can be decoded. Unexpected LogMiner date masks raise `ORACLE_DATE_FORMAT_UNSUPPORTED`. Inspect the source values, the affected table and the durable position before retrying an interrupted run. Oracle's `TIMESTAMP` variants require a separate profile.
 
 Run `tests/oracle-source-probe.py --logminer --pipeline` with the frozen JAR and Oracle JDBC arguments to reproduce the temporary real databases and actual SIGKILL/restart. Add `--text-json` for strict textual JSON or `--date-values` for Oracle DATE, covering Flashback, archived CDC and recovery for both keyed and keyless tables. [Evidence](../verification/README.md#oracle-archived-cdc-and-restart)
+
+## Oracle virtual column feasibility
+
+Oracle Free 26ai `23.26.4.0.0` exposed the virtual `NUMBER` definition `"AMOUNT"*2` without a physical segment column. A native Flashback read returned the original generated values and duplicate multiplicity at one SCN. The archived redo and undo contained the physical operands for two successive updates of the same row, a SQL NULL insert and a keyless delete. They omitted the generated value. The independent `COLUMN_PRESENT` probe returned `ORA-00904` for the qualified operand, so its presence flags are unavailable. The production adapter still rejects generated columns pending opt-in integration and restart validation.
+
+Use `tests/oracle-source-probe.py --logminer --virtual-evidence --startup-timeout 480` with the frozen application and Oracle JDBC arguments. This profile inspects a disposable native database. [Evidence](../verification/README.md#oracle-virtual-column-feasibility)

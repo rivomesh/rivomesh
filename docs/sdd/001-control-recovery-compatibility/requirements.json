@@ -1095,8 +1095,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。",
-        "en": "Temurin 21 verified Oracle 26ai single-PDB long transactions, archived SCN restart, strict text JSON and civil DATE to PostgreSQL. Native binary JSON, LOB, generated columns and RAC failover remain."
+        "zh-CN": "Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。虚拟生成列已核验历史快照和归档基础列可行性。正式生成列同步、原生二进制 JSON、LOB 以及 RAC 切换待验。",
+        "en": "Temurin 21 verified Oracle 26ai single-PDB long transactions, archived SCN restart, strict text JSON and civil DATE to PostgreSQL. Native feasibility verified historical virtual values and archived physical operands. Product support for generated columns, native binary JSON, LOB and RAC failover remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",

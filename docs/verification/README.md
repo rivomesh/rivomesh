@@ -539,3 +539,7 @@ Commit `78eeb52` passed 13 audit export tests each with OpenSSL 3.6.2 and LibreS
 ### PostgreSQL native publication shape review
 
 The `90b7556ce41b90d5d0940d38cd4c22eec2643c4fc617d14d91cdcb7e5673334f` package passed eight native checks, 12 Java tests and 147 DOM tests. PostgreSQL 17.12 stopped delivery after a changed Relation while the prior source LSN and destination cut remained intact. Review identified the current publication shape, reflected subsequent DDL with a different current digest and returned an explicit diagnostic for an unsupported column. No DDL was applied on the target. [Source operations](../en/postgresql-source.md#review-a-paused-schema-change) · [Manifest](baseline.json)
+
+### Oracle virtual column feasibility
+
+The `08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34` release probe and the frozen fixture passed 12 checks with Oracle Free 26ai on a disposable PDB. Historical reads preserved the calculated virtual NUMBER values and duplicate multiplicity. Archived statements carried complete physical operands, including two intermediate updates in the same transaction and a keyless delete. The separate `COLUMN_PRESENT` query returned `ORA-00904`. Product configuration, generated-column ingestion and restart validation remain open. [Oracle operations](../en/oracle-source.md#oracle-virtual-column-feasibility) · [Manifest](baseline.json)

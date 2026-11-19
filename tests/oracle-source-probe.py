@@ -30,6 +30,139 @@ def required(check, description, timeout=240):
     raise AssertionError(description + ' timed out')
 
 
+def mine_archive(sql, start, end, select_rows, *, checked=True):
+    assert start.isdecimal() and end.isdecimal() and int(end)>int(start)
+    return sql(f"""
+        DECLARE
+            added NUMBER := 0;
+        BEGIN
+            FOR file_row IN (
+                SELECT DISTINCT name FROM v$archived_log
+                WHERE resetlogs_change#=(SELECT resetlogs_change# FROM v$database)
+                  AND name IS NOT NULL AND status='A' AND deleted='NO'
+                  AND first_change# <= {end} AND next_change# > {start}
+            ) LOOP
+                dbms_logmnr.add_logfile(
+                    logfilename=>file_row.name,
+                    options=>CASE WHEN added=0 THEN dbms_logmnr.new ELSE dbms_logmnr.addfile END);
+                added := added + 1;
+            END LOOP;
+            dbms_logmnr.start_logmnr(
+                startscn=>{start}, endscn=>{end},
+                options=>dbms_logmnr.dict_from_online_catalog + dbms_logmnr.committed_data_only);
+        END;
+        /
+        {select_rows}
+        EXEC dbms_logmnr.end_logmnr
+    """,checked=checked)
+
+
+def verify_virtual_archive(changes):
+    assert len(changes)==4 and all(len(row)==8 and row[2:4]==['0','0'] for row in changes), changes
+    assert len({(row[4],row[5]) for row in changes})==1, changes
+    assert len(changes[0][4])==16 and changes[0][5].isdecimal(), changes
+    assert all('"AMOUNT"' in sql and '"DERIVED"' not in sql for row in changes for sql in row[6:]), changes
+    updates=[row for row in changes if row[:2]==['RIVO_VIRTUAL_ROWS','UPDATE']]
+    inserted=[row for row in changes if row[:2]==['RIVO_VIRTUAL_ROWS','INSERT']]
+    deleted=[row for row in changes if row[:2]==['RIVO_VIRTUAL_KEYLESS','DELETE']]
+    assert len(updates)==2 and len(inserted)==len(deleted)==1, changes
+    assert "'7'" in updates[0][6] and "'5'" in updates[0][7], changes
+    assert "'5'" in updates[1][6] and "'-8'" in updates[1][7], changes
+    assert '"AMOUNT" IS NULL' in inserted[0][6] and ',NULL)' in inserted[0][7], changes
+    assert "'3'" in deleted[0][6] and "'3'" in deleted[0][7], changes
+
+
+def virtual_evidence(sql, output, observed):
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        CREATE TABLE rivo_app.rivo_virtual_rows (
+            id NUMBER(12) PRIMARY KEY, amount NUMBER(12),
+            derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+        CREATE TABLE rivo_app.rivo_virtual_keyless (
+            amount NUMBER(12), derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+        ALTER TABLE rivo_app.rivo_virtual_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+        ALTER TABLE rivo_app.rivo_virtual_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+        INSERT INTO rivo_app.rivo_virtual_rows(id,amount) VALUES(1,7);
+        INSERT INTO rivo_app.rivo_virtual_keyless(amount) VALUES(3);
+        INSERT INTO rivo_app.rivo_virtual_keyless(amount) VALUES(3);
+        COMMIT;""")
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    start=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    assert start.isdecimal()
+    shape=sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT table_name||'|'||data_type||'|'||data_precision||'|'||data_scale||'|'||
+            virtual_column||'|'||default_length||'|'||data_default_vc||'|'||NVL(TO_CHAR(segment_column_id),'NONE')
+        FROM all_tab_cols
+        WHERE owner='RIVO_APP' AND table_name IN ('RIVO_VIRTUAL_ROWS','RIVO_VIRTUAL_KEYLESS')
+          AND column_name='DERIVED' ORDER BY table_name;
+        UPDATE rivo_app.rivo_virtual_rows SET amount=5 WHERE id=1;
+        UPDATE rivo_app.rivo_virtual_rows SET amount=-8 WHERE id=1;
+        INSERT INTO rivo_app.rivo_virtual_rows(id,amount) VALUES(2,NULL);
+        DELETE FROM rivo_app.rivo_virtual_keyless WHERE ROWNUM=1;
+        COMMIT;
+        SELECT 'NEW|'||amount||'|'||derived FROM rivo_app.rivo_virtual_rows WHERE id=1;
+        SELECT 'NULL|'||COUNT(*) FROM rivo_app.rivo_virtual_rows WHERE id=2 AND amount IS NULL AND derived IS NULL;
+    """).stdout.splitlines()
+    shape=[line.strip() for line in shape if '|' in line]
+    (output/'native-virtual-dictionary.json').write_text(json.dumps(shape,indent=2)+'\n')
+
+    end=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    mined=mine_archive(sql,start,end,"""
+        SELECT table_name||'|'||operation||'|'||status||'|'||csf||'|'||RAWTOHEX(xid)||'|'||commit_scn
+          ||'|'||sql_undo||'|'||sql_redo
+        FROM v$logmnr_contents
+        WHERE seg_owner='RIVO_APP' AND table_name IN ('RIVO_VIRTUAL_ROWS','RIVO_VIRTUAL_KEYLESS')
+          AND src_con_name='FREEPDB1'
+        ORDER BY scn, rs_id, ssn;
+    """).stdout.splitlines()
+    changes=[line.strip().split('|',7) for line in mined if '|' in line]
+    (output/'native-virtual-archive.json').write_text(json.dumps(changes,indent=2)+'\n')
+
+    presence=mine_archive(sql,start,end,"""
+        SELECT scn||'|'||
+            dbms_logmnr.column_present(redo_value,'FREEPDB1:RIVO_APP.RIVO_VIRTUAL_ROWS.AMOUNT')||'|'||
+            dbms_logmnr.column_present(undo_value,'FREEPDB1:RIVO_APP.RIVO_VIRTUAL_ROWS.AMOUNT')||'|'||
+            dbms_logmnr.column_present(redo_value,'FREEPDB1:RIVO_APP.RIVO_VIRTUAL_ROWS.DERIVED')||'|'||
+            dbms_logmnr.column_present(undo_value,'FREEPDB1:RIVO_APP.RIVO_VIRTUAL_ROWS.DERIVED')
+        FROM v$logmnr_contents
+        WHERE seg_owner='RIVO_APP' AND table_name='RIVO_VIRTUAL_ROWS' AND src_con_name='FREEPDB1'
+          AND operation='UPDATE' AND status=0 AND csf=0
+        ORDER BY scn, rs_id, ssn;
+    """,checked=False)
+    present_rows=[line.strip().split('|') for line in presence.stdout.splitlines() if '|' in line]
+    (output/'native-virtual-column-presence.json').write_text(json.dumps({
+        'fields':['scn','amountRedo','amountUndo','derivedRedo','derivedUndo'],
+        'rows':present_rows,'exitCode':presence.returncode,
+        'oracleErrors':[line for line in presence.stdout.splitlines() if line.startswith('ORA-')],
+    },indent=2)+'\n')
+    flashback=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT 'OLD|'||amount||'|'||derived FROM rivo_app.rivo_virtual_rows AS OF SCN {start} WHERE id=1;
+        SELECT 'KEYLESS|'||COUNT(*) FROM rivo_app.rivo_virtual_keyless AS OF SCN {start} WHERE derived=6;
+    """,checked=False)
+    operands=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT 'OLD|'||amount||'|'||(amount*2) FROM rivo_app.rivo_virtual_rows AS OF SCN {start} WHERE id=1;
+        SELECT 'KEYLESS|'||COUNT(*) FROM rivo_app.rivo_virtual_keyless AS OF SCN {start} WHERE amount*2=6;
+    """,checked=False)
+    historical=[line.strip() for line in flashback.stdout.splitlines() if '|' in line]
+    recomputed=[line.strip() for line in operands.stdout.splitlines() if '|' in line]
+    (output/'native-virtual-flashback.json').write_text(json.dumps({
+        'scn':start,'rows':historical,'exitCode':flashback.returncode,
+        'oracleErrors':[line for line in flashback.stdout.splitlines() if line.startswith('ORA-')],
+        'physicalExpressionRows':recomputed,'physicalExpressionExitCode':operands.returncode,
+        'physicalExpressionErrors':[line for line in operands.stdout.splitlines() if line.startswith('ORA-')],
+    },indent=2)+'\n')
+    assert shape[-2:]==['NEW|-8|-16','NULL|1'], shape
+    assert len(shape)==4 and all('|NUMBER|16|0|YES|10|"AMOUNT"*2' in line for line in shape[:2]), shape
+    observed('Oracle dictionary exposes virtual NUMBER definitions and source reads preserve negative products and NULL')
+    verify_virtual_archive(changes)
+    observed('Archived LogMiner supplies keyed and keyless physical operands, including intermediate values in one transaction')
+    if presence.returncode==0 and len(present_rows)==2 and all(row[1:]==['1','1','0','0'] for row in present_rows):
+        observed('LogMiner COLUMN_PRESENT confirms physical operands are present and virtual values are absent')
+    assert operands.returncode==0 and recomputed==['OLD|7|14','KEYLESS|2'], operands.stdout
+    assert flashback.returncode==0 and historical==['OLD|7|14','KEYLESS|2'], flashback.stdout
+    observed('Oracle Flashback at the original SCN computes historical virtual values and exact keyless multiplicity')
+
+
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
     target = oracle + '-pg'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
@@ -366,20 +499,28 @@ def main():
     parser.add_argument('--artifact', required=True, type=Path)
     parser.add_argument('--jdbc-driver', required=True, type=Path)
     parser.add_argument('--java', default='java')
+    parser.add_argument('--startup-timeout', type=int, default=240,
+                        help='Seconds to wait for the disposable Oracle image to become healthy')
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
     parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
     parser.add_argument('--text-json', action='store_true', help='Also verify constrained VARCHAR2 to PostgreSQL JSONB')
     parser.add_argument('--date-values', action='store_true', help='Also verify Oracle DATE to PostgreSQL TIMESTAMP')
+    parser.add_argument('--virtual-evidence', action='store_true',
+                        help='Inspect Oracle virtual NUMBER metadata, Flashback values and actual archived DML')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
+    if options.startup_timeout<1:
+        parser.error('--startup-timeout must be positive')
     if options.pipeline and not options.logminer:
         parser.error('--pipeline requires --logminer')
     if options.text_json and not options.pipeline:
         parser.error('--text-json requires --pipeline')
     if options.date_values and not options.pipeline:
         parser.error('--date-values requires --pipeline')
+    if options.virtual_evidence and not options.logminer:
+        parser.error('--virtual-evidence requires --logminer')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -388,7 +529,9 @@ def main():
     report = {'artifactSha256': hashlib.sha256(options.artifact.read_bytes()).hexdigest(),
               'driverSha256': hashlib.sha256(options.jdbc_driver.read_bytes()).hexdigest(),
               'image': options.image, 'runtimeVersion': execute(options.java,'-version').stderr.splitlines()[0],
-              'textJson': options.text_json, 'dateValues': options.date_values, 'checks': [], 'status': 'FAIL'}
+              'textJson': options.text_json, 'dateValues': options.date_values,
+              'virtualEvidence': options.virtual_evidence, 'startupTimeoutSeconds':options.startup_timeout,
+              'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
         script = ('SET HEADING OFF FEEDBACK OFF PAGESIZE 0 LINESIZE 32767 VERIFY OFF\n'
@@ -409,7 +552,7 @@ def main():
                 options.image, env=environment, timeout=240)
         started = True
         required(lambda: execute('docker', 'inspect', '-f', '{{.State.Health.Status}}', name)
-                 .stdout.strip() == 'healthy', 'Oracle database health')
+                 .stdout.strip() == 'healthy', 'Oracle database health', options.startup_timeout)
         port = execute('docker', 'port', name, '1521/tcp').stdout.strip().rsplit(':', 1)[1]
         report['sourceVersion'] = sql('SELECT version_full FROM v$instance;').stdout.strip()
         if sql("SELECT log_mode FROM v$database;").stdout.strip() != 'ARCHIVELOG':
@@ -500,26 +643,7 @@ def main():
                 end = sql('SELECT current_scn FROM v$database;').stdout.strip()
                 assert end.isdecimal() and int(end) > int(scn)
                 sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
-                mined = sql(f"""
-                    DECLARE
-                        added NUMBER := 0;
-                    BEGIN
-                        FOR file_row IN (
-                            SELECT DISTINCT name FROM v$archived_log
-                            WHERE resetlogs_change#=(SELECT resetlogs_change# FROM v$database)
-                              AND name IS NOT NULL AND status='A' AND deleted='NO'
-                              AND first_change# <= {end} AND next_change# > {scn}
-                        ) LOOP
-                            dbms_logmnr.add_logfile(
-                                logfilename=>file_row.name,
-                                options=>CASE WHEN added=0 THEN dbms_logmnr.new ELSE dbms_logmnr.addfile END);
-                            added := added + 1;
-                        END LOOP;
-                        dbms_logmnr.start_logmnr(
-                            startscn=>{scn}, endscn=>{end},
-                            options=>dbms_logmnr.dict_from_online_catalog + dbms_logmnr.committed_data_only);
-                    END;
-                    /
+                mined = mine_archive(sql,scn,end,"""
                     SELECT operation||'|'||commit_scn||'|'||RAWTOHEX(xid)||'|'||sql_undo||'|'||sql_redo
                     FROM v$logmnr_contents
                     WHERE seg_owner='RIVO_APP' AND table_name='RIVO_ORDERS' AND src_con_name='FREEPDB1'
@@ -528,7 +652,6 @@ def main():
                     FROM v$logmnr_contents
                     WHERE seg_owner='RIVO_APP' AND table_name='RIVO_KEYLESS' AND src_con_name='FREEPDB1'
                     AND operation IN ('INSERT','UPDATE','DELETE') AND status=0;
-                    EXEC dbms_logmnr.end_logmnr
                 """).stdout.splitlines()
                 changes = [line.strip().split('|') for line in mined if '|' in line]
                 updates = [row for row in changes if row[0]=='UPDATE']
@@ -580,6 +703,8 @@ def main():
                 observed('After archive rotation, a second complete commit has a distinct typed SCN and XID')
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
+        if options.virtual_evidence:
+            virtual_evidence(sql,options.output,observed)
         report['status'] = 'PASS'
     except Exception as failure:
         detail = str(failure)

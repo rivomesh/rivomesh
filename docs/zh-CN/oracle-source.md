@@ -65,3 +65,9 @@ Oracle `DATE` 映射为 PostgreSQL `timestamp(6) without time zone`，保留年�
 此档案接受 1582-10-15 至 9999-12-31 的日期。采集识别到更早日期时，包括公元前日期，会报告 `ORACLE_DATE_VALUE_OUT_OF_RANGE`。遇到尚未支持的 LogMiner 日期格式则报告 `ORACLE_DATE_FORMAT_UNSUPPORTED`。中断后先核对源值、受影响的表和持久化位点，再重试。Oracle 的各类 `TIMESTAMP` 另行验证。
 
 用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。加入 `--text-json` 验证严格文本 JSON，加入 `--date-values` 验证 Oracle DATE，均覆盖有主键、无主键表的 Flashback、归档 CDC 和恢复。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)
+
+## Oracle 虚拟生成列可行性
+
+Oracle Free 26ai `23.26.4.0.0` 的目录显示虚拟 `NUMBER` 表达式 `"AMOUNT"*2` 没有物理段列。在同一历史 SCN，Flashback 读取了原生成值并保留无主键重复行数量。归档 redo 和 undo 包含同一行两次更新的基础值、SQL NULL 插入和无主键删除的前镜像，生成值未出现在归档语句中。独立的 `COLUMN_PRESENT` 探测对限定列标识返回 `ORA-00904`，无法使用该函数的存在标记。正式适配器继续拒绝生成列，待显式配置、计算逻辑和原断点续传完成后验收。
+
+使用已冻结的应用包和 Oracle JDBC 参数运行 `tests/oracle-source-probe.py --logminer --virtual-evidence --startup-timeout 480`。该档案在临时 Oracle 实例中运行。 [验证证据](../verification/README.md#oracle-virtual-column-feasibility)

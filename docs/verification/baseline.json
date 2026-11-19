@@ -9370,5 +9370,72 @@
     "domTestsPassed": 147,
     "scope": "One PostgreSQL 17.12 source, one PostgreSQL destination, Temurin 21 and the local management entry. Capture retains the previous LSN and target cut when pgoutput Relation changes. Advisory review shows later DDL and reports an unsupported current shape explicitly. There is no DDL application step in this fixture.",
     "reproduce": "python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact /path/to/rivomesh.jar --output target/pg-ddl-review"
+  },
+  "oracleSourceVirtualColumnFeasibility": {
+    "native": {
+      "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+      "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+      "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "textJson": false,
+      "dateValues": false,
+      "virtualEvidence": true,
+      "startupTimeoutSeconds": 480,
+      "checks": [
+        "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+        "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+        "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+        "A root connection substituted for the PDB is refused before flashback",
+        "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+        "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+        "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+        "An unarchived part of the requested SCN window is refused",
+        "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+        "Oracle dictionary exposes virtual NUMBER definitions and source reads preserve negative products and NULL",
+        "Archived LogMiner supplies keyed and keyless physical operands, including intermediate values in one transaction",
+        "Oracle Flashback at the original SCN computes historical virtual values and exact keyless multiplicity"
+      ],
+      "status": "PASS",
+      "sourceVersion": "23.26.4.0.0",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "01965388e4dd659bea39f27572ce0bafa9e5974bd1e86879ba7ede34bb493de4",
+    "findings": {
+      "status": "PASS_BOUNDED_NATIVE_FEASIBILITY",
+      "nativeChecks": 12,
+      "artifactSha256": "08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34",
+      "sourceVersion": "23.26.4.0.0",
+      "filesSha256": {
+        "manifest.json": "01965388e4dd659bea39f27572ce0bafa9e5974bd1e86879ba7ede34bb493de4",
+        "oracle-source-probe.py": "4562c745a0708bf711028cb6028ea6218dba4f695a8f4a8b4ea466acf5dee853",
+        "fixture.patch": "177df9873143e20df6afc735de5a5e82f478b10466864ffcf0b0d9600c3ef35f",
+        "native-virtual-dictionary.json": "ae4639ec3f650daf0d36eb0747db48253634280aff97382865fff24d3493261d",
+        "native-virtual-archive.json": "746e0ec25c36f4a9c870caf4a5ae7a804d586966196051157ebfd09d0ab44b68",
+        "native-virtual-flashback.json": "1714a8d62691752ed7c6a905275c3cc02d44eeb274047db4daeff4f5c2406e2d",
+        "native-virtual-column-presence.json": "d2bc955ea8f730c5ad59f57c3f7c4653dd4e37f7303bd58143d06f1d4657b113"
+      },
+      "offlineEvaluatorManifestSha256": "ceec595212638b50da14c4e89f962746d6afc2f9974cb56cbb43970dbee176fd",
+      "nativeFindings": {
+        "metadata": "NUMBER(16,0), VIRTUAL_COLUMN=YES, SEGMENT_COLUMN_ID=NULL, \"AMOUNT\"*2",
+        "flashbackScn": "2105299",
+        "archiveCommitScn": "2105306",
+        "archiveTransactionId": "060018001B020000",
+        "keyedIntermediateOperands": [
+          "7",
+          "5",
+          "-8"
+        ],
+        "archiveVirtualFieldPresence": "Absent from all 8 actual SQL redo/undo statements",
+        "columnPresentFunction": {
+          "status": "ORACLE_IDENTIFIER_REJECTED",
+          "reason": "ORA-00904: FREEPDB1:RIVO_APP.RIVO_VIRTUAL_ROWS.AMOUNT: invalid identifier"
+        }
+      },
+      "runtimeAdapterAdmission": "UNCHANGED",
+      "remainingAcceptance": "End-to-end opt-in product configuration, adapter integration and real Worker restart",
+      "remainingFixtureContainers": 0
+    },
+    "evidenceSha256": "c1b7fea931497e8b5b7074415a88a86b2bf4210f268c9453203b5105a631fe40",
+    "scope": "Native feasibility only. One Oracle Free 26ai PDB, Temurin 21, virtual multiplication of an exact physical NUMBER, archived same-transaction intermediate images, nullable and keyless cases. Runtime adapter admission is unchanged."
   }
 }
