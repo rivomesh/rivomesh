@@ -155,7 +155,7 @@ final class PipelineAdoptionPlan {
     private static void verifyFrozenRows(PipelineConfig config, PostgresExistingAdoption.Replay replay,
                                          MysqlUniqueFreeze source) throws Exception {
         source.verifyDurable();
-        TableSchema table = source.singleTable(config.databases.getFirst());
+        TableSchema table = source.singleTable(config.databases.get(0));
         if (!replay.receipt().sourceSha256().equals(Codec.sha256(Codec.encode(source.boundary())))
                 || !replay.receipt().schemaSha256().equals(Codec.sha256(Codec.encode(table)))) {
             throw failure("WRITER_READINESS_SOURCE_CUT_CHANGED");
@@ -182,7 +182,7 @@ final class PipelineAdoptionPlan {
                 || !config.source.nodes.isEmpty() || config.databases.size() != 1) {
             throw failure("ADOPTION_PLAN_SOURCE_PROFILE_UNSUPPORTED");
         }
-        String database = config.databases.getFirst();
+        String database = config.databases.get(0);
         String schema = target.mappings.get(database);
         if (config.targets.size() != 1 || target.product != TargetProduct.POSTGRESQL || schema == null
                 || !"EXTERNAL".equals(config.journal.mode) || config.journal.product != TargetProduct.POSTGRESQL
@@ -199,7 +199,7 @@ final class PipelineAdoptionPlan {
 
     private static Observation observe(PipelineConfig config, PipelineConfig.Target target, MysqlUniqueFreeze source,
                                        PostgresAdoptionRead destination, String expectedDigest, String lockedTable) throws Exception {
-        String database = config.databases.getFirst();
+        String database = config.databases.get(0);
         String schema = target.mappings.get(database);
         source.verifyDurable();
         TableSchema table = source.singleTable(database);

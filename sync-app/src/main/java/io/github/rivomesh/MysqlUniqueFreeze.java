@@ -199,7 +199,7 @@ final class MysqlUniqueFreeze implements AutoCloseable {
     private void verifyTextUniqueKey(TableSchema table) throws SQLException {
         for (TableSchema.Index index : table.indexes) {
             if (index.primary || !index.unique || index.columns.size() != 1) continue;
-            TableSchema.Column key = table.columns.get(table.column(index.columns.getFirst()));
+            TableSchema.Column key = table.columns.get(table.column(index.columns.get(0)));
             if (key.type != TableSchema.Type.STRING || key.sourceType == null || !key.sourceType.startsWith("varchar(")) continue;
             try (PreparedStatement query = connection.prepareStatement("""
                     SELECT PAD_ATTRIBUTE='NO PAD'

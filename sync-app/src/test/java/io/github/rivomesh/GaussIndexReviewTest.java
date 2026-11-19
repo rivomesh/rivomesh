@@ -19,7 +19,7 @@ class GaussIndexReviewTest {
     @Test void reportsTheSameDecisionsAsTheSinkForEachGaussMapping() throws Exception {
         var table = table("sales", "contacts");
         table.indexes.add(index("PRIMARY", "BTREE", true, "id", "tenant"));
-        table.indexes.getFirst().primary = true;
+        table.indexes.get(0).primary = true;
         table.indexes.add(index("phone", "BTREE", false, "phone"));
         table.indexes.add(index("email", "BTREE", true, "email"));
         table.indexes.add(index("business_global", "GSI", true, "email", "tenant", "id"));
@@ -27,8 +27,8 @@ class GaussIndexReviewTest {
         var unsupported = index("functional", "BTREE", false, "email");
         unsupported.expression = "lower('private-expression-value')";
         table.indexes.add(unsupported);
-        table.columns.getLast().defaultExpression = "'private-default-value'";
-        table.columns.getLast().generationExpression = "concat('private-generated-value', email)";
+        table.columns.get(table.columns.size()-1).defaultExpression = "'private-default-value'";
+        table.columns.get(table.columns.size()-1).generationExpression = "concat('private-generated-value', email)";
 
         var ordinary = target("ordinary", TargetProduct.GAUSS);
         var preserve = target("preserve", TargetProduct.GAUSS);

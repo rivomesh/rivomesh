@@ -221,7 +221,7 @@ public final class KafkaRecoveryReview {
         TopicDescription topic=admin.describeTopics(List.of(target.messaging.topic)).allTopicNames()
                 .get(remaining(until).toNanos(),TimeUnit.NANOSECONDS).get(target.messaging.topic);
         if(cluster==null||cluster.isBlank()||topic==null||topic.topicId()==null||Uuid.ZERO_UUID.equals(topic.topicId())||topic.partitions().size()!=1
-                ||topic.partitions().getFirst().partition()!=0||topic.partitions().getFirst().replicas().size()!=target.messaging.replicas)
+                ||topic.partitions().get(0).partition()!=0||topic.partitions().get(0).replicas().size()!=target.messaging.replicas)
             throw rejected("KAFKA_RECOVERY_TOPIC_PROFILE_CHANGED");
         return new Broker(cluster,topic.topicId());
     }

@@ -187,8 +187,8 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
         TopicDescription topic=await(admin.describeTopics(List.of(name)).allTopicNames(),until).get(name);
         if(cluster==null||!Codec.sha256("KAFKA:"+cluster).equals(plan.topic().clusterSha256())
                 ||topic==null||topic.isInternal()||!topic.topicId().toString().equals(plan.topic().topicId())
-                ||topic.partitions().size()!=1||topic.partitions().getFirst().partition()!=0
-                ||topic.partitions().getFirst().replicas().size()<3)
+                ||topic.partitions().size()!=1||topic.partitions().get(0).partition()!=0
+                ||topic.partitions().get(0).replicas().size()<3)
             throw rejected("KAFKA_NOTICE_CONTROL_TOPIC_CHANGED");
         String identity=KafkaRecoveryReview.topicIdentity(cluster,topic.topicId());
         if(!profile)return identity;
@@ -199,7 +199,7 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
             resources.add(new ConfigResource(ConfigResource.Type.BROKER,Integer.toString(broker.id())));
         Map<ConfigResource,Config> result=await(admin.describeConfigs(resources).all(),until);
         Config config=result.get(resource);
-        int replicas=topic.partitions().getFirst().replicas().size();
+        int replicas=topic.partitions().get(0).replicas().size();
         if(!"delete".equals(value(config,"cleanup.policy"))||!"-1".equals(value(config,"retention.ms"))
                 ||!"-1".equals(value(config,"retention.bytes"))||!"false".equals(value(config,"unclean.leader.election.enable"))
                 ||!Integer.toString(replicas/2+1).equals(value(config,"min.insync.replicas"))

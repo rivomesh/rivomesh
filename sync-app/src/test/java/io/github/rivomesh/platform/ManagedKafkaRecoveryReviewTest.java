@@ -41,7 +41,7 @@ class ManagedKafkaRecoveryReviewTest {
             ConsoleServer owner=new ConsoleServer(config,service)){
             owner.start();
             PipelineConfig pipeline=kafkaPipeline("retained","kafka://127.0.0.1:"+sentinel.getLocalPort(),"retained.events");
-            PipelineConfig.Target target=pipeline.targets.getFirst();
+            PipelineConfig.Target target=pipeline.targets.get(0);
             target.username="fixture-worker";target.password="${PATH}";
             target.messaging.securityProtocol="SASL_PLAINTEXT";
             target.messaging.saslMechanism="SCRAM-SHA-512";
@@ -225,7 +225,7 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals("KAFKA_NOTICE_WRITER_SCRAM_TLS_REQUIRED",body.path("writerEntitlement").path("code").asText());
             assertFalse(result.text.contains(noticeWriter.password));
             assertFalse(result.text.contains(noticeWriter.username));
-            assertFalse(result.text.contains(noticeWriter.bootstrapServers.getFirst()));
+            assertFalse(result.text.contains(noticeWriter.bootstrapServers.get(0)));
             assertEquals("VERIFIED_SINGLETON",body.path("catalogCoverage").path("status").asText());
             assertEquals(Codec.sha256("test topic"),body.path("plan").path("catalogIdentity").path("businessTopicSha256").asText());
             assertEquals("legacy-admin",body.path("plan").path("administrator").path("actorId").asText());
@@ -281,7 +281,7 @@ class ManagedKafkaRecoveryReviewTest {
     @Test void optionalControlTopicIsDistinctFromEveryTaskBusinessTopicAndClaimsKnownSharedBootstrapAliases()throws Exception{
         PipelineConfig planned=kafkaPipeline("planned","kafka://main:9092","business.events");
         PipelineConfig other=kafkaPipeline("other","kafka://alias:9092","control.events");
-        PipelineConfig.Target kafka=planned.targets.getFirst();
+        PipelineConfig.Target kafka=planned.targets.get(0);
         kafka.messaging.endpoints=List.of("kafka://alias:9092");
         String fingerprint=planned.fingerprint();
         PipelineConfig.KafkaNotice notice=new PipelineConfig.KafkaNotice();
@@ -295,7 +295,7 @@ class ManagedKafkaRecoveryReviewTest {
         TaskDefinition owner=TaskDefinition.parse(Model.JSON.writeValueAsString(planned),directory,directory.resolve("owner"));
         TaskDefinition peer=TaskDefinition.parse(Model.JSON.writeValueAsString(other),directory,directory.resolve("peer"));
         assertTrue(owner.overlaps(peer));
-        PipelineConfig.Target another=kafkaPipeline("additional","kafka://other:9092","control.events").targets.getFirst();
+        PipelineConfig.Target another=kafkaPipeline("additional","kafka://other:9092","control.events").targets.get(0);
         another.id="second-kafka";
         planned.targets.add(another);
         assertEquals("KAFKA_NOTICE_TOPIC_COLLISION",assertThrows(IllegalArgumentException.class,planned::validate).getMessage());
@@ -303,7 +303,7 @@ class ManagedKafkaRecoveryReviewTest {
 
     private static PipelineConfig kafkaPipeline(String id,String url,String topic){
         PipelineConfig pipeline=PlatformTest.pipeline(id);
-        PipelineConfig.Target target=pipeline.targets.getFirst();
+        PipelineConfig.Target target=pipeline.targets.get(0);
         target.product=TargetProduct.KAFKA;target.url=url;
         target.messaging=new PipelineConfig.Messaging();target.messaging.topic=topic;
         return pipeline;

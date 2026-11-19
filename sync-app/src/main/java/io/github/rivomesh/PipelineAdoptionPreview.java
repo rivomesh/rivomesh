@@ -102,7 +102,7 @@ final class PipelineAdoptionPreview {
                                          TableSchema table) throws Exception {
         RowComparison comparison = new RowComparison(table);
         try (SourceAdapter.Snapshot rows = view.table(table)) {
-            for (List<List<Cell>> batch; !(batch = rows.next(1)).isEmpty();) comparison.source(batch.getFirst());
+            for (List<List<Cell>> batch; !(batch = rows.next(1)).isEmpty();) comparison.source(batch.get(0));
         }
         destination.scan(table, MAXIMUM_ROW_BYTES, comparison::target);
         return comparison;

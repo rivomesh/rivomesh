@@ -46,7 +46,7 @@ class GapVerificationServiceTest {
     @Test void gapPageShowsPayloadRetentionAndKeepsTheReceiptAfterCollection()throws Exception{
         List<?> entries=(List<?>)RecoveryLedger.gaps(config,"target","0",20).get("items");
         assertEquals(1,entries.size());
-        Map<?,?> open=(Map<?,?>)entries.getFirst();
+        Map<?,?> open=(Map<?,?>)entries.get(0);
         assertEquals("OPEN",open.get("state"));assertEquals(true,open.get("journalPayloadRetained"));
         assertFalse(Codec.encode(open).contains("private-cp-value"));
 
@@ -55,7 +55,7 @@ class GapVerificationServiceTest {
         assertEquals(1,journal.collect(journal.claim("collect-owner",30000),1));
         List<?> retained=(List<?>)RecoveryLedger.gaps(config,"target","0",20).get("items");
         assertEquals(1,retained.size());
-        Map<?,?> verified=(Map<?,?>)retained.getFirst();
+        Map<?,?> verified=(Map<?,?>)retained.get(0);
         assertEquals("VERIFIED_AT_COMMON_CUT",verified.get("state"));assertEquals(false,verified.get("journalPayloadRetained"));
         assertEquals(open.get("receiptHash"),verified.get("receiptHash"));assertEquals(receipt.hash(),verified.get("verificationHash"));
     }

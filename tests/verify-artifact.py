@@ -14,6 +14,7 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("artifact", nargs="?", type=Path, default=root / "sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar")
 parser.add_argument("--jdbc-profile", choices=("bundled", "external-mysql-jdbc", "external-vendor-jdbc"), default="bundled")
+parser.add_argument("--java-release", choices=(17, 21), type=int, default=21)
 args = parser.parse_args()
 artifact = args.artifact
 embedded_mysql = args.jdbc_profile == "bundled"
@@ -29,7 +30,7 @@ if os.environ.get('RIVOMESH_RELEASE_MANIFEST'):
 with zipfile.ZipFile(artifact) as jar:
     names = jar.namelist()
     namespace = 'io/github/rivomesh/'
-    java21_class_major = 65
+    class_major = args.java_release + 44
     legacy_namespace = 'io/' + 'rivomesh/'
     assert len(names) == len(set(names)), "Duplicate ZIP entries"
     assert not any("/cscec/" in name for name in names), "Old application package present"
@@ -47,8 +48,12 @@ with zipfile.ZipFile(artifact) as jar:
             assert expected and hashlib.sha256(jar.read('console/'+resource)).hexdigest()==expected, 'Frozen console asset differs: '+resource
     for name in names:
         if name.startswith(namespace) and "/internal/" not in name and name.endswith(".class"):
-            assert struct.unpack(">H", jar.read(name)[6:8])[0] <= java21_class_major, "Application exceeds Java 21: " + name
-    assert struct.unpack(">H", jar.read(namespace+"Main.class")[6:8])[0] == java21_class_major, "Build must target Java 21"
+            assert struct.unpack(">H", jar.read(name)[6:8])[0] <= class_major, f"Application exceeds Java {args.java_release}: {name}"
+    assert struct.unpack(">H", jar.read(namespace+"Main.class")[6:8])[0] == class_major, f"Build must target Java {args.java_release}"
+    if args.java_release == 17:
+        for name in names:
+            if name.endswith(".class") and not name.startswith("META-INF/versions/"):
+                assert struct.unpack(">H", jar.read(name)[6:8])[0] <= class_major, f"Runtime dependency exceeds Java 17: {name}"
     for name in (
         "io/github/rivomesh/Main.class",
         "io/github/rivomesh/cdc/RowValues.class",
@@ -95,7 +100,7 @@ with zipfile.ZipFile(artifact) as jar:
         assert name in names, "Missing runtime class: " + name
     for name in names:
         if (name.startswith("com/gbase8c/") or name.startswith("com/kingbase8/") or name.startswith("dm/jdbc/")) and name.endswith(".class"):
-            assert struct.unpack(">H",jar.read(name)[6:8])[0]<=java21_class_major, "Vendor JDBC runtime exceeds Java 21: "+name
+            assert struct.unpack(">H",jar.read(name)[6:8])[0]<=class_major, f"Vendor JDBC exceeds Java {args.java_release}: {name}"
     mysql_driver = "com.mysql.cj.jdbc.Driver"
     vendor_drivers = ("io.github.rivomesh.gaussdb.jdbc.Driver", "com.kingbase8.Driver",
                       "com.gbase8c.Driver", "dm.jdbc.driver.DmDriver")
@@ -119,7 +124,7 @@ with zipfile.ZipFile(artifact) as jar:
     assert hashlib.sha256(sdk).hexdigest()=="5d74bb0130aae6a8a2fad9cf5ffa1608974a55f1013464334490f7e06311959e", "Wrong private Hive SDK"
     assert "org/apache/hive/jdbc/HiveDriver.class" not in names, "Hive SDK leaked into the core loader"
     with zipfile.ZipFile(io.BytesIO(sdk)) as private:
-        assert struct.unpack(">H", private.read("org/apache/hive/jdbc/HiveDriver.class")[6:8])[0]<=java21_class_major, "Hive driver exceeds Java 21"
+        assert struct.unpack(">H", private.read("org/apache/hive/jdbc/HiveDriver.class")[6:8])[0]<=class_major, f"Hive driver exceeds Java {args.java_release}"
     assert b"atDebug" not in jar.read("org/slf4j/Logger.class"), "Core SLF4J 1.7 API replaced"
     assert "Main-Class: io.github.rivomesh.Main" in jar.read("META-INF/MANIFEST.MF").decode(), "Wrong executable entry point"
     drivers = jar.read("META-INF/services/java.sql.Driver").decode().splitlines()

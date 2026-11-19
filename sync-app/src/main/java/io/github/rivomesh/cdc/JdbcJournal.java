@@ -443,7 +443,7 @@ public final class JdbcJournal implements NormalizedJournal {
                 if(recovery&&settings.deliveryTiming)JdbcDeliveryTiming.collectOne(this,c,sequence);
             }
             if(!sequences.isEmpty()){
-                if(!recovery&&settings.deliveryTiming)JdbcDeliveryTiming.collect(this,c,sequences.getLast());
+                if(!recovery&&settings.deliveryTiming)JdbcDeliveryTiming.collect(this,c,sequences.get(sequences.size()-1));
                 execute(c,"UPDATE "+table("job")+" SET pending_bytes=? WHERE pipeline_id=?",(long)job.get("bytes")-bytes,settings.pipelineId);
             }
             c.commit();return sequences.size();

@@ -126,7 +126,7 @@ class HandoffCandidateAdmissionTest {
         try(var children=Files.list(state.resolve("handoff-admission"))){
             var files=children.toList();
             assertEquals(1,files.size());
-            return files.getFirst();
+            return files.get(0);
         }
     }
     private static ControlCipher cipher(){

@@ -43,9 +43,9 @@ public final class PostgresAdoptedUnique {
     static IndexPolicy.Decision candidate(TableSchema table, JdbcSink.UniquePolicy uniquePolicy) {
         List<IndexPolicy.Decision> planned = IndexPolicy.plan(table, TargetProduct.POSTGRESQL, uniquePolicy);
         if (planned.isEmpty()) return null;
-        IndexPolicy.Decision index = planned.getFirst();
+        IndexPolicy.Decision index = planned.get(0);
         if (planned.size() != 1 || !"DOWNGRADE_UNIQUE".equals(index.action) || index.columns.size() != 1
-                || table.primaryKey.contains(index.columns.getFirst())) {
+                || table.primaryKey.contains(index.columns.get(0))) {
             throw failure("ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED");
         }
         TableSchema.Column key = keyColumn(table, index);
@@ -109,7 +109,7 @@ public final class PostgresAdoptedUnique {
             sql.execute("CREATE TABLE " + relation + " (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,"
                     + "receipt_sha256 VARCHAR(64) NOT NULL,receipt TEXT NOT NULL,PRIMARY KEY(pipeline_id,subscription_id))");
             sql.execute("ALTER TABLE ONLY " + Sql.pg(schema) + "." + Sql.pg(table.name) + " ADD CONSTRAINT "
-                    + Sql.pg(proposal.constraint) + " UNIQUE NULLS DISTINCT (" + Sql.pg(proposal.columns.getFirst()) + ") NOT DEFERRABLE");
+                    + Sql.pg(proposal.constraint) + " UNIQUE NULLS DISTINCT (" + Sql.pg(proposal.columns.get(0)) + ") NOT DEFERRABLE");
         }
         String nativeHash = restoredHash(c, schema, table, index);
         Receipt receipt = new Receipt(approval, Codec.sha256(Codec.encode(baseline.receipt())), baseline.receipt().generation(),
@@ -142,7 +142,7 @@ public final class PostgresAdoptedUnique {
     }
 
     private static TableSchema.Column keyColumn(TableSchema table, IndexPolicy.Decision index) {
-        return table.columns.get(table.column(index.columns.getFirst()));
+        return table.columns.get(table.column(index.columns.get(0)));
     }
 
     private static void verifyTextIndex(Connection c, String schema, TableSchema table, IndexPolicy.Decision index,

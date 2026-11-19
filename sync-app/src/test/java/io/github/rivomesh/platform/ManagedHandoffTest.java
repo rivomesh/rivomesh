@@ -98,12 +98,13 @@ class ManagedHandoffTest {
 
     @Test void routesTheActiveCutToTheCandidateAndThePrivateInventoryOnlyToTheOriginal()throws Exception{
         Map<String,Object> initial=a.invoke(assess("handoff_probe_request",null),fixture.admin);
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+        ExecutorService executor=Executors.newFixedThreadPool(2);
+        try{
             Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe((String)initial.get("id")),fixture.admin));
             PlatformTest.await(()->!aQueries.pending(aLease,fixture.directory,10).isEmpty()
                     &&!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            String candidate=bQueries.pending(bLease,candidateDirectory,10).getFirst();
-            String evidence=aQueries.pending(aLease,fixture.directory,10).getFirst();
+            String candidate=bQueries.pending(bLease,candidateDirectory,10).get(0);
+            String evidence=aQueries.pending(aLease,fixture.directory,10).get(0);
             TaskControlPlane shouldNotRun=(request,actor)->{throw new AssertionError("wrong node ran probe");};
             assertThrows(ControlStore.Fenced.class,()->aQueries.serve(candidate,aLease,fixture.directory,shouldNotRun));
             assertThrows(ControlStore.Fenced.class,()->bQueries.serve(evidence,bLease,candidateDirectory,shouldNotRun));
@@ -127,7 +128,7 @@ class ManagedHandoffTest {
                                 new SharedHandoffEvidence.Archive("b".repeat(64),30,0,0,0,1)));
             });
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            String archive=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            String archive=bQueries.pending(bLease,candidateDirectory,10).get(0);
             bQueries.serve(archive,bLease,candidateDirectory,(request,actor)->{
                 assertEquals(TaskRequest.Kind.HANDOFF_CUSTODY_PROBE,request.kind);
                 assertEquals(candidateDirectory,request.handoffEvidenceScope.candidateDirectory());
@@ -138,7 +139,7 @@ class ManagedHandoffTest {
                 return Map.of("state","VERIFIED");
             });
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            String rawArchive=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            String rawArchive=bQueries.pending(bLease,candidateDirectory,10).get(0);
             bQueries.serve(rawArchive,bLease,candidateDirectory,(request,actor)->{
                 assertEquals(TaskRequest.Kind.HANDOFF_CUSTODY_PROBE,request.kind);
                 assertEquals(candidateDirectory,request.handoffEvidenceScope.candidateDirectory());
@@ -158,7 +159,7 @@ class ManagedHandoffTest {
             assertEquals(certified,latest(entryB(),fixture.admin));
             assertFalse(Model.JSON.writeValueAsString(certified).contains("private-"));
             assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
-        }
+        }finally{executor.shutdownNow();}
     }
 
     @Test void changedTaskRevisionRefusesQueuedProbeBeforeTheCandidateCanReadConfiguration()throws Exception{
@@ -263,11 +264,12 @@ class ManagedHandoffTest {
         TaskRequest probe=TaskRequest.of(TaskRequest.Kind.HANDOFF_PROBE,assessment.taskId);
         probe.reference=assessment.requestId;
         SharedHandoffEvidence.Archive archive=new SharedHandoffEvidence.Archive("b".repeat(64),20,1,2);
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+        ExecutorService executor=Executors.newFixedThreadPool(2);
+        try{
             Future<Map<String,Object>> result=executor.submit(()->b.invoke(probe,actor));
             PlatformTest.await(()->!aQueries.pending(aLease,fixture.directory,10).isEmpty()
                     &&!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,(request,principal)->{
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).get(0),bLease,candidateDirectory,(request,principal)->{
                 if(writerAssignment==null)return Map.of("state","VERIFIED");
                 assertEquals("a",request.ownerNodeId);
                 assertEquals(9,request.handoffCut.epoch());
@@ -276,16 +278,16 @@ class ManagedHandoffTest {
                         "c".repeat(64),"d".repeat(64),List.of("pg"),true,
                         new io.github.rivomesh.cdc.JournalWriterAssignment.ManagedCut("a",AuditStore.hash(writerAssignment),9,2,checkpoint)));
             });
-            aQueries.serve(aQueries.pending(aLease,fixture.directory,10).getFirst(),aLease,fixture.directory,
+            aQueries.serve(aQueries.pending(aLease,fixture.directory,10).get(0),aLease,fixture.directory,
                     (request,principal)->Map.of("state","REFUSED","originInventory",Map.of("validationReports","PRESENT",
                                     "sourceEvidence","ABSENT","failureEvidence","ABSENT"),
                             "closedReceipts",Map.of("state","ARCHIVED","archive",archive),
                             "shareableReports",Map.of("state","ARCHIVED","archive",archive)));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).get(0),bLease,candidateDirectory,
                     (request,principal)->Map.of("state","VERIFIED","archive",request.handoffArchive));
             return result.get(10,TimeUnit.SECONDS);
-        }
+        }finally{executor.shutdownNow();}
     }
     private TaskRequest prepare(String id,Map<String,Object> assessment){
         TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_PREPARE,"orders");
@@ -322,12 +324,13 @@ class ManagedHandoffTest {
         conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED",()->a.invoke(prepare,fixture.admin));
         prepare.identityHash=good;
         Map<String,Object> prepared;
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+        ExecutorService executor=Executors.newFixedThreadPool(2);
+        try{
             var first=executor.submit(()->a.invoke(prepare,fixture.admin));
             var second=executor.submit(()->b.invoke(prepare,fixture.admin));
             prepared=first.get(10,TimeUnit.SECONDS);
             assertEquals(prepared,second.get(10,TimeUnit.SECONDS));
-        }
+        }finally{executor.shutdownNow();}
         assertEquals("PREPARED",prepared.get("state"));
         assertEquals(1,prepared.get("reservedTaskSlots"));assertEquals(1,prepared.get("reservedWorkerSlots"));
         assertEquals(false,prepared.get("executionAuthorized"));
@@ -339,13 +342,14 @@ class ManagedHandoffTest {
         conflict("HANDOFF_PREPARATION_ACTIVE",()->fixture.b.update("orders",revision,YAML,"prepare_frozen_edit",fixture.admin));
         prepare.identityHash="a".repeat(64);
         conflict("HANDOFF_PREPARATION_REQUEST_REUSED",()->a.invoke(prepare,fixture.admin));prepare.identityHash=good;
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
-            var automatic=executor.submit(()->conflict("AGENT_PLACEMENT_UNAVAILABLE",()->fixture.a.allocate("automatic","yaml",
+        ExecutorService allocationExecutor=Executors.newFixedThreadPool(2);
+        try{
+            var automatic=allocationExecutor.submit(()->conflict("AGENT_PLACEMENT_UNAVAILABLE",()->fixture.a.allocate("automatic","yaml",
                     "prepare_auto_allocation",fixture.admin,aAgents,null)));
-            var explicit=executor.submit(()->conflict("AGENT_HANDOFF_CAPACITY_RESERVED",()->fixture.b.create("explicit","b",
+            var explicit=allocationExecutor.submit(()->conflict("AGENT_HANDOFF_CAPACITY_RESERVED",()->fixture.b.create("explicit","b",
                     candidateDirectory,"yaml","prepare_explicit_allocation",fixture.admin)));
             automatic.get(10,TimeUnit.SECONDS);explicit.get(10,TimeUnit.SECONDS);
-        }
+        }finally{allocationExecutor.shutdownNow();}
         conflict("HANDOFF_PREPARATION_CHANGED",()->a.invoke(release("prepare_wrong_release","another_preparation"),fixture.admin));
         TaskRequest release=release("prepare_release_request",prepare.requestId);
         Map<String,Object> released=b.invoke(release,fixture.admin);
@@ -418,10 +422,11 @@ class ManagedHandoffTest {
         assertEquals(request.requestId,plan.executionRequest());
         var ready=new ManagedHandoff.CandidateAdmission(plan.id(),candidate,"STOPPED","e".repeat(64),"f".repeat(64));
         Map<String,Object> masked=Model.JSON.convertValue(ready,Map.class);
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+        ExecutorService executor=Executors.newFixedThreadPool(2);
+        try{
             var result=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            String queued=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            String queued=bQueries.pending(bLease,candidateDirectory,10).get(0);
             assertThrows(ControlStore.Fenced.class,()->aQueries.serve(queued,aLease,fixture.directory,
                     (ignored,actor)->fail("original Agent received candidate configuration")));
             bQueries.serve(queued,bLease,candidateDirectory,(scoped,actor)->{
@@ -449,7 +454,7 @@ class ManagedHandoffTest {
 
             var malformed=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            String malformedId=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            String malformedId=bQueries.pending(bLease,candidateDirectory,10).get(0);
             bQueries.serve(malformedId,bLease,candidateDirectory,(scoped,actor)->{
                 Map<String,Object> leaked=new HashMap<>(masked);leaked.put("yaml",scoped.yaml);return leaked;
             });
@@ -459,7 +464,7 @@ class ManagedHandoffTest {
 
             var released=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
-            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,(scoped,actor)->{
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).get(0),bLease,candidateDirectory,(scoped,actor)->{
                 a.invoke(release("handoff_readiness_release",plan.id()),fixture.admin);
                 return masked;
             });
@@ -468,7 +473,7 @@ class ManagedHandoffTest {
             bQueries.resumeHandoff(queued,bLease,candidateDirectory,
                     (scoped,actor,admission)->fail("released approval must not repeat native checks"));
             assertNull(bQueries.nextHandoffResume(bLease,candidateDirectory,""));
-        }
+        }finally{executor.shutdownNow();}
         assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
     }
 
@@ -476,7 +481,8 @@ class ManagedHandoffTest {
         capacity(aLease,aNodes,1,1);capacity(bLease,bNodes,1,1);
         TaskRequest request=prepare("prepare_allocation_race",verifiedAssessment("prepare_race_assessment",fixture.admin));
         CountDownLatch start=new CountDownLatch(1);
-        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+        ExecutorService executor=Executors.newFixedThreadPool(2);
+        try{
             var preparation=executor.submit(()->{
                 start.await();
                 try{return a.invoke(request,fixture.admin).get("state");}catch(TaskService.Conflict conflict){return conflict.getMessage();}
@@ -495,7 +501,7 @@ class ManagedHandoffTest {
                 assertEquals(1,capacity.assignedTasks()+capacity.reservedTasks());
                 return null;
             });
-        }
+        }finally{executor.shutdownNow();}
     }
 
     @Test void revokedActorCannotReplayAndAnotherCurrentAdminCanRelease()throws Exception{

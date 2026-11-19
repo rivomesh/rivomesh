@@ -91,7 +91,7 @@ class KafkaNoticePlanningTest {
     }
 
     @Test void aPreviouslyStoredLegacyReviewRemainsReadableAndCannotApproveANotice()throws Exception{
-        Observation old=observation(predecessor.observation().epoch(),null,predecessor.observation().nativeReceipts().getFirst().payloadSha256());
+        Observation old=observation(predecessor.observation().epoch(),null,predecessor.observation().nativeReceipts().get(0).payloadSha256());
         String encoded=Codec.encode(old);
         assertFalse(Codec.JSON.readTree(encoded).has("originalFailure"));
         assertEquals(old,Codec.decode(encoded,Observation.class));
@@ -119,7 +119,7 @@ class KafkaNoticePlanningTest {
         assertEquals(1,reads.predecessors);
         assertEquals(0,reads.controlTopics);
         OriginalFailure replaced=new OriginalFailure("another-generation",original.originalFailure().contentSha256(),CLUSTER);
-        predecessor=recorded(observation(original.epoch(),replaced,original.nativeReceipts().getFirst().payloadSha256()));
+        predecessor=recorded(observation(original.epoch(),replaced,original.nativeReceipts().get(0).payloadSha256()));
         code("KAFKA_NOTICE_FAILURE_CHANGED",this::inspect);
         assertEquals(1,reads.predecessors);
     }

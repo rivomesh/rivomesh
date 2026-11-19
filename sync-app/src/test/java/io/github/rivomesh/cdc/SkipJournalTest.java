@@ -119,13 +119,13 @@ class SkipJournalTest {
         assertEquals(1,j.subscriptions().stream().filter(sub->"target".equals(sub.id)).findFirst().orElseThrow().acknowledged);
         assertEquals(0,j.subscriptions().stream().filter(sub->"sibling".equals(sub.id)).findFirst().orElseThrow().acknowledged);
         assertEquals(0,j.collect(owner,100));
-        assertEquals(Codec.encode(fixture.retained.value.review.raw),Codec.encode(j.read("sibling",1).getFirst().transaction));
+        assertEquals(Codec.encode(fixture.retained.value.review.raw),Codec.encode(j.read("sibling",1).get(0).transaction));
         j.acknowledge(owner,"sibling",1);
 
         SourceTransaction next=JdbcSinkTest.transaction(2,JdbcSinkTest.insert(fixture.table,2,"later-value"));
         next.sourceCommittedAt=Instant.parse("2026-11-17T08:06:15Z");
         assertEquals(2,j.append(owner,next));
-        Journal.Record record=j.read("sibling",1).getFirst();
+        Journal.Record record=j.read("sibling",1).get(0);
         j.normalize(owner,record,Map.of(fixture.table.id,fixture.table),Map.of(fixture.table.id,next.position),(position,id)->false);
         j.acknowledge(owner,"target",2);
         assertEquals(0,j.collect(owner,1));

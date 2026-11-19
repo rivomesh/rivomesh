@@ -74,7 +74,7 @@ class FanoutDispatcherTest {
             FanoutDispatcher reconciler=new FanoutDispatcher(journal,lease,Collections.singletonList(sink),
                     Collections.singletonMap(table.id,table),record->record.transaction);
             assertEquals(1,reconciler.drain(1));
-            assertEquals(1,journal.subscriptions().getFirst().acknowledged);
+            assertEquals(1,journal.subscriptions().get(0).acknowledged);
             Map<?,?> progress=(Map<?,?>)journal.deliveryProgress().get("subscriptions");
             assertEquals(Map.of("state","UNKNOWN"),((Map<?,?>)progress.get("fast")).get("lastDeliveryTiming"));
         }

@@ -69,7 +69,7 @@ final class PostgresAdoptionCatalog {
             query.setInt(1, candidate == null ? 1 : restored ? 3 : 2);
             query.setString(2, schema);
             query.setString(3, table.name);
-            query.setString(4, table.primaryKey.getFirst());
+            query.setString(4, table.primaryKey.get(0));
             try (ResultSet row = query.executeQuery()) {
                 if (!row.next() || !row.getBoolean(11)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_INDEX_MISMATCH");
                 if (!row.getBoolean(9)) throw new IllegalStateException("ADOPTION_PLAN_TARGET_OWNERSHIP_REQUIRED");

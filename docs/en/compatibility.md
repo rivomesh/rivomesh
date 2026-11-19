@@ -36,7 +36,16 @@ The V3 wizard reads `GET /api/capabilities` for source availability and limits d
 
 Build, run and accept new candidates on Temurin 21 LTS. Record the real JVM version, architecture and artifact SHA on each live profile. The source and destination tables above include results from their tested development artifact. Earlier records are available as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [verification manifests](../verification/baseline.json). Use the matching Java 21 fixture for unverified source, destination, journal or recovery combinations. [Reproduction commands](performance.md)
 
-The release uses Java 21 class files and requires Java 21 or later. Temurin 25.0.5 on ARM64 has passed a bounded MySQL 8.4.13 profile with two Controllers, an Agent and a Worker. PostgreSQL and MySQL targets received initial and incremental data, then resumed from the original GTID after external replica promotion. Controller and Agent rolling replacement also passed with the original snapshots. [Verification and reproduction](../verification/baseline.json)
+The standard release uses Java 21 class files and requires Java 21 or later. The standard Docker and Kubernetes configurations use Java 21. Temurin 25.0.5 on ARM64 passed a bounded MySQL 8.4.13 profile with two Controllers, an Agent and a Worker. PostgreSQL and MySQL targets received initial and incremental data and resumed from the original GTID after external replica promotion. Controller and Agent rolling replacement also preserved the original snapshots.
+
+Build an optional Java 17 bundle from source with a JDK 17 and Maven.
+
+```sh
+mvn -B -s build/settings.xml -Pjava17 package
+python3 tests/verify-artifact.py --java-release 17
+```
+
+This bundle passed native snapshot, CDC, and Controller and Agent rolling replacement with Temurin 17.0.21 on ARM64, MySQL 8.4.13 source and PostgreSQL and MySQL targets. The Worker reused the original GTID, snapshots and STOP receipt. Use the verified bundle with Java 17 for that profile. The Java 8 and 11 process results in the historical manifests refer to earlier packages. Current bundles for those runtimes remain pending. [Verification and reproduction](../verification/baseline.json)
 
 ## Management requests
 

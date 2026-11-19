@@ -192,7 +192,7 @@ final class OwnerRuntime implements AutoCloseable {
             agents.require(c,lease,directory);
             return authority.preparations().pendingRecipient(c,lease.nodeId,directory,recipientCursor,10);
         });
-        recipientCursor=pending.size()<10?"":pending.getLast().preparation();
+        recipientCursor=pending.size()<10?"":pending.get(pending.size()-1).preparation();
         queuePreparedHandoff();
         for(HandoffPreparations.PendingRecipient task:pending){
             String id="handoff:"+task.preparation();

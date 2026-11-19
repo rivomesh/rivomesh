@@ -242,8 +242,8 @@ class PlatformTest {
     @Test void diagnosticBurstReturnsRetryAfterAndLeavesTaskStatusAvailable()throws Exception{
         PlatformConfig c=config();
         try(TaskService service=new TaskService(c,new Backend(),new Workers());
-            ConsoleServer server=new ConsoleServer(c,service);
-            HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()){
+            ConsoleServer server=new ConsoleServer(c,service)){
+            HttpClient client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
             service.create(Model.JSON.writeValueAsString(task("diagnostic_limit")),"create_diag_limit");
             server.start();
             String base="http://127.0.0.1:"+server.port();

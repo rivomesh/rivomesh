@@ -87,7 +87,7 @@ class PipelineConfigTest {
 
     @Test void pulsarPrivateCaRequiresTlsAndDoesNotReassignTheTopic(){
         PipelineConfig config=config();
-        PipelineConfig.Target target=config.targets.getFirst();
+        PipelineConfig.Target target=config.targets.get(0);
         target.product=TargetProduct.PULSAR;
         target.username=null;
         target.url="pulsar+ssl://broker:6651";

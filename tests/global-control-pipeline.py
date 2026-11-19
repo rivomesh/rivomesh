@@ -81,7 +81,7 @@ parser.add_argument('--handoff-adopted-browser', type=Path,
                     help='Verify installed read-only handoff evidence through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
-parser.add_argument('--runtime-jdk', type=int, choices=(21, 25),
+parser.add_argument('--runtime-jdk', type=int, choices=(17, 21, 25),
                     help='Verify the selected JVM in running Controllers, the Agent and the Worker')
 parser.add_argument('--rolling-restart', action='store_true',
                     help='Replace a Controller and drain/restart an Agent on the selected JVM while another entry stays online')
@@ -303,7 +303,7 @@ owner_node = 'node-worker' if args.separate_execution else 'node-b'
 execution_agents = (owner_node,'node-worker-alt') if args.automatic_placement else (owner_node,) if args.separate_execution else ()
 members = ('node-a','node-b',*execution_agents)
 runtime_major = args.runtime_jdk or 21
-runtime_image = {21:'eclipse-temurin:21-jre-jammy',25:'eclipse-temurin:25-jre'}[runtime_major]
+runtime_image = {17:'eclipse-temurin:17-jre',21:'eclipse-temurin:21-jre-jammy',25:'eclipse-temurin:25-jre'}[runtime_major]
 if args.separate_execution:
     env['RM_GC_STORE_URL'] = 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if args.control_product == 'MYSQL' else 'jdbc:postgresql://store:5432/rivomesh_control'
 checks = []

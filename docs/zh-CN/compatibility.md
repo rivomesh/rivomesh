@@ -36,7 +36,16 @@ V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引�
 
 新候选统一在 Temurin 21 LTS 构建、运行和验收。实库档案同时记录真实 JVM 版本、架构和包 SHA。上述源和目标表保留各自实测候选的结果，历史档案可查[验收记录](../verification/baseline.json)中的 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix` 和 `postgresqlStoredGenerated`。待核验组合使用对应的 Java 21 源、目标、日志与恢复用例。[复现命令](performance.md)
 
-发布包使用 Java 21 字节码，运行需要 Java 21 或更新版本。另在 ARM64 Temurin 25.0.5 验证了两个 Controller、Agent 和 Worker。MySQL 8.4.13 全量及增量写入 PostgreSQL 与 MySQL 两个目标，备用库经外部提升后从原 GTID 自动续传。Controller 与 Agent 滚动替换也通过实库，保留原快照。 [验收证据和复现命令](../verification/baseline.json)
+标准发布包使用 Java 21 字节码，需要 Java 21 或更新版本。标准 Docker 和 Kubernetes 配置使用 Java 21。ARM64 Temurin 25.0.5 已实测两个 Controller、Agent 和 Worker。MySQL 8.4.13 全量及增量写入 PostgreSQL 和 MySQL 两个目标，备用库经外部提升后从原 GTID 自动续传。Controller 与 Agent 滚动替换也保留原快照。
+
+使用 JDK 17 和 Maven 可从源码构建可选 Java 17 运行包。
+
+```sh
+mvn -B -s build/settings.xml -Pjava17 package
+python3 tests/verify-artifact.py --java-release 17
+```
+
+该包已在 ARM64 Temurin 17.0.21 验证 MySQL 8.4.13 源到 PostgreSQL 和 MySQL 两个目标的全量、增量，以及 Controller、Agent 滚动替换。Worker 复用原 GTID、快照和 STOP 回执。在这个已验档案中可用 Java 17 运行该包。档案内的 Java 8、11 进程结果来自较早的制品，当前版本的相应运行包仍待兼容。[验收证据和复现命令](../verification/baseline.json)
 
 ## 管理端请求
 
