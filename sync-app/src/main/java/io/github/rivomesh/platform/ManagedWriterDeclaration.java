@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.github.rivomesh.cdc.JournalWriterAssignment;
-import java.util.Objects;
+import java.util.*;
 
 /** A managed writer's placement fields are immutable through ordinary configuration operations. */
 record ManagedWriterDeclaration(String assignment,String node,String journalUrl,String namespace) {
@@ -45,6 +45,17 @@ record ManagedWriterDeclaration(String assignment,String node,String journalUrl,
         String successor=YAML.writeValueAsString(document);
         read(successor).requireOwner(candidate);
         return successor;
+    }
+    static List<String> subscriptions(String yaml)throws Exception{
+        JsonNode targets=YAML.readTree(yaml).path("targets");
+        Set<String> subscribers=new TreeSet<>();
+        if(!targets.isArray()||targets.isEmpty())throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        for(JsonNode target:targets){
+            String id=target.path("id").textValue();
+            if(id==null||!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")||!subscribers.add(id))
+                throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        }
+        return List.copyOf(subscribers);
     }
     static void requireUnchanged(String before,String after)throws Exception{
         if(!Objects.equals(read(before),read(after)))throw new TaskService.Conflict("MANAGED_WRITER_PLACEMENT_IMMUTABLE");

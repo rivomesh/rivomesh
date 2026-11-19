@@ -52,7 +52,11 @@ final class OwnerQueries {
     private Entry read(Connection c,String id)throws Exception{
         try(PreparedStatement p=db.prepare(c,"SELECT * FROM "+db.table("owner_query")+" WHERE cluster_id=? AND query_id=?",cluster,id);ResultSet r=p.executeQuery()){
             if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");Entry entry=Model.JSON.readValue(cipher.open("owner-query/"+id,r.getString("envelope")),Entry.class);
-            if(entry.version!=1||!id.equals(entry.id)||!Objects.equals(entry.task,r.getString("task_id"))||!Objects.equals(entry.owner,r.getString("owner_id"))||entry.epoch!=r.getLong("node_epoch")||!Objects.equals(entry.phase,r.getString("phase"))||entry.expiresAt!=r.getLong("expires_at")||entry.request==null||!entry.task.equals(entry.request.taskId))throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");readonly(entry.request);return entry;
+            if(entry.version!=1||!id.equals(entry.id)||!Objects.equals(entry.task,r.getString("task_id"))||!Objects.equals(entry.owner,r.getString("owner_id"))||entry.epoch!=r.getLong("node_epoch")||!Objects.equals(entry.phase,r.getString("phase"))||entry.expiresAt!=r.getLong("expires_at")||entry.request==null||!entry.task.equals(entry.request.taskId))throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");readonly(entry.request);
+            if(entry.request.preparedHandoffRpc()&&(entry.request.handoffStaging!=null
+                    ||entry.request.handoffPreparation!=null||entry.request.yaml!=null))
+                throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");
+            return entry;
         }
     }
     private void write(Connection c,Entry entry)throws Exception{
@@ -97,14 +101,22 @@ final class OwnerQueries {
         });
     }
     String submitHandoffStaging(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        return submitPreparedHandoff(supplied,actor,TaskRequest.Kind.HANDOFF_STAGING_RPC);
+    }
+    ManagedHandoff.CandidateAdmission candidateReadiness(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        String query=submitPreparedHandoff(supplied,actor,TaskRequest.Kind.HANDOFF_READINESS_RPC);
+        return Model.JSON.convertValue(await(query,actor),ManagedHandoff.CandidateAdmission.class);
+    }
+    private String submitPreparedHandoff(TaskRequest supplied,AccessControl.Principal actor,TaskRequest.Kind kind)throws Exception{
         TaskRequest request=supplied.snapshot();
         if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_STAGE)
             throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+        if(request.yaml!=null)throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
-            ManagedHandoff.StageRoute route=handoff.stageRoute(c,task,current,request);
-            TaskRequest scoped=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGING_RPC,task.id);
+            TaskRequest scoped=TaskRequest.of(kind,task.id);
             scoped.reference=request.reference;scoped.revision=request.revision;scoped.identityHash=request.identityHash;
             scoped.requestId=request.requestId;
+            ManagedHandoff.StageRoute route=handoff.stageRoute(c,task,current,scoped);
             return insert(c,scoped,current,route.candidate(),reserve(c,1),route.binding().scope().configuration());
         });
     }
@@ -138,14 +150,14 @@ final class OwnerQueries {
         requireHandoffAgent(entry,target);
         return route;
     }
-    private HandoffStaging.Binding verifyHandoffStaging(Connection c,GlobalTaskStore.Record record,
+    private ManagedHandoff.StageRoute verifyPreparedHandoff(Connection c,GlobalTaskStore.Record record,
                                                        AccessControl.Principal actor,Entry entry)throws Exception{
         if(handoff==null||entry.handoffConfiguration==null)throw new TaskService.Conflict("HANDOFF_REQUEST_INVALID");
         ManagedHandoff.StageRoute stage=handoff.stageRoute(c,record,actor,entry.request);
         if(!entry.handoffConfiguration.equals(stage.binding().scope().configuration()))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
         requireHandoffAgent(entry,stage.candidate());
-        return stage.binding();
+        return stage;
     }
     private static void requireHandoffAgent(Entry entry,AgentDirectory.Binding target){
         if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
@@ -179,8 +191,13 @@ final class OwnerQueries {
                 if(!entry.request.handoffRpc())return new Execution(entry.request,actor);
                 GlobalTaskStore.Record record=tasks.record(c,entry.task);
                 TaskRequest scoped=entry.request.snapshot();
-                if(scoped.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC){
-                    scoped.handoffStaging=verifyHandoffStaging(c,record,actor,entry);
+                if(scoped.preparedHandoffRpc()){
+                    ManagedHandoff.StageRoute route=verifyPreparedHandoff(c,record,actor,entry);
+                    scoped.handoffStaging=route.binding();
+                    if(scoped.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC){
+                        scoped.handoffPreparation=route.plan();
+                        scoped.yaml=tasks.activeYaml(c,record);
+                    }
                     return new Execution(scoped,actor);
                 }
                 ManagedHandoff.ProbeRoute route=verifyHandoff(c,record,actor,entry);
@@ -196,7 +213,9 @@ final class OwnerQueries {
                 }
                 return new Execution(scoped,actor);
             });
-            response=local.ownerQuery(execution.request,execution.actor);if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
+            Map<String,Object> returned=local.ownerQuery(execution.request,execution.actor);
+            response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC?readinessResponse(entry,returned):returned;
+            if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
         }catch(TaskService.Conflict rejected){failure=rejected.getMessage()!=null&&rejected.getMessage().matches("[A-Z0-9_]{1,120}")?rejected.getMessage():"OWNER_QUERY_REJECTED";}
         catch(SecurityException denied){failure="AUTHORIZATION_CHANGED";}
         catch(NoSuchElementException absent){failure="OWNER_DATA_NOT_FOUND";}
@@ -208,8 +227,8 @@ final class OwnerQueries {
             if(current.request.readAtRevision()&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
             try{
                 AccessControl.Principal actor=actor(accounts,current);
-                if(current.request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)
-                    verifyHandoffStaging(c,tasks.record(c,current.task),actor,current);
+                if(current.request.preparedHandoffRpc())
+                    verifyPreparedHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
             }catch(SecurityException|TaskService.Conflict revoked){
                 current.phase="REJECTED";current.code=revoked instanceof SecurityException?"AUTHORIZATION_CHANGED":revoked.getMessage();
@@ -218,13 +237,24 @@ final class OwnerQueries {
             current.response=body;current.code=code;current.phase=code==null?"SUCCEEDED":"REJECTED";write(c,current);return null;
         });
     }
+    private static Map<String,Object> readinessResponse(Entry entry,Map<String,Object> response){
+        if(response==null||!response.keySet().equals(Set.of("preparation","binding","desired","configurationSha256","stagingSha256")))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        ManagedHandoff.CandidateAdmission ready;
+        try{ready=Model.JSON.convertValue(response,ManagedHandoff.CandidateAdmission.class);}
+        catch(IllegalArgumentException invalid){throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");}
+        var expected=new HandoffPreparations.Binding(entry.owner,entry.directory,entry.incarnation,entry.epoch);
+        if(!ready.valid()||!entry.request.reference.equals(ready.preparation())||!expected.equals(ready.binding()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        return Model.JSON.convertValue(ready,Map.class);
+    }
     Map<String,Object> poll(String id,AccessControl.Principal supplied)throws Exception{
         String task;try(Connection c=db.connect();PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("owner_query")+" WHERE cluster_id=? AND query_id=?",cluster,id);ResultSet r=p.executeQuery()){if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");task=r.getString(1);}catch(SQLException failure){throw new ControlStore.Unavailable();}
         return tasks.transaction(task,supplied,(c,record,current)->{
             Entry entry=read(c,id);if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
             if(entry.request.readAtRevision()&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
             if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
-            if(entry.request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)verifyHandoffStaging(c,record,current,entry);
+            if(entry.request.preparedHandoffRpc())verifyPreparedHandoff(c,record,current,entry);
             else if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
             else{
                 AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);

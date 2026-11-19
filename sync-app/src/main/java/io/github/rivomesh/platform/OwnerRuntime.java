@@ -24,6 +24,8 @@ final class OwnerRuntime implements AutoCloseable {
     private final ThreadPoolExecutor readers;
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
     private Set<String> retiredTasks=Set.of();
+    private String recipientCursor="";
+    private long nextRecipientPoll;
     private final AtomicBoolean started=new AtomicBoolean(),closed=new AtomicBoolean();
     private volatile String commandProblem,queryProblem;
 
@@ -39,6 +41,20 @@ final class OwnerRuntime implements AutoCloseable {
             commandLoop.scheduleWithFixedDelay(this::commands,0,Math.max(100,Math.min(config.pollMillis,1000)),TimeUnit.MILLISECONDS);
             queryLoop.scheduleWithFixedDelay(this::queries,0,100,TimeUnit.MILLISECONDS);
         }catch(Exception failure){commandProblem=code(failure);close();throw failure;}
+    }
+    private void importCommittedWriter(String task,ControlStore.Lease lease)throws Exception{
+        ManagedRecipientImport.Receipt imported=ManagedRecipientImport.install(authority,agents,local,lease,directory,task,plan->{
+            HandoffCandidateAdmission.ReadyConfig frozen=HandoffCandidateAdmission.verifyCommitted(
+                    Paths.get(config.dataDirectory).toAbsolutePath().normalize(),plan,authority.commandCipher());
+            HandoffCandidateAdmission.Ready receipt=frozen.receipt();
+            return new ManagedRecipientImport.FrozenConfig(receipt.preparation(),receipt.binding(),receipt.desired(),
+                    receipt.configurationSha256(),receipt.stagingSha256(),frozen.successorYaml());
+        });
+        authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            authority.recordRecipientProjection(c,task,lease,directory,imported);
+            return null;
+        });
     }
     private void verifyDefinitions()throws Exception{
         Map<String,String> documents=local.ownerDocuments();
@@ -74,10 +90,33 @@ final class OwnerRuntime implements AutoCloseable {
             commandProblem=null;
         }catch(Exception failure){commandProblem=code(failure);}
     }
+    private void queueRecipients(ControlStore.Lease lease)throws Exception{
+        if(!config.cluster.separateExecution)return;
+        long now=System.nanoTime();
+        if(nextRecipientPoll!=0&&now-nextRecipientPoll<0)return;
+        nextRecipientPoll=now+TimeUnit.SECONDS.toNanos(1);
+        List<HandoffPreparations.PendingRecipient> pending=authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            return authority.preparations().pendingRecipient(c,lease.nodeId,directory,recipientCursor,10);
+        });
+        recipientCursor=pending.size()<10?"":pending.getLast().preparation();
+        for(HandoffPreparations.PendingRecipient task:pending){
+            String id="handoff:"+task.preparation();
+            if(!queued.add(id))continue;
+            try{readers.execute(()->{
+                try{importCommittedWriter(task.task(),leases.get());}
+                catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
+                catch(Exception deferred){/* The committed receipt stays pending and all new commands remain blocked. */}
+                finally{queued.remove(id);}
+            });}catch(RejectedExecutionException full){queued.remove(id);}
+        }
+    }
     private void queries(){
         if(closed.get())return;
         try{
-            List<String> pending=queries.pending(leases.get(),directory,20);queryProblem=null;
+            ControlStore.Lease lease=leases.get();
+            List<String> pending=queries.pending(lease,directory,20);queryProblem=null;
+            queueRecipients(lease);
             for(String id:pending)if(queued.add(id)){
                 try{readers.execute(()->{try{queries.serve(id,leases.get(),directory,new LocalTaskPlane(local));}catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}catch(Exception rejected){/* Per-request expiry/epoch/rejection does not impersonate a cluster outage. */}finally{queued.remove(id);}});}
                 catch(RejectedExecutionException full){queued.remove(id);}

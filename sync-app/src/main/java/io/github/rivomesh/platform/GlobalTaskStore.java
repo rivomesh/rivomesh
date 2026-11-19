@@ -250,6 +250,58 @@ final class GlobalTaskStore {
         access.append(c,event(record,plan.id(),actor,"MANAGED_HANDOFF_WRITER_COMMITTED"));
         return committed;
     }
+    ManagedRecipientImport.Grant verifiedStoppedRecipient(Connection c,String task,ControlStore.Lease lease,String directory)throws Exception{
+        Record current=read(c,task);
+        HandoffPreparations.Plan plan=preparations.latest(c,task,db.now(c));
+        if(plan==null||plan.writerCommit()==null||!"COMMITTED".equals(plan.phase())||plan.activation()==null)
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+        HandoffPreparations.Binding candidate=plan.evidence().candidate();
+        if(!current.owner.equals(lease.nodeId)||!current.directory.equals(directory)||!current.owner.equals(candidate.node())
+                ||!current.directory.equals(candidate.directory())||lease.epoch<candidate.epoch()
+                ||lease.epoch==candidate.epoch()&&!lease.incarnation.equals(candidate.incarnation()))throw new ControlStore.Fenced();
+        HandoffPreparations.WriterCommit commit=plan.writerCommit();
+        HandoffPreparations.Binding former=plan.evidence().original();
+        HandoffPreparations.Plan retired=preparations.retirement(c,task,former.node(),former.directory());
+        if(retired==null||!plan.id().equals(retired.id())||!commit.revision().equals(current.revision)
+                ||!commit.configuration().equals(current.activeConfigurationVersion)||!commit.configuration().equals(current.configurationVersion))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_AUTHORITY_CHANGED");
+        String historical=version(c,task,plan.evidence().configuration()).yaml;
+        String successor=activeYaml(c,current);
+        ManagedWriterDeclaration previous=ManagedWriterDeclaration.read(historical),newWriter=ManagedWriterDeclaration.read(successor);
+        if(previous==null||newWriter==null||!db.sharesPostgresUrl(previous.journalUrl())||!plan.activation().checkedInControlTransaction()
+                ||!AuditStore.hash(previous.assignment()).equals(plan.activation().originalAssignmentSha256())
+                ||!AuditStore.hash(successor).equals(commit.configurationSha256())
+                ||!successor.equals(ManagedWriterDeclaration.successorYaml(historical,former.node(),candidate.node(),plan.activation().nextAssignment())))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        HandoffPreparations.JournalCut prior=plan.evidence().cut();
+        long previousEpoch=Long.parseLong(prior.epoch());
+        if(previousEpoch<1||previousEpoch==Long.MAX_VALUE||commit.journalEpoch()!=previousEpoch+1)
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
+        JournalWriterAssignment.CutProof proof=new JournalWriterAssignment.CutProof(plan.activation().journalGenerationSha256(),
+                plan.activation().nativeEvidenceSha256(),ManagedWriterDeclaration.subscriptions(successor),true,
+                new JournalWriterAssignment.ManagedCut(candidate.node(),AuditStore.hash(newWriter.assignment()),commit.journalEpoch(),
+                        Long.parseLong(prior.sequence()),prior.checkpointSha256()));
+        JournalWriterAssignment.verifyRecipientControlCut(c,newWriter.namespace(),task,previous.assignment(),newWriter.assignment(),proof);
+        return new ManagedRecipientImport.Grant(identity,plan,successor);
+    }
+    void recordRecipientProjection(Connection c,String task,ControlStore.Lease lease,String directory,
+                                   ManagedRecipientImport.Receipt receipt)throws Exception{
+        Record current=read(c,task);
+        HandoffPreparations.Plan plan=preparations.latest(c,task,db.now(c));
+        if(plan==null||plan.writerCommit()==null||!plan.id().equals(receipt.preparation()))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+        if(!current.owner.equals(lease.nodeId)||!current.directory.equals(directory)
+                ||!current.owner.equals(plan.evidence().candidate().node())||!current.directory.equals(plan.evidence().candidate().directory())
+                ||!current.revision.equals(plan.writerCommit().revision())
+                ||!Objects.equals(current.activeConfigurationVersion,plan.writerCommit().configuration()))throw new ControlStore.Fenced();
+        if("PROJECTED".equals(plan.phase())){preparations.recordProjected(c,plan,receipt);return;}
+        verifiedStoppedRecipient(c,task,lease,directory);
+        preparations.recordProjected(c,plan,receipt);
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_RECIPIENT_CONFIG_PROJECTED";event.taskId=task;
+        event.subjectId=lease.nodeId;event.clientRequestHash=AuditStore.hash(plan.id());
+        event.operationHash=plan.writerCommit().configurationSha256();event.status="STOPPED";
+        access.append(c,event);
+    }
     String retiredConfiguration(Connection c,Record current,String original,String directory)throws Exception{
         if(original.equals(current.owner)&&directory.equals(current.directory))return null;
         HandoffPreparations.Plan retired=preparations.retirement(c,current.id,original,directory);

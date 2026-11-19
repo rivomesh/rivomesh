@@ -48,7 +48,10 @@
   "currentCandidateArtifact": "0ce387c8dc554b17e70fff3ed82a399c713eeec4ef472dd43d3d2f5c272a7bb3",
   "currentCandidateScope": "Current merged console, candidate evidence staging and read-only native MySQL schema comparison. 37 Java, 145 DOM and binary checks.",
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "CP-04 private dual-Agent same-store transfer and STOPPED projection published. Seventeen exact native checks and 65 integrated Java. Real lost response replays at the other Controller, one epoch transfer, old Agent cannot reclaim after restart, both target cuts remain. Public transfer and next Worker activation are separately fenced.",
+    "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes."
+  ],
   "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "18d7a77",

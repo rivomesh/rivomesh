@@ -55,6 +55,8 @@ parser.add_argument('--handoff-managed-writer', action='store_true',
                     help='Enroll an Agent writer and verify the same PostgreSQL connection can lock the original cut')
 parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
+parser.add_argument('--handoff-private-writer', action='store_true',
+                    help='Exercise internal signed Agent transfer and paused local projection without granting execution')
 parser.add_argument('--handoff-preparation-browser', type=Path,
                     help='Exercise preparation and release through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
@@ -147,6 +149,9 @@ if args.handoff_managed_writer and (not args.handoff_preparation or args.control
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
 if args.handoff_staging and not args.handoff_preparation:
     parser.error('--handoff-staging requires --handoff-preparation')
+if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
+        or not args.test_classes.is_dir() or args.handoff_failure_custody or args.handoff_raw_custody):
+    parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with source/failure evidence absent')
 if args.handoff_preparation_browser and (not args.handoff_closed_receipts or args.handoff_preparation
         or not os.access(args.handoff_preparation_browser.resolve(), os.X_OK)):
     parser.error('--handoff-preparation-browser requires --handoff-closed-receipts and cannot share --handoff-preparation')
@@ -270,6 +275,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffClosedReceipts': args.handoff_closed_receipts,
             'handoffPreparation': args.handoff_preparation,
             'handoffManagedWriter': args.handoff_managed_writer,
+            'handoffPrivateWriter': args.handoff_private_writer,
             'handoffStaging': args.handoff_staging,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'receiptLookup': args.receipt_lookup,
@@ -355,6 +361,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               'username': 'postgres', 'password': '${RM_GC_CONTROL}', 'heartbeatMillis': 300, 'leaseMillis': 5000}}
         if args.managed_binlog_evidence:
             config['cluster'].update(heartbeatMillis=1000,leaseMillis=15000)
+        if args.handoff_private_writer:
+            config['cluster'].update(heartbeatMillis=1000,leaseMillis=45000)
         if args.automatic_placement and node in execution_agents:
             config.update(maxTasks=1,maxRunningTasks=1)
         if args.managed_failure_review or args.compensation or args.correction or args.handoff_failure_custody:
@@ -406,9 +414,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         (home / 'standalone.json').write_text(json.dumps(local))
         services['standalone'] = dict(services['node-a'], environment={'RM_GC_TOKEN': '${RM_GC_TOKEN}'},
                                       entrypoint=['java', '-Xmx384m', *launch, 'serve', '/fixture/standalone.json'])
-    if args.managed_commit or args.recovery_jobs or args.command_routing:
+    if args.managed_commit or args.recovery_jobs or args.command_routing or args.handoff_private_writer:
         classes=args.test_classes.resolve();classes.relative_to(ROOT)
-        services[owner_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
+        for fixture_node in ('node-a','node-b') if args.handoff_private_writer else (owner_node,):
+            services[fixture_node]['volumes'].append(str(classes)+':/fixture-tests:ro')
         test_hash=hashlib.sha256()
         for entry in sorted(classes.rglob('*')):
             if entry.is_file():test_hash.update(str(entry.relative_to(classes)).encode()+b'\0'+entry.read_bytes())
@@ -2407,6 +2416,63 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                           revision=expected_revision,previousReceiptId=good['id'])
                             assert task()['ownerNodeId']==owner_node and task()['revision']==expected_revision
                             assert data_cut()==original_cut
+                        if args.handoff_private_writer:
+                            preparation=endpoint+'/preparation'
+                            prepared_id='gc_private_prepare_'+uuid.uuid4().hex
+                            prepared_input={'expectedAssessment':good['id'],'expectedRevision':stopped_input['expectedRevision'],
+                                            'expectedEvidenceSha256':good['preparationEvidenceSha256']}
+                            prepared=http('node-a',preparation,prepared_input,request=prepared_id)
+                            assert prepared['state']=='PREPARED' and prepared['writerActivation']['checkedInControlTransaction']
+                            stage_input={'expectedPreparation':prepared_id,'expectedRevision':prepared_input['expectedRevision'],
+                                         'expectedEvidenceSha256':prepared_input['expectedEvidenceSha256']}
+                            staged=http('node-b',preparation+'/stage',stage_input)
+                            assert staged['state']=='STAGED'
+                            request='gc_private_commit_'+uuid.uuid4().hex
+
+                            def private_writer(controller,mode,evidence=stage_input['expectedEvidenceSha256'],check=True):
+                                return compose('exec','-T',controller,'java','-cp','/app/rivomesh.jar:/fixture-tests',
+                                    'io.github.rivomesh.platform.ManagedHandoffPrivateFixture','/fixture/'+controller+'.json',
+                                    'global_cdc',prepared_id,stage_input['expectedRevision'],evidence,request,mode,check=check)
+
+                            invalid=private_writer('node-a','observe',evidence='0'*64,check=False)
+                            assert invalid.returncode and 'HANDOFF_PREPARATION_CHANGED' in invalid.stderr
+                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                            assert private_writer('node-a','discard').stdout.strip()==''
+
+                            def projected():
+                                row=http('node-b',preparation)
+                                return row if row.get('state')=='PROJECTED' else None
+
+                            projected_receipt=wait(projected,'candidate persists and confirms exact stopped projection')
+                            replay=json.loads(private_writer('node-b','observe').stdout)
+                            assert replay==projected_receipt and replay['activatedJournalEpoch']==str(managed['epoch']+1)
+                            assert replay['executionAuthorized'] is False and task()['ownerNodeId']==candidate
+                            actual=data_cut()
+                            assert actual[0].split('|',1)[1]==original_cut[0].split('|',1)[1] and actual[1:]==original_cut[1:]
+                            assert sql('store','SELECT COUNT(*) FROM transfer_journal.rm3_writer_assignment_history')=='2'
+                            assert sql('store','SELECT assignment_id FROM transfer_journal.rm3_writer_assignment')!=assignment
+                            assert rows_match()
+                            candidate_state=json.loads((home/candidate/'controller'/'controller.json').read_text())
+                            local=candidate_state['tasks']['global_cdc']
+                            assert local['desired']=='STOPPED' and not local['operations']
+                            assert local['recipientImport']['preparation']==prepared_id
+                            assert local['configurationVersion']==replay['committedConfigurationVersion']
+                            assert http('node-b',route+'/actions',{'action':'START','expectedRevision':task()['revision']},
+                                        expected=409)['code']=='HANDOFF_RECIPIENT_IMPORT_REQUIRED'
+                            passed('The other Controller replays a discarded internal response and sees one native transfer and durable stopped projection')
+                            compose('kill','-s','SIGKILL',owner_node)
+                            wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                            " AND node_id='"+owner_node+"' AND lease_until>"+clock)=='0','former Agent lease expires')
+                            compose('up','-d',owner_node);address(owner_node)
+                            wait(lambda:http(owner_node,'/readyz',expected=(200,503)).get('status')=='UP','retired former Agent reopens')
+                            old_state=json.loads((home/owner_node/'controller'/'controller.json').read_text())
+                            assert old_state['tasks']['global_cdc']['desired']=='STOPPED'
+                            assert task()['ownerNodeId']==candidate and data_cut()==actual
+                            passed('The retired former Agent reopens without reclaiming the journal or changing target data')
+                            manifest['status']='PASS'
+                            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+                            print('GLOBAL_CONTROL_PRIVATE_HANDOFF_ACCEPTED artifact='+digest)
+                            raise SystemExit(0)
                         if args.handoff_preparation:
                             preparation=endpoint+'/preparation'
                             http('node-a',preparation,expected=404)

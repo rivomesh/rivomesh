@@ -64,6 +64,8 @@ public final class TaskService implements AutoCloseable {
         public String revision=UUID.randomUUID().toString(), desired="STOPPED", fingerprint;
         public String createdBy,createdRole,createdAt;
         public String configurationVersion,configurationHash,configurationFile;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public ManagedRecipientImport.Receipt recipientImport;
         public List<Operation> operations=new ArrayList<>();
     }
     public static final class Receipt {
@@ -192,6 +194,54 @@ public final class TaskService implements AutoCloseable {
     }
     synchronized void beginOwnerScheduling(){ensureOpen();if(config.cluster!=null&&!config.cluster.executes())throw new Conflict("OWNER_ROLE_REQUIRED");if(!schedulingStarted){scheduler.scheduleWithFixedDelay(this::schedule,0,config.pollMillis,TimeUnit.MILLISECONDS);schedulingStarted=true;}}
     synchronized void holdOwnerStart(String task,boolean hold){if(hold)ownerStartBlocks.add(task);else ownerStartBlocks.remove(task);}
+    synchronized ManagedRecipientImport.Receipt installStoppedRecipient(ManagedRecipientImport.Grant grant,
+            ManagedRecipientImport.FrozenConfig frozen)throws Exception{
+        ensureOpen();
+        ManagedRecipientImport.Receipt receipt=ManagedRecipientImport.validate(grant,frozen);
+        HandoffPreparations.Plan plan=grant.committed();HandoffPreparations.WriterCommit commit=plan.writerCommit();
+        HandoffPreparations.Binding destination=plan.evidence().candidate();
+        if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()
+                ||!destination.node().equals(config.cluster.nodeId)||!grant.authority().equals(registry.globalTaskIdentity)
+                ||!destination.directory().equals(registry.ownerDirectoryIdentity))throw new ControlStore.Fenced();
+        String id=plan.task();
+        TaskDefinition parsed=parseTask(frozen.successorYaml());
+        if(!id.equals(parsed.jobId))throw new Conflict("HANDOFF_RECIPIENT_FROZEN_CONFIG_CHANGED");
+        Control existing=registry.tasks.get(id);
+        if(existing!=null){
+            Entry entry=require(id);
+            if(!receipt.equals(existing.recipientImport)||!"STOPPED".equals(existing.desired)||entry.worker!=null&&entry.worker.alive()
+                    ||!commit.revision().equals(existing.revision)||!commit.configuration().equals(existing.configurationVersion)
+                    ||!parsed.fingerprint().equals(existing.fingerprint)||!existing.operations.isEmpty()
+                    ||!frozen.successorYaml().equals(versions.read(id,existing.configurationVersion,existing.configurationHash).yaml))
+                throw new Conflict("HANDOFF_RECIPIENT_LOCAL_CONFIGURATION_CHANGED");
+            return projectStoppedRecipient(entry,receipt);
+        }
+        validateTask(parsed,null);
+        Path path=configurationFile(id+".yml");
+        if(Files.exists(path,LinkOption.NOFOLLOW_LINKS))throw new Conflict("CONFIG_FILE_EXISTS");
+        ConfigurationVersions.Stored stored=versions.importHandoff(id,commit.configuration(),frozen.successorYaml(),plan.id(),plan.closedAt());
+        Control admitted=new Control();admitted.revision=commit.revision();admitted.fingerprint=parsed.fingerprint();
+        admitted.configurationVersion=stored.version.id;admitted.configurationHash=stored.hash;admitted.configurationFile=path.getFileName().toString();
+        admitted.recipientImport=receipt;
+        Registry next=copy();next.tasks.put(id,admitted);
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_RECIPIENT_CONFIG_IMPORTED";event.taskId=id;
+        event.actorId=commit.actor();event.actorRole="ADMIN";event.subjectId=commit.configuration();
+        event.clientRequestHash=AuditStore.hash(plan.id());event.operationHash=receipt.configurationSha256();event.status="STOPPED";
+        next.auditOutbox.add(event);
+        persist(next);
+        Entry entry=new Entry(stored.document,path,parsed);entries.put(id,entry);
+        return projectStoppedRecipient(entry,receipt);
+    }
+    private ManagedRecipientImport.Receipt projectStoppedRecipient(Entry entry,ManagedRecipientImport.Receipt receipt){
+        project(entry);
+        if(entry.projectionPending)throw new Conflict("HANDOFF_RECIPIENT_PROJECTION_PENDING");
+        return receipt;
+    }
+    synchronized void requireLocalHandoffSettled(String task){
+        if(retiredOwners.contains(task))throw new Conflict("HANDOFF_ORIGINAL_RETIRED");
+        Control control=registry.tasks.get(task);
+        if(control!=null&&control.recipientImport!=null)throw new Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
+    }
     synchronized void retainRetiredOwners(Set<String> tasks){
         ensureOpen();
         for(String id:tasks){
@@ -869,7 +919,7 @@ public final class TaskService implements AutoCloseable {
                 entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
             }}
             if(entry.worker==null&&entry.exits<5&&System.currentTimeMillis()>=entry.retryAt) {
-                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
+                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&registry.tasks.get(id).recipientImport==null&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
                     if(slots.tryAcquire()){
                         entry.permit=true;
                         try{Control committed=registry.tasks.get(id);if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));entry.config.holdLocalJournal();entry.worker=workers.start(entry.path,logDirectory.resolve(id+".log"),config.workerHeapMiB);entry.workerState="RUNNING";}
@@ -1047,18 +1097,7 @@ public final class TaskService implements AutoCloseable {
         ControlCipher guard;
         Path shared;
         synchronized(this){
-            ensureOpen();currentActor(actor);
-            if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
-            if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()||registry.globalTaskIdentity==null)
-                throw new Conflict("GLOBAL_HANDOFF_REQUIRED");
-            if(binding==null||!request.reference.equals(binding.preparation())||!request.identityHash.equals(binding.evidence())
-                    ||!request.taskId.equals(binding.scope().task())||!request.revision.equals(binding.scope().revision())
-                    ||!config.cluster.id.equals(binding.scope().cluster())||!nodeId().equals(binding.candidate().node())
-                    ||!Objects.equals(registry.ownerDirectoryIdentity,binding.candidate().directory()))
-                throw new Conflict("HANDOFF_STAGING_SCOPE_CHANGED");
-            if(entries.containsKey(request.taskId)||registry.tasks.containsKey(request.taskId)
-                    ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS))
-                throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+            requireCandidateHandoffScope(request,actor);
             if(config.cluster.handoffEvidenceRoot==null)throw new Conflict("HANDOFF_ARCHIVE_DISABLED");
             shared=Path.of(config.cluster.handoffEvidenceRoot);
             guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
@@ -1072,6 +1111,52 @@ public final class TaskService implements AutoCloseable {
             event.status="STAGED";appendAudit(event);
         }
         return staged;
+    }
+    Map<String,Object> prepareHandoffCandidate(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        HandoffPreparations.Plan plan=request.handoffPreparation;
+        if(request.kind!=TaskRequest.Kind.HANDOFF_READINESS_RPC||plan==null||request.yaml==null)
+            throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        ControlCipher guard;
+        synchronized(this){
+            requireCandidateHandoffScope(request,actor);
+            if(!Objects.equals(plan.actor(),actor.id)||!Objects.equals(plan.actorRevision(),actor.authorizationRevision))
+                throw new Conflict("AUTHORIZATION_CHANGED");
+            guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        }
+        HandoffCandidateAdmission.Ready ready=HandoffCandidateAdmission.prepare(statePath.getParent(),
+                request.handoffStaging,plan,request.yaml,guard,successor->{
+                    synchronized(this){
+                        requireCandidateHandoffScope(request,actor);
+                        TaskDefinition task=parseTask(successor);
+                        if(!request.taskId.equals(task.jobId))throw new Conflict("HANDOFF_CANDIDATE_CONFIGURATION_CHANGED");
+                        validateTask(task,null);
+                        if(Files.exists(configurationFile(request.taskId+".yml"),LinkOption.NOFOLLOW_LINKS))
+                            throw new Conflict("CONFIG_FILE_EXISTS");
+                    }
+                });
+        synchronized(this){
+            requireCandidateHandoffScope(request,actor);
+            AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_CANDIDATE_READY";
+            event.taskId=request.taskId;event.subjectId=ready.preparation();event.actorId=actor.id;event.actorRole=actor.role.name();
+            event.clientRequestHash=AuditStore.hash(request.requestId);event.operationHash=ready.configurationSha256();
+            event.status=ready.desired();appendAudit(event);
+        }
+        return Model.JSON.convertValue(ready,Map.class);
+    }
+    private void requireCandidateHandoffScope(TaskRequest request,AccessControl.Principal actor){
+        HandoffStaging.Binding binding=request.handoffStaging;
+        ensureOpen();currentActor(actor);
+        if(!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()||registry.globalTaskIdentity==null)
+            throw new Conflict("GLOBAL_HANDOFF_REQUIRED");
+        if(binding==null||!request.reference.equals(binding.preparation())||!request.identityHash.equals(binding.evidence())
+                ||!request.taskId.equals(binding.scope().task())||!request.revision.equals(binding.scope().revision())
+                ||!config.cluster.id.equals(binding.scope().cluster())||!nodeId().equals(binding.candidate().node())
+                ||!Objects.equals(registry.ownerDirectoryIdentity,binding.candidate().directory()))
+            throw new Conflict("HANDOFF_STAGING_SCOPE_CHANGED");
+        if(entries.containsKey(request.taskId)||registry.tasks.containsKey(request.taskId)
+                ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS))
+            throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
     }
     private SharedHandoffEvidence.ReceiptPlan collectClosedHandoffReceipts(String task,SharedHandoffEvidence.ReceiptPlan plan){
         if(plan==null)return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");

@@ -39,6 +39,22 @@ final class HandoffStaging {
 
     private HandoffStaging(){}
 
+    @FunctionalInterface interface VerifiedStage<T>{ T accept(String sealSha256)throws Exception; }
+
+    static synchronized <T> T withVerifiedStage(Path state,Binding binding,ControlCipher cipher,VerifiedStage<T> use)throws Exception{
+        Path root=state.toRealPath().resolve("handoff-staging");
+        secureDirectory(root);
+        Path lockFile=root.resolve("staging.lock");
+        secureFile(lockFile);
+        try(FileChannel channel=FileChannel.open(lockFile,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
+            FileLock lock=channel.tryLock()){
+            if(lock==null)throw refusal("HANDOFF_STAGING_BUSY");
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(12);
+            String evidenceSha256=verifyStage(root.resolve(binding.key()),binding,cipher,deadline);
+            return use.accept(evidenceSha256);
+        }catch(OverlappingFileLockException busy){throw refusal("HANDOFF_STAGING_BUSY");}
+    }
+
     static synchronized Map<String,Object> stage(Path data,Path shared,Binding binding,ControlCipher cipher)throws Exception{
         Path root=data.toRealPath().resolve("handoff-staging");
         if(Files.notExists(root,LinkOption.NOFOLLOW_LINKS)){
@@ -157,13 +173,15 @@ final class HandoffStaging {
         }
     }
 
-    private static void verifyStage(Path stage,Binding expected,ControlCipher cipher,long deadline)throws Exception{
+    private static String verifyStage(Path stage,Binding expected,ControlCipher cipher,long deadline)throws Exception{
         secureDirectory(stage);
         Path seal=stage.resolve(SEAL);
-        String envelope=new String(readFile(seal,MAX_SEAL),java.nio.charset.StandardCharsets.UTF_8);
+        byte[] sealedBytes=readFile(seal,MAX_SEAL);
+        String envelope=new String(sealedBytes,java.nio.charset.StandardCharsets.UTF_8);
         Stage stored=Model.JSON.readValue(cipher.open("handoff-stage/"+expected.key(),envelope),Stage.class);
         if(stored==null||stored.version()!=1||!expected.equals(stored.binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
         checkFiles(stage,stored,deadline);
+        return Codec.sha256(sealedBytes);
     }
 
     private static void checkFiles(Path stage,Stage manifest,long deadline)throws Exception{
@@ -285,7 +303,7 @@ final class HandoffStaging {
         if(bytes.length==0||bytes.length>maximum)throw refusal("HANDOFF_ARCHIVE_LIMIT_EXCEEDED");
         return bytes;
     }
-    private static byte[] readFile(Path path,int maximum)throws Exception{
+    static byte[] readFile(Path path,int maximum)throws Exception{
         secureFile(path);
         try(InputStream input=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS)){
             return readEntry(input,maximum);
@@ -323,10 +341,10 @@ final class HandoffStaging {
         if(length==0)throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         return new FileSeal(length,HexFormat.of().formatHex(hash.digest()));
     }
-    private static void createDirectory(Path path)throws IOException{
+    static void createDirectory(Path path)throws IOException{
         Files.createDirectory(path,PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
     }
-    private static void secureDirectory(Path path)throws Exception{
+    static void secureDirectory(Path path)throws Exception{
         if(!Files.isDirectory(path,LinkOption.NOFOLLOW_LINKS))throw refusal("HANDOFF_STAGING_PATH_UNSAFE");
         checkPermissions(path);
     }
@@ -341,7 +359,7 @@ final class HandoffStaging {
     private static void checkDeadline(long deadline){
         if(Thread.currentThread().isInterrupted()||System.nanoTime()>=deadline)throw refusal("HANDOFF_STAGING_TIMEOUT");
     }
-    private static void force(Path directory)throws IOException{
+    static void force(Path directory)throws IOException{
         try(FileChannel channel=FileChannel.open(directory,StandardOpenOption.READ)){channel.force(true);}
     }
     private static TaskService.Conflict refusal(String code){return new TaskService.Conflict(code);}

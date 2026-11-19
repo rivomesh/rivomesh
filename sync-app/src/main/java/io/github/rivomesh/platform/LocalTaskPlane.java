@@ -9,6 +9,7 @@ final class LocalTaskPlane implements TaskControlPlane {
     public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
         if(request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)return tasks.stageHandoffEvidence(request,actor);
+        if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
         if(request.handoffRpc())return tasks.handoffProbe(request,actor);
         if(request.readAtRevision())request.revision=(String)tasks.view(request.taskId).get("revision");return invoke(request,actor);
     }
@@ -20,6 +21,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         if(r.skipRecovery()&&!tasks.skipRecoveryEnabled())throw new TaskService.Conflict("SKIP_DISABLED");
         if(r.commitRecovery()&&!tasks.commitRecoveryEnabled())throw new TaskService.Conflict("FAILURE_ACK_DISABLED");
         if(r.failureReview()&&!tasks.failureReviewEnabled())throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
+        if(r.mutation()&&r.taskId!=null)tasks.requireLocalHandoffSettled(r.taskId);
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);

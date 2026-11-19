@@ -57,7 +57,7 @@ final class HandoffPreparations {
                     case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
-                    case "COMMITTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
+                    case "COMMITTED","PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null;
                     default->false;
                 }))throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
@@ -90,6 +90,7 @@ final class HandoffPreparations {
     void requireUnreserved(Connection c,String task)throws Exception{
         Plan plan=latest(c,task,db.now(c));
         if(plan!=null&&"PREPARED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
+        if(plan!=null&&plan.writerCommit!=null)throw new TaskService.Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
     }
     long reserved(Connection c,String candidate)throws Exception{
         return reservations(c,candidate).getOrDefault(candidate,0L);
@@ -133,9 +134,37 @@ final class HandoffPreparations {
         return complete;
     }
 
+    record PendingRecipient(String task,String preparation){}
+    List<PendingRecipient> pendingRecipient(Connection c,String candidate,String directory,String after,int limit)throws Exception{
+        List<PendingRecipient> pending=new ArrayList<>();
+        try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
+                +" WHERE cluster_id=? AND candidate_id=? AND phase='COMMITTED' AND request_id>? ORDER BY request_id LIMIT ?",
+                cluster,candidate,after,limit);ResultSet rows=statement.executeQuery()){
+            while(rows.next()){
+                Plan p=read(rows);
+                if(!directory.equals(p.evidence.candidate.directory))throw new ControlStore.Fenced();
+                pending.add(new PendingRecipient(p.task,p.id));
+            }
+        }
+        return pending;
+    }
+    void recordProjected(Connection c,Plan plan,ManagedRecipientImport.Receipt imported)throws Exception{
+        if(plan==null||plan.writerCommit==null||!plan.id.equals(imported.preparation())
+                ||!plan.writerCommit.configurationSha256.equals(imported.configurationSha256())
+                ||!plan.writerCommit.stagingSha256.equals(imported.stagingSha256()))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_PROJECTION_CHANGED");
+        if("PROJECTED".equals(plan.phase))return;
+        if(!"COMMITTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+        Plan projected=new Plan(plan.id,plan.task,plan.sequence,"PROJECTED",plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit);
+        if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase='COMMITTED'",projected.phase,seal(projected),cluster,plan.id)!=1)
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
+    }
+
     Plan retirement(Connection c,String task,String original,String directory)throws Exception{
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND task_id=? AND phase='COMMITTED' ORDER BY ordinal DESC",cluster,task);
+                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED') ORDER BY ordinal DESC",cluster,task);
             ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);

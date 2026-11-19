@@ -220,6 +220,25 @@ public final class JournalWriterAssignment {
         return placement;
     }
 
+    /** A stopped recipient must see the exact committed native history before writing its local configuration. */
+    public static void verifyRecipientControlCut(Connection c,String namespace,String task,String previousAssignment,
+                                                 String assignment,CutProof proof)throws Exception{
+        if(!validId(previousAssignment)||Objects.equals(previousAssignment,assignment))
+            throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
+        LockedControlCut locked=lockManagedControlCut(c,namespace,task,assignment,proof);
+        ManagedCut cut=proof.managedWriter();
+        try(PreparedStatement statement=c.prepareStatement("SELECT previous_assignment,activated_epoch,last_sequence,checkpoint_hash,evidence_hash"
+                +" FROM "+Sql.pg(namespace)+".rm3_writer_assignment_history WHERE pipeline_id=? AND assignment_id=?")){
+            statement.setQueryTimeout(5);statement.setString(1,task);statement.setString(2,assignment);
+            try(ResultSet row=statement.executeQuery()){
+                if(!row.next()||!previousAssignment.equals(row.getString(1))||row.getLong(2)!=cut.epoch()
+                        ||row.getLong(3)!=cut.sequence()||!Codec.sha256(locked.captured).equals(row.getString(4))
+                        ||!proof.nativeEvidenceSha256().equals(row.getString(5)))
+                    throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
+            }
+        }
+    }
+
     private static LockedControlCut lockManagedControlCut(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
         if(c.getAutoCommit()||!"PostgreSQL".equals(c.getMetaData().getDatabaseProductName())||proof==null
                 ||proof.managedWriter()==null||!validId(assignment)||!Codec.sha256(assignment).equals(proof.managedWriter().originalAssignmentSha256()))

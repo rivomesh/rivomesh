@@ -252,7 +252,8 @@ class ManagedHandoffTest {
                         new io.github.rivomesh.cdc.JournalWriterAssignment.ManagedCut("a",AuditStore.hash(writerAssignment),9,2,checkpoint)));
             });
             aQueries.serve(aQueries.pending(aLease,fixture.directory,10).getFirst(),aLease,fixture.directory,
-                    (request,principal)->Map.of("state","REFUSED","originInventory",Map.of("validationReports","PRESENT"),
+                    (request,principal)->Map.of("state","REFUSED","originInventory",Map.of("validationReports","PRESENT",
+                                    "sourceEvidence","ABSENT","failureEvidence","ABSENT"),
                             "closedReceipts",Map.of("state","ARCHIVED","archive",archive),
                             "shareableReports",Map.of("state","ARCHIVED","archive",archive)));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
@@ -360,6 +361,70 @@ class ManagedHandoffTest {
         a.invoke(release("stage_release_fixture",preparation.requestId),fixture.admin);
         bQueries.serve(pending,bLease,candidateDirectory,(request,actor)->fail("Released preparation reached the Agent"));
         conflict("HANDOFF_PREPARATION_CHANGED",()->bQueries.poll(pending,fixture.admin));
+    }
+
+
+    @Test void readinessTransportDerivesPrivateInputAndFencesReleasedOrMalformedResults()throws Exception{
+        Map<String,Object> reviewed=verifiedAssessment("handoff_readiness_assessment",fixture.admin);
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,"orders");
+        request.requestId="handoff_readiness_lookup";request.reference="handoff_readiness_plan";request.revision=revision;
+        request.identityHash=(String)reviewed.get("preparationEvidenceSha256");
+        conflict("HANDOFF_PREPARATION_CHANGED",()->aQueries.candidateReadiness(request,fixture.admin));
+        var original=new HandoffPreparations.Binding("a",fixture.directory,aLease.incarnation,aLease.epoch);
+        var candidate=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
+        var cut=Model.JSON.valueToTree(reviewed.get("originalCut"));
+        HandoffPreparations.Plan plan=fixture.a.transaction("orders",fixture.admin,(c,task,actor)->{
+            // Native writer assignment is verified separately. This fixture seals its exact assessment for the transport.
+            var proof=new HandoffPreparations.Evidence((String)reviewed.get("id"),revision,task.activeConfigurationVersion,
+                    original,candidate,new HandoffPreparations.JournalCut(cut.path("journalEpoch").asText(),
+                    cut.path("sequence").asText(),cut.path("checkpointHash").asText()),request.identityHash,"b".repeat(64));
+            var activation=new HandoffPreparations.WriterActivation("a".repeat(64),UUID.randomUUID().toString(),
+                    "c".repeat(64),"d".repeat(64),true);
+            return fixture.a.preparations().prepare(c,task,request.reference,actor,proof,activation,aNodes.now(c));
+        });
+        request.yaml="caller supplied configuration must never be sent";
+        assertEquals("HANDOFF_REQUEST_INVALID",assertThrows(IllegalArgumentException.class,
+                ()->aQueries.candidateReadiness(request,fixture.admin)).getMessage());
+        request.yaml=null;
+        var ready=new ManagedHandoff.CandidateAdmission(plan.id(),candidate,"STOPPED","e".repeat(64),"f".repeat(64));
+        Map<String,Object> masked=Model.JSON.convertValue(ready,Map.class);
+        try(ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor()){
+            var result=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
+            PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            String queued=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            assertThrows(ControlStore.Fenced.class,()->aQueries.serve(queued,aLease,fixture.directory,
+                    (ignored,actor)->fail("original Agent received candidate configuration")));
+            bQueries.serve(queued,bLease,candidateDirectory,(scoped,actor)->{
+                assertEquals(TaskRequest.Kind.HANDOFF_READINESS_RPC,scoped.kind);
+                assertEquals(YAML,scoped.yaml);
+                assertEquals(plan,scoped.handoffPreparation);
+                assertEquals(candidate,scoped.handoffStaging.candidate());
+                assertEquals(fixture.admin.id,actor.id);
+                return masked;
+            });
+            assertEquals(ready,result.get(10,TimeUnit.SECONDS));
+            assertFalse(Model.JSON.writeValueAsString(aQueries.poll(queued,fixture.admin)).contains("private-"));
+
+            var malformed=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
+            PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            String malformedId=bQueries.pending(bLease,candidateDirectory,10).getFirst();
+            bQueries.serve(malformedId,bLease,candidateDirectory,(scoped,actor)->{
+                Map<String,Object> leaked=new HashMap<>(masked);leaked.put("yaml",scoped.yaml);return leaked;
+            });
+            assertEquals("HANDOFF_CANDIDATE_ADMISSION_CHANGED",assertThrows(ExecutionException.class,
+                    ()->malformed.get(10,TimeUnit.SECONDS)).getCause().getMessage());
+            assertFalse(aQueries.poll(malformedId,fixture.admin).containsKey("result"));
+
+            var released=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
+            PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
+            bQueries.serve(bQueries.pending(bLease,candidateDirectory,10).getFirst(),bLease,candidateDirectory,(scoped,actor)->{
+                a.invoke(release("handoff_readiness_release",plan.id()),fixture.admin);
+                return masked;
+            });
+            assertEquals("HANDOFF_PREPARATION_CHANGED",assertThrows(ExecutionException.class,
+                    ()->released.get(10,TimeUnit.SECONDS)).getCause().getMessage());
+        }
+        assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
     }
 
     @Test void preparationAndNewPlacementRaceForOneWorkerSlot()throws Exception{
