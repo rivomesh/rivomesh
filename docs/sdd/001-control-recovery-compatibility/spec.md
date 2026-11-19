@@ -52,7 +52,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
-| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 |
+| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Temurin 21 单 PDB 已实测 Oracle 26ai 长事务、归档 SCN 原位恢复、严格文本 JSON 与 DATE 到 PostgreSQL。原生二进制 JSON、LOB、生成列及 RAC 切换待验。 |
 
 ## Java运行时兼容
@@ -85,7 +85,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | LG-05 | P0 / PARTIAL | 可选存储和跨节点数据可达性 | 可选本地/外部日志及双 Agent 证据核验已实测。候选私有暂存报告和回执保持原字节，原始证据签名密钥留在原 Agent。完整状态接管及多产品验证待验。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
-| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。 |
+| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单和 UNIQUE/GSI 转换已有。Java 21 已实测 MySQL 8.4.13 → PostgreSQL 17.12 的本地日志和目标协调冷备、原断点恢复与身份错配拒绝。更广动态 DDL、复杂类型和其他产品待验。 PostgreSQL 关系变化也已实测停留原 LSN 并可审阅当前发布差异。 |
 | LG-09 | P1 / DONE | 报告目录、保留清理与真实浏览器验收 | 双入口历史报告/回执、审批、键盘分页、归档和恢复已实测。限定档案回收经停止、保留期、摘要和报告锁检查后只移除已安全归档的重复行文件。 |
 | LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 独立审计锚点已支持离线签名和审计库标识核验。SBOM 及可选外置五路 JDBC 包已核对。项目授权、LICENSE/NOTICE、外部身份与不可变自动留存待完成。 |
 

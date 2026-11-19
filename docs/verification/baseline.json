@@ -9330,5 +9330,45 @@
       "LibreSSL 3.3.6": 13
     },
     "scope": "ECDSA P-256 detached signature on the original audit checkpoint bytes, pinned key and storeId, verified continuity, no output on signature or scope refusal. External signing, immutable retention and source rights are separate."
+  },
+  "postgresSourcePublicationDriftNative": {
+    "native": {
+      "artifactSha256": "90b7556ce41b90d5d0940d38cd4c22eec2643c4fc617d14d91cdcb7e5673334f",
+      "status": "PASS",
+      "checks": [
+        "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+        "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+        "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+        "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+        "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+        "Changed native Relation fails closed and review identifies its current publication shape",
+        "A later DDL changes the advisory live digest while preserving the recorded schema and failure cut",
+        "An unsupported publication shape has an explicit unavailable diagnostic without changing either cut"
+      ],
+      "jdk": 21,
+      "runtimeImage": "eclipse-temurin:21-jre-jammy",
+      "sourceImage": "postgres:17.12",
+      "failover": false,
+      "rejectOldPrimary": false,
+      "uuid": false,
+      "dateValues": false,
+      "timestampValues": false,
+      "clockValues": false,
+      "deliveryTiming": false,
+      "tls": false,
+      "ddlReview": true,
+      "harnessSha256": "8b741b8ba3b474279509c43d407c4a07d90496f2d4e4857beb59bb7283de23e1",
+      "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "runtimeVersion": "21.0.13",
+      "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+      "runtimeArchitecture": "arm64",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "dddb472b7c75725c94728ae08a68de6bcbc8de25d3e72f8b5db0fb024bbcffc7",
+    "javaTestsPassed": 12,
+    "domTestsPassed": 147,
+    "scope": "One PostgreSQL 17.12 source, one PostgreSQL destination, Temurin 21 and the local management entry. Capture retains the previous LSN and target cut when pgoutput Relation changes. Advisory review shows later DDL and reports an unsupported current shape explicitly. There is no DDL application step in this fixture.",
+    "reproduce": "python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact /path/to/rivomesh.jar --output target/pg-ddl-review"
   }
 }

@@ -535,3 +535,7 @@ The `675b34ac8ec1df9536986888db039558f3307bac33d177cd2a3ff241707e769a` package p
 ### Offline signed audit checkpoints
 
 Commit `78eeb52` passed 13 audit export tests each with OpenSSL 3.6.2 and LibreSSL 3.3.6. Verification accepts the original ECDSA P-256 signature, exact checkpoint bytes and independently enrolled store identity. It refuses the wrong key, modified data and a genuine signature from the same signer for another store. The independent custodian retains the signing key and latest trusted sequence. [Operations](../en/security-audit.md#signed-checkpoints) · [Manifest](baseline.json)
+
+### PostgreSQL native publication shape review
+
+The `90b7556ce41b90d5d0940d38cd4c22eec2643c4fc617d14d91cdcb7e5673334f` package passed eight native checks, 12 Java tests and 147 DOM tests. PostgreSQL 17.12 stopped delivery after a changed Relation while the prior source LSN and destination cut remained intact. Review identified the current publication shape, reflected subsequent DDL with a different current digest and returned an explicit diagnostic for an unsupported column. No DDL was applied on the target. [Source operations](../en/postgresql-source.md#review-a-paused-schema-change) · [Manifest](baseline.json)

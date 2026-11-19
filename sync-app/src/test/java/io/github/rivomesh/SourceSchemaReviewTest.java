@@ -5,12 +5,23 @@ import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.TableSchema;
 import org.junit.jupiter.api.Test;
 
+import static io.github.rivomesh.SourceSchemaReview.Scope.CURRENT_MYSQL_CATALOG_VS_JOURNAL;
+import static io.github.rivomesh.SourceSchemaReview.Scope.CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL;
+
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class MysqlSchemaReviewTest {
+class SourceSchemaReviewTest {
+    @Test void unavailablePostgresqlPublicationKeepsItsOwnScope() {
+        assertEquals(Map.of("scope", "CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL", "state", "UNAVAILABLE",
+                        "code", "POSTGRESQL_TYPE_UNSUPPORTED"),
+                SourceSchemaReview.unavailable(CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL,
+                        "POSTGRESQL_TYPE_UNSUPPORTED"));
+    }
+
     @Test
     void comparesOnlyLatestRecordedShapeAndKeepsExpressionsPrivate() throws Exception {
         TableSchema old = table("orders", 1, "id");
@@ -19,7 +30,7 @@ class MysqlSchemaReviewTest {
         live.columns.get(1).defaultExpression = "a sensitive default literal";
         live.identityKey.add("id");
 
-        var review = Codec.encode(MysqlSchemaReview.compare(List.of(baseline, old), List.of(live)));
+        var review = Codec.encode(SourceSchemaReview.compare(CURRENT_MYSQL_CATALOG_VS_JOURNAL, List.of(baseline, old), List.of(live)));
         JsonNode result = Codec.JSON.readTree(review);
         assertEquals("CHANGES_VISIBLE", result.path("state").asText());
         assertEquals(1, result.path("changedTables").asInt());
@@ -34,16 +45,16 @@ class MysqlSchemaReviewTest {
 
     @Test
     void versionsAloneAreEquivalentAndCurrentOnlyCatalogIsNotAPlan() {
-        assertEquals("NO_VISIBLE_CHANGE", MysqlSchemaReview.compare(
+        assertEquals("NO_VISIBLE_CHANGE", SourceSchemaReview.compare(CURRENT_MYSQL_CATALOG_VS_JOURNAL,
                 List.of(table("orders", 2, "id")), List.of(table("orders", 1, "id"))).get("state"));
-        assertEquals("NO_JOURNAL_SCHEMA", MysqlSchemaReview.compare(
+        assertEquals("NO_JOURNAL_SCHEMA", SourceSchemaReview.compare(CURRENT_MYSQL_CATALOG_VS_JOURNAL,
                 List.of(), List.of(table("orders", 1, "id"))).get("state"));
     }
 
     @Test
     void detailsAreBoundedAndMissingTablesStillCount() throws Exception {
         var baseline = IntStream.range(0, 65).mapToObj(i -> table("orders" + i, 1, "id")).toList();
-        var json = Codec.JSON.readTree(Codec.encode(MysqlSchemaReview.compare(baseline, List.of())));
+        var json = Codec.JSON.readTree(Codec.encode(SourceSchemaReview.compare(CURRENT_MYSQL_CATALOG_VS_JOURNAL, baseline, List.of())));
         assertEquals(65, json.path("changedTables").asInt());
         assertEquals(64, json.path("tables").size());
         assertTrue(json.path("detailsLimited").asBoolean());

@@ -1064,8 +1064,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE, microsecond timestamp and TIME(6) recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain."
+        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE, microsecond timestamp and TIME(6) recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain. A native read-only comparison shows the current PostgreSQL publication while capture stays at the pre-change LSN."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1678,8 +1678,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。",
-        "en": "Allowlisted objects, UNIQUE/GSI policies and coordinated MySQL-to-PostgreSQL restore have native evidence. Two management entries expose read-only MySQL DDL differences between recorded schema and current catalog. Reviewed DDL execution, more types and other products remain."
+        "zh-CN": "对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 关系变化也已实测停留原 LSN 并可审阅当前发布差异。",
+        "en": "Allowlisted objects, UNIQUE/GSI policies and coordinated MySQL-to-PostgreSQL restore have native evidence. Two management entries expose read-only MySQL DDL differences between recorded schema and current catalog. Reviewed DDL execution, more types and other products remain. PostgreSQL relation drift also retained the original LSN and exposed a read-only current publication comparison."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1694,7 +1694,7 @@
         "docs/zh-CN/first-release.md",
         "tests/local-state-restore.py",
         "tests/local-state-restore-native.py",
-        "sync-app/src/main/java/io/github/rivomesh/MysqlSchemaReview.java"
+        "sync-app/src/main/java/io/github/rivomesh/SourceSchemaReview.java"
       ]
     },
     {

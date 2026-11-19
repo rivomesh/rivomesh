@@ -235,17 +235,17 @@ public final class CaptureRecoveryReview {
                                 ByteArrayOutputStream retained,String expectedBoundary)throws Exception{
         // Read journal dependencies before the source probe so storage errors cannot look like source failures.
         List<SourcePosition> dependencies=journal.dependencies();
-        boolean compareSchema="MYSQL".equals(config.effectiveSourceType())&&"DDL".equals(phase);
-        List<TableSchema> history=compareSchema?journal.schemas():List.of();
+        SourceSchemaReview.Scope schemaScope=schemaScope(config.effectiveSourceType(),phase);
+        List<TableSchema> history=schemaScope==null?List.of():journal.schemas();
         try(SourceAdapter source=PipelineSources.open(config,generation)){
             source.validateFailover(checkpoint,dependencies);
-            if(compareSchema){
+            if(schemaScope!=null){
                 try{
-                    nativeEvidence.put("schemaDrift",MysqlSchemaReview.compare(history,source.discover()));
+                    nativeEvidence.put("schemaDrift",SourceSchemaReview.compare(schemaScope,history,source.discover()));
                 }catch(InterruptedException interrupted){
                     throw interrupted;
                 }catch(Exception unavailable){
-                    nativeEvidence.put("schemaDrift",MysqlSchemaReview.unavailable(PipelineEngine.sourceErrorCode(unavailable)));
+                    nativeEvidence.put("schemaDrift",SourceSchemaReview.unavailable(schemaScope,PipelineEngine.sourceErrorCode(unavailable)));
                 }
             }
             if(source instanceof MysqlCdcSource&&"SOURCE_DECODE".equals(phase)){
@@ -268,6 +268,13 @@ public final class CaptureRecoveryReview {
         }catch(Exception failure){
             return PipelineEngine.sourceErrorCode(failure);
         }
+    }
+
+    private static SourceSchemaReview.Scope schemaScope(String sourceType,String phase){
+        if(!"DDL".equals(phase))return null;
+        if("MYSQL".equals(sourceType))return SourceSchemaReview.Scope.CURRENT_MYSQL_CATALOG_VS_JOURNAL;
+        if("POSTGRESQL".equals(sourceType))return SourceSchemaReview.Scope.CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL;
+        return null;
     }
 
     private static List<String> actions(String admission,String phase){

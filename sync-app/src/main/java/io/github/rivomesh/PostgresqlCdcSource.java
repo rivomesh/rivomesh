@@ -222,6 +222,9 @@ final class PostgresqlCdcSource implements SourceAdapter {
         Map<Integer,TableSchema> found=new LinkedHashMap<>();
         Set<String> observed=new TreeSet<>();
         try(Connection c=sql()){
+            c.setReadOnly(true);
+            c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+            c.setAutoCommit(false);
             try(PreparedStatement p=c.prepareStatement("SELECT puballtables,pubinsert,pubupdate,pubdelete,pubviaroot FROM pg_publication WHERE pubname=?")){
                 p.setString(1,options.publication);
                 try(ResultSet r=p.executeQuery()){
@@ -250,6 +253,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                     }
                 }
             }
+            c.commit();
         }
         if(found.isEmpty()||!observed.equals(namespaces))throw invalid("POSTGRESQL_PUBLICATION_SCOPE_UNSUPPORTED");
         tables.clear();

@@ -286,7 +286,7 @@ Object.assign(messages.en,{
  firstSourceExclusion:'First source transaction skip after sequence',viewCaptureExclusions:'View source gaps',captureExclusionsNext:'Next source gaps'
 });
 Object.assign(messages.zh,{
- schemaDriftTitle:'MySQL 结构差异',schemaDriftScope:'当前源目录与日志中记录的结构对比。当前目录可能包含后续 DDL。',
+ schemaDriftTitle:'MySQL 结构差异',postgresSchemaDriftTitle:'PostgreSQL 结构差异',schemaDriftScope:'当前源目录与日志中记录的结构对比。当前目录可能包含后续 DDL。',
  schemaDriftCount:'变化的表',schemaDriftLimited:'仅显示前 64 张变化表。',
  schemaDriftNew:'新增表',schemaDriftMissing:'当前目录缺少',schemaDriftChanged:'结构变化',
  schemaDriftAdded:'新增列',schemaDriftRemoved:'移除列',schemaDriftModified:'修改列',
@@ -294,17 +294,20 @@ Object.assign(messages.zh,{
  schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。'
 });
 Object.assign(messages.en,{
- schemaDriftTitle:'MySQL schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
+ schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
  schemaDriftCount:'Changed tables',schemaDriftLimited:'Showing the first 64 changed tables.',
  schemaDriftNew:'New table',schemaDriftMissing:'Missing from current catalog',schemaDriftChanged:'Changed definition',
  schemaDriftAdded:'Added columns',schemaDriftRemoved:'Removed columns',schemaDriftModified:'Modified columns',
  schemaDriftIdentity:'Row identity changed',schemaDriftSame:'The current catalog has no visible structural differences.',
  schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.'
 });
-function showMysqlSchemaDrift(content,review){
- if(review?.scope!=='CURRENT_MYSQL_CATALOG_VS_JOURNAL')return;
+function showSourceSchemaDrift(content,review){
+ const titles={CURRENT_MYSQL_CATALOG_VS_JOURNAL:'schemaDriftTitle',
+  CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL:'postgresSchemaDriftTitle'};
+ if(!Object.hasOwn(titles,review?.scope))return;
+ const title=titles[review.scope];
  const section=text('section','','callout');
- section.append(text('h3',t('schemaDriftTitle')),text('p',t('schemaDriftScope')));
+ section.append(text('h3',t(title)),text('p',t('schemaDriftScope')));
  if(review.state==='CHANGES_VISIBLE'){
   const tableLabels={TABLE_ADDED:'schemaDriftNew',TABLE_MISSING:'schemaDriftMissing',TABLE_CHANGED:'schemaDriftChanged'};
   const tables=text('ul');
@@ -342,7 +345,7 @@ async function openCaptureRecovery(task){
   content.replaceChildren(text('p',t('UNPROVEN_SOURCE_RANGE')),
    text('p',t('sourceAdmission')+' · '+explain(report.sourceAdmission)),
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
-  showMysqlSchemaDrift(content,report.schemaDrift);
+  showSourceSchemaDrift(content,report.schemaDrift);
   const boundary=report.nextTransactionHeaders;
   if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
    const evidence=text('section','','callout');

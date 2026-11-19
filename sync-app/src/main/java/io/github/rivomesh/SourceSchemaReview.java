@@ -11,21 +11,21 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/** Advisory comparison of existing journal metadata with the current MySQL catalog. */
-final class MysqlSchemaReview {
+/** Advisory comparison of recorded journal metadata with the current source catalog. */
+final class SourceSchemaReview {
     private static final int MAX_TABLE_DETAILS = 64;
     private static final int MAX_COLUMN_NAMES = 32;
-    private static final String SCOPE = "CURRENT_MYSQL_CATALOG_VS_JOURNAL";
+    enum Scope { CURRENT_MYSQL_CATALOG_VS_JOURNAL, CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL }
 
-    private MysqlSchemaReview() {}
+    private SourceSchemaReview() {}
 
-    static Map<String, Object> compare(List<TableSchema> history, List<TableSchema> catalog) {
+    static Map<String, Object> compare(Scope scope, List<TableSchema> history, List<TableSchema> catalog) {
         var recorded = new TreeMap<String, TableSchema>();
         for (TableSchema table : history) {
             recorded.merge(table.id, table, (first, next) -> first.version >= next.version ? first : next);
         }
         if (recorded.isEmpty()) {
-            return Map.of("scope", SCOPE, "state", "NO_JOURNAL_SCHEMA");
+            return Map.of("scope", scope.name(), "state", "NO_JOURNAL_SCHEMA");
         }
         var live = new TreeMap<String, TableSchema>();
         for (TableSchema table : catalog) {
@@ -55,13 +55,13 @@ final class MysqlSchemaReview {
                     before != null && now != null && (!before.primaryKey.equals(now.primaryKey)
                             || !before.identityKey.equals(now.identityKey))));
         }
-        return Map.of("scope", SCOPE, "state", changed == 0 ? "NO_VISIBLE_CHANGE" : "CHANGES_VISIBLE",
+        return Map.of("scope", scope.name(), "state", changed == 0 ? "NO_VISIBLE_CHANGE" : "CHANGES_VISIBLE",
                 "recordedTables", recorded.size(), "visibleTables", live.size(), "changedTables", changed,
                 "detailsLimited", changed > details.size(), "tables", details);
     }
 
-    static Map<String, Object> unavailable(String code) {
-        return Map.of("scope", SCOPE, "state", "UNAVAILABLE", "code", code);
+    static Map<String, Object> unavailable(Scope scope, String code) {
+        return Map.of("scope", scope.name(), "state", "UNAVAILABLE", "code", code);
     }
 
     private static ColumnChanges columns(TableSchema before, TableSchema now) {

@@ -52,3 +52,9 @@ PostgreSQL 18.7 到 PostgreSQL 17.12 在 Temurin 21 下通过八项实库检查�
 数据库高可用服务隔离旧主、提升备库并更新写入口，Rivomesh 通过原入口重新连接。新主需要有相同的 system ID、覆盖原持久 LSN 和快照坐标的时间线历史，以及原 failover 槽。该槽须保有所需 WAL，确认位置不能领先 Rivomesh 日志。检查失败时保留旧 WAL 和日志。下一次切换前准备下一台物理备库。
 
 PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复用快照继续投递，以及误指回旧主时保留新时间线断点并拒绝续传。夹具用 `IDENTIFY_SYSTEM` 核对当前活动时间线。测试参数为 `--source-image postgres:17.12 --failover`，追加 `--reject-old-primary` 可复现旧主路由拒绝。负载均衡产品、级联拓扑和其他版本组合单独验收。[流复制协议](https://www.postgresql.org/docs/17/protocol-replication.html)
+
+## 审阅导致采集暂停的结构变化
+
+当 pgoutput 为行事务报告已变化的关系时，同步停在前一持久 LSN，提示 `POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN`。打开采集故障审阅，可对照当前发布与日志结构，查看表、原结构和当前结构摘要、变化的列名。当前发布可能包含故障发生后的 DDL。pgoutput 传输关系元数据和行变更，DDL 语句不在流中。当前发布超出支持范围时，审阅显示原生发现诊断并保留前一 LSN。审阅期间不执行 DDL，也不更新断点。 [PostgreSQL 逻辑复制限制](https://www.postgresql.org/docs/17/logical-replication-restrictions.html) · [Relation 消息](https://www.postgresql.org/docs/17/protocol-logical-replication.html)
+
+执行 `python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact <release jar> --output target/pg-ddl-review` 可复现。

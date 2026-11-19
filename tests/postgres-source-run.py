@@ -27,6 +27,7 @@ temporal.add_argument('--date-values', action='store_true', help='Exercise civil
 temporal.add_argument('--timestamp-values', action='store_true', help='Exercise civil and UTC timestamps through both targets')
 temporal.add_argument('--clock-values', action='store_true', help='Exercise PostgreSQL clock values, including 24:00')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
+parser.add_argument('--ddl-review', action='store_true', help='Review native publication drift without advancing the cut')
 parser.add_argument('--tls', action='store_true',
                     help='Require CA and host verification for SQL and pgoutput and exercise rejected certificates')
 parser.add_argument('--failover', action='store_true',
@@ -40,6 +41,8 @@ if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
 if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
+if args.ddl_review and (args.failover or temporal_targets):
+    parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
 output = args.output.resolve()
 output.relative_to(ROOT)
@@ -53,6 +56,8 @@ report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runt
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
               uuid=args.uuid,dateValues=args.date_values,timestampValues=args.timestamp_values,
               clockValues=args.clock_values,deliveryTiming=args.delivery_timing,tls=args.tls)
+if args.ddl_review:
+    report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -702,7 +707,51 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             report['timelineAfterPromotion']=promoted_timeline
             passed('After primary SIGKILL, the promoted standby resumes the synchronized slot and reuses the snapshot')
 
-        if args.date_values:
+        if args.ddl_review:
+            def target_cut():
+                return (sql('target','SELECT stream_seq FROM copy_meta.rm3_sink_job'),
+                        sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id'),
+                        sql('target',"SELECT id,label FROM copy_billing.ledger ORDER BY id"),
+                        sql('target',"SELECT column_name FROM information_schema.columns WHERE table_schema='copy_billing' "
+                                     "AND table_name='ledger' ORDER BY ordinal_position"))
+
+            original=target_cut()
+            sql('source',"ALTER TABLE billing.ledger ADD COLUMN first_note TEXT; "
+                         "INSERT INTO billing.ledger VALUES(2,'unapplied','pending')")
+
+            def ddl_fault():
+                status=task()['status']
+                return status if status.get('error_stage')=='DDL' and status.get('run_state')=='ERROR' else None
+
+            refused=require(ddl_fault,'changed Relation stops at the intact logical cut')
+            assert refused['error_code']=='POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN'
+            assert refused['capture_lsn']==durable and target_cut()==original
+            first=http(route+'/capture-recovery')
+            assert first['sourceAdmission']=='SOURCE_CHECKPOINT_AVAILABLE' and first['phase']=='DDL'
+            assert first['affectedSubscriptions']==['pg'] and first['scope']=='UNPROVEN_SOURCE_RANGE'
+            diff=first['schemaDrift']
+            assert diff['scope']=='CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL' and diff['changedTables']==1
+            table,=diff['tables']
+            assert (table['database'],table['table'],table['change'])==('billing','ledger','TABLE_CHANGED')
+            assert table['columns']['added']==['first_note']
+            passed('Changed native Relation fails closed and review identifies its current publication shape')
+
+            sql('source','ALTER TABLE billing.ledger ADD COLUMN second_note VARCHAR(30)')
+            later=http(route+'/capture-recovery')
+            current,=later['schemaDrift']['tables']
+            assert current['columns']['added']==['first_note','second_note']
+            assert current['recordedSha256']==table['recordedSha256'] and current['liveSha256']!=table['liveSha256']
+            assert later['checkpointHash']==first['checkpointHash'] and later['errorGeneration']==first['errorGeneration']
+            passed('A later DDL changes the advisory live digest while preserving the recorded schema and failure cut')
+
+            sql('source','ALTER TABLE billing.ledger ADD COLUMN out_of_profile TIMETZ')
+            unavailable=http(route+'/capture-recovery')
+            assert unavailable['schemaDrift']=={'scope':'CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL',
+                                               'state':'UNAVAILABLE','code':'POSTGRESQL_TYPE_UNSUPPORTED'}
+            assert unavailable['checkpointHash']==first['checkpointHash'] and task()['status']['capture_lsn']==durable
+            assert target_cut()==original
+            passed('An unsupported publication shape has an explicit unavailable diagnostic without changing either cut')
+        elif args.date_values:
             before_date_fault=task()['status']
             finished_dates=date_rows()
             sql('source',"""
@@ -753,7 +802,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['run_state']=='ERROR' and refused['capture_lsn']==durable
             assert sql('target',"SELECT label FROM copy_billing.ledger WHERE id=1")=='promoted commit'
             passed('Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint')
-        elif not temporal_targets:
+        elif not temporal_targets and not args.ddl_review:
             require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
             sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
             compose('up','-d','runner')
