@@ -25,7 +25,7 @@ final class OwnerRuntime implements AutoCloseable {
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String,Long> handoffRetries=new ConcurrentHashMap<>();
     private Set<String> retiredTasks=Set.of();
-    private String recipientCursor="";
+    private String recipientCursor="",handoffResumeCursor="";
     private long nextRecipientPoll;
     private final AtomicBoolean started=new AtomicBoolean(),closed=new AtomicBoolean();
     private volatile String commandProblem,queryProblem;
@@ -169,6 +169,7 @@ final class OwnerRuntime implements AutoCloseable {
             return authority.preparations().pendingRecipient(c,lease.nodeId,directory,recipientCursor,10);
         });
         recipientCursor=pending.size()<10?"":pending.getLast().preparation();
+        queuePreparedHandoff();
         for(HandoffPreparations.PendingRecipient task:pending){
             String id="handoff:"+task.preparation();
             boolean finishing=Set.of("FENCE_PENDING","START_PENDING","WORKER_ADMITTED").contains(task.phase());
@@ -200,6 +201,20 @@ final class OwnerRuntime implements AutoCloseable {
                 finally{queued.remove(id);}
             });}catch(RejectedExecutionException full){queued.remove(id);}
         }
+    }
+    private void queuePreparedHandoff(){
+        String key="handoff-resume";
+        if(!queued.add(key))return;
+        try{readers.execute(()->{
+            try{
+                ControlStore.Lease lease=leases.get();
+                String request=queries.nextHandoffResume(lease,directory,handoffResumeCursor);
+                handoffResumeCursor=request==null?"":request;
+                if(request!=null)queries.resumeHandoff(request,lease,directory,local::recheckPreparedHandoff);
+            }catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
+            catch(Exception pending){/* Only current signed readiness and the exact native cut can commit ownership. */}
+            finally{queued.remove(key);}
+        });}catch(RejectedExecutionException full){queued.remove(key);}
     }
     private void rememberPendingProblem(HandoffPreparations.PendingRecipient task,String problem){
         try{

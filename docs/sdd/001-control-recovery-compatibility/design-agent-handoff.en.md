@@ -53,4 +53,10 @@ The candidate’s local registry records the matching request ID and the RUNNING
 
 Exercise partial destination fencing, a moved native checkpoint before Worker admission, candidate process loss, ordinary lifecycle commands and source CDC after ownership transfer. History readers keep original and candidate grants and verify the adopted files against their signed manifest. The public ownership confirmation runs the same signed bind and private readiness checks through either Controller. Automatic relocation and partition acceptance remain separate work.
 
+### Automatic continuation after a Controller interruption
+
+When an administrator has bound the original execution request for a stopped, drained task and the candidate has durably acknowledged signed readiness, the candidate can finish the ownership transaction after the accepting Controller exits. It opens the sealed configuration and evidence again and checks the source position, SQL destination receipts and journal lease. The shared PostgreSQL control transaction then confirms the same task revision, current administrator authorization, both Agent bindings and the signed cut. Ownership moves at most once for that request and the transaction parks the journal. The candidate remains STOPPED and can install the read-only evidence through the existing flow.
+
+The original Agent's control binding must remain current and its journal lease must have expired or been released. Source and destination checks use the existing exclusive-writer profile. Raw capture history requires explicit Controller commit. Changed authorization, leases, custody or native cut leave ownership where it is and the bounded pending receipt can retry until it expires. Interruption before queuing candidate readiness, promotion of an offline original Agent, independent control and journal stores, and automatic write activation require separate flows.
+
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

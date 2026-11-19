@@ -409,6 +409,18 @@ class ManagedHandoffTest {
             });
             assertEquals(ready,result.get(10,TimeUnit.SECONDS));
             assertFalse(Model.JSON.writeValueAsString(aQueries.poll(queued,fixture.admin)).contains("private-"));
+            assertEquals(queued,bQueries.nextHandoffResume(bLease,candidateDirectory,""));
+            assertNull(aQueries.nextHandoffResume(aLease,fixture.directory,""));
+            assertThrows(ControlStore.Fenced.class,()->aQueries.resumeHandoff(queued,aLease,fixture.directory,
+                    (scoped,actor,admission)->fail("predecessor must not consume candidate readiness")));
+            conflict("HANDOFF_JOURNAL_LEASE_ACTIVE",()->bQueries.resumeHandoff(queued,bLease,candidateDirectory,
+                    (scoped,actor,admission)->{
+                        assertEquals(plan,scoped.handoffPreparation);
+                        assertEquals(ready,admission);
+                        throw new TaskService.Conflict("HANDOFF_JOURNAL_LEASE_ACTIVE");
+                    }));
+            assertEquals(queued,bQueries.nextHandoffResume(bLease,candidateDirectory,""));
+            assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
 
             var malformed=executor.submit(()->aQueries.candidateReadiness(request,fixture.admin));
             PlatformTest.await(()->!bQueries.pending(bLease,candidateDirectory,10).isEmpty());
@@ -428,6 +440,9 @@ class ManagedHandoffTest {
             });
             assertEquals("HANDOFF_PREPARATION_CHANGED",assertThrows(ExecutionException.class,
                     ()->released.get(10,TimeUnit.SECONDS)).getCause().getMessage());
+            bQueries.resumeHandoff(queued,bLease,candidateDirectory,
+                    (scoped,actor,admission)->fail("released approval must not repeat native checks"));
+            assertNull(bQueries.nextHandoffResume(bLease,candidateDirectory,""));
         }
         assertEquals("a",fixture.a.get("orders",fixture.admin).owner);
     }

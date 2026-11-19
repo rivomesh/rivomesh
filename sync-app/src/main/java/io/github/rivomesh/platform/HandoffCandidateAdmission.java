@@ -78,13 +78,27 @@ final class HandoffCandidateAdmission {
                                        AdmittedEvidence<T> read)throws Exception{
         if(!COMMITTED_PHASES.contains(plan.phase())||plan.writerCommit()==null)
             throw refused("HANDOFF_CANDIDATE_COMMIT_REQUIRED");
+        Ready expected=new Ready(plan.id(),plan.evidence().candidate(),STOPPED,
+                plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),plan.writerCommit().rawCapture());
+        return withEvidence(state,plan,cipher,expected,read);
+    }
+
+    static ReadyConfig verifyPrepared(Path state,HandoffPreparations.Plan plan,ControlCipher cipher,Ready expected)throws Exception{
+        if(expected.rawCapture()!=null)throw refused("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        if(!"PREPARED".equals(plan.phase())||plan.executionRequest()==null)
+            throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        return withEvidence(state,plan,cipher,expected,(config,staged)->config);
+    }
+
+    private static <T> T withEvidence(Path state,HandoffPreparations.Plan plan,ControlCipher cipher,Ready expected,
+                                      AdmittedEvidence<T> read)throws Exception{
         Path file=sealPath(state,plan,false);
         Seal observed=read(file,plan,cipher);
         requireScope(plan,observed.stage(),plan.phase());
+        if(!plan.id().equals(expected.preparation())||!plan.evidence().candidate().equals(expected.binding())
+                ||!STOPPED.equals(expected.desired()))throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         return HandoffStaging.withVerifiedFiles(state,observed.stage(),cipher,staged->{
             Seal current=read(file,plan,cipher);
-            Ready expected=new Ready(plan.id(),plan.evidence().candidate(),STOPPED,
-                    plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),plan.writerCommit().rawCapture());
             if(expected.rawCapture()!=null&&!expected.rawCapture().matches(plan))
                 throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
             if(!current.equals(observed)||!current.original().equals(plan.evidence().original())

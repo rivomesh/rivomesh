@@ -310,39 +310,57 @@ final class ManagedHandoff {
     // Commits only after the authenticated candidate has verified its private staged files.
     Map<String,Object> commitAdmittedWriter(String taskId,CandidateAdmission candidate,
                                            String executionRequest,AccessControl.Principal supplied)throws Exception{
+        return tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->
+                commitCandidate(c,task,actor,candidate,executionRequest,null));
+    }
+
+    void resumePreparedWriter(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                              CandidateAdmission candidate,String executionRequest,
+                              JournalWriterAssignment.CutProof recoveredCut)throws Exception{
+        Objects.requireNonNull(recoveredCut);
+        commitCandidate(c,task,actor,candidate,executionRequest,recoveredCut);
+    }
+
+    private Map<String,Object> commitCandidate(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                                              CandidateAdmission candidate,String executionRequest,
+                                              JournalWriterAssignment.CutProof recoveredCut)throws Exception{
         if(candidate==null||!candidate.valid())
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_REQUIRED");
-        return tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
-            HandoffPreparations.Plan plan=tasks.preparations().byRequest(c,candidate.preparation(),db.now(c));
-            if(plan==null||!plan.id().equals(candidate.preparation()))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
-            requirePlanGrants(actor,task,plan);
-            if(!plan.evidence().candidate().equals(candidate.binding()))
-                throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
-            if(plan.writerCommit()!=null){
-                requireExecutionReplay(plan,actor,executionRequest);
-                if(!plan.writerCommit().stagingSha256().equals(candidate.stagingSha256())
-                        ||!plan.writerCommit().configurationSha256().equals(candidate.configurationSha256())
-                        ||!Objects.equals(plan.writerCommit().rawCapture(),candidate.rawCapture()))
-                    throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
-                return HandoffPreparations.summary(plan);
-            }
-            Assessment current=read(c,task.id);
-            RawCaptureHandoffStaging.Binding requiredRaw=requireCandidateReadiness(plan,actor,current,db.now(c));
-            if(!Objects.equals(requiredRaw,candidate.rawCapture()==null?null:candidate.rawCapture().binding()))
-                throw new TaskService.Conflict("HANDOFF_RAW_STAGING_REQUIRED");
-            if(stale(c,task,actor,current))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
-            AgentDirectory.HandoffCapacity capacity=agents.handoffCapacity(c,candidate.binding().node());
-            long total=capacity.assignedTasks()+capacity.reservedTasks();
-            if(capacity.reservedTasks()<1||total>capacity.taskSlots()||total>capacity.workerSlots())
-                throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
-            String yaml=ManagedWriterDeclaration.successorYaml(tasks.activeYaml(c,task),task.owner,
-                    candidate.binding().node(),plan.activation().nextAssignment());
-            if(!AuditStore.hash(yaml).equals(candidate.configurationSha256()))
-                throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
-            JournalWriterAssignment.CutProof cut=Model.JSON.convertValue(current.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
-            return HandoffPreparations.summary(tasks.commitPreparedWriter(c,task,plan,actor,cut,yaml,
-                    candidate.stagingSha256(),executionRequest,candidate.rawCapture()));
-        });
+        HandoffPreparations.Plan plan=tasks.preparations().byRequest(c,candidate.preparation(),db.now(c));
+        if(plan==null||!plan.id().equals(candidate.preparation()))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        requirePlanGrants(actor,task,plan);
+        if(!plan.evidence().candidate().equals(candidate.binding()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        if(plan.writerCommit()!=null){
+            requireExecutionReplay(plan,actor,executionRequest);
+            if(!plan.writerCommit().stagingSha256().equals(candidate.stagingSha256())
+                    ||!plan.writerCommit().configurationSha256().equals(candidate.configurationSha256())
+                    ||!Objects.equals(plan.writerCommit().rawCapture(),candidate.rawCapture()))
+                throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
+            return HandoffPreparations.summary(plan);
+        }
+        Assessment current=read(c,task.id);
+        RawCaptureHandoffStaging.Binding requiredRaw=requireCandidateReadiness(plan,actor,current,db.now(c));
+        if(recoveredCut!=null&&requiredRaw!=null)
+            throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        if(!Objects.equals(requiredRaw,candidate.rawCapture()==null?null:candidate.rawCapture().binding()))
+            throw new TaskService.Conflict("HANDOFF_RAW_STAGING_REQUIRED");
+        if(stale(c,task,actor,current))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        AgentDirectory.HandoffCapacity capacity=agents.handoffCapacity(c,candidate.binding().node());
+        long total=capacity.assignedTasks()+capacity.reservedTasks();
+        if(capacity.reservedTasks()<1||total>capacity.taskSlots()||total>capacity.workerSlots())
+            throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
+        String yaml=ManagedWriterDeclaration.successorYaml(tasks.activeYaml(c,task),task.owner,
+                candidate.binding().node(),plan.activation().nextAssignment());
+        if(!AuditStore.hash(yaml).equals(candidate.configurationSha256()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        JournalWriterAssignment.CutProof cut=Model.JSON.convertValue(current.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
+        if(recoveredCut!=null&&!cut.equals(recoveredCut))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        var committed=tasks.commitPreparedWriter(c,task,plan,actor,cut,yaml,candidate.stagingSha256(),
+                executionRequest,candidate.rawCapture());
+        if(recoveredCut!=null)auditPreparation(c,committed,actor,executionRequest,"MANAGED_HANDOFF_EXECUTION_RECOVERED");
+        return HandoffPreparations.summary(committed);
     }
 
     private RawCaptureHandoffStaging.Binding requireCandidateReadiness(HandoffPreparations.Plan plan,AccessControl.Principal actor,

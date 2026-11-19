@@ -1227,6 +1227,34 @@ public final class TaskService implements AutoCloseable {
         }
         return Model.JSON.convertValue(ready,Map.class);
     }
+    io.github.rivomesh.cdc.JournalWriterAssignment.CutProof recheckPreparedHandoff(
+            TaskRequest request,AccessControl.Principal actor,ManagedHandoff.CandidateAdmission admission)throws Exception{
+        HandoffPreparations.Plan plan=request.handoffPreparation;
+        ControlCipher guard;
+        TaskDefinition original;
+        synchronized(this){
+            requireCandidateHandoffScope(request,actor);
+            if(plan==null||!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
+                throw new Conflict("AUTHORIZATION_CHANGED");
+            guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+            original=parseTask(request.yaml,Paths.get(config.tasksDirectory),plan.evidence().original().node());
+            if(!request.taskId.equals(original.jobId)||original.pipeline==null)
+                throw new Conflict("HANDOFF_CONFIGURATION_CHANGED");
+        }
+        var signed=new HandoffCandidateAdmission.Ready(admission.preparation(),admission.binding(),admission.desired(),
+                admission.configurationSha256(),admission.stagingSha256(),admission.rawCapture());
+        var staged=HandoffCandidateAdmission.verifyPrepared(statePath.getParent(),plan,guard,signed);
+        synchronized(this){
+            requireCandidateHandoffScope(request,actor);
+            validateTask(parseTask(staged.successorYaml()),null);
+            if(Files.exists(configurationFile(request.taskId+".yml"),LinkOption.NOFOLLOW_LINKS))
+                throw new Conflict("CONFIG_FILE_EXISTS");
+        }
+        var cut=plan.evidence().cut();
+        return original.pipeline.verifyHandoffCut(new io.github.rivomesh.cdc.JournalWriterAssignment.ExpectedCut(
+                Long.parseLong(cut.epoch()),Long.parseLong(cut.sequence()),cut.checkpointSha256()));
+    }
+
     private void requireCandidateHandoffScope(TaskRequest request,AccessControl.Principal actor){
         HandoffStaging.Binding binding=request.handoffStaging;
         ensureOpen();currentActor(actor);

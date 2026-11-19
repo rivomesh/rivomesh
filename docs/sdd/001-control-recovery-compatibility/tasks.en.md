@@ -20,7 +20,8 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
   Acceptance: AC-CP-04
   - [x] Same-store ownership transfer, native target fencing and candidate continuation to both original SQL targets.
   - [x] Durable handoff blockers in the console and reapproval after an authorization change.
-  - [ ] Native automatic takeover, partitions and drain/move acceptance.
+  - [x] The candidate revalidates both receipts and completes an approved drained same-store handoff after the accepting Controller exits.
+  - [ ] Automatic takeover after unexpected Agent loss, network partitions and broader drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
   Acceptance: AC-CP-05

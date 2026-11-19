@@ -10781,5 +10781,48 @@
     "integratedJavaTestsPassed": 45,
     "scope": "Oracle Free 26ai single PDB to PostgreSQL 17.12 with two physical operands of bounded integer precision, explicit admission and complete archived images. Tests cover NULL, keyless duplicates, exact replay, and read-only DDL refusal.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact /path/to/rivomesh.jar --jdbc-driver /path/to/ojdbc.jar --logminer --pipeline --virtual-columns --startup-timeout 900 --output target/native-oracle-virtual"
+  },
+  "managedHandoffApprovedControllerLossNative": {
+    "status": "PASS",
+    "nativeArtifactSha256": "9a7200d6942bdd8aeca1645666b3dd01d524ed76dc90065b8df6af7c3d2d5db6",
+    "nativeManifestSha256": "5c4f543db7f4a6fd013fd009c9c92005d982307e71dbd0749fdee5ae631e3d26",
+    "nativeHarnessSha256": "83d9d25293d061ee4bd255a29a5b8f7ff4c860655118cac9d58edb8468a79519",
+    "nativeTestClassesSha256": "f5f659bab2cbfcd153bf9abbc5ea548c8677f8ee1aebb1ef8e394a08ed94f78a",
+    "mysqlSourceVersion": "8.4.13",
+    "mysqlSourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+    "controlStore": "POSTGRESQL",
+    "nativeChecksPassed": 18,
+    "checks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Only the original Agent can admit the explicitly initialized managed writer",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+      "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+      "Concurrent refreshes against the same receipt allow exactly one replacement",
+      "Controller restart retains the assessed placement, original owner and masked cut proof",
+      "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+      "Candidate with a disjoint private mount cannot claim custody of the original completed report",
+      "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+      "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+      "Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain",
+      "Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records",
+      "The approved candidate remains fenced while a native destination receipt differs",
+      "The candidate resumes the same approved ownership without the accepting Controller or a second mutation request",
+      "Automatic continuation parks one newer assignment and leaves the exact source and target data cut"
+    ],
+    "cleanupExitCode": 0,
+    "priorFixture": {
+      "status": "FAIL",
+      "nativeChecksPassed": 5,
+      "phase": "Prerequisite target validation reached its read budget",
+      "manifestSha256": "96703f086ead91da4cf8bd93ed852a7654ab7d252365e68d98988ff927c7424b"
+    },
+    "integratedArtifactSha256": "c69e00d9d33d0a5f95bc1b828565c106bda7a471324c6243b156379a62467880",
+    "integratedJavaTestsPassed": 70,
+    "integratedDomTestsPassed": 156,
+    "scope": "Approved stopped-and-drained same-store transfer. The candidate revalidates exact source and target cuts, then parks the new assignment after the accepting Controller exits. This execution used the profile without raw capture custody. The final package also contains the separately verified Oracle arithmetic and JDBC index protections.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/native-handoff-auto --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-auto-resume"
   }
 }
