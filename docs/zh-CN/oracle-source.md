@@ -37,7 +37,15 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
-归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式、部分回滚及更多目标档案另行验收。SecureFiles LOB 的 LogMiner 记录缺少 `SQL_UNDO`，当前完整前后镜像采集在预检时拒绝 LOB 列。[Oracle LogMiner 数据类型与 SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式、部分回滚及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+
+### BLOB 与 CLOB 预检
+
+所选 Oracle 表含 `BLOB` 或 `CLOB` 时，预检通过 `ALL_LOBS` 识别存储方式并拒绝归档采集。`ORACLE_SECUREFILES_LOB_UNDO_UNAVAILABLE` 对应 SecureFiles，LogMiner 缺少该 LOB 的撤销 SQL。`ORACLE_BASICFILES_LOB_REQUIRES_PROFILE` 对应 BasicFiles，完整镜像与重放仍需单独验证。`ORACLE_LOB_STORAGE_UNPROVEN` 表示 LOB 已分区或读取账号无法确认其存储方式。[Oracle LogMiner 数据类型与 SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle ALL_LOBS](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/ALL_LOBS.html)
+
+Oracle Free 26ai 23.26.4.0.0 的实测覆盖 BasicFiles 和 SecureFiles 的 BLOB、CLOB，Flashback 均读到原始非空值。四张表的 12 次短值更新，撤销 SQL 都显示 `PAYLOAD = NULL`，其中实际前值明确非 NULL。对长度为 5000 的值分别局部改写两个字节或字符后，日志出现状态为 2 的 `SEL_LOB_LOCATOR` 和 `LOB_WRITE`，且缺少撤销 SQL。两遍读取同一区间的归档均得到 30 条记录，内容逐字节一致。用临时 Oracle 实例复现时，为测试脚本提供 JAR、Oracle JDBC 驱动并追加 `--logminer --lob-evidence --lob-preflight`。
+
+遇到预检拒绝时，与数据库管理员核对所选 OWNER、表和 LOB 存储。排查既有任务时保留持久化 SCN 及其归档。如果必须迁移该表，安排能处理 LOB 的独立迁移流程，切换前核对内容。LOB 定位器和片段不能单独代表完整值，空 LOB 和 SQL NULL 含义不同。
 
 ### 文本 JSON 列
 

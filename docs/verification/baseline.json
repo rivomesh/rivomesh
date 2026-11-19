@@ -11259,5 +11259,58 @@
     "candidateTree": "da4da20612f91227163c8d13b3524599b5c70198",
     "scope": "Shared PostgreSQL control and journal, an original managed writer with an established settled cut, two management Controllers, a MySQL source and two SQL targets. Network isolation only removed the original Agent’s PostgreSQL path. Independent control and journal reachability, transactions in flight and permanently unavailable original private evidence need their own profiles.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --test-classes sync-app/target/test-classes --output target/native-asymmetric-partition --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition"
+  },
+  "oracleLobArchiveAndPreflight": {
+    "baselineGitCommit": "89598e1",
+    "mavenBuildTree": "0c1a0e0432e12cadd9c0baa4fc2e88a930ec420c",
+    "publicationCandidateTree": "c2123c14e8f3a2511b218451849893c5cd9efaaf",
+    "scopedPatchSha256": "292d908057b23a40e2bd4cad4a0481a569f2ef1a04f7a869a12f2c836de1dab7",
+    "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "oracleVersion": "23.26.4.0.0",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "mavenPassed": 14,
+    "nativeChecksPassed": 12,
+    "nativeArchiveRecords": 30,
+    "nativeReplayBytesEqual": true,
+    "findings": {
+      "RIVO_BF_BLOB": {
+        "shortValueUpdatesWithMisleadingNullUndo": 3,
+        "partialWriteRecordsWithMissingUndo": 2,
+        "restrictedRolePreflightCode": "ORACLE_BASICFILES_LOB_REQUIRES_PROFILE"
+      },
+      "RIVO_BF_CLOB": {
+        "shortValueUpdatesWithMisleadingNullUndo": 3,
+        "partialWriteRecordsWithMissingUndo": 2,
+        "restrictedRolePreflightCode": "ORACLE_BASICFILES_LOB_REQUIRES_PROFILE"
+      },
+      "RIVO_SF_BLOB": {
+        "shortValueUpdatesWithMisleadingNullUndo": 3,
+        "partialWriteRecordsWithMissingUndo": 2,
+        "restrictedRolePreflightCode": "ORACLE_SECUREFILES_LOB_UNDO_UNAVAILABLE"
+      },
+      "RIVO_SF_CLOB": {
+        "shortValueUpdatesWithMisleadingNullUndo": 3,
+        "partialWriteRecordsWithMissingUndo": 2,
+        "restrictedRolePreflightCode": "ORACLE_SECUREFILES_LOB_UNDO_UNAVAILABLE"
+      }
+    },
+    "evidenceSha256": {
+      "native-lob-archive-replay.json": "aaa059e52e7c2cb9828dc07f845e3f79c1598c3bffeeec84f7b39b0acdeeb5e7",
+      "native-lob-archive.json": "aaa059e52e7c2cb9828dc07f845e3f79c1598c3bffeeec84f7b39b0acdeeb5e7",
+      "native-lob-flashback.json": "093d7797876356716d3e9e73d90306dbfb8144ba2d56cc6ad808fd2d0d60227d",
+      "native-lob-preflight.json": "5feb04e0bdf8d81ad0168acee27d7446518c6fc8f96d4d792f8268938c0582b7",
+      "native-lob-storage.json": "7ffed29caecae65040112491f2f1829959afeed6f6e4bdc8bf5f52b58624012a",
+      "native-lob-summary.json": "0293bf5be08d5a319b01230a3fa78ae69e5e2947c64365b0abe297f87f23f9ba",
+      "native-synthetic-redo.json": "9ab511e14be6abaa595078e2a6c8bd311b48d09f1f9e53d37d66be501be0a113",
+      "manifest.json": "964496296f30d9bae837563e1200283dcf01d72fdd0fca5b0d5441bb7d748ad6",
+      "oracle-source-probe.py": "416538f117ddfdcd3d6da7531d4e3d91cea194ef4cf6f02730906d37eacc04c2"
+    },
+    "cleanupExitCode": 0,
+    "profile": "BLOB and CLOB capture refused with storage diagnostics. No LOB admission.",
+    "status": "PASS",
+    "evidenceManifestSha256": "6780f22109400d8302b6c266b7ac4235a76f6d7dcd9008b62e29168c98bc0135",
+    "reproduce": "python3 tests/oracle-source-probe.py --output target/oracle-lob-profile --logminer --lob-evidence --lob-preflight --artifact /path/to/rivomesh.jar --oracle-driver /path/to/ojdbc8.jar"
   }
 }

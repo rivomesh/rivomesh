@@ -163,6 +163,134 @@ def virtual_evidence(sql, output, observed):
     observed('Oracle Flashback at the original SCN computes historical virtual values and exact keyless multiplicity')
 
 
+def lob_evidence(sql, output, observed, *, verify_preflight=None):
+    variants={
+        'RIVO_BF_BLOB':('BASICFILE','BLOB'),
+        'RIVO_BF_CLOB':('BASICFILE','CLOB'),
+        'RIVO_SF_BLOB':('SECUREFILE','BLOB'),
+        'RIVO_SF_CLOB':('SECUREFILE','CLOB'),
+    }
+
+    def write(table, kind, call):
+        return f"""DECLARE locator {kind};
+        BEGIN
+            SELECT payload INTO locator FROM rivo_app.{table} WHERE id=5 FOR UPDATE;
+            {call}
+        END;
+        /"""
+
+    for table,(storage,kind) in variants.items():
+        original="TO_BLOB(HEXTORAW('001122FF'))" if kind=='BLOB' else "TO_CLOB('clob-old')"
+        chunk="UTL_RAW.CAST_TO_RAW(RPAD('A',5000,'A'))" if kind=='BLOB' else "RPAD('A',5000,'A')"
+        sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            CREATE TABLE rivo_app.{table} (id NUMBER(12) PRIMARY KEY, payload {kind})
+                LOB(payload) STORE AS {storage} (ENABLE STORAGE IN ROW);
+            ALTER TABLE rivo_app.{table} ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            GRANT SELECT, FLASHBACK ON rivo_app.{table} TO C##RIVO_PROBE;
+            INSERT INTO rivo_app.{table} VALUES(1,{original});
+            INSERT INTO rivo_app.{table} VALUES(2,EMPTY_{kind}());
+            INSERT INTO rivo_app.{table} VALUES(3,NULL);
+            INSERT INTO rivo_app.{table} VALUES(4,NULL);
+            INSERT INTO rivo_app.{table} VALUES(5,EMPTY_{kind}());
+            {write(table,kind,f'DBMS_LOB.WRITEAPPEND(locator,5000,{chunk});')}
+            COMMIT;""")
+    tables=','.join("'"+table+"'" for table in variants)
+    storage_rows=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT table_name||'|'||securefile||'|'||in_row FROM all_lobs
+        WHERE owner='RIVO_APP' AND table_name IN ({tables}) AND column_name='PAYLOAD'
+        ORDER BY table_name;""").stdout.splitlines()
+    storage=[row.strip().split('|') for row in storage_rows if '|' in row]
+    (output/'native-lob-storage.json').write_text(json.dumps(storage,indent=2)+'\n')
+    assert storage==[[table,'YES' if mode=='SECUREFILE' else 'NO','YES']
+                     for table,(mode,_) in variants.items()],storage
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    start=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    assert start.isdecimal()
+
+    for table,(_,kind) in variants.items():
+        middle="TO_BLOB(HEXTORAW('AABBCCDD'))" if kind=='BLOB' else "TO_CLOB('clob-middle')"
+        final="TO_BLOB(HEXTORAW('CAFEBABE'))" if kind=='BLOB' else "TO_CLOB('clob-final')"
+        fragment="HEXTORAW('00FF')" if kind=='BLOB' else "'XY'"
+        sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            UPDATE rivo_app.{table} SET payload={middle} WHERE id=1;
+            UPDATE rivo_app.{table} SET payload={final} WHERE id=1;
+            DECLARE locator {kind};
+            BEGIN
+                SELECT payload INTO locator FROM rivo_app.{table} WHERE id=1 FOR UPDATE;
+                DBMS_LOB.WRITE(locator,2,2,{fragment});
+            END;
+            /
+            {write(table,kind,f'DBMS_LOB.WRITE(locator,2,4999,{fragment});')}
+            DELETE FROM rivo_app.{table} WHERE id=2;
+            UPDATE rivo_app.{table} SET payload=EMPTY_{kind}() WHERE id=3;
+            COMMIT;""")
+    end=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    query=f"""
+        SET LONG 32767 LONGCHUNKSIZE 32767
+        SELECT JSON_OBJECT('table' VALUE table_name, 'operation' VALUE operation, 'scn' VALUE TO_CHAR(scn),
+          'xid' VALUE RAWTOHEX(xid), 'commitScn' VALUE TO_CHAR(commit_scn), 'status' VALUE status,
+          'continues' VALUE csf, 'redo' VALUE sql_redo, 'undo' VALUE sql_undo NULL ON NULL RETURNING CLOB)
+        FROM v$logmnr_contents WHERE src_con_name='FREEPDB1' AND (
+          (seg_owner='RIVO_APP' AND table_name IN ({tables})) OR
+          operation IN ('SEL_LOB_LOCATOR','LOB_WRITE','LOB_TRIM','LOB_ERASE'))
+        ORDER BY commit_scn,rawtohex(xid),scn,rs_id,ssn;
+    """
+    def archive(name):
+        result=mine_archive(sql,start,end,query)
+        records=[json.loads(line) for line in result.stdout.splitlines() if line.lstrip().startswith('{')]
+        (output/name).write_text(json.dumps(records,indent=2)+'\n')
+        return records
+
+    original=archive('native-lob-archive.json')
+    replay=archive('native-lob-archive-replay.json')
+    assert original and original==replay
+    for table in variants:
+        assert any(row['table']==table for row in original), table
+    observed('Closed Oracle LOB archive returns a deterministic native record stream on replay')
+
+    native_values={}
+    for table,(_,kind) in variants.items():
+        content='DBMS_LOB.SUBSTR(payload,20,1)'
+        tail='DBMS_LOB.SUBSTR(payload,4,4997)'
+        if kind=='BLOB':
+            content=f'RAWTOHEX({content})'
+            tail=f'RAWTOHEX({tail})'
+        projection=(f"""id||'|'||CASE WHEN payload IS NULL THEN 'NULL' ELSE
+                    TO_CHAR(DBMS_LOB.GETLENGTH(payload))||'|'||CASE WHEN id=5 THEN {tail}
+                    ELSE {content} END END""")
+        select=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            SELECT 'OLD|'||{projection} FROM rivo_app.{table} AS OF SCN {start} ORDER BY id;
+            SELECT 'NEW|'||{projection} FROM rivo_app.{table} ORDER BY id;""",checked=False)
+        native_values[table]={
+            'rows':[row.strip() for row in select.stdout.splitlines() if row.lstrip().startswith(('OLD|','NEW|'))],
+            'error':[row for row in select.stdout.splitlines() if row.startswith('ORA-')],
+            'exitCode':select.returncode,
+        }
+    (output/'native-lob-flashback.json').write_text(json.dumps(native_values,indent=2)+'\n')
+    for table,(_,kind) in variants.items():
+        old,new,old_tail,new_tail=(('001122FF','CA00FFBE','41414141','414100FF') if kind=='BLOB'
+                                  else ('clob-old','cXYb-final','AAAA','AAXY'))
+        assert native_values[table]['exitCode']==0,native_values[table]
+        assert native_values[table]['rows']==[
+            f'OLD|1|{len(old)//2 if kind=="BLOB" else len(old)}|{old}',
+            'OLD|2|0|','OLD|3|NULL','OLD|4|NULL',f'OLD|5|5000|{old_tail}',
+            f'NEW|1|{len(new)//2 if kind=="BLOB" else len(new)}|{new}',
+            'NEW|3|0|','NEW|4|NULL',f'NEW|5|5000|{new_tail}',
+        ],native_values[table]
+    observed('Oracle Flashback distinguishes real LOB bytes, empty values and SQL NULL under both storage modes')
+    if verify_preflight is not None:
+        refusals={}
+        for table,(mode,_) in variants.items():
+            expected=('ORACLE_SECUREFILES_LOB_UNDO_UNAVAILABLE' if mode=='SECUREFILE'
+                      else 'ORACLE_BASICFILES_LOB_REQUIRES_PROFILE')
+            result=verify_preflight(table,start,end)
+            assert result.returncode and expected in result.stderr,(table,result.stderr)
+            refusals[table]=expected
+        (output/'native-lob-preflight.json').write_text(json.dumps(refusals,indent=2)+'\n')
+        observed('The restricted Oracle source role receives the expected BasicFiles and SecureFiles preflight errors')
+
+
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
     target = oracle + '-pg'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
@@ -610,6 +738,10 @@ def main():
                         help='Check opt-in Oracle integer virtual columns through full and archived incremental replication')
     parser.add_argument('--virtual-evidence', action='store_true',
                         help='Inspect Oracle virtual NUMBER metadata, Flashback values and actual archived DML')
+    parser.add_argument('--lob-evidence', action='store_true',
+                        help='Inspect native BasicFiles and SecureFiles BLOB/CLOB Flashback and archived DML')
+    parser.add_argument('--lob-preflight', action='store_true',
+                        help='Verify the specific LOB refusal codes from the Java probe')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     if options.startup_timeout<1:
@@ -624,6 +756,10 @@ def main():
         parser.error('--virtual-columns requires --pipeline')
     if options.virtual_evidence and not options.logminer:
         parser.error('--virtual-evidence requires --logminer')
+    if options.lob_evidence and not options.logminer:
+        parser.error('--lob-evidence requires --logminer')
+    if options.lob_preflight and not options.lob_evidence:
+        parser.error('--lob-preflight requires --lob-evidence')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -633,7 +769,9 @@ def main():
               'driverSha256': hashlib.sha256(options.jdbc_driver.read_bytes()).hexdigest(),
               'image': options.image, 'runtimeVersion': execute(options.java,'-version').stderr.splitlines()[0],
               'textJson': options.text_json, 'dateValues': options.date_values,
-              'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns, 'startupTimeoutSeconds':options.startup_timeout,
+              'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns,
+              'lobEvidence':options.lob_evidence, 'lobPreflight':options.lob_preflight,
+              'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
@@ -811,6 +949,15 @@ def main():
                 assert extended['lastCommit']['payload']['xid']!=last['payload']['xid']
                 assert extended['contentSha256']!=typed['contentSha256']
                 observed('After archive rotation, a second complete commit has a distinct typed SCN and XID')
+            if options.lob_evidence:
+                def lob_preflight(table,start,end):
+                    document['tables']=[f'RIVO_APP.{table}']
+                    document['archiveWindow']={'startScn':start,'endScnExclusive':end,'decodeCommitted':True}
+                    profile.write_text(json.dumps(document))
+                    return execute(*program,env=environment,checked=False)
+
+                lob_evidence(sql,options.output,observed,
+                             verify_preflight=lob_preflight if options.lob_preflight else None)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
         if options.virtual_evidence:

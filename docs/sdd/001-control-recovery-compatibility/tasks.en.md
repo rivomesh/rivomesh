@@ -114,7 +114,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
   - [x] Native Flashback, archive replay and original-snapshot restart for bounded virtual integer multiplication and two-column sums and differences.
-  - [ ] Other expressions, binary JSON, LOB and RAC promotion.
+  - [x] Native BasicFiles and SecureFiles BLOB/CLOB archive evidence, storage-specific restricted-role preflight and independent migration instructions.
+  - [ ] Other expressions, binary JSON, full LOB image capture and RAC promotion.
 ## Java runtime compatibility
 
 - [x] T-JV-01 · Temurin 21 first-release runtime · P0 · Depends on: none

@@ -114,7 +114,8 @@ RM-SDD-001 · 2026-11-17
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
   - [x] 有界整数虚拟列的乘法与双物理列加减法，实库验证 Flashback、归档重放和原快照重启。
-  - [ ] 其他表达式、二进制 JSON、LOB 与 RAC 切换。
+  - [x] BasicFiles 与 SecureFiles 的 BLOB/CLOB 实库证据、受限账号分型预检和独立迁移说明。
+  - [ ] 其他表达式、二进制 JSON、LOB 完整镜像采集与 RAC 切换。
 ## Java运行时兼容
 
 - [x] T-JV-01 · Temurin 21 首版运行基线 · P0 · 依赖：无

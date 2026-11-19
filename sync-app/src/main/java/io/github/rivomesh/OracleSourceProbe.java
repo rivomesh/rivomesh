@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -220,6 +221,9 @@ final class OracleSourceProbe {
                         case "DATE":
                             column.type=TableSchema.Type.DATETIME;
                             break;
+                        case "BLOB":
+                        case "CLOB":
+                            throw lobRefusal(pdb,names[0],names[1],column.name);
                         default:throw new IllegalStateException("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
                     }
                     schema.columns.add(column);
@@ -242,6 +246,26 @@ final class OracleSourceProbe {
             if(schema.columns.get(schema.column(key)).type==TableSchema.Type.JSON)
                 throw new IllegalStateException("ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED");
         return schema;
+    }
+
+    private static IllegalStateException lobRefusal(Connection pdb,String owner,String table,String column)throws SQLException{
+        try(PreparedStatement query=pdb.prepareStatement(
+                "SELECT securefile,partitioned FROM all_lobs WHERE owner=? AND table_name=? AND column_name=?")){
+            query.setQueryTimeout(QUERY_SECONDS);
+            query.setString(1,owner);
+            query.setString(2,table);
+            query.setString(3,column);
+            try(ResultSet rows=query.executeQuery()){
+                if(!rows.next())return new IllegalStateException("ORACLE_LOB_STORAGE_UNPROVEN");
+                String storage=rows.getString(1);
+                // A partition can override the storage mode declared for the column.
+                if(!"NO".equals(rows.getString(2))||rows.next())
+                    return new IllegalStateException("ORACLE_LOB_STORAGE_UNPROVEN");
+                if("YES".equals(storage))return new IllegalStateException("ORACLE_SECUREFILES_LOB_UNDO_UNAVAILABLE");
+                if("NO".equals(storage))return new IllegalStateException("ORACLE_BASICFILES_LOB_REQUIRES_PROFILE");
+                return new IllegalStateException("ORACLE_LOB_STORAGE_UNPROVEN");
+            }
+        }
     }
 
     private static String unsigned(String value){
