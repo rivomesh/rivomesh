@@ -164,7 +164,10 @@ final class PgOutput {
                 if("f".equals(text)||"false".equals(text))return Cell.value("false");
                 throw invalid("POSTGRESQL_BOOLEAN_INVALID");
             case INT64:return Cell.value(Long.toString(Long.parseLong(text)));
-            case DECIMAL:return Cell.value(new BigDecimal(text).toPlainString());
+            case DECIMAL:
+                if("NaN".equals(text)||"Infinity".equals(text)||"-Infinity".equals(text))
+                    throw invalid("POSTGRESQL_NUMERIC_NONFINITE");
+                return Cell.value(new BigDecimal(text).toPlainString());
             case DATE:return Cell.value(PostgresDate.canonicalSource(text));
             case TIME:return Cell.value(PostgresClock.canonical(text));
             case DATETIME:return Cell.value(PostgresTimestamp.canonicalSource(text,false));

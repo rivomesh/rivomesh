@@ -647,3 +647,7 @@ The `9253e3ad29f17697bda9a9a1471c2516606ae96625542f67c4ee78e434284cc2` candidate
 ### Retention of complete signed audit event windows
 
 Eight retention tests and 13 exporter tests validate exact archive bytes, an independently signed predecessor and refusal before upload when a window omits required history. The loopback MinIO fixture with AWS CLI 2.32.24 passed 11 native checks. It retrieved the original event bytes and signature by version, recovered an identical version on retry, refused deletion of the protected event object, validated a second retained cut and detected local readback tampering. Live AWS identity and policy still require that environment. [Operations](../en/security-audit.md#retain-complete-audit-event-windows) · [Manifest](baseline.json)
+
+### PostgreSQL bounded NUMERIC with extended scale
+
+The `987f005cac585c68b334f506a66897cf227f2d5774901d933987be54f2be9c38` candidate passed 37 Java tests and 11 native checks. PostgreSQL 17.12 `NUMERIC(4,-2)` and `NUMERIC(2,4)` retained their stored values in PostgreSQL 17.12 and MySQL 8.4.13. The same publication had been rejected by the previous binary without creating a logical slot. The candidate preserved 65-digit values, SQL NULL, keys and exact keyless multiplicities across a Worker SIGKILL. A transaction containing NaN kept its entire batch unapplied and preserved the capture LSN and both SQL receipts. [Operations](../en/postgresql-source.md#exact-numeric-values) · [Manifest](baseline.json)

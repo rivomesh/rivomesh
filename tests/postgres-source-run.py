@@ -22,10 +22,14 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-image', default='postgres:17')
 parser.add_argument('--generated', action='store_true', help='Exercise PostgreSQL 18 stored generated columns')
 parser.add_argument('--uuid', action='store_true', help='Exercise UUID keys and nullable UUID values')
-temporal = parser.add_mutually_exclusive_group()
-temporal.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
-temporal.add_argument('--timestamp-values', action='store_true', help='Exercise civil and UTC timestamps through both targets')
-temporal.add_argument('--clock-values', action='store_true', help='Exercise PostgreSQL clock values, including 24:00')
+type_profile = parser.add_mutually_exclusive_group()
+type_profile.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
+type_profile.add_argument('--timestamp-values', action='store_true', help='Exercise civil and UTC timestamps through both targets')
+type_profile.add_argument('--clock-values', action='store_true', help='Exercise PostgreSQL clock values, including 24:00')
+type_profile.add_argument('--numeric-values', action='store_true',
+                          help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
+parser.add_argument('--previous-numeric-artifact', type=Path,
+                    help='Check a prior release against the same native numeric declarations before the candidate')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
 parser.add_argument('--ddl-review', action='store_true', help='Review native publication drift without advancing the cut')
 parser.add_argument('--tls', action='store_true',
@@ -37,11 +41,14 @@ parser.add_argument('--reject-old-primary', action='store_true',
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
+dual_targets = temporal_targets or args.numeric_values
+if args.previous_numeric_artifact and not args.numeric_values:
+    parser.error('--previous-numeric-artifact requires --numeric-values')
 if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
 if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
-if args.ddl_review and (args.failover or temporal_targets):
+if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
 output = args.output.resolve()
@@ -56,6 +63,8 @@ report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runt
               sourceImage=args.source_image,failover=args.failover,rejectOldPrimary=args.reject_old_primary,
               uuid=args.uuid,dateValues=args.date_values,timestampValues=args.timestamp_values,
               clockValues=args.clock_values,deliveryTiming=args.delivery_timing,tls=args.tls)
+if args.numeric_values:
+    report.update(numericValues=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.ddl_review:
     report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -124,7 +133,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     if args.failover:
         pipeline['source']['postgresql'].update(
             failoverSlot=True,url='jdbc:postgresql://source-rw:5432/sync_test?connectTimeout=3&socketTimeout=15')
-    if temporal_targets:
+    if dual_targets:
         pipeline['targets'].append(dict(
             id='mysql',product='MYSQL',
             url='jdbc:mysql://mysql:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true',
@@ -142,10 +151,16 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                               environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}'),
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
+    previous_numeric_jar=None
+    if args.previous_numeric_artifact:
+        previous_numeric_jar=args.previous_numeric_artifact.resolve()
+        report['previousNumericArtifactSha256']=hashlib.sha256(previous_numeric_jar.read_bytes()).hexdigest()
+        services['runner']['volumes'].append(str(previous_numeric_jar)+':/app/previous-numeric.jar:ro')
     document=dict(services=services)
     if temporal_targets:
         services['source']['command']+=['-c','datestyle=SQL, DMY']
         services['runner']['environment']['TZ']='Pacific/Apia' if args.date_values else 'America/Los_Angeles'
+    if dual_targets:
         services['mysql']=dict(image='mysql:8.4',environment=dict(
             MYSQL_ROOT_PASSWORD='${RM_PG_PASSWORD}',MYSQL_ROOT_HOST='%'))
     if args.timestamp_values or args.clock_values:
@@ -263,6 +278,27 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                 read(lambda query:mysql(query).replace('\t','|'),'copy_billing','copy_sales',
                      'CAST(slot AS CHAR)','CAST(seen AS CHAR)','seen IS NULL,seen'))
 
+    def numeric_rows():
+        def read(query, text_type, billing, sales):
+            keyed=(f"SELECT CAST(rounded AS {text_type}),COALESCE(CAST(fractional AS {text_type}),'<NULL>'),"
+                   f"COALESCE(CAST(wide AS {text_type}),'<NULL>') FROM {billing}.numeric_key ORDER BY rounded")
+            keyless=(f"SELECT COALESCE(CAST(fractional AS {text_type}),'<NULL>'),"
+                     f"COALESCE(CAST(wide AS {text_type}),'<NULL>') FROM {sales}.numeric_keyless "
+                      "ORDER BY fractional IS NULL,fractional,wide IS NULL,wide")
+            return query(keyed),query(keyless)
+
+        return (read(lambda query:sql('source',query),'TEXT','billing','sales'),
+                read(lambda query:sql('target',query),'TEXT','copy_billing','copy_sales'),
+                read(lambda query:mysql(query).replace('\t','|'),'CHAR','copy_billing','copy_sales'))
+
+    def numeric_storage_shape(read):
+        return read("SELECT column_name,numeric_precision,numeric_scale,is_nullable FROM information_schema.columns "
+                    "WHERE table_schema='copy_billing' AND table_name='numeric_key' ORDER BY ordinal_position")
+
+    def numeric_target_cut():
+        receipt='SELECT epoch,stream_seq,transaction_hash FROM copy_meta.rm3_sink_job'
+        return numeric_rows()[1:],sql('target',receipt),mysql(receipt)
+
     def source_timeline():
         identity=compose('exec','-T',live_source,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres',
                          '-d','dbname=sync_test replication=database','-A','-t','-F','|',
@@ -302,6 +338,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             temporal_rows=clock_rows if args.clock_values else timestamp_rows if args.timestamp_values else date_rows
             source,pg,my=temporal_rows()
             return source==pg==my
+        if args.numeric_values:
+            source,pg,my=numeric_rows()
+            return source==pg==my
         return True
 
     def stream_ready():
@@ -321,14 +360,15 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         assert result.returncode!=0 and any(fragment in error for fragment in message), f'{name} was not rejected as expected'
 
     try:
-        endpoints=['source','target']+(['mysql'] if temporal_targets else [])
+        endpoints=['source','target']+(['mysql'] if dual_targets else [])
         compose('up','-d',*endpoints)
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
         report['sourceVersion']=sql('source',"SHOW server_version")
-        if temporal_targets:
+        if dual_targets:
             report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL target ready')
             report['postgresTargetVersion']=sql('target','SHOW server_version')
+        if temporal_targets:
             assert sql('source','SHOW DateStyle')=='SQL, DMY'
         if args.timestamp_values:
             assert sql('source','SHOW TimeZone')=='America/New_York'
@@ -405,6 +445,31 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
             sql('source','DROP TABLE sales.zoned_clock')
             passed('TIMETZ is refused by native discovery before creating a logical slot')
+        if args.numeric_values:
+            sql('source',"""
+                CREATE TABLE sales.unportable_numeric(amount NUMERIC(65,-1));
+                ALTER TABLE sales.unportable_numeric REPLICA IDENTITY FULL;
+                ALTER PUBLICATION rivomesh_test ADD TABLE sales.unportable_numeric;
+            """)
+            denied=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml',check=False)
+            assert denied.returncode!=0 and 'POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED' in denied.stderr
+            assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
+            sql('source','DROP TABLE sales.unportable_numeric')
+            passed('Preflight refuses a PostgreSQL numeric declaration requiring 66 target digits before creating a slot')
+            sql('source',"""
+                CREATE TABLE billing.numeric_key(rounded NUMERIC(4,-2) PRIMARY KEY,
+                    fractional NUMERIC(2,4), wide NUMERIC(65,30));
+                CREATE TABLE sales.numeric_keyless(fractional NUMERIC(2,4), wide NUMERIC(65,30));
+                ALTER TABLE billing.numeric_key REPLICA IDENTITY FULL;
+                ALTER TABLE sales.numeric_keyless REPLICA IDENTITY FULL;
+                INSERT INTO billing.numeric_key VALUES
+                    (-1249,-0.00994,NULL),
+                    (1250,0.00124,-12345678901234567890123456789012345.123456789012345678901234567890);
+                INSERT INTO sales.numeric_keyless VALUES
+                    (0.00124,0.000000000000000000000000000001),
+                    (0.00124,0.000000000000000000000000000001),(0.0099,NULL),(NULL,NULL);
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.numeric_key,sales.numeric_keyless;
+            """)
         if args.failover:
             compose('exec','-T','source','sh','-c',
                     'printf "\\nhost replication postgres samenet scram-sha-256\\n" >> "$PGDATA/pg_hba.conf"')
@@ -437,8 +502,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             check=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml',check=False)
             assert check.returncode and 'POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED' in check.stderr
             sql('source',"ALTER PUBLICATION rivomesh_test SET (publish_generated_columns='stored')")
+        if previous_numeric_jar:
+            previous=compose('run','--rm','--no-deps','--entrypoint','java','runner','-Xmx384m','-jar',
+                             '/app/previous-numeric.jar','check','/fixture/tasks/postgres_source.yml',check=False)
+            assert previous.returncode!=0 and 'POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED' in previous.stderr
+            assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
+            passed('The prior runtime refuses the valid publication containing both extended numeric scales')
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=3+int(args.uuid)+2*int(temporal_targets)
+        table_count=3+int(args.uuid)+2*int(dual_targets)
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -466,10 +537,20 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
-        if temporal_targets:
+        if dual_targets:
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
-            temporal_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+            dual_target_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+        if args.numeric_values:
+            expected_shape='rounded|6|0|NO\nfractional|4|4|YES\nwide|65|30|YES'
+            assert numeric_storage_shape(lambda query:sql('target',query))==expected_shape
+            assert numeric_storage_shape(lambda query:mysql(query).replace('\t','|'))==expected_shape
+            wide='-12345678901234567890123456789012345.123456789012345678901234567890'
+            zero_tail='0.000000000000000000000000000001'
+            expected=(f'-1200|-0.0099|<NULL>\n1300|0.0012|{wide}',
+                      f'0.0012|{zero_tail}\n0.0012|{zero_tail}\n0.0099|<NULL>\n<NULL>|<NULL>')
+            assert numeric_rows()==(expected,expected,expected)
+            passed('Native snapshots preserve rounded keys, fractional-only values and 65-digit decimals in both targets')
         if args.date_values:
             baseline_dates=('1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31',
                             '2011-12-30\n2011-12-30\n2011-12-31\n<NULL>')
@@ -545,6 +626,19 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             COMMIT""")
         require(lambda:equal() and task()['status'].get('capture_lsn')!=initial['capture_lsn'],'pgoutput transaction delivered')
         passed('A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence')
+        if args.numeric_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.numeric_key SET rounded=1450,fractional=0.00496 WHERE rounded=1300;
+                UPDATE sales.numeric_keyless SET fractional=-0.00344 WHERE ctid=(
+                    SELECT ctid FROM sales.numeric_keyless WHERE fractional=0.0012 LIMIT 1);
+                COMMIT;
+            """)
+            require(equal,'numeric key move and one duplicate occurrence delivered')
+            keyed,keyless=numeric_rows()[0]
+            assert keyed.splitlines()==['-1200|-0.0099|<NULL>',f'1500|0.0050|{wide}']
+            assert keyless.splitlines()==[f'-0.0034|{zero_tail}',f'0.0012|{zero_tail}','0.0099|<NULL>','<NULL>|<NULL>']
+            passed('Pgoutput moves the source-rounded primary key and updates exactly one numeric duplicate')
         if args.uuid:
             sql('source',"""
                 BEGIN;
@@ -645,6 +739,13 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.clock_values:
             sql('source',"UPDATE billing.clock_key SET slot='23:59:59.999999' WHERE slot='24:00:00'; "
                          "INSERT INTO sales.clock_keyless VALUES('00:00:00.000001')")
+        if args.numeric_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.numeric_key SET rounded=-1450,fractional=NULL WHERE rounded=-1200;
+                DELETE FROM sales.numeric_keyless WHERE fractional=0.0012;
+                COMMIT;
+            """)
         compose('up','-d','runner')
         require(lambda:stream_ready() and task()['status']['capture_lsn']!=previous,'exact LSN restart')
         assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
@@ -652,9 +753,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
         assert slot.startswith('rivomesh_test_') and len(slot.splitlines())==1
         passed('SIGKILL and restart reuse the original slot and snapshot with continuing LSN')
-        if temporal_targets:
-            assert slot==temporal_slot
+        if dual_targets:
+            assert slot==dual_target_slot
             assert mysql_snapshots==mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+        if args.numeric_values:
+            assert numeric_rows()[0]==(
+                f'-1500|<NULL>|<NULL>\n1500|0.0050|{wide}',
+                f'-0.0034|{zero_tail}\n0.0099|<NULL>\n<NULL>|<NULL>')
+            passed('Numeric CDC catch-up after SIGKILL keeps the original slot and both snapshot sets')
         if args.date_values:
             assert date_rows()[0]==(
                 '1000-01-01|<NULL>\n1582-10-10|2024-02-29\n2011-12-30|9999-12-31\n9999-12-31|2024-02-29',
@@ -784,9 +890,27 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['error_stage']=='SOURCE_DECODE' and refused['capture_lsn']==before_timestamp_fault
             assert timestamp_rows()[1:]==finished
             passed('An infinite timestamp refuses the complete transaction at the original LSN for both targets')
+        elif args.numeric_values:
+            prior_lsn=task()['status']['capture_lsn']
+            prior_cut=numeric_target_cut()
+            sql('source',"""
+                BEGIN;
+                INSERT INTO billing.numeric_key VALUES(2000,0.0012,NULL);
+                INSERT INTO sales.numeric_keyless VALUES('NaN',NULL);
+                COMMIT;
+            """)
+
+            def numeric_fault():
+                value=task()['status']
+                return value if value.get('error_code')=='POSTGRESQL_NUMERIC_NONFINITE' else None
+
+            refused=require(numeric_fault,'non-finite numeric aborts logical decoding without changing either target')
+            assert refused['error_stage']=='SOURCE_DECODE' and refused['capture_lsn']==prior_lsn
+            assert numeric_target_cut()==prior_cut
+            passed('A native numeric NaN refuses the complete transaction without moving the journal LSN or either target receipt')
         else:
             compose('kill','-s','SIGKILL','runner')
-        if args.reject_old_primary and not temporal_targets:
+        if args.reject_old_primary and not dual_targets:
             compose('stop','standby')
             compose('up','-d','source')
             live_source='source'
@@ -802,7 +926,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['run_state']=='ERROR' and refused['capture_lsn']==durable
             assert sql('target',"SELECT label FROM copy_billing.ledger WHERE id=1")=='promoted commit'
             passed('Routing back to the old primary after promotion is refused and preserves the durable new-timeline checkpoint')
-        elif not temporal_targets and not args.ddl_review:
+        elif not dual_targets and not args.ddl_review:
             require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='f','old slot disconnected')
             sql('source',"SELECT pg_drop_replication_slot('"+slot+"')")
             compose('up','-d','runner')
@@ -824,6 +948,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('source',"SELECT COUNT(*) FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='0'
             passed('Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint')
         assert hashlib.sha256(artifact.read_bytes()).hexdigest()==digest
+        if previous_numeric_jar:
+            assert hashlib.sha256(previous_numeric_jar.read_bytes()).hexdigest()==report['previousNumericArtifactSha256']
         report['status']='PASS'
     except Exception as error:
         report['status']='FAIL'

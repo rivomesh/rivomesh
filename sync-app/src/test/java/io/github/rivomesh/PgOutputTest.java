@@ -51,6 +51,43 @@ class PgOutputTest {
         assertThrows(IllegalStateException.class,()->PgOutput.value(uuid,"a0eebc999c0b4ef8bb6d6bb9bd380a11"));
     }
 
+    @Test void signedNumericTypeModifiersMapToPortableExactStorage(){
+        assertNumericStorage(20,4,20,4);
+        assertNumericStorage(4,-2,6,0);
+        assertNumericStorage(2,4,4,4);
+        assertNumericStorage(1,-64,65,0);
+        assertNumericStorage(1,30,30,30);
+        for(int modifier:new int[]{numericModifier(65,-1),numericModifier(1,31),numericModifier(66,10)})
+            assertEquals("POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                    ()->PostgresqlCdcSource.configureNumeric(new TableSchema.Column(),modifier)).getMessage());
+        assertEquals("POSTGRESQL_NUMERIC_PRECISION_REQUIRED",assertThrows(IllegalStateException.class,
+                ()->PostgresqlCdcSource.configureNumeric(new TableSchema.Column(),-1)).getMessage());
+    }
+
+    private static int numericModifier(int precision,int scale){
+        return 4+((precision<<16)|(scale&0x7ff));
+    }
+
+    private static void assertNumericStorage(int declaredPrecision,int declaredScale,int precision,int scale){
+        TableSchema.Column column=new TableSchema.Column();
+        PostgresqlCdcSource.configureNumeric(column,numericModifier(declaredPrecision,declaredScale));
+        assertEquals(TableSchema.Type.DECIMAL,column.type);
+        assertEquals(precision,column.precision);
+        assertEquals(scale,column.scale);
+    }
+
+    @Test void finiteNumericTextKeepsTheExactSourceValue(){
+        TableSchema.Column amount=new TableSchema.Column();
+        PostgresqlCdcSource.configureNumeric(amount,numericModifier(65,30));
+        String exact="-12345678901234567890123456789012345.123456789012345678901234567890";
+        assertEquals(exact,PgOutput.value(amount,exact).value);
+        assertEquals("0.0000",PgOutput.value(amount,"0.0000").value);
+        assertNull(PgOutput.value(amount,null).value);
+        for(String special:new String[]{"NaN","Infinity","-Infinity"})
+            assertEquals("POSTGRESQL_NUMERIC_NONFINITE",assertThrows(IllegalStateException.class,
+                    ()->PgOutput.value(amount,special)).getMessage());
+    }
+
     @Test void civilDatesShareOneBoundedCanonicalRepresentation(){
         TableSchema.Column day=new TableSchema.Column();
         day.type=TableSchema.Type.DATE;

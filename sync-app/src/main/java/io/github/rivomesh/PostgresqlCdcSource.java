@@ -329,17 +329,25 @@ final class PostgresqlCdcSource implements SourceAdapter {
             case PostgresClock.OID:column.type=TableSchema.Type.TIME;break;
             case PostgresTimestamp.CIVIL_OID:column.type=TableSchema.Type.DATETIME;break;
             case PostgresTimestamp.INSTANT_OID:column.type=TableSchema.Type.TIMESTAMP;break;
-            case 1700:
-                if(modifier<4)throw invalid("POSTGRESQL_NUMERIC_PRECISION_REQUIRED");
-                int numeric=modifier-4;
-                column.precision=numeric>>>16;
-                column.scale=numeric&2047;
-                if(column.precision<1||column.precision>65||column.scale>Math.min(column.precision,30))
-                    throw invalid("POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED");
-                column.type=TableSchema.Type.DECIMAL;
-                break;
+            case 1700:configureNumeric(column,modifier);break;
             default:throw invalid("POSTGRESQL_TYPE_UNSUPPORTED");
         }
+    }
+
+    static void configureNumeric(TableSchema.Column column,int modifier){
+        if(modifier<4)throw invalid("POSTGRESQL_NUMERIC_PRECISION_REQUIRED");
+        int numeric=modifier-4;
+        int declaredPrecision=numeric>>>16;
+        int declaredScale=numeric&0x7ff;
+        // PostgreSQL packs an 11-bit signed scale in the type modifier.
+        if(declaredScale>=1024)declaredScale-=2048;
+        int scale=Math.max(0,declaredScale);
+        int precision=Math.max(declaredPrecision-declaredScale,0)+scale;
+        if(declaredPrecision<1||precision>65||scale>30)
+            throw invalid("POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED");
+        column.type=TableSchema.Type.DECIMAL;
+        column.precision=precision;
+        column.scale=scale;
     }
 
     @Override public Snapshot snapshot(TableSchema table)throws Exception{

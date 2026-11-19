@@ -27,6 +27,22 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
 - 共同点对账、更多目标与切换档案继续由 SO-06 跟踪。
 
+### 精确小数
+
+源列需要声明有限精度。PostgreSQL 先按源列精度和舍入规则写入数据。Rivomesh 为目标选择能够精确容纳源列有限值范围的 `DECIMAL`。
+
+| 源声明 | PostgreSQL 和 MySQL 目标存储 | 示例 |
+| --- | --- | --- |
+| `NUMERIC(p,s)` 且 `0 <= s <= p` | `DECIMAL(p,s)` | `NUMERIC(65,30)` 保留全部 65 位 |
+| `NUMERIC(p,s)` 且 `s < 0` | `DECIMAL(p + abs(s),0)` | `NUMERIC(4,-2)` 映射为 `DECIMAL(6,0)`，同步源端舍入后的整数 |
+| `NUMERIC(p,s)` 且 `s > p` | `DECIMAL(s,s)` | `NUMERIC(2,4)` 映射为 `DECIMAL(4,4)`，保留源端的纯小数 |
+
+共有档案允许目标总精度最多 65 位、小数位最多 30 位。映射保留源存储值、SQL `NULL` 和行身份。源端写入沿用 PostgreSQL 自身的舍入和范围规则，目标声明的取值范围可能更宽。源适配器保留原类型修饰符用于结构检查。[PostgreSQL 数值类型](https://www.postgresql.org/docs/17/datatype-numeric.html) · [MySQL 定点类型](https://dev.mysql.com/doc/refman/8.4/en/fixed-point-types.html)
+
+未声明精度的 `NUMERIC` 在预检中报告 `POSTGRESQL_NUMERIC_PRECISION_REQUIRED`，映射后超出精度或小数位上限会报告 `POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED`。`NaN` 等非有限值会触发 `POSTGRESQL_NUMERIC_NONFINITE`。采集保留此前的 LSN，整笔事务不写入目标。保留复制槽和日志，再通过采集恢复审阅确认保留的断点和受影响的目标订阅。后续修改源数据无法移除已有的 WAL 事务。
+
+给下方夹具命令追加 `--source-image postgres:17.12 --numeric-values`，可验证 PostgreSQL 和 MySQL 两目标快照、主键变更、无主键重复行的更新和删除、原 LSN 重启，以及对含 `NaN` 事务的拒绝。
+
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
 
 追加 `--source-image postgres:17.12 --date-values` 可运行日期实库场景，验证 PostgreSQL 和 MySQL 两个目标、DATE 主键变更、无主键重复行的精确匹配、复用原槽与快照的重启，以及拒绝包含无穷日期的整个事务。公元前日期和超出范围的日期也会报告 `POSTGRESQL_DATE_OUT_OF_RANGE`。重试前核对源值和保留的 LSN。

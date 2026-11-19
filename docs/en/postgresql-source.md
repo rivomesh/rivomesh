@@ -27,6 +27,22 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.
 - SO-06 continues to track common-cut validation and additional target, promotion and driver profiles.
 
+### Exact numeric values
+
+Source columns must declare a finite precision. PostgreSQL returns each value after applying its source precision and rounding rules. Rivomesh selects a target `DECIMAL` that fits every finite value in the declaration.
+
+| Source declaration | PostgreSQL and MySQL target storage | Example |
+| --- | --- | --- |
+| `NUMERIC(p,s)` with `0 <= s <= p` | `DECIMAL(p,s)` | `NUMERIC(65,30)` retains all 65 digits |
+| `NUMERIC(p,s)` with negative `s` | `DECIMAL(p + abs(s),0)` | `NUMERIC(4,-2)` uses `DECIMAL(6,0)` and copies the source-rounded integer |
+| `NUMERIC(p,s)` with `s > p` | `DECIMAL(s,s)` | `NUMERIC(2,4)` uses `DECIMAL(4,4)` and copies the source's fractional values |
+
+The shared profile allows up to 65 target digits and 30 fractional digits. These mappings preserve stored values, SQL `NULL` and row identities. PostgreSQL applies the original rounding and range to writes at the source. The target declaration can have a wider domain. The source adapter retains the original type modifier for its publication shape check. [PostgreSQL numeric types](https://www.postgresql.org/docs/17/datatype-numeric.html) · [MySQL fixed-point types](https://dev.mysql.com/doc/refman/8.4/en/fixed-point-types.html)
+
+Preflight reports `POSTGRESQL_NUMERIC_PRECISION_REQUIRED` for unconstrained `NUMERIC` and `POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED` when the mapped precision or scale exceeds the profile. A non-finite value such as `NaN` causes `POSTGRESQL_NUMERIC_NONFINITE`. Capture holds its previous LSN and leaves the entire transaction unapplied. Preserve the slot and journal, then use the capture recovery review to confirm the retained checkpoint and affected subscriptions. A later source update does not remove the original transaction from WAL.
+
+Append `--source-image postgres:17.12 --numeric-values` to the fixture command below to verify PostgreSQL and MySQL snapshots, key changes, duplicate keyless updates and deletes, restart at the original LSN, and rejection of a transaction containing `NaN`.
+
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 
 Add `--source-image postgres:17.12 --date-values` to run the civil date fixture against PostgreSQL and MySQL destinations. It covers a DATE primary-key change, an exact keyless occurrence, restart from the original slot and snapshot, and refusal of an infinite date without applying its transaction. BCE dates and dates outside the profile range produce the same `POSTGRESQL_DATE_OUT_OF_RANGE` diagnostic. Review source values and the retained LSN before retrying.
