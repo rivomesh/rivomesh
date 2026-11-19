@@ -11699,5 +11699,65 @@
     "verifiedClassMajor": 61,
     "scope": "Optional application bundle under Maven profile java17. Built on Corretto 17.0.19. Actual Temurin 17.0.21 ARM64 Controller, Agent and Worker processes complete MySQL 8.4.13 GTID/ROW/FULL snapshot, CDC and one rolling Controller and Agent replacement while retaining both PostgreSQL and MySQL target cuts. Standard distribution remains Java 21.",
     "reproduce": "mvn -B -s build/settings.xml -Pjava17 package && python3 tests/verify-artifact.py --java-release 17 && python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-java17-rolling --runtime-jdk 17 --rolling-restart --separate-execution --control-product POSTGRESQL --source-expected-version 8.4.13"
+  },
+  "kafkaConditionalNoticeApproval": {
+    "status": "PASS",
+    "nativeArtifactSha256": "b29d9a8a50dc31d2208ccc7ae013f54014183b36bc9cdd383a3d80754f0dac7c",
+    "evidenceSha256": "0d33fd5d89dc1396334b6d2511c19f590c31e882c2f9c7db7e0ffd7dfba62ab7",
+    "native": {
+      "profile": "4 Kafka 3.9.2 KRaft brokers, 2 packaged Controllers",
+      "manifestSha256": "795f3f89435f1a4a00651d3ab8f3ae5bc047690f525143588b456446941b21c4",
+      "phaseSha256": "e9ebd7310b78cb51ea0646cda6465a13825b2f96bc36caf2ca37296838485869",
+      "checks": [
+        "Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup",
+        "A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints",
+        "Both management entries replay the durable blocked approval and reject a replaced authorization revision",
+        "Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched"
+      ],
+      "sourceJavaSha256": "21002a18ea372c7cd4c035c32d0a17e15b5f1d73a48574f093d25bcba72e66e2",
+      "approvalState": "RECORDED_BLOCKED",
+      "approvalReplayAfterAuthorizationChange": "AUTHORIZATION_CHANGED",
+      "historicalApprovalAvailableWithOwnerOffline": true,
+      "approvalBlockers": [
+        "KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED",
+        "KAFKA_NOTICE_WRITER_NOT_CONFIGURED"
+      ],
+      "controlTopicEnd": 0,
+      "businessTopicEndBeforeAfter": [
+        9,
+        9
+      ],
+      "consumerPositionBeforeAfter": [
+        1,
+        1
+      ],
+      "failedHealthyAcknowledgments": [
+        1,
+        2
+      ],
+      "cleanupExitCode": 0,
+      "sourceHarnessSha256": "1e0addee78003c32eb5b81cbc7cd81a1cec16fb7f80b9a0e2b531ab41f6eb8f0"
+    },
+    "focusedEvidence": {
+      "targetedJavaSubset": 30,
+      "httpAuditJava": 90,
+      "browserSessionJava": 16,
+      "uiDom": 157
+    },
+    "httpBoundary": {
+      "changedPhysicalConfigurationCut": "KAFKA_NOTICE_CATALOG_CHANGED",
+      "changedTaskRevision": "REVISION_CHANGED",
+      "changedAuthorizationRevision": "AUTHORIZATION_CHANGED",
+      "approvingAdministratorDemotedHttpStatus": 403,
+      "deletedApprovalAuditAnchor": "KAFKA_NOTICE_APPROVAL_AUDIT_REQUIRED"
+    },
+    "integratedJava17": {
+      "artifactSha256": "393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24",
+      "tree": "0d268439afdd6d1d5d54b25c4047cb11441614fb",
+      "javaPassed": 51,
+      "domPassed": 157
+    },
+    "scope": "Durable approval record without publish authorization. Fresh owner evidence is required when creating the receipt. The native fixture did not configure an independent writer and therefore retained both the writer missing and historical ownership blockers. The current task, topic, authorization and audit proofs are bound to the approval. No business or control event was written by the approval.",
+    "reproduce": "python3 tests/kafka-cluster-run.py --artifact /path/to/rivomesh.jar --output target/kafka-conditional-approval --java-home /path/to/jdk --only-managed-notice-plan"
   }
 }

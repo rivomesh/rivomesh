@@ -655,3 +655,7 @@ The `987f005cac585c68b334f506a66897cf227f2d5774901d933987be54f2be9c38` candidate
 ### Optional Java 17 build and native rolling replacement
 
 Corretto 17.0.19 packaged the `5a4a26bb861e33217050a22555ae4d449470b089fff864553e60a0884dd0a8ac` bundle. It passed 627 application tests with 35 optional skips. The package gate checks Java 17 class-file compatibility. Twelve native checks observed both Controllers, the Agent and the Worker on ARM64 Temurin 17.0.21. A MySQL 8.4.13 source fed both PostgreSQL and MySQL, and rolling replacement retained the GTID, snapshots and STOP receipt. This is the explicit `-Pjava17` bundle. The standard release is built for Java 21. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
+
+### Durable conditional Kafka notice approval
+
+The `b29d9a8a50dc31d2208ccc7ae013f54014183b36bc9cdd383a3d80754f0dac7c` candidate passed four checks on Kafka 3.9.2 with four brokers and two packaged Controllers. An exact blocked approval replayed from both entries and survived owner loss. A replaced authorization revision was refused. The dedicated control topic stayed empty. The business topic end offset and committed consumer offset remained 9 and 1. The native profile retains the missing writer and historic ownership blockers. The exact package passed 106 Java and 157 DOM checks. The combined Java 17 package passed 51 focused Java and 157 DOM tests. [Operations](../en/messaging-v3.md) · [Manifest](baseline.json)

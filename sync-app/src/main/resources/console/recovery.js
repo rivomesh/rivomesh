@@ -102,6 +102,30 @@ window.RivomeshRecovery=(()=>{
      result.append(label('p','kafkaNoticeWriterVerified'));
     if(writer?.status==='BLOCKED'&&/^KAFKA_NOTICE_WRITER_[A-Z_]{1,64}$/.test(writer.code||''))
      result.append(label('p','kafkaNoticeWriterBlocked'),text('code',writer.code));
+    if(digest.test(data.approvalScopeSha256||'')&&Array.isArray(data.approvalBlockers)
+     &&data.approvalBlockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED')){
+     const approvalId=requestId(),approve=label('button','kafkaNoticeApprove'),approvalResult=text('div');
+     approvalResult.setAttribute('aria-live','polite');
+     approve.onclick=async()=>{
+      if(!current()||!eligible(scope())||scope().revision!==activeTask.revision||approve.disabled)return;
+      approve.disabled=true;approvalResult.replaceChildren();
+      try{
+       const recorded=await api(base(task)+'/kafka-notice-approvals',{method:'POST',
+        headers:{'Content-Type':'application/json','X-Request-ID':approvalId},
+        body:JSON.stringify({expectedRevision:activeTask.revision,predecessorRequestId:receipt.id,
+         approvalScopeSha256:data.approvalScopeSha256})});
+       if(!current()||!approvalResult.isConnected)return;
+       if(recorded?.id!==approvalId||recorded?.taskId!==task.id||recorded?.status!=='RECORDED_BLOCKED'
+        ||recorded.executionAuthorized!==false||recorded.approvalScopeSha256!==data.approvalScopeSha256)
+        throw new Error(t('receiptMismatch'));
+       approvalResult.append(label('p','kafkaNoticeApprovalRecorded'),text('code',approvalId));
+      }catch(error){
+       if(current()&&approvalResult.isConnected)approvalResult.append(text('p',error.message,'error'));
+       approve.disabled=false;
+      }
+     };
+     result.append(label('p','kafkaNoticeApprovalNote'),approve,approvalResult);
+    }
    }catch(error){if(current()&&section.isConnected)result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
   };
@@ -538,6 +562,9 @@ window.RivomeshRecovery=(()=>{
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'发布受阻。专用 Topic 的全局归属尚未确认。',
   kafkaNoticeWriterVerified:'已核对独立 Kafka 写入身份在这两个 Topic 上的有效权限。',
   kafkaNoticeWriterBlocked:'独立 Kafka 写入身份的权限核对未通过。',
+  kafkaNoticeApprove:'登记条件审批',
+  kafkaNoticeApprovalNote:'历史物理归属仍待核对。登记审批仅保存本次核对范围，通知不会发送。',
+  kafkaNoticeApprovalRecorded:'审批已登记，通知仍未获准发送。',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'已核对生效和可回退配置当前指向的 Kafka Topic。',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'管理目录超出这次只读核对的范围。',
@@ -566,6 +593,9 @@ window.RivomeshRecovery=(()=>{
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'Publication is blocked until dedicated topic ownership is verified globally.',
   kafkaNoticeWriterVerified:'Verified the effective permissions of the dedicated Kafka writer on these two topics.',
   kafkaNoticeWriterBlocked:'The effective permissions of the dedicated Kafka writer could not be verified.',
+  kafkaNoticeApprove:'Record conditional approval',
+  kafkaNoticeApprovalNote:'Historical topic ownership needs verification. Recording approval saves the reviewed scope and keeps publication blocked.',
+  kafkaNoticeApprovalRecorded:'Approval recorded. Publication is still blocked.',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'Verified where active and restorable Kafka configurations point at review time.',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'The managed catalog exceeds the scope of this read-only review.',

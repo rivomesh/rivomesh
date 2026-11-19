@@ -22,7 +22,10 @@ public final class KafkaNoticeWriterReview {
     private static final Set<AclOperation> READ_ONLY=Set.of(AclOperation.DESCRIBE,AclOperation.DESCRIBE_CONFIGS,AclOperation.READ);
     private static final Set<AclOperation> NOTICE_WRITER=Set.of(AclOperation.DESCRIBE,AclOperation.WRITE);
 
-    public record Result(String status,String code) {
+    public record Result(String status,String code,
+                         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                         String evidenceSha256) {
+        public Result(String status,String code){this(status,code,null);}
         public static Result notConfigured(){return new Result("NOT_CONFIGURED","KAFKA_NOTICE_WRITER_NOT_CONFIGURED");}
     }
 
@@ -78,7 +81,13 @@ public final class KafkaNoticeWriterReview {
             writer=Admin.create(separate);
             Permissions before=observe(reviewer,writer,target.messaging.topic,plan,deadline);
             Permissions after=observe(reviewer,writer,target.messaging.topic,plan,deadline);
-            return evaluate(before,after);
+            Result result=evaluate(before,after);
+            if(!"VERIFIED_AT_REVIEW".equals(result.status()))return result;
+            String digest=Codec.sha256(Codec.encode(List.of("kafka-notice-writer-v1",plan.approvalSha256(),
+                    target.username,username,target.messaging.saslMechanism,
+                    before.reviewerControl().stream().sorted().toList(),before.writerControl().stream().sorted().toList(),
+                    before.writerBusiness().stream().sorted().toList())));
+            return new Result(result.status(),result.code(),digest);
         }catch(Blocked failure){
             return blocked(failure.getMessage());
         }catch(InterruptedException interrupted){

@@ -213,6 +213,11 @@ def main():
                     assert catalog['retainedVersions']==3 and catalog['routes']==4
                     assert catalog['missing']=='KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING'
                     assert catalog['aliasConflict']=='KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION'
+                    assert review['noticeApproval']['status']=='RECORDED_BLOCKED'
+                    assert not review['noticeApproval']['executionAuthorized']
+                    assert review['noticeApprovalOwnerOffline']
+                    assert review['approvalReplayAfterAuthorizationChange']=='AUTHORIZATION_CHANGED'
+                    passed('Both management entries replay the durable blocked approval and reject a replaced authorization revision')
                     assert review['noticePlanPartialRefusal']=='KAFKA_RECOVERY_PUBLICATION_UNCERTAIN'
                     assert review['noticeControlEnd']==0
                     passed('Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched')

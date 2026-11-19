@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_CATALOG_PROBE,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_NOTICE_APPROVAL,KAFKA_CATALOG_PROBE,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -43,7 +43,7 @@ final class TaskRequest {
     public HandoffEvidenceAdoption.Receipt adoptedEvidence;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
-    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER||kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||kind==Kind.ACTION;}
+    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER||kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||kind==Kind.KAFKA_NOTICE_APPROVAL||kind==Kind.ACTION;}
     boolean admin(){return kind!=Kind.LIST&&kind!=Kind.VIEW&&kind!=Kind.VALIDATION_REPORT&&kind!=Kind.VALIDATION_REPORTS&&(kind!=Kind.ACTION||!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action));}
     void validate(){
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
@@ -103,6 +103,10 @@ final class TaskRequest {
             throw new IllegalArgumentException("HANDOFF_ADOPTED_SCOPE_CHANGED");
         if(kind==Kind.RECOVERY_RECEIPT&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")))
             throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
+        if(kind==Kind.KAFKA_NOTICE_APPROVAL&&(revision==null||!revision.matches("[a-f0-9-]{36}")
+                ||reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||reference.equals(requestId)
+                ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")||yaml!=null||document!=null))
+            throw new IllegalArgumentException("KAFKA_NOTICE_APPROVAL_REQUEST_INVALID");
         if(kind==Kind.KAFKA_CATALOG_PROBE&&(revision==null||!revision.matches("[a-f0-9-]{36}")
                 ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")||yaml!=null||document!=null))
             throw new IllegalArgumentException("KAFKA_NOTICE_CATALOG_PROBE_INVALID");
@@ -182,6 +186,6 @@ final class TaskRequest {
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
     boolean excludesCapture(){return kind==Kind.ACTION&&"CAPTURE_EXCLUDE".equals(action);}
     boolean captureRetention(){return kind==Kind.ACTION&&"CAPTURE_RETAIN".equals(action);}
-    boolean failureReview(){return kafkaReview()||kind==Kind.KAFKA_NOTICE_PLAN||kind==Kind.KAFKA_CATALOG_PROBE||kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
+    boolean failureReview(){return kafkaReview()||kind==Kind.KAFKA_NOTICE_PLAN||kind==Kind.KAFKA_NOTICE_APPROVAL||kind==Kind.KAFKA_CATALOG_PROBE||kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}
 }

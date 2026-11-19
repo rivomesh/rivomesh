@@ -33,7 +33,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
-            case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
+            case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:case KAFKA_NOTICE_APPROVAL:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
             case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:case HANDOFF_FAILURE_HISTORY:
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:case HANDOFF_STAGE:case HANDOFF_COMMIT_OWNER:case HANDOFF_TARGET_FENCE:case HANDOFF_START_WORKER:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);

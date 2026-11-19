@@ -270,18 +270,29 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  const base='/api/tasks/'+task.id,requests=[];
  let publishing=true;
  let coverage={status:'INCOMPLETE',code:'KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING'};
+ let approvalScope=null;
+ const approvalRequests=[];
  ui.w.fetch=async(path,options)=>{
   if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
    id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
     observedAt:'2026-11-18T09:00:00Z',epoch:'3',errorGeneration:'17',acknowledgedSequence:'6',failedSequence:'7',
     observedTopicIdentitySha256:'a'.repeat(64),originalFailure:{journalGeneration:'retained'},
     nativeReceipts:[{namespace:'orders',offset:'31',payloadSha256:'b'.repeat(64)}]}})};
+  if(path===base+'/kafka-notice-approvals'){
+   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+   const request={id:options.headers['X-Request-ID'],body:JSON.parse(options.body)};
+   approvalRequests.push(request);
+   if(approvalRequests.length===1)return{ok:false,status:503,json:async()=>({code:'CONTROL_STORE_UNAVAILABLE'})};
+   return{ok:true,status:200,json:async()=>({id:request.id,taskId:task.id,status:'RECORDED_BLOCKED',
+    executionAuthorized:false,approvalScopeSha256:approvalScope})};
+  }
   if(path!==base+'/kafka-notice-plan')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
   requests.push(JSON.parse(options.body));
   return{ok:true,status:200,json:async()=>({status:'KAFKA_NOTICE_PLAN_REVIEWED',executionAuthorized:publishing,
    publicationBlockCode:'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
    catalogCoverage:coverage,
+   approvalScopeSha256:approvalScope,approvalBlockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'],
    writerEntitlement:{status:'VERIFIED_AT_REVIEW',code:'KAFKA_NOTICE_WRITER_EFFECTIVE_PERMISSIONS_VERIFIED'},
    plan:{task:{taskId:task.id},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
     controlTopic:{targetId:target,topicName:'control.events',topicId:'cKtKfC5KQGq-qM1RDCb_3w'},credential:'not sent to the DOM'}})};
@@ -304,6 +315,19 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   assert.match(section.textContent,/已核对生效和可回退配置当前指向的 Kafka Topic/);
   assert.match(section.textContent,/发布受阻/);
   assert.equal(section.querySelectorAll('button').length,1);
+  approvalScope='e'.repeat(64);
+  button.click();await flush();
+  const approve=section.querySelectorAll('button')[1];
+  assert.match(approve.textContent,/登记条件审批/);
+  approve.click();await flush();
+  assert.ok(!approve.disabled);
+  approve.click();await flush();
+  assert.equal(approvalRequests.length,2);
+  assert.deepEqual(approvalRequests[0],approvalRequests[1]);
+  assert.deepEqual(approvalRequests[0].body,{expectedRevision:'task-revision',predecessorRequestId:id,
+   approvalScopeSha256:approvalScope});
+  assert.match(section.textContent,/审批已登记，通知仍未获准发送/);
+  assert.ok(approve.disabled);
  }finally{ui.dom.window.close();}
 });
 

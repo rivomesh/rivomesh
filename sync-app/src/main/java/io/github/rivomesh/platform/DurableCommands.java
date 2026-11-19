@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,8 @@ final class DurableCommands {
         public TaskRequest executionTemplate;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public KafkaRecoveryReview.Observation kafkaReview;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public KafkaNoticeApproval.Scope kafkaNoticeApproval;
     }
     static final class Dispatch {
         final Stored command;
@@ -88,13 +91,27 @@ final class DurableCommands {
                 ||!Objects.equals(command.owner,r.getString("owner_id"))||!Objects.equals(command.phase,r.getString("phase"))
                 ||command.priority!=r.getInt("priority")||command.createdAt!=r.getLong("created_at")||command.request==null
                 ||!id.equals(command.request.requestId)||!Objects.equals(command.task,command.request.taskId)
-                ||!validKafkaObservation(command.request,command.phase,command.code,command.kafkaReview))
+                ||!validKafkaObservation(command.request,command.phase,command.code,command.kafkaReview)||!validApproval(command))
             throw new TaskService.Conflict("COMMAND_RECORD_INVALID");
         return command;
     }
     private static void authorize(TaskRequest request,AccessControl.Principal actor){if(request.admin()&&!actor.administers()||request.kind==TaskRequest.Kind.ACTION&&!actor.operates())throw new SecurityException("FORBIDDEN");}
     private Stored replay(Connection c,TaskRequest request,AccessControl.Principal actor)throws Exception{
         Stored previous=read(c,request.requestId);if(previous==null)return null;if(!actor.id.equals(previous.actor))throw new TaskService.Conflict("REQUEST_IDENTITY_CHANGED");if(!signature(request,actor).equals(previous.inputHash))throw new TaskService.Conflict("REQUEST_ID_REUSED");return previous;
+    }
+    private static boolean validApproval(Stored command){
+        if(command.request.kind!=TaskRequest.Kind.KAFKA_NOTICE_APPROVAL)return command.kafkaNoticeApproval==null;
+        var scope=command.kafkaNoticeApproval;
+        if(scope==null||!"SUCCEEDED".equals(command.phase)||!KafkaNoticeApproval.RECORDED.equals(command.code)
+                ||command.localRequest!=null||command.executionTemplate!=null||command.dispatchEpoch!=0||command.dispatchIncarnation!=null)
+            return false;
+        var plan=scope.plan();
+        return Objects.equals(command.request.identityHash,scope.digest())&&Objects.equals(command.request.reference,plan.predecessorRequestId())
+                &&Objects.equals(command.task,plan.task().taskId())&&Objects.equals(command.owner,plan.task().ownerNodeId())
+                &&Objects.equals(command.directory,plan.task().ownerDirectoryId())&&Objects.equals(command.actor,plan.administrator().actorId())
+                &&Objects.equals(command.actorRevision,plan.administrator().authorizationRevision())&&"ADMIN".equals(command.actorRole)
+                &&Objects.equals(command.configurationVersion,plan.task().configurationVersion())
+                &&Objects.equals(command.acceptedRevision,plan.task().revision())&&Objects.equals(command.request.revision,command.acceptedRevision);
     }
     private Stored insert(Connection c,GlobalTaskStore.Record task,TaskRequest request,AccessControl.Principal actor)throws Exception{return insert(c,task,request,actor,null);}
     private Stored insert(Connection c,GlobalTaskStore.Record task,TaskRequest request,AccessControl.Principal actor,TaskRequest template)throws Exception{
@@ -113,9 +130,13 @@ final class DurableCommands {
         if(cancellation&&parent==null)throw new TaskService.Conflict("CANCEL_SCOPE_CHANGED");
         if(!cancellation)try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("command")+" WHERE cluster_id=? AND priority>0 AND phase IN ('PENDING','DISPATCHED','ACCEPTED','UNKNOWN')",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)>=maximum)throw new TaskService.Conflict("COMMAND_CAPACITY");}
         Stored command=new Stored();command.id=request.requestId;command.task=task.id;command.owner=task.owner;command.directory=task.directory;command.actor=actor.id;command.actorRole=actor.role.name();command.actorRevision=actor.authorizationRevision;command.inputHash=signature(request,actor);command.acceptedRevision=task.revision;command.configurationVersion=request.kind==TaskRequest.Kind.ACTION&&task.activeConfigurationVersion!=null?task.activeConfigurationVersion:task.configurationVersion;command.request=request;command.executionTemplate=template;command.createdAt=db.now(c);command.priority=cancellation?0:1;command.parent=parent==null?null:parent.id;
-        db.update(c,"INSERT INTO "+db.table("command")+" (cluster_id,request_id,task_id,owner_id,phase,priority,created_at,envelope) VALUES (?,?,?,?,?,?,?,?)",cluster,command.id,command.task,command.owner,command.phase,command.priority,command.createdAt,cipher.seal("command/"+command.id,Model.JSON.writeValueAsString(command)));
-        long nextCount=Math.addExact(acceptedCount,1);db.update(c,"UPDATE "+db.table("command_root")+" SET accepted_count=?,state_hash=? WHERE cluster_id=?",nextCount,stateHash(nextCount),cluster);
+        storeAccepted(c,command,acceptedCount);
         AuditStore.Event event=new AuditStore.Event();event.kind="GLOBAL_COMMAND_ACCEPTED";event.taskId=task.id;event.action=request.action==null?request.kind.name():request.action;event.actorId=actor.id;event.actorRole=actor.role.name();event.clientRequestHash=AuditStore.hash(command.id);event.status="PENDING";access.append(c,event);return command;
+    }
+    private void storeAccepted(Connection c,Stored command,long acceptedCount)throws Exception{
+        db.update(c,"INSERT INTO "+db.table("command")+" (cluster_id,request_id,task_id,owner_id,phase,priority,created_at,envelope) VALUES (?,?,?,?,?,?,?,?)",cluster,command.id,command.task,command.owner,command.phase,command.priority,command.createdAt,cipher.seal("command/"+command.id,Model.JSON.writeValueAsString(command)));
+        long nextCount=Math.addExact(acceptedCount,1);
+        db.update(c,"UPDATE "+db.table("command_root")+" SET accepted_count=?,state_hash=? WHERE cluster_id=?",nextCount,stateHash(nextCount),cluster);
     }
     private static boolean matchesCancellation(TaskRequest request,Stored parent){
         String action=parent.request.action;
@@ -289,7 +310,13 @@ final class DurableCommands {
             try(PreparedStatement p=db.prepare(c,sql,cluster,requestId,record.id);ResultSet r=p.executeQuery()){
                 if(!r.next())throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
                 Stored command=authenticated(r,requestId);
-                if(!current.node(command.owner)||!RecoveryReceipts.supports(command.request))
+                if(!current.node(command.owner))
+                    throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+                if(command.kafkaNoticeApproval!=null){
+                    requireApprovalAudit(c,command.id);
+                    return approvalView(command);
+                }
+                if(!RecoveryReceipts.supports(command.request))
                     throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
                 Map<String,Object> result=view(command);
                 result.put("kind","CONTROL_OPERATION");
@@ -309,7 +336,11 @@ final class DurableCommands {
                                                   AccessControl.Principal actor)throws Exception{
         if(requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}"))
             throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
-        return tasks.transaction(task,actor,(c,record,current)->{
+        return tasks.transaction(task,actor,(c,record,current)->kafkaNoticePredecessor(c,record,current,requestId,expectedRevision));
+    }
+
+    private KafkaNoticePredecessor kafkaNoticePredecessor(Connection c,GlobalTaskStore.Record record,AccessControl.Principal current,
+                                                         String requestId,String expectedRevision)throws Exception{
             if(!current.administers())throw new SecurityException("FORBIDDEN");
             if(!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
             if(!Objects.equals(record.revision,expectedRevision))throw new TaskService.Conflict("REVISION_CHANGED");
@@ -334,7 +365,105 @@ final class DurableCommands {
             KafkaNoticePlanning.Predecessor receipt=new KafkaNoticePlanning.Predecessor(command.id,command.task,command.owner,
                     command.directory,command.configurationVersion,command.actor,command.kafkaReview);
             return new KafkaNoticePredecessor(scope,administrator,receipt);
+    }
+
+    Map<String,Object> replayKafkaNoticeApproval(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        return tasks.transaction(request.taskId,actor,(c,task,current)->{
+            authorize(request,current);root(c,false);
+            return replayApproval(c,task,request,current);
         });
+    }
+
+    Map<String,Object> recordKafkaNoticeApproval(TaskRequest request,AccessControl.Principal actor,
+                                                KafkaNoticeApproval.Scope approval)throws Exception{
+        return tasks.transaction(request.taskId,actor,(c,task,current)->{
+            authorize(request,current);long accepted=root(c);
+            Map<String,Object> previous=replayApproval(c,task,request,current);
+            if(previous!=null)return previous;
+            if(approval==null||!request.identityHash.equals(approval.digest()))
+                throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_CHANGED");
+            requireApprovalCut(c,task,request,current,approval);
+            if(hasUnresolved(c,task.id))throw new TaskService.Conflict("OPERATION_PENDING");
+            try(PreparedStatement query=db.prepare(c,"SELECT request_id FROM "+db.table("task_request")
+                    +" WHERE cluster_id=? AND request_id=?",cluster,request.requestId);ResultSet found=query.executeQuery()){
+                if(found.next())throw new TaskService.Conflict("REQUEST_ID_REUSED");
+            }
+            var command=new Stored();
+            command.id=request.requestId;command.task=task.id;command.owner=task.owner;command.directory=task.directory;
+            command.actor=current.id;command.actorRole=current.role.name();command.actorRevision=current.authorizationRevision;
+            command.inputHash=signature(request,current);command.acceptedRevision=task.revision;
+            command.configurationVersion=task.activeConfigurationVersion;command.request=request;command.createdAt=db.now(c);
+            command.phase="SUCCEEDED";command.code=KafkaNoticeApproval.RECORDED;command.kafkaNoticeApproval=approval;
+            if(!validApproval(command))throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_EVIDENCE_INVALID");
+            String eventId=approvalAuditId(command.id);
+            if(access.containsReceipt(c,eventId))throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_RECORD_REQUIRED");
+            storeAccepted(c,command,accepted);
+            AuditStore.Event audit=new AuditStore.Event();
+            audit.id=eventId;audit.kind="KAFKA_NOTICE_APPROVAL_RECORDED";audit.taskId=task.id;audit.action=request.kind.name();
+            audit.actorId=current.id;audit.actorRole=current.role.name();audit.clientRequestHash=AuditStore.hash(command.id);
+            audit.operationHash=approval.digest();audit.status="RECORDED_BLOCKED";audit.code=KafkaNoticeApproval.HISTORY;
+            access.append(c,audit);
+            return approvalView(command);
+        });
+    }
+
+    private Map<String,Object> replayApproval(Connection c,GlobalTaskStore.Record task,TaskRequest request,
+                                              AccessControl.Principal actor)throws Exception{
+        Stored previous=replay(c,request,actor);
+        if(previous==null)return null;
+        if(previous.kafkaNoticeApproval==null)throw new TaskService.Conflict("REQUEST_ID_REUSED");
+        if(!Objects.equals(previous.actorRevision,actor.authorizationRevision))
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        requireApprovalAudit(c,previous.id);
+        requireApprovalCut(c,task,request,actor,previous.kafkaNoticeApproval);
+        return approvalView(previous);
+    }
+
+    private String approvalAuditId(String request){
+        return UUID.nameUUIDFromBytes(("rivomesh-kafka-notice-approval/"+tasks.identity+"/"+request)
+                .getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private void requireApprovalAudit(Connection c,String request)throws SQLException{
+        if(!access.containsReceipt(c,approvalAuditId(request)))throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_AUDIT_REQUIRED");
+    }
+
+    private void requireApprovalCut(Connection c,GlobalTaskStore.Record task,TaskRequest request,
+                                    AccessControl.Principal actor,KafkaNoticeApproval.Scope approval)throws Exception{
+        var proof=kafkaNoticePredecessor(c,task,actor,request.reference,request.revision);
+        var plan=approval.plan();
+        if(!proof.administrator().equals(plan.administrator()))
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        var observed=proof.receipt().observation();
+        var original=observed.originalFailure();
+        var failed=plan.failure();
+        if(!proof.task().equals(plan.task())||!proof.receipt().requestId().equals(plan.predecessorRequestId())
+                ||!proof.receipt().actorId().equals(plan.predecessorActorId())
+                ||!Codec.sha256(Codec.encode(proof.receipt())).equals(plan.predecessorReceiptSha256())
+                ||!observed.target().equals(failed.targetId())||!observed.target().equals(plan.controlTopic().targetId())
+                ||!observed.epoch().equals(failed.epoch())||!observed.errorGeneration().equals(failed.errorGeneration())
+                ||!observed.acknowledgedSequence().equals(failed.acknowledgedSequence())
+                ||!observed.failedSequence().equals(failed.failedSequence())||!original.journalGeneration().equals(failed.journalGeneration())
+                ||!original.contentSha256().equals(failed.contentSha256())
+                ||!original.kafkaClusterSha256().equals(plan.controlTopic().kafkaClusterSha256())
+                ||!observed.observedTopicIdentitySha256().equals(plan.catalogIdentity().businessTopicSha256()))
+            throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_CHANGED");
+        KafkaNoticeCatalog.requireConfigurationCut(tasks,c,task,plan,approval.configurationCutSha256());
+    }
+
+    private static Map<String,Object> approvalView(Stored command){
+        Map<String,Object> result=view(command);
+        KafkaNoticeApproval.Scope approval=command.kafkaNoticeApproval;
+        result.put("status","RECORDED_BLOCKED");
+        result.put("kind","KAFKA_NOTICE_APPROVAL");
+        result.put("executionAuthorized",false);
+        result.put("approvalScopeSha256",approval.digest());
+        result.put("plan",approval.plan());
+        result.put("configurationCutSha256",approval.configurationCutSha256());
+        result.put("physicalRoutesSha256",approval.physicalRoutesSha256());
+        result.put("writerEntitlement",approval.writer());
+        result.put("blockers",approval.blockers());
+        return result;
     }
 
     List<Map<String,Object>> operations(Connection c,String task,AccessControl.Principal actor)throws Exception{

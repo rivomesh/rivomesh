@@ -238,6 +238,32 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals(1,backend.planned);
             assertTrue(fixture.get(api,"/api/audit",PlatformTest.TOKEN).toString().contains("POST_KAFKA_NOTICE_PLAN"));
             assertEquals(body,noticePlan(fixture.base(two),path,plan));
+            String approvalRoute=TASK+"/kafka-notice-approvals",approveId="approve_kafka_1234";
+            String scopeHash=body.path("approvalScopeSha256").asText();
+            assertTrue(scopeHash.matches("[a-f0-9]{64}"));
+            ObjectNode approvalInput=plan.deepCopy().put("approvalScopeSha256",scopeHash);
+            assertEquals(403,PlatformTest.http(api,approvalRoute,OPERATOR,approvalInput.toString(),approveId).status);
+            assertEquals(400,PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,
+                    approvalInput.deepCopy().put("controlTopic","forged").toString(),approveId).status);
+            assertCode(409,"KAFKA_NOTICE_APPROVAL_CHANGED",PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,
+                    approvalInput.deepCopy().put("approvalScopeSha256","0".repeat(64)).toString(),"wrong_scope_kafka_1234"));
+            var recorded=PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId);
+            assertEquals(200,recorded.status,recorded.text);
+            JsonNode approval=Model.JSON.readTree(recorded.text);
+            assertEquals("RECORDED_BLOCKED",approval.path("status").asText());
+            assertFalse(approval.path("executionAuthorized").asBoolean(true));
+            assertEquals(scopeHash,approval.path("approvalScopeSha256").asText());
+            assertEquals(body.path("plan"),approval.path("plan"));
+            assertEquals(body.path("catalogCoverage").path("physicalRoutesSha256"),approval.path("physicalRoutesSha256"));
+            assertTrue(approval.path("blockers").toString().contains("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED"));
+            String approvalReceipt=TASK+"/recovery-receipts/"+approveId;
+            assertEquals(approval,fixture.get(api,approvalReceipt,PlatformTest.TOKEN));
+            var replay=PlatformTest.http(fixture.base(two),approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId);
+            assertEquals(200,replay.status,replay.text);
+            assertEquals(approval,Model.JSON.readTree(replay.text));
+            assertCode(409,"REQUEST_ID_REUSED",PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,
+                    approvalInput.deepCopy().put("approvalScopeSha256","0".repeat(64)).toString(),approveId));
+            assertEquals(revision,fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText());
             backend.controlIdentity=null;
             assertEquals("KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
             backend.controlIdentity=backend.businessIdentity;
@@ -250,6 +276,9 @@ class ManagedKafkaRecoveryReviewTest {
             backend.businessIdentity=Codec.sha256("test topic");
             fixture.create(api,"another","b");
             assertEquals("KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            assertCode(409,"KAFKA_NOTICE_CATALOG_CHANGED",
+                    PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId));
+            assertEquals(approval,fixture.get(api,approvalReceipt,PlatformTest.TOKEN));
             String configuration=TASK+"/configuration";
             JsonNode before=fixture.get(api,configuration,PlatformTest.TOKEN);
             ObjectNode edit=Model.JSON.createObjectNode().put("expectedRevision",revision);
@@ -269,7 +298,46 @@ class ManagedKafkaRecoveryReviewTest {
             plan.put("predecessorRequestId",NEW_REVIEW);
             assertEquals("KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING",
                     noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            assertCode(409,"REVISION_CHANGED",PlatformTest.http(api,approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId));
+            String replacement=createReplacementAdmin(fixture,api);
+            assertCode(409,"AUTHORIZATION_CHANGED",
+                    PlatformTest.http(fixture.base(two),approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId));
+            assertEquals(approval,fixture.get(api,approvalReceipt,PlatformTest.TOKEN));
+            String accessRevision=fixture.get(api,"/api/accounts",replacement).path("revision").asText();
+            ObjectNode revoke=Model.JSON.createObjectNode().put("expectedRevision",accessRevision).put("role","VIEWER").put("enabled",true);
+            var revoked=AccountManagementTest.http(api,"PUT","/api/accounts/legacy-admin",replacement,revoke.toString(),"revoke_notice_actor");
+            assertEquals(200,revoked.status,revoked.json.toString());
+            assertEquals(403,PlatformTest.http(fixture.base(two),approvalRoute,PlatformTest.TOKEN,approvalInput.toString(),approveId).status);
+            assertEquals(approval,fixture.get(api,approvalReceipt,replacement));
+            String auditKey=null;
+            for(JsonNode event:fixture.get(api,"/api/audit?limit=1000",replacement).path("events")){
+                if("KAFKA_NOTICE_APPROVAL_RECORDED".equals(event.path("kind").asText())&&scopeHash.equals(event.path("operationHash").asText()))
+                    auditKey=event.path("id").asText();
+            }
+            assertNotNull(auditKey);
+            JdbcControlStore control=new JdbcControlStore(controller.cluster);
+            try(var connection=control.connect()){
+                assertEquals(1,control.update(connection,"DELETE FROM "+control.table("audit_receipt")+" WHERE cluster_id=? AND event_key=?",
+                        controller.cluster.id,auditKey));
+            }
+            assertCode(409,"KAFKA_NOTICE_APPROVAL_AUDIT_REQUIRED",
+                    PlatformTest.http(api,approvalReceipt,replacement,null,null));
         }
+    }
+
+    private static void assertCode(int status,String code,PlatformTest.Response response)throws Exception{
+        assertEquals(status,response.status,response.text);
+        assertEquals(code,Model.JSON.readTree(response.text).path("code").asText());
+    }
+
+    private static String createReplacementAdmin(GlobalControlHttpTest fixture,String api)throws Exception{
+        String token="approval-observer-admin-for-console-fixture";
+        ObjectNode account=Model.JSON.createObjectNode().put("id","approval-observer").put("role","ADMIN").put("enabled",true)
+                .put("token",token)
+                .put("expectedRevision",fixture.get(api,"/api/accounts",PlatformTest.TOKEN).path("revision").asText());
+        var created=PlatformTest.http(api,"/api/accounts",PlatformTest.TOKEN,account.toString(),"approval_rotate_auth");
+        assertEquals(201,created.status,created.text);
+        return token;
     }
 
     private static JsonNode noticePlan(String api,String path,ObjectNode request)throws Exception{

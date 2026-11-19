@@ -40,7 +40,8 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case KAFKA_NOTICE_PLAN:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
-                return kafkaNoticePlan(request,actor);
+                return kafkaNoticePlan(request,actor).response();
+            case KAFKA_NOTICE_APPROVAL:return kafkaNoticeApproval(request,actor);
             case HANDOFF_ASSESS:case HANDOFF_LATEST:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);
@@ -102,6 +103,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
     }
     private Map<String,Object> recoveryReceipt(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> retained=commands.recoveryReceipt(request.taskId,request.reference,actor);
+        if("KAFKA_NOTICE_APPROVAL".equals(retained.get("kind")))return retained;
         boolean adopted=tasks.transaction(request.taskId,actor,(c,task,current)->{
             HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,tasks.database().now(c));
             return HandoffPreparations.evidenceInstalled(plan)
@@ -126,7 +128,20 @@ final class GlobalTaskPlane implements TaskControlPlane {
         return retained;
     }
 
-    private Map<String,Object> kafkaNoticePlan(TaskRequest request,AccessControl.Principal actor)throws Exception{
+    private record KafkaNoticeReview(Map<String,Object> response,KafkaNoticeApproval.Scope approval){}
+
+    private Map<String,Object> kafkaNoticeApproval(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        Map<String,Object> retained=commands.replayKafkaNoticeApproval(request,actor);
+        if(retained!=null)return retained;
+        TaskRequest review=TaskRequest.of(TaskRequest.Kind.KAFKA_NOTICE_PLAN,request.taskId);
+        review.revision=request.revision;review.reference=request.reference;
+        review.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
+        KafkaNoticeApproval.Scope approval=kafkaNoticePlan(review,actor).approval();
+        if(approval==null)throw new TaskService.Conflict("KAFKA_NOTICE_APPROVAL_CATALOG_UNVERIFIED");
+        return commands.recordKafkaNoticeApproval(request,actor,approval);
+    }
+
+    private KafkaNoticeReview kafkaNoticePlan(TaskRequest request,AccessControl.Principal actor)throws Exception{
         Map<String,Object> response=queries.await(queries.submit(request,actor),actor);
         // The owner-query envelope already authenticates this response and fences the producing owner.
         var plan=Model.JSON.convertValue(response.get("plan"),KafkaNoticePlanning.Prepared.class);
@@ -154,7 +169,12 @@ final class GlobalTaskPlane implements TaskControlPlane {
         });
         if(coverage==null)coverage=KafkaNoticeCatalog.coverage(tasks,queries,plan,actor);
         response.put("catalogCoverage",coverage);
-        return response;
+        KafkaNoticeApproval.Scope approval=KafkaNoticeApproval.reviewed(plan,coverage,response.get("writerEntitlement"));
+        if(approval!=null){
+            response.put("approvalScopeSha256",approval.digest());
+            response.put("approvalBlockers",approval.blockers());
+        }
+        return new KafkaNoticeReview(response,approval);
     }
 
     private static Map<String,Object> incompleteCatalog(String code){return Map.of("status","INCOMPLETE","code",code);}

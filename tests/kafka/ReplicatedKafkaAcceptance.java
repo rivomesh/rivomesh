@@ -79,6 +79,8 @@ public final class ReplicatedKafkaAcceptance {
     private static final String TASK_ROUTE = "/api/tasks/" + PIPELINE;
     private static final String RECEIPT_ROUTE = TASK_ROUTE + "/recovery-receipts/";
     private static final String PLAN_ROUTE = TASK_ROUTE + "/kafka-notice-plan";
+    private static final String APPROVAL_ROUTE = TASK_ROUTE + "/kafka-notice-approvals";
+    private static final String APPROVAL_ID = "managed_notice_approval_1234";
     private static final String REVIEW_ACTION = "REVIEW_KAFKA_RECEIPTS";
     private static final String FIXTURE_ADMIN = "fixture-admin-only-for-loopback-kafka-test";
 
@@ -360,7 +362,7 @@ public final class ReplicatedKafkaAcceptance {
 
         JsonNode request(ConsoleServer server,String route,String id,JsonNode data,int expectedStatus)throws Exception{
             HttpRequest.Builder request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+server.port()+route))
-                    .timeout(Duration.ofSeconds(PLAN_ROUTE.equals(route)?35:5)).header("Authorization","Bearer "+FIXTURE_ADMIN);
+                    .timeout(Duration.ofSeconds(PLAN_ROUTE.equals(route)||APPROVAL_ROUTE.equals(route)?35:5)).header("Authorization","Bearer "+FIXTURE_ADMIN);
             if(data!=null)request.header("X-Request-ID",id).header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(data.toString()));
             HttpResponse<String> reply=http.send(request.build(),HttpResponse.BodyHandlers.ofString());
@@ -425,6 +427,34 @@ public final class ReplicatedKafkaAcceptance {
                     "Identical plan request through the second entry changed its authority or digests");
             require(revision.equals(task().path("revision").asText()),"The notice plan advanced the task revision");
             return result;
+        }
+
+        JsonNode approvalRoundtrip(JsonNode preview,String predecessor,Map<String,Object> report)throws Exception{
+            String approvalScope=preview.path("approvalScopeSha256").asText();
+            require(approvalScope.matches("[a-f0-9]{64}"),"The verified preview had no approval scope");
+            String revision=preview.path("plan").path("task").path("revision").asText();
+            ObjectNode body=Codec.JSON.createObjectNode().put("expectedRevision",revision)
+                    .put("predecessorRequestId",predecessor).put("approvalScopeSha256",approvalScope);
+            JsonNode stored=request(entry,APPROVAL_ROUTE,APPROVAL_ID,body,200);
+            require(stored.equals(request(owner,APPROVAL_ROUTE,APPROVAL_ID,body,200))
+                    &&stored.equals(request(entry,RECEIPT_ROUTE+APPROVAL_ID,null,null)),"The exact approval changed after replay through another Controller");
+            require("RECORDED_BLOCKED".equals(stored.path("status").asText())&&!stored.path("executionAuthorized").asBoolean(true)
+                    &&approvalScope.equals(stored.path("approvalScopeSha256").asText())
+                    &&stored.path("plan").equals(preview.path("plan"))
+                    &&stored.path("physicalRoutesSha256").equals(preview.path("catalogCoverage").path("physicalRoutesSha256"))
+                    &&stored.path("blockers").toString().contains("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED")
+                    &&stored.path("blockers").toString().contains("KAFKA_NOTICE_WRITER_NOT_CONFIGURED")
+                    &&revision.equals(task().path("revision").asText()),"Approval lost its blocked status or reviewed scope");
+            String accessRevision=request(entry,"/api/accounts",null,null).path("revision").asText();
+            ObjectNode rotate=Codec.JSON.createObjectNode().put("id","fixture-viewer").put("role","VIEWER").put("enabled",true)
+                    .put("token","native-fixture-viewer-token-only").put("expectedRevision",accessRevision);
+            request(entry,"/api/accounts","change_notice_authorization",rotate,201);
+            JsonNode revoked=request(owner,APPROVAL_ROUTE,APPROVAL_ID,body,409);
+            require("AUTHORIZATION_CHANGED".equals(revoked.path("code").asText())
+                    &&stored.equals(request(owner,RECEIPT_ROUTE+APPROVAL_ID,null,null)),
+                    "Revoked approval replay was accepted or the immutable record was replaced");
+            report.put("approvalReplayAfterAuthorizationChange",revoked.path("code").asText());
+            return stored;
         }
 
         void createCatalogTask(String id,String address,String topic,long serverId)throws Exception{
@@ -516,6 +546,11 @@ public final class ReplicatedKafkaAcceptance {
                 require(historical.path("kafkaReview").equals(report.get("review")),
                         "Historical native proof disappeared when the execution owner went offline");
                 report.put("managedHistoricalOwnerOffline",true);
+                if(control!=null){
+                    JsonNode approval=management.request(entry,RECEIPT_ROUTE+APPROVAL_ID,null,null);
+                    require(approval.equals(report.get("noticeApproval")),"Durable approval disappeared with the former owner offline");
+                    report.put("noticeApprovalOwnerOffline",true);
+                }
             }
         }else reviewPredecessor(home,configuration,config,null,null,report);
     }
@@ -647,6 +682,7 @@ public final class ReplicatedKafkaAcceptance {
                                     .equals(Codec.sha256(((State)report.get("cluster")).clusterId()+"/"+control.topicId)),
                             "Managed Topic identity is not bound to the exact observed native UUIDs");
                     report.put("noticePlan",planned);
+                    report.put("noticeApproval",managed.approvalRoundtrip(planned,receiptId,report));
                     report.put("catalogRecovery",managed.verifyCatalog(receiptId));
                 }
                 report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));

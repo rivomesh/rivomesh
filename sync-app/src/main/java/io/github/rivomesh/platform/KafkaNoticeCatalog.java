@@ -54,6 +54,8 @@ final class KafkaNoticeCatalog {
         var identity=plan.catalogIdentity();
         String target=plan.controlTopic().targetId();
         String selectedKey=key(selected.configurationVersion(),target);
+        Map<String,String> nativeRoutes=new TreeMap<>();
+        nativeRoutes.put(selected.taskId()+"/"+selectedKey,identity.businessTopicSha256());
         Map<Selection,String> probes=new LinkedHashMap<>();
         boolean liveMissing=false,retainedMissing=false,collision=false;
         for(Selection selection:before.selections()){
@@ -85,6 +87,7 @@ final class KafkaNoticeCatalog {
                     if(version.id().equals(selection.active()))liveMissing=true;
                     else retainedMissing=true;
                 }else if(identity.controlTopicSha256().equals(resolvedIdentity))collision=true;
+                else nativeRoutes.put(selection.task()+"/"+ref,resolvedIdentity);
             }
         }
         try{
@@ -95,13 +98,32 @@ final class KafkaNoticeCatalog {
         if(liveMissing)return incomplete("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING");
         int versions=before.selections().stream().mapToInt(item->item.versions().size()).sum();
         int routes=before.selections().stream().mapToInt(Selection::routes).sum();
-        if(versions==1&&routes==1)return Map.of("status","VERIFIED_SINGLETON","code","KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED");
+        if(routes!=nativeRoutes.size())throw changed();
+        String cut=configurationCut(tasks,before);
+        String routesProof=Codec.sha256(Codec.encode(List.of("kafka-notice-routes-v1",cut,identity.controlTopicSha256(),nativeRoutes)));
+        if(versions==1&&routes==1)return Map.of("status","VERIFIED_SINGLETON","code","KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED",
+                "configurationCutSha256",cut,"physicalRoutesSha256",routesProof);
         return Map.of("status","VERIFIED_AT_REVIEW","code","KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED",
-                "configurationVersions",versions,"kafkaRoutes",routes);
+                "configurationVersions",versions,"kafkaRoutes",routes,"configurationCutSha256",cut,"physicalRoutesSha256",routesProof);
+    }
+
+    /** Uses the same locked shared root as the approval insert. */
+    static void requireConfigurationCut(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record selected,
+                                        Prepared plan,String expected)throws Exception{
+        try{
+            if(!configurationCut(tasks,snapshot(tasks,c,selected,plan)).equals(expected))throw changed();
+        }catch(Limit exceeded){throw changed();}
+    }
+
+    private static String configurationCut(GlobalTaskStore tasks,Snapshot snapshot){
+        return Codec.sha256(tasks.commandCipher().signature("kafka-notice-catalog-cut-v1\n"+snapshot.digest()));
     }
 
     private static Snapshot snapshot(GlobalTaskStore tasks,Prepared plan,AccessControl.Principal actor)throws Exception{
-        return tasks.transaction(plan.task().taskId(),actor,(c,selected,current)->{
+        return tasks.transaction(plan.task().taskId(),actor,(c,selected,current)->snapshot(tasks,c,selected,plan));
+    }
+
+    private static Snapshot snapshot(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record selected,Prepared plan)throws Exception{
             var expected=plan.task();
             if(!selected.revision.equals(expected.revision())||!selected.owner.equals(expected.ownerNodeId())
                     ||!selected.directory.equals(expected.ownerDirectoryId())||!selected.configurationVersion.equals(expected.configurationVersion())
@@ -118,7 +140,6 @@ final class KafkaNoticeCatalog {
                 catalog.add(selection);
             }
             return new Snapshot(List.copyOf(catalog));
-        });
     }
 
     static Selection selection(GlobalTaskStore tasks,Connection c,GlobalTaskStore.Record task,int remaining)throws Exception{

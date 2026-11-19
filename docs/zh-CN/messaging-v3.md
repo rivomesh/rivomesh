@@ -88,6 +88,12 @@ messaging:
 
 预览的 `writerEntitlement` 来自 Broker 返回的有效权限。业务身份须能读取两个 Topic 的元数据，且对通知 Topic 只有只读权限。独立身份在通知 Topic 需要 `WRITE` 及其隐含的 `DESCRIBE`，对该业务 Topic 至少要有 `DESCRIBE`，且不能修改它。两个身份均须取得 Broker 的有效操作列表。可用 `python3 tests/kafka-notice-writer-run.py <应用包>` 验证该权限规则。核对结果适用于当前身份和 Topic，发布仍需完整的管理目录、Broker 授权证据与审批后的事务发送流程。
 
+### 登记条件审批
+
+预览通过当前管理目录核对后，管理员可选择 **登记条件审批**。审批封存本次核对的精确失败证据、任务配置修订、控制 Topic UUID、物理路由摘要、通知内容摘要和写入身份的权限观察，保留登记时的阻断原因。管理目录缺证或发现冲突时，无法登记。当前物理路由证据无法追认历史写入归属，因此登记始终保留该阻断项。写入身份通过新核对或配置发生变化后，需要重新预览和审批。
+
+API 调用使用 `POST /api/tasks/<task>/kafka-notice-approvals`，携带固定的 `X-Request-ID`，请求体包含 `expectedRevision`、`predecessorRequestId` 和预览返回的 `approvalScopeSha256`。登记成功返回 `RECORDED_BLOCKED` 和 `executionAuthorized: false`。相关配置和审批人授权修订保持有效时，可在任一管理入口用原请求重放。已授权的管理员可用 `GET /api/tasks/<task>/recovery-receipts/<request-id>` 查询历史记录，任务所属节点离线时也可查询。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh

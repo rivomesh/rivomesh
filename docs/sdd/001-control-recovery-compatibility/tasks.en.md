@@ -89,6 +89,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-RC-10
   - [x] Verified broker-native permissions for an independent Kafka notice writer identity.
   - [x] The bounded active and restorable catalog verifies present physical topic identity under current Agent credential grants.
+  - [x] Both entries can verify and replay a durable blocked approval, with the exact scope, authorization and audit anchor. Topic and consumer offsets remain at the original values.
   - [ ] Historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
 ## Source compatibility
 

@@ -863,8 +863,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "原事件留存、ClickHouse 前序回执和 Kafka 持久回执已实测。Kafka 通知计划核验受限目录内生效、停用和可回退配置的当前物理 Topic，复核当前 Agent 凭据授权，并拒绝缺证和别名冲突。历史实际写入归属、审批后正式发送与恢复、跨适配器补偿仍待验。",
-        "en": "Native event retention, ClickHouse preceding receipts and Kafka durable receipts are verified. The Kafka notice preview observes physical topics for active, stopped and restorable configurations in the bounded catalog, under the current Agent credential grants. It refuses missing evidence and alias collisions. Historical write custody, approved dispatch and recovery, and cross-adapter compensation remain."
+        "zh-CN": "原事件、ClickHouse 前序回执和 Kafka 持久回执已实测。Kafka 计划复核当前物理 Topic、历史可回退配置及凭据授权。管理员可以持久记录受阻审批，双入口重放同一回执并核对授权、审计和配置。审批时控制 Topic、业务 Topic 和消费位点均保持原值。历史实际写入归属、正式发送与恢复、跨适配器补偿待验。",
+        "en": "Native retention, ClickHouse preceding receipts and Kafka durable receipts are verified. Kafka plans review current physical topics, restorable configurations and current credential grants. An administrator can record a blocked approval. Both entries replay the same receipt and check authorization, audit and configuration. Approval leaves the control topic, business topic and consumer offsets unchanged. Historical write custody, dispatch and recovery, and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -887,7 +887,9 @@
         "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaNoticeWriterReview.java",
         "tests/kafka-notice-writer-run.py",
         "sync-app/src/main/java/io/github/rivomesh/platform/KafkaNoticeCatalog.java",
-        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedKafkaRecoveryReviewTest.java"
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedKafkaRecoveryReviewTest.java",
+        "sync-app/src/main/java/io/github/rivomesh/platform/KafkaNoticeApproval.java",
+        "tests/kafka/ReplicatedKafkaAcceptance.java"
       ]
     },
     {

@@ -90,6 +90,12 @@ An owner Controller can additionally inspect a dedicated writer with `kafkaNotic
 
 The preview reports `writerEntitlement` with the broker's observed effective permissions. The business identity needs metadata access to both topics and read-only access to the control topic. The dedicated identity needs `WRITE` and its implied `DESCRIBE` on the control topic and at least `DESCRIBE` on the selected business topic, with no permissions to mutate it. The check requires the broker's effective operation list for both roles. Installations can exercise the contract with `python3 tests/kafka-notice-writer-run.py <application-jar>`. A verified observation covers the reviewed roles and topics at that time. Publication remains blocked pending complete managed coverage, broader broker policy and approved transactional dispatch.
 
+### Record conditional approval
+
+After the preview verifies the current managed catalog, an administrator can select **Record conditional approval**. This saves the exact failure, configuration revision, control Topic UUID, physical-route and notice digests, and writer permission evidence from that review. The record is immutable and retains its original blockers. Incomplete or conflicting catalog observations prevent an approval from being recorded. Confirmed current routes do not establish where older configurations wrote in the past, so the approval always keeps historical ownership as a publication blocker. A newly verified writer or changed configuration requires a fresh review and approval.
+
+API clients send `POST /api/tasks/<task>/kafka-notice-approvals` with a stable `X-Request-ID` header and JSON fields `expectedRevision`, `predecessorRequestId` and the preview's `approvalScopeSha256`. A successful record returns `RECORDED_BLOCKED` and `executionAuthorized: false`. Either controller can replay the request while the reviewed configurations and the approving account's authorization revision remain current. For the historical receipt, use `GET /api/tasks/<task>/recovery-receipts/<request-id>` as an authorized administrator, including while the task owner is offline.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof
