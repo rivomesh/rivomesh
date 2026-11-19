@@ -300,7 +300,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
     approvalRequestId:approvalRequests.at(-1).id,approvalScopeSha256:approvalScope,controlTopicId:topicId,payloadSha256:'d'.repeat(64),
     task:{taskId:task.id,revision:task.revision,configurationVersion:version},failure:{failedSequence:'7',targetId:target},
     precedingPhysicalReceipt:{status:'VERIFIED',receiptSha256:'f'.repeat(64),signature:'private display fixture'},
-    blockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED']})};
+    blockers:['KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED','KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED']})};
   }
   if(path!==base+'/kafka-notice-plan')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
@@ -350,6 +350,7 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
   preflightAuthorizes=false;check.click();await flush();
   assert.match(preflight.textContent,/已核实本次故障的确切前序 ACK/);
   assert.match(preflight.textContent,/历史归属仍待核实，通知继续受阻/);
+  assert.match(preflight.textContent,/发送端必须按已审批的物理 Topic UUID 写入/);
   assert.ok(!preflight.textContent.includes('private display fixture'));
   assert.equal(preflight.querySelectorAll('button').length,1);
   assert.deepEqual(preflightRequests,Array(2).fill({expectedRevision:task.revision,approvalScopeSha256:approvalScope}));

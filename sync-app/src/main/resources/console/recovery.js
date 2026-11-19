@@ -126,6 +126,7 @@ window.RivomeshRecovery=(()=>{
      ||!Array.isArray(check.blockers)||!check.blockers.includes('KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED'))
      throw new Error(t('receiptMismatch'));
     result.append(label('p',states[status]),label('p','kafkaNoticePreflightBlocked'));
+    if(check.blockers.includes('KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED'))result.append(label('p','kafkaNoticeTopicIdentityRequired'));
    }catch(error){if(eligible())result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
   };
@@ -646,6 +647,7 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprovalNote:'历史物理归属仍待核对。登记审批仅保存本次核对范围，通知不会发送。',
   kafkaNoticeApprovalRecorded:'审批已登记，通知仍未获准发送。',
   kafkaNoticePreflight:'核对发送条件',kafkaNoticePreflightBlocked:'控制 Topic 的历史归属仍待核实，通知继续受阻。',
+  kafkaNoticeTopicIdentityRequired:'发送端必须按已审批的物理 Topic UUID 写入。当前 Kafka 客户端按名称发送。',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'已核对生效和可回退配置当前指向的 Kafka Topic。',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'管理目录超出这次只读核对的范围。',
@@ -681,6 +683,7 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticeApprovalNote:'Historical topic ownership needs verification. Recording approval saves the reviewed scope and keeps publication blocked.',
   kafkaNoticeApprovalRecorded:'Approval recorded. Publication is still blocked.',
   kafkaNoticePreflight:'Check sender prerequisites',kafkaNoticePreflightBlocked:'The notice remains blocked until historical control Topic ownership is verified.',
+  kafkaNoticeTopicIdentityRequired:'The sender must address the approved physical Topic UUID. The current Kafka client sends by name.',
   KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
   KAFKA_NOTICE_CATALOG_RESTORABLE_ROUTES_VERIFIED:'Verified where active and restorable Kafka configurations point at review time.',
   KAFKA_NOTICE_CATALOG_REVIEW_LIMIT:'The managed catalog exceeds the scope of this read-only review.',

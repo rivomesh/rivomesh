@@ -15,6 +15,7 @@ import java.util.Set;
 final class KafkaNoticeApproval {
     static final String RECORDED="KAFKA_NOTICE_APPROVAL_RECORDED_BLOCKED";
     static final String HISTORY="KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED";
+    static final String TOPIC_ID_PRODUCE="KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED";
     private static final Set<String> VERIFIED_CATALOG=Set.of("VERIFIED_SINGLETON","VERIFIED_AT_REVIEW");
 
     record Scope(Prepared plan,String configurationCutSha256,String physicalRoutesSha256,Result writer,
@@ -54,7 +55,9 @@ final class KafkaNoticeApproval {
         boolean exact=task.configurationVersion().equals(receipt.get("configurationVersion"))
                 &&failure.targetId().equals(receipt.get("targetId"))
                 &&failure.acknowledgedSequence().equals(receipt.get("acknowledgedSequence"));
-        var blockers=new ArrayList<>(scope.blockers());var predecessor=new LinkedHashMap<String,Object>();
+        var blockers=new ArrayList<>(scope.blockers());
+        blockers.add(TOPIC_ID_PRODUCE);
+        var predecessor=new LinkedHashMap<String,Object>();
         if(exact&&"VERIFIED".equals(status)&&"KAFKA_PHYSICAL_RECEIPT_VERIFIED".equals(code)
                 &&receipt.get("receiptSha256") instanceof String digest&&FailureEvidence.hash(digest)){
             predecessor.put("receiptSha256",digest);

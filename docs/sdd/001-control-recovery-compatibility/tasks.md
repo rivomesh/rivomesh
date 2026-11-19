@@ -100,6 +100,7 @@ RM-SDD-001 · 2026-11-17
   - [x] 真实 Kafka 首个新 COMMIT 保存签名 Topic 回执、Agent 成员租约和日志 UTC；实测 PostgreSQL、MySQL、H2 日志。
   - [x] 双入口在真实 TLS/SCRAM Kafka 查询同一签名回执，替换 Topic UUID 时由管理界面提示缺证。
   - [x] 真实 MySQL 到双 Kafka 已验首发 UNKNOWN、单订阅失败隔离、目标恢复、Agent 重启和原 Worker 撤租。
+  - [x] 双入口独立报告按审批的物理 UUID 发送这一前置条件。三 Broker 验证同名控制 Topic 重建和旧配置拒绝，原位点与两路 ACK 保持。
   - [ ] 历史实际写入归属、审批后事务发送、故障恢复和跨适配器验收。
 ## 源数据库兼容
 

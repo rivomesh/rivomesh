@@ -14367,5 +14367,26 @@
     },
     "pending": "The first attempt does not establish the complete history or physical destination UUID. Approved recovery notice dispatch and whole-history evidence remain blocked.",
     "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-first-send --java-home <Temurin 21 directory> --artifact-sha256 <release SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+  },
+  "kafkaNoticePhysicalAddressRequirement": {
+    "artifactSha256": "fc76a7170ed77b90c6db8b88c0168a3936fe95f6827bdf21015ff757eff2e81e",
+    "nativeLogSha256": "4f7ae4e4a4a5ae556955e00712af186c8db1cc8d4dcb61a7387ac0b9de584753",
+    "nativeChecks": [
+      "RF3 TLS/SCRAM approval and both Controller preflight reads match exact original failure, topic and actor.",
+      "both Controllers reject same-name replacement of the RF3 control Topic.",
+      "updated configuration is rejected; control and business offsets, groups and both journal ACKs are unchanged."
+    ],
+    "fixtureSha256": "fe800be3b4645de4e4781de3a9c212a446fe2b693a5d5ae3251433766b21d41f",
+    "scope": "Dedicated readiness response for an approval requiring physical Topic ID addressing. Existing immutable approval digest and original history blocker remain. No sender starts in this management path.",
+    "nativeBroker": "Three Kafka 3.9.2 TLS/SCRAM brokers, control Topic RF3",
+    "currentClientProduceMaxVersion": 11,
+    "protocolEvidenceSha256": "7bfb503d22f0552fb984de28d9bf83666a45d2f3ae59aaf6023347cdfef4d72d",
+    "controllerBothReport": "KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED",
+    "nativeCheckCount": 3,
+    "focusedJavaPassed": 16,
+    "domPassed": 167,
+    "browserPassed": 14,
+    "browserManifestSha256": "a4e586b21890139fd2bb6c63e73653cca5b786d63ebf69d4e1bab34193ae2b9b",
+    "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-notice-preflight --java-home <Temurin 21 directory> --artifact-sha256 <release SHA-256> sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
   }
 }

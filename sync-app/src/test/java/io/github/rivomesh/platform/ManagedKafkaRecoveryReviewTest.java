@@ -450,7 +450,8 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals("VERIFIED",verified.path("precedingPhysicalReceipt").path("status").asText());
             assertEquals(Codec.sha256("checked physical receipt"),verified.path("precedingPhysicalReceipt").path("receiptSha256").asText());
             assertFalse(verified.toString().contains("private fixture"));
-            assertEquals(List.of("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED","KAFKA_NOTICE_WRITER_NOT_CONFIGURED"),
+            assertEquals(List.of("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED","KAFKA_NOTICE_WRITER_NOT_CONFIGURED",
+                    "KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED"),
                     Model.JSON.convertValue(verified.path("blockers"),List.class));
             assertEquals(revision,fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText());
             assertEquals(historical,fixture.get(api,TASK+"/recovery-receipts/"+approvalId,PlatformTest.TOKEN));

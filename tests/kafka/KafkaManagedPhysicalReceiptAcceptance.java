@@ -297,7 +297,8 @@ public final class KafkaManagedPhysicalReceiptAcceptance {
                 &&original.toString().equals(verified.path("controlTopicId").asText())
                 &&"VERIFIED".equals(verified.path("precedingPhysicalReceipt").path("status").asText())
                 &&Codec.sha256(Codec.encode(physical)).equals(verified.path("precedingPhysicalReceipt").path("receiptSha256").asText())
-                &&List.of("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED").equals(Codec.JSON.convertValue(verified.path("blockers"),List.class))
+                &&List.of("KAFKA_NOTICE_HISTORICAL_OWNERSHIP_UNVERIFIED","KAFKA_NOTICE_TOPIC_ID_PRODUCE_REQUIRED")
+                    .equals(Codec.JSON.convertValue(verified.path("blockers"),List.class))
                 &&!verified.toString().contains(secret)&&!verified.toString().contains("fixture-writer"),
                 "Sender prerequisite report lost its scope, redaction or historical blocker");
         assertNativeProgress(journal,broker,before);
