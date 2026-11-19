@@ -603,6 +603,7 @@ function sourceConfiguration(f){
    root:{url:f.oracleRootUrl.value.trim(),username:f.oracleRootUser.value.trim(),password:f.oracleRootPassword.value},
    pdb:{url:f.oraclePdbUrl.value.trim(),username:f.oraclePdbUser.value.trim(),password:f.oraclePdbPassword.value},
    tables:oracleTables()}});
+  if(f.oracleVirtualNumeric.checked)source.oracle.allowVirtualNumericColumns=true;
   version=f.oracleVersion.value.trim();
  }else{
   Object.assign(source,{host:f.sourceHost.value.trim(),port:Number(f.sourcePort.value),username:f.sourceUsername.value,password:f.sourcePassword.value,serverId:Number(f.serverId.value)});
@@ -658,14 +659,14 @@ Object.assign(messages.zh,{
  pgSourceRequirements:'实验性档案。填写可写主库的地址、数据库及发布名称。切主续传需使用稳定写入入口和已同步逻辑槽。支持 PostgreSQL 和 MySQL 目标。创建后先执行检查。',
  oraclePdb:'可写 PDB 名称',oracleRootService:'CDB 根服务（归档读取）',oraclePdbService:'PDB 服务（读取快照）',oracleTables:'源表（大写 OWNER.TABLE，每行一张）',
  oracleSourceRequirements:'实验性档案。Agent 需安装 Oracle JDBC 驱动。填写 CDB 根和可写 PDB 两个服务，归档模式与全列补充日志须已配置。支持 PostgreSQL 目标。创建后先执行检查。',
- oracleTableListInvalid:'填写 1–200 张不重复的表，每张表使用大写 OWNER.TABLE。',sourceJdbcInvalid:'请填写该源数据库的 JDBC URL。'
+ oracleVirtualNumeric:'同步受支持的整数虚拟列',oracleTableListInvalid:'填写 1–200 张不重复的表，每张表使用大写 OWNER.TABLE。',sourceJdbcInvalid:'请填写该源数据库的 JDBC URL。'
 });
 Object.assign(messages.en,{
  sourceEngine:'Source database engine',sourceJdbc:'Source JDBC URL',pgDatabase:'PostgreSQL database',pgSchemas:'Source schemas (comma-separated)',pgPublication:'Logical publication',pgSlotPrefix:'Logical slot prefix',pgFailoverSlot:'Use a failover logical slot',
  pgSourceRequirements:'Experimental. Provide the writable primary address, database and publication. Failover needs a stable writer endpoint and a synchronized logical slot. PostgreSQL and MySQL targets are supported. Run Check after creating the task.',
  oraclePdb:'Writable PDB name',oracleRootService:'CDB root service (archive capture)',oraclePdbService:'PDB service (snapshot reads)',oracleTables:'Source tables (uppercase OWNER.TABLE, one per line)',
  oracleSourceRequirements:'Experimental. Install Oracle JDBC on the Agent. Supply the CDB root and writable PDB services with archive mode and all-column supplemental logging. PostgreSQL targets are supported. Run Check after creating the task.',
- oracleTableListInvalid:'Enter 1–200 distinct tables using uppercase OWNER.TABLE.',sourceJdbcInvalid:'Enter a JDBC URL for this source engine.'
+ oracleVirtualNumeric:'Sync supported integer virtual columns',oracleTableListInvalid:'Enter 1–200 distinct tables using uppercase OWNER.TABLE.',sourceJdbcInvalid:'Enter a JDBC URL for this source engine.'
 });
 function wizardSource(){return v3()?$('create-form').elements.sourceType.value:'MYSQL';}
 function oracleTables(){return $('create-form').elements.oracleTables.value.split(/[,\n]/).map(name=>name.trim()).filter(Boolean);}

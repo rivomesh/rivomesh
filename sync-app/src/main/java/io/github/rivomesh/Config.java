@@ -58,6 +58,7 @@ public final class Config {
         public OracleEndpoint root,pdb;
         public java.util.List<String> tables=new java.util.ArrayList<>();
         public long archivePollMillis=2000;
+        public boolean allowVirtualNumericColumns;
     }
 
     public static final class OracleEndpoint {

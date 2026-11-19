@@ -85,7 +85,7 @@ final class OracleCdcSource implements SourceAdapter {
             for(String qualified:options.tables){
                 OracleSourceProbe.verifyFlashback(pdb,qualified,
                         snapshot==null?authority.currentScn:snapshot.getPayload().get("scn"));
-                TableSchema table=OracleSourceProbe.redoSchema(pdb,config.database,qualified);
+                TableSchema table=OracleSourceProbe.redoSchema(pdb,config.database,qualified,options.allowVirtualNumericColumns);
                 requireSupplementalImages(pdb,table);
                 tables.put(qualified,table);
             }
@@ -227,6 +227,7 @@ final class OracleCdcSource implements SourceAdapter {
             query.setFetchSize(256);
             SourcePosition anchor=snapshot;
             query.setBigDecimal(1,new BigDecimal(scn(anchor)));
+            OracleVirtualNumbers.Plan generated=options.allowVirtualNumericColumns?OracleVirtualNumbers.plan(table):null;
             ResultSet rows=query.executeQuery();
             return new Snapshot(){
                 public SourcePosition baseline(){return anchor;}
@@ -245,6 +246,7 @@ final class OracleCdcSource implements SourceAdapter {
                                 row.add(Cell.value(number==null?null:number.toPlainString()));
                             }
                         }
+                        if(generated!=null)generated.verifySnapshot(row);
                         result.add(row);
                     }
                     return result;

@@ -28,6 +28,7 @@ final class OracleSourceProbe {
         public String sourceId,pdbName;
         public List<String> tables;
         public OracleArchiveWindow archiveWindow;
+        public boolean allowVirtualNumericColumns;
     }
 
     static final class Authority {
@@ -71,7 +72,7 @@ final class OracleSourceProbe {
             for(String qualified:unique)tables.add(verifyFlashback(pdb,qualified,anchor.currentScn));
             if(archive!=null&&settings.archiveWindow.decodeCommitted){
                 Map<String,TableSchema> selected=new LinkedHashMap<>();
-                for(String qualified:unique)selected.put(qualified,redoSchema(pdb,settings.pdbName,qualified));
+                for(String qualified:unique)selected.put(qualified,redoSchema(pdb,settings.pdbName,qualified,settings.allowVirtualNumericColumns));
                 archive.summary.put("decoded",OracleArchiveRead.inspect(root,settings.pdbName,archive,selected,snapshot));
             }
             Authority current=authority(root,settings.pdbName);
@@ -176,7 +177,7 @@ final class OracleSourceProbe {
         return result;
     }
 
-    static TableSchema redoSchema(Connection pdb,String pdbName,String qualified)throws Exception{
+    static TableSchema redoSchema(Connection pdb,String pdbName,String qualified,boolean allowVirtualNumeric)throws Exception{
         String[] names=qualified.split("\\.",2);
         TableSchema schema=new TableSchema();
         schema.database=names[0];
@@ -184,17 +185,24 @@ final class OracleSourceProbe {
         schema.id=TableSchema.identity(pdbName,names[0],names[1]);
         schema.sourceEngine="ORACLE";
         Set<String> textJson=OracleTextJson.columns(pdb,names[0],names[1],QUERY_SECONDS);
+        String definition=allowVirtualNumeric?",default_length,data_default_vc":"";
         try(PreparedStatement query=pdb.prepareStatement("SELECT column_name,data_type,data_precision,data_scale,char_length,nullable,"
-                +"virtual_column,data_length FROM all_tab_cols WHERE owner=? AND table_name=? AND hidden_column='NO' ORDER BY column_id")){
+                +"virtual_column,data_length"+definition+" FROM all_tab_cols WHERE owner=? AND table_name=? AND hidden_column='NO' ORDER BY column_id")){
             query.setQueryTimeout(QUERY_SECONDS);
             query.setString(1,names[0]);query.setString(2,names[1]);
             try(ResultSet rows=query.executeQuery()){
                 while(rows.next()){
-                    if(!"NO".equals(rows.getString(7)))throw new IllegalStateException("ORACLE_VIRTUAL_COLUMN_REQUIRES_PROFILE");
                     TableSchema.Column column=new TableSchema.Column();
                     column.name=rows.getString(1);
                     column.sourceType=rows.getString(2);
                     column.nullable="Y".equals(rows.getString(6));
+                    if(!"NO".equals(rows.getString(7))){
+                        if(!allowVirtualNumeric)throw new IllegalStateException("ORACLE_VIRTUAL_COLUMN_REQUIRES_PROFILE");
+                        if(!"YES".equals(rows.getString(7))||!"NUMBER".equals(column.sourceType)||rows.getInt(9)>100)
+                            throw new IllegalStateException("ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED");
+                        column.generationKind="VIRTUAL";
+                        column.generationExpression=rows.getString(10);
+                    }
                     switch(column.sourceType){
                         case "NUMBER":
                             column.precision=rows.getInt(3);
@@ -229,6 +237,7 @@ final class OracleSourceProbe {
             }
         }
         schema.validate();
+        if(allowVirtualNumeric)OracleVirtualNumbers.plan(schema);
         for(String key:schema.primaryKey)
             if(schema.columns.get(schema.column(key)).type==TableSchema.Type.JSON)
                 throw new IllegalStateException("ORACLE_TEXT_JSON_PRIMARY_KEY_UNSUPPORTED");

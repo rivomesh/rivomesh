@@ -10318,5 +10318,47 @@
     "domTestsPassed": 154,
     "scope": "MySQL 8.4.13 source, a shared PostgreSQL control and journal database with two Agents and Controllers, and PostgreSQL and MySQL transactional destinations. Real Chrome commits the bound public transfer, and both controllers replay it. Changed destination receipt preserves the parked state. The same start approval resumes after a candidate restart, retains original snapshots, and can be replayed after ordinary STOP without restarting the Worker.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/native-public-owner --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-target-fence --handoff-worker-start --handoff-public-owner --handoff-public-owner-browser /path/to/Chrome --handoff-adopted-browser /path/to/Chrome --previous-handoff-runtime /path/to/parked-format-runtime.jar"
+  },
+  "oracleSourceVirtualIntegerNative": {
+    "native": {
+      "artifactSha256": "4d81f927ee7000af9b948e4842c51127e873f091a17602175ae8712b0ef603a7",
+      "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+      "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "textJson": false,
+      "dateValues": false,
+      "virtualEvidence": false,
+      "virtualColumns": true,
+      "startupTimeoutSeconds": 480,
+      "checks": [
+        "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+        "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+        "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+        "A root connection substituted for the PDB is refused before flashback",
+        "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+        "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+        "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+        "An unarchived part of the requested SCN window is refused",
+        "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+        "Preflight requires explicit virtual column admission and refuses function expressions",
+        "Flashback independently verifies keyed derived values and preserves keyless duplicate multiplicity",
+        "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+        "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+        "Archived same-row updates, SQL NULL and one keyless delete carry computed values on PostgreSQL",
+        "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+        "PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs",
+        "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+      ],
+      "status": "PASS",
+      "sourceVersion": "23.26.4.0.0",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "548b15df354aa157b0d792fb818f20808655f3d538a82c779b8a90e2cfe7b0f8",
+    "harnessSourceSha256": "7d34783e08a57d7f80e4808c188cc519a669872ca0b132d5eb518abd560e50d1",
+    "javaTestsPassed": 123,
+    "javaConditionalSkips": 1,
+    "domTestsPassed": 154,
+    "scope": "Oracle Free 26ai 23.26.4.0.0 single PDB to PostgreSQL 17.12. Opt-in integer virtual columns use one checked physical operand and a bounded literal. Snapshot verifies computed values, archived typed images preserve updates, SQL NULL and keyless duplicates, and SIGKILL replay retains the original PostgreSQL snapshot identities.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact /path/to/rivomesh.jar --jdbc-driver /path/to/ojdbc8.jar --java /path/to/java --output target/native-oracle-virtual --logminer --pipeline --virtual-columns --startup-timeout 480"
   }
 }

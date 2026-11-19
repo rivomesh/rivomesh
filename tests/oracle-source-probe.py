@@ -222,6 +222,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         order = '"ID"' if key else '"EVENT_AT" NULLS LAST'
         return target_sql(f'SELECT {column} FROM copy_app."{table}" ORDER BY {order}',checked=False).splitlines()
 
+    def virtual_rows(keyed=False):
+        table='RIVO_SYNC_VIRTUAL_ROWS' if keyed else 'RIVO_SYNC_VIRTUAL_KEYLESS'
+        amount="""COALESCE("AMOUNT"::text,'<NULL>')||'|'||COALESCE("DERIVED"::text,'<NULL>')"""
+        selected=f'''"ID"||'|'||{amount}''' if keyed else amount
+        order='"ID"' if keyed else '"AMOUNT" NULLS LAST'
+        return target_sql(f'SELECT {selected} FROM copy_app."{table}" ORDER BY {order}',checked=False).splitlines()
+
     def rotate():
         sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
 
@@ -279,6 +286,27 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         rotate()
         source_tables += ['RIVO_APP.RIVO_DATE_ROWS','RIVO_APP.RIVO_DATE_KEYLESS']
 
+    if options.virtual_columns:
+        sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
+            CREATE TABLE rivo_app.rivo_sync_virtual_rows (
+                id NUMBER(12) PRIMARY KEY, amount NUMBER(12),
+                derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+            CREATE TABLE rivo_app.rivo_sync_virtual_keyless (
+                amount NUMBER(12), derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+            CREATE TABLE rivo_app.rivo_sync_virtual_unsupported (
+                amount NUMBER(12), derived NUMBER(16,0) GENERATED ALWAYS AS (ABS(amount)) VIRTUAL);
+            ALTER TABLE rivo_app.rivo_sync_virtual_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            ALTER TABLE rivo_app.rivo_sync_virtual_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_rows TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_keyless TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_unsupported TO C##RIVO_PROBE;
+            INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES(1,7);
+            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount) VALUES(3);
+            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount) VALUES(3);
+            COMMIT;''')
+        rotate()
+        source_tables += ['RIVO_APP.RIVO_SYNC_VIRTUAL_ROWS','RIVO_APP.RIVO_SYNC_VIRTUAL_KEYLESS']
+
     started=False
     try:
         execute('docker','run','--rm','-d','--name',target,
@@ -310,6 +338,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                             'metadataSchema':'copy_meta'}],
                 'chunkSize':2,'heartbeatMillis':500,'leaseMillis':5000,'pollIntervalMillis':150,
             }
+            if options.virtual_columns:
+                pipeline['source']['oracle']['allowVirtualNumericColumns']=True
             task_file=tasks/'oracle_native.yml'
             task_file.write_text(json.dumps(pipeline))
             checked=execute(*program,'check',str(task_file),env=env)
@@ -327,6 +357,20 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert denied.returncode and error in denied.stderr
                 source_oracle['tables']=source_tables
                 observed('Preflight refuses native binary JSON and textual JSON source keys')
+
+            if options.virtual_columns:
+                invalid=folder/'virtual-unsupported.yml'
+                source_oracle=pipeline['source']['oracle']
+                for tables,allow,code in [
+                    (source_tables,False,'ORACLE_VIRTUAL_COLUMN_REQUIRES_PROFILE'),
+                    (['RIVO_APP.RIVO_SYNC_VIRTUAL_UNSUPPORTED'],True,'ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED'),
+                ]:
+                    source_oracle.update(tables=tables,allowVirtualNumericColumns=allow)
+                    invalid.write_text(json.dumps(pipeline))
+                    denied=execute(*program,'check',str(invalid),env=env,checked=False)
+                    assert denied.returncode and code in denied.stderr
+                source_oracle.update(tables=source_tables,allowVirtualNumericColumns=True)
+                observed('Preflight requires explicit virtual column admission and refuses function expressions')
 
             # Keep DML started before the snapshot open through the first archive rotation.
             long_transaction=subprocess.Popen(('docker','exec','-i',oracle,'sqlplus','-L','-s','/','as','sysdba'),
@@ -374,6 +418,10 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert target_sql('SELECT pg_typeof("EVENT_AT")::text FROM copy_app."RIVO_DATE_ROWS" '
                                       'WHERE "ID"=1')=='timestamp without time zone'
                     observed('Flashback preserves Oracle DATE leap day, NULL, seconds and two distinct local clocks across a JVM DST gap')
+                if options.virtual_columns:
+                    required(lambda:virtual_rows(True)==['1|7|14'] and virtual_rows()==['3|6','3|6'],
+                             'Oracle virtual NUMBER snapshot',90)
+                    observed('Flashback independently verifies keyed derived values and preserves keyless duplicate multiplicity')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
@@ -402,6 +450,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         DELETE FROM rivo_app.rivo_date_keyless
                             WHERE event_at=TO_DATE('2024-03-10 02:17:19','YYYY-MM-DD HH24:MI:SS');
                         COMMIT;""")
+                if options.virtual_columns:
+                    sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
+                        UPDATE rivo_app.rivo_sync_virtual_rows SET amount=5 WHERE id=1;
+                        UPDATE rivo_app.rivo_sync_virtual_rows SET amount=-8 WHERE id=1;
+                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES (2,NULL);
+                        DELETE FROM rivo_app.rivo_sync_virtual_keyless WHERE ROWNUM=1;
+                        COMMIT;''')
                 rotate()
                 required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
                 observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
@@ -415,6 +470,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              and date_rows('RIVO_DATE_KEYLESS')==['2024-03-10 03:17:19'],
                              'Oracle DATE archived redo and undo',60)
                     observed('Archived redo and undo preserve Oracle DATE and NULL, and identify the exact keyless row across the DST gap')
+
+                if options.virtual_columns:
+                    required(lambda:virtual_rows(True)==['1|-8|-16','2|<NULL>|<NULL>'] and virtual_rows()==['3|6'],
+                             'Oracle virtual NUMBER archived redo',60)
+                    observed('Archived same-row updates, SQL NULL and one keyless delete carry computed values on PostgreSQL')
 
                 stop_platform(force=True)
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
@@ -432,6 +492,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         UPDATE rivo_app.rivo_date_keyless
                             SET event_at=TO_DATE('2024-03-10 02:11:00','YYYY-MM-DD HH24:MI:SS');
                         COMMIT;""")
+                if options.virtual_columns:
+                    sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
+                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES (3,11);
+                        UPDATE rivo_app.rivo_sync_virtual_keyless SET amount=-9;
+                        COMMIT;''')
                 rotate()
                 required_sql='SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=4'
                 start_platform(config,'worker-restart.log')
@@ -454,6 +519,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              'Oracle DATE archived restart',60)
                     assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                     observed('Oracle DATE offline insert and keyless update resume after SIGKILL with original snapshot IDs')
+
+                if options.virtual_columns:
+                    required(lambda:virtual_rows(True)==['1|-8|-16','2|<NULL>|<NULL>','3|11|22']
+                             and virtual_rows()==['-9|-18'],'Oracle virtual NUMBER restart',60)
+                    assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+                    observed('PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs')
 
                 durable=progress()['capture_scn']
                 sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
@@ -507,6 +578,8 @@ def main():
     parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
     parser.add_argument('--text-json', action='store_true', help='Also verify constrained VARCHAR2 to PostgreSQL JSONB')
     parser.add_argument('--date-values', action='store_true', help='Also verify Oracle DATE to PostgreSQL TIMESTAMP')
+    parser.add_argument('--virtual-columns', action='store_true',
+                        help='Check opt-in Oracle integer virtual columns through full and archived incremental replication')
     parser.add_argument('--virtual-evidence', action='store_true',
                         help='Inspect Oracle virtual NUMBER metadata, Flashback values and actual archived DML')
     parser.add_argument('--output', required=True, type=Path)
@@ -519,6 +592,8 @@ def main():
         parser.error('--text-json requires --pipeline')
     if options.date_values and not options.pipeline:
         parser.error('--date-values requires --pipeline')
+    if options.virtual_columns and not options.pipeline:
+        parser.error('--virtual-columns requires --pipeline')
     if options.virtual_evidence and not options.logminer:
         parser.error('--virtual-evidence requires --logminer')
     options.output.mkdir(parents=True, exist_ok=True)
@@ -530,7 +605,7 @@ def main():
               'driverSha256': hashlib.sha256(options.jdbc_driver.read_bytes()).hexdigest(),
               'image': options.image, 'runtimeVersion': execute(options.java,'-version').stderr.splitlines()[0],
               'textJson': options.text_json, 'dateValues': options.date_values,
-              'virtualEvidence': options.virtual_evidence, 'startupTimeoutSeconds':options.startup_timeout,
+              'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns, 'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
@@ -606,7 +681,14 @@ def main():
             program = (options.java, '-cp', str(options.artifact.resolve()) + os.pathsep
                        + str(options.jdbc_driver.resolve()), 'io.github.rivomesh.Main', 'probe-oracle',
                        str(profile))
-            result = json.loads(execute(*program, env=environment).stdout)
+            def fresh_anchor():
+                attempt=execute(*program,env=environment,checked=False)
+                if attempt.returncode and 'ORA-01466' in attempt.stderr:
+                    return None  # The disposable fixture has just changed the table definitions.
+                attempt.check_returncode()
+                return json.loads(attempt.stdout)
+
+            result=required(fresh_anchor,'Flashback anchor after fixture DDL',20)
             anchor = result['snapshotAnchor']
             assert anchor['sourceType'] == 'ORACLE' and anchor['sourceId'] == 'oracle-fixture'
             assert anchor['payload']['scn'].isdecimal() and anchor['payload']['resetlogsScn'].isdecimal()

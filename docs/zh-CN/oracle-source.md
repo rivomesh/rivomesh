@@ -37,7 +37,7 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
-归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、生成列、部分回滚及更多目标档案另行验收。SecureFiles LOB 的 LogMiner 记录缺少 `SQL_UNDO`，当前完整前后镜像采集在预检时拒绝 LOB 列。[Oracle LogMiner 数据类型与 SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式、部分回滚及更多目标档案另行验收。SecureFiles LOB 的 LogMiner 记录缺少 `SQL_UNDO`，当前完整前后镜像采集在预检时拒绝 LOB 列。[Oracle LogMiner 数据类型与 SecureFiles](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
 
 ### 文本 JSON 列
 
@@ -66,8 +66,20 @@ Oracle `DATE` 映射为 PostgreSQL `timestamp(6) without time zone`，保留年�
 
 用 `tests/oracle-source-probe.py --logminer --pipeline` 和冻结 JAR、Oracle JDBC 参数复现临时实库、强杀和恢复。加入 `--text-json` 验证严格文本 JSON，加入 `--date-values` 验证 Oracle DATE，均覆盖有主键、无主键表的 Flashback、归档 CDC 和恢复。[验收记录](../verification/README.md#oracle-archived-cdc-and-restart)
 
+## 整数虚拟列
+
+Oracle 26ai 任务可在向导选中 **同步受支持的整数虚拟列**，或在 V3 YAML 设置 `source.oracle.allowVirtualNumericColumns: true`。启动前先执行检查。
+
+支持虚拟 `NUMBER(p,0)` 列。目录表达式必须是单个物理 `NUMBER(p,0)` 列乘以 1 至 999 的整数。物理列与虚拟列都须明确声明精度，最大 18 位，结果精度须覆盖物理列的整个取值范围。例如 `AMOUNT NUMBER(12)` 和 `DERIVED NUMBER(16,0) GENERATED ALWAYS AS (AMOUNT * 2) VIRTUAL`。虚拟主键、函数表达式和小数操作数需要单独支持。 [Oracle 列表达式](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Column-Expressions.html)
+
+Worker 在全量阶段读取历史 SCN 的虚拟值并独立核对。增量阶段从归档 redo 和 undo 的物理列分别计算前后镜像。PostgreSQL 接收保存计算值的普通数值列。同一事务内多次更新、无主键重复行和 SQL NULL 保留原有语义。
+
+在创建日志时开启此项。设置会改变源指纹。已有任务应先审阅表结构与断点迁移，再启用此功能。
+
+以冻结应用包及 Oracle JDBC 参数运行 `tests/oracle-source-probe.py --logminer --pipeline --virtual-columns --startup-timeout 480`。实库夹具检查前后值、无主键重复行、原快照续传，以及对不支持表达式的拒绝。 [验证证据](../verification/README.md#oracle-virtual-column-feasibility)
+
 ## Oracle 虚拟生成列可行性
 
-Oracle Free 26ai `23.26.4.0.0` 的目录显示虚拟 `NUMBER` 表达式 `"AMOUNT"*2` 没有物理段列。在同一历史 SCN，Flashback 读取了原生成值并保留无主键重复行数量。归档 redo 和 undo 包含同一行两次更新的基础值、SQL NULL 插入和无主键删除的前镜像，生成值未出现在归档语句中。独立的 `COLUMN_PRESENT` 探测对限定列标识返回 `ORA-00904`，无法使用该函数的存在标记。正式适配器继续拒绝生成列，待显式配置、计算逻辑和原断点续传完成后验收。
+Oracle Free 26ai `23.26.4.0.0` 的目录显示虚拟 `NUMBER` 表达式 `"AMOUNT"*2` 没有物理段列。在同一历史 SCN，Flashback 读取了原生成值并保留无主键重复行数量。归档 redo 和 undo 包含同一行两次更新的基础值、SQL NULL 插入和无主键删除的前镜像，生成值未出现在归档语句中。独立的 `COLUMN_PRESENT` 探测对限定列标识返回 `ORA-00904`，无法使用该函数的存在标记。该次可行性试验确认了原生归档提供的操作数。
 
 使用已冻结的应用包和 Oracle JDBC 参数运行 `tests/oracle-source-probe.py --logminer --virtual-evidence --startup-timeout 480`。该档案在临时 Oracle 实例中运行。 [验证证据](../verification/README.md#oracle-virtual-column-feasibility)

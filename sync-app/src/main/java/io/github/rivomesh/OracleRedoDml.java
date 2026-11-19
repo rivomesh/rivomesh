@@ -58,8 +58,9 @@ final class OracleRedoDml {
         event.operation=expected;
         event.tableId=schema.id;
         event.schemaVersion=schema.version;
-        if(before!=null)event.before=typed(schema,before);
-        if(after!=null)event.after=typed(schema,after);
+        OracleVirtualNumbers.Plan generated=OracleVirtualNumbers.plan(schema);
+        if(before!=null)event.before=typed(schema,before,generated);
+        if(after!=null)event.after=typed(schema,after,generated);
         return event;
     }
 
@@ -82,10 +83,14 @@ final class OracleRedoDml {
         }
     }
 
-    private static List<Cell> typed(TableSchema schema,Map<String,Literal> image){
-        if(image.size()!=schema.columns.size())throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
+    private static List<Cell> typed(TableSchema schema,Map<String,Literal> image,OracleVirtualNumbers.Plan generated){
+        if(image.size()!=generated.physicalColumns())throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
         List<Cell> values=new ArrayList<>(schema.columns.size());
         for(TableSchema.Column column:schema.columns){
+            if(OracleVirtualNumbers.isVirtual(column)){
+                values.add(null);
+                continue;
+            }
             if(!image.containsKey(column.name))throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
             Literal literal=image.get(column.name);
             String value=literal==null?null:literal.value;
@@ -101,6 +106,7 @@ final class OracleRedoDml {
             }
             values.add(Cell.value(value));
         }
+        generated.populate(values);
         return values;
     }
 

@@ -726,6 +726,8 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     f.sourceType.value='ORACLE';f.sourceType.dispatchEvent(new ui.w.Event('change'));
     assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,true);
     assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);
+    assert.equal(f.oracleVirtualNumeric.disabled,false);assert.equal(f.oracleVirtualNumeric.checked,false);
+    f.oracleVirtualNumeric.checked=true;
     for(const [name,value] of Object.entries({jobId:'web-oracle',clusterId:'ora',oraclePdb:'FREEPDB1',oracleVersion:'23.26.4.0.0',oracleRootUrl:'jdbc:oracle:thin:@//ora:1521/FREE',oraclePdbUrl:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',oracleRootUser:'C##READER',oraclePdbUser:'PDB_READER',oracleRootPassword:'PRIVATE_ROOT',oraclePdbPassword:'PRIVATE_PDB',oracleTables:'owner.TABLE'}))f[name].value=value;
     ui.d.getElementById('next-step').click();assert.equal(f.oracleTables.validity.customError,true);
     f.oracleTables.value='SALES.ORDERS\nSALES.ITEMS\nBILLING.INVOICE';
@@ -734,7 +736,7 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     ui.d.getElementById('next-step').click();assert.doesNotMatch(ui.d.getElementById('plan-preview').textContent,/PRIVATE_ROOT|PRIVATE_PDB/);
     form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
     const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
-    assert.deepEqual(config.source,{type:'ORACLE',clusterId:'ora',database:'FREEPDB1',topology:'SINGLE',expectedVersion:'23.26.4.0.0',oracle:{tables:['SALES.ORDERS','SALES.ITEMS','BILLING.INVOICE'],root:{url:'jdbc:oracle:thin:@//ora:1521/FREE',username:'C##READER',password:'PRIVATE_ROOT'},pdb:{url:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',username:'PDB_READER',password:'PRIVATE_PDB'}}});
+    assert.deepEqual(config.source,{type:'ORACLE',clusterId:'ora',database:'FREEPDB1',topology:'SINGLE',expectedVersion:'23.26.4.0.0',oracle:{allowVirtualNumericColumns:true,tables:['SALES.ORDERS','SALES.ITEMS','BILLING.INVOICE'],root:{url:'jdbc:oracle:thin:@//ora:1521/FREE',username:'C##READER',password:'PRIVATE_ROOT'},pdb:{url:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',username:'PDB_READER',password:'PRIVATE_PDB'}}});
     assert.deepEqual(config.targets[0].mappings,{SALES:'sales_copy',BILLING:'billing_copy'});
   }finally{ui.dom.window.close();}
 });

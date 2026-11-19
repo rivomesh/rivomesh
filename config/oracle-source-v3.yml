@@ -20,6 +20,7 @@ source:
       - RIVO_APP.RIVO_ORDERS
       - RIVO_APP.RIVO_KEYLESS
     archivePollMillis: 2000
+    # allowVirtualNumericColumns: true
 databases: [RIVO_APP]
 journal:
   mode: LOCAL
