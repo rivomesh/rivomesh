@@ -26,12 +26,20 @@ Summaries expose identity,phase,positions,hashes and event counts without row im
 
 Journal inspection still limits combined raw/normalized content to4MiB and historical schemas to2MiB. Streaming large-transaction review remains open. File/page limits do not bypass capture limits.
 
+## Preserve history during an Agent handoff
+
+For a managed writer with a verified stopped cut and journal and control state in the same PostgreSQL database, the original Agent authenticates stored failure records with its private HMAC key. After verifying the same archive, the candidate stages the signed authority, original records, validation reports and closed operation receipts in its private directory. Approve ownership transfer using the same preparation in the console. The commit binds the verified stage to the journal cut and successor configuration. The Worker remains stopped.
+
+An administrator with access to the task and both Agents can use `GET /api/tasks/{taskId}/handoff/failure-history` through either Controller. The response lists the evidence IDs, byte lengths and SHA-256 digests, with an adoption digest. Supported closed operation receipts remain searchable by request ID through `/api/tasks/{taskId}/recovery-receipts/{requestId}`. The console shows how many records were staged and adopted. Historical reads verify the candidate copy and survive a candidate restart without the shared archive or staging directory.
+
+The original Agent keeps the HMAC key. The candidate stores the original signed bytes in `handoff-adopted/<id>/historical-failures`, separate from the live evidence store. The API serves metadata and digests. Use the normal recovery approvals for corrections, skips, target writes or Worker start. When a Controller is interrupted before commit, replay the same ownership request through either Controller. Ownership commit is refused when the preparation includes both raw captures and failure evidence. For an older stage sealed without these records, release the preparation and stage a fresh one. [Managed handoff controls](global-control.md#assess-transfer-to-another-agent)
+
 ## FAQ
 
 **Can a lost key be regenerated?** No. Existing authority/evidence without the key refuses initialization;wrong keys fail signatures. Restore key,authority,evidence and original directory identity together,including private permissions.
 
-**Can files be copied to another Agent for automatic takeover?** No. Changed owner/directory identity refuses. Explicit migration,authorization and checkpoint handoff remain open.
+**How can I retain evidence when transferring the task?** Use the reviewed handoff to preserve the original signed files as read-only history. A copy into a different Agent’s live evidence directory fails the owner and directory checks.
 
 **Does retention freeze destination commit status?** No. Capture does not connect to or activate business destinations and never assumes non-commit. Manual native-checkpoint reconciliation remains RC-05.
 
-**Is the file a skip plan?** No. Native receipts,fresh state checks,approval,gaps and idempotent recovery are still required. Manual skip/independent corrective entry are not exposed.
+**How can I skip or correct data after reviewing evidence?** Use the recovery flow that supports the destination. It rechecks the current cut, native receipts and approval scope, then records the gap and recovery receipt. Use handed-off history to locate the original incident and its closed receipts. [Transaction skip](transaction-skip.md) · [Managed repair](managed-repair.md)

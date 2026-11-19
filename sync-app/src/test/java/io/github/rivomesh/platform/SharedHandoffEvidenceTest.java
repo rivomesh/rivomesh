@@ -48,7 +48,7 @@ class SharedHandoffEvidenceTest {
         try(DirectoryStream<Path> paths=Files.newDirectoryStream(shared,"*.zip")){return paths.iterator().next();}
     }
 
-    private FailureEvidence historicalFailure() {
+    static FailureEvidence historicalFailure(String task,String node,String directory) {
         var failure=new FailureEvidence();
         failure.id=UUID.randomUUID().toString();
         failure.requestId="request_failure_1";
@@ -56,12 +56,12 @@ class SharedHandoffEvidenceTest {
         failure.createdBy="administrator";
         failure.createdAt=Instant.now().toString();
         failure.scope=new FailureEvidence.Scope();
-        failure.scope.taskId="task";
-        failure.scope.ownerNodeId="origin";
-        failure.scope.ownerDirectoryId=UUID.randomUUID().toString();
+        failure.scope.taskId=task;
+        failure.scope.ownerNodeId=node;
+        failure.scope.ownerDirectoryId=directory;
         var review=new Journal.FailureReview();
         review.fingerprint=Codec.sha256("config");
-        review.pipelineId="task";
+        review.pipelineId=task;
         review.generation="first-generation";
         review.epoch=review.sequence=review.failureEpoch=1;
         review.subscription=new Journal.Subscription();
@@ -81,7 +81,7 @@ class SharedHandoffEvidenceTest {
     }
 
     @Test void verifiesHistoricalFailureBytesAndKeepsTheSourceSigningKeyPrivate()throws Exception{
-        FailureEvidence failure=historicalFailure();
+        FailureEvidence failure=historicalFailure(scope.task(),"origin",UUID.randomUUID().toString());
         Path original=temporary.toRealPath().resolve("failures");
         var inputs=new SharedHandoffEvidence.Failures(original,failure.scope);
         scope=new SharedHandoffEvidence.Scope(scope.cluster(),scope.task(),scope.assessment(),scope.revision(),

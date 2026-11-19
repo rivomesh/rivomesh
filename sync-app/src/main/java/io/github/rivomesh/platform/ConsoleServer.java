@@ -212,11 +212,13 @@ public final class ConsoleServer implements AutoCloseable {
                 }
             }
             if(parts.length==6&&parts[1].equals("api")&&parts[2].equals("tasks")&&parts[4].equals("handoff")
-                    &&parts[5].equals("raw-history")&&method.equals("GET")){
-                try{json(exchange,200,invoke(TaskRequest.Kind.HANDOFF_RAW_HISTORY,parts[3],principal));}
+                    &&(parts[5].equals("raw-history")||parts[5].equals("failure-history"))&&method.equals("GET")){
+                TaskRequest.Kind kind=parts[5].equals("failure-history")?TaskRequest.Kind.HANDOFF_FAILURE_HISTORY:TaskRequest.Kind.HANDOFF_RAW_HISTORY;
+                try{json(exchange,200,invoke(kind,parts[3],principal));}
                 catch(NoSuchElementException missing){
-                    if(!"HANDOFF_RAW_HISTORY_NOT_FOUND".equals(missing.getMessage()))throw missing;
-                    error(exchange,404,"HANDOFF_RAW_HISTORY_NOT_FOUND");
+                    String code=kind+"_NOT_FOUND";
+                    if(!code.equals(missing.getMessage()))throw missing;
+                    error(exchange,404,code);
                 }
                 return;
             }

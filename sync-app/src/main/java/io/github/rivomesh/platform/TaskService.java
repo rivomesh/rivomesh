@@ -1242,7 +1242,7 @@ public final class TaskService implements AutoCloseable {
                 throw new Conflict("HANDOFF_CONFIGURATION_CHANGED");
         }
         var signed=new HandoffCandidateAdmission.Ready(admission.preparation(),admission.binding(),admission.desired(),
-                admission.configurationSha256(),admission.stagingSha256(),admission.rawCapture());
+                admission.configurationSha256(),admission.stagingSha256(),admission.rawCapture(),admission.failureRecords());
         var staged=HandoffCandidateAdmission.verifyPrepared(statePath.getParent(),plan,guard,signed);
         synchronized(this){
             requireCandidateHandoffScope(request,actor);
@@ -1422,6 +1422,17 @@ public final class TaskService implements AutoCloseable {
         if(authorized==null||task.recipientImport==null)throw new NoSuchElementException("HANDOFF_RAW_HISTORY_NOT_FOUND");
         ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
         return HandoffEvidenceAdoption.rawHistory(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
+                authorized.committedRevision(),task.recipientImport,guard,actor::node,authorized);
+    }
+    synchronized Map<String,Object> adoptedFailureHistory(String id,AccessControl.Principal actor,
+                                                          HandoffEvidenceAdoption.Receipt authorized)throws Exception{
+        ensureOpen();currentActor(actor);
+        if(!actor.administers()||!actor.task(id)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        require(id);
+        Control task=registry.tasks.get(id);
+        if(authorized==null||task.recipientImport==null)throw new NoSuchElementException("HANDOFF_FAILURE_HISTORY_NOT_FOUND");
+        ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+        return HandoffEvidenceAdoption.failureHistory(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
                 authorized.committedRevision(),task.recipientImport,guard,actor::node,authorized);
     }
     private Path failureEvidenceDirectory(String id){return Paths.get(config.dataDirectory).toAbsolutePath().normalize().resolve("failure-evidence").resolve(id);}

@@ -60,7 +60,7 @@ java -jar rivomesh.jar review-source /etc/rivomesh/tasks/pipeline.yml \
 
 原 Agent 和候选 Agent 核验同一个原始归档后，在交接准备中点击 **暂存报告和回执**。Controller 核验准备记录并将原始归档的描述发给绑定候选。候选把原始 ZIP 和密封绑定写入私有的 `handoff-raw-staging` 目录。API 返回 `rawCapture`，界面显示已核验的归档数量。共享挂载不可用时，可从任一 Controller 重放同一暂存请求，直接核验候选的密封副本。原 Agent 保管 HMAC 密钥。暂存后任务归属与源断点仍在原审阅状态。
 
-使用 PostgreSQL 管理写入者时，提交已准备的归属交接可将相同 ZIP 发布到候选的私有 `handoff-adopted` 历史目录，此时 Worker 保持停止。管理员持有任务和两个 Agent 的访问权限后，可从任一 Controller 请求 `GET /api/tasks/{taskId}/handoff/raw-history` 查看归档摘要、大小、捕获数量及接收摘要。接口核验候选的私有副本。候选重启后，即使共享挂载不可用，仍可查询。原 Agent 保管原归档、回执及 HMAC 密钥。接收的归档供历史查询。跳过事务、写入目标和启动 Worker 各自需要授权。带故障证据的交接仍需单独支持。 [交接控制](global-control.md)
+使用 PostgreSQL 管理写入者时，提交已准备的归属交接可将相同 ZIP 发布到候选的私有 `handoff-adopted` 历史目录，此时 Worker 保持停止。管理员持有任务和两个 Agent 的访问权限后，可从任一 Controller 请求 `GET /api/tasks/{taskId}/handoff/raw-history` 查看归档摘要、大小、捕获数量及接收摘要。接口核验候选的私有副本。候选重启后，即使共享挂载不可用，仍可查询。原 Agent 保管原归档、回执及 HMAC 密钥。接收的归档供历史查询。跳过事务、写入目标和启动 Worker 各自需要授权。保留故障记录的任务使用独立的[故障历史交接](failure-evidence.md)。
 
 ### 批准跳过源事务
 

@@ -4,6 +4,7 @@ import io.github.rivomesh.CaptureArchiveReceipt;
 import io.github.rivomesh.CaptureArchiveReceiptTest;
 import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.recovery.FailureEvidenceStore;
 import io.github.rivomesh.validation.ValidationStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -93,7 +94,7 @@ class HandoffEvidenceAdoptionTest {
     }
 
     @Test void committedRawCaptureRemainsPrivateHistoryAfterStagingAndSharedCopiesAreUnavailable()throws Exception{
-        Fixture f=prepare(true);
+        Fixture f=prepare(Profile.RAW);
         assertThrows(NoSuchElementException.class,()->rawHistory(f,null,original.node()));
         var adoption=HandoffEvidenceAdoption.install(f.state(),f.plan(),cipher());
         var raw=adoption.rawCapture();
@@ -126,15 +127,70 @@ class HandoffEvidenceAdoptionTest {
                 f.plan().writerCommit().revision(),f.local(),cipher(),granted::equals,authorized);
     }
 
+    @Test void signedHistoricalFailureIsAdoptedExactlyAndRemainsSeparateFromLiveRecovery()throws Exception{
+        Fixture fixture=prepare(Profile.FAILURE);
+        assertThrows(NoSuchElementException.class,()->failureHistory(fixture,null,original.node()));
+        Path source=fixture.original().resolveSibling("historical-source");
+        Path staged=fixture.staged().resolve(HandoffFailureHistory.DIRECTORY);
+        String name=fixture.failureId()+".json";
+        byte[] signingKey=Files.readAllBytes(source.resolve("evidence.key"));
+        byte[] exact=Files.readAllBytes(source.resolve(name));
+        byte[] modified=exact.clone();modified[modified.length-1]^=1;
+        Files.write(staged.resolve(name),modified);
+        assertEquals("HANDOFF_STAGING_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffEvidenceAdoption.install(fixture.state(),fixture.plan(),cipher())).getMessage());
+        assertFalse(Files.exists(fixture.state().resolve("handoff-adopted")));
+        Files.write(staged.resolve(name),exact);
+        var receipt=HandoffEvidenceAdoption.install(fixture.state(),fixture.plan(),cipher());
+        assertEquals(1,receipt.failureRecords());
+        Path adopted=readWorkspace(fixture,null,receipt).resolve(HandoffFailureHistory.DIRECTORY);
+        for(String file:List.of("authority.json",name)){
+            assertArrayEquals(Files.readAllBytes(source.resolve(file)),Files.readAllBytes(adopted.resolve(file)));
+            assertEquals(PosixFilePermissions.fromString("rw-------"),Files.getPosixFilePermissions(adopted.resolve(file)));
+        }
+        try(var contents=Files.list(adopted)){
+            assertEquals(Set.of("authority.json",name),Set.copyOf(contents.map(path->path.getFileName().toString()).toList()));
+        }
+        Files.delete(fixture.archive());
+        Files.move(fixture.staged(),fixture.staged().resolveSibling("offline"));
+        var catalog=failureHistory(fixture,receipt,original.node());
+        assertEquals("READ_ONLY_HISTORY",catalog.get("state"));
+        assertEquals(false,catalog.get("executionAuthorized"));
+        assertEquals(List.of(java.util.Map.of("id",fixture.failureId(),"sha256",Codec.sha256(exact),"bytes",(long)exact.length)),
+                catalog.get("records"));
+        assertThrows(NoSuchElementException.class,()->failureHistory(fixture,receipt,candidate.node()));
+        assertFalse(Files.exists(fixture.state().resolve("failure-evidence")));
+        assertArrayEquals(signingKey,Files.readAllBytes(source.resolve("evidence.key")));
+        Files.write(adopted.resolve(name),modified);
+        assertEquals("HANDOFF_STAGING_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->failureHistory(fixture,receipt,original.node())).getMessage());
+    }
+
+    private java.util.Map<String,Object> failureHistory(Fixture fixture,HandoffEvidenceAdoption.Receipt authorized,String granted)throws Exception{
+        return HandoffEvidenceAdoption.failureHistory(fixture.state(),fixture.plan().task(),candidate.node(),candidate.directory(),
+                fixture.plan().writerCommit().revision(),fixture.local(),cipher(),granted::equals,authorized);
+    }
+
+    private enum Profile { STANDARD, RAW, FAILURE }
     private record Fixture(Path state,Path original,Path archive,Path staged,String report,
-                           HandoffPreparations.Plan plan,ManagedRecipientImport.Receipt local,Path rawArchive){}
-    private Fixture prepare()throws Exception{return prepare(false);}
-    private Fixture prepare(boolean rawProfile)throws Exception{
+                           HandoffPreparations.Plan plan,ManagedRecipientImport.Receipt local,Path rawArchive,String failureId){}
+    private Fixture prepare()throws Exception{return prepare(Profile.STANDARD);}
+    private Fixture prepare(Profile profile)throws Exception{
         Path root=home.toRealPath(),source=root.resolve("original"),shared=root.resolve("shared"),state=root.resolve("candidate");
         for(Path dir:List.of(source,shared,state))HandoffStaging.createDirectory(dir);
         String report=HandoffStagingTest.completedReport(source);
         var scope=new SharedHandoffEvidence.Scope("cluster","orders","assessed_01",UUID.randomUUID().toString(),UUID.randomUUID().toString(),original.directory(),candidate.directory());
-        var archive=SharedHandoffEvidence.export(shared,scope,source,List.of(closed));
+        SharedHandoffEvidence.Failures failures=null;
+        String failureId=null;
+        if(profile==Profile.FAILURE){
+            var failure=SharedHandoffEvidenceTest.historicalFailure(scope.task(),original.node(),original.directory());
+            Path storage=source.resolveSibling("historical-source");
+            var store=new FailureEvidenceStore(storage,failure.scope,new FailureEvidenceStore.Limits());
+            store.retain(failure);
+            failures=new SharedHandoffEvidence.Failures(storage,failure.scope);
+            failureId=failure.id;
+        }
+        var archive=SharedHandoffEvidence.export(shared,scope,source,List.of(closed),failures);
         var binding=new HandoffStaging.Binding("prepared_01","b".repeat(64),candidate,scope,archive);
         HandoffStaging.stage(state,shared,binding,cipher());
         String assignment=UUID.randomUUID().toString();
@@ -156,7 +212,7 @@ class HandoffEvidenceAdoptionTest {
                 100,900100,null,null,0,activation,null,null,null);
         RawCaptureHandoffStaging.Binding rawBinding=null;
         Path rawArchive=null;
-        if(rawProfile){
+        if(profile==Profile.RAW){
             Path identity=Files.writeString(state.resolve("owner-directory-id"),candidate.directory());
             Files.setPosixFilePermissions(identity,PosixFilePermissions.fromString("rw-------"));
             Path captures=source.resolve("native-capture");
@@ -172,11 +228,11 @@ class HandoffEvidenceAdoptionTest {
         }
         var ready=HandoffCandidateAdmission.prepare(state,binding,prepared,yaml,cipher(),successor->{},rawBinding);
         var committed=new HandoffPreparations.WriterCommit(prepared.actor(),ready.stagingSha256(),ready.configurationSha256(),
-                "revision_002","configuration_002",24,ready.rawCapture());
+                "revision_002","configuration_002",24,ready.rawCapture(),ready.failureRecords());
         var projected=new HandoffPreparations.Plan(prepared.id(),prepared.task(),prepared.sequence(),"PROJECTED",prepared.actor(),
                 prepared.actorRevision(),evidence,100,900100,null,null,200,activation,committed,"execute_001",null);
         var local=new ManagedRecipientImport.Receipt(prepared.id(),ready.configurationSha256(),ready.stagingSha256());
-        return new Fixture(state,source,SharedHandoffEvidence.stagingSource(shared,scope,archive),state.resolve("handoff-staging").resolve(binding.key()),report,projected,local,rawArchive);
+        return new Fixture(state,source,SharedHandoffEvidence.stagingSource(shared,scope,archive),state.resolve("handoff-staging").resolve(binding.key()),report,projected,local,rawArchive,failureId);
     }
     private static HandoffPreparations.Plan phase(HandoffPreparations.Plan plan,String phase,HandoffEvidenceAdoption.Receipt adoption){
         return new HandoffPreparations.Plan(plan.id(),plan.task(),plan.sequence(),phase,plan.actor(),plan.actorRevision(),plan.evidence(),

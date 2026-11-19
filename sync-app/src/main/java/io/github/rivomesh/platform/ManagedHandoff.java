@@ -299,12 +299,19 @@ final class ManagedHandoff {
     record CandidateAdmission(String preparation,HandoffPreparations.Binding binding,String desired,
                               String configurationSha256,String stagingSha256,
                               @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                              RawCaptureHandoffStaging.Proof rawCapture){
+                              RawCaptureHandoffStaging.Proof rawCapture,
+                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+                 int failureRecords){
         CandidateAdmission(String preparation,HandoffPreparations.Binding binding,String desired,String configurationSha256,String stagingSha256){
-            this(preparation,binding,desired,configurationSha256,stagingSha256,null);
+            this(preparation,binding,desired,configurationSha256,stagingSha256,null,0);
+        }
+        CandidateAdmission(String preparation,HandoffPreparations.Binding binding,String desired,String configurationSha256,String stagingSha256,
+                 RawCaptureHandoffStaging.Proof rawCapture){
+            this(preparation,binding,desired,configurationSha256,stagingSha256,rawCapture,0);
         }
         boolean valid(){return preparation!=null&&binding!=null&&"STOPPED".equals(desired)
-                &&digest(configurationSha256)&&digest(stagingSha256);}
+                &&digest(configurationSha256)&&digest(stagingSha256)&&HandoffFailureHistory.bounded(failureRecords)
+                &&(rawCapture==null||failureRecords==0);}
     }
 
     // Commits only after the authenticated candidate has verified its private staged files.
@@ -335,16 +342,19 @@ final class ManagedHandoff {
             requireExecutionReplay(plan,actor,executionRequest);
             if(!plan.writerCommit().stagingSha256().equals(candidate.stagingSha256())
                     ||!plan.writerCommit().configurationSha256().equals(candidate.configurationSha256())
-                    ||!Objects.equals(plan.writerCommit().rawCapture(),candidate.rawCapture()))
+                    ||!Objects.equals(plan.writerCommit().rawCapture(),candidate.rawCapture())
+                    ||plan.writerCommit().failureRecords()!=candidate.failureRecords())
                 throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
             return HandoffPreparations.summary(plan);
         }
         Assessment current=read(c,task.id);
-        RawCaptureHandoffStaging.Binding requiredRaw=requireCandidateReadiness(plan,actor,current,db.now(c));
-        if(recoveredCut!=null&&requiredRaw!=null)
+        RecoveryCustody required=requireCandidateReadiness(plan,actor,current,db.now(c));
+        if(recoveredCut!=null&&(required.raw()!=null||required.failures()>0))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        if(!Objects.equals(requiredRaw,candidate.rawCapture()==null?null:candidate.rawCapture().binding()))
+        if(!Objects.equals(required.raw(),candidate.rawCapture()==null?null:candidate.rawCapture().binding()))
             throw new TaskService.Conflict("HANDOFF_RAW_STAGING_REQUIRED");
+        if(required.failures()!=candidate.failureRecords())
+            throw new TaskService.Conflict("HANDOFF_FAILURE_HISTORY_STAGING_REQUIRED");
         if(stale(c,task,actor,current))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
         AgentDirectory.HandoffCapacity capacity=agents.handoffCapacity(c,candidate.binding().node());
         long total=capacity.assignedTasks()+capacity.reservedTasks();
@@ -358,12 +368,13 @@ final class ManagedHandoff {
         if(recoveredCut!=null&&!cut.equals(recoveredCut))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
         var committed=tasks.commitPreparedWriter(c,task,plan,actor,cut,yaml,candidate.stagingSha256(),
-                executionRequest,candidate.rawCapture());
+                executionRequest,candidate.rawCapture(),candidate.failureRecords());
         if(recoveredCut!=null)auditPreparation(c,committed,actor,executionRequest,"MANAGED_HANDOFF_EXECUTION_RECOVERED");
         return HandoffPreparations.summary(committed);
     }
 
-    private RawCaptureHandoffStaging.Binding requireCandidateReadiness(HandoffPreparations.Plan plan,AccessControl.Principal actor,
+    private record RecoveryCustody(RawCaptureHandoffStaging.Binding raw,int failures){}
+    private RecoveryCustody requireCandidateReadiness(HandoffPreparations.Plan plan,AccessControl.Principal actor,
                                            Assessment assessment,long now)throws Exception{
         if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
             throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
@@ -371,10 +382,13 @@ final class ManagedHandoff {
             throw new TaskService.Conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
         HandoffPreparations.Evidence active=assessment==null?null:preparationEvidence(assessment,now);
         if(!plan.evidence().equals(active))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
-        if(!(assessment.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory)
-                ||!"ABSENT".equals(inventory.get("failureEvidence")))
+        if(!(assessment.probe.originalEvidence.get("originInventory") instanceof Map<?,?> inventory))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        if("ABSENT".equals(inventory.get("sourceEvidence")))return null;
+        if("PRESENT".equals(inventory.get("failureEvidence"))&&"ABSENT".equals(inventory.get("sourceEvidence")))
+            return new RecoveryCustody(null,verifiedFailureRecords(assessment,plan));
+        if(!"ABSENT".equals(inventory.get("failureEvidence")))
+            throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        if("ABSENT".equals(inventory.get("sourceEvidence")))return new RecoveryCustody(null,0);
         if(!"PRESENT".equals(inventory.get("sourceEvidence")))
             throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
         var e=plan.evidence();
@@ -382,7 +396,21 @@ final class ManagedHandoff {
                 e.original().directory(),e.candidate().directory());
         RawCaptureHandoffStaging.Binding raw=rawCaptureStage(assessment,plan,scope);
         if(raw==null)throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
-        return raw;
+        return new RecoveryCustody(raw,0);
+    }
+
+    private static int verifiedFailureRecords(Assessment assessment,HandoffPreparations.Plan plan){
+        Object original=assessment.probe.originalEvidence.get("historicalFailureEvidence");
+        Map<String,Object> candidate=assessment.probe.sharedReportCustody;
+        if(!(original instanceof Map<?,?> witnessed)||!"ARCHIVED".equals(witnessed.get("state"))
+                ||candidate==null||!"VERIFIED".equals(candidate.get("state")))
+            throw new TaskService.Conflict("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        var archive=Model.JSON.convertValue(witnessed.get("archive"),SharedHandoffEvidence.Archive.class);
+        var verified=Model.JSON.convertValue(candidate.get("archive"),SharedHandoffEvidence.Archive.class);
+        if(archive==null||!archive.equals(verified)||archive.failureRecords()<1
+                ||!plan.evidence().custody().equals(archive.sha256()))
+            throw new TaskService.Conflict("HANDOFF_FAILURE_HISTORY_SCOPE_CHANGED");
+        return archive.failureRecords();
     }
 
     private static boolean digest(String value){return value!=null&&value.matches("[a-f0-9]{64}");}

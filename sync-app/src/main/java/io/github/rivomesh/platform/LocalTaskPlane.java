@@ -14,6 +14,8 @@ final class LocalTaskPlane implements TaskControlPlane {
         if(request.kind==TaskRequest.Kind.KAFKA_NOTICE_PLAN)return tasks.planKafkaNotice(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)return tasks.stageHandoffEvidence(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
+        if(request.kind==TaskRequest.Kind.HANDOFF_FAILURE_HISTORY)
+            return tasks.adoptedFailureHistory(request.taskId,actor,request.adoptedEvidence);
         if(request.kind==TaskRequest.Kind.HANDOFF_RAW_HISTORY)return tasks.adoptedRawHistory(request.taskId,actor,request.adoptedEvidence);
         if(request.kind==TaskRequest.Kind.RECOVERY_RECEIPT)return tasks.adoptedHandoffReceipt(request.taskId,request.reference,actor,request.adoptedEvidence);
         if(request.handoffRpc())return tasks.handoffProbe(request,actor);
@@ -32,7 +34,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
             case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
-            case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:
+            case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:case HANDOFF_FAILURE_HISTORY:
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:case HANDOFF_STAGE:case HANDOFF_COMMIT_OWNER:case HANDOFF_TARGET_FENCE:case HANDOFF_START_WORKER:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);

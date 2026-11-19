@@ -62,25 +62,27 @@ window.RivomeshHandoff=(()=>{
  bridge.register({
   handoffStage:'暂存报告和回执',handoffStageAgain:'复核已暂存的报告和回执',handoffStageRetry:'重试同一暂存请求',
   handoffStageHelp:'在候选 Agent 的私有目录暂存已核验的校验报告和已办结回执。暂存后仍由原 Agent 负责该任务。',
-  handoffStageDone:'候选 Agent 已核验暂存文件。',handoffStageReports:'校验报告',handoffStageReceipts:'已办结回执',handoffStageRawCapture:'原始采集档案',handoffAdoptedRawCapture:'只读原始采集档案',handoffStageRawPending:'归属切换后，原始档案仅可作为只读历史查看。',
+  handoffStageDone:'候选 Agent 已核验暂存文件。',handoffStageReports:'校验报告',handoffStageReceipts:'已办结回执',handoffStageRawCapture:'原始采集档案',handoffAdoptedRawCapture:'只读原始采集档案',handoffStageFailureHistory:'历史故障证据',handoffAdoptedFailureHistory:'只读历史故障证据',handoffStageRawPending:'归属切换后，原始档案仅可作为只读历史查看。',
   handoffStageUnknown:'暂存结果未知。可重试同一请求来核验候选 Agent 上的文件。',
   handoffStageInvalid:'暂存回执与当前准备记录不匹配。请重试核验。',
   HANDOFF_AGENT_CHANGED:'Agent 的登记已变化，请重新评估。',
   HANDOFF_STAGING_BUSY:'候选 Agent 正在处理暂存文件，稍后可重试。',
   HANDOFF_STAGING_CAPACITY:'候选 Agent 的私有暂存目录已达到容量上限。',
   HANDOFF_RAW_STAGING_REQUIRED:'候选 Agent 上缺少经过核验的原始采集档案。请重新暂存。',
+  HANDOFF_FAILURE_HISTORY_STAGING_REQUIRED:'候选 Agent 上缺少经过核验的历史故障证据。请重新暂存。',
   HANDOFF_STAGING_BYTES_CHANGED:'候选 Agent 上已暂存文件的内容发生变化，未通过核验。',
   HANDOFF_ARCHIVE_BYTES_CHANGED:'原证据归档摘要已变化，请重新核对归档。'
  },{
   handoffStage:'Stage reports and receipts',handoffStageAgain:'Reverify staged reports and receipts',handoffStageRetry:'Retry the same staging request',
   handoffStageHelp:'Stage verified validation reports and closed receipts in the candidate Agent’s private directory. The original Agent keeps ownership.',
-  handoffStageDone:'The candidate Agent verified the staged files.',handoffStageReports:'Validation reports',handoffStageReceipts:'Closed receipts',handoffStageRawCapture:'Raw capture archives',handoffAdoptedRawCapture:'Read-only raw capture archives',handoffStageRawPending:'After ownership transfer, raw archives are available as read-only history.',
+  handoffStageDone:'The candidate Agent verified the staged files.',handoffStageReports:'Validation reports',handoffStageReceipts:'Closed receipts',handoffStageRawCapture:'Raw capture archives',handoffAdoptedRawCapture:'Read-only raw capture archives',handoffStageFailureHistory:'Historical failure evidence',handoffAdoptedFailureHistory:'Read-only historical failure evidence',handoffStageRawPending:'After ownership transfer, raw archives are available as read-only history.',
   handoffStageUnknown:'The staging outcome is unknown. Retry the same request to verify the candidate’s files.',
   handoffStageInvalid:'The staging receipt does not match this preparation. Retry to verify.',
   HANDOFF_AGENT_CHANGED:'An Agent registered again. Reassess before staging.',
   HANDOFF_STAGING_BUSY:'The candidate is working with the staging files. Retry shortly.',
   HANDOFF_STAGING_CAPACITY:'The candidate’s private staging directories reached their capacity limit.',
   HANDOFF_RAW_STAGING_REQUIRED:'Restage the verified raw capture archive on the candidate Agent.',
+  HANDOFF_FAILURE_HISTORY_STAGING_REQUIRED:'Restage the verified historical failure evidence on the candidate Agent.',
   HANDOFF_STAGING_BYTES_CHANGED:'The candidate’s staged contents changed and could not be verified.',
   HANDOFF_ARCHIVE_BYTES_CHANGED:'The original evidence archive digest changed. Review the archive again.'
  });
@@ -275,6 +277,7 @@ window.RivomeshHandoff=(()=>{
  function readOnly(v){
   return bridge.task(v.taskId)?.formatVersion!==3||transferred(v.preparation)||v.unverifiedTransfer;
  }
+ function evidenceCount(value){return Number.isSafeInteger(value)&&value>0&&value<=64;}
  function validTransfer(preparation){
   if(!revisionId.test(preparation.committedRevision||'')||preparation.committedRevision===preparation.taskRevision
    ||!revisionId.test(preparation.committedConfigurationVersion||'')||typeof preparation.activatedJournalEpoch!=='string'
@@ -299,7 +302,8 @@ window.RivomeshHandoff=(()=>{
   return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED',...startStates].includes(preparation.state)?evidence!=null
     &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
     &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0
-    &&(evidence.rawCaptures==null||Number.isSafeInteger(evidence.rawCaptures)&&evidence.rawCaptures>0&&evidence.rawCaptures<=64)
+    &&(evidence.rawCaptures==null||evidence.failureRecords==null&&evidenceCount(evidence.rawCaptures))
+    &&(evidence.failureRecords==null||evidenceCount(evidence.failureRecords))
     :evidence==null;
  }
  function nextHandoffAction(v){
@@ -467,6 +471,7 @@ window.RivomeshHandoff=(()=>{
    ['handoffStageReports',preparation.adoptedEvidence.validationReports],
    ['handoffStageReceipts',preparation.adoptedEvidence.closedReceipts]);
   if(preparation.adoptedEvidence?.rawCaptures)values.push(['handoffAdoptedRawCapture',preparation.adoptedEvidence.rawCaptures]);
+  if(preparation.adoptedEvidence?.failureRecords)values.push(['handoffAdoptedFailureHistory',preparation.adoptedEvidence.failureRecords]);
   if(preparation.targetFence)values.push(['handoffFencedCount',preparation.targetFence.destinationsFenced]);
   for(const [label,value] of values)facts.append(node('dt',t(label)),node('dd',value));
   const details=node('details');
@@ -492,7 +497,8 @@ window.RivomeshHandoff=(()=>{
   const counts=attempted?.counts;
   const status=counts?t('handoffStageDone')+' '+t('handoffStageReports')+' '+counts.reports+' · '
    +t('handoffStageReceipts')+' '+counts.closedReceipts
-   +(counts.rawCaptures?' · '+t('handoffStageRawCapture')+' '+counts.rawCaptures+' · '+t('handoffStageRawPending'):''):'';
+   +(counts.rawCaptures?' · '+t('handoffStageRawCapture')+' '+counts.rawCaptures+' · '+t('handoffStageRawPending'):'')
+   +(counts.failureRecords?' · '+t('handoffStageFailureHistory')+' '+counts.failureRecords:''):'';
   if(v.stageStatus.textContent!==status)v.stageStatus.textContent=status;
  }
  function update(v){
@@ -735,7 +741,8 @@ window.RivomeshHandoff=(()=>{
      &&raw.preparationId===plan.id&&raw.candidateNodeId===plan.candidateNodeId&&raw.evidenceSha256===plan.evidenceSha256
      &&sha256.test(raw.archiveSha256||'')&&raw.archiveSha256!==result.archiveSha256&&sha256.test(raw.stagedSealSha256||'')
      &&Number.isSafeInteger(raw.archiveBytes)&&raw.archiveBytes>0&&Number.isSafeInteger(raw.rawCaptures)&&raw.rawCaptures>0;
-   if(!rawValid||result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
+   const failures=result?.failureRecords;
+   if(!rawValid||(failures!=null&&(raw!=null||!evidenceCount(failures)))||result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
      ||result.taskRevision!==plan.taskRevision||result.candidateNodeId!==plan.candidateNodeId
      ||result.evidenceSha256!==plan.evidenceSha256||result.archiveSha256!==plan.custodySha256
      ||!Number.isSafeInteger(result.reports)||result.reports<0
@@ -743,7 +750,7 @@ window.RivomeshHandoff=(()=>{
     attempt.counts=null;attempt.uncertain=true;v.feedback.textContent=t('handoffStageInvalid');
     return;
    }
-   attempt.counts={reports:result.reports,closedReceipts:result.closedReceipts,rawCaptures:raw?.rawCaptures};attempt.uncertain=false;
+   attempt.counts={reports:result.reports,closedReceipts:result.closedReceipts,rawCaptures:raw?.rawCaptures,failureRecords:failures};attempt.uncertain=false;
   }catch(error){
    if(!current(v)||v.stageAttempt!==attempt)return;
    attempt.counts=null;

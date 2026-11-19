@@ -168,7 +168,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-LG-05
   - [x] Adopted reports and closed receipts, and private MySQL capture ZIP staging with offline verification.
   - [x] Approved ownership transfer preserves the exact MySQL ZIP as candidate read-only history after restart and loss of the shared and staging copies.
-  - [ ] Historical failure evidence adoption and further storage and target profiles.
+  - [x] Approved same-database transfer adopts original signed failure records and closed receipts. Both Controllers reopen the read-only history after candidate restart.
+  - [ ] Combined raw and failure evidence adoption and further storage and target profiles.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06

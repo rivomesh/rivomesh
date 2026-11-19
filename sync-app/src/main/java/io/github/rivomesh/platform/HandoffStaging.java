@@ -105,9 +105,11 @@ final class HandoffStaging {
                 Files.move(pending,complete,StandardCopyOption.ATOMIC_MOVE);
                 force(root);
             }
-            return Map.of("state","STAGED","preparationId",binding.preparation(),"taskRevision",binding.scope().revision(),
+            Map<String,Object> result=new LinkedHashMap<>(Map.of("state","STAGED","preparationId",binding.preparation(),"taskRevision",binding.scope().revision(),
                     "candidateNodeId",binding.candidate().node(),"evidenceSha256",binding.evidence(),"archiveSha256",binding.archive().sha256(),
-                    "reports",binding.archive().reports(),"closedReceipts",binding.archive().closedReceipts(),"executionAuthorized",false);
+                    "reports",binding.archive().reports(),"closedReceipts",binding.archive().closedReceipts(),"executionAuthorized",false));
+            if(binding.archive().failureRecords()>0)result.put("failureRecords",binding.archive().failureRecords());
+            return result;
         }catch(OverlappingFileLockException busy){throw refusal("HANDOFF_STAGING_BUSY");}
     }
 
@@ -127,17 +129,27 @@ final class HandoffStaging {
                 files.put(RECEIPTS,writeFile(pending.resolve(RECEIPTS),new ByteArrayInputStream(receipts),MAX_RECEIPTS,deadline));
                 long remaining=MAX_BYTES;
                 if(binding.archive().failureRecords()>0){
-                    expect(zip.getNextEntry(),FAILURES+"authority.json");
-                    remaining-=readEntry(zip,4096).length;
+                    Path history=pending.resolve(HandoffFailureHistory.DIRECTORY);
+                    HandoffFailureHistory.prepare(history);
+                    String authority=HandoffFailureHistory.AUTHORITY;
+                    expect(zip.getNextEntry(),FAILURES+authority);
+                    FileSeal signedAuthority=writeFile(history.resolve(authority),zip,Math.min(remaining,HandoffFailureHistory.MAX_AUTHORITY),deadline);
+                    files.put(HandoffFailureHistory.relative(authority),signedAuthority);
+                    remaining-=signedAuthority.bytes();
                     String prior="";
                     for(int count=0;count<binding.archive().failureRecords();count++){
                         ZipEntry entry=zip.getNextEntry();
-                        String name=entry==null?"":entry.getName();
-                        if(!name.matches(FAILURES+UUID_PATTERN+"\\.json")||name.compareTo(prior)<=0)
+                        if(entry==null||entry.isDirectory()||!entry.getName().startsWith(FAILURES))
                             throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
-                        remaining-=stream(zip,null,Math.min(remaining,8L*1024*1024),deadline).bytes();
+                        String name=entry.getName().substring(FAILURES.length());
+                        if(!HandoffFailureHistory.record(name)||name.compareTo(prior)<=0)
+                            throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
+                        FileSeal record=writeFile(history.resolve(name),zip,Math.min(remaining,HandoffFailureHistory.MAX_RECORD_BYTES),deadline);
+                        files.put(HandoffFailureHistory.relative(name),record);
+                        remaining-=record.bytes();
                         prior=name;
                     }
+                    force(history);
                 }
                 if(binding.archive().reports()>0)createDirectory(pending.resolve(REPORTS));
                 String previous="";
@@ -191,7 +203,7 @@ final class HandoffStaging {
     private static void checkFiles(Path stage,Stage manifest,long deadline)throws Exception{
         SharedHandoffEvidence.Archive archive=manifest.binding().archive();
         Map<String,FileSeal> files=manifest.files();
-        if(files==null||files.size()!=1+2*archive.reports()||!files.containsKey(RECEIPTS))
+        if(files==null||files.size()!=1+2*archive.reports()+HandoffFailureHistory.fileCount(archive.failureRecords())||!files.containsKey(RECEIPTS))
             throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         checkFile(stage.resolve(RECEIPTS),files.get(RECEIPTS),MAX_RECEIPTS,deadline);
         verifyReceipts(readFile(stage.resolve(RECEIPTS),MAX_RECEIPTS),archive.closedReceipts());
@@ -224,8 +236,10 @@ final class HandoffStaging {
             }
             if(observed!=archive.reports())throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         }
+        HandoffFailureHistory.verify(stage,files,archive.failureRecords(),deadline);
         Set<String> names=new HashSet<>(Set.of(RECEIPTS));
         if(archive.reports()>0)names.add(REPORTS);
+        if(archive.failureRecords()>0)names.add(HandoffFailureHistory.DIRECTORY);
         if(Files.exists(stage.resolve(SEAL),LinkOption.NOFOLLOW_LINKS))names.add(SEAL);
         exactNames(stage,names);
     }
@@ -241,6 +255,16 @@ final class HandoffStaging {
                             if(!report.getFileName().toString().matches(UUID_PATTERN))throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
                             secureDirectory(report);
                             clearPartialReport(report);
+                        }
+                    }
+                    Files.delete(child);
+                }else if(HandoffFailureHistory.DIRECTORY.equals(name)){
+                    secureDirectory(child);
+                    try(var members=Files.newDirectoryStream(child)){
+                        for(Path member:members){
+                            String file=member.getFileName().toString();
+                            if(!HandoffFailureHistory.member(file))throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
+                            removePartial(member,Set.of(file));
                         }
                     }
                     Files.delete(child);

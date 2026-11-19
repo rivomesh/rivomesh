@@ -1589,8 +1589,8 @@
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志、原报告和已办结回执通过限定实库。候选 Agent 已能在批准的 PostgreSQL 管理归属交接后接收原始 MySQL ZIP。候选重启或共享与暂存副本离线时，两个管理入口均可查询只读历史。历史故障证据的正式接管和其他存储及目标档案待验。",
-        "en": "Bounded native tests cover optional journals, adopted reports and closed receipts. The candidate adopts the exact original MySQL ZIP after an approved PostgreSQL-managed owner transfer. Both entries serve read-only history after the candidate restarts and the shared and staging copies go offline. Historical failure custody and broader storage and target profiles remain."
+        "zh-CN": "可选日志、原报告和已办结回执已通过限定实库。批准的 PostgreSQL 同库归属交接支持候选 Agent 接收原始 MySQL ZIP 或原签名故障历史。共享来源和暂存离线后，两个管理入口仍可在候选重启后核验只读摘要。原始采集和故障证据共存的归属交接、跨存储及其他目标档案待验。",
+        "en": "Bounded native tests cover optional journals, original reports and closed receipts. An approved PostgreSQL same-database transfer accepts original MySQL capture ZIPs or original signed failure history. Both Controllers verify read-only metadata after candidate restart and loss of shared and staging copies. Combined custody of raw and failure evidence and other storage and destination profiles remain."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1608,7 +1608,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/ManagedRecipientImport.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/RawCaptureHandoffStaging.java",
-        "tests/global-control-pipeline.py"
+        "tests/global-control-pipeline.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffFailureHistory.java"
       ]
     },
     {

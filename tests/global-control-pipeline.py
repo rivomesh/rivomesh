@@ -172,10 +172,12 @@ if args.handoff_original_outage and (not args.handoff_assessment or args.handoff
 if args.handoff_staging and not args.handoff_preparation:
     parser.error('--handoff-staging requires --handoff-preparation')
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
-        or not args.test_classes.is_dir() or args.handoff_failure_custody):
-    parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with failure evidence absent')
-if args.handoff_private_writer and args.handoff_raw_custody and not args.handoff_public_owner:
-    parser.error('official raw history acceptance requires --handoff-public-owner')
+        or not args.test_classes.is_dir()):
+    parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes')
+if args.handoff_private_writer and (args.handoff_raw_custody or args.handoff_failure_custody) and not args.handoff_public_owner:
+    parser.error('official historical evidence acceptance requires --handoff-public-owner')
+if args.handoff_private_writer and args.handoff_raw_custody and args.handoff_failure_custody:
+    parser.error('official handoff tests raw and failure history in separate profiles')
 if args.handoff_auto_resume and (not args.handoff_private_writer or args.handoff_public_owner or args.handoff_raw_custody):
     parser.error('--handoff-auto-resume requires --handoff-private-writer without public or raw-history ownership approval')
 if args.handoff_target_fence and not args.handoff_private_writer:
@@ -2494,8 +2496,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 failure_names=('authority.json',evidence+'.json')
                 failure_bytes={name:(failure_root/name).read_bytes() for name in failure_names}
                 assert b'custody-private-fixture' in failure_bytes[evidence+'.json']
+                failure_key_digest=hashlib.sha256((failure_root/'evidence.key').read_bytes()).hexdigest()
                 sql('postgres','ALTER TABLE rm_pg_sales.items DROP CONSTRAINT handoff_fixture')
-                action('RESUME_TARGET',subscriptionId='pg',errorCount=failed['errorGeneration'])
+                resolved,_=action('RESUME_TARGET',subscriptionId='pg',errorCount=failed['errorGeneration'])
                 wait(rows_match,'original transaction replays after removing the fixture constraint')
                 passed('A native constraint failure is signed and retained before the original task drains through replay')
             request='gc_handoff_'+uuid.uuid4().hex
@@ -2673,6 +2676,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert len(closed)==receipts['archive']['closedReceipts']
                             assert any(r['request']==validation and r['phase']=='SUCCEEDED' for r in closed)
                             assert all(set(r)=={'request','signature','actor','role','kind','phase','code'} for r in closed)
+                        if args.handoff_failure_custody:
+                            closed_ids={row['request'] for row in closed if row['phase']=='SUCCEEDED'}
+                            assert {review,resolved}<=closed_ids
                         assert validation not in json.dumps(good)
                         passed('Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records')
                         if args.handoff_preparation_browser:
@@ -2696,6 +2702,16 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             staged=http('node-b',preparation+'/stage',stage_input)
                             assert staged['state']=='STAGED'
                             request='gc_private_commit_'+uuid.uuid4().hex
+                            if args.handoff_failure_custody:
+                                failure_history_path=endpoint+'/failure-history'
+                                for controller in ('node-a','node-b'):
+                                    assert http(controller,failure_history_path,expected=404)['code']=='HANDOFF_FAILURE_HISTORY_NOT_FOUND'
+                                assert staged['failureRecords']==1 and staged['archiveSha256']==failures['archive']['sha256']
+                                staged_workspace,=[folder for folder in (home/candidate/'controller'/'handoff-staging').iterdir()
+                                                  if folder.is_dir()]
+                                staged_failures=staged_workspace/'historical-failures'
+                                assert {file.name for file in staged_failures.iterdir()}==set(failure_names)
+                                assert all((staged_failures/name).read_bytes()==payload for name,payload in failure_bytes.items())
                             if args.handoff_raw_custody:
                                 raw_history_path=endpoint+'/raw-history'
                                 for controller in ('node-a','node-b'):
@@ -2769,6 +2785,19 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                         held_stage.rename(raw_stage)
                                     raw_zip.rename(raw_zip.with_name('raw-unavailable-after-staging.held'))
                                     passed('An authenticated raw proof requires its exact candidate private staging before the native writer changes')
+                                if args.handoff_failure_custody:
+                                    staged_record=staged_failures/(evidence+'.json')
+                                    expected_record=failure_bytes[staged_record.name]
+                                    damaged=expected_record[:-1]+bytes([expected_record[-1]^1])
+                                    staged_record.write_bytes(damaged)
+                                    try:
+                                        refused=http('node-a',commit_url,stage_input,request=request,expected=409)
+                                        assert refused['code']=='HANDOFF_STAGING_BYTES_CHANGED'
+                                        assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                    finally:
+                                        staged_record.write_bytes(expected_record)
+                                    archive.rename(archive.with_name('failure-history-unavailable-after-staging.held'))
+                                    passed('Damaged staged historical failure evidence refuses ownership while the original cut remains exact')
                                 # Discard this response and verify the same operation through the other entry.
                                 if args.handoff_public_owner_browser:
                                     browser_check('handoff-owner-commit',owner=owner_node,candidate=candidate,
@@ -2812,6 +2841,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                                'closedReceipts':receipts['archive']['closedReceipts']}
                             if args.handoff_raw_custody:
                                 expected_adoption['rawCaptures']=1
+                            if args.handoff_failure_custody:
+                                expected_adoption['failureRecords']=1
                             assert replay['adoptedEvidence']==expected_adoption
                             assert replay['commitRequestId']==request
                             if not args.handoff_auto_resume:
@@ -2882,6 +2913,26 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                     assert re.fullmatch(r'[0-9a-f]{64}',received.pop('adoptionSha256'))
                                     assert received==expected_history and not raw_zip.exists()
                                     assert http('node-b',raw_history_path,expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
+                                if args.handoff_failure_custody:
+                                    history=adopted_directory/'historical-failures'
+                                    assert {file.name for file in history.iterdir()}==set(failure_names)
+                                    for name,payload in failure_bytes.items():
+                                        assert (history/name).read_bytes()==payload and (history/name).stat().st_mode & 0o777==0o600
+                                    assert hashlib.sha256((failure_root/'evidence.key').read_bytes()).hexdigest()==failure_key_digest
+                                    assert not (candidate_data/'failure-evidence'/'global_cdc').exists()
+                                    assert not any(candidate_data.rglob('evidence.key'))
+                                    entry=failure_bytes[evidence+'.json']
+                                    catalog=http('node-a',failure_history_path)
+                                    assert catalog==http('node-b',failure_history_path)
+                                    assert re.fullmatch(r'[0-9a-f]{64}',catalog.pop('adoptionSha256'))
+                                    assert catalog=={'state':'READ_ONLY_HISTORY','preparationId':prepared_id,'executionAuthorized':False,
+                                                     'failureRecords':1,'records':[{'id':evidence,'sha256':hashlib.sha256(entry).hexdigest(),
+                                                                                   'bytes':len(entry)}]}
+                                    assert not archive.exists()
+                                    for controller in ('node-a','node-b'):
+                                        receipt=http(controller,route+'/recovery-receipts/'+review)
+                                        assert receipt['id']==review and receipt['status']=='SUCCEEDED' and receipt['candidateCustody']=='VERIFIED'
+                                    assert http('node-b',failure_history_path,expected=403,token=env['RM_GC_VIEWER'])['code']=='FORBIDDEN'
                                 if additional_report is None:
                                     assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert all((local_report/name).read_bytes()==payload for name,payload in saved_bytes.items())
@@ -2890,6 +2941,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             passed('Both Controllers read exact adopted report history and verify the candidate closed receipt without exposing signatures')
                             if args.handoff_raw_custody:
                                 raw_stage.rename(raw_stage.with_name(raw_stage.name+'.offline'))
+                            if args.handoff_failure_custody:
+                                held_failure_stage=staged_workspace.with_name(staged_workspace.name+'.offline')
+                                staged_workspace.rename(held_failure_stage)
                             compose('kill','-s','SIGKILL',candidate)
                             wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
                                             " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','adopted candidate lease expires')
@@ -2905,6 +2959,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                     'archiveBytes':len(exact_raw_zip),'nativeCaptures':1,'crossControllerQueries':True,
                                     'candidateRestartWithoutSharedOrStagedRaw':True,'originalKeyPreserved':True,'workerStopped':True}
                                 passed('Candidate restart reads the offline adopted native MySQL ZIP from both Controllers with its original HMAC and live recovery scope untouched')
+                            if args.handoff_failure_custody:
+                                manifest['failureHistoryAdoption']={'archiveSha256':failures['archive']['sha256'],
+                                    'failureRecords':1,'crossControllerQueries':True,'candidateRestartWithoutSharedOrStagedEvidence':True,
+                                    'originalKeyPreserved':True,'closedReviewReceiptVerified':True,'workerStopped':True}
+                                passed('Candidate restart reopens exact signed historical failure evidence and closed review receipts without shared or staged copies')
+                                if args.handoff_target_fence:
+                                    held_failure_stage.rename(staged_workspace)
                             parked_status="SELECT run_state,owner IS NULL,lease_until,format_version FROM transfer_journal.rm3_job"
                             assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
                             worker_config='/fixture/'+candidate+'/tasks/global_cdc.yml'

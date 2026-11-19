@@ -11,13 +11,7 @@
     "CP-04 the candidate completes one preapproved and drained handoff after its accepting Controller exits. Both native cuts are rechecked before parking the assignment. 18 native, 70 integrated Java and 156 DOM; pushed b8ca754.",
     "Temurin 25.0.5 on ARM64 passed external MySQL asynchronous GTID promotion and Controller and Agent rolling replacement on the integrated package."
   ],
-  "inProgress": [
-    "CP-04 native original Agent loss and observed control-state fencing.",
-    "LG-05 signed historical failure evidence staging and read-only ownership integration.",
-    "RC-10 Kafka physical identity checks across active and recoverable configurations.",
-    "LG-08 bounded Gauss index review within the managed CHECK operation.",
-    "LG-04 two-broker Pulsar and three-BookKeeper quorum recovery."
-  ],
+  "inProgress": [],
   "reportContents": [
     "Current totals",
     "New completions since previous report",
@@ -43,23 +37,32 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Complete focused and native acceptance in isolated environments.",
-    "Integrate compatible verified slices while retaining the SDD parent acceptance limits."
+    "CP-04 conflicting network partitions and candidate promotion after original directory loss.",
+    "LG-05 combined raw and failure archive custody and further storage profiles.",
+    "RC-10 historical write custody, approved dispatch and loss recovery.",
+    "LG-04 Pulsar cluster TLS, metadata quorum and capacity.",
+    "LG-08 commercial distributed GaussDB CN/DN acceptance."
   ],
-  "currentCandidateArtifact": "c69e00d9d33d0a5f95bc1b828565c106bda7a471324c6243b156379a62467880",
-  "currentCandidateScope": "Integrated approved handoff continuation, original capture history, Kafka writer permissions, Oracle virtual arithmetic and JDBC identity protection. Java 25 async source promotion and Agent rolling replacement now pass on this same application package.",
+  "currentCandidateArtifact": "81888b8f09d266cc45f3a7bfbff435667f25351f77ed8c2cb0f08a775513522c",
+  "currentCandidateScope": "Integrated Gauss index review, Agent outage, Kafka retained topic proof, Pulsar quorum acceptance and signed failure-history adoption. The app and console entries match the exact combined native failure-history candidate.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "LG-08 Gauss v3 index preview shares the write policy, reports complete counts and bounds blocker details. 43 Java and 156 DOM tests. Pushed 853a1e2.",
+    "CP-04 Native Agent SIGKILL, same-directory restart with queued STOP, exact backlog and former-generation fencing. Nine native, 61 Java and 157 DOM tests. Pushed da11cde.",
+    "RC-10 Bounded current physical Kafka route proof for active and restorable configurations. Four brokers, two Controllers, three retained versions and four routes. The current secret policy blocks withdrawn references before any connection. Pushed b7f3d70.",
+    "LG-04 Pulsar 4.0.14 with two brokers, three bookies and one ZooKeeper node passed four outage and recovery checks. Pushed 7e0a523.",
+    "LG-05 Signed original failure history and recovery receipt survive approved PostgreSQL same-database transfer and candidate restart. 29 native checks, including 3 Chrome checks."
+  ],
   "lastScheduledReportAt": "2026-11-19T13:58:16+08:00",
   "lastVerifiedReactor": {
-    "commit": "bbe4fc8",
-    "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
-    "verifiedAppTree": "5e771f86a9124011db3cbd1dbafa037688d1b9d9",
-    "javaTestsPassed": 578,
-    "appTestsPassed": 576,
-    "isolatedTransportTestsPassed": 2,
+    "baseCommit": "7e0a523201967748c51e7c0b515b0bb4e0cc96af",
+    "candidateTree": "de4cd5f09aaf77780fba50e4d66080b3681de20d",
+    "verifiedAppTree": "1388826190b349eb238f344da42fc7e327865877",
+    "artifactSha256": "81888b8f09d266cc45f3a7bfbff435667f25351f77ed8c2cb0f08a775513522c",
+    "javaTestsPassed": 627,
     "optionalSkips": 35,
-    "scope": "Normal Temurin 21 packaging reactor from the exact staged app tree. Package binary gate passed. The independent 17-case private Agent native scope uses its separately archived original artifact."
+    "domTestsPassed": 157,
+    "scope": "Normal Maven reactor and product gate. Rivomesh classes and console resources match the combined native candidate bytes."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [

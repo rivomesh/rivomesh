@@ -21,9 +21,15 @@ final class HandoffCandidateAdmission {
     record Ready(String preparation,HandoffPreparations.Binding binding,String desired,
                  String configurationSha256,String stagingSha256,
                  @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                 RawCaptureHandoffStaging.Proof rawCapture){
+                 RawCaptureHandoffStaging.Proof rawCapture,
+                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+                 int failureRecords){
         Ready(String preparation,HandoffPreparations.Binding binding,String desired,String configurationSha256,String stagingSha256){
-            this(preparation,binding,desired,configurationSha256,stagingSha256,null);
+            this(preparation,binding,desired,configurationSha256,stagingSha256,null,0);
+        }
+        Ready(String preparation,HandoffPreparations.Binding binding,String desired,String configurationSha256,String stagingSha256,
+                 RawCaptureHandoffStaging.Proof rawCapture){
+            this(preparation,binding,desired,configurationSha256,stagingSha256,rawCapture,0);
         }
     }
     record ReadyConfig(Ready receipt,String successorYaml){
@@ -56,7 +62,7 @@ final class HandoffCandidateAdmission {
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         validator.validate(successor);
         return HandoffStaging.withVerifiedStage(state,staged,cipher,stagingSha256->{
-            Ready receipt=new Ready(plan.id(),staged.candidate(),STOPPED,Codec.sha256(successor),stagingSha256,raw);
+            Ready receipt=new Ready(plan.id(),staged.candidate(),STOPPED,Codec.sha256(successor),stagingSha256,raw,staged.archive().failureRecords());
             Seal intended=new Seal(1,staged,plan.evidence().original(),plan.activation(),receipt,successor);
             Path file=sealPath(state,plan,true);
             if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS)){
@@ -79,12 +85,13 @@ final class HandoffCandidateAdmission {
         if(!COMMITTED_PHASES.contains(plan.phase())||plan.writerCommit()==null)
             throw refused("HANDOFF_CANDIDATE_COMMIT_REQUIRED");
         Ready expected=new Ready(plan.id(),plan.evidence().candidate(),STOPPED,
-                plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),plan.writerCommit().rawCapture());
+                plan.writerCommit().configurationSha256(),plan.writerCommit().stagingSha256(),plan.writerCommit().rawCapture(),plan.writerCommit().failureRecords());
         return withEvidence(state,plan,cipher,expected,read);
     }
 
     static ReadyConfig verifyPrepared(Path state,HandoffPreparations.Plan plan,ControlCipher cipher,Ready expected)throws Exception{
-        if(expected.rawCapture()!=null)throw refused("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
+        if(expected.rawCapture()!=null||expected.failureRecords()>0)
+            throw refused("HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED");
         if(!"PREPARED".equals(plan.phase())||plan.executionRequest()==null)
             throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         return withEvidence(state,plan,cipher,expected,(config,staged)->config);
@@ -101,7 +108,8 @@ final class HandoffCandidateAdmission {
             Seal current=read(file,plan,cipher);
             if(expected.rawCapture()!=null&&!expected.rawCapture().matches(plan))
                 throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
-            if(!current.equals(observed)||!current.original().equals(plan.evidence().original())
+            if(expected.failureRecords()!=staged.manifest().binding().archive().failureRecords()
+                    ||!current.equals(observed)||!current.original().equals(plan.evidence().original())
                     ||!current.activation().equals(plan.activation())||!expected.equals(current.receipt())
                     ||!staged.sealSha256().equals(expected.stagingSha256())
                     ||!Codec.sha256(current.successorYaml()).equals(expected.configurationSha256()))

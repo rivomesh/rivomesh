@@ -206,6 +206,13 @@ try{
     expectMasked([raw.state,raw.preparationId,raw.rawCaptures,raw.executionAuthorized],
      ['READ_ONLY_HISTORY',preparationId,adoption.rawCaptures,false],'The candidate serves the corresponding raw history');
    }
+   if(adoption.failureRecords){
+    expectedFacts.push([light?'只读历史故障证据':'Read-only historical failure evidence',String(adoption.failureRecords)]);
+    const failures=await read(taskPath+'/handoff/failure-history');
+    expectMasked([failures.state,failures.preparationId,failures.failureRecords,failures.executionAuthorized],
+     ['READ_ONLY_HISTORY',preparationId,adoption.failureRecords,false],'The candidate serves verified historical failure evidence');
+    assert.equal(failures.records.length,adoption.failureRecords);
+   }
    expectMasked(visible.facts,expectedFacts,'The dialog shows exact node names, decimal journal epoch and counts');
    const allowed=light?['关闭','刷新交接状态']:['Close','Refresh handoff status'];
    if(fenceOffered)allowed.push(light?'隔离 SQL 目标':'Fence SQL targets');

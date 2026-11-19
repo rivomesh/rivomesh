@@ -66,7 +66,7 @@ final class OwnerQueries {
                     ||entry.request.handoffRawStaging!=null||entry.request.handoffPreparation!=null||entry.request.yaml!=null))
                 throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");
             if(HANDOFF_READY.equals(entry.phase)&&(entry.request.kind!=TaskRequest.Kind.HANDOFF_READINESS_RPC
-                    ||entry.response==null||entry.response.get("rawCapture")!=null||entry.code!=null))
+                    ||entry.response==null||entry.response.get("rawCapture")!=null||entry.response.get("failureRecords")!=null||entry.code!=null))
                 throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");
             return entry;
         }
@@ -269,7 +269,8 @@ final class OwnerQueries {
             }
             current.response=body;current.code=code;
             if(code!=null)current.phase="REJECTED";
-            else if(current.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC&&body.get("rawCapture")==null)
+            else if(current.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC
+                    &&body.get("rawCapture")==null&&body.get("failureRecords")==null)
                 current.phase=HANDOFF_READY;
             else current.phase="SUCCEEDED";
             write(c,current);return null;
@@ -337,7 +338,8 @@ final class OwnerQueries {
     private static Map<String,Object> readinessResponse(Entry entry,Map<String,Object> response){
         Set<String> keys=Set.of("preparation","binding","desired","configurationSha256","stagingSha256");
         if(response==null||!(response.keySet().equals(keys)
-                ||response.size()==keys.size()+1&&response.keySet().containsAll(keys)&&response.get("rawCapture")!=null))
+                ||response.size()==keys.size()+1&&response.keySet().containsAll(keys)
+                    &&(response.get("rawCapture")!=null||response.get("failureRecords") instanceof Integer count&&count>0)))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         ManagedHandoff.CandidateAdmission ready;
         try{ready=Model.JSON.convertValue(response,ManagedHandoff.CandidateAdmission.class);}

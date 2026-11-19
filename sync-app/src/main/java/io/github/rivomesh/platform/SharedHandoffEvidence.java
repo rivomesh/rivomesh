@@ -23,7 +23,8 @@ final class SharedHandoffEvidence {
     static final int MAX_RECEIPTS=64;
     private static final int MAX_RECEIPT_BYTES=128*1024;
     private static final long MAX_BYTES=64L*1024*1024;
-    private static final int MAX_FAILURE_RECORDS=64,MAX_FAILURE_RECORD_BYTES=8*1024*1024,MAX_RAW_CAPTURES=64;
+    private static final int MAX_FAILURE_RECORDS=HandoffFailureHistory.MAX_RECORDS,
+            MAX_FAILURE_RECORD_BYTES=HandoffFailureHistory.MAX_RECORD_BYTES,MAX_RAW_CAPTURES=64;
     private static final String FAILURES="failure-evidence/",CAPTURES="capture/",CAPTURE_RECEIPTS="capture-receipts/";
     private record ByteProof(String sha256,long bytes){}
     @FunctionalInterface private interface ArchiveWriter {Archive write(Path stage,long deadline)throws Exception;}

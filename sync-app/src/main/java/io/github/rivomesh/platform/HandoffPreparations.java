@@ -17,9 +17,15 @@ final class HandoffPreparations {
                             String nativeEvidenceSha256,boolean checkedInControlTransaction){}
     record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch,
                         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                        RawCaptureHandoffStaging.Proof rawCapture){
+                        RawCaptureHandoffStaging.Proof rawCapture,
+                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+                 int failureRecords){
         WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){
-            this(actor,stagingSha256,configurationSha256,revision,configuration,journalEpoch,null);
+            this(actor,stagingSha256,configurationSha256,revision,configuration,journalEpoch,null,0);
+        }
+        WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch,
+                 RawCaptureHandoffStaging.Proof rawCapture){
+            this(actor,stagingSha256,configurationSha256,revision,configuration,journalEpoch,rawCapture,0);
         }
     }
     record PendingProblem(String code,long observedAt){}
@@ -94,6 +100,7 @@ final class HandoffPreparations {
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
                     case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor)
+                            &&validFailureCount(p.writerCommit)
                             &&(p.writerCommit.rawCapture()==null||p.writerCommit.rawCapture().matches(p)
                                 &&cluster.equals(p.writerCommit.rawCapture().binding().scope().cluster()));
                     default->false;
@@ -192,7 +199,7 @@ final class HandoffPreparations {
 
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
         if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires
-                ||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
+                ||!validFailureCount(receipt)||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
                 null,null,Math.max(now,p.created),p.activation,receipt,p.executionRequest,null);
@@ -239,6 +246,10 @@ final class HandoffPreparations {
         return plan!=null&&("PROJECTED".equals(plan.phase)||evidenceInstalled(plan));
     }
 
+    private static boolean validFailureCount(WriterCommit commit){
+        return HandoffFailureHistory.bounded(commit.failureRecords())&&(commit.failureRecords()==0||commit.rawCapture()==null);
+    }
+
     private static boolean validAdoption(Plan plan,HandoffEvidenceAdoption.Receipt receipt){
         return receipt!=null&&plan.writerCommit!=null&&plan.id.equals(receipt.preparation())
                 &&plan.task.equals(receipt.task())&&plan.evidence.candidate.equals(receipt.candidate())
@@ -246,6 +257,7 @@ final class HandoffPreparations {
                 &&plan.writerCommit.configurationSha256.equals(receipt.configurationSha256())
                 &&plan.writerCommit.stagingSha256.equals(receipt.stagingSha256())
                 &&Objects.equals(plan.writerCommit.rawCapture(),receipt.rawCapture())
+                &&plan.writerCommit.failureRecords()==receipt.failureRecords()
                 &&receipt.adoptionSha256()!=null&&receipt.adoptionSha256().matches("[a-f0-9]{64}")
                 &&receipt.reports()>=0&&receipt.closedReceipts()>0&&receipt.closedReceipts()<=SharedHandoffEvidence.MAX_RECEIPTS;
     }
@@ -410,6 +422,7 @@ final class HandoffPreparations {
             adopted.put("closedReceipts",p.evidenceAdoption.closedReceipts());
             if(p.evidenceAdoption.rawCapture()!=null)
                 adopted.put("rawCaptures",p.evidenceAdoption.rawCapture().binding().archive().rawCaptures());
+            if(p.evidenceAdoption.failureRecords()>0)adopted.put("failureRecords",p.evidenceAdoption.failureRecords());
             view.put("adoptedEvidence",adopted);
         }
         if("EVIDENCE_ADOPTED".equals(p.phase))view.put("targetFenceAvailable",true);
