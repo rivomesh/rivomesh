@@ -62,6 +62,11 @@ public final class PipelineConfig {
         public int connectTimeoutMillis=5000,requestTimeoutMillis=10000,maxMessageBytes=1024*1024,replicas=1,minimumRetentionHours=87600;
         public boolean autoCreate=true;
         public String stream,token,topic,adminUrl,cluster,broker,queueType="quorum",securityProtocol="PLAINTEXT",saslMechanism="PLAIN";
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public KafkaNotice recoveryNotice;
+    }
+    public static final class KafkaNotice {
+        public String controlTopic,clusterSha256,topicId,reservationId;
     }
     private static ObjectMapper yaml(){return new ObjectMapper(new YAMLFactory());}
     public static boolean isV3(Path file)throws Exception{JsonNode tree=yaml().readTree(file.toFile());return tree!=null&&tree.path("formatVersion").asInt()==3;}
@@ -90,12 +95,23 @@ public final class PipelineConfig {
         if(chunkSize<1||chunkSize>10000||leaseMillis<3000||heartbeatMillis<100||heartbeatMillis>leaseMillis/3||pollIntervalMillis<10||retryDelayMillis<10||journal.maxBytes<1)throw new IllegalArgumentException("PIPELINE_LIMIT_INVALID");
         PipelineSources.validate(this);
         Set<String> ids=new HashSet<>(),destinations=new HashSet<>(),mapped=new TreeSet<>();
+        Set<String> kafkaBusinessTopics=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        Set<String> kafkaControlTopics=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         for(Target t:targets){
             if(t==null)throw new IllegalArgumentException("TARGET_REQUIRED");id(t.id);if(!ids.add(t.id))throw new IllegalArgumentException("DUPLICATE_TARGET_ID");
             if(t.product!=TargetProduct.DM&&t.dm!=null)throw new IllegalArgumentException("DM_OPTIONS_ON_OTHER_TARGET");if(t.product==TargetProduct.DM&&t.dm==null)t.dm=new Dm();
             boolean messaging=t.product!=null&&t.product.messaging();if(t.product!=TargetProduct.HIVE&&t.hive!=null)throw new IllegalArgumentException("HIVE_OPTIONS_ON_OTHER_TARGET");if(t.product!=TargetProduct.DORIS&&t.doris!=null)throw new IllegalArgumentException("DORIS_OPTIONS_ON_OTHER_TARGET");if(t.product==TargetProduct.HIVE){if(t.hive==null||t.doris!=null||t.clickhouse!=null||t.messaging!=null||t.uniquePolicy!=JdbcSink.UniquePolicy.DOWNGRADE_BUSINESS||t.hive.maxMessageBytes<1024||t.hive.maxMessageBytes>16*1024*1024)throw new IllegalArgumentException("HIVE_CONFIG_INVALID");try(HiveSqlClient ignored=new HiveSqlClient(t.url,t.username,t.password,t.hive.queryTimeoutSeconds,t.hive.maximumSqlBytes,t.hive.maximumResponseBytes)){} }else if(t.product==TargetProduct.DORIS){if(t.doris==null||t.doris.redirectOrigins==null||t.clickhouse!=null||t.messaging!=null||t.uniquePolicy!=JdbcSink.UniquePolicy.DOWNGRADE_BUSINESS||t.doris.secondaryIndexes==null||t.doris.replicas<1||t.doris.replicas>5||t.doris.buckets<1||t.doris.buckets>64||t.doris.maxMessageBytes<1024||t.doris.maxMessageBytes>16*1024*1024)throw new IllegalArgumentException("DORIS_CONFIG_INVALID");try(DorisHttpClient ignored=new DorisHttpClient(dorisHttp(t));DorisSqlClient local=new DorisSqlClient(t.url,t.username,t.password,t.doris.requestTimeoutMillis)){/* Local validation only. */}}else if(t.product==TargetProduct.CLICKHOUSE){if(t.clickhouse==null)t.clickhouse=new ClickHouse();if(t.clickhouse.secondaryIndexes==null||t.messaging!=null||t.uniquePolicy!=JdbcSink.UniquePolicy.DOWNGRADE_BUSINESS||t.clickhouse.maxMessageBytes<1024||t.clickhouse.maxMessageBytes>16*1024*1024)throw new IllegalArgumentException("CLICKHOUSE_CONFIG_INVALID");try(ClickHouseHttpClient ignored=new ClickHouseHttpClient(clickHouseHttp(t))){/* Local validation only. */}catch(Exception invalid){throw new IllegalArgumentException("CLICKHOUSE_CONFIG_INVALID");}}else{if(t.clickhouse!=null)throw new IllegalArgumentException("CLICKHOUSE_OPTIONS_ON_OTHER_TARGET");if(messaging)validateMessaging(t);else{url(t.product,t.url);if(t.messaging!=null)throw new IllegalArgumentException("MESSAGING_OPTIONS_ON_SQL_TARGET");}}
             if((!messaging&&(t.username==null||t.username.isEmpty()))||t.uniquePolicy==null||t.mappings==null||t.mappings.isEmpty())throw new IllegalArgumentException("TARGET_CONFIG_INVALID");Sql.pg(t.metadataSchema);if(t.product==TargetProduct.CLICKHOUSE)ClickHouseMaterializer.q(t.metadataSchema);if(t.product==TargetProduct.DORIS)DorisMaterializer.databaseName(t.metadataSchema);if(t.product==TargetProduct.HIVE)HiveRows.name(t.metadataSchema);
             if((t.product==TargetProduct.KAFKA||t.product==TargetProduct.PULSAR)&&!destinations.add(t.product.name()+":"+t.url.toLowerCase(Locale.ROOT)+":"+t.messaging.topic))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");
+            if(t.product==TargetProduct.KAFKA)kafkaBusinessTopics.add(t.messaging.topic);
+            if(t.messaging!=null&&t.messaging.recoveryNotice!=null){
+                if(t.product!=TargetProduct.KAFKA)throw new IllegalArgumentException("KAFKA_NOTICE_CONFIG_INVALID");
+                KafkaNotice notice=t.messaging.recoveryNotice;
+                try{
+                    new KafkaNoticePlanning.TopicReservation(notice.reservationId,pipelineId,t.id,notice.controlTopic,notice.clusterSha256,notice.topicId);
+                }catch(RuntimeException invalid){throw new IllegalArgumentException("KAFKA_NOTICE_CONFIG_INVALID");}
+                if(!kafkaControlTopics.add(notice.controlTopic))throw new IllegalArgumentException("KAFKA_NOTICE_TOPIC_COLLISION");
+            }
             if(t.product==TargetProduct.REDIS_STREAMS&&!destinations.add("REDIS_STREAMS:"+t.url.toLowerCase(Locale.ROOT)+":"+t.messaging.stream))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");
             Set<String> local=new HashSet<>();for(Map.Entry<String,String> mapping:t.mappings.entrySet()){
                 if(!db.contains(mapping.getKey()))throw new IllegalArgumentException("UNDECLARED_SOURCE_DATABASE");Sql.pg(mapping.getValue());if(t.product==TargetProduct.CLICKHOUSE)ClickHouseMaterializer.q(mapping.getValue());if(t.product==TargetProduct.DORIS)DorisMaterializer.databaseName(mapping.getValue());if(t.product==TargetProduct.HIVE)HiveRows.name(mapping.getValue());
@@ -104,6 +120,8 @@ public final class PipelineConfig {
                 if(!t.product.singleMessageLog()&&!destinations.add(t.url.split("\\?",2)[0].toLowerCase(Locale.ROOT)+"\u0000"+mapping.getValue().toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("TARGET_MAPPING_COLLISION");mapped.add(mapping.getKey());
             }
         }
+        if(kafkaControlTopics.stream().anyMatch(kafkaBusinessTopics::contains))
+            throw new IllegalArgumentException("KAFKA_NOTICE_TOPIC_COLLISION");
         if(!mapped.equals(db))throw new IllegalArgumentException("SOURCE_DATABASE_WITHOUT_TARGET");
         if("EXTERNAL".equals(journal.mode)){if(!Arrays.asList(TargetProduct.MYSQL,TargetProduct.POSTGRESQL,TargetProduct.GAUSS).contains(journal.product))throw new IllegalArgumentException("JOURNAL_PRODUCT_NOT_ENABLED");url(journal.product,journal.url);Sql.pg(journal.namespace);if(journal.username==null||journal.username.isEmpty())throw new IllegalArgumentException("JOURNAL_USERNAME_REQUIRED");}
         else if("LOCAL".equals(journal.mode)){Path path=localPath();if(path.toString().indexOf(';')>=0||path.toString().chars().anyMatch(ch->ch<32))throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_INVALID");}

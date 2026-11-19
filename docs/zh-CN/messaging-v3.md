@@ -58,6 +58,28 @@ API 调用方以稳定的 `X-Request-ID` 调用 `POST /api/tasks/<task>/actions`
 
 可用 `tests/kafka-cluster-run.py --only-managed-recovery-review` 在四个真实 KRaft Broker 上验证发行包的 HTTP 管理流程。隔离用例使用两个仅监听环回地址的管理入口和共享 H2 控制库，核验跨入口重试、所属节点离线后查询、拒绝确认部分发布，以及目标进度保持原值。
 
+#### 核对 Kafka 通知计划
+
+管理员可以预览发往预先登记的 Kafka 专用控制 Topic 的故障通知。先在 Kafka 目标的 `messaging` 配置下填写可选的 `recoveryNotice` 并使配置生效，再核对前序回执。
+
+```yaml
+messaging:
+  topic: sales.events
+  recoveryNotice:
+    controlTopic: rivomesh.sales.recovery
+    clusterSha256: "<KAFKA: 加 Kafka 原生集群 ID 的 SHA-256>"
+    topicId: "<Kafka Topic UUID 的原生字符串>"
+    reservationId: "<预先登记的 Topic 预留 UUID>"
+```
+
+控制 Topic 必须与任务为每个 Kafka 业务目标配置的 Topic 不同，管理面也会按已知 Broker 连接地址检查目标资源冲突。计划会验证专用 Topic 已存在于原 Kafka 集群，满足单分区、至少三个副本、最小 ISR 为多数派、无限期保留和禁用自动创建的要求。已知地址无法证明所有别名或外部写入端所指向的物理资源均独立，发布受阻状态为 `KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED`。
+
+专用 Topic 设置 `cleanup.policy=delete`、`retention.ms=-1`、`retention.bytes=-1`、`unclean.leader.election.enable=false` 和 `remote.storage.enable=false`。`max.message.bytes` 可取 2048 至 65536，`min.insync.replicas` 取配置副本数的多数。所有 Broker 均设置 `auto.create.topics.enable=false`。核对计划时需要读取业务 Topic，并有权查询 Kafka Topic 和 Broker 配置。
+
+暂停整条任务，获得新一次成功的 Kafka 回执核对结果，再从回执窗口选择 **核对 Kafka 通知计划**。API 调用使用 `POST /api/tasks/<task>/kafka-notice-plan`，请求体为 `{"expectedRevision":"<当前任务修订号>","predecessorRequestId":"<成功核对的请求 ID>"}`。所属节点重新核对已认证的前序回执、任务修订号、管理员、原始失败事务和 Topic UUID。响应返回计划与通知内容的确定性摘要，并始终标记 `executionAuthorized: false`。修改配置、迁移所属节点或旧回执缺少原始失败摘要后，请重新核对回执。
+
+可用 `tests/kafka-cluster-run.py --only-managed-notice-plan` 在两个管理入口和真实 Kafka 集群上验证只读计划流程。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh

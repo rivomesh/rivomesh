@@ -261,6 +261,42 @@ test('Kafka review submits a paused target and opens only the verified native re
  }
 });
 
+test('Kafka notice preview is bound to the verified receipt and displays publication blocked',async()=>{
+ const id='verified_notice_review',target='kafka',code='PRECEDING_KAFKA_RECEIPTS_VERIFIED';
+ const task={id:'notice-preview',revision:'task-revision',formatVersion:3,workerState:'PAUSED',desired:'PAUSED',statusAvailable:true,
+  status:{run_state:'PAUSED'},destinations:[{id:target,product:'KAFKA',kafkaNoticePlanningAvailable:true}],
+  operations:[{id,action:'REVIEW_KAFKA_RECEIPTS',code,status:'SUCCEEDED'}]};
+ const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
+ const base='/api/tasks/'+task.id,requests=[];
+ let publishing=true;
+ ui.w.fetch=async(path,options)=>{
+  if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
+   id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
+    observedAt:'2026-11-18T09:00:00Z',epoch:'3',errorGeneration:'17',acknowledgedSequence:'6',failedSequence:'7',
+    observedTopicIdentitySha256:'a'.repeat(64),originalFailure:{journalGeneration:'retained'},
+    nativeReceipts:[{namespace:'orders',offset:'31',payloadSha256:'b'.repeat(64)}]}})};
+  if(path!==base+'/kafka-notice-plan')return fallback(path,options);
+  assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+  requests.push(JSON.parse(options.body));
+  return{ok:true,status:200,json:async()=>({status:'KAFKA_NOTICE_PLAN_REVIEWED',executionAuthorized:publishing,
+   publicationBlockCode:'KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED',approvalSha256:'c'.repeat(64),
+   plan:{task:{taskId:task.id},predecessorRequestId:id,payloadSha256:'d'.repeat(64),failure:{failedSequence:'7'},
+    controlTopic:{targetId:target,topicName:'control.events',topicId:'cKtKfC5KQGq-qM1RDCb_3w'},credential:'not sent to the DOM'}})};
+ };
+ try{
+  await login(ui);ui.d.querySelector('[data-recovery-receipt-request="'+id+'"]').click();await flush();
+  const section=ui.d.querySelector('[data-kafka-notice-preview]'),button=section.querySelector('button');
+  button.click();await flush();
+  assert.match(section.textContent,/回执与当前请求不符/);
+  publishing=false;button.click();await flush();
+  assert.deepEqual(requests,[{expectedRevision:'task-revision',predecessorRequestId:id},{expectedRevision:'task-revision',predecessorRequestId:id}]);
+  assert.match(section.textContent,/发布受阻.*control.events/s);
+  assert.ok(section.textContent.includes('d'.repeat(64)));
+  assert.ok(!section.textContent.includes('not sent to the DOM'));
+  assert.equal(section.querySelectorAll('button').length,1);
+ }finally{ui.dom.window.close();}
+});
+
 test('retention review shows the existing hold, requires approval, and retries the identical request',async()=>{
  const reportId='a4500000-1223-4abc-8abc-0123456789ab';
  const task={id:'retention-review',revision:'task-revision',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],

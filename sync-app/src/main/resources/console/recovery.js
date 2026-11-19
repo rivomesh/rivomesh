@@ -56,6 +56,40 @@ window.RivomeshRecovery=(()=>{
   for(const item of proof.nativeReceipts)offsets.append(text('li',item.namespace+' · '+t('kafkaReceiptOffset')+' '+item.offset+' · '+item.payloadSha256));
   section.append(label('h3','kafkaReceiptTitle'),facts,offsets);return section;
  }
+ function kafkaNoticePreview(task,receipt,current){
+  const scope=()=>bridge.task(task.id);
+  const eligible=latest=>receiptAllowed(latest)&&paused(latest)&&bridge.session()?.recoveryReview
+   &&latest.destinations?.some(item=>item.id===receipt.subscriptionId&&item.kafkaNoticePlanningAvailable===true);
+  const proof=receipt.kafkaReview;
+  if(!proof?.originalFailure||!eligible(scope()))return null;
+  const section=text('section'),button=label('button','kafkaNoticePreview'),result=text('div');
+  section.dataset.kafkaNoticePreview='';result.setAttribute('aria-live','polite');
+  button.onclick=async()=>{
+   const activeTask=scope();
+   if(!current()||!eligible(activeTask)||button.disabled)return;
+   button.disabled=true;result.replaceChildren();
+   try{
+    const data=await api(base(task)+'/kafka-notice-plan',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},
+     body:JSON.stringify({expectedRevision:activeTask.revision,predecessorRequestId:receipt.id})});
+    if(!current()||!section.isConnected||!eligible(scope())||scope().revision!==activeTask.revision)return;
+    const plan=data?.plan,topic=plan?.controlTopic,failure=plan?.failure;
+    if(data?.status!=='KAFKA_NOTICE_PLAN_REVIEWED'||data?.executionAuthorized!==false
+     ||data?.publicationBlockCode!=='KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'
+     ||plan?.task?.taskId!==task.id||plan?.predecessorRequestId!==receipt.id
+     ||topic?.targetId!==receipt.subscriptionId||failure?.failedSequence!==proof.failedSequence
+     ||!digest.test(data.approvalSha256||'')||!digest.test(plan.payloadSha256||'')
+     ||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,248}$/.test(topic.topicName||'')||!/^[A-Za-z0-9_-]{22}$/.test(topic.topicId||''))
+     throw new Error(t('receiptMismatch'));
+    const details=text('dl');
+    for(const [key,value] of [['kafkaNoticeControlTopic',topic.topicName],['kafkaNoticeTopicId',topic.topicId],
+     ['kafkaReceiptFailed',failure.failedSequence],['kafkaNoticePayloadSha',plan.payloadSha256],['kafkaNoticePlanSha',data.approvalSha256]])
+     details.append(label('dt',key),text('dd',value));
+    result.append(label('p','KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'),details);
+   }catch(error){if(current()&&section.isConnected)result.append(text('p',error.message,'error'));}
+   finally{button.disabled=false;}
+  };
+  section.append(button,result);return section;
+ }
  function receiptAction(task,operation){
   if(!receiptAllowed(task)||!receiptActions.has(operation.action)||!receiptId.test(operation.id||''))return null;
   const button=label('button','receiptView');button.className='quiet';
@@ -105,7 +139,11 @@ window.RivomeshRecovery=(()=>{
     result.append(text('p',t(receipt.status),'badge'));
     if(typeof receipt.code==='string'&&/^[A-Z0-9_]{1,120}$/.test(receipt.code))result.append(text('p',bridge.explain(receipt.code)));
     result.append(facts);
-    if(nativeEvidence)result.append(nativeEvidence);
+    if(nativeEvidence){
+     result.append(nativeEvidence);
+     const notice=kafkaNoticePreview(task,receipt,dialog.current);
+     if(notice)result.append(notice);
+    }
    }catch(error){if(dialog.current())feedback.textContent=error.message;}
    finally{if(dialog.current())button.disabled=input.disabled=false;}
   };
@@ -478,6 +516,10 @@ window.RivomeshRecovery=(()=>{
   review_kafka_receipts:'核对 Kafka 回执',kafkaReceiptTitle:'前一笔已确认事务的 Kafka 回执',
   kafkaReceiptObservedAt:'核对时间',kafkaReceiptEpoch:'任务代次',kafkaReceiptGeneration:'目标错误代次',
   kafkaReceiptAcknowledged:'已确认事务序号',kafkaReceiptFailed:'失败事务序号',kafkaReceiptTopic:'Topic 身份摘要',kafkaReceiptOffset:'位点',
+  kafkaNoticePreview:'核对 Kafka 通知计划',kafkaNoticeControlTopic:'专用控制 Topic',kafkaNoticeTopicId:'Topic ID',
+  kafkaNoticePayloadSha:'通知内容摘要',kafkaNoticePlanSha:'计划摘要',
+  KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'发布受阻。专用 Topic 的全局归属尚未确认。',
+  KAFKA_NOTICE_PREDECESSOR_REFRESH_REQUIRED:'请在当前任务配置下重新核对 Kafka 回执。',
   PRECEDING_KAFKA_RECEIPTS_VERIFIED:'已核对前一笔 Kafka 回执。',
   KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'发现后续事务发布记录，无法确认当前投递状态。',
   KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE:'找不到前一笔已确认事务的完整 Kafka 回执。',
@@ -493,6 +535,10 @@ window.RivomeshRecovery=(()=>{
   review_kafka_receipts:'Review Kafka receipts',kafkaReceiptTitle:'Kafka receipts for the preceding acknowledged transaction',
   kafkaReceiptObservedAt:'Reviewed at',kafkaReceiptEpoch:'Pipeline epoch',kafkaReceiptGeneration:'Destination error generation',
   kafkaReceiptAcknowledged:'Acknowledged sequence',kafkaReceiptFailed:'Failed sequence',kafkaReceiptTopic:'Topic identity digest',kafkaReceiptOffset:'Offset',
+  kafkaNoticePreview:'Review Kafka notice plan',kafkaNoticeControlTopic:'Dedicated control topic',kafkaNoticeTopicId:'Topic ID',
+  kafkaNoticePayloadSha:'Notice payload digest',kafkaNoticePlanSha:'Plan digest',
+  KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'Publication is blocked until dedicated topic ownership is verified globally.',
+  KAFKA_NOTICE_PREDECESSOR_REFRESH_REQUIRED:'Review the Kafka receipts again using the current task configuration.',
   PRECEDING_KAFKA_RECEIPTS_VERIFIED:'Verified the preceding Kafka receipts.',
   KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'A later publication is visible and its delivery state is uncertain.',
   KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE:'Complete Kafka receipts for the preceding acknowledged transaction are unavailable.',

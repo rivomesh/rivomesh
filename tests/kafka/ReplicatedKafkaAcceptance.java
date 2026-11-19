@@ -64,6 +64,7 @@ public final class ReplicatedKafkaAcceptance {
     private static final String SUBSCRIPTION = "kafka";
     private static final String TOPIC = "rivomesh-events";
     private static final String PEER_TOPIC = "rivomesh-recovery-peer";
+    private static final String CONTROL_TOPIC = "rivomesh-plan-control";
     private static final String GENERATION = "fixture-generation";
     private static final String UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private static final String FINGERPRINT = Codec.sha256("rivomesh-kafka-cluster-fixture");
@@ -76,6 +77,7 @@ public final class ReplicatedKafkaAcceptance {
     private static final TableSchema TABLE = table();
     private static final String TASK_ROUTE = "/api/tasks/" + PIPELINE;
     private static final String RECEIPT_ROUTE = TASK_ROUTE + "/recovery-receipts/";
+    private static final String PLAN_ROUTE = TASK_ROUTE + "/kafka-notice-plan";
     private static final String REVIEW_ACTION = "REVIEW_KAFKA_RECEIPTS";
     private static final String FIXTURE_ADMIN = "fixture-admin-only-for-loopback-kafka-test";
 
@@ -92,7 +94,9 @@ public final class ReplicatedKafkaAcceptance {
         Set<Integer> expectedIsr = PLACEMENT.stream().filter(active::contains).collect(Collectors.toSet());
         Path home = Path.of(args[2]);
         Map<String, Object> report = new LinkedHashMap<>();
-        boolean review = Set.of("recovery-review","managed-recovery-review").contains(phase);
+        boolean noticePlan = "managed-notice-plan".equals(phase);
+        boolean review = noticePlan || Set.of("recovery-review","managed-recovery-review").contains(phase);
+        PipelineConfig.KafkaNotice control = null;
 
         try (Admin admin = Admin.create(client())) {
             await(() -> ids(get(admin.describeCluster().nodes())), active::equals);
@@ -102,6 +106,16 @@ public final class ReplicatedKafkaAcceptance {
                     && active.contains(value.leader) && value.metadataLeader <= 3
                     && active.contains(value.metadataLeader));
             report.put("cluster", state);
+            if (noticePlan) {
+                createTopic(admin, CONTROL_TOPIC, 32768);
+                var topic = await(() -> get(admin.describeTopics(List.of(CONTROL_TOPIC)).allTopicNames()).get(CONTROL_TOPIC),
+                        observed -> observed != null && observed.partitions().size()==1
+                                && ids(observed.partitions().getFirst().isr()).equals(expectedIsr));
+                control = new PipelineConfig.KafkaNotice();
+                control.controlTopic=CONTROL_TOPIC;control.topicId=topic.topicId().toString();
+                control.clusterSha256=Codec.sha256("KAFKA:"+state.clusterId());
+                control.reservationId="d9d64abe-cc3e-43ff-a352-03a288f58c04";
+            }
             if ("below-isr".equals(phase)) {
                 // A new metadata commit distinguishes a data-replica shortage from controller quorum loss.
                 get(admin.createTopics(List.of(new NewTopic("metadata-proof", 1, (short) 1)
@@ -117,7 +131,8 @@ public final class ReplicatedKafkaAcceptance {
             case "elected" -> publish(home, phase, 2, report);
             case "below-isr", "restored" -> publish(home, phase, 3, report);
             case "offsets" -> { }
-            case "recovery-review", "managed-recovery-review" -> reviewPredecessor(home, report,"managed-recovery-review".equals(phase));
+            case "recovery-review", "managed-recovery-review", "managed-notice-plan" ->
+                reviewPredecessor(home,report,!"recovery-review".equals(phase),control);
             default -> throw new IllegalArgumentException("Unknown fixture phase");
         }
         if (!"below-isr".equals(phase) && !review) consume(home, phase, report);
@@ -338,12 +353,16 @@ public final class ReplicatedKafkaAcceptance {
         ManagedReview(ConsoleServer entry,ConsoleServer owner){this.entry=entry;this.owner=owner;}
 
         JsonNode request(ConsoleServer server,String route,String id,JsonNode data)throws Exception{
+            return request(server,route,id,data,data==null?200:202);
+        }
+
+        JsonNode request(ConsoleServer server,String route,String id,JsonNode data,int expectedStatus)throws Exception{
             HttpRequest.Builder request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+server.port()+route))
-                    .timeout(Duration.ofSeconds(5)).header("Authorization","Bearer "+FIXTURE_ADMIN);
+                    .timeout(Duration.ofSeconds(PLAN_ROUTE.equals(route)?35:5)).header("Authorization","Bearer "+FIXTURE_ADMIN);
             if(data!=null)request.header("X-Request-ID",id).header("Content-Type","application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(data.toString()));
             HttpResponse<String> reply=http.send(request.build(),HttpResponse.BodyHandlers.ofString());
-            require(reply.statusCode()==(data==null?200:202),"Managed HTTP refused "+route+" "+reply.statusCode()+": "+reply.body());
+            require(reply.statusCode()==expectedStatus,"Managed HTTP "+route+" "+reply.statusCode()+": "+reply.body());
             return Codec.JSON.readTree(reply.body());
         }
 
@@ -395,9 +414,19 @@ public final class ReplicatedKafkaAcceptance {
             }
             return result;
         }
+
+        JsonNode noticePlan(String predecessor,int status,boolean repeat)throws Exception{
+            String revision=task().path("revision").asText();
+            ObjectNode body=Codec.JSON.createObjectNode().put("expectedRevision",revision).put("predecessorRequestId",predecessor);
+            JsonNode result=request(entry,PLAN_ROUTE,"plan_notice_first_entry",body,status);
+            if(repeat)require(result.equals(request(owner,PLAN_ROUTE,"plan_notice_second_entry",body,status)),
+                    "Identical plan request through the second entry changed its authority or digests");
+            require(revision.equals(task().path("revision").asText()),"The notice plan advanced the task revision");
+            return result;
+        }
     }
 
-    private static void reviewPredecessor(Path home, Map<String,Object> report,boolean managed) throws Exception {
+    private static void reviewPredecessor(Path home,Map<String,Object> report,boolean managed,PipelineConfig.KafkaNotice control)throws Exception {
         PipelineConfig config = new PipelineConfig();
         config.pipelineId = PIPELINE;
         config.source.username = "fixture";
@@ -406,6 +435,7 @@ public final class ReplicatedKafkaAcceptance {
         config.journal.path = home.resolve(managed?"owner/data/journals/"+PIPELINE:"review-journal").toString();
         PipelineConfig.Target target = configuredTarget();
         target.mappings.put("inventory", "catalog");
+        target.messaging.recoveryNotice=control;
         config.targets.add(target);
         PipelineConfig.Target peer = configuredTarget();
         peer.id="kafka-peer";peer.messaging.topic=PEER_TOPIC;peer.messaging.maxMessageBytes=2*MAX_MESSAGE_BYTES;
@@ -533,6 +563,26 @@ public final class ReplicatedKafkaAcceptance {
                             "Native predecessor receipt did not return its exact offset and bytes digest");
                 }
                 report.put("review",proof);
+                PipelineConfig.KafkaNotice control=target.messaging.recoveryNotice;
+                TopicPartition controlPartition=control==null?null:new TopicPartition(control.controlTopic,0);
+                if(controlPartition!=null){
+                    require(consumer.endOffsets(Set.of(controlPartition),API_TIMEOUT).get(controlPartition)==0,"Control topic was pre-populated");
+                    JsonNode planned=managed.noticePlan(receiptId,200,true);
+                    JsonNode plan=planned.path("plan"),failedTransaction=plan.path("failure");
+                    require("KAFKA_NOTICE_PLAN_REVIEWED".equals(planned.path("status").asText())
+                            &&!planned.path("executionAuthorized").asBoolean(true)
+                            &&"KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED".equals(planned.path("publicationBlockCode").asText())
+                            &&"legacy-admin".equals(plan.path("administrator").path("actorId").asText())
+                            &&receiptId.equals(plan.path("predecessorRequestId").asText())
+                            &&control.topicId.equals(plan.path("controlTopic").path("topicId").asText())
+                            &&GENERATION.equals(failedTransaction.path("journalGeneration").asText())
+                            &&proof.path("epoch").asText().equals(failedTransaction.path("epoch").asText())
+                            &&"2".equals(failedTransaction.path("failedSequence").asText())
+                            &&proof.path("originalFailure").path("contentSha256").asText().equals(failedTransaction.path("contentSha256").asText())
+                            &&plan.path("payloadSha256").asText().matches("[0-9a-f]{64}")
+                            &&planned.path("approvalSha256").asText().matches("[0-9a-f]{64}"),"Native notice authorization or failure scope changed");
+                    report.put("noticePlan",planned);
+                }
                 report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));
                 report.put("consumerOffsetAfterReview",consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset());
                 require(records.equals(read(consumer,0,brokerEnd)),"Review altered native data");
@@ -554,6 +604,15 @@ public final class ReplicatedKafkaAcceptance {
                     require("FAILED".equals(partial.path("status").asText())
                             &&"KAFKA_RECOVERY_PUBLICATION_UNCERTAIN".equals(partial.path("code").asText())
                             &&!partial.has("kafkaReview"),"Managed review verified a partial publication");
+                }
+                if(controlPartition!=null){
+                    JsonNode rejected=managed.noticePlan(receiptId,409,false);
+                    require("KAFKA_RECOVERY_PUBLICATION_UNCERTAIN".equals(rejected.path("code").asText()),
+                            "An ambiguous later native BEGIN produced a second plan");
+                    long controlOffset=consumer.endOffsets(Set.of(controlPartition),API_TIMEOUT).get(controlPartition);
+                    require(controlOffset==0,"Preview wrote a notice or touched the dedicated topic");
+                    report.put("noticePlanPartialRefusal",rejected.path("code").asText());
+                    report.put("noticeControlEnd",controlOffset);
                 }
                 require(consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION)==brokerEnd+1
                         &&consumer.committed(PARTITIONS,API_TIMEOUT).get(PARTITION).offset()==1,"Review mutated broker offsets");

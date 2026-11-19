@@ -1,5 +1,6 @@
 package io.github.rivomesh.cdc;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -42,7 +43,8 @@ public final class KafkaRecoveryReview {
     private static final ObjectReader ENVELOPE=Codec.JSON.readerFor(MessageEvent.class)
             .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private record Cut(String generation,long epoch,long acknowledged,long failedSequence,String rawHash,
-                       String normalizedHash,String transactionId,String transactionHash,String clusterHash){}
+                       String normalizedHash,String transactionId,String transactionHash,String clusterHash,
+                       OriginalFailure originalFailure){}
     private record Broker(String clusterId,Uuid topicId){}
     public record Receipt(String namespace,String offset,String payloadSha256){
         public Receipt {
@@ -51,9 +53,23 @@ public final class KafkaRecoveryReview {
                 throw rejected("KAFKA_RECOVERY_OBSERVATION_INVALID");
         }
     }
+    public record OriginalFailure(String journalGeneration,String contentSha256,String kafkaClusterSha256) {
+        public OriginalFailure {
+            if(journalGeneration==null||journalGeneration.isBlank()||journalGeneration.length()>128
+                    ||!FailureEvidence.hash(contentSha256)||!FailureEvidence.hash(kafkaClusterSha256))
+                throw rejected("KAFKA_RECOVERY_OBSERVATION_INVALID");
+        }
+    }
     public record Observation(String status,String target,String observedAt,String epoch,String errorGeneration,
                               String acknowledgedSequence,String failedSequence,String observedTopicIdentitySha256,
-                              List<Receipt> nativeReceipts){
+                              List<Receipt> nativeReceipts,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) OriginalFailure originalFailure){
+        public Observation(String status,String target,String observedAt,String epoch,String errorGeneration,
+                           String acknowledgedSequence,String failedSequence,String observedTopicIdentitySha256,
+                           List<Receipt> nativeReceipts){
+            this(status,target,observedAt,epoch,errorGeneration,acknowledgedSequence,failedSequence,
+                    observedTopicIdentitySha256,nativeReceipts,null);
+        }
         public Observation {
             if(!VERIFIED.equals(status)||target==null||!target.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
                     ||observedAt==null||observedAt.length()>40||decimal(epoch)<0||decimal(errorGeneration)<0
@@ -89,7 +105,7 @@ public final class KafkaRecoveryReview {
             if(!before.equals(cut(journal,targetId,expectedErrorGeneration)))throw rejected("KAFKA_RECOVERY_CUT_CHANGED");
             return new Observation(VERIFIED,targetId,Instant.now().toString(),Long.toString(before.epoch()),
                     Long.toString(expectedErrorGeneration),Long.toString(before.acknowledged()),Long.toString(before.failedSequence()),
-                    proof.topicIdentitySha256(),proof.receipts());
+                    proof.topicIdentitySha256(),proof.receipts(),before.originalFailure());
         }
     }
 
@@ -123,11 +139,23 @@ public final class KafkaRecoveryReview {
                             ||!FailureEvidence.hash(hash)||!FailureEvidence.hash(cluster))
                         throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
                     result=new Cut(failure.generation,failure.epoch,sequence,failure.sequence,failure.rawHash,
-                            failure.normalizedHash,transaction,hash,cluster);
+                            failure.normalizedHash,transaction,hash,cluster,originalFailure(failure,cluster));
                 }
             }
             deadline.verify();c.rollback();return result;
         }
+    }
+
+    static String failureContentSha256(Journal.FailureReview failure){
+        if(!FailureEvidence.hash(failure.rawHash)||!FailureEvidence.hash(failure.normalizedHash)
+                ||!FailureEvidence.hash(failure.failure.projectedHash))return null;
+        return Codec.sha256(Codec.encode(List.of(failure.fingerprint,failure.failureEpoch,
+                failure.rawHash,failure.normalizedHash,failure.failure.projectedHash)));
+    }
+
+    private static OriginalFailure originalFailure(Journal.FailureReview failure,String cluster){
+        String content=failureContentSha256(failure);
+        return content==null?null:new OriginalFailure(failure.generation,content,cluster);
     }
 
     private static Proof nativeProof(PipelineConfig.Target target,String pipeline,Cut cut)throws Exception{

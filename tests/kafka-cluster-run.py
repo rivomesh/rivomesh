@@ -16,6 +16,8 @@ RUNTIME = 'eclipse-temurin:21-jre-jammy'
 BROKERS = {1: 'kafka-a', 2: 'kafka-b', 3: 'kafka-c', 4: 'kafka-d'}
 JAVA_SOURCE = ROOT/'tests/kafka/ReplicatedKafkaAcceptance.java'
 JAVA_CLASS = 'io.github.rivomesh.acceptance.ReplicatedKafkaAcceptance'
+NOTICE_SOURCE = ROOT/'tests/kafka/KafkaRecoveryNoticeAcceptance.java'
+NOTICE_CLASS = 'io.github.rivomesh.cdc.KafkaRecoveryNoticeAcceptance'
 
 
 def sha256(path):
@@ -23,7 +25,7 @@ def sha256(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def compose_config(home, artifact):
+def compose_config(home, artifact, java_class):
     cluster = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode().rstrip('=')
     voters = ','.join(f'{node}@{BROKERS[node]}:9093' for node in (1,2,3))
     services = {}
@@ -57,7 +59,7 @@ def compose_config(home, artifact):
                               volumes=[str(home)+':/fixture',str(artifact)+':/app/rivomesh.jar:ro'],
                               entrypoint=['java','-Xmx256m','-XX:ActiveProcessorCount=2',
                                           '-Dorg.slf4j.simpleLogger.defaultLogLevel=warn',
-                                          '-cp','/app/rivomesh.jar:/fixture/classes',JAVA_CLASS])
+                                          '-cp','/app/rivomesh.jar:/fixture/classes',java_class])
     return dict(services=services,volumes={name:{} for name in BROKERS.values()})
 
 
@@ -121,6 +123,8 @@ def main():
     recovery = parser.add_mutually_exclusive_group()
     recovery.add_argument('--only-recovery-review',action='store_true')
     recovery.add_argument('--only-managed-recovery-review',action='store_true')
+    recovery.add_argument('--only-managed-notice-plan',action='store_true')
+    recovery.add_argument('--only-notice-recovery',action='store_true')
     args = parser.parse_args()
     artifact,output = args.artifact.resolve(),args.output.resolve()
     for path in (artifact,output):
@@ -128,8 +132,9 @@ def main():
     output.mkdir(mode=0o700,parents=True,exist_ok=False)
     project = 'rivomesh-kafka-'+secrets.token_hex(5)
     javac = str(args.java_home/'bin/javac') if args.java_home else 'javac'
+    java_source,java_class = (NOTICE_SOURCE,NOTICE_CLASS) if args.only_notice_recovery else (JAVA_SOURCE,JAVA_CLASS)
     report = dict(status='FAIL',artifactSha256=sha256(artifact),harnessSha256=sha256(Path(__file__)),
-                  acceptanceSourceSha256=sha256(JAVA_SOURCE),checks=[],phases={})
+                  acceptanceSourceSha256=sha256(java_source),checks=[],phases={})
 
     def run(*command,check=True,timeout=210):
         return subprocess.run(command,cwd=ROOT,text=True,capture_output=True,check=check,timeout=timeout)
@@ -141,7 +146,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='fixture-',dir=output) as temporary:
         home = Path(temporary)
         composition = home/'compose.json'
-        composition.write_text(json.dumps(compose_config(home,artifact)))
+        composition.write_text(json.dumps(compose_config(home,artifact,java_class)))
         command = ('docker','compose','--env-file','/dev/null','-p',project,'-f',str(composition))
 
         def compose(*docker_args,**options):
@@ -160,7 +165,7 @@ def main():
 
         started = False
         try:
-            run(javac,'--release','21','-cp',str(artifact),'-d',str(home/'classes'),str(JAVA_SOURCE))
+            run(javac,'--release','21','-cp',str(artifact),'-d',str(home/'classes'),str(java_source))
             started = True
             compose('up','-d',*BROKERS.values())
             report['images'] = {tag:run('docker','image','inspect','--format','{{.Id}}',tag).stdout.strip()
@@ -169,15 +174,28 @@ def main():
             report['javaVersion'] = next(line.strip() for line in version.stderr.splitlines()
                                          if line.strip().startswith('openjdk version '))
             assert report['javaVersion'].startswith('openjdk version "21.')
-            if args.only_recovery_review or args.only_managed_recovery_review:
-                review = phase('managed-recovery-review' if args.only_managed_recovery_review else 'recovery-review',
-                               set(BROKERS))
+            if args.only_notice_recovery:
+                notice = phase('notice-recovery',set(BROKERS))
+                assert notice['oldProducerFenced'] and notice['oldUncommittedOffset'] < notice['recoveredOffset']
+                assert notice['visibleControlOffsets'] == [notice['recoveredOffset']]
+                passed('A new transactional writer fences the old Kafka producer and exact offset replay proves one committed control notice')
+                assert notice['businessBefore'] == notice['businessAfter']
+                assert notice['failedTargetAcknowledgment'] == 1 and notice['healthyPeerAcknowledgment'] == 2
+                assert notice['sourcePayloadUnchanged']
+                passed('Commit response loss and journal reopen preserve both business topics, consumer offsets, original payload and target acknowledgments')
+                assert sha256(artifact)==report['artifactSha256']
+                report['status'] = 'PASS'
+                return
+            if args.only_recovery_review or args.only_managed_recovery_review or args.only_managed_notice_plan:
+                mode = ('managed-notice-plan' if args.only_managed_notice_plan else
+                        'managed-recovery-review' if args.only_managed_recovery_review else 'recovery-review')
+                review = phase(mode,set(BROKERS))
                 assert review['review']['status']=='PRECEDING_KAFKA_RECEIPTS_VERIFIED'
                 assert review['review']['acknowledgedSequence']=='1' and review['review']['failedSequence']=='2'
                 assert len(review['review']['nativeReceipts'])==2
                 assert review['brokerEndBefore']==review['brokerEndAfterReview']
                 assert review['consumerOffsetBefore']==review['consumerOffsetAfterReview']
-                if args.only_managed_recovery_review:
+                if args.only_managed_recovery_review or args.only_managed_notice_plan:
                     assert review['managedOwner']=='owner' and review['managedActor']=='legacy-admin'
                     assert review['managedReplayedAcrossEntries'] and review['managedHistoricalOwnerOffline']
                     passed('Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup')
@@ -187,6 +205,12 @@ def main():
                 assert review['journalAcknowledged']==review['publicationAcknowledged']==1
                 assert review['peerAcknowledged']==2 and review['peerEndBefore']==review['peerEndAfter']
                 passed('A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints')
+                if args.only_managed_notice_plan:
+                    assert not review['noticePlan']['executionAuthorized']
+                    assert review['noticePlan']['publicationBlockCode']=='KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'
+                    assert review['noticePlanPartialRefusal']=='KAFKA_RECOVERY_PUBLICATION_UNCERTAIN'
+                    assert review['noticeControlEnd']==0
+                    passed('Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched')
                 assert sha256(artifact)==report['artifactSha256']
                 report['status'] = 'PASS'
                 return

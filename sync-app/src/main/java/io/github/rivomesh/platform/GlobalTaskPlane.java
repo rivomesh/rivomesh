@@ -28,6 +28,10 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case LIST:{Map<String,Object> page=tasks.page(request.cursor==null?"":request.cursor,request.limit,request.ownerNodeId,request.taskId,actor,this::view);page.put("invalidConfigs",Collections.emptyList());return page;}
             case VIEW:return get(request.taskId,actor);
             case RECOVERY_RECEIPT:return commands.recoveryReceipt(request.taskId,request.reference,actor);
+            case KAFKA_NOTICE_PLAN:
+                if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
+                request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
+                return queries.await(queries.submit(request,actor),actor);
             case HANDOFF_ASSESS:case HANDOFF_LATEST:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);

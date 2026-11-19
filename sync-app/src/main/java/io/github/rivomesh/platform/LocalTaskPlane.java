@@ -8,6 +8,7 @@ final class LocalTaskPlane implements TaskControlPlane {
     LocalTaskPlane(TaskService tasks){this.tasks=tasks;}
     public Map<String,Object> ownerQuery(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if(request.mutation()||request.kind==TaskRequest.Kind.LIST)throw new IllegalArgumentException("OWNER_QUERY_READ_REQUIRED");
+        if(request.kind==TaskRequest.Kind.KAFKA_NOTICE_PLAN)return tasks.planKafkaNotice(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_STAGING_RPC)return tasks.stageHandoffEvidence(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
         if(request.handoffRpc())return tasks.handoffProbe(request,actor);
@@ -25,7 +26,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         switch(r.kind){
             case LIST:return tasks.list(actor);
             case VIEW:return tasks.view(r.taskId);
-            case RECOVERY_RECEIPT:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
+            case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
             case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:case HANDOFF_STAGE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);

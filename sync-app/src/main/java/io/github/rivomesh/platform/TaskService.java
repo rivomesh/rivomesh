@@ -2,6 +2,7 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
 import io.github.rivomesh.api.SourcePosition;
+import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.validation.ValidationArchive;
@@ -1279,6 +1280,65 @@ public final class TaskService implements AutoCloseable {
         Map<String,Object> result=backend.failureEvidence(failureEvidenceDirectory(id),failureEvidenceScope(id),evidence,view,from,limit);
         AuditStore.Event event=new AuditStore.Event();event.kind=view==null?"FAILURE_EVIDENCE_SUMMARY_READ":"FAILURE_EVIDENCE_EVENTS_READ";event.action=view==null?"READ_FAILURE_SUMMARY":"READ_FAILURE_EVENTS";event.taskId=id;event.subjectId=evidence;event.operationHash=String.valueOf(result.get("hash"));event.actorId=actor.id;event.actorRole=actor.role.name();event.status="RESPONSE_PREPARED";appendAudit(event);return result;
     }
+    Map<String,Object> planKafkaNotice(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        DurableCommands.KafkaNoticePredecessor predecessor=request.kafkaNoticePredecessor;
+        TaskDefinition definition;
+        String localRevision;
+        KafkaNoticePlanning.TopicReservation reservation;
+        synchronized(this){
+            definition=kafkaNoticeTask(request,actor).config;
+            localRevision=registry.tasks.get(request.taskId).revision;
+            String targetId=predecessor.receipt().observation().target();
+            PipelineConfig.Target target=definition.pipeline.targets.stream().filter(item->item.id.equals(targetId)
+                            &&item.product==TargetProduct.KAFKA).findFirst()
+                    .orElseThrow(()->new Conflict("KAFKA_NOTICE_TARGET_UNSUPPORTED"));
+            PipelineConfig.KafkaNotice notice=target.messaging.recoveryNotice;
+            if(notice==null)throw new Conflict("KAFKA_NOTICE_CONTROL_TOPIC_REQUIRED");
+            reservation=new KafkaNoticePlanning.TopicReservation(notice.reservationId,request.taskId,targetId,
+                    notice.controlTopic,notice.clusterSha256,notice.topicId);
+        }
+        KafkaNoticePlanning.Prepared plan;
+        try{plan=backend.planKafkaNotice(definition,predecessor.task(),predecessor.administrator(),predecessor.receipt(),reservation);}
+        catch(IllegalArgumentException|IllegalStateException failed){
+            String code=failed.getMessage();
+            if(code!=null&&code.matches("(?:KAFKA_NOTICE|KAFKA_RECOVERY)_[A-Z0-9_]{1,90}"))
+                throw new Conflict(code);
+            throw failed;
+        }
+        synchronized(this){
+            if(kafkaNoticeTask(request,actor).config!=definition||!localRevision.equals(registry.tasks.get(request.taskId).revision))
+                throw new Conflict("REVISION_CHANGED");
+            if(plan==null||!predecessor.task().equals(plan.task())||!predecessor.administrator().equals(plan.administrator())
+                    ||!request.reference.equals(plan.predecessorRequestId())||!reservation.equals(plan.controlTopic()))
+                throw new Conflict("KAFKA_NOTICE_PLAN_CHANGED");
+            AuditStore.Event event=new AuditStore.Event();
+            event.kind="KAFKA_NOTICE_PLAN_READ";event.action="READ_KAFKA_NOTICE_PLAN";event.taskId=request.taskId;
+            event.subjectId=request.reference;event.actorId=actor.id;event.actorRole=actor.role.name();
+            event.operationHash=plan.approvalSha256();event.status="RESPONSE_PREPARED";appendAudit(event);
+            return Map.of("status","KAFKA_NOTICE_PLAN_REVIEWED","plan",plan,"approvalSha256",plan.approvalSha256(),
+                    "executionAuthorized",false,"publicationBlockCode","KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED");
+        }
+    }
+
+    private Entry kafkaNoticeTask(TaskRequest request,AccessControl.Principal actor){
+        ensureOpen();currentActor(actor);
+        if(actor==null||!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
+        if(config.cluster==null||!config.cluster.sharedTasks)throw new Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
+        if(!failureReviewEnabled())throw new Conflict("FAILURE_REVIEW_DISABLED");
+        DurableCommands.KafkaNoticePredecessor predecessor=request.kafkaNoticePredecessor;
+        if(predecessor==null||!Objects.equals(nodeId(),predecessor.task().ownerNodeId())
+                ||!Objects.equals(registry.ownerDirectoryIdentity,predecessor.task().ownerDirectoryId()))
+            throw new Conflict("KAFKA_NOTICE_PREDECESSOR_SCOPE_CHANGED");
+        if(!actor.id.equals(predecessor.administrator().actorId())
+                ||!Objects.equals(actor.authorizationRevision,predecessor.administrator().authorizationRevision()))
+            throw new SecurityException("FORBIDDEN");
+        Entry entry=require(request.taskId);Control control=registry.tasks.get(request.taskId);
+        if(entry.config.pipeline==null)throw new Conflict("KAFKA_NOTICE_TARGET_UNSUPPORTED");
+        if(!"PAUSED".equals(control.desired))throw new Conflict("KAFKA_NOTICE_REQUIRES_PIPELINE_PAUSED");
+        if(control.operations.stream().anyMatch(op->"PENDING".equals(op.status)))throw new Conflict("OPERATION_PENDING");
+        return entry;
+    }
+
     private Entry recoveryRead(String id,AccessControl.Principal actor)throws Exception{
         ensureOpen();currentActor(actor);if(actor==null||!actor.administers())throw new SecurityException("FORBIDDEN");if(!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");if(!skipRecoveryEnabled())throw new Conflict("SKIP_DISABLED");return require(id);
     }

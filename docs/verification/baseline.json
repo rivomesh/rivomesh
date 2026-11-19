@@ -9194,5 +9194,131 @@
     "scope": "PostgreSQL 17.12 without time zone TIME(6) to native PostgreSQL 17.12 and MySQL 8.4.13 TIME(6), Temurin 21. Midnight and 24:00, microseconds, NULL, one key change, one duplicate deletion, two original snapshots and original slot restart. TIMETZ preflight refusal before slot creation.",
     "firstRunNote": "First run timed out in the snapshot predicate despite native SQL showing the expected rows on all three endpoints. The same JAR passed after exact integer normalization of each server's native TIME text in the fixture. Both scopes cleared their Compose resources.",
     "reproduce": "python3 tests/postgres-source-run.py --source-image postgres:17.12 --clock-values --artifact /path/to/rivomesh.jar --output target/pg-clock-proof"
+  },
+  "kafkaManagedNoticePlanNative": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "675b34ac8ec1df9536986888db039558f3307bac33d177cd2a3ff241707e769a",
+      "harnessSha256": "2cb0c366db03e0d0440483da73c14b869384d1dced9392b9573376588cf41495",
+      "acceptanceSourceSha256": "059c12aebebeaac139ab2459f30b8f1b98380b057a7d59665afb8e6829dc9e11",
+      "checks": [
+        "Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup",
+        "A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints",
+        "Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched"
+      ],
+      "phases": {
+        "managed-notice-plan": {
+          "brokerEndAfterReview": 9,
+          "brokerEndBefore": 9,
+          "cluster": {
+            "clusterId": "yrY5efSQC0WjkDjV8_9F8g",
+            "topicId": "MSVP_3fvTTGv0zb5Qwv_kQ",
+            "leader": 1,
+            "isr": [
+              1,
+              2,
+              4
+            ],
+            "metadataLeader": 3,
+            "metadataHighWatermark": 38
+          },
+          "consumerOffsetAfterReview": 1,
+          "consumerOffsetBefore": 1,
+          "journalAcknowledged": 1,
+          "managedActor": "legacy-admin",
+          "managedHistoricalOwnerOffline": true,
+          "managedOwner": "owner",
+          "managedReplayedAcrossEntries": true,
+          "noticeControlEnd": 0,
+          "noticePlan": {
+            "status": "KAFKA_NOTICE_PLAN_REVIEWED",
+            "executionAuthorized": false,
+            "plan": {
+              "task": {
+                "taskId": "kafka-cluster",
+                "ownerNodeId": "owner",
+                "ownerDirectoryId": "398b2fc8-911e-4274-ad25-035b84417e6e",
+                "configurationVersion": "11de5394-f8d0-4b90-8eb7-37a5a3076438",
+                "revision": "6552548d-cf8b-407d-99ed-071e51b667ea"
+              },
+              "administrator": {
+                "actorId": "legacy-admin",
+                "authorizationRevision": "00f4eda1-858f-486c-81a6-225407d1a963"
+              },
+              "predecessorRequestId": "managed_verified_kafka",
+              "predecessorActorId": "legacy-admin",
+              "predecessorReceiptSha256": "76e3131d167e75a53abaeeeb904fa45b8c4aa60b1461dd02806673b40a3d9391",
+              "controlTopic": {
+                "reservationId": "d9d64abe-cc3e-43ff-a352-03a288f58c04",
+                "taskId": "kafka-cluster",
+                "targetId": "kafka",
+                "topicName": "rivomesh-plan-control",
+                "kafkaClusterSha256": "c237f85d09d1a45a7f6eeeb35d9aa951e84c0c034014838973732280bb4bdccf",
+                "topicId": "8N6d2VwNRxyNk6QR8E6-cA"
+              },
+              "failure": {
+                "targetId": "kafka",
+                "journalGeneration": "fixture-generation",
+                "epoch": "2",
+                "errorGeneration": "1",
+                "acknowledgedSequence": "1",
+                "failedSequence": "2",
+                "contentSha256": "3a0ee8cc0c11d917da78f31b45bcbbcf49a6125eda8fd43ae45dea72fc1a2ead"
+              },
+              "noticeId": "aa7c23e94aed5c2534d6f3c14394bae69601286c3cf349b4cfdeedc0a1f11f34",
+              "payloadSha256": "09d65044c7e866a37ed9dee1d43141791dcba96e1bd29f77b71e4a8d4a1bf9a8"
+            },
+            "publicationBlockCode": "KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",
+            "approvalSha256": "0df3c7b879764f447ee1c48f471657086f9aaf5d88443bba4b9ea790e3d2199f"
+          },
+          "noticePlanPartialRefusal": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "partialFailureCode": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "peerAcknowledged": 2,
+          "peerEndAfter": 14,
+          "peerEndBefore": 14,
+          "publicationAcknowledged": 1,
+          "review": {
+            "status": "PRECEDING_KAFKA_RECEIPTS_VERIFIED",
+            "target": "kafka",
+            "observedAt": "2026-11-19T00:49:11.253129679Z",
+            "epoch": "2",
+            "errorGeneration": "1",
+            "acknowledgedSequence": "1",
+            "failedSequence": "2",
+            "observedTopicIdentitySha256": "32aac3c1d59db0a11be4d078bbae9d8396881a6ee358a105e517a7679be95f20",
+            "nativeReceipts": [
+              {
+                "namespace": "catalog",
+                "offset": "7",
+                "payloadSha256": "daa592d01e0b388d79df4e4e91c764f04c4bb768a7cf29fe41baf8c825624bcc"
+              },
+              {
+                "namespace": "orders",
+                "offset": "8",
+                "payloadSha256": "2b8cdb46039da84aa9bb5ca94ce21bc631756921e6e907cec69478f456b98589"
+              }
+            ],
+            "originalFailure": {
+              "journalGeneration": "fixture-generation",
+              "contentSha256": "3a0ee8cc0c11d917da78f31b45bcbbcf49a6125eda8fd43ae45dea72fc1a2ead",
+              "kafkaClusterSha256": "c237f85d09d1a45a7f6eeeb35d9aa951e84c0c034014838973732280bb4bdccf"
+            }
+          }
+        }
+      },
+      "images": {
+        "apache/kafka:3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+        "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+      },
+      "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "47a152259c0033cf3937ccdfff88d501d51aa589ade05b7fbf07b96132b0c77d",
+    "nativeScopedJavaTestsPassed": 67,
+    "integratedPackageSha256": "a9125326fc919655c15d64fa84ebaab0134fb6692ca9562d968f10497cd556c8",
+    "integratedJavaTestsPassed": 46,
+    "integratedDomTestsPassed": 146,
+    "scope": "Four Kafka 3.9.2 KRaft brokers with two packaged management entries. Exact read-only plan, same owner and request, native Topic identity, unchanged business and consumer positions, original transaction evidence and refusal after an observed partial BEGIN. Dedicated Topic remains empty, so live notice dispatch is outside this acceptance.",
+    "reproduce": "python3 tests/kafka-cluster-run.py --only-managed-notice-plan --artifact /path/to/rivomesh.jar --output target/kafka-managed-plan"
   }
 }

@@ -56,6 +56,8 @@ public final class TaskDefinition {
         for(PipelineConfig.Target destination:pipeline.targets){
             Map<String,Object> row=new LinkedHashMap<>();row.put("id",destination.id);row.put("product",destination.product.name());row.put("mappings",new TreeMap<>(destination.mappings));row.put("consistency",destination.product.messaging()?"AT_LEAST_ONCE_EVENTS":destination.product.materialized()?"VERSIONED_MATERIALIZATION":"TRANSACTIONAL");
             if(destination.product==TargetProduct.KAFKA||destination.product==TargetProduct.PULSAR)row.put("resource",destination.messaging.topic);
+            if(destination.product==TargetProduct.KAFKA&&destination.messaging.recoveryNotice!=null)
+                row.put("kafkaNoticePlanningAvailable",true);
             if(destination.product==TargetProduct.REDIS_STREAMS||destination.product==TargetProduct.NATS_JETSTREAM)row.put("resource",destination.messaging.stream);
             if(destination.product==TargetProduct.ROCKETMQ){row.put("topicPrefix",destination.messaging.topic);if(generation!=null)row.put("resource",io.github.rivomesh.transport.rocketmq.RocketTransport.physicalTopic(destination.messaging.topic,io.github.rivomesh.cdc.MessagePublishers.binding(pipeline.pipelineId,destination.id,generation)));}
             if(destination.product==TargetProduct.ACTIVEMQ_ARTEMIS){row.put("queuePrefix",destination.messaging.stream);if(generation!=null)row.put("resource",io.github.rivomesh.transport.artemis.ArtemisTransport.physicalQueue(destination.messaging.stream,io.github.rivomesh.cdc.MessagePublishers.binding(pipeline.pipelineId,destination.id,generation)));}
@@ -77,7 +79,22 @@ public final class TaskDefinition {
     Map<String,Set<String>> spaces(boolean metadata){
         Map<String,Set<String>> result=new HashMap<>();
         if(pipeline==null){Set<String> names=new HashSet<>();names.add(target.schema);if(metadata)names.add(target.metadataSchema);result.put(destination(target.url),names);}
-        else for(PipelineConfig.Target t:pipeline.targets){Set<String> names=result.computeIfAbsent(destination(t.url),key->new HashSet<>());if(t.product==TargetProduct.KAFKA)names.add("kafka-topic:"+t.messaging.topic);else if(t.product==TargetProduct.REDIS_STREAMS)names.add("redis-stream:"+t.messaging.stream);else if(t.product==TargetProduct.PULSAR)names.add("pulsar-topic:"+t.messaging.topic);else if(t.product==TargetProduct.ROCKETMQ)names.add("rocketmq-publication:"+pipeline.pipelineId+":"+t.id);else if(t.product==TargetProduct.ACTIVEMQ_CLASSIC)names.add("classic-publication:"+pipeline.pipelineId+":"+t.id);else if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS)names.add("artemis-publication:"+pipeline.pipelineId+":"+t.id);else names.addAll(t.mappings.values());if(metadata&&!t.product.messaging())names.add(t.metadataSchema);}
+        else for(PipelineConfig.Target t:pipeline.targets){
+            Set<String> names=result.computeIfAbsent(destination(t.url),key->new HashSet<>());
+            if(t.product==TargetProduct.KAFKA){
+                Set<String> topics=new HashSet<>();
+                topics.add("kafka-topic:"+t.messaging.topic);
+                if(t.messaging.recoveryNotice!=null)topics.add("kafka-topic:"+t.messaging.recoveryNotice.controlTopic);
+                names.addAll(topics);
+                for(String endpoint:t.messaging.endpoints)result.computeIfAbsent(destination(endpoint),key->new HashSet<>()).addAll(topics);
+            }else if(t.product==TargetProduct.REDIS_STREAMS)names.add("redis-stream:"+t.messaging.stream);
+            else if(t.product==TargetProduct.PULSAR)names.add("pulsar-topic:"+t.messaging.topic);
+            else if(t.product==TargetProduct.ROCKETMQ)names.add("rocketmq-publication:"+pipeline.pipelineId+":"+t.id);
+            else if(t.product==TargetProduct.ACTIVEMQ_CLASSIC)names.add("classic-publication:"+pipeline.pipelineId+":"+t.id);
+            else if(t.product==TargetProduct.ACTIVEMQ_ARTEMIS)names.add("artemis-publication:"+pipeline.pipelineId+":"+t.id);
+            else names.addAll(t.mappings.values());
+            if(metadata&&!t.product.messaging())names.add(t.metadataSchema);
+        }
         return result;
     }
     Map<String,Set<String>> metadataSpaces(){

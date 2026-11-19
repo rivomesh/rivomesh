@@ -60,6 +60,28 @@ API clients send `POST /api/tasks/<task>/actions` with a stable `X-Request-ID` a
 
 Use `tests/kafka-cluster-run.py --only-managed-recovery-review` to exercise the packaged HTTP management flow against four KRaft brokers. The isolated fixture uses two loopback management entries with a shared H2 control store and checks replay through the second entry, lookup with the owner offline, partial-publication rejection and unchanged target progress.
 
+#### Review a Kafka notice plan
+
+An administrator can preview a failure notice for a pre-owned Kafka control topic. Set the optional `recoveryNotice` fields under the Kafka destination’s `messaging` configuration, and apply the configuration before reviewing the predecessor receipt.
+
+```yaml
+messaging:
+  topic: sales.events
+  recoveryNotice:
+    controlTopic: rivomesh.sales.recovery
+    clusterSha256: "<SHA-256 of KAFKA: followed by the native cluster ID>"
+    topicId: "<Kafka topic UUID in its native string format>"
+    reservationId: "<UUID for the pre-owned topic reservation>"
+```
+
+The control topic must differ from every configured Kafka business topic in the task. Management also checks logical destination conflicts across known bootstrap addresses. The planner verifies that the dedicated topic already exists in the original Kafka cluster, with one partition, at least three replicas, a majority minimum ISR, indefinite retention and automatic creation disabled. Publication stays blocked with `KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED` because logical endpoint claims cannot establish physical separation across every external or aliased destination.
+
+Set `cleanup.policy=delete`, `retention.ms=-1`, `retention.bytes=-1`, `unclean.leader.election.enable=false` and `remote.storage.enable=false` on the control topic. Use a `max.message.bytes` value from 2048 through 65536 and set `min.insync.replicas` to a majority of configured replicas. Set `auto.create.topics.enable=false` on all Brokers. The planner needs business-topic read access and access to Kafka topic and Broker configuration metadata.
+
+Pause the entire task, run a new successful Kafka receipt review, and select **Review Kafka notice plan** inside its receipt. API clients can send `POST /api/tasks/<task>/kafka-notice-plan` with `{"expectedRevision":"<current task revision>","predecessorRequestId":"<successful review request ID>"}`. The owner rechecks the authenticated predecessor, task revision, administrator, original failure and Topic UUID. The response contains a deterministic plan digest and notice payload digest and always returns `executionAuthorized: false`. Generate a fresh receipt after a configuration or owner change, or when the original receipt predates the failure-content binding.
+
+Use `tests/kafka-cluster-run.py --only-managed-notice-plan` to exercise the read-only plan through two management entries and a real Kafka cluster.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof

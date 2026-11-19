@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_STAGE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,RECOVERY_RECEIPT,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_STAGE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -37,6 +37,7 @@ final class TaskRequest {
     public SharedHandoffEvidence.Archive handoffArchive;
     public SharedHandoffEvidence.ReceiptPlan handoffClosedReceipts;
     public HandoffStaging.Binding handoffStaging;
+    public DurableCommands.KafkaNoticePredecessor kafkaNoticePredecessor;
     public HandoffPreparations.Plan handoffPreparation;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
@@ -94,6 +95,16 @@ final class TaskRequest {
         }else if(validationArchive!=null)throw new IllegalArgumentException("VALIDATION_ARCHIVE_REQUEST_INVALID");
         if(kind==Kind.RECOVERY_RECEIPT&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")))
             throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
+        if(kind==Kind.KAFKA_NOTICE_PLAN){
+            if(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
+                    ||revision==null||!revision.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"))
+                throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
+            if(kafkaNoticePredecessor!=null&&(kafkaNoticePredecessor.task()==null||kafkaNoticePredecessor.administrator()==null
+                    ||kafkaNoticePredecessor.receipt()==null||!taskId.equals(kafkaNoticePredecessor.task().taskId())
+                    ||!revision.equals(kafkaNoticePredecessor.task().revision())
+                    ||!reference.equals(kafkaNoticePredecessor.receipt().requestId())))
+                throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
+        }else if(kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
         if(kind==Kind.DIAGNOSTICS)WorkerDiagnostics.validatePage(cursor,limit,subscriptionId);
         if(kind==Kind.CAPTURE_EXCLUSIONS&&(cursor==null||!cursor.isEmpty()&&!cursor.matches("[A-Za-z0-9_-]{8,128}")
                 ||limit<1||limit>25))throw new IllegalArgumentException("CAPTURE_EXCLUSION_PAGE_INVALID");
@@ -149,7 +160,7 @@ final class TaskRequest {
     boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE
             ||kind==Kind.HANDOFF_CUSTODY_PROBE||preparedHandoffRpc();}
     boolean preparedHandoffRpc(){return kind==Kind.HANDOFF_STAGING_RPC||kind==Kind.HANDOFF_READINESS_RPC;}
-    boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||correctionRead()||handoffRpc();}
+    boolean readAtRevision(){return kind==Kind.CONFIG_PREVIEW||kind==Kind.KAFKA_NOTICE_PLAN||correctionRead()||handoffRpc();}
     boolean compensationAction(){return kind==Kind.ACTION&&CompensationRequest.handles(action);}
     boolean gapAction(){return kind==Kind.ACTION&&Arrays.asList("GAP_VERIFY_PLAN","GAP_VERIFY_EXECUTE").contains(action);}
     boolean recoveryCancel(){return kind==Kind.ACTION&&"RECOVERY_CANCEL".equals(action);}
@@ -158,6 +169,6 @@ final class TaskRequest {
     boolean commitRecovery(){return kind==Kind.ACTION&&"CONFIRM_COMMIT".equals(action);}
     boolean excludesCapture(){return kind==Kind.ACTION&&"CAPTURE_EXCLUDE".equals(action);}
     boolean captureRetention(){return kind==Kind.ACTION&&"CAPTURE_RETAIN".equals(action);}
-    boolean failureReview(){return kafkaReview()||kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
+    boolean failureReview(){return kafkaReview()||kind==Kind.KAFKA_NOTICE_PLAN||kind==Kind.FAILURE_EVIDENCE_SUMMARY||kind==Kind.FAILURE_EVIDENCE_EVENTS||kind==Kind.ACTION&&"FAILURE_REVIEW".equals(action);}
     TaskRequest snapshot()throws Exception{validate();return Model.JSON.readValue(Model.JSON.writeValueAsBytes(this),TaskRequest.class);}
 }

@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -301,6 +302,41 @@ final class DurableCommands {
             }
         });
     }
+    record KafkaNoticePredecessor(KafkaNoticePlanning.TaskScope task,KafkaNoticePlanning.Administrator administrator,
+                                  KafkaNoticePlanning.Predecessor receipt) {}
+
+    KafkaNoticePredecessor kafkaNoticePredecessor(String task,String requestId,String expectedRevision,
+                                                  AccessControl.Principal actor)throws Exception{
+        if(requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}"))
+            throw new IllegalArgumentException("RECOVERY_RECEIPT_ID_INVALID");
+        return tasks.transaction(task,actor,(c,record,current)->{
+            if(!current.administers())throw new SecurityException("FORBIDDEN");
+            if(!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
+            if(!Objects.equals(record.revision,expectedRevision))throw new TaskService.Conflict("REVISION_CHANGED");
+            if(record.activeConfigurationVersion==null||!record.activeConfigurationVersion.equals(record.configurationVersion))
+                throw new TaskService.Conflict("TASK_CONFIGURATION_NOT_APPLIED");
+            root(c,false);
+            Stored command=read(c,requestId);
+            if(command==null||!record.id.equals(command.task)||!command.request.kafkaReview())
+                throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+            if(!record.owner.equals(command.owner)||!record.directory.equals(command.directory)
+                    ||!record.activeConfigurationVersion.equals(command.configurationVersion))
+                throw new TaskService.Conflict("KAFKA_NOTICE_PREDECESSOR_SCOPE_CHANGED");
+            if(!"SUCCEEDED".equals(command.phase)||!KafkaRecoveryReview.VERIFIED.equals(command.code)
+                    ||!"ADMIN".equals(command.actorRole)||command.localRequest==null||command.kafkaReview==null)
+                throw new TaskService.Conflict("KAFKA_NOTICE_PREDECESSOR_NOT_VERIFIED");
+            if(command.kafkaReview.originalFailure()==null)
+                throw new TaskService.Conflict("KAFKA_NOTICE_PREDECESSOR_REFRESH_REQUIRED");
+
+            KafkaNoticePlanning.TaskScope scope=new KafkaNoticePlanning.TaskScope(record.id,record.owner,record.directory,
+                    record.activeConfigurationVersion,record.revision);
+            KafkaNoticePlanning.Administrator administrator=new KafkaNoticePlanning.Administrator(current.id,current.authorizationRevision);
+            KafkaNoticePlanning.Predecessor receipt=new KafkaNoticePlanning.Predecessor(command.id,command.task,command.owner,
+                    command.directory,command.configurationVersion,command.actor,command.kafkaReview);
+            return new KafkaNoticePredecessor(scope,administrator,receipt);
+        });
+    }
+
     List<Map<String,Object>> operations(Connection c,String task,AccessControl.Principal actor)throws Exception{
         root(c,false);List<Map<String,Object>> result=new ArrayList<>();
         try(PreparedStatement p=db.prepare(c,"SELECT request_id FROM "+db.table("command")+" WHERE cluster_id=? AND task_id=? ORDER BY created_at DESC,request_id DESC LIMIT 20",cluster,task);ResultSet r=p.executeQuery()){

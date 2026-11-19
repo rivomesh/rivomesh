@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
+import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.sql.*;
 import java.util.*;
@@ -19,6 +20,11 @@ public interface TaskBackend {
     default void subscription(TaskDefinition task,String id,String action,long generation)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SUBSCRIPTION_ACTION_INVALID");PipelineBackend.subscription(task.pipeline,id,action,generation);}
     default KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String subscription,long generation)throws Exception{
         return KafkaRecoveryReview.inspect(task.pipeline,subscription,generation);
+    }
+    default KafkaNoticePlanning.Prepared planKafkaNotice(TaskDefinition task,KafkaNoticePlanning.TaskScope scope,
+            KafkaNoticePlanning.Administrator administrator,KafkaNoticePlanning.Predecessor predecessor,
+            KafkaNoticePlanning.TopicReservation topic)throws Exception{
+        return KafkaNoticePlanning.inspect(task.pipeline,scope,administrator,predecessor,topic);
     }
     default Map<String,Object> reviewFailure(TaskDefinition task,java.nio.file.Path directory,io.github.rivomesh.recovery.FailureEvidence.Scope scope,String evidence,String request,String revision,String actor,String subscription,long generation)throws Exception{
         if(task.pipeline==null)throw new IllegalArgumentException("FAILURE_REVIEW_V3_REQUIRED");

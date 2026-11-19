@@ -856,8 +856,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "原事件保留与回收、ClickHouse 原生前序回执、Kafka 管理界面核验和持久回执已实测。消息通知及跨适配器补偿待验。",
-        "en": "Native event retention, ClickHouse preceding receipts, Kafka management review and durable receipts are verified. Message notices and cross-adapter compensation remain."
+        "zh-CN": "原事件保留与回收、ClickHouse 原生前序回执和 Kafka 持久回执已实测。四 Broker、双管理入口通过 Kafka 只读通知计划与部分发布拒绝。通知投递及跨适配器补偿待验。",
+        "en": "Native event retention, ClickHouse preceding receipts and Kafka durable receipts are verified. Four brokers and two management entries passed the read-only Kafka notice plan and refusal after partial publication. Notice delivery and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -874,7 +874,9 @@
         "tests/skip-recovery-native.py",
         "sync-app/src/main/java/io/github/rivomesh/platform/AdapterCatalog.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/ClickHouseRecoveryReview.java",
-        "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaRecoveryReview.java"
+        "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaRecoveryReview.java",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/KafkaNoticePlanning.java",
+        "tests/kafka-cluster-run.py"
       ]
     },
     {
