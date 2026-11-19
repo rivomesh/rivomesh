@@ -108,6 +108,9 @@ public final class ValidationStore implements AutoCloseable {
 
     /** Lists immutable report identities without opening any report database or reading row values. */
     public static Map<String,Object> catalog(Path root,String after,int limit)throws IOException{
+        return catalog(root,null,after,limit);
+    }
+    public static Map<String,Object> catalog(Path root,Path additional,String after,int limit)throws IOException{
         if(limit<1||limit>25||after==null)throw new IllegalArgumentException("VALIDATION_CATALOG_PAGE_INVALID");
         ReportEntry cursor=null;
         if(!after.isEmpty()){
@@ -119,34 +122,43 @@ public final class ValidationStore implements AutoCloseable {
             cursor=new ReportEntry(id,Long.parseLong(after.substring(0,split)));
         }
         Path directory=root.toAbsolutePath().normalize();
-        if(Files.isSymbolicLink(directory))throw new IOException("VALIDATION_PATH_INVALID");
+        Path second=additional==null?null:additional.toAbsolutePath().normalize();
         Comparator<ReportEntry> recency=Comparator.comparingLong(ReportEntry::created).reversed()
                 .thenComparing(ReportEntry::id);
         NavigableSet<ReportEntry> matches=new TreeSet<>(recency);
-        if(Files.exists(directory,LinkOption.NOFOLLOW_LINKS)){
-            try(DirectoryStream<Path> children=Files.newDirectoryStream(directory)){
-                for(Path entry:children){
-                    String id=entry.getFileName().toString();
-                    if(!reportId(id)||!Files.isDirectory(entry,LinkOption.NOFOLLOW_LINKS))continue;
-                    boolean live=Files.isRegularFile(entry.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS)
-                            &&Files.isRegularFile(entry.resolve("summary.json"),LinkOption.NOFOLLOW_LINKS);
-                    if(!live&&!ValidationArchive.hasDescriptor(entry))continue;
-                    BasicFileAttributes attributes;
-                    try{attributes=Files.readAttributes(entry,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);}
-                    catch(NoSuchFileException removed){continue;}
-                    ReportEntry found=new ReportEntry(id,Math.max(0,attributes.creationTime().toMillis()));
-                    if(cursor!=null&&recency.compare(found,cursor)<=0)continue;
-                    matches.add(found);
-                    if(matches.size()>limit+1)matches.pollLast();
-                }
-            }
-        }
+        scanCatalog(directory,second,cursor,limit,matches);
+        if(second!=null)scanCatalog(second,null,cursor,limit,matches);
         boolean more=matches.size()>limit;
         if(more)matches.pollLast();
         Map<String,Object> page=new LinkedHashMap<>();
         page.put("reports",matches.stream().map(ReportEntry::view).toList());
         page.put("nextCursor",more?matches.last().cursor():null);
         return page;
+    }
+
+    private static void scanCatalog(Path directory,Path rejectDuplicatesIn,ReportEntry cursor,int limit,
+                                    NavigableSet<ReportEntry> matches)throws IOException{
+        if(Files.isSymbolicLink(directory)||rejectDuplicatesIn!=null&&Files.isSymbolicLink(rejectDuplicatesIn))
+            throw new IOException("VALIDATION_PATH_INVALID");
+        if(Files.notExists(directory,LinkOption.NOFOLLOW_LINKS))return;
+        try(DirectoryStream<Path> children=Files.newDirectoryStream(directory)){
+            for(Path entry:children){
+                String id=entry.getFileName().toString();
+                if(!reportId(id)||!Files.isDirectory(entry,LinkOption.NOFOLLOW_LINKS))continue;
+                if(rejectDuplicatesIn!=null&&!Files.notExists(rejectDuplicatesIn.resolve(id),LinkOption.NOFOLLOW_LINKS))
+                    throw new IOException("HANDOFF_ADOPTED_PATH_OCCUPIED");
+                boolean live=Files.isRegularFile(entry.resolve("rows.mv.db"),LinkOption.NOFOLLOW_LINKS)
+                        &&Files.isRegularFile(entry.resolve("summary.json"),LinkOption.NOFOLLOW_LINKS);
+                if(!live&&!ValidationArchive.hasDescriptor(entry))continue;
+                BasicFileAttributes attributes;
+                try{attributes=Files.readAttributes(entry,BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);}
+                catch(NoSuchFileException removed){continue;}
+                ReportEntry found=new ReportEntry(id,Math.max(0,attributes.creationTime().toMillis()));
+                if(cursor!=null&&matches.comparator().compare(found,cursor)<=0)continue;
+                matches.add(found);
+                if(matches.size()>limit+1)matches.pollLast();
+            }
+        }
     }
 
     static boolean reportId(String id){

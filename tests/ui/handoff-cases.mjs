@@ -32,11 +32,11 @@ export function registerHandoffTests({setup,flush,login}){
    expiresAt:expiration,reservedTaskSlots:slots,reservedWorkerSlots:slots,...(releaseId?{releaseId}:{})};
  }
  function fixture({role='ADMIN',scope=['original-agent','target-agent','offline-agent'],mode='GLOBAL',
-  read,submit,probe,readPreparation,prepare,release,stage,fence,taskState}={}){
+  read,submit,probe,readPreparation,prepare,release,stage,fence,start,commit,taskState}={}){
   const task={id:'handoff-task',revision,ownerNodeId:'original-agent',formatVersion:3,
    workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[],...taskState};
   const ui=setup([task],role,{authenticated:false,taskControlScope:mode,nodeRole:'CONTROLLER',nodeIds:scope}),fallback=ui.w.fetch;
-  const requests=[],reserves=[],releases=[],probes=[],stages=[],fences=[];
+  const requests=[],reserves=[],releases=[],probes=[],stages=[],fences=[],starts=[],commits=[];
   ui.w.fetch=async(path,options={})=>{
    if(path.startsWith('/api/nodes?')){
     if(path.includes('after='))return reply({nodes:[agent('target-agent'),agent('offline-agent','AGENT','STALE')],next:null});
@@ -68,6 +68,16 @@ export function registerHandoffTests({setup,flush,login}){
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
     return fence(options);
    }
+   if(path===preparationRoute+'/commit-owner'){
+    commits.push(options);
+    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+    return commit(options);
+   }
+   if(path===preparationRoute+'/start-worker'){
+    starts.push(options);
+    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+    return start(options);
+   }
    if(path===preparationRoute+'/stage'){
     stages.push(options);
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
@@ -75,7 +85,7 @@ export function registerHandoffTests({setup,flush,login}){
    }
    return fallback(path,options);
   };
-  return{...ui,task,requests,reserves,releases,probes,stages,fences};
+  return{...ui,task,requests,reserves,releases,probes,stages,fences,starts,commits};
  }
  const launcher=ui=>ui.d.querySelector('[data-handoff-task]');
  const dialog=ui=>ui.d.querySelector('.handoff-dialog');
@@ -323,6 +333,44 @@ export function registerHandoffTests({setup,flush,login}){
   assert.equal(ui.requests.length+ui.probes.length+ui.reserves.length+ui.releases.length+ui.stages.length,0);
  }
 
+ test('handoff can commit the reviewed owner after staging and resume the bound approval',async()=>{
+  let plan={...preparation('completed-handoff'),writerActivation:{checkedInControlTransaction:true}};
+  let calls=0;
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),stage:()=>stagingReply(plan),commit:options=>{
+   const commitRequestId=options.headers['X-Request-ID'];
+   if(++calls===1){
+    plan={...plan,commitRequestId};
+    return error('OWNER_QUERY_TIMEOUT',409);
+   }
+   const accepted=completed('COMMITTED',{commitRequestId});
+   plan=accepted;
+   Object.assign(ui.task,transferredTask);
+   return reply(accepted);
+  }});
+  try{
+   await open(ui);
+   assert.ok(button(ui,'fence').disabled);
+   button(ui,'stage').click();await flush();
+   assert.equal(button(ui,'fence').dataset.handoffAction,'commit-owner');
+   assert.match(button(ui,'fence').textContent,/确认切换归属/);
+   button(ui,'fence').click();await flush();
+   assert.match(feedback(ui),/归属切换结果待确认/);
+   assert.equal(ui.task.ownerNodeId,'original-agent');
+   button(ui,'reload').click();await flush();
+   assert.match(button(ui,'fence').textContent,/重试同一归属切换/);
+   button(ui,'fence').click();await flush();
+   assert.equal(ui.commits.length,2);
+   assert.deepEqual(ui.commits[0],ui.commits[1]);
+   assert.deepEqual(JSON.parse(ui.commits[0].body),{expectedPreparation:'completed-handoff',
+    expectedRevision:revision,expectedEvidenceSha256:digest});
+   assert.equal(ui.task.ownerNodeId,'target-agent');
+   if(!dialog(ui))await open(ui);
+   assert.match(reservation(ui).textContent,/归属已提交/);
+   assert.ok(button(ui,'stage').disabled&&button(ui,'fence').disabled);
+   assert.equal(ui.starts.length+ui.fences.length,0);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff shows ownership commit before the candidate publishes a local task observation',async()=>{
   const ui=fixture({taskState:{...transferredTask,formatVersion:undefined,statusAvailable:false,
    workerState:'UNKNOWN',desired:'UNKNOWN'},read:()=>assert.fail('Read-only dialog does not load an assessment'),
@@ -393,6 +441,43 @@ export function registerHandoffTests({setup,flush,login}){
    button(ui,'reload').click();await flush();
    assert.match(reservation(ui).textContent,/目标已隔离.*保持停止.*校验报告2.*已隔离的目标数2/s);assertReadOnly(ui);
    plan={...plan,targetFence:{...plan.targetFence,destinationsFenced:9}};
+   button(ui,'reload').click();await flush();
+   assert.match(feedback(ui),/回执无法核验/);assert.ok(reservation(ui).hidden);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff starts the candidate once and keeps the receipt visible after later task revisions',async()=>{
+  const targetFence={requestId:'approved-fence',destinationsFenced:2};
+  let plan=completed('TARGETS_FENCED',{workerStartAvailable:true,targetFence,
+   adoptedEvidence:{validationReports:2,closedReceipts:5}});
+  let calls=0;
+  const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(plan),start:options=>{
+   if(++calls===1)throw new TypeError('disconnected');
+   plan={...plan,state:'START_PENDING',workerStartAvailable:undefined,workerStart:{requestId:options.headers['X-Request-ID']}};
+   return reply(plan,202);
+  }});
+  try{
+   await open(ui);
+   const start=button(ui,'fence');
+   assert.equal(start.dataset.handoffAction,'start-worker');
+   assert.match(start.textContent,/启动候选 Worker/);
+   start.click();await flush();
+   assert.match(start.textContent,/重试同一启动审批/);
+   start.click();await flush();
+   assert.equal(ui.starts.length,2);assert.equal(ui.fences.length,0);
+   assert.deepEqual(ui.starts[0],ui.starts[1]);
+   assert.deepEqual(JSON.parse(ui.starts[1].body),{expectedPreparation:'completed-handoff',expectedRevision:newRevision});
+   assert.match(reservation(ui).textContent,/等待启动授权.*复核源端断点/s);
+   assert.ok(start.disabled);
+   plan={...plan,state:'WORKER_ADMITTED',executionAuthorized:true};
+   button(ui,'reload').click();await flush();
+   assert.match(reservation(ui).textContent,/已授权启动 Worker.*正在保存启动意图/s);
+   ui.task.revision='00123456-0000-0000-0000-000000000000';
+   plan={...plan,state:'WORKER_PROJECTED'};
+   button(ui,'reload').click();await flush();
+   assert.match(reservation(ui).textContent,/已保存启动意图.*实际运行状态见任务详情/s);
+   assertReadOnly(ui);
+   plan={...plan,workerStart:{requestId:targetFence.requestId}};
    button(ui,'reload').click();await flush();
    assert.match(feedback(ui),/回执无法核验/);assert.ok(reservation(ui).hidden);
   }finally{ui.dom.window.close();}

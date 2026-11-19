@@ -93,9 +93,17 @@ A verified preparation records the original assignment and a private successor a
 
 In the console, open **Assess Agent handoff**. After verifying the current evidence, choose **Reserve task and Worker slots**. You can view the same receipt and expiration from either Controller. During an active reservation, choose **Stage reports and receipts** to copy the verified report archive and closed receipts into private storage on the candidate. The console shows their counts after the candidate verifies them. Select **Reverify staged reports and receipts** to check the same files again. After reopening the panel from either Controller, **Stage reports and receipts** also verifies an existing staged copy for that reservation. Select **Release reservation** before sending a new command to the original task.
 
-After the control transaction commits ownership, open the handoff panel and select **Refresh handoff status**. **Ownership committed** means the candidate still needs to install the reviewed configuration. **Candidate configuration installed** records that the candidate saved the task in a stopped state. **Evidence received** adds the counts of verified reports and closed receipts received by the candidate. The panel displays the signed receipt when its committed revision and configuration still match the task. The same administrator needs grants for the task and both Agents.
+After the control transaction commits ownership, open the handoff panel and select **Refresh handoff status**. **Ownership committed** means the candidate still needs to install the reviewed configuration. **Candidate configuration installed** records that the candidate saved the task in a stopped state. **Evidence received** adds the counts of verified reports and closed receipts received by the candidate. The panel binds the signed receipt to the candidate and the committed configuration. After the Worker is admitted, later lifecycle revisions leave the handoff receipt available. The same administrator needs grants for the task and both Agents.
 
-The verified same-store profile installs original reports and closed receipts after the internal transfer. The candidate can serve that history read-only from either Controller at the original cut. While it is stopped, `HANDOFF_PARKED` and journal formats 15–18 block direct Worker launch and generic resume. Upgrade the Controllers and Agents that share this journal before running the new handoff profile. Older units refuse the new format. Explicit Worker activation and operator-driven transfer remain separate.
+The verified same-store profile installs original reports and closed receipts after the internal transfer. The candidate can serve that history read-only from either Controller at the original cut. While it is stopped, `HANDOFF_PARKED` and journal formats 15–18 block direct Worker launch and generic resume. Upgrade the Controllers and Agents that share this journal before running the new handoff profile. Older units refuse the new format. Worker start has its own approval after ownership transfer and SQL target fencing.
+
+### Commit a reviewed owner change
+
+Stage and verify the evidence for a prepared same-store managed SQL handoff. The **Commit ownership transfer** action uses the exact staged receipt. The candidate checks its private files, writer configuration and authorization again before the control database commits ownership. The original Agent must have stopped at the reviewed cut. If original source or failure evidence still needs to be adopted, the transfer is refused.
+
+For automation, send `POST /api/tasks/{id}/handoff/preparation/commit-owner` with `X-Request-ID`, `expectedPreparation`, `expectedRevision` and `expectedEvidenceSha256`. Use the original prepared revision and digest. The Controller retrieves the private candidate configuration and preparation from signed records. An accepted transfer moves ownership to the candidate and parks the journal transactionally. The candidate then installs the task as stopped and receives the report history.
+
+If the Controller disconnects, read the preparation from either entry. Retry a bound operation with the same request ID. The preparation returns `commitRequestId` while a request is bound and after transfer. A fresh preparation is required when the reviewed cut, candidate binding or authorization changes before commit.
 
 ### Fence the parked SQL targets
 
@@ -104,6 +112,20 @@ After the candidate has adopted the signed report and receipt history, an admini
 The first profile uses a MySQL source, one shared PostgreSQL control and journal database, and at most eight PostgreSQL or MySQL targets at a common original epoch. The candidate independently verifies its installed configuration, archived evidence, source log coverage, and original target checkpoints and snapshots. Each target transaction advances its writer epoch under its checkpoint row lock. Transaction receipts, snapshot IDs and source position remain at the reviewed cut. The journal stays parked and the Worker stays stopped.
 
 Keep the same request ID to read the receipt from either Controller. If the candidate or a database stops during execution, the approved request stays pending and the candidate resumes from the native target epochs when it returns. A different request cannot replace a current approval. If account authorization has changed while fencing is pending, an eligible administrator can explicitly approve again with a fresh request ID. A changed cut or lost snapshot keeps the request pending. Check the sanitized `HANDOFF_TARGET_FENCE` diagnostic on the candidate. Worker activation requires separate admission.
+
+### Start the candidate Worker
+
+After **Targets fenced**, select **Start candidate Worker**. The API uses `POST /api/tasks/{id}/handoff/preparation/start-worker` with a new `X-Request-ID` and the same `expectedPreparation` and `expectedRevision` as the fencing request. Retry an uncertain result with the same request ID and payload.
+
+| Handoff state | What to check |
+| --- | --- |
+| `START_PENDING` | The approval is durable. The candidate checks the source cut and each native target checkpoint again. If a check fails, the Worker remains stopped and the candidate logs `HANDOFF_START_PENDING` with the reason. |
+| `WORKER_ADMITTED` | The shared PostgreSQL transaction opened the journal to the candidate assignment and recorded the approved request. The candidate still needs to save the local start intent. |
+| `WORKER_PROJECTED` | The candidate saved the start intent. Check the Worker state and capture lease in task details to confirm actual execution. |
+
+Journal formats 19–22 mark the admitted assignment, preserve enabled recovery features and fence older runtimes. The candidate still acquires the normal exclusive lease and respects available Worker slots. It consumes the original source checkpoint and snapshot generation. Once the start intent is saved, use the ordinary task controls. Replaying the handoff approval preserves a later operator stop. Task and node grants govern access to original report history and closed receipts. New reports are stored in the candidate’s ordinary workspace.
+
+During the pending approval, a changed target receipt, unavailable source logs or a revoked administrator authorization leaves the task parked. Check the candidate log and restore the reviewed database state before retry. An eligible administrator can submit a fresh approval after the authorization revision changes. This profile covers the same PostgreSQL control/journal store and the same MySQL and PostgreSQL target profiles as the fencing step. Automatic host takeover and partition recovery have separate acceptance criteria.
 
 ## Admission and recovery
 

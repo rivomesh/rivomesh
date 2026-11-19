@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_STAGE,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -42,7 +42,7 @@ final class TaskRequest {
     public HandoffEvidenceAdoption.Receipt adoptedEvidence;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
-    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_STAGE||kind==Kind.ACTION;}
+    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER||kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||kind==Kind.ACTION;}
     boolean admin(){return kind!=Kind.LIST&&kind!=Kind.VIEW&&kind!=Kind.VALIDATION_REPORT&&kind!=Kind.VALIDATION_REPORTS&&(kind!=Kind.ACTION||!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action));}
     void validate(){
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
@@ -61,13 +61,13 @@ final class TaskRequest {
                 ||reference.equals(requestId)||kind==Kind.HANDOFF_PREPARE&&(revision==null||!revision.matches("[0-9a-f-]{36}")
                 ||identityHash==null||!identityHash.matches("[0-9a-f]{64}"))))
             throw new IllegalArgumentException("HANDOFF_PREPARATION_REQUEST_INVALID");
-        if(kind==Kind.HANDOFF_TARGET_FENCE&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
+        if((kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER)&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
                 ||reference.equals(requestId)||revision==null||!revision.matches("[0-9a-f-]{36}")))
-            throw new IllegalArgumentException("HANDOFF_TARGET_FENCE_REQUEST_INVALID");
+            throw new IllegalArgumentException(kind==Kind.HANDOFF_TARGET_FENCE?"HANDOFF_TARGET_FENCE_REQUEST_INVALID":"HANDOFF_WORKER_START_REQUEST_INVALID");
         if((handoffRpc()||kind==Kind.HANDOFF_PROBE)&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
                 ||handoffRpc()&&(revision==null||!revision.matches("[0-9a-f-]{36}"))))
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
-        if((kind==Kind.HANDOFF_STAGE||preparedHandoffRpc())
+        if((kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||preparedHandoffRpc())
                 &&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")||revision==null||!revision.matches("[0-9a-f-]{36}")
                 ||identityHash==null||!identityHash.matches("[a-f0-9]{64}")
                 ||requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")||requestId.equals(reference))

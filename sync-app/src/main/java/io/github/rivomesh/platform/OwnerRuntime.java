@@ -23,7 +23,7 @@ final class OwnerRuntime implements AutoCloseable {
     private final ScheduledExecutorService commandLoop,queryLoop;
     private final ThreadPoolExecutor readers;
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
-    private final ConcurrentMap<String,Long> fenceRetries=new ConcurrentHashMap<>();
+    private final ConcurrentMap<String,Long> handoffRetries=new ConcurrentHashMap<>();
     private Set<String> retiredTasks=Set.of();
     private String recipientCursor="";
     private long nextRecipientPoll;
@@ -72,11 +72,11 @@ final class OwnerRuntime implements AutoCloseable {
             return null;
         });
     }
-    private void fenceRecipientTargets(String task,String preparation,ControlStore.Lease lease)throws Exception{
+    private void processParkedHandoff(String task,String preparation,ControlStore.Lease lease,boolean starting)throws Exception{
         ManagedRecipientImport.Grant expected=authority.service((c,accounts)->{
             agents.require(c,lease,directory);
             var verified=authority.verifiedEvidenceRecipient(c,task,preparation,lease,directory);
-            requireFenceAuthor(accounts,verified.committed());
+            requireHandoffAuthor(accounts,verified.committed(),starting);
             return verified;
         });
         local.installAdoptedHandoffEvidence(expected);
@@ -84,17 +84,35 @@ final class OwnerRuntime implements AutoCloseable {
         authority.service((c,accounts)->{
             agents.require(c,lease,directory);
             var current=authority.verifiedEvidenceRecipient(c,task,preparation,lease,directory);
-            if(!expected.equals(current))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
-            requireFenceAuthor(accounts,current.committed());
-            authority.fenceParkedTargets(c,current,config,()->agents.require(c,lease,directory));
+            if(!expected.equals(current))throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+            requireHandoffAuthor(accounts,current.committed(),starting);
+            if(starting)authority.admitParkedWorker(c,current,config,()->agents.require(c,lease,directory));
+            else authority.fenceParkedTargets(c,current,config,()->agents.require(c,lease,directory));
             return null;
         });
     }
-    private static void requireFenceAuthor(AccountDirectory.State accounts,HandoffPreparations.Plan plan){
-        var request=plan.targetFence();
-        if(!"FENCE_PENDING".equals(plan.phase())||request==null)throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
-        AccountDirectory.User author=accounts.users.get(request.actor());
-        if(!Objects.equals(accounts.revision,request.actorRevision())||author==null||!author.enabled||author.deleted)
+    private void projectStartedWorker(String task,String preparation,ControlStore.Lease lease)throws Exception{
+        var grant=authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            var current=authority.admittedRecipient(c,authority.record(c,task),lease,directory);
+            if(current==null||!preparation.equals(current.committed().id()))
+                throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+            return current;
+        });
+        String request=local.projectStartedRecipient(grant);
+        authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            authority.recordStartedRecipient(c,task,lease,directory,request);
+            return null;
+        });
+    }
+    private static void requireHandoffAuthor(AccountDirectory.State accounts,HandoffPreparations.Plan plan,boolean starting){
+        if(!(starting?"START_PENDING":"FENCE_PENDING").equals(plan.phase()))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+        String id=starting?plan.workerStart().actor():plan.targetFence().actor();
+        String revision=starting?plan.workerStart().actorRevision():plan.targetFence().actorRevision();
+        AccountDirectory.User author=accounts.users.get(id);
+        if(!Objects.equals(accounts.revision,revision)||author==null||!author.enabled||author.deleted)
             throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
         var actor=new AccessControl.Principal(author.id,author.role,author.taskIds,accounts.revision,author.nodeIds);
         if(!actor.administers()||!actor.task(plan.task())||!actor.node(plan.evidence().candidate().node())
@@ -102,6 +120,7 @@ final class OwnerRuntime implements AutoCloseable {
     }
     private void verifyDefinitions()throws Exception{
         Map<String,String> documents=local.ownerDocuments();
+        Map<String,String> starts=local.ownerRecipientStarts();
         Set<String> retired=authority.service((c,accounts)->{
             ControlStore.Lease lease=leases.get();agents.require(c,lease,directory);ObjectMapper yaml=new ObjectMapper(new YAMLFactory());
             Set<String> prior=new HashSet<>();
@@ -111,8 +130,14 @@ final class OwnerRuntime implements AutoCloseable {
                 String expectedYaml=historical==null?authority.activeYaml(c,record):historical;
                 TaskDefinition expected=TaskDefinition.parse(expectedYaml,Paths.get(config.tasksDirectory),Paths.get(config.dataDirectory),lease.nodeId);
                 if(!yaml.readTree(expected.workerYaml).equals(yaml.readTree(entry.getValue())))throw new TaskService.Conflict("OWNER_CONFIGURATION_PROJECTION_CHANGED");
-                if(historical==null)durable.reserveExisting(c,record,expected);
-                else prior.add(record.id);
+                if(historical!=null){prior.add(record.id);continue;}
+                String request=starts.get(record.id);
+                var admitted=authority.admittedRecipient(c,record,lease,directory);
+                if(request!=null&&(admitted==null||!request.equals(admitted.committed().workerStart().id()))
+                        ||admitted!=null&&(!starts.containsKey(record.id)
+                        ||request==null&&"WORKER_PROJECTED".equals(admitted.committed().phase())))
+                    throw new TaskService.Conflict("HANDOFF_WORKER_LOCAL_ADMISSION_CHANGED");
+                durable.reserveExisting(c,record,expected);
             }
             agents.require(c,lease,directory);
             return prior;
@@ -146,22 +171,27 @@ final class OwnerRuntime implements AutoCloseable {
         recipientCursor=pending.size()<10?"":pending.getLast().preparation();
         for(HandoffPreparations.PendingRecipient task:pending){
             String id="handoff:"+task.preparation();
-            boolean fencing="FENCE_PENDING".equals(task.phase());
-            Long retryAt=fenceRetries.get(id);
-            if(fencing&&retryAt!=null&&System.nanoTime()-retryAt<0)continue;
+            boolean finishing=Set.of("FENCE_PENDING","START_PENDING","WORKER_ADMITTED").contains(task.phase());
+            Long retryAt=handoffRetries.get(id);
+            if(finishing&&retryAt!=null&&System.nanoTime()-retryAt<0)continue;
             if(!queued.add(id))continue;
             try{readers.execute(()->{
                 try{
                     ControlStore.Lease current=leases.get();
-                    if(fencing){fenceRecipientTargets(task.task(),task.preparation(),current);fenceRetries.remove(id);}
-                    else if("PROJECTED".equals(task.phase()))adoptRecipientEvidence(task.task(),task.preparation(),current);
-                    else importCommittedWriter(task.task(),current);
+                    switch(task.phase()){
+                        case "FENCE_PENDING","START_PENDING" -> processParkedHandoff(task.task(),task.preparation(),current,"START_PENDING".equals(task.phase()));
+                        case "WORKER_ADMITTED" -> projectStartedWorker(task.task(),task.preparation(),current);
+                        case "PROJECTED" -> adoptRecipientEvidence(task.task(),task.preparation(),current);
+                        default -> importCommittedWriter(task.task(),current);
+                    }
+                    handoffRetries.remove(id);
                 }
                 catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
                 catch(Exception deferred){
-                    if(fencing){
-                        fenceRetries.put(id,System.nanoTime()+TimeUnit.SECONDS.toNanos(6));
-                        System.err.println("HANDOFF_TARGET_FENCE " + code(deferred));
+                    if(finishing){
+                        handoffRetries.put(id,System.nanoTime()+TimeUnit.SECONDS.toNanos(6));
+                        String operation="FENCE_PENDING".equals(task.phase())?"HANDOFF_TARGET_FENCE":"HANDOFF_"+task.phase();
+                        System.err.println(operation+" "+code(deferred));
                     }
                     // The committed receipt stays pending and new generic commands remain blocked.
                 }
@@ -187,6 +217,6 @@ final class OwnerRuntime implements AutoCloseable {
     public void close(){
         if(!closed.compareAndSet(false,true))return;commandLoop.shutdownNow();queryLoop.shutdownNow();readers.shutdownNow();
         for(ExecutorService executor:Arrays.asList(commandLoop,queryLoop,readers))try{executor.awaitTermination(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
-        queued.clear();fenceRetries.clear();
+        queued.clear();handoffRetries.clear();
     }
 }

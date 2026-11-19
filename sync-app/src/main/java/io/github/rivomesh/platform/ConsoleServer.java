@@ -219,22 +219,29 @@ public final class ConsoleServer implements AutoCloseable {
                 json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")
-                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&parts[6].equals("stage")&&method.equals("POST")){
+                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&method.equals("POST")
+                    &&(parts[6].equals("stage")||parts[6].equals("commit-owner"))){
+                boolean committing=parts[6].equals("commit-owner");
                 if(!principal.administers())throw new SecurityException("FORBIDDEN");
                 JsonNode input=body(exchange);
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,parts[3]);
+                if(committing&&(input.size()!=3||!input.path("expectedPreparation").isTextual()
+                        ||!input.path("expectedRevision").isTextual()||!input.path("expectedEvidenceSha256").isTextual()))
+                    throw new IllegalArgumentException("HANDOFF_EXECUTION_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(committing?TaskRequest.Kind.HANDOFF_COMMIT_OWNER:TaskRequest.Kind.HANDOFF_STAGE,parts[3]);
                 request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
                 request.reference=input.path("expectedPreparation").textValue();request.revision=input.path("expectedRevision").textValue();
                 request.identityHash=input.path("expectedEvidenceSha256").textValue();
                 json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")
-                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&parts[6].equals("fence-targets")&&method.equals("POST")){
+                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&method.equals("POST")
+                    &&(parts[6].equals("fence-targets")||parts[6].equals("start-worker"))){
+                boolean starting=parts[6].equals("start-worker");
                 if(!principal.administers())throw new SecurityException("FORBIDDEN");
                 JsonNode input=body(exchange);
                 if(input.size()!=2||!input.path("expectedPreparation").isTextual()||!input.path("expectedRevision").isTextual())
-                    throw new IllegalArgumentException("HANDOFF_TARGET_FENCE_REQUEST_INVALID");
-                TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_TARGET_FENCE,parts[3]);
+                    throw new IllegalArgumentException(starting?"HANDOFF_WORKER_START_REQUEST_INVALID":"HANDOFF_TARGET_FENCE_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(starting?TaskRequest.Kind.HANDOFF_START_WORKER:TaskRequest.Kind.HANDOFF_TARGET_FENCE,parts[3]);
                 request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
                 request.reference=input.path("expectedPreparation").textValue();
                 request.revision=input.path("expectedRevision").textValue();

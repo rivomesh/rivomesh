@@ -67,6 +67,8 @@ public final class TaskService implements AutoCloseable {
         public String configurationVersion,configurationHash,configurationFile;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         public ManagedRecipientImport.Receipt recipientImport;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        public String recipientStart;
         public List<Operation> operations=new ArrayList<>();
     }
     public static final class Receipt {
@@ -246,7 +248,7 @@ public final class TaskService implements AutoCloseable {
     synchronized io.github.rivomesh.PipelineConfig parkedFenceConfig(ManagedRecipientImport.Grant grant)throws Exception{
         requireEvidenceRecipient(grant);
         var configured=require(grant.committed().task()).config.pipeline;
-        if(configured==null||!"FENCE_PENDING".equals(grant.committed().phase()))
+        if(configured==null||!Set.of("FENCE_PENDING","START_PENDING").contains(grant.committed().phase()))
             throw new Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
         return configured;
     }
@@ -278,7 +280,7 @@ public final class TaskService implements AutoCloseable {
     synchronized void requireLocalHandoffSettled(String task){
         if(retiredOwners.contains(task))throw new Conflict("HANDOFF_ORIGINAL_RETIRED");
         Control control=registry.tasks.get(task);
-        if(control!=null&&control.recipientImport!=null)throw new Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
+        if(control!=null&&control.recipientImport!=null&&control.recipientStart==null)throw new Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
     }
     synchronized void retainRetiredOwners(Set<String> tasks){
         ensureOpen();
@@ -289,6 +291,37 @@ public final class TaskService implements AutoCloseable {
                 throw new Conflict("HANDOFF_ORIGINAL_WORKER_CHANGED");
         }
         retiredOwners.clear();retiredOwners.addAll(tasks);
+    }
+    synchronized Map<String,String> ownerRecipientStarts(){
+        Map<String,String> local=new HashMap<>();
+        for(var item:registry.tasks.entrySet())if(item.getValue().recipientImport!=null)
+            local.put(item.getKey(),item.getValue().recipientStart);
+        return local;
+    }
+    synchronized String projectStartedRecipient(ManagedRecipientImport.Grant grant)throws Exception{
+        ensureOpen();
+        HandoffPreparations.Plan plan=grant.committed();
+        if(!HandoffPreparations.workerAdmitted(plan)||!grant.authority().equals(registry.globalTaskIdentity)
+                ||!nodeId().equals(plan.evidence().candidate().node())
+                ||!registry.ownerDirectoryIdentity.equals(plan.evidence().candidate().directory()))throw new ControlStore.Fenced();
+        var commit=plan.writerCommit();
+        Control task=registry.tasks.get(plan.task());
+        var expected=new ManagedRecipientImport.Receipt(plan.id(),commit.configurationSha256(),commit.stagingSha256());
+        if(task==null||!expected.equals(task.recipientImport)||!commit.configuration().equals(task.configurationVersion)
+                ||!grant.successorYaml().equals(versions.read(plan.task(),task.configurationVersion,task.configurationHash).yaml))
+            throw new Conflict("HANDOFF_RECIPIENT_LOCAL_CONFIGURATION_CHANGED");
+        String request=plan.workerStart().id();
+        if(task.recipientStart!=null){
+            if(!request.equals(task.recipientStart))throw new Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+            return request;
+        }
+        requireEvidenceRecipient(grant);
+        Registry next=copy();Control projected=next.tasks.get(plan.task());projected.recipientStart=request;projected.desired="RUNNING";
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_WORKER_START_PROJECTED";event.taskId=plan.task();
+        event.actorId=plan.workerStart().actor();event.actorRole="ADMIN";event.clientRequestHash=AuditStore.hash(request);event.status="RUNNING_REQUESTED";
+        next.auditOutbox.add(event);
+        persist(next);
+        return request;
     }
     synchronized Map<String,String> ownerDocuments(){ensureOpen();if(!invalid.isEmpty()||!entries.keySet().equals(registry.tasks.keySet()))throw new Conflict("OWNER_LOCAL_CONFIGURATION_INVALID");Map<String,String> result=new LinkedHashMap<>();for(Map.Entry<String,Entry> item:entries.entrySet())result.put(item.getKey(),item.getValue().config.workerYaml);return result;}
     private void bindSharedAccess()throws Exception{
@@ -957,7 +990,7 @@ public final class TaskService implements AutoCloseable {
                 entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
             }}
             if(entry.worker==null&&entry.exits<5&&System.currentTimeMillis()>=entry.retryAt) {
-                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&registry.tasks.get(id).recipientImport==null&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
+                try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&(registry.tasks.get(id).recipientImport==null||registry.tasks.get(id).recipientStart!=null)&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
                     if(slots.tryAcquire()){
                         entry.permit=true;
                         try{Control committed=registry.tasks.get(id);if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));entry.config.holdLocalJournal();entry.worker=workers.start(entry.path,logDirectory.resolve(id+".log"),config.workerHeapMiB);entry.workerState="RUNNING";}
@@ -1312,10 +1345,18 @@ public final class TaskService implements AutoCloseable {
         if(authorized==null)return live;
         if(task.recipientImport==null)throw new Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
         ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
-        Path adopted=HandoffEvidenceAdoption.reports(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
-                task.revision,task.recipientImport,guard,report,actor::node,authorized);
+        boolean started=task.recipientStart!=null;
+        if(!started&&!Files.notExists(live,LinkOption.NOFOLLOW_LINKS))throw new Conflict("HANDOFF_ADOPTED_PATH_OCCUPIED");
+        Path adopted;
+        try{
+            adopted=HandoffEvidenceAdoption.reports(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
+                    authorized.committedRevision(),task.recipientImport,guard,report,actor::node,authorized);
+        }catch(NoSuchElementException missing){
+            if(started&&(report==null||Files.isDirectory(live.resolve(report),LinkOption.NOFOLLOW_LINKS)))return live;
+            throw missing;
+        }
         if(adopted==null)throw new Conflict("HANDOFF_ADOPTED_CUSTODY_UNAVAILABLE");
-        if(!Files.notExists(live,LinkOption.NOFOLLOW_LINKS))throw new Conflict("HANDOFF_ADOPTED_PATH_OCCUPIED");
+        if(report!=null&&!Files.notExists(live.resolve(report),LinkOption.NOFOLLOW_LINKS))throw new Conflict("HANDOFF_ADOPTED_PATH_OCCUPIED");
         return adopted;
     }
     synchronized Map<String,Object> adoptedHandoffReceipt(String id,String request,AccessControl.Principal actor,
@@ -1324,10 +1365,10 @@ public final class TaskService implements AutoCloseable {
         if(!actor.administers()||!actor.task(id)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");
         require(id);
         Control task=registry.tasks.get(id);
-        if(task.recipientImport==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
+        if(authorized==null||task.recipientImport==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
         ControlCipher guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
         var receipt=HandoffEvidenceAdoption.receipt(statePath.getParent(),id,nodeId(),registry.ownerDirectoryIdentity,
-                task.revision,task.recipientImport,guard,request,actor::node,authorized);
+                authorized.committedRevision(),task.recipientImport,guard,request,actor::node,authorized);
         if(receipt==null)throw new NoSuchElementException("RECOVERY_RECEIPT_NOT_FOUND");
         return Map.of("id",receipt.request(),"status",receipt.phase(),"code",receipt.code(),"actorRole",receipt.role());
     }
@@ -1466,16 +1507,17 @@ public final class TaskService implements AutoCloseable {
     Map<String,Object> validationReports(String id,String after,int limit,AccessControl.Principal actor,
                                               HandoffEvidenceAdoption.Receipt authorized)throws Exception{
         TaskDefinition definition;
-        Path workspace;
+        Path workspace,live=null;
         synchronized(this){
             ensureOpen();
             currentActor(actor);
             if(actor==null||!actor.task(id)||!nodeAllowed(actor))throw new NoSuchElementException("TASK_NOT_FOUND");
             definition=require(id).config;
             workspace=reportsForRead(id,null,actor,authorized);
+            if(!workspace.equals(reports(id))&&registry.tasks.get(id).recipientStart!=null)live=reports(id);
         }
         if(definition.pipeline==null)throw new Conflict("VALIDATION_V3_REQUIRED");
-        Map<String,Object> page=io.github.rivomesh.validation.ValidationStore.catalog(workspace,after,limit);
+        Map<String,Object> page=io.github.rivomesh.validation.ValidationStore.catalog(workspace,live,after,limit);
         synchronized(this){
             ensureOpen();
             currentActor(actor);

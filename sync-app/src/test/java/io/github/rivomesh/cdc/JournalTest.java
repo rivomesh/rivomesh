@@ -106,6 +106,13 @@ class JournalTest {
             assertEquals(18,JdbcJournal.withSourceExclusions(16));
             assertEquals(18,JdbcJournal.withTargetGaps(17));
             assertTrue(JdbcJournal.managedWriter(18));assertTrue(JdbcJournal.assignedWriter(18));
+            assertEquals(List.of(19,20,21,22),List.of(15,16,17,18).stream().map(JdbcJournal::withWorkerAdmission).toList());
+            assertThrows(IllegalStateException.class,()->JdbcJournal.withWorkerAdmission(11));
+            assertEquals(20,JdbcJournal.withTargetGaps(19));
+            assertEquals(21,JdbcJournal.withSourceExclusions(19));
+            assertEquals(22,JdbcJournal.withSourceExclusions(20));
+            assertEquals(22,JdbcJournal.withTargetGaps(21));
+            assertTrue(JdbcJournal.hasTargetGaps(22));assertTrue(JdbcJournal.hasSourceExclusions(22));
             Journal.Lease granted=authority.claim("origin-worker",30000);
             authority.append(granted,transaction(1));
             assertEquals(transaction(1).position,authority.captured());

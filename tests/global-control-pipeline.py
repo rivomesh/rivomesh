@@ -59,8 +59,14 @@ parser.add_argument('--handoff-private-writer', action='store_true',
                     help='Exercise internal signed Agent transfer and paused local projection without granting execution')
 parser.add_argument('--handoff-target-fence', action='store_true',
                     help='Approve and replay parked SQL target fences after a native handoff')
+parser.add_argument('--handoff-public-owner', action='store_true',
+                    help='Commit a prepared owner change through the authenticated public API')
+parser.add_argument('--handoff-public-owner-browser', type=Path,
+                    help='Commit the prepared owner change using the actual console in Chrome')
+parser.add_argument('--handoff-worker-start', action='store_true',
+                    help='Resume the recorded cut after a separately approved and revalidated Worker start')
 parser.add_argument('--previous-handoff-runtime', type=Path,
-                    help='Compare actual prior runtime refusal on a newly parked successor')
+                    help='Compare a prior runtime at the parked journal, or at the admitted journal with --handoff-worker-start')
 parser.add_argument('--handoff-preparation-browser', type=Path,
                     help='Exercise preparation and release through both management entries in Chrome')
 parser.add_argument('--handoff-adopted-browser', type=Path,
@@ -160,6 +166,13 @@ if args.handoff_private_writer and (not args.handoff_managed_writer or not args.
     parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with source/failure evidence absent')
 if args.handoff_target_fence and not args.handoff_private_writer:
     parser.error('--handoff-target-fence requires --handoff-private-writer')
+if args.handoff_public_owner and not args.handoff_private_writer:
+    parser.error('--handoff-public-owner requires --handoff-private-writer')
+if args.handoff_public_owner_browser and (not args.handoff_public_owner
+        or not os.access(args.handoff_public_owner_browser.resolve(), os.X_OK)):
+    parser.error('--handoff-public-owner-browser requires --handoff-public-owner and executable Chrome')
+if args.handoff_worker_start and not args.handoff_target_fence:
+    parser.error('--handoff-worker-start requires --handoff-target-fence')
 if args.previous_handoff_runtime and (not args.handoff_private_writer or not args.previous_handoff_runtime.is_file()
         or args.previous_handoff_runtime.resolve()==args.artifact.resolve()):
     parser.error('--previous-handoff-runtime requires --handoff-private-writer and a distinct prior JAR')
@@ -294,6 +307,8 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'handoffAdoptedBrowser': bool(args.handoff_adopted_browser),
             'handoffTargetFence': args.handoff_target_fence,
+            'handoffWorkerStart': args.handoff_worker_start,
+            'handoffPublicOwner': args.handoff_public_owner,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'reportArchive': args.report_archive,
@@ -567,12 +582,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                        taskId='global_cdc', **state)
         preparation = scenario == 'handoff-preparation'
         adopted = scenario == 'handoff-adopted'
-        handoff = preparation or adopted or scenario == 'handoff'
+        handoff = preparation or adopted or scenario in ('handoff','handoff-owner-commit')
         browser_test = ROOT / ('tests/ui/browser-handoff.mjs' if handoff else 'tests/ui/browser-recovery.mjs')
         sources = (browser_test, browser_test.with_name('chromium.mjs'))
         hashes = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
         chrome = {'handoff-preparation':args.handoff_preparation_browser,'handoff-adopted':args.handoff_adopted_browser,
-                  'handoff':args.handoff_browser}.get(scenario,args.browser)
+                  'handoff':args.handoff_browser,'handoff-owner-commit':args.handoff_public_owner_browser}.get(scenario,args.browser)
         command = ['node', str(browser_test), str(chrome.resolve()), scenario]
         result = subprocess.run(command, input=json.dumps(options), text=True, capture_output=True, timeout=420)
         if result.returncode:
@@ -585,6 +600,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         evidence['sourceSha256'] = hashes
         if adopted:
             manifest['browserHandoffAdopted'] = evidence
+        elif scenario=='handoff-owner-commit':
+            manifest['browserHandoffOwnerCommit'] = evidence
         elif handoff:
             manifest['browserHandoffPreparation' if preparation else 'browserHandoff'] = evidence
         else:
@@ -2441,6 +2458,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert task()['ownerNodeId']==owner_node and task()['revision']==expected_revision
                             assert data_cut()==original_cut
                         if args.handoff_private_writer:
+                            if args.handoff_public_owner:
+                                good_plan,good=current_probe(good_plan)
+                                assert good['probe']['current'] and good['probe']['sharedReceiptCustody']==receipts
                             preparation=endpoint+'/preparation'
                             prepared_id='gc_private_prepare_'+uuid.uuid4().hex
                             prepared_input={'expectedAssessment':good['id'],'expectedRevision':stopped_input['expectedRevision'],
@@ -2467,28 +2487,57 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                     raise AssertionError(f'Private Controller {mode} failed with {kind} {code} at {location}')
                                 return result
 
-                            invalid=private_writer('node-a','observe',evidence='0'*64,check=False)
-                            assert invalid.returncode and 'HANDOFF_PREPARATION_CHANGED' in invalid.stderr
-                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
-                            private_writer('node-a','bind')
-                            assert http('node-b',preparation)['state']=='PREPARED'
-                            replacement='gc_replacement_'+uuid.uuid4().hex
-                            refused=private_writer('node-b','observe',execution=replacement,check=False)
-                            assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
-                            assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
-                            passed('The same signed execution intent resumes at a different Controller after stopping before native commit')
-                            assert private_writer('node-b','discard').stdout.strip()==''
+                            if args.handoff_public_owner:
+                                commit_url=preparation+'/commit-owner'
+                                invalid=http('node-a',commit_url,dict(stage_input,expectedEvidenceSha256='0'*64),
+                                             request=request,expected=409)
+                                assert invalid['code']=='HANDOFF_PREPARATION_CHANGED'
+                                invalid=http('node-b',commit_url,dict(stage_input,configurationYaml='forbidden'),
+                                             request=request,expected=400)
+                                assert invalid['code']=='HANDOFF_EXECUTION_REQUEST_INVALID'
+                                assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                private_writer('node-a','bind')
+                                retained=http('node-b',preparation)
+                                assert retained['state']=='PREPARED' and retained['commitRequestId']==request
+                                replacement='gc_replacement_'+uuid.uuid4().hex
+                                refused=http('node-b',commit_url,stage_input,request=replacement,expected=409)
+                                assert refused['code']=='HANDOFF_EXECUTION_REQUEST_CHANGED'
+                                assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                # Discard this response and verify the same operation through the other entry.
+                                if args.handoff_public_owner_browser:
+                                    browser_check('handoff-owner-commit',owner=owner_node,candidate=candidate,
+                                                  revision=stage_input['expectedRevision'],preparationId=prepared_id,
+                                                  commitRequestId=request)
+                                else:
+                                    http('node-b',commit_url,stage_input,request=request)
+                                passed('Scoped public ownership API uses the signed bind from another Controller and rejects injected YAML or replacement intent')
+                            else:
+                                invalid=private_writer('node-a','observe',evidence='0'*64,check=False)
+                                assert invalid.returncode and 'HANDOFF_PREPARATION_CHANGED' in invalid.stderr
+                                assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                private_writer('node-a','bind')
+                                assert http('node-b',preparation)['state']=='PREPARED'
+                                replacement='gc_replacement_'+uuid.uuid4().hex
+                                refused=private_writer('node-b','observe',execution=replacement,check=False)
+                                assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
+                                assert task()['ownerNodeId']==owner_node and data_cut()==original_cut
+                                passed('The same signed execution intent resumes at a different Controller after stopping before native commit')
+                                assert private_writer('node-b','discard').stdout.strip()==''
 
                             def adopted():
                                 row=http('node-b',preparation)
                                 return row if row.get('state')=='EVIDENCE_ADOPTED' else None
 
                             adopted_receipt=wait(adopted,'candidate adopts exact original private evidence while stopped')
-                            replay=json.loads(private_writer('node-a','observe').stdout)
+                            replay=(http('node-a',commit_url,stage_input,request=request) if args.handoff_public_owner
+                                    else json.loads(private_writer('node-a','observe').stdout))
+                            if args.handoff_public_owner:
+                                assert replay['commitRequestId']==request
+                                assert replay==http('node-b',commit_url,stage_input,request=request)
                             assert replay==adopted_receipt and replay['activatedJournalEpoch']==str(managed['epoch']+1)
                             assert replay['adoptedEvidence']=={'validationReports':receipts['archive']['reports'],
                                                               'closedReceipts':receipts['archive']['closedReceipts']}
-                            assert request not in json.dumps(replay)
+                            assert replay['commitRequestId']==request
                             refused=private_writer('node-b','observe',execution=replacement,check=False)
                             assert refused.returncode and 'HANDOFF_EXECUTION_REQUEST_CHANGED' in refused.stderr
                             assert replay['executionAuthorized'] is False and task()['ownerNodeId']==candidate
@@ -2503,11 +2552,17 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert local['recipientImport']['preparation']==prepared_id
                             assert local['configurationVersion']==replay['committedConfigurationVersion']
 
-                            def adopted_reads():
+                            def adopted_reads(additional_report=None):
                                 expected_summary=json.loads(saved_bytes['summary.json'])
                                 for controller in ('node-a','node-b'):
                                     catalog=http(controller,route+'/validations')
-                                    assert [item['id'] for item in catalog['reports']]==[report_id]
+                                    expected_catalog={report_id} if additional_report is None else {report_id,additional_report}
+                                    assert {item['id'] for item in catalog['reports']}==expected_catalog
+                                    if additional_report:
+                                        current_report=http(controller,route+'/validations/'+additional_report)
+                                        assert current_report['id']==additional_report
+                                        current_storage=http(controller,route+'/validations/'+additional_report+'/storage')
+                                        assert not current_storage.get('adoptedReadOnly',False)
                                     report=http(controller,route+'/validations/'+report_id)
                                     assert report['id']==report_id and report['code']==expected_summary['code']
                                     storage=http(controller,route+'/validations/'+report_id+'/storage')
@@ -2519,7 +2574,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 adopted_directory,=[item for item in (candidate_data/'handoff-adopted').iterdir() if item.is_dir()]
                                 assert all((adopted_directory/report_id/name).read_bytes()==payload for name,payload in saved_bytes.items())
                                 assert json.loads((adopted_directory/'closed-receipts.json').read_text())==closed
-                                assert not (candidate_data/'validations'/'global_cdc').exists()
+                                if additional_report is None:
+                                    assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert all((local_report/name).read_bytes()==payload for name,payload in saved_bytes.items())
 
                             adopted_reads()
@@ -2538,7 +2594,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                             assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
                             worker_config='/fixture/'+candidate+'/tasks/global_cdc.yml'
                             generation=sql('store','SELECT error_generation FROM transfer_journal.rm3_job')
-                            if args.previous_handoff_runtime:
+                            if args.previous_handoff_runtime and not args.handoff_worker_start:
                                 for command in (('resume-pipeline',worker_config,generation),('run',worker_config)):
                                     old_attempt=compose('exec','-T',candidate,'timeout','10s','java','-jar',
                                                         '/previous-handoff-runtime.jar',*command,check=False)
@@ -2585,6 +2641,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 fence_url=preparation+'/fence-targets'
                                 fence_id='gc_fence_'+uuid.uuid4().hex
                                 fence_input={'expectedPreparation':replay['id'],'expectedRevision':replay['committedRevision']}
+                                if args.handoff_worker_start:
+                                    early_start=http('node-a',preparation+'/start-worker',fence_input,
+                                                     request='gc_early_start_'+uuid.uuid4().hex,expected=409)
+                                    assert early_start['code']=='HANDOFF_TARGET_FENCE_REQUIRED'
                                 refused=http('node-a',fence_url,dict(fence_input,expectedRevision=prepared_input['expectedRevision']),
                                              request='gc_stale_'+uuid.uuid4().hex,expected=409)
                                 assert refused['code']=='REVISION_CHANGED' and data_cut()==actual
@@ -2620,6 +2680,96 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 adopted_reads()
                                 manifest['targetFence']={'epoch':parked,'destinations':2,'requestReplay':True}
                                 passed('An explicit approved fence revalidates the signed SQL cut and resumes an already raised first target')
+                            if args.handoff_worker_start:
+                                start_url=preparation+'/start-worker'
+                                start_id='gc_worker_start_'+uuid.uuid4().hex
+                                refused=http('node-a',start_url,dict(fence_input,expectedRevision=prepared_input['expectedRevision']),
+                                             request='gc_stale_start_'+uuid.uuid4().hex,expected=409)
+                                assert refused['code']=='REVISION_CHANGED'
+                                snapshots="SELECT table_id,snapshot_id FROM transfer_journal.rm3_snapshot ORDER BY table_id"
+                                original_snapshots=sql('store',snapshots)
+                                assert len(original_snapshots.splitlines())==3
+                                old_hash=current[1].split('|',2)[2]
+                                assert re.fullmatch(r'[0-9a-f]{64}',old_hash)
+                                try:
+                                    sql('postgres',"UPDATE rm_pg_meta.rm3_sink_job SET transaction_hash='"+('0'*64)+"'")
+                                    approved=http('node-a',start_url,fence_input,request=start_id,expected=202)
+                                    assert approved['state']=='START_PENDING' and not approved['executionAuthorized']
+                                    assert approved['workerStart']=={'requestId':start_id}
+                                    refused=http('node-b',start_url,fence_input,request='gc_other_'+uuid.uuid4().hex,expected=409)
+                                    assert refused['code']=='HANDOFF_WORKER_START_REQUEST_CHANGED'
+                                    assert approved==http('node-b',start_url,fence_input,request=start_id,expected=202)
+                                    wait(lambda:'HANDOFF_START_PENDING HANDOFF_TARGET_FENCE_CHANGED'
+                                         in compose('logs','--no-color',candidate).stdout,'candidate rejects changed native SQL receipt')
+                                    assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15'
+                                    assert task()['workerState']=='STOPPED' and data_cut()[0]==current[0] and rows_match()
+                                    compose('kill','-s','SIGKILL',candidate)
+                                finally:
+                                    sql('postgres',"UPDATE rm_pg_meta.rm3_sink_job SET transaction_hash='"+old_hash+"'")
+                                assert data_cut()==current
+                                passed('Worker approval stays pending with its original request while the native target receipt differs')
+                                wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                                " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','approved Worker candidate lease expires')
+                                compose('up','-d',candidate);address(candidate)
+
+                                def started():
+                                    receipt=http('node-b',preparation)
+                                    observed=task()
+                                    return receipt if (receipt['state']=='WORKER_PROJECTED'
+                                            and observed['workerState']=='RUNNING' and observed['captureLeaseState']=='CLAIMED') else None
+
+                                installed=wait(started,'approved candidate reopens native journal and starts one Worker')
+                                resumed=data_cut()
+                                assert installed['executionAuthorized'] is True and installed['workerStart']=={'requestId':start_id}
+                                assert sql('store',parked_status).split('|')[-1]=='19'
+                                assert int(resumed[0].split('|',1)[0])>parked
+                                assert resumed[0].split('|',1)[1]==current[0].split('|',1)[1]
+                                assert sql('store',snapshots)==original_snapshots
+                                assert installed==http('node-a',start_url,fence_input,request=start_id,expected=202)
+                                assert task()['ownerNodeId']==candidate
+                                if args.previous_handoff_runtime:
+                                    old_attempt=compose('exec','-T',candidate,'timeout','10s','java','-jar',
+                                                        '/previous-handoff-runtime.jar','run',worker_config,check=False)
+                                    assert old_attempt.returncode==1 and 'JOURNAL_IDENTITY_MISMATCH' in old_attempt.stderr
+                                    passed('Previous runtime also refuses the admitted journal format under the candidate configuration')
+                                passed('Candidate restart consumes the signed start once at the original source position and snapshot generation')
+                                sql('mysql',"START TRANSACTION; UPDATE sales.items SET note='resumed handoff',payload=JSON_OBJECT('n',71) WHERE id=1; "
+                                            "INSERT INTO sales.items(id,note,payload) VALUES(71,'handoff CDC',JSON_OBJECT('n',71)); COMMIT")
+                                wait(rows_match,'both fenced targets apply original post-handoff binlog')
+                                assert sql('store',snapshots)==original_snapshots
+                                for before,after in zip(current[1:],data_cut()[1:]):
+                                    assert int(after.split('|')[1])>int(before.split('|')[1])
+                                assert json.loads((home/owner_node/'controller'/'controller.json').read_text())['tasks']['global_cdc']['desired']=='STOPPED'
+                                passed('New MySQL changes are replicated to both original SQL targets without taking another snapshot')
+                                action('STOP',node='node-b')
+                                wait(lambda:task()['desired']=='STOPPED' and task()['workerState']=='STOPPED',
+                                     'candidate publishes ordinary STOP')
+                                assert installed==http('node-a',start_url,fence_input,request=start_id,expected=202)
+                                adopted_reads()
+                                if args.handoff_public_owner:
+                                    stopped_cut=data_cut()
+                                    compose('kill','-s','SIGKILL',candidate)
+                                    wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                                    " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','admitted stopped candidate lease expires')
+                                    compose('up','-d',candidate);address(candidate)
+                                    wait(lambda:task()['ownerState']=='HEALTHY' and task()['desired']=='STOPPED'
+                                         and task()['workerState']=='STOPPED','admitted candidate preserves STOP across Agent restart')
+                                    assert stopped_cut==data_cut()
+                                    assert installed==http('node-b',start_url,fence_input,request=start_id,expected=202)
+                                    adopted_reads()
+                                    passed('A complete Agent restart validates the signed admission marker and preserves the later STOP')
+                                sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(72,'held after stop',JSON_OBJECT('n',72))")
+                                assert not rows_match() and task()['workerState']=='STOPPED'
+                                action('START',node='node-a')
+                                wait(rows_match,'ordinary START resumes the exact candidate cut')
+                                checked,_=action('VALIDATE',node='node-b',validation={'targets':['pg','my'],'gateMillis':15000,
+                                                                                     'sourceMillis':60000,'targetMillis':30000})
+                                adopted_reads(operation(checked)['validation']['reportId'])
+                                assert sql('store',snapshots)==original_snapshots
+                                manifest['workerStart']={'journalFormat':19,'fencedDestinations':2,'requestReplay':True,
+                                                         'sameSnapshotGeneration':True,'historyAndNewReports':True}
+                                passed('Both Controllers preserve STOP on approval replay and read original and newly created reports after ordinary restart')
+
                             manifest['status']='PASS'
                             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
                             print('GLOBAL_CONTROL_PRIVATE_HANDOFF_ACCEPTED artifact='+digest)
@@ -2692,7 +2842,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 assert {file.name for file in staged_report.iterdir()}=={'rows.staged.mv.db','summary.staged.json','validation.lock'}
                                 assert json.loads((destination/'closed-receipts.json').read_text())==closed
                                 assert (destination/'evidence.seal').read_text().startswith('v1.')
-                                assert not (candidate_data/'validations'/'global_cdc').exists()
+                                if additional_report is None:
+                                    assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert 'global_cdc' not in json.loads((candidate_data/'controller.json').read_text())['tasks']
                                 assert data_cut()==original_cut and task()['ownerNodeId']==owner_node
                                 passed('Prepared candidate privately stages exact report and receipt bytes with live ownership, checkpoints and registry untouched')

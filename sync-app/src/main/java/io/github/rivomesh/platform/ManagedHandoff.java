@@ -282,7 +282,7 @@ final class ManagedHandoff {
                 &&digest(configurationSha256)&&digest(stagingSha256);}
     }
 
-    // Internal transaction only. Candidate staging is not an HTTP grant to call this method.
+    // Commits only after the authenticated candidate has verified its private staged files.
     Map<String,Object> commitAdmittedWriter(String taskId,CandidateAdmission candidate,
                                            String executionRequest,AccessControl.Principal supplied)throws Exception{
         if(candidate==null||!candidate.valid())
@@ -334,7 +334,7 @@ final class ManagedHandoff {
 
     Map<String,Object> orchestratePreparedWriter(TaskRequest supplied,AccessControl.Principal actor,OwnerQueries transport)throws Exception{
         TaskRequest request=supplied.snapshot();
-        if(request.kind!=TaskRequest.Kind.HANDOFF_STAGE||request.yaml!=null)
+        if(request.kind!=TaskRequest.Kind.HANDOFF_COMMIT_OWNER||request.yaml!=null)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_INVALID");
         Map<String,Object> replay=bindOrReplayExecution(request,actor);
         if(replay!=null)return replay;
@@ -365,9 +365,30 @@ final class ManagedHandoff {
             return HandoffPreparations.summary(approved);
         });
     }
+    Map<String,Object> requestWorkerStart(TaskRequest supplied,AccessControl.Principal principal)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(request.kind!=TaskRequest.Kind.HANDOFF_START_WORKER)throw new IllegalArgumentException("HANDOFF_WORKER_START_REQUEST_INVALID");
+        return tasks.transaction(request.taskId,principal,(c,task,actor)->{
+            var plan=tasks.preparations().latest(c,task.id,db.now(c));
+            if(!HandoffPreparations.evidenceInstalled(plan)||!plan.id().equals(request.reference))
+                throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+            requirePlanGrants(actor,task,plan);
+            var commit=plan.writerCommit();
+            var candidate=plan.evidence().candidate();
+            if(!commit.revision().equals(request.revision)
+                    ||!task.revision.equals(commit.revision())&&!HandoffPreparations.workerAdmitted(plan)
+                    ||!commit.configuration().equals(task.activeConfigurationVersion)
+                    ||!commit.configuration().equals(task.configurationVersion)
+                    ||!task.owner.equals(candidate.node())||!task.directory.equals(candidate.directory()))
+                throw new TaskService.Conflict("REVISION_CHANGED");
+            var approved=tasks.preparations().bindWorkerStart(c,plan,request.requestId,actor);
+            if(!approved.equals(plan))auditPreparation(c,approved,actor,request.requestId,"MANAGED_HANDOFF_WORKER_START_APPROVED");
+            return HandoffPreparations.summary(approved);
+        });
+    }
     Map<String,Object> bindOrReplayExecution(TaskRequest supplied,AccessControl.Principal principal)throws Exception{
         TaskRequest request=supplied.snapshot();
-        if(request.kind!=TaskRequest.Kind.HANDOFF_STAGE||request.yaml!=null)
+        if(request.kind!=TaskRequest.Kind.HANDOFF_COMMIT_OWNER||request.yaml!=null)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_INVALID");
         return tasks.transaction(request.taskId,principal,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
             HandoffPreparations.Plan plan=executionPlan(c,task,actor,request);

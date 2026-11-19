@@ -111,8 +111,8 @@ final class OwnerQueries {
     }
     private String submitPreparedHandoff(TaskRequest supplied,AccessControl.Principal actor,TaskRequest.Kind kind)throws Exception{
         TaskRequest request=supplied.snapshot();
-        if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_STAGE)
-            throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+        TaskRequest.Kind operation=kind==TaskRequest.Kind.HANDOFF_READINESS_RPC?TaskRequest.Kind.HANDOFF_COMMIT_OWNER:TaskRequest.Kind.HANDOFF_STAGE;
+        if(handoff==null||request.kind!=operation)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
         if(request.yaml!=null)throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
         return tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
             TaskRequest scoped=TaskRequest.of(kind,task.id);
@@ -165,9 +165,10 @@ final class OwnerQueries {
         HandoffPreparations.Plan plan=tasks.preparations().latest(c,record.id,db.now(c));
         if(!HandoffPreparations.evidenceInstalled(plan))return null;
         var receipt=plan.evidenceAdoption();
-        if(receipt==null||!record.revision.equals(receipt.committedRevision())||!record.owner.equals(receipt.candidate().node())
-                ||!record.directory.equals(receipt.candidate().directory())
-                ||!Objects.equals(record.activeConfigurationVersion,plan.writerCommit().configuration()))
+        if(receipt==null||!record.revision.equals(receipt.committedRevision())&&!HandoffPreparations.workerAdmitted(plan)
+                ||!record.owner.equals(receipt.candidate().node())||!record.directory.equals(receipt.candidate().directory())
+                ||!Objects.equals(record.activeConfigurationVersion,plan.writerCommit().configuration())
+                ||!Objects.equals(record.configurationVersion,plan.writerCommit().configuration()))
             throw new TaskService.Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
         return receipt;
     }

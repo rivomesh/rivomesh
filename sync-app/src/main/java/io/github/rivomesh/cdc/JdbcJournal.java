@@ -57,9 +57,11 @@ public final class JdbcJournal implements NormalizedJournal {
         try(Statement s=c.createStatement()){s.execute(sql);}
         catch(SQLException e){if(!Arrays.asList("42P06","42P07","42710","23505").contains(e.getSQLState()))throw e;}
     }
-    static boolean assignedWriter(int format){return format>=7&&format<=18;}
-    static boolean managedWriter(int format){return format>=11&&format<=18;}
+    static boolean assignedWriter(int format){return format>=7&&format<=22;}
+    static boolean managedWriter(int format){return format>=11&&format<=22;}
+    static boolean workerAdmitted(int format){return format>=19&&format<=22;}
     private static int assignmentFamily(int format){
+        if(workerAdmitted(format))return 16;
         if(format>=15&&format<=18)return 12;
         return managedWriter(format)?8:assignedWriter(format)?4:0;
     }
@@ -67,12 +69,16 @@ public final class JdbcJournal implements NormalizedJournal {
         if(!managedWriter(format))throw new IllegalArgumentException("HANDOFF_MANAGED_CONTROL_CUT_INVALID");
         return baseFormat(format)+12;
     }
+    static int withWorkerAdmission(int format){
+        if(format<15||format>18)throw new IllegalStateException("HANDOFF_WORKER_JOURNAL_NOT_PARKED");
+        return baseFormat(format)+16;
+    }
     private static int baseFormat(int format){return format-assignmentFamily(format);}
     static boolean hasTargetGaps(int format){return baseFormat(format)==4||baseFormat(format)==6;}
     static boolean hasSourceExclusions(int format){return baseFormat(format)==5||baseFormat(format)==6;}
     static int withTargetGaps(int format){return (hasSourceExclusions(format)?6:4)+assignmentFamily(format);}
     static int withSourceExclusions(int format){return (hasTargetGaps(format)?6:5)+assignmentFamily(format);}
-    private static boolean supported(int format){return format>=3&&format<=18;}
+    private static boolean supported(int format){return format>=3&&format<=22;}
     private void verifyRecoveryTables(Connection c,int format)throws Exception{
         if(hasTargetGaps(format))JdbcSkipJournal.verifyTables(this,c);
         if(hasSourceExclusions(format))JdbcSourceExclusion.verify(this,c);

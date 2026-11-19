@@ -2,7 +2,7 @@
 window.RivomeshHandoff=(()=>{
  const bridge=window.RivomeshConfiguration,{api,can,requestId,t}=bridge;
  bridge.register({
-  handoffTitle:'评估 Agent 接管',handoffHelp:'评估和预留期间，任务始终归原 Agent。此界面仅提供接管准备。',
+  handoffTitle:'评估 Agent 接管',handoffHelp:'评估、预留和暂存期间，任务归原 Agent。完成核验后，可确认归属切换。',
   handoffOriginal:'当前 Agent',handoffCandidate:'选择候选 Agent',handoffCandidateNode:'候选 Agent',handoffChoose:'请选择 Agent',
   handoffMore:'查看更多 Agent',handoffReload:'刷新节点、评估和预留',handoffAssess:'记录评估',
   handoffReassess:'更新评估',handoffRetry:'重试同一评估',handoffReceipt:'评估回执',
@@ -30,7 +30,7 @@ window.RivomeshHandoff=(()=>{
   CANDIDATE_ACCESS_UNVERIFIED:'尚需核对候选 Agent 的驱动、密钥引用和连接能力。',
   ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED:'尚需确认候选 Agent 能读取原恢复报告和回执。'
  },{
-  handoffTitle:'Assess Agent handoff',handoffHelp:'The current Agent keeps ownership throughout assessment and reservation. Use this panel to prepare a handoff.',
+  handoffTitle:'Assess Agent handoff',handoffHelp:'The current Agent keeps ownership during assessment, reservation and staging. After verification, you can confirm the owner change.',
   handoffOriginal:'Current Agent',handoffCandidate:'Choose a candidate Agent',handoffCandidateNode:'Candidate Agent',handoffChoose:'Select an Agent',
   handoffMore:'More Agents',handoffReload:'Refresh nodes, assessment and reservation',handoffAssess:'Record assessment',
   handoffReassess:'Update assessment',handoffRetry:'Retry the same assessment',handoffReceipt:'Assessment receipt',
@@ -155,6 +155,19 @@ window.RivomeshHandoff=(()=>{
   handoffTargetsFencedHelp:'目标端已拒绝旧纪元写入。候选 Worker 保持停止。',handoffFencedCount:'已隔离的目标数',
   handoffFence:'隔离 SQL 目标',handoffFenceHelp:'隔离会提高 SQL 目标的写入纪元。候选 Worker 保持停止。',
   handoffFenceRetry:'重试同一隔离审批',handoffFenceUnknown:'审批结果未知。请重试同一审批或刷新状态。',
+  handoffStartPending:'等待启动授权',handoffWorkerAdmitted:'已授权启动 Worker',handoffWorkerProjected:'已保存启动意图',
+  handoffStartPendingHelp:'候选 Agent 正在复核源端断点和目标隔离。请刷新查看进度。',
+  handoffWorkerAdmittedHelp:'共享日志已开放给候选 Worker。候选 Agent 正在保存启动意图。',
+  handoffWorkerProjectedHelp:'候选 Agent 已保存从交接断点续传的启动意图。实际运行状态见任务详情。',
+  handoffStartWorker:'启动候选 Worker',handoffStartWorkerHelp:'批准候选 Worker 从交接断点继续同步。',
+  handoffStartRetry:'重试同一启动审批',
+  handoffCommitOwner:'确认切换归属',handoffCommitRetry:'重试同一归属切换',
+  handoffCommitOwnerHelp:'切换后由候选 Agent 保存停止状态的任务，并接收校验报告和回执。下一步仍须隔离 SQL 目标。',
+  handoffCommitUnknown:'归属切换结果待确认。可用同一请求重试或刷新交接状态。',
+  HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED:'当前任务还有未接收的源或故障证据，需要先完成证据接管。',
+  HANDOFF_EXECUTION_REQUEST_CHANGED:'已有归属切换请求。刷新交接状态后重试原请求。',
+  HANDOFF_TARGET_FENCE_REQUIRED:'启动前须完成所有 SQL 目标的隔离。',
+  HANDOFF_WORKER_START_REQUEST_CHANGED:'已有启动审批。请刷新交接状态。',
   handoffCommittedRevision:'已提交任务修订',handoffCommittedConfig:'已提交配置版本',handoffJournalEpoch:'已提交日志代次',
   handoffFormerOwner:'原 Agent',handoffCurrentOwner:'当前归属 Agent',handoffTransferId:'交接准备 ID',handoffRefreshProgress:'刷新交接状态'
  },{
@@ -168,6 +181,19 @@ window.RivomeshHandoff=(()=>{
   handoffTargetsFencedHelp:'The targets reject writes from the previous epoch. The candidate Worker remains stopped.',handoffFencedCount:'Fenced targets',
   handoffFence:'Fence SQL targets',handoffFenceHelp:'Fencing advances the SQL target writer epochs. The candidate Worker remains stopped.',
   handoffFenceRetry:'Retry the same fence approval',handoffFenceUnknown:'Approval outcome unknown. Retry the same approval or refresh the status.',
+  handoffStartPending:'Worker start pending',handoffWorkerAdmitted:'Worker start authorized',handoffWorkerProjected:'Start intent saved',
+  handoffStartPendingHelp:'The candidate is verifying the source cut and native target fences. Refresh to view progress.',
+  handoffWorkerAdmittedHelp:'The journal admits the candidate Worker. The candidate Agent is saving the start intent.',
+  handoffWorkerProjectedHelp:'The candidate Agent saved the intent to resume from the handoff cut. See the task view for the actual Worker state.',
+  handoffStartWorker:'Start candidate Worker',handoffStartWorkerHelp:'Approve the candidate Worker to resume synchronization from the handoff cut.',
+  handoffStartRetry:'Retry the same start approval',
+  handoffCommitOwner:'Commit ownership transfer',handoffCommitRetry:'Retry the same ownership transfer',
+  handoffCommitOwnerHelp:'The candidate will install the task in a stopped state and receive validation reports and receipts. Fence the SQL targets in the next step.',
+  handoffCommitUnknown:'The ownership transfer outcome is pending. Retry the same request or refresh the handoff status.',
+  HANDOFF_RECOVERY_EVIDENCE_ADMISSION_REQUIRED:'This task has source or failure evidence still awaiting adoption.',
+  HANDOFF_EXECUTION_REQUEST_CHANGED:'An ownership transfer is already assigned. Refresh the status and retry the original request.',
+  HANDOFF_TARGET_FENCE_REQUIRED:'Fence every SQL destination before starting the Worker.',
+  HANDOFF_WORKER_START_REQUEST_CHANGED:'A start approval already exists. Refresh the handoff status.',
   handoffCommittedRevision:'Committed task revision',handoffCommittedConfig:'Committed configuration version',handoffJournalEpoch:'Committed journal epoch',
   handoffFormerOwner:'Original Agent',handoffCurrentOwner:'Current owner Agent',handoffTransferId:'Preparation ID',handoffRefreshProgress:'Refresh handoff status'
  });
@@ -178,7 +204,10 @@ window.RivomeshHandoff=(()=>{
  const sha256=/^[0-9a-f]{64}$/;
  const stateLabels={BLOCKED:'handoffStateBlocked',EVIDENCE_REQUIRED:'handoffStateEvidence',STALE:'handoffStateStale'};
  const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired'};
- const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted',FENCE_PENDING:'handoffFencePending',TARGETS_FENCED:'handoffTargetsFenced'};
+ const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted',FENCE_PENDING:'handoffFencePending',TARGETS_FENCED:'handoffTargetsFenced',
+  START_PENDING:'handoffStartPending',WORKER_ADMITTED:'handoffWorkerAdmitted',WORKER_PROJECTED:'handoffWorkerProjected'};
+ const startStates=['START_PENDING','WORKER_ADMITTED','WORKER_PROJECTED'];
+ function workerAdmitted(state){return state==='WORKER_ADMITTED'||state==='WORKER_PROJECTED';}
  let view=null;
 
  function node(tag,value='',className){
@@ -229,7 +258,8 @@ window.RivomeshHandoff=(()=>{
    ||preparation.originalNodeId===preparation.candidateNodeId)return false;
   if(!transferred(preparation))return preparation.originalNodeId===v.owner;
   const task=bridge.task(v.taskId);
-  return preparation.candidateNodeId===v.owner&&preparation.committedRevision===task?.revision
+  return preparation.candidateNodeId===v.owner
+   &&(preparation.committedRevision===task?.revision||workerAdmitted(preparation.state))
    &&preparation.committedConfigurationVersion===task?.configurationVersion;
  }
  function readOnly(v){
@@ -241,18 +271,27 @@ window.RivomeshHandoff=(()=>{
    ||!/^[1-9][0-9]{0,18}$/.test(preparation.activatedJournalEpoch))return false;
   const evidence=preparation.adoptedEvidence;
   if(preparation.targetFenceAvailable!=null&&(preparation.state!=='EVIDENCE_ADOPTED'||preparation.targetFenceAvailable!==true))return false;
-  const fence=preparation.targetFence;
-  if(['FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)){
+  if(preparation.workerStartAvailable!=null&&(preparation.state!=='TARGETS_FENCED'||preparation.workerStartAvailable!==true))return false;
+  const start=preparation.workerStart,fence=preparation.targetFence;
+  if(startStates.includes(preparation.state)){
+   if(!requestPattern.test(start?.requestId||'')||start.requestId===fence?.requestId)return false;
+  }else if(start!=null)return false;
+  if(['FENCE_PENDING','TARGETS_FENCED',...startStates].includes(preparation.state)){
    if(!requestPattern.test(fence?.requestId||'')||!Number.isSafeInteger(fence.destinationsFenced)
     ||(preparation.state==='FENCE_PENDING'?fence.destinationsFenced!==0:fence.destinationsFenced<1||fence.destinationsFenced>8))return false;
   }else if(fence!=null)return false;
-  return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)?evidence!=null
+  return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED',...startStates].includes(preparation.state)?evidence!=null
     &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
     &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0:evidence==null;
  }
- function fenceAvailable(v){
-  return v.preparationLoaded&&v.preparation?.state==='EVIDENCE_ADOPTED'&&v.preparation.targetFenceAvailable===true
-   &&preparationScope(v,v.preparation);
+ function nextHandoffAction(v){
+  const plan=v.preparation;
+  if(!v.preparationLoaded||!plan||!preparationScope(v,plan))return null;
+  if(plan.state==='PREPARED'&&plan.writerActivation?.checkedInControlTransaction===true
+   &&v.stageAttempt?.counts&&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
+  if(plan.state==='EVIDENCE_ADOPTED'&&plan.targetFenceAvailable===true)return 'fence-targets';
+  if(plan.state==='TARGETS_FENCED'&&plan.workerStartAvailable===true)return 'start-worker';
+  return null;
  }
  function activeReservation(v){return v.preparation?.state==='PREPARED';}
  function stagePreparation(v){
@@ -289,7 +328,9 @@ window.RivomeshHandoff=(()=>{
   const active=state==='PREPARED',transferredState=transferred(response);
   if(response?.taskId!==v.taskId||!preparationScope(v,response)||!requestPattern.test(response.id||'')
     ||!requestPattern.test(response.assessmentId||'')||!revisionId.test(response.taskRevision||'')
-    ||!(Object.hasOwn(preparationLabels,state)||transferredState&&validTransfer(response))||response.executionAuthorized!==false
+    ||!(Object.hasOwn(preparationLabels,state)||transferredState&&validTransfer(response))
+    ||response.executionAuthorized!==workerAdmitted(state)
+    ||response.commitRequestId!=null&&(!requestPattern.test(response.commitRequestId)||!(active||transferredState))
     ||response.reservedTaskSlots!==Number(active)||response.reservedWorkerSlots!==Number(active)
     ||!sha256.test(response.evidenceSha256||'')||!Number.isFinite(Date.parse(response.createdAt))
     ||!(Date.parse(response.expiresAt)>Date.parse(response.createdAt))
@@ -426,7 +467,15 @@ window.RivomeshHandoff=(()=>{
   if(v.stageStatus.textContent!==status)v.stageStatus.textContent=status;
  }
  function update(v){
-  if(!current(v)){if(view===v)close();return;}
+  if(!current(v)){
+   if(view===v){
+    const task=bridge.task(v.taskId);
+    if(v.fenceAttempt?.action==='commit-owner'&&task?.ownerNodeId===v.fenceAttempt.candidate
+      &&bridge.session()?.id===v.actor&&eligible(task))open(task);
+    else close();
+   }
+   return;
+  }
   const busy=v.posting||v.reading||v.probing||v.preparationReading||v.preparationPosting||v.staging||v.fencing;
   v.dialog.setAttribute('aria-busy',String(Boolean(busy||v.loadingNodes)));
   for(const option of [...v.select.options])if(option.value&&!nodeGrant(option.value)){
@@ -466,9 +515,17 @@ window.RivomeshHandoff=(()=>{
   renderReceipt(v);
   renderPreparation(v,readonly);
   renderStaging(v,busy,readonly);
-  const offer=fenceAvailable(v);
+  const offer=nextHandoffAction(v);
+  const labels={
+   'fence-targets':['handoffFence','handoffFenceRetry','handoffFenceHelp'],
+   'start-worker':['handoffStartWorker','handoffStartRetry','handoffStartWorkerHelp'],
+   'commit-owner':['handoffCommitOwner','handoffCommitRetry','handoffCommitOwnerHelp']
+  };
+  const [label,retry,help]=labels[offer]||labels['fence-targets'];
   v.fencePanel.hidden=!offer;v.fence.disabled=busy||!offer;
-  v.fence.textContent=t(v.fenceAttempt?'handoffFenceRetry':'handoffFence');
+  v.fence.dataset.handoffAction=offer||'';
+  v.fence.textContent=t(v.fenceAttempt?.action===offer||offer==='commit-owner'&&v.preparation?.commitRequestId?retry:label);
+  v.actionHelp.textContent=t(help);
   if(!offer&&focused===v.fence&&!v.reload.disabled)v.reload.focus({preventScroll:true});
   if((focused===v.reserve&&!reserveShown)||(focused===v.release&&!releaseShown)){
    const next=releaseShown?v.release:reserveShown?v.reserve:v.reload;
@@ -506,9 +563,10 @@ window.RivomeshHandoff=(()=>{
    }catch(error){if(error.code!=='HANDOFF_PREPARATION_NOT_FOUND')throw error;value=null;}
    if(!current(v))return;
    v.unverifiedTransfer=false;v.preparation=value;v.preparationLoaded=true;
+   if(v.fenceAttempt&&(v.fenceAttempt.action!==nextHandoffAction(v)||v.fenceAttempt.preparation!==value?.id))
+    v.fenceAttempt=null;
    if(transferred(value)){
     v.attempt=null;v.preparationAttempt=null;
-    if(!fenceAvailable(v)||v.fenceAttempt?.preparation!==value.id)v.fenceAttempt=null;
    }else if(v.preparationAttempt&&matchesPreparation(value,v.preparationAttempt)){
     v.preparationAttempt=null;v.feedback.textContent=t('handoffReservationSaved');
    }
@@ -522,6 +580,8 @@ window.RivomeshHandoff=(()=>{
  }
  async function refreshDialog(v){
   v.feedback.textContent='';
+  if(v.fenceAttempt?.action==='commit-owner')await bridge.refresh();
+  if(!current(v))return;
   await readPreparation(v);
   if(current(v)&&!readOnly(v))await Promise.all([read(v),candidates(v)]);
  }
@@ -580,22 +640,42 @@ window.RivomeshHandoff=(()=>{
    await reconcile(v,error);
   }finally{if(current(v)){v.preparationPosting=false;update(v);}}
  }
- async function fenceTargets(v){
-  if(!current(v)||v.fence.disabled||!fenceAvailable(v))return;
-  const plan=v.preparation;
-  const attempt=v.fenceAttempt??={preparation:plan.id,id:requestId(),body:JSON.stringify({expectedPreparation:plan.id,
-   expectedRevision:plan.committedRevision})};
+ async function submitHandoffAction(v){
+  const action=nextHandoffAction(v);
+  if(!current(v)||v.fence.disabled||!action)return;
+  const plan=v.preparation,committing=action==='commit-owner';
+  const input={expectedPreparation:plan.id,expectedRevision:committing?plan.taskRevision:plan.committedRevision};
+  if(committing)input.expectedEvidenceSha256=plan.evidenceSha256;
+  const attempt=v.fenceAttempt??={action,preparation:plan.id,candidate:plan.candidateNodeId,
+   id:committing&&plan.commitRequestId||requestId(),body:JSON.stringify(input)};
   v.fencing=true;v.feedback.textContent='';update(v);
   try{
-   const response=verifiedPreparation(v,await api(preparationEndpoint(v)+'/fence-targets',postOptions(attempt.body,attempt.id)));
-   if(!current(v)||v.fenceAttempt!==attempt)return;
-   if(response.id!==attempt.preparation||!['FENCE_PENDING','TARGETS_FENCED'].includes(response.state)
-      ||response.targetFence?.requestId!==attempt.id)throw new Error(t('handoffReservationInvalid'));
+   const reply=await api(preparationEndpoint(v)+'/'+action,postOptions(attempt.body,attempt.id));
+   if(view!==v||v.fenceAttempt!==attempt)return;
+   if(!current(v)){update(v);return;}
+   if(committing){
+    if(!transferred(reply)||!validTransfer(reply)||reply.executionAuthorized!==workerAdmitted(reply.state)
+      ||reply.commitRequestId!==attempt.id||reply.id!==plan.id||reply.taskId!==v.taskId
+      ||reply.taskRevision!==plan.taskRevision||reply.evidenceSha256!==plan.evidenceSha256
+      ||reply.originalNodeId!==v.owner||reply.candidateNodeId!==attempt.candidate||!nodeGrant(attempt.candidate))
+     throw new Error(t('handoffReservationInvalid'));
+    await bridge.refresh();
+    if(current(v))v.feedback.textContent=t('handoffCommitUnknown');
+    return;
+   }
+   const response=verifiedPreparation(v,reply);
+   const starting=action==='start-worker';
+   const states=starting?startStates:['FENCE_PENDING','TARGETS_FENCED'];
+   const approval=starting?response.workerStart:response.targetFence;
+   if(response.id!==attempt.preparation||!states.includes(response.state)||approval?.requestId!==attempt.id)
+    throw new Error(t('handoffReservationInvalid'));
    v.preparation=response;v.fenceAttempt=null;
   }catch(error){
    if(!current(v)||v.fenceAttempt!==attempt)return;
-   if(!(error.status>=400&&error.status<500)||[408,429].includes(error.status)){
-    v.feedback.textContent=t('handoffFenceUnknown');return;
+   const uncertain=!(error.status>=400&&error.status<500)||[408,429].includes(error.status)
+    ||committing&&['OWNER_QUERY_TIMEOUT','OWNER_QUERY_EXPIRED','OWNER_QUERY_UNAVAILABLE'].includes(error.code);
+   if(uncertain){
+    v.feedback.textContent=t(committing?'handoffCommitUnknown':'handoffFenceUnknown');return;
    }
    v.fenceAttempt=null;v.feedback.textContent=error.message;
    await reconcile(v,error);
@@ -703,10 +783,10 @@ window.RivomeshHandoff=(()=>{
    release=node('button',t('handoffRelease')),preparationPanel=node('section','','recovery-retry'),
    preparationResult=node('div'),stagePanel=node('div'),stageStatus=node('p','','subtle'),
    stageButton=node('button',t('handoffStage')),help=node('p',t('handoffHelp'),'callout'),
-   fencePanel=node('div'),fence=node('button',t('handoffFence'),'primary');
+   fencePanel=node('div'),fence=node('button',t('handoffFence'),'primary'),actionHelp=node('p','','subtle');
   const v={dialog,taskId:task.id,owner:task.ownerNodeId,actor:bridge.session().id,select,candidateMessage,
    feedback,result,more,reload,submit:submitButton,probe:probeButton,reserve,release,preparationPanel,preparationResult,
-   stage:stageButton,stagePanel,stageStatus,fencePanel,fence,header:heading,help,original,field,nodes:new Map()};
+   stage:stageButton,stagePanel,stageStatus,fencePanel,fence,actionHelp,header:heading,help,original,field,nodes:new Map()};
   view=v;
   heading.id='handoff-title';dialog.setAttribute('aria-labelledby',heading.id);
   select.name='candidateNodeId';field.append(node('span',t('handoffCandidate')),select);
@@ -726,11 +806,11 @@ window.RivomeshHandoff=(()=>{
   probeButton.onclick=()=>probe(v);reserve.onclick=()=>mutatePreparation(v,false);
   release.onclick=()=>mutatePreparation(v,true);
   stageButton.onclick=()=>stageEvidence(v);
-  fence.dataset.handoffFence='';fence.onclick=()=>fenceTargets(v);
+  fence.dataset.handoffFence='';fence.onclick=()=>submitHandoffAction(v);
   actions.append(exit,more,reload,submitButton);
   form.append(field,candidateMessage,actions);
   stagePanel.append(node('p',t('handoffStageHelp'),'subtle'),stageButton,stageStatus);
-  fencePanel.append(node('p',t('handoffFenceHelp'),'subtle'),fence);
+  fencePanel.append(actionHelp,fence);
   preparationPanel.append(preparationResult,stagePanel,reserve,release,fencePanel);
   dialog.append(heading,node('p',task.id,'subtle'),help,original,form,feedback,
    result,probeButton,preparationPanel);

@@ -45,10 +45,12 @@ A separate administrator request binds its identity and current authorization re
 
 The native target verification uses a 20-second deadline on the shared control transaction. A stalled verification leaves the approval pending and can temporarily delay concurrent management changes. The current evidence covers the bounded handoff profile.
 
-### Planned Worker admission after fencing
+### Worker admission after fencing
 
-Worker admission requires a separate administrator request and a current candidate lease. Bind the request to the committed configuration, the adopted evidence receipt, and the exact native fence receipt for every configured SQL destination. Reopen each target at the fenced epoch and compare its original transaction receipt and snapshot before changing journal admission. Persist the candidate’s admission and the approved desired state together in the shared control and journal transaction. The local scheduler must read that shared receipt before starting the Worker, including after an interrupted local projection.
+A separate administrator request binds the committed configuration, adopted evidence and every signed native SQL fence. The current candidate lease authorizes the final source and destination recheck. The shared PostgreSQL transaction advances the parked journal to its admitted format 19–22 and persists the signed `WORKER_ADMITTED` receipt. This preserves the source position and recovery format features. Older builds refuse the admitted format.
 
-Verify process loss before any target fence, after a subset of target fences, after shared admission commits, and after the first Worker claims the journal. The same approval must recover the same admission across Controllers. A later ordinary restart must reuse the original snapshot and source position. Once the Worker is admitted, the operator must be able to stop or pause it through the standard command path. Historical report access must still require the original and candidate node grants.
+The candidate’s local registry records the matching request ID and the RUNNING intent atomically. The candidate then records `WORKER_PROJECTED` in the control database. When interrupted after shared admission, the candidate can resume local projection from the shared receipt. At startup the candidate checks any local start marker against the shared assignment, preparation and native journal format before scheduling. A replay of the installed intent preserves later STOP/PAUSE operations. The exclusive journal lease remains the final writer guard.
+
+Exercise partial destination fencing, a moved native checkpoint before Worker admission, candidate process loss, ordinary lifecycle commands and source CDC after ownership transfer. History readers keep original and candidate grants and verify the adopted files against their signed manifest. The public ownership confirmation runs the same signed bind and private readiness checks through either Controller. Automatic relocation and partition acceptance remain separate work.
 
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

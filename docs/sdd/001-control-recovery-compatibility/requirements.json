@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双 Agent 同库换权、STOPPED 配置和证据安装、跨入口重放、日志停驻及原 Agent 重启隔离已通过限定实库。另已实测管理员审批的 PostgreSQL/MySQL 目标纪元隔离及候选离线后续跑。候选 Worker 启用、公开换权和自动故障接管待验。",
-        "en": "Native dual-Agent tests cover same-store transfer, STOPPED configuration and evidence installation, cross-entry replay, parked journal admission and original-Agent restart fencing. Native tests also cover approved PostgreSQL/MySQL target-epoch fencing and restart of an offline candidate. Worker activation, public transfer and automatic takeover remain."
+        "zh-CN": "双 Agent 同库归属切换、报告回执接收、PostgreSQL/MySQL 目标隔离和候选显式启动通过限定实库。两个管理入口可重放审批，旧构建继续隔离。自动接管、网络分区及排空验收仍待完成。",
+        "en": "Bounded native tests cover public same-store dual-Agent ownership transfer, adopted evidence, PostgreSQL/MySQL target fencing and approved Worker continuation. Both management entries replay the bound operations and earlier runtimes remain fenced. Automatic takeover, partition and drain acceptance remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",

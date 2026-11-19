@@ -6,11 +6,11 @@ import {isDeepStrictEqual} from 'node:util';
 import {launchChrome,waitFor} from './chromium.mjs';
 
 const [binary,scenario]=process.argv.slice(2);
-assert(binary&&['handoff','handoff-preparation','handoff-adopted'].includes(scenario));
+assert(binary&&['handoff','handoff-preparation','handoff-adopted','handoff-owner-commit'].includes(scenario));
 const chunks=[];
 for await(const chunk of process.stdin)chunks.push(chunk);
 const {first,second,taskId,token,owner,candidate,revision,previousReceiptId,
- preparationId,configurationVersion,adoption,validationReportId,closedReceiptId}=JSON.parse(Buffer.concat(chunks));
+ preparationId,configurationVersion,adoption,validationReportId,closedReceiptId,commitRequestId}=JSON.parse(Buffer.concat(chunks));
 for(const address of [first,second]){
  const url=new URL(address);
  assert(url.protocol==='http:'&&url.hostname==='127.0.0.1'&&url.port);
@@ -160,7 +160,12 @@ try{
     'The signed adoption is bound to the expected task, preparation and revision with no execution authority');
    assert.notEqual(summary.taskRevision,revision);
    const fenceOffered=summary.targetFenceAvailable===true;
-   expectKeys(summary,fenceOffered?[...summaryFields,'targetFenceAvailable']:summaryFields);
+   const publicFields=fenceOffered?[...summaryFields,'targetFenceAvailable']:[...summaryFields];
+   if(summary.commitRequestId!=null){
+    assert.match(summary.commitRequestId,/^[A-Za-z0-9_-]{8,128}$/);
+    publicFields.push('commitRequestId');
+   }
+   expectKeys(summary,publicFields);
    expectKeys(summary.cut,['epoch','sequence','checkpointSha256']);
    expectKeys(summary.writerActivation,activationFields);
    expectMasked(summary.adoptedEvidence,adoption,'The receipt exposes only the exact adopted evidence counts');
@@ -213,8 +218,37 @@ try{
   }
  }
 
+ async function commitOwnerFlow(){
+  const taskPath='/api/tasks/'+encodeURIComponent(taskId);
+  const reservation='document.querySelector("[data-handoff-preparation]")';
+  const commit='[data-handoff-action="commit-owner"]';
+  const prep='fetch('+quote(taskPath+'/handoff/preparation')+').then(response=>response.json())';
+  await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await navigate(second,'node-b',true);
+  await open();
+  await poll(`${reservation}?.textContent.includes("预留中")`,'bound handoff preparation');
+  const plan=await evaluate(prep);
+  assert.deepEqual([plan.state,plan.id,plan.commitRequestId,plan.originalNodeId,plan.candidateNodeId],
+    ['PREPARED',preparationId,commitRequestId,owner,candidate]);
+  assert(await evaluate(`document.querySelector(${quote(commit)})===null`));
+  await clickByKeyboard('[data-handoff-stage]');
+  await poll(`document.querySelector("[data-handoff-stage-status]")?.textContent.includes("已核验暂存文件")`,'candidate re-verifies exact staging');
+  assert.match(await evaluate(`document.querySelector(${quote(commit)}).textContent`),/重试同一归属切换/);
+  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
+  await clickByKeyboard(commit);
+  await poll(`fetch(${quote(taskPath)}).then(response=>response.json()).then(task=>
+   task.ownerNodeId===${quote(candidate)}&&task.desired==="STOPPED"&&task.workerState==="STOPPED")`,'task ownership moves to the stopped candidate');
+  await poll(`${reservation}?.textContent.match(/归属已提交|候选配置已安装|证据已接收/)!=null`,'dialog follows the current owner');
+  const committed=await evaluate(prep);
+  assert.deepEqual([committed.id,committed.commitRequestId,committed.candidateNodeId,committed.executionAuthorized],
+    [preparationId,commitRequestId,candidate,false]);
+  checks.push('The second Controller stages signed custody and commits the already bound owner transfer by keyboard at 390px, keeping the Worker stopped');
+ }
+
  if(scenario==='handoff-adopted'){
   await adoptedFlow();
+ }else if(scenario==='handoff-owner-commit'){
+  await commitOwnerFlow();
  }else{
   await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
   await navigate(first,'node-a',true);

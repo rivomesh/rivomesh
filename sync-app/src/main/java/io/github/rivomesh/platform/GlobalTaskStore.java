@@ -211,7 +211,7 @@ final class GlobalTaskStore {
         }
     }
     HandoffPreparations preparations(){return preparations;}
-    void advance(Connection c,Record record)throws Exception{preparations.requireUnreserved(c,record.id);record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}
+    void advance(Connection c,Record record)throws Exception{preparations.requireCommandAllowed(c,record.id);record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}
     void applied(Connection c,Record record,String version)throws Exception{
         if(!record.configurationVersion.equals(version))throw new TaskService.Conflict("CONFIGURATION_VERSION_CHANGED");configuration(c,record);record.activeConfigurationVersion=version;
         db.update(c,"UPDATE "+db.table("task_authority")+" SET active_version=?,record_hash=? WHERE cluster_id=? AND task_id=?",version,recordSignature(record),cluster,record.id);
@@ -326,9 +326,7 @@ final class GlobalTaskStore {
         if(!"FENCE_PENDING".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
         ManagedWriterDeclaration previous=ManagedWriterDeclaration.read(version(c,plan.task(),plan.evidence().configuration()).yaml);
         ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(grant.successorYaml());
-        if(previous==null||successor==null||!plan.task().equals(config.pipelineId)||!successor.assignment().equals(config.journal.writerAssignment)
-                ||!successor.node().equals(config.nodeId)||!successor.namespace().equals(config.journal.namespace)
-                ||!successor.journalUrl().equals(config.journal.url))throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        requireRecipientConfiguration(plan,config,previous,successor);
         var proof=recipientCut(plan,successor,grant.successorYaml());
         var fenced=config.fenceParkedHandoff(c,previous.assignment(),proof,authorize);
         if(!fenced.destinations().keySet().equals(new TreeSet<>(proof.destinations())))
@@ -339,6 +337,57 @@ final class GlobalTaskStore {
         event.clientRequestHash=AuditStore.hash(plan.targetFence().id());event.operationHash=fenced.cutSha256();event.status="STOPPED";
         access.append(c,event);
     }
+    private static void requireRecipientConfiguration(HandoffPreparations.Plan plan,io.github.rivomesh.PipelineConfig config,
+                                                      ManagedWriterDeclaration previous,ManagedWriterDeclaration successor){
+        if(previous==null||successor==null||!plan.task().equals(config.pipelineId)||!successor.assignment().equals(config.journal.writerAssignment)
+                ||!successor.node().equals(config.nodeId)||!successor.namespace().equals(config.journal.namespace)
+                ||!successor.journalUrl().equals(config.journal.url))throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+    }
+    void admitParkedWorker(Connection c,ManagedRecipientImport.Grant grant,io.github.rivomesh.PipelineConfig config,
+                           JournalWriterAssignment.FenceAuthorization authorize)throws Exception{
+        HandoffPreparations.Plan plan=grant.committed();
+        if(!"START_PENDING".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+        ManagedWriterDeclaration previous=ManagedWriterDeclaration.read(version(c,plan.task(),plan.evidence().configuration()).yaml);
+        ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(grant.successorYaml());
+        requireRecipientConfiguration(plan,config,previous,successor);
+        var proof=recipientCut(plan,successor,grant.successorYaml());
+        config.admitParkedHandoff(c,previous.assignment(),proof,authorize,plan.targetFence().result());
+        preparations.recordWorkerAdmitted(c,plan);
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_WORKER_ADMITTED";event.taskId=plan.task();
+        event.actorId=plan.workerStart().actor();event.actorRole="ADMIN";event.subjectId=plan.evidence().candidate().node();
+        event.clientRequestHash=AuditStore.hash(plan.workerStart().id());event.operationHash=plan.targetFence().result().cutSha256();
+        event.status="COMMITTED";access.append(c,event);
+    }
+    ManagedRecipientImport.Grant admittedRecipient(Connection c,Record current,ControlStore.Lease lease,String directory)throws Exception{
+        var plan=preparations.latest(c,current.id,db.now(c));
+        if(!HandoffPreparations.workerAdmitted(plan))return null;
+        var candidate=plan.evidence().candidate();
+        if(!lease.nodeId.equals(candidate.node())||!directory.equals(candidate.directory())
+                ||!current.owner.equals(candidate.node())||!current.directory.equals(candidate.directory())
+                ||lease.epoch<candidate.epoch()||lease.epoch==candidate.epoch()&&!lease.incarnation.equals(candidate.incarnation()))
+            throw new ControlStore.Fenced();
+        String version=plan.writerCommit().configuration();
+        if(!version.equals(current.configurationVersion)||!version.equals(current.activeConfigurationVersion))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        String active=activeYaml(c,current);
+        ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(active);
+        if(successor==null||!db.sharesPostgresUrl(successor.journalUrl())||!candidate.node().equals(successor.node())
+                ||!AuditStore.hash(active).equals(plan.writerCommit().configurationSha256()))
+            throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        var proof=recipientCut(plan,successor,active);
+        JournalWriterAssignment.verifyAdmittedPlacement(c,successor.namespace(),current.id,successor.assignment(),proof);
+        return new ManagedRecipientImport.Grant(identity,plan,active);
+    }
+    void recordStartedRecipient(Connection c,String task,ControlStore.Lease lease,String directory,String request)throws Exception{
+        var grant=admittedRecipient(c,read(c,task),lease,directory);
+        if(grant==null||!grant.committed().workerStart().id().equals(request))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+        if("WORKER_PROJECTED".equals(grant.committed().phase()))return;
+        preparations.recordWorkerProjected(c,grant.committed());
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_WORKER_INTENT_INSTALLED";event.taskId=task;
+        event.subjectId=lease.nodeId;event.clientRequestHash=AuditStore.hash(request);event.status="RUNNING_REQUESTED";
+        access.append(c,event);
+    }
+
     void recordRecipientProjection(Connection c,String task,ControlStore.Lease lease,String directory,
                                    ManagedRecipientImport.Receipt receipt)throws Exception{
         Record current=read(c,task);

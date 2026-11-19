@@ -44,9 +44,15 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case HANDOFF_STAGE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return queries.await(queries.submitHandoffStaging(request,actor),actor);
+            case HANDOFF_COMMIT_OWNER:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return handoff.orchestratePreparedWriter(request,actor,queries);
             case HANDOFF_TARGET_FENCE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return handoff.requestTargetFence(request,actor);
+            case HANDOFF_START_WORKER:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return handoff.requestWorkerStart(request,actor);
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return switch(request.kind){
@@ -93,7 +99,9 @@ final class GlobalTaskPlane implements TaskControlPlane {
         boolean adopted=tasks.transaction(request.taskId,actor,(c,task,current)->{
             HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,tasks.database().now(c));
             return HandoffPreparations.evidenceInstalled(plan)
-                    &&task.revision.equals(plan.writerCommit().revision())
+                    &&(task.revision.equals(plan.writerCommit().revision())||HandoffPreparations.workerAdmitted(plan))
+                    &&plan.writerCommit().configuration().equals(task.activeConfigurationVersion)
+                    &&plan.writerCommit().configuration().equals(task.configurationVersion)
                     &&task.owner.equals(plan.evidence().candidate().node())&&task.directory.equals(plan.evidence().candidate().directory())
                     &&Objects.equals(retained.get("ownerNodeId"),plan.evidence().original().node());
         });

@@ -23,7 +23,7 @@ public final class ManagedHandoffPrivateFixture {
         ManagedHandoff workflow=new ManagedHandoff(cluster,access,tasks,commands,agents,views);
         OwnerQueries transport=new OwnerQueries(cluster,tasks,agents,1000,30000,workflow);
         AccessControl.Principal admin=AccountDirectory.authenticate(access.accounts(),"Bearer "+config.authToken);
-        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,args[1]);
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_COMMIT_OWNER,args[1]);
         request.reference=args[2];request.revision=args[3];request.identityHash=args[4];request.requestId=args[5];
         if("bind".equals(args[6])){
             if(workflow.bindOrReplayExecution(request,admin)!=null)

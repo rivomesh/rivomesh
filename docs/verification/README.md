@@ -559,3 +559,7 @@ The `4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a` package p
 ### Target fence approval in the managed handoff console
 
 The `f458c5f066ceceed95b451f8c1de5f12d5e2f1399c7edb3a431e791ef4711289` package passed 24 native checks, 59 Java tests and 152 DOM tests. Chrome at 390px and 320px observed the approved action from both management entries. The DOM fixture verified a lost approval response reuses its original request ID and committed task revision. Both SQL targets finished at the parked epoch and the candidate Worker remained stopped. [Global controller guide](../en/global-control.md#fence-the-parked-sql-targets) · [Manifest](baseline.json)
+
+### Public SQL Agent handoff and Worker continuity
+
+The `0c2e231f473a3a6546a221abcc188305202e4d3d1d77f26c680f830722e0d933` package passed 31 native checks, 94 Java tests and 154 DOM tests. The real console committed the same bound ownership request without starting the candidate. After an administrator fenced both SQL targets, a changed target receipt kept the next approval pending. The same approval took effect after the candidate restarted with the restored receipt. The former Agent and the previous runtime remained fenced. New MySQL CDC reached both SQL targets at the original snapshot generation. Ordinary STOP, Agent restart and approval replay preserved the stopped state. Both Controllers read adopted history and newer reports. [Operator workflow](../en/global-control.md#commit-a-reviewed-owner-change) · [Manifest](baseline.json)

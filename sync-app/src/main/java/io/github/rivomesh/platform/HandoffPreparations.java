@@ -18,6 +18,7 @@ final class HandoffPreparations {
     record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){}
     record TargetFenceRequest(String id,String actor,String actorRevision,
                               JournalWriterAssignment.TargetFence result){}
+    record WorkerStart(String id,String actor,String actorRevision){}
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -29,12 +30,14 @@ final class HandoffPreparations {
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                 HandoffEvidenceAdoption.Receipt evidenceAdoption,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                TargetFenceRequest targetFence){
+                TargetFenceRequest targetFence,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                WorkerStart workerStart){
         Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
              long created,long expires,String releaseId,String releasedBy,long closedAt,WriterActivation activation,
              WriterCommit writerCommit,String executionRequest,HandoffEvidenceAdoption.Receipt evidenceAdoption){
             this(id,task,sequence,phase,actor,actorRevision,evidence,created,expires,releaseId,releasedBy,closedAt,
-                    activation,writerCommit,executionRequest,evidenceAdoption,null);
+                    activation,writerCommit,executionRequest,evidenceAdoption,null,null);
         }
     }
 
@@ -73,12 +76,12 @@ final class HandoffPreparations {
                     case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
-                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
+                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor);
                     default->false;
                 })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
                 ||(evidenceInstalled(p)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null)
-                ||!validTargetFence(p))
+                ||!validTargetFence(p)||!validWorkerStart(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
     }
@@ -110,6 +113,11 @@ final class HandoffPreparations {
         Plan plan=latest(c,task,db.now(c));
         if(plan!=null&&"PREPARED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
         if(plan!=null&&plan.writerCommit!=null)throw new TaskService.Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
+    }
+    void requireCommandAllowed(Connection c,String task)throws Exception{
+        Plan plan=latest(c,task,db.now(c));
+        if(plan!=null&&"WORKER_PROJECTED".equals(plan.phase()))return;
+        requireUnreserved(c,task);
     }
     long reserved(Connection c,String candidate)throws Exception{
         return reservations(c,candidate).getOrDefault(candidate,0L);
@@ -179,7 +187,7 @@ final class HandoffPreparations {
     List<PendingRecipient> pendingRecipient(Connection c,String candidate,String directory,String after,int limit)throws Exception{
         List<PendingRecipient> pending=new ArrayList<>();
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND candidate_id=? AND phase IN ('COMMITTED','PROJECTED','FENCE_PENDING') AND request_id>? ORDER BY request_id LIMIT ?",
+                +" WHERE cluster_id=? AND candidate_id=? AND phase IN ('COMMITTED','PROJECTED','FENCE_PENDING','START_PENDING','WORKER_ADMITTED') AND request_id>? ORDER BY request_id LIMIT ?",
                 cluster,candidate,after,limit);ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
@@ -231,10 +239,10 @@ final class HandoffPreparations {
     }
 
     static boolean evidenceInstalled(Plan plan){
-        return plan!=null&&Set.of("EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED").contains(plan.phase());
+        return plan!=null&&Set.of("EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED").contains(plan.phase());
     }
     private static boolean validTargetFence(Plan plan){
-        if(!Set.of("FENCE_PENDING","TARGETS_FENCED").contains(plan.phase()))return plan.targetFence==null;
+        if(!Set.of("FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED").contains(plan.phase()))return plan.targetFence==null;
         TargetFenceRequest request=plan.targetFence;
         if(request==null||!validExecutionId(plan,request.id)||request.id.equals(plan.executionRequest)
                 ||request.actor==null||request.actorRevision==null)return false;
@@ -267,16 +275,59 @@ final class HandoffPreparations {
     private Plan updateTargetFence(Connection c,Plan plan,String phase,TargetFenceRequest request)throws Exception{
         Plan next=new Plan(plan.id,plan.task,plan.sequence,phase,plan.actor,plan.actorRevision,plan.evidence,plan.created,
                 plan.expires,plan.releaseId,plan.releasedBy,plan.closedAt,plan.activation,plan.writerCommit,
-                plan.executionRequest,plan.evidenceAdoption,request);
+                plan.executionRequest,plan.evidenceAdoption,request,null);
         if(!validTargetFence(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase=?",phase,seal(next),cluster,plan.id,plan.phase)!=1)
             throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
         return next;
     }
 
+    static boolean workerAdmitted(Plan plan){
+        return plan!=null&&("WORKER_ADMITTED".equals(plan.phase)||"WORKER_PROJECTED".equals(plan.phase));
+    }
+    private static boolean validWorkerStart(Plan plan){
+        boolean expected=workerAdmitted(plan)||"START_PENDING".equals(plan.phase);
+        WorkerStart start=plan.workerStart;
+        if(!expected)return start==null;
+        return start!=null&&validExecutionId(plan,start.id)&&!start.id.equals(plan.executionRequest)
+                &&plan.targetFence!=null&&!start.id.equals(plan.targetFence.id)
+                &&start.actor!=null&&start.actorRevision!=null;
+    }
+    Plan bindWorkerStart(Connection c,Plan plan,String request,AccessControl.Principal actor)throws Exception{
+        WorkerStart bound=plan.workerStart;
+        if(bound!=null){
+            if("START_PENDING".equals(plan.phase)&&!bound.id.equals(request)
+                    &&!bound.actorRevision.equals(actor.authorizationRevision))
+                return updateWorkerStart(c,plan,"START_PENDING",new WorkerStart(request,actor.id,actor.authorizationRevision));
+            if(!bound.id.equals(request))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+            if(!bound.actor.equals(actor.id)||!bound.actorRevision.equals(actor.authorizationRevision))
+                throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+            return plan;
+        }
+        if(!"TARGETS_FENCED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUIRED");
+        return updateWorkerStart(c,plan,"START_PENDING",new WorkerStart(request,actor.id,actor.authorizationRevision));
+    }
+    Plan recordWorkerAdmitted(Connection c,Plan plan)throws Exception{
+        if(!"START_PENDING".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+        return updateWorkerStart(c,plan,"WORKER_ADMITTED",plan.workerStart);
+    }
+    Plan recordWorkerProjected(Connection c,Plan plan)throws Exception{
+        if(!"WORKER_ADMITTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+        return updateWorkerStart(c,plan,"WORKER_PROJECTED",plan.workerStart);
+    }
+    private Plan updateWorkerStart(Connection c,Plan plan,String phase,WorkerStart request)throws Exception{
+        Plan next=new Plan(plan.id,plan.task,plan.sequence,phase,plan.actor,plan.actorRevision,plan.evidence,plan.created,
+                plan.expires,plan.releaseId,plan.releasedBy,plan.closedAt,plan.activation,plan.writerCommit,
+                plan.executionRequest,plan.evidenceAdoption,plan.targetFence,request);
+        if(!validWorkerStart(next)||!validTargetFence(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase=?",phase,seal(next),cluster,plan.id,plan.phase)!=1)
+            throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
+        return next;
+    }
+
     Plan retirement(Connection c,String task,String original,String directory)throws Exception{
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED','EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED') ORDER BY ordinal DESC",cluster,task);
+                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED','EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED','START_PENDING','WORKER_ADMITTED','WORKER_PROJECTED') ORDER BY ordinal DESC",cluster,task);
             ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
@@ -295,9 +346,11 @@ final class HandoffPreparations {
         view.put("originalNodeEpoch",Long.toString(e.original.epoch));view.put("candidateNodeEpoch",Long.toString(e.candidate.epoch));
         view.put("cut",e.cut);view.put("custodySha256",e.custody);view.put("evidenceSha256",e.proof);
         view.put("createdAt",Instant.ofEpochMilli(p.created).toString());view.put("expiresAt",Instant.ofEpochMilli(p.expires).toString());
-        view.put("executionAuthorized",false);view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
+        view.put("executionAuthorized",workerAdmitted(p));view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
         view.put("reservedWorkerSlots","PREPARED".equals(p.phase)?1:0);
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
+        if(p.executionRequest!=null&&(p.writerCommit!=null||"PREPARED".equals(p.phase)))
+            view.put("commitRequestId",p.executionRequest);
         if(p.writerCommit!=null){
             view.put("activatedJournalEpoch",Long.toString(p.writerCommit.journalEpoch));
             view.put("committedRevision",p.writerCommit.revision);
@@ -306,6 +359,8 @@ final class HandoffPreparations {
         if(p.evidenceAdoption!=null)view.put("adoptedEvidence",Map.of(
                 "validationReports",p.evidenceAdoption.reports(),"closedReceipts",p.evidenceAdoption.closedReceipts()));
         if("EVIDENCE_ADOPTED".equals(p.phase))view.put("targetFenceAvailable",true);
+        if("TARGETS_FENCED".equals(p.phase))view.put("workerStartAvailable",true);
+        if(p.workerStart!=null)view.put("workerStart",Map.of("requestId",p.workerStart.id()));
         if(p.targetFence!=null)view.put("targetFence",Map.of("requestId",p.targetFence.id(),
                 "destinationsFenced",p.targetFence.result()==null?0:p.targetFence.result().destinations().size()));
         if(p.activation!=null)view.put("writerActivation",Map.of(

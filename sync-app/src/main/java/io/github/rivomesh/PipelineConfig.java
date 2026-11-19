@@ -94,6 +94,11 @@ public final class PipelineConfig {
         return JournalWriterAssignment.fenceParkedRecipient(control,this,previousAssignment,proof,
                 generation->PipelineSources.open(this,generation),authorize);
     }
+    public void admitParkedHandoff(java.sql.Connection control,String previousAssignment,JournalWriterAssignment.CutProof proof,
+            JournalWriterAssignment.FenceAuthorization authorize,JournalWriterAssignment.TargetFence approved)throws Exception{
+        JournalWriterAssignment.admitParkedRecipient(control,this,previousAssignment,proof,
+                generation->PipelineSources.open(this,generation),authorize,approved);
+    }
     public void validate(){
         if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
         Set<String> db=new TreeSet<>();for(String name:databases)if(name==null||name.isEmpty()||name.indexOf('\0')>=0||!db.add(name))throw new IllegalArgumentException("DATABASE_LIST_INVALID");

@@ -85,7 +85,7 @@ public final class JournalWriterAssignment {
                 throw new JdbcJournal.Fenced();
             // Older managed transfers also left their first successor epoch unclaimed.
             if(j.settings.managedWriter&&(MANAGED_PARKED.equals(job.get("state"))
-                    ||p.previousAssignment()!=null&&p.epoch()==epoch))
+                    ||!JdbcJournal.workerAdmitted((int)job.get("format"))&&p.previousAssignment()!=null&&p.epoch()==epoch))
                 throw new JdbcJournal.PipelinePaused();
         }else if(j.settings.writerAssignment!=null)throw new IllegalStateException("WRITER_ASSIGNMENT_NOT_ENROLLED");
     }
@@ -194,6 +194,20 @@ public final class JournalWriterAssignment {
     /** Keeps the shared journal parked while pinning its original SQL target cut. */
     public static TargetFence fenceParkedRecipient(Connection control,PipelineConfig candidate,String previousAssignment,
                                                     CutProof proof,SourceConnection sources,FenceAuthorization authorize)throws Exception{
+        return parkedTargets(control,candidate,previousAssignment,proof,sources,authorize,null);
+    }
+
+    /** The caller also records the signed admission in the same PostgreSQL transaction. */
+    public static void admitParkedRecipient(Connection control,PipelineConfig candidate,String previousAssignment,
+                                             CutProof proof,SourceConnection sources,FenceAuthorization authorize,
+                                             TargetFence approved)throws Exception{
+        if(approved==null)throw new IllegalStateException("HANDOFF_TARGET_FENCE_REQUIRED");
+        parkedTargets(control,candidate,previousAssignment,proof,sources,authorize,approved);
+    }
+
+    private static TargetFence parkedTargets(Connection control,PipelineConfig candidate,String previousAssignment,
+                                              CutProof proof,SourceConnection sources,FenceAuthorization authorize,
+                                              TargetFence approved)throws Exception{
         candidate.validate();
         JdbcJournal.Settings settings=candidate.existingJournalSettings();
         if(!settings.managedWriter||!"EXTERNAL".equals(candidate.journal.mode)||candidate.journal.product!=TargetProduct.POSTGRESQL
@@ -212,6 +226,15 @@ public final class JournalWriterAssignment {
             long sequence=proof.managedWriter().sequence();
             String generation=(String)job.get("generation");
             WriterCut cut=readWriterCut(candidate,journal,control,job,generation,parked,sequence,(String)job.get("captured"),sources);
+            if(approved!=null){
+                Map<String,String> actual=new TreeMap<>();
+                for(var target:cut.targets.entrySet()){
+                    if(target.getValue().epoch!=parked)throw new IllegalStateException("HANDOFF_TARGET_FENCE_CHANGED");
+                    actual.put(target.getKey(),Codec.sha256(Codec.encode(target.getValue())));
+                }
+                if(!approved.equals(new TargetFence(parked,proof.nativeEvidenceSha256(),actual)))
+                    throw new IllegalStateException("HANDOFF_TARGET_FENCE_CHANGED");
+            }
             // A replay may observe an already fenced destination. Restore the old epoch for the signed digest.
             for(SinkAdapter.Checkpoint target:cut.targets.values()){
                 if(target.epoch!=parked-1&&target.epoch!=parked)
@@ -219,6 +242,16 @@ public final class JournalWriterAssignment {
                 target.epoch=parked-1;
             }
             if(!proof.nativeEvidenceSha256().equals(cut.digest()))throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
+            if(approved!=null){
+                deadline.verify();authorize.verify();
+                int format=(int)job.get("format");
+                if(JdbcJournal.execute(control,"UPDATE "+journal.table("job")+" SET run_state='RUNNING',format_version=?"
+                        +" WHERE pipeline_id=? AND run_state=? AND format_version=? AND epoch=? AND owner IS NULL AND lease_until=0",
+                        JdbcJournal.withWorkerAdmission(format),candidate.pipelineId,MANAGED_PARKED,format,parked)!=1)
+                    throw new IllegalStateException("HANDOFF_WORKER_JOURNAL_NOT_PARKED");
+                deadline.verify();authorize.verify();
+                return approved;
+            }
             Map<String,String> receipts=new TreeMap<>();
             for(PipelineConfig.Target target:candidate.targets){
                 deadline.verify();authorize.verify();
@@ -288,6 +321,27 @@ public final class JournalWriterAssignment {
                         ||row.getLong(3)!=cut.sequence()||!Codec.sha256(locked.captured).equals(row.getString(4))
                         ||!proof.nativeEvidenceSha256().equals(row.getString(5)))
                     throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
+            }
+        }
+    }
+
+    public static void verifyAdmittedPlacement(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{
+        ManagedCut expected=proof.managedWriter();
+        if(c.getAutoCommit()||!validId(assignment)||!Codec.sha256(assignment).equals(expected.originalAssignmentSha256()))
+            throw new IllegalStateException("HANDOFF_WORKER_JOURNAL_ADMISSION_CHANGED");
+        String schema=Sql.pg(namespace);
+        String sql="SELECT j.format_version,j.generation,j.epoch,j.run_state,h.node_id,h.generation,h.activated_epoch,h.evidence_hash"
+                +" FROM "+schema+".rm3_job j JOIN "+schema+".rm3_writer_assignment a ON a.pipeline_id=j.pipeline_id JOIN "
+                +schema+".rm3_writer_assignment_history h ON h.pipeline_id=a.pipeline_id AND h.assignment_id=a.assignment_id"
+                +" WHERE j.pipeline_id=? AND a.assignment_id=?";
+        try(PreparedStatement statement=c.prepareStatement(sql)){
+            statement.setQueryTimeout(5);statement.setString(1,task);statement.setString(2,assignment);
+            try(ResultSet row=statement.executeQuery()){
+                if(!row.next()||!JdbcJournal.workerAdmitted(row.getInt(1))||!proof.journalGenerationSha256().equals(Codec.sha256(row.getString(2)))
+                        ||row.getLong(3)<expected.epoch()||MANAGED_PARKED.equals(row.getString(4))||!expected.originalNode().equals(row.getString(5))
+                        ||!row.getString(2).equals(row.getString(6))||row.getLong(7)!=expected.epoch()
+                        ||!proof.nativeEvidenceSha256().equals(row.getString(8)))
+                    throw new IllegalStateException("HANDOFF_WORKER_JOURNAL_ADMISSION_CHANGED");
             }
         }
     }

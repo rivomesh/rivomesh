@@ -366,7 +366,7 @@ class ManagedHandoffTest {
 
     @Test void readinessTransportDerivesPrivateInputAndFencesReleasedOrMalformedResults()throws Exception{
         Map<String,Object> reviewed=verifiedAssessment("handoff_readiness_assessment",fixture.admin);
-        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,"orders");
+        TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_COMMIT_OWNER,"orders");
         request.requestId="handoff_readiness_lookup";request.reference="handoff_readiness_plan";request.revision=revision;
         request.identityHash=(String)reviewed.get("preparationEvidenceSha256");
         conflict("HANDOFF_PREPARATION_CHANGED",()->aQueries.candidateReadiness(request,fixture.admin));

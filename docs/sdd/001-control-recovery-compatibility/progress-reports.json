@@ -11,9 +11,8 @@
     "The Oracle virtual integer column candidate passed 29 Java tests, 152 DOM tests and native opt-in and expression refusal in Oracle Free. Full snapshot and archive replay remain under native verification."
   ],
   "inProgress": [
-    "CP-04 proves fence-to-start continuation, old binary refusal at the admitted journal, and ordinary STOP and restart from the original snapshot.",
-    "SO-07 runs the opt-in integer virtual column native pipeline after correcting the verification query and waiting for a current post-DDL Flashback anchor.",
-    "Automatic owner takeover, partition recovery and drain remain open within CP-04."
+    "CP-04 remaining acceptance covers automatic Agent takeover, network partitions and drain/move.",
+    "SO-07 integer virtual column admission has native preflight and focused tests. Snapshot and archived CDC acceptance continue."
   ],
   "reportContents": [
     "Current totals",
@@ -37,13 +36,15 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish both exact-package native runs and publish their results.",
-    "Continue automatic Agent takeover and partition acceptance after the explicit handoff is verified."
+    "Finish Oracle virtual integer snapshot and restart verification.",
+    "Continue CP-04 automatic takeover and partition acceptance."
   ],
-  "currentCandidateArtifact": "f458c5f066ceceed95b451f8c1de5f12d5e2f1399c7edb3a431e791ef4711289",
-  "currentCandidateScope": "Exact parked target fence console package. 59 Java, 152 DOM and 24 native checks including dual-entry Chrome.",
+  "currentCandidateArtifact": "0c2e231f473a3a6546a221abcc188305202e4d3d1d77f26c680f830722e0d933",
+  "currentCandidateScope": "Public same-store Agent transfer and approved Worker continuation. 31 native checks, 94 Java tests and 154 DOM tests.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "CP-04 public ownership transfer and explicit candidate Worker continuation passed 31 native checks with MySQL 8.4.13 and two SQL targets. Both Controllers replayed the original approvals. The former Agent and earlier binary stayed fenced."
+  ],
   "lastScheduledReportAt": "2026-11-19T10:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",
