@@ -45,6 +45,50 @@ class OracleVirtualNumbersTest {
                 plan.verifySnapshot(List.of(Cell.value("1"),Cell.value("7"),Cell.value("15")))).getMessage());
     }
 
+    private static TableSchema sums(){
+        TableSchema schema=table(false);
+        schema.columns.add(2,number("ADJUSTMENT",12));
+        schema.columns.get(3).generationExpression="\"AMOUNT\" + \"ADJUSTMENT\"";
+        TableSchema.Column difference=number("DIFFERENCE",16);
+        difference.generationKind="VIRTUAL";
+        difference.generationExpression="\"AMOUNT\"-\"ADJUSTMENT\"";
+        schema.columns.add(difference);
+        return schema;
+    }
+
+    @Test void computesSumsAndDifferencesFromEachFullPhysicalImage()throws Exception{
+        TableSchema schema=sums();
+        String target="\"RIVO_APP\".\"RIVO_VIRTUAL_ROWS\"";
+        String redo="update "+target+" set \"AMOUNT\"='-8',\"ADJUSTMENT\"='4'"
+                +" where \"ID\"='1' and \"AMOUNT\"='7' and \"ADJUSTMENT\"='-2'";
+        String undo="update "+target+" set \"AMOUNT\"='7',\"ADJUSTMENT\"='-2'"
+                +" where \"ID\"='1' and \"AMOUNT\"='-8' and \"ADJUSTMENT\"='4'";
+        Change change=OracleRedoDml.decode(schema,"UPDATE",redo,undo);
+        assertEquals(List.of("1","7","-2","5","9"),change.before.stream().map(cell->cell.value).toList());
+        assertEquals(List.of("1","-8","4","-4","-12"),change.after.stream().map(cell->cell.value).toList());
+        var plan=OracleVirtualNumbers.plan(schema);
+        plan.verifySnapshot(List.of(Cell.value("1"),Cell.value(null),Cell.value("2"),Cell.value(null),Cell.value(null)));
+        plan.verifySnapshot(List.of(Cell.value("1"),Cell.value("2"),Cell.value(null),Cell.value(null),Cell.value(null)));
+        plan.verifySnapshot(List.of(Cell.value("1"),Cell.value("999999999999"),Cell.value("999999999999"),
+                Cell.value("1999999999998"),Cell.value("0")));
+    }
+
+    @Test void requiresBothOperandsAndPrecisionForBothInputDomains()throws Exception{
+        TableSchema schema=sums();
+        String target="\"RIVO_APP\".\"RIVO_VIRTUAL_ROWS\"";
+        String redo="insert into "+target+" (\"ID\",\"AMOUNT\") values ('1','2')";
+        String undo="delete from "+target+" where \"ID\"='1' and \"AMOUNT\"='2'";
+        assertEquals("ORACLE_FULL_ROW_IMAGE_REQUIRED",assertThrows(IllegalStateException.class,()->
+                OracleRedoDml.decode(schema,"INSERT",redo,undo)).getMessage());
+        schema.columns.get(4).precision=12;
+        assertEquals("ORACLE_VIRTUAL_PRECISION_UNSUPPORTED",assertThrows(IllegalStateException.class,()->
+                OracleVirtualNumbers.plan(schema)).getMessage());
+        schema.columns.get(4).precision=16;
+        schema.columns.get(2).generationKind="STORED";
+        assertEquals("ORACLE_VIRTUAL_OPERAND_UNSUPPORTED",assertThrows(IllegalStateException.class,()->
+                OracleVirtualNumbers.plan(schema)).getMessage());
+    }
+
     @Test void acceptsNullAndRejectsTruncatedPhysicalImages()throws Exception{
         TableSchema schema=table(false);
         String target="\"RIVO_APP\".\"RIVO_VIRTUAL_ROWS\"";

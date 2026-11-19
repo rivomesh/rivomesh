@@ -109,6 +109,8 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
+  - [x] 有界整数虚拟列的乘法与双物理列加减法，实库验证 Flashback、归档重放和原快照重启。
+  - [ ] 其他表达式、二进制 JSON、LOB 与 RAC 切换。
   - [x] Oracle 26ai 整数虚拟列的全量、归档增量及原快照续传。
   - [ ] 其他生成表达式、原生二进制 JSON、LOB 与 RAC 切换。
 ## Java运行时兼容

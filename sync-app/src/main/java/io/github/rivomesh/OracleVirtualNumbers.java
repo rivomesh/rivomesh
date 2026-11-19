@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Exact integer products over one physical Oracle NUMBER column. */
+/** Exact integer arithmetic over physical Oracle NUMBER columns. */
 final class OracleVirtualNumbers {
     private static final Pattern NAME=Pattern.compile("[A-Z][A-Z0-9_]{0,29}");
-    private static final Pattern PRODUCT=Pattern.compile("\"([A-Z][A-Z0-9_]{0,29})\"\\h*\\*\\h*([1-9][0-9]{0,2})");
+    private static final String OPERAND="\"([A-Z][A-Z0-9_]{0,29})\"";
+    private static final Pattern ARITHMETIC=Pattern.compile(OPERAND
+            +"\\h*(?:\\*\\h*([1-9][0-9]{0,2})|([+-])\\h*"+OPERAND+")");
 
     private OracleVirtualNumbers(){}
 
@@ -32,24 +34,35 @@ final class OracleVirtualNumbers {
 
             String expression=generated.generationExpression;
             if(expression==null||expression.length()>100)throw invalid("ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED");
-            Matcher operands=PRODUCT.matcher(expression.trim());
+            Matcher operands=ARITHMETIC.matcher(expression.trim());
             if(!operands.matches())throw invalid("ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED");
-            String operandName=operands.group(1);
-            int operandIndex;
-            try{operandIndex=table.column(operandName);}
-            catch(IllegalArgumentException missing){throw invalid("ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED");}
-            TableSchema.Column operand=table.columns.get(operandIndex);
-            if(operand.generationKind!=null||!boundedNumber(operand))
-                throw invalid("ORACLE_VIRTUAL_OPERAND_UNSUPPORTED");
-
-            int multiplier=Integer.parseInt(operands.group(2));
-            BigInteger operandLimit=BigInteger.TEN.pow(operand.precision);
-            BigInteger maximum=operandLimit.subtract(BigInteger.ONE).multiply(BigInteger.valueOf(multiplier));
+            Operand left=operand(table,operands.group(1));
+            Operand right=null;
+            int factor;
+            BigInteger maximum;
+            if(operands.group(2)!=null){
+                factor=Integer.parseInt(operands.group(2));
+                maximum=left.maximum().multiply(BigInteger.valueOf(factor));
+            }else{
+                right=operand(table,operands.group(4));
+                factor="-".equals(operands.group(3))?-1:1;
+                maximum=left.maximum().add(right.maximum());
+            }
             if(maximum.compareTo(BigInteger.TEN.pow(generated.precision))>=0)
                 throw invalid("ORACLE_VIRTUAL_PRECISION_UNSUPPORTED");
-            formulas.add(new Formula(index,operandIndex,multiplier,operandLimit.longValueExact(),generated.nullable));
+            formulas.add(new Formula(index,left,right,factor,generated.nullable));
         }
         return new Plan(table.columns.size()-formulas.size(),List.copyOf(formulas));
+    }
+
+    private static Operand operand(TableSchema table,String name){
+        int index;
+        try{index=table.column(name);}
+        catch(IllegalArgumentException missing){throw invalid("ORACLE_VIRTUAL_EXPRESSION_UNSUPPORTED");}
+        TableSchema.Column column=table.columns.get(index);
+        if(column.generationKind!=null||!boundedNumber(column))
+            throw invalid("ORACLE_VIRTUAL_OPERAND_UNSUPPORTED");
+        return new Operand(index,BigInteger.TEN.pow(column.precision).longValueExact());
     }
 
     private static boolean boundedNumber(TableSchema.Column column){
@@ -70,19 +83,30 @@ final class OracleVirtualNumbers {
         }
     }
 
-    private record Formula(int output,int operand,int multiplier,long operandLimit,boolean nullable){
-        String value(List<Cell> row){
-            Cell input=row.get(operand);
+    private record Operand(int index,long limit){
+        BigInteger maximum(){return BigInteger.valueOf(limit-1);}
+
+        Long value(List<Cell> row){
+            Cell input=row.get(index);
             if(input==null||!input.present)throw invalid("ORACLE_FULL_ROW_IMAGE_REQUIRED");
-            if(input.value==null){
-                if(!nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
-                return null;
-            }
+            if(input.value==null)return null;
             long number;
             try{number=Long.parseLong(input.value);}
             catch(NumberFormatException unsupported){throw invalid("ORACLE_VIRTUAL_VALUE_OUT_OF_RANGE");}
-            if(number<=-operandLimit||number>=operandLimit)throw invalid("ORACLE_VIRTUAL_VALUE_OUT_OF_RANGE");
-            return Long.toString(number*multiplier);
+            if(number<=-limit||number>=limit)throw invalid("ORACLE_VIRTUAL_VALUE_OUT_OF_RANGE");
+            return number;
+        }
+    }
+
+    private record Formula(int output,Operand left,Operand right,int factor,boolean nullable){
+        String value(List<Cell> row){
+            Long first=left.value(row);
+            Long second=right==null?Long.valueOf(0):right.value(row);
+            if(first==null||second==null){
+                if(!nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
+                return null;
+            }
+            return Long.toString(right==null?first*factor:first+second*factor);
         }
     }
 

@@ -70,9 +70,9 @@ Oracle `DATE` 映射为 PostgreSQL `timestamp(6) without time zone`，保留年�
 
 Oracle 26ai 任务可在向导选中 **同步受支持的整数虚拟列**，或在 V3 YAML 设置 `source.oracle.allowVirtualNumericColumns: true`。启动前先执行检查。
 
-支持虚拟 `NUMBER(p,0)` 列。目录表达式必须是单个物理 `NUMBER(p,0)` 列乘以 1 至 999 的整数。物理列与虚拟列都须明确声明精度，最大 18 位，结果精度须覆盖物理列的整个取值范围。例如 `AMOUNT NUMBER(12)` 和 `DERIVED NUMBER(16,0) GENERATED ALWAYS AS (AMOUNT * 2) VIRTUAL`。虚拟主键、函数表达式和小数操作数需要单独支持。 [Oracle 列表达式](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Column-Expressions.html)
+支持三种虚拟 `NUMBER(p,0)` 表达式。可以将一个物理整数列乘以 1 至 999 的整数常量，也可以对两个物理整数列求和或求差。操作数和结果都须明确声明精度，最大 18 位，结果精度须覆盖所有操作数的完整取值范围。例如 `AMOUNT NUMBER(12)`、`ADJUSTMENT NUMBER(12)` 和 `TOTAL NUMBER(16,0) GENERATED ALWAYS AS (AMOUNT + ADJUSTMENT) VIRTUAL`。虚拟主键、函数表达式和小数操作数需要单独支持。 [Oracle 列表达式](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Column-Expressions.html)
 
-Worker 在全量阶段读取历史 SCN 的虚拟值并独立核对。增量阶段从归档 redo 和 undo 的物理列分别计算前后镜像。PostgreSQL 接收保存计算值的普通数值列。同一事务内多次更新、无主键重复行和 SQL NULL 保留原有语义。
+Worker 在全量阶段读取历史 SCN 的虚拟值并独立核对。增量阶段从归档 redo 和 undo 的物理列分别计算前后镜像。PostgreSQL 接收保存计算值的普通数值列。同一事务内多次更新和无主键重复行保留原有语义。任一操作数为 SQL NULL 时，计算结果为 SQL NULL。
 
 在创建日志时开启此项。设置会改变源指纹。已有任务应先审阅表结构与断点迁移，再启用此功能。
 

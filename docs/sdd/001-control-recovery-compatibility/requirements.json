@@ -1098,8 +1098,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式开启的整数虚拟列。无主键重复行、SQL NULL 和原快照重启通过。其他生成表达式、原生二进制 JSON、LOB 以及 RAC 故障切换待验。",
-        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in integer virtual columns. Keyless duplicates, SQL NULL and original-snapshot replay passed. Other generated expressions, native binary JSON, LOB and RAC failover remain."
+        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。",
+        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in bounded virtual integer multiplication, addition and subtraction. Keyless duplicates, SQL NULL and original-snapshot archive replay passed. Other expressions, native binary JSON, LOB and RAC failover remain."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
@@ -1119,7 +1119,8 @@
         "sync-app/src/main/java/io/github/rivomesh/OracleArchiveRead.java",
         "config/oracle-source-v3.yml",
         "sync-app/src/main/java/io/github/rivomesh/OracleCdcSource.java",
-        "sync-app/src/main/java/io/github/rivomesh/OracleDate.java"
+        "sync-app/src/main/java/io/github/rivomesh/OracleDate.java",
+        "sync-app/src/main/java/io/github/rivomesh/OracleVirtualNumbers.java"
       ]
     },
     {

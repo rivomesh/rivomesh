@@ -109,6 +109,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Native Flashback, archive replay and original-snapshot restart for bounded virtual integer multiplication and two-column sums and differences.
+  - [ ] Other expressions, binary JSON, LOB and RAC promotion.
   - [x] Oracle 26ai integer virtual columns through snapshot, archived CDC and original-snapshot restart.
   - [ ] Additional generated expressions, native binary JSON, LOB and RAC failover.
 ## Java runtime compatibility

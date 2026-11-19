@@ -224,8 +224,9 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
 
     def virtual_rows(keyed=False):
         table='RIVO_SYNC_VIRTUAL_ROWS' if keyed else 'RIVO_SYNC_VIRTUAL_KEYLESS'
-        amount="""COALESCE("AMOUNT"::text,'<NULL>')||'|'||COALESCE("DERIVED"::text,'<NULL>')"""
-        selected=f'''"ID"||'|'||{amount}''' if keyed else amount
+        values="||'|'||".join(f"""COALESCE("{column}"::text,'<NULL>')"""
+                              for column in ('AMOUNT','ADJUSTMENT','DERIVED','SUM_VALUE','DIFFERENCE'))
+        selected=f'''"ID"||'|'||{values}''' if keyed else values
         order='"ID"' if keyed else '"AMOUNT" NULLS LAST'
         return target_sql(f'SELECT {selected} FROM copy_app."{table}" ORDER BY {order}',checked=False).splitlines()
 
@@ -289,10 +290,15 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     if options.virtual_columns:
         sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE TABLE rivo_app.rivo_sync_virtual_rows (
-                id NUMBER(12) PRIMARY KEY, amount NUMBER(12),
-                derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+                id NUMBER(12) PRIMARY KEY, amount NUMBER(12), adjustment NUMBER(12),
+                derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL,
+                sum_value NUMBER(16,0) GENERATED ALWAYS AS (amount+adjustment) VIRTUAL,
+                difference NUMBER(16,0) GENERATED ALWAYS AS (amount-adjustment) VIRTUAL);
             CREATE TABLE rivo_app.rivo_sync_virtual_keyless (
-                amount NUMBER(12), derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL);
+                amount NUMBER(12), adjustment NUMBER(12),
+                derived NUMBER(16,0) GENERATED ALWAYS AS (amount*2) VIRTUAL,
+                sum_value NUMBER(16,0) GENERATED ALWAYS AS (amount+adjustment) VIRTUAL,
+                difference NUMBER(16,0) GENERATED ALWAYS AS (amount-adjustment) VIRTUAL);
             CREATE TABLE rivo_app.rivo_sync_virtual_unsupported (
                 amount NUMBER(12), derived NUMBER(16,0) GENERATED ALWAYS AS (ABS(amount)) VIRTUAL);
             ALTER TABLE rivo_app.rivo_sync_virtual_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
@@ -300,9 +306,10 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_rows TO C##RIVO_PROBE;
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_keyless TO C##RIVO_PROBE;
             GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_virtual_unsupported TO C##RIVO_PROBE;
-            INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES(1,7);
-            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount) VALUES(3);
-            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount) VALUES(3);
+            INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount,adjustment) VALUES(1,7,-2);
+            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount,adjustment) VALUES(3,2);
+            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount,adjustment) VALUES(3,2);
+            INSERT INTO rivo_app.rivo_sync_virtual_keyless(amount,adjustment) VALUES(4,1);
             COMMIT;''')
         rotate()
         source_tables += ['RIVO_APP.RIVO_SYNC_VIRTUAL_ROWS','RIVO_APP.RIVO_SYNC_VIRTUAL_KEYLESS']
@@ -419,7 +426,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                       'WHERE "ID"=1')=='timestamp without time zone'
                     observed('Flashback preserves Oracle DATE leap day, NULL, seconds and two distinct local clocks across a JVM DST gap')
                 if options.virtual_columns:
-                    required(lambda:virtual_rows(True)==['1|7|14'] and virtual_rows()==['3|6','3|6'],
+                    required(lambda:virtual_rows(True)==['1|7|-2|14|5|9']
+                             and virtual_rows()==['3|2|6|5|1','3|2|6|5|1','4|1|8|5|3'],
                              'Oracle virtual NUMBER snapshot',90)
                     observed('Flashback independently verifies keyed derived values and preserves keyless duplicate multiplicity')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
@@ -451,12 +459,14 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                             WHERE event_at=TO_DATE('2024-03-10 02:17:19','YYYY-MM-DD HH24:MI:SS');
                         COMMIT;""")
                 if options.virtual_columns:
+                    virtual_start=sql('SELECT current_scn FROM v$database;').stdout.strip()
                     sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
                         UPDATE rivo_app.rivo_sync_virtual_rows SET amount=5 WHERE id=1;
-                        UPDATE rivo_app.rivo_sync_virtual_rows SET amount=-8 WHERE id=1;
-                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES (2,NULL);
-                        DELETE FROM rivo_app.rivo_sync_virtual_keyless WHERE ROWNUM=1;
+                        UPDATE rivo_app.rivo_sync_virtual_rows SET amount=-8,adjustment=4 WHERE id=1;
+                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount,adjustment) VALUES (2,NULL,6);
+                        DELETE FROM rivo_app.rivo_sync_virtual_keyless WHERE amount=3 AND ROWNUM=1;
                         COMMIT;''')
+                    virtual_end=sql('SELECT current_scn FROM v$database;').stdout.strip()
                 rotate()
                 required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
                 observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
@@ -472,9 +482,26 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     observed('Archived redo and undo preserve Oracle DATE and NULL, and identify the exact keyless row across the DST gap')
 
                 if options.virtual_columns:
-                    required(lambda:virtual_rows(True)==['1|-8|-16','2|<NULL>|<NULL>'] and virtual_rows()==['3|6'],
+                    required(lambda:virtual_rows(True)==['1|-8|4|-16|-4|-12','2|<NULL>|6|<NULL>|<NULL>|<NULL>']
+                             and virtual_rows()==['3|2|6|5|1','4|1|8|5|3'],
                              'Oracle virtual NUMBER archived redo',60)
-                    observed('Archived same-row updates, SQL NULL and one keyless delete carry computed values on PostgreSQL')
+                    observed('Archived updates and SQL NULL preserve products, sums and differences and delete one exact keyless row')
+                    mined=mine_archive(sql,virtual_start,virtual_end,"""
+                        SELECT operation||'|'||status||'|'||csf||'|'||sql_undo||'|'||sql_redo
+                        FROM v$logmnr_contents
+                        WHERE seg_owner='RIVO_APP' AND src_con_name='FREEPDB1'
+                          AND table_name IN ('RIVO_SYNC_VIRTUAL_ROWS','RIVO_SYNC_VIRTUAL_KEYLESS')
+                          AND operation IN ('UPDATE','INSERT','DELETE')
+                        ORDER BY scn,rs_id,ssn;
+                    """).stdout.splitlines()
+                    records=[line.strip().split('|',4) for line in mined if '|' in line]
+                    (output/'native-virtual-arithmetic-redo.json').write_text(json.dumps(records,indent=2)+'\n')
+                    assert sorted(row[0] for row in records)==['DELETE','INSERT','UPDATE','UPDATE'], records
+                    assert all(row[1:3]==['0','0'] and all(any('"'+name+'"' in image for image in row[3:])
+                               for name in ('AMOUNT','ADJUSTMENT')) for row in records), records
+                    assert all(not any('"'+name+'"' in image for name in ('DERIVED','SUM_VALUE','DIFFERENCE'))
+                               for row in records for image in row[3:]), records
+                    observed('Native redo and undo contain both physical operands and omit all three generated values')
 
                 stop_platform(force=True)
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
@@ -494,8 +521,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         COMMIT;""")
                 if options.virtual_columns:
                     sql('''ALTER SESSION SET CONTAINER=FREEPDB1;
-                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount) VALUES (3,11);
-                        UPDATE rivo_app.rivo_sync_virtual_keyless SET amount=-9;
+                        INSERT INTO rivo_app.rivo_sync_virtual_rows(id,amount,adjustment) VALUES (3,11,NULL);
+                        UPDATE rivo_app.rivo_sync_virtual_keyless SET amount=-9,adjustment=-3 WHERE amount=3;
                         COMMIT;''')
                 rotate()
                 required_sql='SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=4'
@@ -521,8 +548,9 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     observed('Oracle DATE offline insert and keyless update resume after SIGKILL with original snapshot IDs')
 
                 if options.virtual_columns:
-                    required(lambda:virtual_rows(True)==['1|-8|-16','2|<NULL>|<NULL>','3|11|22']
-                             and virtual_rows()==['-9|-18'],'Oracle virtual NUMBER restart',60)
+                    required(lambda:virtual_rows(True)==['1|-8|4|-16|-4|-12','2|<NULL>|6|<NULL>|<NULL>|<NULL>',
+                                                          '3|11|<NULL>|22|<NULL>|<NULL>']
+                             and virtual_rows()==['-9|-3|-18|-12|-6','4|1|8|5|3'],'Oracle virtual NUMBER restart',60)
                     assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                     observed('PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs')
 

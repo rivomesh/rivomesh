@@ -10732,5 +10732,54 @@
     ],
     "reproduce": "mvn -pl sync-app -am -Dtest=JdbcSinkTest -Dsurefire.failIfNoSpecifiedTests=false test",
     "scope": "Conversion decision and pre-DDL guard. Managed Gauss check and actual commercial GaussDB multi-CN/DN acceptance remain."
+  },
+  "oracleSourceVirtualIntegerSumsNative": {
+    "status": "PASS",
+    "native": {
+      "artifactSha256": "61ea0d63cb00acf7b4eb5172f2e3f4b57e075a3551bfbd6b89507e43bc139904",
+      "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+      "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+      "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "textJson": false,
+      "dateValues": false,
+      "virtualEvidence": false,
+      "virtualColumns": true,
+      "startupTimeoutSeconds": 900,
+      "checks": [
+        "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+        "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+        "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+        "A root connection substituted for the PDB is refused before flashback",
+        "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+        "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+        "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+        "An unarchived part of the requested SCN window is refused",
+        "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+        "Preflight requires explicit virtual column admission and refuses function expressions",
+        "Flashback independently verifies keyed derived values and preserves keyless duplicate multiplicity",
+        "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+        "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+        "Archived updates and SQL NULL preserve products, sums and differences and delete one exact keyless row",
+        "Native redo and undo contain both physical operands and omit all three generated values",
+        "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+        "PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs",
+        "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+      ],
+      "status": "PASS",
+      "sourceVersion": "23.26.4.0.0",
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "139593c7cb81366b0ee1b2d3329c2b4be4665a032e0b441d78fe156aa8c2e1f0",
+    "nativeHarnessSha256": "8f6493cfc50838957cdfd57601ff744be63034c00998ccc049bfb18a17001152",
+    "originalStartupTimeout": {
+      "stage": "Oracle image health before dataset",
+      "nativeChecks": 0,
+      "cleanupExitCode": 0,
+      "manifestSha256": "95f188242ffe1e4a156fc93f742af964cec954a34dbec2e2262d296e5a48ca8e"
+    },
+    "integratedArtifactSha256": "4aa6fe1ab7bbb4f10bc1183e93c6d453c634992ef5f518425408d9af47de90c1",
+    "integratedJavaTestsPassed": 45,
+    "scope": "Oracle Free 26ai single PDB to PostgreSQL 17.12 with two physical operands of bounded integer precision, explicit admission and complete archived images. Tests cover NULL, keyless duplicates, exact replay, and read-only DDL refusal.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact /path/to/rivomesh.jar --jdbc-driver /path/to/ojdbc.jar --logminer --pipeline --virtual-columns --startup-timeout 900 --output target/native-oracle-virtual"
   }
 }

@@ -595,3 +595,7 @@ The `9caca6d9160b7e7e8689b90793d854bcd2a378db1ab161a620c58e676316d893` package p
 ### JDBC identity index protection
 
 The `331ecb19e9dca51eeff2455cc343da8a04efd431289f414a432bafd72fc6227a` package passed 31 focused Java tests, including nine JDBC sink tests. The H2 guard fixture rejected explicit global primary indexes and reordered identity GSI before creating the target schema. Ordinary UNIQUE retains the declared identity constraint, and a business GSI with additional columns retains its ordinary-index plan. The optional real-database test was skipped. The bilingual guide defines the commercial distributed GaussDB acceptance. [Index operations](../en/gaussdb-index-policy.md) · [Manifest](baseline.json)
+
+### Oracle virtual integer sums and differences
+
+The `61ea0d63cb00acf7b4eb5172f2e3f4b57e075a3551bfbd6b89507e43bc139904` package passed 18 native checks on Oracle Free 26ai to PostgreSQL 17.12. Flashback and the archived physical operands reproduced integer multiplication, addition and subtraction, including SQL NULL and duplicate keyless rows. A forced Controller and Worker restart recovered archived work with the original snapshot IDs. The first parallel launch timed out during database initialization, and the same package passed the exclusive rerun. The integrated `4aa6fe1ab7bbb4f10bc1183e93c6d453c634992ef5f518425408d9af47de90c1` package passed 45 Java tests and the artifact gate. [Oracle operations](../en/oracle-source.md#integer-virtual-columns) · [Manifest](baseline.json)
