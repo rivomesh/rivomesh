@@ -84,6 +84,8 @@ messaging:
 
 在所属 Agent 的启动配置设置 `kafkaPhysicalOwnershipEvidence: true`，即可核对新的 Kafka 业务发布。Agent 在 Worker 启动时检查共享库的生效配置及投影文件，只交给 Worker 在该配置及所属目录下可用的签名密钥。同一生效配置与日志代次下，首个成功核对的 COMMIT 记录 Kafka Topic UUID、Broker 确认偏移和精确内容摘要。发布检查点先暂存证据，成功 ACK 与正式证据在同一个日志库事务提交。
 
+Linux 和 Docker 部署在执行成员的 platform YAML 根级设置此项，然后重启该成员。手工部署 Kubernetes 时，修改 Agent ConfigMap 内的 `platform.yml`，重新应用清单并滚动更新 Agent。Helm 部署在 Agent Release 或运行 Worker 的共享任务组合 Release 中设置 `platform.kafkaPhysicalOwnershipEvidence=true`。
+
 启用后，Worker 在发布前检查收据表及对应的 SQL 权限。有建表权限时，Worker 可补建缺失的收据表。遇到 `KAFKA_PHYSICAL_JOURNAL_NOT_READY` 时，请检查日志库 schema、暂存表的 SELECT、INSERT、DELETE 权限和历史表的 SELECT、INSERT 权限。MySQL 收据表使用 InnoDB 和 utf8mb4_bin 排序规则，PostgreSQL 协议的日志库使用持久普通表。关闭此选项时，现有日志库可继续处理业务 ACK，无需收据表。
 
 共享控制库为签发授权的 Agent 节点、进程实例、租约代次和租约窗口独立签名，证明授权签发时观察到的成员租约。日志库给发布检查点和订阅 ACK 记录 UTC 毫秒并签名，只比较同一日志库的两个时间值。控制库、日志库和 Kafka 的时钟差异无法证明事件先后。两次写入之间如遇日志库时钟回拨，业务 ACK 仍提交，该条 COMMIT 保持缺证。同一配置重启后可在待入库收据中保留原 Agent 见证。早期物理收据缺少新增的成员及时序证明，同一配置后续新观察到的 COMMIT 可以生成新证明。

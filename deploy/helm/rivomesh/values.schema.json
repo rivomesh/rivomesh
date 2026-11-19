@@ -165,6 +165,9 @@
           "minimum": 1000,
           "maximum": 10000000
         },
+        "kafkaPhysicalOwnershipEvidence": {
+          "type": "boolean"
+        },
         "validationRetentionMinimumDays": {
           "type": "integer",
           "minimum": 0,

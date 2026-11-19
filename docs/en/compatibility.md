@@ -24,9 +24,9 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 |---|---|---|
 | `MYSQL`, `POSTGRESQL` | MySQL 8.4 and PostgreSQL 17.12 native transactional targets with business writes and checkpoint in one commit. | [Relational pipeline](pipeline-v3.md) |
 | `GAUSS` | openGauss 7.0.0-RC3 native transactional profile. Commercial distributed GaussDB constraints, GSI behavior and deployment acceptance are pending. | [Gauss index policy and takeover](gaussdb-index-policy.md) |
-| `DM`, `KINGBASE`, `GBASE_8C` | Initial Java 8 native transactional profiles. Consult each guide for the exact server mode, driver, field conversions and recovery checks. | [DM](dm-v3.md), [Kingbase](kingbase-v3.md), [GBase 8c](gbase8c-v3.md) |
+| `DM`, `KINGBASE`, `GBASE_8C` | The first archived native transactional profiles used Java 8. Consult each guide for the exact server mode, driver, field conversions and recovery checks. | [DM](dm-v3.md), [Kingbase](kingbase-v3.md), [GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`, `GBASE_8S` | Planned separate products. | [Product status](implementation-status.md) |
-| `OCEANBASE` | CE 4.3.5.6 MySQL-mode native transactions, snapshot, CDC, restart and SQL recovery passed on Java 8. Oracle mode and clusters remain pending. | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | The archived CE 4.3.5.6 MySQL-mode profile passed native transactions, snapshot, CDC, restart and SQL recovery on Java 8. Oracle mode and clusters remain pending. | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`, `DORIS`, `HIVE` | First native analytical profiles. Versioned materialization and receipts, with visibility and replay rules defined per engine. | [ClickHouse](clickhouse-v3.md), [Doris](doris-v3.md), [Hive](hive-v3.md) |
 | `KAFKA`, `PULSAR`, `RABBITMQ`, `ROCKETMQ`, `ACTIVEMQ_CLASSIC`, `ACTIVEMQ_ARTEMIS`, `REDIS_STREAMS`, `NATS_JETSTREAM` | Bounded broker profiles with confirmed at-least-once publishing. Deduplicate stable event IDs and track consumer completion separately. | [Messaging](messaging-v3.md), [ActiveMQ Classic](classic-v3.md) |
 

@@ -24,9 +24,9 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 |---|---|---|
 | `MYSQL`、`POSTGRESQL` | MySQL 8.4 和 PostgreSQL 17.12 事务档案已实测。业务写入和目标断点在同一事务提交。 | [关系型目标](pipeline-v3.md) |
 | `GAUSS` | openGauss 7.0.0-RC3 事务档案已实测。商用分布式 GaussDB 的约束、GSI 和部署验收待完成。 | [高斯索引策略与接管](gaussdb-index-policy.md) |
-| `DM`、`KINGBASE`、`GBASE_8C` | 首批 Java 8 事务档案。确切版本、模式、驱动、类型转换和恢复范围见各产品手册。 | [达梦](dm-v3.md)、[金仓](kingbase-v3.md)、[GBase 8c](gbase8c-v3.md) |
+| `DM`、`KINGBASE`、`GBASE_8C` | 首批历史事务档案使用 Java 8。确切版本、模式、驱动、类型转换和恢复范围见各产品手册。 | [达梦](dm-v3.md)、[金仓](kingbase-v3.md)、[GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`、`GBASE_8S` | 独立产品，规划中。 | [实施状态](implementation-status.md) |
-| `OCEANBASE` | CE 4.3.5.6 MySQL 租户在 Java 8 已通过原生事务、全量、增量、重启和 SQL 恢复。Oracle 模式和集群待完成。 | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | CE 4.3.5.6 MySQL 租户的早期 Java 8 档案涵盖原生事务、全量、增量、重启和 SQL 恢复。Oracle 模式和集群待完成。 | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`、`DORIS`、`HIVE` | 首批实库分析档案，采用版本化物化与回执。数据可见性和重放规则按引擎区分。 | [ClickHouse](clickhouse-v3.md)、[Doris](doris-v3.md)、[Hive](hive-v3.md) |
 | `KAFKA`、`PULSAR`、`RABBITMQ`、`ROCKETMQ`、`ACTIVEMQ_CLASSIC`、`ACTIVEMQ_ARTEMIS`、`REDIS_STREAMS`、`NATS_JETSTREAM` | 限定 broker 档案，确认式至少一次投递。消费端按稳定事件 ID 去重，独立记录业务消费进度。 | [消息目标](messaging-v3.md)、[ActiveMQ Classic](classic-v3.md) |
 

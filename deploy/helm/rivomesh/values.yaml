@@ -24,6 +24,7 @@ platform:
   pollMillis: 3000
   autoStart: false
   auditMaxEvents: 1000000
+  kafkaPhysicalOwnershipEvidence: false # Opt in on a shared-task member that runs Workers.
   validationRetentionMinimumDays: 0
   validationArchiveDirectory: ""
   validationArchiveReclaim: false

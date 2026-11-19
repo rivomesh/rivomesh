@@ -2,7 +2,7 @@
 
 For apply failures caused by target drift, see [transaction compensation](transaction-compensation.md).
 
-The bounded RC-03 skip and RC-08 gap verification profiles passed. Java 8, MySQL 8.4 source, original Agent and LOCAL journal, PostgreSQL business target, and PostgreSQL/MySQL control stores are verified. Native MySQL target contracts passed. Its full public skip matrix and other destinations remain in progress. Shared cluster skip is opt-in. Administrators must retain complete evidence and explicitly approve execution. [Evidence](../verification/README.md) · [中文](../zh-CN/transaction-skip.md)
+The first RC-03 skip and RC-08 gap verification profiles passed with a MySQL 8.4 source, the original Agent and LOCAL journal, a PostgreSQL business target, and PostgreSQL/MySQL control stores. Those archived runs used Java 8. Release builds and deployments use Eclipse Temurin 21 LTS. Native MySQL target contracts passed. Its full public skip matrix and other destinations remain in progress. Shared cluster skip is opt-in. Administrators must retain complete evidence and explicitly approve execution. [Evidence](../verification/README.md) · [中文](../zh-CN/transaction-skip.md)
 
 Gap verification API/UI are integrated,with54 native contracts passing on each of PostgreSQL/MySQL;27 real-CDC checks pass with each PG/MySQL control store. See the [operator guide](gap-verification.md) for approval,cancellation and status semantics.
 

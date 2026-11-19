@@ -127,6 +127,37 @@ def manifests():
         arguments = ['helm', 'template', 'rivomesh', chart, '-f', chart+'/values-'+role+'.yaml', '--set', overrides]
         assert subprocess.run(arguments, cwd=ROOT, capture_output=True).returncode != 0, overrides
     print('PASS optional shared custody claim on both Agents with independent private state and owner-only volume permissions')
+    evidence = 'platform.kafkaPhysicalOwnershipEvidence=true'
+    for profile in ('agent', 'global-control'):
+        rendered = command('helm', 'template', 'rivomesh-kafka', chart, '-f',
+                           chart + '/values-' + profile + '.yaml', '--set', evidence)
+        assert '\n    kafkaPhysicalOwnershipEvidence: true\n' in rendered
+    for flags in ((), ('-f', chart + '/values-controller.yaml')):
+        result = subprocess.run(['helm', 'template', 'rivomesh-kafka', chart, *flags, '--set', evidence],
+                                cwd=ROOT, capture_output=True)
+        assert result.returncode != 0
+        assert b'requires a shared-task member that runs Workers' in result.stderr
+    print('PASS optional Kafka ownership evidence on executing shared-task members')
+    oidc = (
+        'oidc.enabled=true,sessions.publicOrigin=https://sync.example.test,'
+        'oidc.issuer=https://identity.example.test/tenant,'
+        'oidc.authorizationEndpoint=https://identity.example.test/tenant/authorize,'
+        'oidc.tokenEndpoint=https://identity.example.test/tenant/token,'
+        'oidc.clientId=fixture-client,oidc.keyId=fixture-key,oidc.rsaPublicKey=fixture-public-key,'
+        'oidc.existingSecret=fixture-oidc'
+    )
+    rendered = command('helm', 'template', 'rivomesh-oidc', chart, '-f', chart + '/values-controller.yaml',
+                       '--set', oidc)
+    assert 'oidc:' in rendered and 'clientSecret: "${RIVOMESH_OIDC_CLIENT_SECRET}"' in rendered
+    assert 'name: RIVOMESH_OIDC_CLIENT_SECRET' in rendered and 'name: "fixture-oidc"' in rendered
+    assert 'key: "client-secret"' in rendered
+    for role, invalid in (('agent', ''), ('controller', ',sessions.secureCookie=false'),
+                          ('controller', ',sessions.publicOrigin=http://sync.example.test')):
+        flags = ['-f', chart + '/values-' + role + '.yaml', '--set', oidc + invalid]
+        result = subprocess.run(['helm', 'template', 'rivomesh-oidc', chart, *flags],
+                                cwd=ROOT, capture_output=True)
+        assert result.returncode != 0 and b'oidc requires a shared-task Controller' in result.stderr
+    print('PASS OIDC Controller Helm configuration uses a Secret reference and requires HTTPS session settings')
     reviewed=command('helm','template','rivomesh-review',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-review.yaml')
     assert 'recoveryReview: true' in reviewed and 'sharedTasks: true' in reviewed
     committed=command('helm','template','rivomesh-commit',chart,'-f',chart+'/values-controller.yaml','-f',chart+'/values-recovery-commit.yaml')

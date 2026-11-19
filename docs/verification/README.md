@@ -654,9 +654,9 @@ Eight retention tests and 13 exporter tests validate exact archive bytes, an ind
 
 The `987f005cac585c68b334f506a66897cf227f2d5774901d933987be54f2be9c38` candidate passed 37 Java tests and 11 native checks. PostgreSQL 17.12 `NUMERIC(4,-2)` and `NUMERIC(2,4)` retained their stored values in PostgreSQL 17.12 and MySQL 8.4.13. The same publication had been rejected by the previous binary without creating a logical slot. The candidate preserved 65-digit values, SQL NULL, keys and exact keyless multiplicities across a Worker SIGKILL. A transaction containing NaN kept its entire batch unapplied and preserved the capture LSN and both SQL receipts. [Operations](../en/postgresql-source.md#exact-numeric-values) · [Manifest](baseline.json)
 
-### Optional Java 17 build and native rolling replacement
+### Archived Java 17 build and native rolling replacement
 
-Corretto 17.0.19 packaged the `5a4a26bb861e33217050a22555ae4d449470b089fff864553e60a0884dd0a8ac` bundle. It passed 627 application tests with 35 optional skips. The package gate checks Java 17 class-file compatibility. Twelve native checks observed both Controllers, the Agent and the Worker on ARM64 Temurin 17.0.21. A MySQL 8.4.13 source fed both PostgreSQL and MySQL, and rolling replacement retained the GTID, snapshots and STOP receipt. This is the explicit `-Pjava17` bundle. The standard release is built for Java 21. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
+Corretto 17.0.19 packaged the `5a4a26bb861e33217050a22555ae4d449470b089fff864553e60a0884dd0a8ac` bundle. It passed 627 application tests with 35 optional skips. The package gate checks Java 17 class-file compatibility. Twelve native checks observed both Controllers, the Agent and the Worker on ARM64 Temurin 17.0.21. A MySQL 8.4.13 source fed both PostgreSQL and MySQL, and rolling replacement retained the GTID, snapshots and STOP receipt. This archived bundle used the former Maven profile. Build and run the current release with Eclipse Temurin 21 LTS. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
 
 ### Durable conditional Kafka notice approval
 
@@ -682,7 +682,7 @@ The `b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3` package p
 
 The `6f148bba` candidate passed 13 native checks. A PostgreSQL target row lock prevented it from committing while the MySQL target committed and reached journal ACK 2. Cutting the original Agent's control and journal path isolated its Worker. The PostgreSQL blocked transaction rolled back after that Worker exited. The same Agent reconnected and completed queued STOP. Explicit START filled only the missing PostgreSQL delivery. Both target logs recorded exactly one insert and one update, the MySQL receipt and source cut remained unchanged, and both old leases were rejected. The verification manifest records exact hashes and prior fixture failures. [Operations](../en/global-control.md#asymmetric-control-network-partition) · [Manifest](baseline.json)
 
-### Java 17 MySQL asynchronous source promotion
+### Archived Java 17 MySQL asynchronous source promotion
 
 The `393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24` bundle passed nine native checks on ARM64 Temurin 17.0.21. MySQL 8.4.13 replica and authorization checks kept it read-only during the primary outage. Both management entries reported the source fault and preserved both cuts. External promotion let the Agent consume the promoted GTID once on each SQL target. Original configuration and snapshots stayed in use. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
 

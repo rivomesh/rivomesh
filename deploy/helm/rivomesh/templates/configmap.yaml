@@ -2,6 +2,7 @@
 {{- if and .Values.cluster.recoverySkip (not .Values.cluster.recoveryCommit) }}{{ fail "cluster.recoverySkip requires recoveryCommit" }}{{ end }}
 {{- if and .Values.cluster.sharedTasks (or (not .Values.cluster.enabled) (not .Values.cluster.sharedAccess)) }}{{ fail "cluster.sharedTasks requires enabled sharedAccess" }}{{ end }}
 {{- if and .Values.cluster.recoveryReview (or (not .Values.cluster.enabled) (not .Values.cluster.sharedTasks)) }}{{ fail "cluster.recoveryReview requires enabled sharedTasks" }}{{ end }}
+{{- if and .Values.platform.kafkaPhysicalOwnershipEvidence (or (not .Values.cluster.enabled) (not .Values.cluster.sharedTasks) (eq .Values.cluster.role "CONTROLLER")) }}{{ fail "platform.kafkaPhysicalOwnershipEvidence requires a shared-task member that runs Workers" }}{{ end }}
 {{- if .Values.cluster.handoffEvidenceClaim }}
 {{- if not (and .Values.cluster.enabled .Values.cluster.sharedTasks .Values.cluster.separateExecution (eq .Values.cluster.role "AGENT")) }}{{ fail "cluster.handoffEvidenceClaim requires a separate shared-task Agent" }}{{ end }}
 {{- if not .Values.persistence.existingClaim }}{{ fail "cluster.handoffEvidenceClaim requires a preprovisioned private persistence.existingClaim" }}{{ end }}
@@ -68,6 +69,9 @@ data:
     pollMillis: {{ .Values.platform.pollMillis }}
     autoStart: {{ .Values.platform.autoStart }}
     auditMaxEvents: {{ .Values.platform.auditMaxEvents | int }}
+    {{- if .Values.platform.kafkaPhysicalOwnershipEvidence }}
+    kafkaPhysicalOwnershipEvidence: true
+    {{- end }}
     {{- if gt (int .Values.platform.validationRetentionMinimumDays) 0 }}
     validationRetentionMinimumDays: {{ .Values.platform.validationRetentionMinimumDays | int }}
     {{- end }}
