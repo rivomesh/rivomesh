@@ -85,6 +85,16 @@ window.RivomeshRecovery=(()=>{
      ['kafkaReceiptFailed',failure.failedSequence],['kafkaNoticePayloadSha',plan.payloadSha256],['kafkaNoticePlanSha',data.approvalSha256]])
      details.append(label('dt',key),text('dd',value));
     result.append(label('p','KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED'),details);
+    const coverage=data.catalogCoverage;
+    const coverageCodes={
+     KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'VERIFIED_SINGLETON',
+     KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'CONFLICT',
+     KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'INCOMPLETE',
+     KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'INCOMPLETE',
+     KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING:'INCOMPLETE'
+    };
+    if(coverage&&Object.hasOwn(coverageCodes,coverage.code)&&coverageCodes[coverage.code]===coverage.status)
+     result.append(label('p',coverage.code));
    }catch(error){if(current()&&section.isConnected)result.append(text('p',error.message,'error'));}
    finally{button.disabled=false;}
   };
@@ -519,6 +529,11 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticePreview:'核对 Kafka 通知计划',kafkaNoticeControlTopic:'专用控制 Topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'通知内容摘要',kafkaNoticePlanSha:'计划摘要',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'发布受阻。专用 Topic 的全局归属尚未确认。',
+  KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'已核对唯一任务及其唯一配置版本中的 Kafka 目标。',
+  KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'业务 Topic 与专用通知 Topic 指向同一物理资源。',
+  KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'所属节点未提供 Kafka 原生 Topic 标识。',
+  KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'历史配置仍需补齐物理 Topic 归属证据。',
+  KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING:'其他受管任务或 Kafka 目标仍需补齐物理 Topic 归属证据。',
   KAFKA_NOTICE_PREDECESSOR_REFRESH_REQUIRED:'请在当前任务配置下重新核对 Kafka 回执。',
   PRECEDING_KAFKA_RECEIPTS_VERIFIED:'已核对前一笔 Kafka 回执。',
   KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'发现后续事务发布记录，无法确认当前投递状态。',
@@ -538,6 +553,11 @@ window.RivomeshRecovery=(()=>{
   kafkaNoticePreview:'Review Kafka notice plan',kafkaNoticeControlTopic:'Dedicated control topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'Notice payload digest',kafkaNoticePlanSha:'Plan digest',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'Publication is blocked until dedicated topic ownership is verified globally.',
+  KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED:'Verified the Kafka destination in the sole managed task and its only configuration version.',
+  KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION:'The business topic and dedicated control topic identify the same physical resource.',
+  KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING:'The task owner did not provide native Kafka topic identity evidence.',
+  KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING:'Historical configurations still require physical topic evidence.',
+  KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING:'Other managed tasks or Kafka destinations still require physical topic evidence.',
   KAFKA_NOTICE_PREDECESSOR_REFRESH_REQUIRED:'Review the Kafka receipts again using the current task configuration.',
   PRECEDING_KAFKA_RECEIPTS_VERIFIED:'Verified the preceding Kafka receipts.',
   KAFKA_RECOVERY_PUBLICATION_UNCERTAIN:'A later publication is visible and its delivery state is uncertain.',

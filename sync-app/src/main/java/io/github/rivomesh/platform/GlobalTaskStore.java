@@ -198,6 +198,18 @@ final class GlobalTaskStore {
             c.setAutoCommit(false);AccessControl.Principal actor=authorize(c,supplied);root(c);Record record=read(c,id);scope(actor,id,record.owner,false);T result=work.run(c,record,actor);c.commit();return result;
         }catch(SQLException failure){throw new ControlStore.Unavailable();}
     }
+    /** Called inside transaction(), with the validated authority root held for the entire check. */
+    boolean singleRegisteredTask(Connection c,Record task)throws SQLException {
+        if(task.sequence!=1)return false;
+        try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);
+            ResultSet r=p.executeQuery()){
+            if(!r.next()||r.getLong(1)!=1)return false;
+        }
+        try(PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("task_authority")+" WHERE cluster_id=? AND task_id<>? LIMIT 1",
+                cluster,task.id);ResultSet r=p.executeQuery()){
+            return !r.next();
+        }
+    }
     HandoffPreparations preparations(){return preparations;}
     void advance(Connection c,Record record)throws Exception{preparations.requireUnreserved(c,record.id);record.revision=UUID.randomUUID().toString();db.update(c,"UPDATE "+db.table("task_authority")+" SET revision=?,record_hash=? WHERE cluster_id=? AND task_id=?",record.revision,recordSignature(record),cluster,record.id);}
     void applied(Connection c,Record record,String version)throws Exception{

@@ -80,6 +80,8 @@ messaging:
 
 可用 `tests/kafka-cluster-run.py --only-managed-notice-plan` 在两个管理入口和真实 Kafka 集群上验证只读计划流程。
 
+预览的 `catalogCoverage` 单独描述管理目录的物理归属证据。`VERIFIED_SINGLETON` 表示目录仅登记一项任务，该任务唯一保留的配置仅包含一个 Kafka 目标。任务当前所属节点会按 Kafka 集群和 Topic UUID 核对业务与通知 Topic 的物理标识，管理面会再次核对所属节点、修订号和生效配置。标识相同返回 `CONFLICT`。存在多项任务、多个 Kafka 目标、历史配置或所属节点缺少证据时，返回 `INCOMPLETE`。这些状态反映核对当时的管理目录，所有预览仍会阻止发布。
+
 Temurin 21 下的五项实测覆盖分区 Leader 强杀后选主、ISR 只剩一个时元数据仍可提交且发布回执停在序列 2，以及恢复 Broker 后复用原事务续传到序列 3。消费者从位点 7 重开，暂存六条待处理记录并提交到 13。新消费者确认没有剩余记录，13 条原始事件正文仍可读取。
 
 ```sh

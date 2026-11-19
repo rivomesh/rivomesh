@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ManagedKafkaRecoveryReviewTest {
     private static final String TASK="/api/tasks/job";
     private static final String ID="review_kafka_1234";
+    private static final String NEW_REVIEW="replacement_kafka_review_1234";
     private static final String OPERATOR="kafka-recovery-operator-at-least-32-bytes";
     private static final String NOTICE_TOPIC_ID="cKtKfC5KQGq-qM1RDCb_3w";
     @TempDir Path directory;
@@ -27,6 +28,8 @@ class ManagedKafkaRecoveryReviewTest {
     static final class Backend extends ManagedCommitTest.Backend {
         volatile boolean uncertain;
         volatile int planned;
+        volatile String businessIdentity=Codec.sha256("test topic");
+        volatile String controlIdentity=Codec.sha256("test control topic");
 
         @Override public KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String target,long generation)throws Exception{
             assertEquals("job",task.jobId);
@@ -48,7 +51,7 @@ class ManagedKafkaRecoveryReviewTest {
             planned++;
             assertEquals("b",scope.ownerNodeId());
             assertEquals("legacy-admin",administrator.actorId());
-            assertEquals(ID,predecessor.requestId());
+            assertTrue(List.of(ID,NEW_REVIEW).contains(predecessor.requestId()));
             assertEquals("control.events",control.topicName());
             assertEquals(NOTICE_TOPIC_ID,control.topicId());
             var proof=predecessor.observation();
@@ -57,7 +60,8 @@ class ManagedKafkaRecoveryReviewTest {
                     proof.originalFailure().contentSha256());
             return new KafkaNoticePlanning.Prepared(scope,administrator,predecessor.requestId(),
                     predecessor.actorId(),Codec.sha256(Codec.encode(predecessor)),control,failure,
-                    Codec.sha256("test notice id"),Codec.sha256("test notice payload"));
+                    Codec.sha256("test notice id"),Codec.sha256("test notice payload"),
+                    controlIdentity==null?null:new KafkaNoticePlanning.CatalogIdentity(businessIdentity,controlIdentity));
         }
     }
 
@@ -172,6 +176,8 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals("KAFKA_NOTICE_PLAN_REVIEWED",body.path("status").asText());
             assertFalse(body.path("executionAuthorized").asBoolean(true));
             assertEquals("KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",body.path("publicationBlockCode").asText());
+            assertEquals("VERIFIED_SINGLETON",body.path("catalogCoverage").path("status").asText());
+            assertEquals(Codec.sha256("test topic"),body.path("plan").path("catalogIdentity").path("businessTopicSha256").asText());
             assertEquals("legacy-admin",body.path("plan").path("administrator").path("actorId").asText());
             assertEquals(NOTICE_TOPIC_ID,body.path("plan").path("controlTopic").path("topicId").asText());
             assertEquals("7",body.path("plan").path("failure").path("failedSequence").asText());
@@ -181,7 +187,45 @@ class ManagedKafkaRecoveryReviewTest {
             assertEquals(revision,fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText());
             assertEquals(1,backend.planned);
             assertTrue(fixture.get(api,"/api/audit",PlatformTest.TOKEN).toString().contains("POST_KAFKA_NOTICE_PLAN"));
+            assertEquals(body,noticePlan(fixture.base(two),path,plan));
+            backend.controlIdentity=null;
+            assertEquals("KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            backend.controlIdentity=backend.businessIdentity;
+            assertEquals("KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            backend.controlIdentity=Codec.sha256("test control topic");
+            backend.businessIdentity=Codec.sha256("another topic");
+            PlatformTest.Response changed=PlatformTest.http(api,path,PlatformTest.TOKEN,plan.toString(),null);
+            assertEquals(409,changed.status,changed.text);
+            assertEquals("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED",Model.JSON.readTree(changed.text).path("code").asText());
+            backend.businessIdentity=Codec.sha256("test topic");
+            fixture.create(api,"another","b");
+            assertEquals("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING",noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
+            String configuration=TASK+"/configuration";
+            JsonNode before=fixture.get(api,configuration,PlatformTest.TOKEN);
+            ObjectNode edit=Model.JSON.createObjectNode().put("expectedRevision",revision);
+            ObjectNode config=((ObjectNode)before.path("config")).deepCopy();
+            ((ObjectNode)config.path("source")).put("password","replacement-fixture-source");
+            edit.set("config",config);
+            var update=PlatformConfigurationTest.request(api,configuration,"PUT",PlatformTest.TOKEN,edit.toString(),"edit_notice_config_1234");
+            assertEquals(202,update.status,update.text);
+            PlatformTest.await(()->fixture.completed(api,"job","edit_notice_config_1234"));
+            assertEquals(202,post(api,request(fixture,api),NEW_REVIEW,PlatformTest.TOKEN).status);
+            awaitCode(fixture,api,NEW_REVIEW,KafkaRecoveryReview.VERIFIED);
+            String newRevision=fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText();
+            plan.put("expectedRevision",newRevision);
+            PlatformTest.Response oldPlan=PlatformTest.http(api,path,PlatformTest.TOKEN,plan.toString(),null);
+            assertEquals(409,oldPlan.status,oldPlan.text);
+            assertEquals("KAFKA_NOTICE_PREDECESSOR_SCOPE_CHANGED",Model.JSON.readTree(oldPlan.text).path("code").asText());
+            plan.put("predecessorRequestId",NEW_REVIEW);
+            assertEquals("KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING",
+                    noticePlan(api,path,plan).path("catalogCoverage").path("code").asText());
         }
+    }
+
+    private static JsonNode noticePlan(String api,String path,ObjectNode request)throws Exception{
+        PlatformTest.Response result=PlatformTest.http(api,path,PlatformTest.TOKEN,request.toString(),null);
+        assertEquals(200,result.status,result.text);
+        return Model.JSON.readTree(result.text);
     }
 
     @Test void optionalControlTopicIsDistinctFromEveryTaskBusinessTopicAndClaimsKnownSharedBootstrapAliases()throws Exception{

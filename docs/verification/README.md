@@ -547,3 +547,7 @@ The `08e755568ee40d57d8e4ccf776a3974bd02c9d6130a686843e428c10734a9e34` release p
 ### Parked Agent handoff with external evidence and mixed-runtime fencing
 
 The `45bcb211eb41891d4b3b9142b639e2e6f8c274c2e49b6217ab688cdce5a2dc06` package passed 24 native checks, including two real Chrome checks across both management entries. The candidate reopened its stopped configuration and installed the original reports and closed operation receipts. The other Controller replayed the bound request after process exit. The journal parked the successor and refused direct Worker launch and generic resume from both the previous and current binaries. The original Agent could not reclaim the journal. Exact source and SQL cuts were preserved through both restarts. The integrated candidate also passed 115 Java tests, 150 DOM tests and 25 configuration examples. [Operator status](../en/global-control.md#assess-transfer-to-another-agent) · [Manifests](baseline.json)
+
+### Native physical Kafka Topic evidence for managed notice preview
+
+The `7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275` package passed 55 Java tests, 150 DOM tests and three native Kafka checks. Both Controllers returned the same signed notice plan with the observed business and control Topic identity digests. Two configured Kafka destinations returned the explicit missing-evidence result. The dedicated Topic stayed at offset zero while business, healthy peer and consumer positions remained unchanged during review. [Operations](../en/messaging-v3.md) · [Manifest](baseline.json)

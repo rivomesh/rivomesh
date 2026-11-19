@@ -38,13 +38,14 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
         this.target=target;
     }
 
-    void inspectControlTopic(Plan plan)throws Exception{
+    String inspectControlTopic(Plan plan)throws Exception{
         requireTarget(plan);
         Admin admin=Admin.create(KafkaMessagePublisher.connectionProperties(target));
         try{
             long deadline=until();
-            requireTopic(admin,plan,true,deadline);
-            requireTopic(admin,plan,false,deadline);
+            String identity=requireTopic(admin,plan,true,deadline);
+            if(!identity.equals(requireTopic(admin,plan,false,deadline)))throw rejected("KAFKA_NOTICE_CONTROL_TOPIC_CHANGED");
+            return identity;
         }
         finally{admin.close(CLOSE);}
     }
@@ -181,7 +182,7 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
             throw rejected("KAFKA_NOTICE_CONTROL_TOPIC_REQUIRED");
     }
 
-    private void requireTopic(Admin admin,Plan plan,boolean profile,long until)throws Exception {
+    private String requireTopic(Admin admin,Plan plan,boolean profile,long until)throws Exception {
         String name=plan.topic().name(),cluster=await(admin.describeCluster().clusterId(),until);
         TopicDescription topic=await(admin.describeTopics(List.of(name)).allTopicNames(),until).get(name);
         if(cluster==null||!Codec.sha256("KAFKA:"+cluster).equals(plan.topic().clusterSha256())
@@ -189,7 +190,8 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
                 ||topic.partitions().size()!=1||topic.partitions().getFirst().partition()!=0
                 ||topic.partitions().getFirst().replicas().size()<3)
             throw rejected("KAFKA_NOTICE_CONTROL_TOPIC_CHANGED");
-        if(!profile)return;
+        String identity=KafkaRecoveryReview.topicIdentity(cluster,topic.topicId());
+        if(!profile)return identity;
         ConfigResource resource=new ConfigResource(ConfigResource.Type.TOPIC,name);
         List<ConfigResource> resources=new ArrayList<>();
         resources.add(resource);
@@ -208,6 +210,7 @@ final class KafkaNoticeBroker implements KafkaRecoveryNotice.Broker {
             if(!"false".equals(value(result.get(broker),"auto.create.topics.enable")))
                 throw rejected("KAFKA_NOTICE_AUTOCREATION_MUST_BE_DISABLED");
         }
+        return identity;
     }
 
     private static boolean messageLimit(String value){

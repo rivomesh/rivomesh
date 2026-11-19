@@ -581,6 +581,15 @@ public final class ReplicatedKafkaAcceptance {
                             &&proof.path("originalFailure").path("contentSha256").asText().equals(failedTransaction.path("contentSha256").asText())
                             &&plan.path("payloadSha256").asText().matches("[0-9a-f]{64}")
                             &&planned.path("approvalSha256").asText().matches("[0-9a-f]{64}"),"Native notice authorization or failure scope changed");
+                    JsonNode coverage=planned.path("catalogCoverage");
+                    require("INCOMPLETE".equals(coverage.path("status").asText())
+                            && "KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING".equals(coverage.path("code").asText()),
+                            "A second Kafka destination must retain the managed ownership publication block");
+                    require(plan.path("catalogIdentity").path("businessTopicSha256").asText()
+                            .equals(proof.path("observedTopicIdentitySha256").asText())
+                            && plan.path("catalogIdentity").path("controlTopicSha256").asText()
+                                    .equals(Codec.sha256(((State)report.get("cluster")).clusterId()+"/"+control.topicId)),
+                            "Managed Topic identity is not bound to the exact observed native UUIDs");
                     report.put("noticePlan",planned);
                 }
                 report.put("brokerEndAfterReview",consumer.endOffsets(PARTITIONS,API_TIMEOUT).get(PARTITION));

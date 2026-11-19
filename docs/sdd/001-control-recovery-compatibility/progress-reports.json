@@ -16,11 +16,9 @@
     "Removed 170 generated output files totaling 2,936,795,719 logical bytes from completed runs while retaining final packages, native manifests, active files and user data."
   ],
   "inProgress": [
-    "CP-04 and LG-05 signed STOPPED evidence adoption passed 20 native checks, 101 integrated Java and 148 integrated DOM tests. Native verification of the new durable parked journal fence is running before publication.",
-    "SO-06 PostgreSQL publication drift review for a paused Relation change is implemented in a scoped candidate. The focused Java package and 147 DOM tests passed. Native verification is queued behind the Agent test.",
-    "RC-10 native ownership prerequisites for explicit Kafka notice dispatch are in implementation. Global physical Topic ownership remains open.",
-    "SO-07 Oracle archived SQL_REDO/UNDO retains physical operands across two same-row changes, NULL and keyless deletion. The generated value is absent in those statements. Independent virtual-column and Flashback checks remain in scope.",
-    "LG-10 external identity, automated immutable audit storage, source rights and release notices remain open."
+    "CP-04 explicit Candidate Worker activation awaits native target-epoch fencing and authorized single admission.",
+    "RC-10 broader durable physical Kafka ownership and approved publication require coverage of all active and recoverable configurations.",
+    "SO-07 Oracle virtual NUMBER integration and Worker restart follow the bounded native feasibility result."
   ],
   "reportContents": [
     "Current totals",
@@ -51,14 +49,20 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Complete the native direct-start and direct-resume refusal proof, publish signed evidence adoption with parked protection, then authorize strictly bounded candidate activation.",
-    "Run the PostgreSQL publication drift fixture and preserve exact checkpoints during advisory review.",
-    "Verify native Kafka Topic policy against known aliases and trusted authority before controlled dispatch."
+    "Implement explicit reviewed Agent activation with native target epoch receipts.",
+    "Extend Kafka identity evidence to multiple managed tasks and retained configurations and separately prove broker-side authority.",
+    "Integrate the bounded Oracle virtual calculation and verify original archive checkpoint resume."
   ],
-  "currentCandidateArtifact": "74c66b4a97404daa04e58d5ea639fc94b99f76d90b11af09b26c51c6ca6c833d",
-  "currentCandidateScope": "Parked dual-Agent native control-journal fence candidate. 102 focused Java tests; native verification pending when reported.",
-  "lastAcceptedPublicWorkflowArtifact": "a9125326fc919655c15d64fa84ebaab0134fb6692ca9562d968f10497cd556c8",
-  "newSinceLastReport": [],
+  "currentCandidateArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
+  "currentCandidateScope": "Latest integrated managed Kafka Topic identity preview. 55 Java, 150 DOM and three native checks.",
+  "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
+  "newSinceLastReport": [
+    "PostgreSQL native read-only publication drift shipped. Eight native checks preserve the pause LSN and destination cut while reviewing current catalog changes.",
+    "Oracle virtual NUMBER feasibility shipped with 12 native observations. Archived physical operands and Flashback are verified. Adapter integration and restart are pending.",
+    "Signed candidate history installation and parked mixed-runtime fencing shipped. 24 native checks include both Agent restarts, two actual browser entries and both versions of direct Worker/restore refusal.",
+    "Managed Kafka native Topic identity preview passed three real checks across four brokers and two Controllers. Second Kafka output requests ownership evidence while every business and consumer cut remains unchanged.",
+    "An additional 94 obsolete or byte-identical generated intermediate files were cleaned, totaling 2,482,469,369 logical bytes."
+  ],
   "lastScheduledReportAt": "2026-11-19T08:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",

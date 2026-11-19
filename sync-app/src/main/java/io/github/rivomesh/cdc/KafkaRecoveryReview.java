@@ -197,12 +197,14 @@ public final class KafkaRecoveryReview {
                             ||consumer.endOffsets(partitions,remaining(until)).get(partition)!=end
                             ||!broker.equals(broker(admin,target,until)))throw rejected("KAFKA_RECOVERY_NATIVE_VIEW_CHANGED");
                     if(!namespaces.equals(receipts.keySet()))throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
-                    return new Proof(Codec.sha256(broker.clusterId()+"/"+broker.topicId()),List.copyOf(receipts.values()));
+                    return new Proof(topicIdentity(broker.clusterId(),broker.topicId()),List.copyOf(receipts.values()));
                 }finally{consumer.close(CLOSE_LIMIT);}
             }finally{admin.close(CLOSE_LIMIT);}
         }catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw interrupted;}
         catch(KafkaException|ExecutionException|TimeoutException unavailable){throw rejected("KAFKA_RECOVERY_NATIVE_READ_UNAVAILABLE");}
     }
+
+    static String topicIdentity(String clusterId,Uuid topicId){return Codec.sha256(clusterId+"/"+topicId);}
 
     private static Broker broker(Admin admin,PipelineConfig.Target target,long until)throws Exception{
         String cluster=admin.describeCluster().clusterId().get(remaining(until).toNanos(),TimeUnit.NANOSECONDS);

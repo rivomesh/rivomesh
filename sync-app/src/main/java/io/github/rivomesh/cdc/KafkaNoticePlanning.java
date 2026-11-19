@@ -1,5 +1,6 @@
 package io.github.rivomesh.cdc;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.cdc.KafkaRecoveryReview.Observation;
 import io.github.rivomesh.cdc.KafkaRecoveryReview.OriginalFailure;
@@ -48,15 +49,23 @@ public final class KafkaNoticePlanning {
     public record FailedTransaction(String targetId,String journalGeneration,String epoch,String errorGeneration,
                                     String acknowledgedSequence,String failedSequence,String contentSha256) {}
 
+    /** Both physical identities were observed by the routed current owner at the same reviewed failure. */
+    public record CatalogIdentity(String businessTopicSha256,String controlTopicSha256) {
+        public CatalogIdentity {
+            if(!FailureEvidence.hash(businessTopicSha256)||!FailureEvidence.hash(controlTopicSha256))
+                throw rejected("KAFKA_NOTICE_CATALOG_IDENTITY_INVALID");
+        }
+    }
+
     public record Prepared(TaskScope task,Administrator administrator,String predecessorRequestId,String predecessorActorId,
                            String predecessorReceiptSha256,TopicReservation controlTopic,FailedTransaction failure,
-                           String noticeId,String payloadSha256) {
+                           String noticeId,String payloadSha256,@JsonInclude(JsonInclude.Include.NON_NULL) CatalogIdentity catalogIdentity) {
         public String approvalSha256(){return Codec.sha256(Codec.encode(this));}
     }
 
     interface NativeReads {
         Observation inspectPredecessor(PipelineConfig config,String target,long errorGeneration)throws Exception;
-        void inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception;
+        String inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception;
     }
 
     private KafkaNoticePlanning(){}
@@ -67,8 +76,8 @@ public final class KafkaNoticePlanning {
             @Override public Observation inspectPredecessor(PipelineConfig cfg,String target,long generation)throws Exception{
                 return KafkaRecoveryReview.inspect(cfg,target,generation);
             }
-            @Override public void inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception{
-                new KafkaNoticeBroker(target).inspectControlTopic(plan);
+            @Override public String inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception{
+                return new KafkaNoticeBroker(target).inspectControlTopic(plan);
             }
         });
     }
@@ -96,6 +105,7 @@ public final class KafkaNoticePlanning {
         KafkaRecoveryNotice.Topic topic=new KafkaRecoveryNotice.Topic(reservation.topicName(),reservation.kafkaClusterSha256(),reservation.topicId());
         String predecessorDigest=predecessor.digest();
         KafkaRecoveryNotice.Plan plan;
+        CatalogIdentity identity;
         try(JdbcJournal journal=new JdbcJournal(config.existingJournalSettings())){
             journal.verifyIdentity(config.fingerprint(),config.subscribers());
             JdbcKafkaNoticeLedger ledger=new JdbcKafkaNoticeLedger(journal);
@@ -103,7 +113,8 @@ public final class KafkaNoticePlanning {
             requireFailure(plan.failure(),observation);
             Observation fresh=reads.inspectPredecessor(config,target.id,errorGeneration);
             if(!samePredecessor(observation,fresh))throw rejected("KAFKA_NOTICE_PREDECESSOR_CHANGED");
-            reads.inspectControlTopic(target,plan);
+            String controlIdentity=reads.inspectControlTopic(target,plan);
+            identity=new CatalogIdentity(fresh.observedTopicIdentitySha256(),controlIdentity);
             if(!plan.equals(ledger.prepare(target.id,errorGeneration,topic,predecessorDigest,()->{})))
                 throw rejected("KAFKA_NOTICE_FAILURE_CHANGED");
         }
@@ -111,7 +122,7 @@ public final class KafkaNoticePlanning {
                 observation.errorGeneration(),observation.acknowledgedSequence(),observation.failedSequence(),
                 original.contentSha256());
         return new Prepared(task,administrator,predecessor.requestId(),predecessor.actorId(),predecessorDigest,
-                reservation,failure,plan.id(),plan.payloadSha256());
+                reservation,failure,plan.id(),plan.payloadSha256(),identity);
     }
 
     /** Both prepared snapshots must come from management, including a fresh owner-side inspection. */

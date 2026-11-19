@@ -2,6 +2,9 @@ package io.github.rivomesh.platform;
 
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.KafkaNoticePlanning;
 import java.sql.Connection;
 import java.util.*;
 
@@ -31,7 +34,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case KAFKA_NOTICE_PLAN:
                 if(request.kafkaNoticePredecessor!=null)throw new IllegalArgumentException("KAFKA_NOTICE_REQUEST_INVALID");
                 request.kafkaNoticePredecessor=commands.kafkaNoticePredecessor(request.taskId,request.reference,request.revision,actor);
-                return queries.await(queries.submit(request,actor),actor);
+                return kafkaNoticePlan(request,actor);
             case HANDOFF_ASSESS:case HANDOFF_LATEST:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return request.kind==TaskRequest.Kind.HANDOFF_ASSESS?handoff.assess(request,actor):handoff.latest(request.taskId,actor);
@@ -105,6 +108,62 @@ final class GlobalTaskPlane implements TaskControlPlane {
         }
         return retained;
     }
+
+    private Map<String,Object> kafkaNoticePlan(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        Map<String,Object> response=queries.await(queries.submit(request,actor),actor);
+        // The owner-query envelope already authenticates this response and fences the producing owner.
+        var plan=Model.JSON.convertValue(response.get("plan"),KafkaNoticePlanning.Prepared.class);
+        var predecessor=request.kafkaNoticePredecessor;
+        if(plan==null||!predecessor.task().equals(plan.task())||!predecessor.administrator().equals(plan.administrator())
+                ||!predecessor.receipt().requestId().equals(plan.predecessorRequestId())
+                ||!Codec.sha256(Codec.encode(predecessor.receipt())).equals(plan.predecessorReceiptSha256())
+                ||!plan.approvalSha256().equals(response.get("approvalSha256"))
+                ||!Boolean.FALSE.equals(response.get("executionAuthorized")))
+            throw new TaskService.Conflict("KAFKA_NOTICE_PLAN_CHANGED");
+        Map<String,Object> coverage=tasks.transaction(request.taskId,actor,(c,task,current)->{
+            if(!task.revision.equals(plan.task().revision())||!task.owner.equals(plan.task().ownerNodeId())
+                    ||!task.directory.equals(plan.task().ownerDirectoryId())
+                    ||!task.configurationVersion.equals(plan.task().configurationVersion())
+                    ||!task.configurationVersion.equals(task.activeConfigurationVersion))
+                throw new TaskService.Conflict("REVISION_CHANGED");
+            var identity=plan.catalogIdentity();
+            if(identity==null)return incompleteCatalog("KAFKA_NOTICE_CATALOG_NATIVE_IDENTITY_MISSING");
+            if(!predecessor.receipt().observation().observedTopicIdentitySha256().equals(identity.businessTopicSha256()))
+                throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
+            int kafkaTargets=kafkaCatalogTargets(tasks.activeYaml(c,task),plan.controlTopic());
+            if(identity.businessTopicSha256().equals(identity.controlTopicSha256()))
+                return Map.of("status","CONFLICT","code","KAFKA_NOTICE_CATALOG_PHYSICAL_TOPIC_COLLISION");
+            if(task.configurationIndex!=1)return incompleteCatalog("KAFKA_NOTICE_CATALOG_RETAINED_REVISION_MISSING");
+            if(kafkaTargets!=1||!tasks.singleRegisteredTask(c,task))
+                return incompleteCatalog("KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING");
+            return Map.of("status","VERIFIED_SINGLETON","code","KAFKA_NOTICE_CATALOG_SINGLE_TASK_VERIFIED");
+        });
+        response.put("catalogCoverage",coverage);
+        return response;
+    }
+
+    private static Map<String,Object> incompleteCatalog(String code){return Map.of("status","INCOMPLETE","code",code);}
+
+    private static int kafkaCatalogTargets(String yaml,KafkaNoticePlanning.TopicReservation reservation)throws Exception{
+        JsonNode config=document(yaml),targets=config.path("targets");
+        if(config.path("formatVersion").asInt()!=3||!reservation.taskId().equals(config.path("pipelineId").asText())||!targets.isArray())
+            throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
+        int count=0;
+        boolean declared=false;
+        for(JsonNode target:targets){
+            if(!"KAFKA".equalsIgnoreCase(target.path("product").asText()))continue;
+            count++;
+            if(!reservation.targetId().equals(target.path("id").asText()))continue;
+            JsonNode notice=target.path("messaging").path("recoveryNotice");
+            declared=reservation.reservationId().equals(notice.path("reservationId").asText())
+                    &&reservation.topicName().equals(notice.path("controlTopic").asText())
+                    &&reservation.kafkaClusterSha256().equals(notice.path("clusterSha256").asText())
+                    &&reservation.topicId().equals(notice.path("topicId").asText());
+        }
+        if(!declared)throw new TaskService.Conflict("KAFKA_NOTICE_CATALOG_IDENTITY_CHANGED");
+        return count;
+    }
+
     private static JsonNode document(String yaml)throws Exception{return new ObjectMapper(new YAMLFactory()).readTree(yaml);}
     private Map<String,Object> preview(String id,JsonNode document,String revision,AccessControl.Principal actor)throws Exception{
         TaskRequest request=TaskRequest.of(TaskRequest.Kind.CONFIG_PREVIEW,id);request.document=document;request.revision=revision;return queries.await(queries.submit(request,actor),actor);

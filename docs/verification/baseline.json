@@ -9853,5 +9853,137 @@
     "configurationExamplesPassed": 25,
     "scope": "Two Controllers and two Agents, MySQL 8.4.13, shared PostgreSQL control and journal, and PostgreSQL and MySQL transactional targets. The accepted private fixture binds one request, parks actual journal format 15, preserves source and targets, adopts original history, refuses old and current direct resume and Worker launch, and verifies the read-only panel in Chrome. Public Worker activation and automatic handoff remain open.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/managed-adoption --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --previous-handoff-runtime /path/to/previous.jar --handoff-adopted-browser /path/to/Chrome"
+  },
+  "kafkaManagedTopicIdentityNative": {
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
+      "harnessSha256": "2cb0c366db03e0d0440483da73c14b869384d1dced9392b9573376588cf41495",
+      "acceptanceSourceSha256": "fcaf6d3332969edb388bb17a0cfaf90945bd6059f9d2c45b1e8cb77b38628636",
+      "checks": [
+        "Two packaged management entries verify both preceding native COMMIT receipts with stable replay and owner-offline lookup",
+        "A native partial BEGIN refuses recovery proof and preserves the original failed payload and checkpoints",
+        "Both management entries return one identical read-only notice plan, with publication blocked and the dedicated topic untouched"
+      ],
+      "phases": {
+        "managed-notice-plan": {
+          "brokerEndAfterReview": 9,
+          "brokerEndBefore": 9,
+          "cluster": {
+            "clusterId": "bxF8_IRPz_IvjWxSCjZsfw",
+            "topicId": "OomeBNdjSLK4TFalXvA2Eg",
+            "leader": 1,
+            "isr": [
+              1,
+              2,
+              4
+            ],
+            "metadataLeader": 3,
+            "metadataHighWatermark": 38
+          },
+          "consumerOffsetAfterReview": 1,
+          "consumerOffsetBefore": 1,
+          "journalAcknowledged": 1,
+          "managedActor": "legacy-admin",
+          "managedHistoricalOwnerOffline": true,
+          "managedOwner": "owner",
+          "managedReplayedAcrossEntries": true,
+          "noticeControlEnd": 0,
+          "noticePlan": {
+            "executionAuthorized": false,
+            "status": "KAFKA_NOTICE_PLAN_REVIEWED",
+            "approvalSha256": "4df5e24d61576b4ac365f0b1ed32469fdbcbf91d937f5d070d51a26566c3b09a",
+            "publicationBlockCode": "KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED",
+            "plan": {
+              "task": {
+                "taskId": "kafka-cluster",
+                "ownerNodeId": "owner",
+                "ownerDirectoryId": "775f8538-5874-4f3f-947d-c8328ec5ef86",
+                "configurationVersion": "3f5f586d-eadf-4c1d-81ab-0c44ef43959e",
+                "revision": "07aa73fe-be95-40a9-933b-69e4fc1a6f90"
+              },
+              "administrator": {
+                "actorId": "legacy-admin",
+                "authorizationRevision": "4137c802-5e2c-4a4e-b03d-31b06f0ac9fa"
+              },
+              "predecessorRequestId": "managed_verified_kafka",
+              "predecessorActorId": "legacy-admin",
+              "predecessorReceiptSha256": "112ba86bd1a353aff3995e5a0c8f53816719e95a8fdee55c75e8c6e148232905",
+              "controlTopic": {
+                "reservationId": "d9d64abe-cc3e-43ff-a352-03a288f58c04",
+                "taskId": "kafka-cluster",
+                "targetId": "kafka",
+                "topicName": "rivomesh-plan-control",
+                "kafkaClusterSha256": "18baad4be37061de304e4ffbd808b5375e5bf276676793ea7dd50e90cf47749f",
+                "topicId": "KmrpBzGcTTa6_UMIC-JT_A"
+              },
+              "failure": {
+                "targetId": "kafka",
+                "journalGeneration": "fixture-generation",
+                "epoch": "2",
+                "errorGeneration": "1",
+                "acknowledgedSequence": "1",
+                "failedSequence": "2",
+                "contentSha256": "3a0ee8cc0c11d917da78f31b45bcbbcf49a6125eda8fd43ae45dea72fc1a2ead"
+              },
+              "noticeId": "aa7c23e94aed5c2534d6f3c14394bae69601286c3cf349b4cfdeedc0a1f11f34",
+              "payloadSha256": "a145e8ed2fa2009f15d981d042557e34f24f1ed4554dc8a9476c35bb36dd9b28",
+              "catalogIdentity": {
+                "businessTopicSha256": "804982909a10dc140177e96573aef2b1af526e8d2918d9a765e49d68621e9928",
+                "controlTopicSha256": "483757d5cb313566a7ba7b7c7e3c7de2771a211dc0810a22415707c7c92ceb38"
+              }
+            },
+            "catalogCoverage": {
+              "code": "KAFKA_NOTICE_CATALOG_MANAGED_TARGETS_MISSING",
+              "status": "INCOMPLETE"
+            }
+          },
+          "noticePlanPartialRefusal": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "partialFailureCode": "KAFKA_RECOVERY_PUBLICATION_UNCERTAIN",
+          "peerAcknowledged": 2,
+          "peerEndAfter": 14,
+          "peerEndBefore": 14,
+          "publicationAcknowledged": 1,
+          "review": {
+            "status": "PRECEDING_KAFKA_RECEIPTS_VERIFIED",
+            "target": "kafka",
+            "observedAt": "2026-11-19T01:33:13.552762846Z",
+            "epoch": "2",
+            "errorGeneration": "1",
+            "acknowledgedSequence": "1",
+            "failedSequence": "2",
+            "observedTopicIdentitySha256": "804982909a10dc140177e96573aef2b1af526e8d2918d9a765e49d68621e9928",
+            "nativeReceipts": [
+              {
+                "namespace": "catalog",
+                "offset": "7",
+                "payloadSha256": "daa592d01e0b388d79df4e4e91c764f04c4bb768a7cf29fe41baf8c825624bcc"
+              },
+              {
+                "namespace": "orders",
+                "offset": "8",
+                "payloadSha256": "2b8cdb46039da84aa9bb5ca94ce21bc631756921e6e907cec69478f456b98589"
+              }
+            ],
+            "originalFailure": {
+              "journalGeneration": "fixture-generation",
+              "contentSha256": "3a0ee8cc0c11d917da78f31b45bcbbcf49a6125eda8fd43ae45dea72fc1a2ead",
+              "kafkaClusterSha256": "18baad4be37061de304e4ffbd808b5375e5bf276676793ea7dd50e90cf47749f"
+            }
+          }
+        }
+      },
+      "images": {
+        "apache/kafka:3.9.2": "sha256:5b8b0495077ca724c06b253f7d94ed27a36a3211c6c6e84ff54a758f109d3d0f",
+        "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+      },
+      "javaVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "47a27545a846a9a29c3cf97ea1af5a186af3aa80244a57caafe90997c6c6359b",
+    "javaTestsPassed": 55,
+    "domTestsPassed": 150,
+    "scope": "Four native Kafka brokers and two packaged management Controllers. Two Kafka outputs in the fixture. Preview binds both observed physical identities, reports missing scope for additional managed output, refuses partial business publication and preserves all offsets, raw evidence and subscription acknowledgements. The reduced singleton coverage has Java tests.",
+    "reproduce": "python3 tests/kafka-cluster-run.py --only-managed-notice-plan --artifact /path/to/rivomesh.jar --output target/kafka-topic-identity"
   }
 }

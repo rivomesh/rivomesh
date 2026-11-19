@@ -82,6 +82,8 @@ Pause the entire task, run a new successful Kafka receipt review, and select **R
 
 Use `tests/kafka-cluster-run.py --only-managed-notice-plan` to exercise the read-only plan through two management entries and a real Kafka cluster.
 
+The preview reports `catalogCoverage` separately from the publication block. `VERIFIED_SINGLETON` covers one registered task whose only retained configuration declares one Kafka destination. The active owner checks the physical identities of that destination and the control topic using the Kafka cluster and Topic UUID. The shared controller checks the owner, revision and active configuration against its authenticated records. A shared identity is a `CONFLICT`. Multiple tasks, multiple Kafka targets, retained configurations or missing owner evidence return `INCOMPLETE`. These states describe the managed catalog at the time of review. Every preview continues to block publication.
+
 ```sh
 python3 tests/kafka-cluster-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar \
   --java-home "$JAVA_HOME" --output target/kafka-cluster-proof

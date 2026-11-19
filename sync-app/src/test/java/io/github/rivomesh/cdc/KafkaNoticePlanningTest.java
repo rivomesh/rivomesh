@@ -77,6 +77,8 @@ class KafkaNoticePlanningTest {
             assertEquals(predecessor.digest(),reviewed.predecessorReceiptSha256());
             assertEquals(reads.plan.id(),reviewed.noticeId());
             assertEquals(reads.plan.payloadSha256(),reviewed.payloadSha256());
+            assertEquals(reads.fresh.observedTopicIdentitySha256(),reviewed.catalogIdentity().businessTopicSha256());
+            assertEquals(Codec.sha256("control topic identity"),reviewed.catalogIdentity().controlTopicSha256());
             assertDoesNotThrow(()->KafkaNoticePlanning.validateApproval(reviewed,reviewed.approvalSha256(),inspect()));
             assertFalse(Codec.encode(reviewed).contains(FailureReviewTest.tx(2).id));
             Journal.FailureReview after=journal.inspectFailure(TARGET,1,100000);
@@ -179,10 +181,11 @@ class KafkaNoticePlanningTest {
             assertEquals(1,generation);
             return fresh;
         }
-        @Override public void inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception{
+        @Override public String inspectControlTopic(PipelineConfig.Target target,KafkaRecoveryNotice.Plan plan)throws Exception{
             controlTopics++;
             this.plan=plan;
             onControl.run();
+            return Codec.sha256("control topic identity");
         }
     }
 }
