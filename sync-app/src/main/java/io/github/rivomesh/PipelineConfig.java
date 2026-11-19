@@ -93,6 +93,9 @@ public final class PipelineConfig {
     public JournalWriterAssignment.CutProof verifyHandoffCut(JournalWriterAssignment.ExpectedCut expected)throws Exception{
         return JournalWriterAssignment.verifyExistingCut(this,expected,generation->PipelineSources.open(this,generation));
     }
+    public void verifyOriginalFreeze(JournalWriterAssignment.CutProof cut,JournalWriterAssignment.OriginalFreeze freeze)throws Exception{
+        JournalWriterAssignment.verifyFrozenOriginal(this,cut,freeze,generation->PipelineSources.open(this,generation));
+    }
     public JournalWriterAssignment.TargetFence fenceParkedHandoff(java.sql.Connection control,String previousAssignment,
             JournalWriterAssignment.CutProof proof,JournalWriterAssignment.FenceAuthorization authorize)throws Exception{
         return JournalWriterAssignment.fenceParkedRecipient(control,this,previousAssignment,proof,

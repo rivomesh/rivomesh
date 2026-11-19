@@ -249,7 +249,13 @@ final class ManagedHandoff {
         SharedHandoffEvidence.Scope scope=new SharedHandoffEvidence.Scope(cluster,task.id,evidence.assessment(),
                 evidence.revision(),evidence.configuration(),evidence.original().directory(),evidence.candidate().directory());
         RawCaptureHandoffStaging.Binding raw=rawCaptureStage(assessment,plan,scope);
-        return new StageRoute(new HandoffStaging.Binding(plan.id(),evidence.proof(),evidence.candidate(),scope,archive),candidate,plan,raw);
+        Object observed=assessment.probe.originalEvidence.get("offlineRecoveryInventory");
+        HandoffRecoveryInventory.ReceiptOnly inventory=null;
+        if(observed!=null&&plan.activation()!=null&&plan.activation().checkedInControlTransaction()){
+            if(raw!=null)throw new TaskService.Conflict("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED");
+            inventory=HandoffRecoveryInventory.validate(observed,scope,archive,closedReceipts(c,task));
+        }
+        return new StageRoute(new HandoffStaging.Binding(plan.id(),evidence.proof(),evidence.candidate(),scope,archive,inventory),candidate,plan,raw);
     }
 
     private static RawCaptureHandoffStaging.Binding rawCaptureStage(Assessment assessment,HandoffPreparations.Plan plan,
@@ -288,6 +294,7 @@ final class ManagedHandoff {
             HandoffPreparations.Plan existing=plans.byRequest(c,request.requestId,now);
             if(existing!=null){
                 requirePlanGrants(actor,task,existing);
+                if(existing.writerFreeze()!=null)throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED");
                 if(!request.requestId.equals(existing.releaseId())||!request.reference.equals(existing.id())
                         ||!actor.id.equals(existing.releasedBy()))throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
                 return HandoffPreparations.summary(existing);
@@ -296,10 +303,147 @@ final class ManagedHandoff {
             if(plan==null)throw new NoSuchElementException("HANDOFF_PREPARATION_NOT_FOUND");
             requirePlanGrants(actor,task,plan);
             if(!request.reference.equals(plan.id()))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+            if("ORIGINAL_FROZEN".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FROZEN");
             plan=plans.release(c,plan,request.requestId,actor,now);
             auditPreparation(c,plan,actor,request.requestId,"MANAGED_HANDOFF_PREPARATION_RELEASED");
             return HandoffPreparations.summary(plan);
         });
+    }
+
+    record FreezeOriginRoute(HandoffPreparations.Plan plan,HandoffStaging.Binding staging,AgentDirectory.Binding original,
+                             SharedHandoffEvidence.ReceiptPlan receipts){}
+    record FreezeOriginProof(HandoffPreparations.Binding original,JournalWriterAssignment.CutProof cut,String receiptPayloadSha256){}
+
+    Map<String,Object> changeOriginalFreeze(TaskRequest supplied,AccessControl.Principal principal,OwnerQueries transport)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        boolean cancelling=request.kind==TaskRequest.Kind.HANDOFF_CANCEL_FREEZE;
+        if(!cancelling&&request.kind!=TaskRequest.Kind.HANDOFF_FREEZE_ORIGINAL||request.yaml!=null||request.document!=null)
+            throw new IllegalArgumentException("HANDOFF_ORIGINAL_FREEZE_REQUEST_INVALID");
+        Map<String,Object> replay=readFreezeReplay(request,principal,cancelling);
+        if(replay!=null)return replay;
+        FreezeOriginProof checked;
+        Map<String,Object> staged;
+        try{
+            if(!cancelling){
+                TaskRequest stage=TaskRequest.of(TaskRequest.Kind.HANDOFF_STAGE,request.taskId);
+                stage.reference=request.reference;stage.revision=request.revision;stage.identityHash=request.identityHash;
+                stage.requestId=request.requestId;
+                staged=transport.await(transport.submitHandoffStaging(stage,principal),principal);
+                requireFrozenInventoryReceipt(request,staged,null);
+            }else staged=null;
+            checked=Model.JSON.convertValue(transport.await(transport.submitFreezeOrigin(request,principal),principal),
+                    FreezeOriginProof.class);
+        }catch(TaskService.Conflict concurrent){
+            replay=readFreezeReplay(request,principal,cancelling);
+            if(replay!=null)return replay;
+            throw concurrent;
+        }
+        return tasks.transaction(request.taskId,principal,(c,task,actor)->{
+            var plan=freezePlan(c,task,actor,request);
+            Map<String,Object> repeated=freezeReplay(plan,request,actor,cancelling);
+            if(repeated!=null)return repeated;
+            FreezeOriginRoute route=freezeOriginRoute(c,task,actor,request,cancelling);
+            var origin=route.original();
+            var binding=new HandoffPreparations.Binding(origin.node,origin.directory,origin.incarnation,origin.epoch);
+            var inventory=cancelling?plan.writerFreeze().inventory():route.staging().offlineInventory();
+            if(checked==null||!binding.equals(checked.original())||!inventory.receiptPayloadSha256().equals(checked.receiptPayloadSha256()))
+                throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+            ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(tasks.activeYaml(c,task));
+            if(declaration==null||!db.sharesPostgresUrl(declaration.journalUrl()))
+                throw new TaskService.Conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
+            HandoffPreparations.Plan result;
+            if(cancelling){
+                var saved=plan.writerFreeze();
+                if(!saved.cut().equals(checked.cut()))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CUT_CHANGED");
+                JournalWriterAssignment.cancelOriginalFreeze(c,declaration.namespace(),task.id,declaration.assignment(),saved.cut(),saved.fence());
+                result=tasks.preparations().cancelOriginalFreeze(c,plan,request.requestId,actor,db.now(c));
+            }else{
+                requireFrozenInventoryReceipt(request,staged,route.staging());
+                Assessment assessment=read(c,task.id);
+                var reviewed=Model.JSON.convertValue(assessment.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
+                if(reviewed==null||!reviewed.equals(checked.cut()))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CUT_CHANGED");
+                var fence=JournalWriterAssignment.freezeOriginal(c,declaration.namespace(),task.id,declaration.assignment(),reviewed);
+                result=tasks.preparations().freezeOriginal(c,plan,new HandoffPreparations.WriterFreeze(
+                        request.requestId,request.handoffInventorySha256,inventory,reviewed,fence,db.now(c)));
+            }
+            auditPreparation(c,result,actor,request.requestId,cancelling?"MANAGED_HANDOFF_ORIGINAL_FREEZE_CANCELLED":"MANAGED_HANDOFF_ORIGINAL_FROZEN");
+            return HandoffPreparations.summary(result);
+        });
+    }
+
+    private Map<String,Object> readFreezeReplay(TaskRequest request,AccessControl.Principal principal,
+                                                boolean cancelling)throws Exception{
+        return tasks.transaction(request.taskId,principal,(c,task,actor)->
+                freezeReplay(freezePlan(c,task,actor,request),request,actor,cancelling));
+    }
+
+    private static void requireFrozenInventoryReceipt(TaskRequest request,Map<String,Object> staged,HandoffStaging.Binding expected){
+        if(staged==null||!"STAGED".equals(staged.get("state"))||!Boolean.FALSE.equals(staged.get("executionAuthorized"))
+                ||!request.reference.equals(staged.get("preparationId"))||!request.revision.equals(staged.get("taskRevision"))
+                ||!request.identityHash.equals(staged.get("evidenceSha256"))
+                ||!(staged.get("offlineInventory") instanceof Map<?,?> inventory)
+                ||!"SEALED".equals(inventory.get("state"))||!HandoffRecoveryInventory.PROFILE.equals(inventory.get("profile"))
+                ||!Boolean.FALSE.equals(inventory.get("executionAuthorized"))
+                ||!request.handoffInventorySha256.equals(inventory.get("manifestSha256"))
+                ||expected!=null&&(!expected.candidate().node().equals(staged.get("candidateNodeId"))
+                   ||!expected.archive().sha256().equals(staged.get("archiveSha256"))
+                   ||!Objects.equals(expected.offlineInventory().closedReceipts(),inventory.get("closedReceipts"))
+                   ||!expected.offlineInventory().originInventory().equals(inventory.get("originInventory"))))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED");
+    }
+
+    FreezeOriginRoute freezeOriginRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                                       TaskRequest request,boolean cancelling)throws Exception{
+        HandoffPreparations.Plan plan=freezePlan(c,task,actor,request);
+        var evidence=plan.evidence();
+        if(!task.owner.equals(evidence.original().node())||!task.directory.equals(evidence.original().directory())
+                ||!task.revision.equals(evidence.revision())||!Objects.equals(task.activeConfigurationVersion,evidence.configuration())
+                ||!Objects.equals(task.configurationVersion,evidence.configuration())||commands.hasUnresolved(c,task.id))
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        AgentDirectory.Binding original=agents.owner(c,task.owner,task.directory);
+        if(!"HEALTHY".equals(original.state))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_OWNER_UNAVAILABLE");
+        if(cancelling){
+            if(!"ORIGINAL_FROZEN".equals(plan.phase())||plan.writerFreeze()==null
+                    ||!request.handoffInventorySha256.equals(plan.writerFreeze().manifestSha256())
+                    ||plan.writerFreeze().request().equals(request.requestId))
+                throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+            var receipts=closedReceipts(c,task);
+            plan.writerFreeze().inventory().requireReceipts(receipts);
+            return new FreezeOriginRoute(plan,null,original,receipts);
+        }
+        if(!"PREPARED".equals(plan.phase())||plan.executionRequest()!=null||!plan.actor().equals(actor.id)
+                ||!plan.actorRevision().equals(actor.authorizationRevision)
+                ||!evidence.original().incarnation().equals(original.incarnation)||evidence.original().epoch()!=original.epoch)
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        StageRoute stage=stageRoute(c,task,actor,request);
+        if(stage.binding().offlineInventory()==null||stage.rawCapture()!=null)
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED");
+        return new FreezeOriginRoute(plan,stage.binding(),original,closedReceipts(c,task));
+    }
+
+    private HandoffPreparations.Plan freezePlan(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                                                TaskRequest request)throws Exception{
+        var plan=tasks.preparations().byRequest(c,request.reference,db.now(c));
+        if(plan==null||!plan.id().equals(request.reference))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        requirePlanGrants(actor,task,plan);
+        if(!plan.evidence().revision().equals(request.revision)||!plan.evidence().proof().equals(request.identityHash))
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        return plan;
+    }
+
+    private static Map<String,Object> freezeReplay(HandoffPreparations.Plan plan,TaskRequest request,
+                                                   AccessControl.Principal actor,boolean cancelling){
+        var frozen=plan.writerFreeze();
+        if(frozen==null)return null;
+        boolean sameManifest=request.handoffInventorySha256.equals(frozen.manifestSha256());
+        if(cancelling){
+            if("ORIGINAL_FROZEN".equals(plan.phase()))return null;
+            if(!sameManifest||!request.requestId.equals(plan.releaseId())||!actor.id.equals(plan.releasedBy()))
+                throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED");
+        }else if(!sameManifest||!request.requestId.equals(frozen.request())||!actor.id.equals(plan.actor())){
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED");
+        }
+        return HandoffPreparations.summary(plan);
     }
 
     /** From the candidate's authenticated private admission proof, after durable staging. */
@@ -508,6 +652,7 @@ final class ManagedHandoff {
         requirePlanGrants(actor,task,plan);
         if(!plan.evidence().revision().equals(request.revision)||!plan.evidence().proof().equals(request.identityHash))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        if("ORIGINAL_FROZEN".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FROZEN");
         return plan;
     }
     private static void requireExecutionReplay(HandoffPreparations.Plan plan,AccessControl.Principal actor,String executionRequest){
@@ -603,7 +748,10 @@ final class ManagedHandoff {
     }
 
     private Map<String,Object> view(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
-        return summary(task,a,stale(c,task,actor,a),db.now(c),views.ownerControlState(c,a.original.node));
+        Map<String,Object> result=summary(task,a,stale(c,task,actor,a),db.now(c),views.ownerControlState(c,a.original.node));
+        if(result.containsKey("offlinePreflight")&&tasks.preparations().hasOriginalFreeze(c,task.id))
+            result.remove("offlinePreflight");
+        return result;
     }
     private boolean stale(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,Assessment a)throws Exception{
         boolean stale=!task.revision.equals(a.revision)||!Objects.equals(task.activeConfigurationVersion,a.activeVersion)

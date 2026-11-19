@@ -26,13 +26,25 @@ final class HandoffStaging {
     private static final int MAX_STAGES=16,MAX_SEAL=64*1024,MAX_SUMMARY=1024*1024,MAX_RECEIPTS=128*1024;
     private static final String UUID_PATTERN="[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}";
     record Binding(String preparation,String evidence,HandoffPreparations.Binding candidate,
-                   SharedHandoffEvidence.Scope scope,SharedHandoffEvidence.Archive archive){
+                   SharedHandoffEvidence.Scope scope,SharedHandoffEvidence.Archive archive,
+                   @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                   HandoffRecoveryInventory.ReceiptOnly offlineInventory){
+        Binding(String preparation,String evidence,HandoffPreparations.Binding candidate,
+                SharedHandoffEvidence.Scope scope,SharedHandoffEvidence.Archive archive){
+            this(preparation,evidence,candidate,scope,archive,null);
+        }
         Binding{
             if(preparation==null||!preparation.matches("[A-Za-z0-9_-]{8,128}")||evidence==null||!evidence.matches("[a-f0-9]{64}")
                     ||candidate==null||candidate.epoch()<1||scope==null||!Objects.equals(candidate.directory(),scope.candidateDirectory())
                     ||archive==null||archive.closedReceipts()==0)throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
+            if(offlineInventory!=null)offlineInventory.requireArchive(scope,archive);
         }
         String key(){return Codec.sha256(Codec.encode(List.of(scope.cluster(),scope.task(),preparation)));}
+        boolean matchesStored(Binding stored){
+            return stored!=null&&preparation.equals(stored.preparation)&&evidence.equals(stored.evidence)
+                    &&candidate.equals(stored.candidate)&&scope.equals(stored.scope)&&archive.equals(stored.archive)
+                    &&(offlineInventory==null||stored.offlineInventory==null||offlineInventory.equals(stored.offlineInventory));
+        }
     }
     record FileSeal(long bytes,String sha256){}
     record Stage(int version,Binding binding,Map<String,FileSeal> files){}
@@ -40,12 +52,8 @@ final class HandoffStaging {
 
     private HandoffStaging(){}
 
-    @FunctionalInterface interface VerifiedStage<T>{ T accept(String sealSha256)throws Exception; }
     @FunctionalInterface interface VerifiedFiles<T>{ T accept(Verified verified)throws Exception; }
 
-    static <T> T withVerifiedStage(Path state,Binding binding,ControlCipher cipher,VerifiedStage<T> use)throws Exception{
-        return withVerifiedFiles(state,binding,cipher,verified->use.accept(verified.sealSha256()));
-    }
     static synchronized <T> T withVerifiedFiles(Path state,Binding binding,ControlCipher cipher,VerifiedFiles<T> use)throws Exception{
         Path root=state.toRealPath().resolve("handoff-staging");
         secureDirectory(root);
@@ -92,6 +100,12 @@ final class HandoffStaging {
                         if(children.limit(MAX_STAGES+1L).count()>MAX_STAGES)
                             throw refusal("HANDOFF_STAGING_CAPACITY");
                     }
+                    if(binding.offlineInventory()!=null){
+                        Path sharedRoot=shared.toRealPath();
+                        Path privateRoot=data.toRealPath();
+                        if(sharedRoot.startsWith(privateRoot)||privateRoot.startsWith(sharedRoot))
+                            throw refusal("HANDOFF_OFFLINE_INVENTORY_STORAGE_OVERLAP");
+                    }
                     createDirectory(pending);
                     Path source=SharedHandoffEvidence.stagingSource(shared,binding.scope(),binding.archive());
                     Map<String,FileSeal> files=extract(source,pending,binding,deadline);
@@ -109,6 +123,13 @@ final class HandoffStaging {
                     "candidateNodeId",binding.candidate().node(),"evidenceSha256",binding.evidence(),"archiveSha256",binding.archive().sha256(),
                     "reports",binding.archive().reports(),"closedReceipts",binding.archive().closedReceipts(),"executionAuthorized",false));
             if(binding.archive().failureRecords()>0)result.put("failureRecords",binding.archive().failureRecords());
+            if(binding.offlineInventory()!=null){
+                Verified retained=verifyStage(complete,binding,cipher,deadline);
+                var inventory=retained.manifest().binding().offlineInventory();
+                if(inventory!=null)result.put("offlineInventory",Map.of("state","SEALED","profile",HandoffRecoveryInventory.PROFILE,
+                        "manifestSha256",retained.sealSha256(),"closedReceipts",inventory.closedReceipts(),
+                        "originInventory",inventory.originInventory(),"executionAuthorized",false));
+            }
             return result;
         }catch(OverlappingFileLockException busy){throw refusal("HANDOFF_STAGING_BUSY");}
     }
@@ -126,6 +147,7 @@ final class HandoffStaging {
                 expect(zip.getNextEntry(),RECEIPTS);
                 byte[] receipts=readEntry(zip,MAX_RECEIPTS);
                 verifyReceipts(receipts,binding.archive().closedReceipts());
+                if(binding.offlineInventory()!=null)binding.offlineInventory().requirePayload(receipts);
                 files.put(RECEIPTS,writeFile(pending.resolve(RECEIPTS),new ByteArrayInputStream(receipts),MAX_RECEIPTS,deadline));
                 long remaining=MAX_BYTES;
                 if(binding.archive().failureRecords()>0){
@@ -195,7 +217,7 @@ final class HandoffStaging {
         byte[] sealedBytes=readFile(seal,MAX_SEAL);
         String envelope=new String(sealedBytes,java.nio.charset.StandardCharsets.UTF_8);
         Stage stored=Model.JSON.readValue(cipher.open("handoff-stage/"+expected.key(),envelope),Stage.class);
-        if(stored==null||stored.version()!=1||!expected.equals(stored.binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
+        if(stored==null||stored.version()!=1||!expected.matchesStored(stored.binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
         checkFiles(stage,stored,deadline);
         return new Verified(stage,stored,Codec.sha256(sealedBytes));
     }
@@ -206,7 +228,9 @@ final class HandoffStaging {
         if(files==null||files.size()!=1+2*archive.reports()+HandoffFailureHistory.fileCount(archive.failureRecords())||!files.containsKey(RECEIPTS))
             throw refusal("HANDOFF_STAGING_ENTRY_INVALID");
         checkFile(stage.resolve(RECEIPTS),files.get(RECEIPTS),MAX_RECEIPTS,deadline);
-        verifyReceipts(readFile(stage.resolve(RECEIPTS),MAX_RECEIPTS),archive.closedReceipts());
+        byte[] receipts=readFile(stage.resolve(RECEIPTS),MAX_RECEIPTS);
+        verifyReceipts(receipts,archive.closedReceipts());
+        if(manifest.binding().offlineInventory()!=null)manifest.binding().offlineInventory().requirePayload(receipts);
         Path reports=stage.resolve(REPORTS);
         if(archive.reports()>0){
             secureDirectory(reports);

@@ -1,10 +1,12 @@
 package io.github.rivomesh.platform;
 
+import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -63,6 +65,27 @@ class HandoffCandidateAdmissionTest {
         assertFalse(Files.exists(f.state().resolve("tasks")));
         assertFalse(Files.exists(f.state().resolve("validations")));
         assertFalse(Files.exists(f.state().resolve("controller.json")));
+    }
+
+    @Test void ordinaryStageAndAdmissionReplayAfterAnInventoryWitnessIsIntroduced()throws Exception{
+        Fixture fixture=stage();
+        var prior=HandoffCandidateAdmission.prepare(fixture.state(),fixture.staged(),fixture.plan(),originalYaml,cipher(),yaml->{});
+        Path seal=fixture.custody().resolve("evidence.seal"),readyFile=readinessPath(fixture.state());
+        byte[] sealed=Files.readAllBytes(seal),ready=Files.readAllBytes(readyFile);
+        var receipts=List.of(Model.JSON.readValue(Files.readAllBytes(fixture.custody().resolve("closed-receipts.json")),
+                SharedHandoffEvidence.ClosedReceipt[].class));
+        var inventory=HandoffRecoveryInventory.observe(scope,Map.of("validationReports","ABSENT","failureEvidence","ABSENT",
+                "sourceEvidence","ABSENT"),false,new SharedHandoffEvidence.ReceiptPlan(receipts,null),fixture.staged().archive());
+        assertNotNull(inventory);
+        var enhanced=new HandoffStaging.Binding(fixture.staged().preparation(),fixture.staged().evidence(),candidate,
+                scope,fixture.staged().archive(),inventory);
+        Files.delete(fixture.archive());
+        var ordinary=HandoffStaging.stage(fixture.state(),home.resolve("archive-unavailable"),enhanced,cipher());
+        assertEquals("STAGED",ordinary.get("state"));
+        assertFalse(ordinary.containsKey("offlineInventory"));
+        assertEquals(prior,HandoffCandidateAdmission.prepare(fixture.state(),enhanced,fixture.plan(),originalYaml,cipher(),yaml->{}));
+        assertArrayEquals(sealed,Files.readAllBytes(seal));
+        assertArrayEquals(ready,Files.readAllBytes(readyFile));
     }
 
     @Test void changedEnrollmentConfigurationEvidenceAndCorruptedSealRefuseAdmission()throws Exception{

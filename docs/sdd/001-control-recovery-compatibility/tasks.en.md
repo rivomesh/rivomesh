@@ -26,6 +26,7 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
   - [x] An in-flight target row lock rolls back after fencing. Explicit resume fills the PostgreSQL delivery once and preserves the MySQL receipt.
   - [x] Both SQL targets pass committed-but-unacknowledged recovery with the original Agent and PostgreSQL journal, 15 native checks per case.
   - [x] The offline handoff dialog reports historical cut, reports and receipt custody, plus missing freeze and archive evidence.
+  - [x] The same-store closed-receipt profile durably freezes the original writer through Agent termination and restart. Explicit cancellation keeps the original owner and STOPPED state.
   - [ ] Permanent original Agent loss, split-store fencing and broader drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
@@ -190,6 +191,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Approved same-database transfer adopts original signed failure records and closed receipts. Both Controllers reopen the read-only history after candidate restart.
   - [x] One approved transfer adopts raw capture and signed failure history. Four staging failures are isolated. Both Controllers verify a common receipt after restart.
   - [x] Independent journal loss refuses native cut proof. Recovery restores read-only staging. Both entries block writer transfer and the original Agent resumes.
+  - [x] Candidate-private closed-receipt inventory verifies after loss of the transfer archive and rejects an altered private copy.
   - [ ] Durable split-store fencing and further storage and destination profiles.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.

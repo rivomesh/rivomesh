@@ -41,6 +41,8 @@ final class HandoffPreparations {
                        PendingProblem problem){
         WorkerStart(String id,String actor,String actorRevision){this(id,actor,actorRevision,null);}
     }
+    record WriterFreeze(String request,String manifestSha256,HandoffRecoveryInventory.ReceiptOnly inventory,
+                        JournalWriterAssignment.CutProof cut,JournalWriterAssignment.OriginalFreeze fence,long frozenAt){}
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -54,7 +56,16 @@ final class HandoffPreparations {
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                 TargetFenceRequest targetFence,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                WorkerStart workerStart){
+                WorkerStart workerStart,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                WriterFreeze writerFreeze){
+        Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
+             long created,long expires,String releaseId,String releasedBy,long closedAt,WriterActivation activation,
+             WriterCommit writerCommit,String executionRequest,HandoffEvidenceAdoption.Receipt evidenceAdoption,
+             TargetFenceRequest targetFence,WorkerStart workerStart){
+            this(id,task,sequence,phase,actor,actorRevision,evidence,created,expires,releaseId,releasedBy,closedAt,
+                    activation,writerCommit,executionRequest,evidenceAdoption,targetFence,workerStart,null);
+        }
         Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
              long created,long expires,String releaseId,String releasedBy,long closedAt,WriterActivation activation,
              WriterCommit writerCommit,String executionRequest,HandoffEvidenceAdoption.Receipt evidenceAdoption){
@@ -98,6 +109,8 @@ final class HandoffPreparations {
                     case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
+                    case "ORIGINAL_FROZEN"->p.releaseId==null&&p.releasedBy==null;
+                    case "FREEZE_CANCELLED"->validExecutionId(p,p.releaseId)&&p.releasedBy!=null;
                     case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor)
                             &&HandoffFailureHistory.bounded(p.writerCommit.failureRecords())
@@ -106,10 +119,31 @@ final class HandoffPreparations {
                     default->false;
                 })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
                 ||(evidenceInstalled(p)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null)
-                ||!validTargetFence(p)||!validWorkerStart(p))
+                ||!validTargetFence(p)||!validWorkerStart(p)||!validFreeze(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
     }
+    private static boolean validFreeze(Plan plan){
+        WriterFreeze freeze=plan.writerFreeze;
+        boolean open="ORIGINAL_FROZEN".equals(plan.phase);
+        if(!open&&!"FREEZE_CANCELLED".equals(plan.phase))return freeze==null;
+        if(freeze==null||plan.executionRequest!=null||plan.writerCommit!=null||plan.activation==null
+                ||!plan.activation.checkedInControlTransaction()||!validExecutionId(plan,freeze.request())
+                ||freeze.request().equals(plan.releaseId)||freeze.manifestSha256()==null
+                ||!freeze.manifestSha256().matches("[a-f0-9]{64}")||freeze.inventory()==null||freeze.fence()==null
+                ||freeze.cut()==null||!freeze.cut().writerPlacementEnrolled()||freeze.cut().managedWriter()==null
+                ||freeze.frozenAt()<plan.created||freeze.frozenAt()>=plan.expires||open&&plan.closedAt!=freeze.frozenAt()
+                ||plan.closedAt<freeze.frozenAt())return false;
+        var cut=freeze.cut().managedWriter();
+        return plan.evidence.original.node.equals(cut.originalNode())&&cut.epoch()==freeze.fence().epoch()-1
+                &&plan.evidence.custody.equals(freeze.inventory().archiveSha256())
+                &&plan.evidence.cut.epoch.equals(Long.toString(cut.epoch()))&&plan.evidence.cut.sequence.equals(Long.toString(cut.sequence()))
+                &&plan.evidence.cut.checkpointSha256.equals(cut.checkpointSha256())
+                &&plan.activation.originalAssignmentSha256().equals(cut.originalAssignmentSha256())
+                &&plan.activation.journalGenerationSha256().equals(freeze.cut().journalGenerationSha256())
+                &&plan.activation.nativeEvidenceSha256().equals(freeze.cut().nativeEvidenceSha256());
+    }
+
     private String seal(Plan p)throws Exception{return cipher.seal(purpose(p.id),Model.JSON.writeValueAsString(p));}
     private Plan select(Connection c,String predicate,Object... arguments)throws Exception{
         try(PreparedStatement p=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")+" WHERE "+predicate+" FOR UPDATE",arguments);
@@ -134,9 +168,14 @@ final class HandoffPreparations {
     Plan latest(Connection c,String task,long now)throws Exception{
         return expire(c,select(c,"cluster_id=? AND task_id=? ORDER BY ordinal DESC LIMIT 1",cluster,task),now);
     }
+    boolean hasOriginalFreeze(Connection c,String task)throws Exception{
+        Plan plan=select(c,"cluster_id=? AND task_id=? ORDER BY ordinal DESC LIMIT 1",cluster,task);
+        return plan!=null&&"ORIGINAL_FROZEN".equals(plan.phase);
+    }
     void requireUnreserved(Connection c,String task)throws Exception{
         Plan plan=latest(c,task,db.now(c));
         if(plan!=null&&"PREPARED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
+        if(plan!=null&&"ORIGINAL_FROZEN".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FROZEN");
         if(plan!=null&&plan.writerCommit!=null)throw new TaskService.Conflict("HANDOFF_RECIPIENT_IMPORT_REQUIRED");
     }
     void requireCommandAllowed(Connection c,String task)throws Exception{
@@ -164,6 +203,7 @@ final class HandoffPreparations {
                  WriterActivation activation,long now)throws Exception{
         Plan latest=latest(c,task.id,now);
         if(latest!=null&&"PREPARED".equals(latest.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_ACTIVE");
+        if(latest!=null&&"ORIGINAL_FROZEN".equals(latest.phase))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FROZEN");
         int next=latest==null?1:Math.addExact(latest.sequence,1);
         Plan p=new Plan(request,task.id,next,"PREPARED",actor.id,actor.authorizationRevision,evidence,now,now+REVIEW_MILLIS,null,null,0,activation,null,null,null);
         db.update(c,"INSERT INTO "+db.table("task_handoff_plan")
@@ -178,6 +218,28 @@ final class HandoffPreparations {
     private static boolean validExecutionId(Plan plan,String request){
         return request!=null&&request.matches("[A-Za-z0-9_-]{8,128}")&&!plan.id.equals(request);
     }
+    Plan freezeOriginal(Connection c,Plan plan,WriterFreeze freeze)throws Exception{
+        if(!"PREPARED".equals(plan.phase)||plan.executionRequest!=null)
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        Plan frozen=new Plan(plan.id,plan.task,plan.sequence,"ORIGINAL_FROZEN",plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,null,null,freeze.frozenAt(),plan.activation,null,null,null,null,null,freeze);
+        return writeFreeze(c,plan,frozen);
+    }
+    Plan cancelOriginalFreeze(Connection c,Plan plan,String request,AccessControl.Principal actor,long now)throws Exception{
+        if(!"ORIGINAL_FROZEN".equals(plan.phase)||plan.writerFreeze==null)
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        Plan cancelled=new Plan(plan.id,plan.task,plan.sequence,"FREEZE_CANCELLED",plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,request,actor.id,now,plan.activation,null,null,null,null,null,plan.writerFreeze);
+        return writeFreeze(c,plan,cancelled);
+    }
+    private Plan writeFreeze(Connection c,Plan prior,Plan next)throws Exception{
+        if(!validFreeze(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")
+                +" SET phase=?,release_id=?,envelope=? WHERE cluster_id=? AND request_id=? AND phase=?",
+                next.phase,next.releaseId,seal(next),cluster,prior.id,prior.phase)!=1)
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        return next;
+    }
+
     Plan bindExecution(Connection c,Plan plan,String request)throws Exception{
         if(!"PREPARED".equals(plan.phase)||!validExecutionId(plan,request))
             throw new TaskService.Conflict("HANDOFF_EXECUTION_REQUEST_INVALID");
@@ -409,6 +471,9 @@ final class HandoffPreparations {
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
         if(p.executionRequest!=null&&(p.writerCommit!=null||"PREPARED".equals(p.phase)))
             view.put("commitRequestId",p.executionRequest);
+        if(p.writerFreeze!=null)view.put("originalFreeze",Map.of("requestId",p.writerFreeze.request(),
+                "manifestSha256",p.writerFreeze.manifestSha256(),"journalEpoch",Long.toString(p.writerFreeze.fence().epoch()),
+                "frozenAt",Instant.ofEpochMilli(p.writerFreeze.frozenAt()).toString()));
         if(p.writerCommit!=null){
             view.put("activatedJournalEpoch",Long.toString(p.writerCommit.journalEpoch));
             view.put("committedRevision",p.writerCommit.revision);

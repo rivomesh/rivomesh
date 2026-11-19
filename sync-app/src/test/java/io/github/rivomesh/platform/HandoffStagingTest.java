@@ -93,6 +93,89 @@ class HandoffStagingTest {
         assertTrue(Files.isRegularFile(stage.resolve("closed-receipts.json")));
     }
 
+    @Test void completeClosedReceiptInventorySurvivesLossOfTheOriginalAndTransferArchive()throws Exception{
+        Path root=home.toRealPath(),shared=privateDirectory(root,"shared"),data=privateDirectory(root,"candidate");
+        var original=root.resolve("original-absent");
+        var commands=new SharedHandoffEvidence.ReceiptPlan(List.of(receipt),null);
+        var archive=SharedHandoffEvidence.export(shared,scope,original,commands.receipts());
+        var inventory=HandoffRecoveryInventory.observe(scope,allAbsent(),false,commands,archive);
+        assertNotNull(inventory);
+        var observed=Model.JSON.readTree(Model.JSON.writeValueAsBytes(inventory));
+        assertEquals(inventory,HandoffRecoveryInventory.validate(observed,scope,archive,commands));
+        var bound=new HandoffStaging.Binding("offline_inventory_001","f".repeat(64),candidate,scope,archive,inventory);
+        var staged=HandoffStaging.stage(data,shared,bound,guard);
+        var summary=Model.JSON.valueToTree(staged.get("offlineInventory"));
+        assertEquals("SEALED",summary.path("state").asText());
+        assertEquals("CLOSED_RECEIPTS_ONLY",summary.path("profile").asText());
+        assertEquals(1,summary.path("closedReceipts").asInt());
+        assertFalse(summary.path("executionAuthorized").asBoolean(true));
+        assertFalse(summary.toString().contains(receipt.signature()));
+        assertFalse(observed.toString().contains(scope.originalDirectory()));
+        assertFalse(observed.toString().contains(scope.candidateDirectory()));
+        Files.delete(SharedHandoffEvidence.stagingSource(shared,scope,archive));
+        assertFalse(Files.exists(original));
+        assertEquals(staged,HandoffStaging.stage(data,root.resolve("shared-absent"),bound,guard));
+        HandoffStaging.withVerifiedFiles(data,bound,guard,verified->{
+            assertEquals(inventory,verified.manifest().binding().offlineInventory());
+            assertEquals(summary.path("manifestSha256").asText(),verified.sealSha256());
+            return null;
+        });
+        Path stagedReceipts=data.resolve("handoff-staging").resolve(bound.key()).resolve("closed-receipts.json");
+        Files.write(stagedReceipts,Model.JSON.writeValueAsBytes(List.of(otherReceipt())));
+        assertEquals("HANDOFF_STAGING_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffStaging.stage(data,root.resolve("shared-absent"),bound,guard)).getMessage());
+        assertFalse(Files.exists(data.resolve("validations")));
+    }
+
+    @Test void completeInventoryRefusesUnknownCategoriesChangedClosedCommandsOrAnOverlappingRoot()throws Exception{
+        Path root=home.toRealPath(),data=privateDirectory(root,"candidate"),shared=privateDirectory(data,"shared");
+        var original=root.resolve("original-absent");
+        var commands=new SharedHandoffEvidence.ReceiptPlan(List.of(receipt),null);
+        var archive=SharedHandoffEvidence.export(shared,scope,original,commands.receipts());
+        for(String category:allAbsent().keySet())for(String state:List.of("PRESENT","UNSAFE","UNKNOWN")){
+            var changed=new HashMap<>(allAbsent());
+            changed.put(category,state);
+            assertNull(HandoffRecoveryInventory.observe(scope,changed,false,commands,archive));
+        }
+        assertNull(HandoffRecoveryInventory.observe(scope,Map.of(),false,commands,archive));
+        assertNull(HandoffRecoveryInventory.observe(scope,allAbsent(),true,commands,archive));
+        assertNull(HandoffRecoveryInventory.observe(scope,allAbsent(),false,
+                new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN"),archive));
+        var inventory=HandoffRecoveryInventory.observe(scope,allAbsent(),false,commands,archive);
+        var changed=new SharedHandoffEvidence.ReceiptPlan(List.of(otherReceipt()),null);
+        assertEquals("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffRecoveryInventory.validate(inventory,scope,archive,changed)).getMessage());
+        assertEquals("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffRecoveryInventory.validate(inventory,scope,archive,new SharedHandoffEvidence.ReceiptPlan(List.of(),null))).getMessage());
+        var bound=new HandoffStaging.Binding("offline_inventory_002","f".repeat(64),candidate,scope,archive,inventory);
+        assertEquals("HANDOFF_OFFLINE_INVENTORY_STORAGE_OVERLAP",assertThrows(TaskService.Conflict.class,
+                ()->HandoffStaging.stage(data,shared,bound,guard)).getMessage());
+        assertFalse(Files.exists(data.resolve("handoff-staging").resolve(bound.key())));
+    }
+
+    @Test void sameCountAndAnAuthenticArchiveCannotSubstituteForTheSealedReceiptPayload()throws Exception{
+        Path root=home.toRealPath(),shared=privateDirectory(root,"shared"),data=privateDirectory(root,"candidate");
+        var original=root.resolve("original-absent");
+        var commands=new SharedHandoffEvidence.ReceiptPlan(List.of(receipt),null);
+        var expected=SharedHandoffEvidence.export(shared,scope,original,commands.receipts());
+        var inventory=HandoffRecoveryInventory.observe(scope,allAbsent(),false,commands,expected);
+        var changed=SharedHandoffEvidence.export(shared,scope,original,List.of(otherReceipt()));
+        assertNotEquals(expected.sha256(),changed.sha256());
+        var wrong=new HandoffRecoveryInventory.ReceiptOnly(1,inventory.scopeSha256(),changed.sha256(),1,inventory.receiptPayloadSha256(),allAbsent());
+        var bound=new HandoffStaging.Binding("offline_inventory_003","f".repeat(64),candidate,scope,changed,wrong);
+        assertEquals("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffStaging.stage(data,shared,bound,guard)).getMessage());
+        assertFalse(Files.exists(data.resolve("handoff-staging").resolve(bound.key())));
+    }
+
+    private static Map<String,String> allAbsent(){
+        return Map.of("validationReports","ABSENT","failureEvidence","ABSENT","sourceEvidence","ABSENT");
+    }
+    private SharedHandoffEvidence.ClosedReceipt otherReceipt(){
+        return new SharedHandoffEvidence.ClosedReceipt(receipt.request(),"b".repeat(64),
+                receipt.actor(),receipt.role(),receipt.kind(),receipt.phase(),receipt.code());
+    }
+
     private HandoffStaging.Binding binding(SharedHandoffEvidence.Archive archive){
         return new HandoffStaging.Binding("prepared_001","f".repeat(64),candidate,scope,archive);
     }

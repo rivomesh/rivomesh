@@ -152,6 +152,9 @@ window.RivomeshHandoff=(()=>{
 
  bridge.register({
   handoffProgress:'查看 Agent 交接状态',handoffTransferReceipt:'交接回执',handoffNoPreparation:'该任务暂无交接准备记录。',
+  handoffOriginalFrozen:'原写入者已冻结',handoffOriginalFreezeCancelled:'原写入者冻结已取消',
+  handoffOriginalFrozenHelp:'归属保留在原 Agent。原写入者保持停止，普通启动、配置修改和解除预留受阻。',
+  handoffFreezeRequest:'冻结请求 ID',handoffFreezeEpoch:'冻结日志纪元',
   handoffCommitted:'归属已提交',handoffProjected:'候选配置已安装',handoffEvidenceAdopted:'证据已接收',
   handoffCommittedHelp:'任务归属已变更。候选 Agent 正在等待安装已审阅的任务配置。',
   handoffProjectedHelp:'候选 Agent 已保存停止状态的任务配置。接收报告和回执后会更新交接状态。',
@@ -182,6 +185,9 @@ window.RivomeshHandoff=(()=>{
   handoffFormerOwner:'原 Agent',handoffCurrentOwner:'当前归属 Agent',handoffTransferId:'交接准备 ID',handoffRefreshProgress:'刷新交接状态'
  },{
   handoffProgress:'View Agent handoff status',handoffTransferReceipt:'Handoff receipt',handoffNoPreparation:'This task has no handoff preparation.',
+  handoffOriginalFrozen:'Original writer frozen',handoffOriginalFreezeCancelled:'Original writer freeze cancelled',
+  handoffOriginalFrozenHelp:'The original Agent keeps ownership and stays stopped. A freeze blocks ordinary start, configuration changes and reservation release.',
+  handoffFreezeRequest:'Freeze request ID',handoffFreezeEpoch:'Frozen journal epoch',
   handoffCommitted:'Ownership committed',handoffProjected:'Candidate configuration installed',handoffEvidenceAdopted:'Evidence received',
   handoffCommittedHelp:'Task ownership has changed. The candidate Agent is waiting to install the reviewed configuration.',
   handoffProjectedHelp:'The candidate Agent saved the task configuration in a stopped state. Handoff status will update when it receives the reports and receipts.',
@@ -240,7 +246,8 @@ window.RivomeshHandoff=(()=>{
  const sha256=/^[0-9a-f]{64}$/;
  const stateLabels={BLOCKED:'handoffStateBlocked',EVIDENCE_REQUIRED:'handoffStateEvidence',STALE:'handoffStateStale'};
  const offlineControlStates=['STALE','STOPPED','UNKNOWN'];
- const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired'};
+ const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired',
+  ORIGINAL_FROZEN:'handoffOriginalFrozen',FREEZE_CANCELLED:'handoffOriginalFreezeCancelled'};
  const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted',FENCE_PENDING:'handoffFencePending',TARGETS_FENCED:'handoffTargetsFenced',
   START_PENDING:'handoffStartPending',WORKER_ADMITTED:'handoffWorkerAdmitted',WORKER_PROJECTED:'handoffWorkerProjected'};
  const startStates=['START_PENDING','WORKER_ADMITTED','WORKER_PROJECTED'];
@@ -300,12 +307,13 @@ window.RivomeshHandoff=(()=>{
    &&preparation.committedConfigurationVersion===task?.configurationVersion;
  }
  function readOnly(v){
-  return bridge.task(v.taskId)?.formatVersion!==3||transferred(v.preparation)||v.unverifiedTransfer;
+  return bridge.task(v.taskId)?.formatVersion!==3||transferred(v.preparation)
+   ||v.preparation?.state==='ORIGINAL_FROZEN'||v.unverifiedTransfer;
  }
  function offlineReadback(v){
   const task=bridge.task(v.taskId);
   return task?.statusAvailable===false&&offlineControlStates.includes(task.ownerControlState)
-   &&!transferred(v.preparation)&&!v.unverifiedTransfer;
+   &&!transferred(v.preparation)&&v.preparation?.state!=='ORIGINAL_FROZEN'&&!v.unverifiedTransfer;
  }
  function offlineReceipt(v,receipt){
   return receipt?.originalNodeId===v.owner&&offlineControlStates.includes(receipt.originalControlState)
@@ -380,6 +388,14 @@ window.RivomeshHandoff=(()=>{
   }
   return response;
  }
+ function validOriginalFreeze(preparation){
+  const freeze=preparation.originalFreeze;
+  if(!['ORIGINAL_FROZEN','FREEZE_CANCELLED'].includes(preparation.state))return freeze==null;
+  return typeof freeze?.requestId==='string'&&requestPattern.test(freeze.requestId)&&freeze.requestId!==preparation.id&&freeze.requestId!==preparation.releaseId
+   &&sha256.test(freeze.manifestSha256||'')&&typeof freeze.journalEpoch==='string'&&/^[1-9][0-9]{0,18}$/.test(freeze.journalEpoch)
+   &&Number.isFinite(Date.parse(freeze.frozenAt))&&Date.parse(freeze.frozenAt)>=Date.parse(preparation.createdAt)
+   &&Date.parse(freeze.frozenAt)<Date.parse(preparation.expiresAt);
+ }
  function verifiedPreparation(v,response,attempt){
   const state=response?.state;
   const active=state==='PREPARED',transferredState=transferred(response);
@@ -393,7 +409,8 @@ window.RivomeshHandoff=(()=>{
     ||response.reservedTaskSlots!==Number(active)||response.reservedWorkerSlots!==Number(active)
     ||!sha256.test(response.evidenceSha256||'')||!Number.isFinite(Date.parse(response.createdAt))
     ||!(Date.parse(response.expiresAt)>Date.parse(response.createdAt))
-    ||(state==='RELEASED'?!requestPattern.test(response.releaseId||''):response.releaseId!=null)
+    ||(['RELEASED','FREEZE_CANCELLED'].includes(state)?!requestPattern.test(response.releaseId||''):response.releaseId!=null)
+    ||!validOriginalFreeze(response)
     ||attempt&&!matchesPreparation(response,attempt)){
    throw new Error(t('handoffReservationInvalid'));
   }
@@ -481,9 +498,10 @@ window.RivomeshHandoff=(()=>{
  }
  function renderPreparation(v,readonly){
   const preparation=v.preparation,proof=!readonly&&reviewReady(v)?v.receipt.preparationEvidenceSha256:null;
-  const empty=readonly&&v.preparationLoaded&&!preparation;
-  if(v.drawnPreparation?.receipt===preparation&&v.drawnPreparation?.proof===proof&&v.drawnPreparation?.empty===empty)return;
-  v.drawnPreparation={receipt:preparation,proof,empty};
+  const empty=readonly&&v.preparationLoaded&&!preparation,locale=document.documentElement.lang;
+  if(v.drawnPreparation?.receipt===preparation&&v.drawnPreparation?.proof===proof
+   &&v.drawnPreparation?.empty===empty&&v.drawnPreparation?.locale===locale)return;
+  v.drawnPreparation={receipt:preparation,proof,empty,locale};
   v.preparationResult.replaceChildren();
   if(empty)v.preparationResult.append(node('p',t('handoffNoPreparation'),'subtle'));
   if(!preparation&&!proof)return;
@@ -505,6 +523,12 @@ window.RivomeshHandoff=(()=>{
    const details=node('details');
    details.append(node('summary',t('handoffReservationId')),node('code',preparation.id));
    v.preparationResult.append(facts,details);
+   const freeze=preparation.originalFreeze;
+   if(freeze){
+    facts.append(node('dt',t('handoffFreezeEpoch')),node('dd',freeze.journalEpoch));
+    details.append(node('p',t('handoffFreezeRequest')),node('code',freeze.requestId));
+    if(preparation.state==='ORIGINAL_FROZEN')v.preparationResult.append(node('p',t('handoffOriginalFrozenHelp'),'callout warning'));
+   }
    if(active)v.preparationResult.append(node('p',t('handoffActiveHelp'),'subtle'));
    if(active&&preparation.commitBlocker==='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
     v.preparationResult.append(node('p',t(preparation.commitBlocker),'callout warning'));
@@ -654,7 +678,7 @@ window.RivomeshHandoff=(()=>{
    try{
     const response=await api(preparationEndpoint(v));
     if(!current(v))return;
-    v.unverifiedTransfer=transferred(response);
+    v.unverifiedTransfer=transferred(response)||response?.state==='ORIGINAL_FROZEN';
     value=verifiedPreparation(v,response);
    }catch(error){if(error.code!=='HANDOFF_PREPARATION_NOT_FOUND')throw error;value=null;}
    if(!current(v))return;

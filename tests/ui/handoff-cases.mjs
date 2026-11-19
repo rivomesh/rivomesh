@@ -182,6 +182,25 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('a frozen original remains read-only in the preparation receipt despite an online original',async()=>{
+  const latest={...preparation('frozen-preparation','fresh-assessment','ORIGINAL_FROZEN'),originalFreeze:{
+   requestId:'freeze-request',manifestSha256:archiveDigest,journalEpoch:'14',frozenAt:'2026-11-18T09:10:00Z'}};
+  let assessmentReads=0;
+  const ui=fixture({read:()=>{assessmentReads++;return reply(reviewed());},readPreparation:()=>reply(latest)});
+  try{
+   await open(ui);
+   assert.equal(assessmentReads,0);
+   assert.match(reservation(ui).textContent,/原写入者已冻结.*冻结日志纪元14.*冻结请求 ID.*freeze-request/s);
+   assert.deepEqual([...dialog(ui).querySelectorAll('button')].filter(b=>!b.closest('[hidden]')).map(b=>b.textContent),
+    ['关闭','刷新交接状态']);
+   ui.d.getElementById('language').click();
+   assert.match(reservation(ui).textContent,/Original writer frozen.*Frozen journal epoch14/s);
+   assert.equal(ui.requests.length+ui.probes.length+ui.reserves.length+ui.releases.length+ui.stages.length+
+    ui.fences.length+ui.starts.length+ui.commits.length,0);
+   assert.equal(ui.task.ownerNodeId,'original-agent');
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff verifies bound evidence, reviews reservation impact, reserves capacity and releases the original task',async()=>{
   let latest={...snapshot('fresh-assessment'),originalCut:{checkpointHash:'7'.repeat(64)}};
   let planned,checks=0;

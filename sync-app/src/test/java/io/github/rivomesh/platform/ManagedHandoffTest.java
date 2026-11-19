@@ -660,6 +660,74 @@ class ManagedHandoffTest {
         assertEquals("a",fixture.b.get(task.id,fixture.admin).owner);
     }
 
+    @Test void originalFreezeReceiptSurvivesExpiryAndFencesOrdinaryControlUntilExplicitCancellation()throws Exception{
+        String assignmentSha="a".repeat(64),generation="b".repeat(64),nativeEvidence="c".repeat(64),checkpoint="d".repeat(64);
+        var plan=fixture.a.service((c,accounts)->{
+            var record=fixture.a.record(c,"orders");
+            var original=new HandoffPreparations.Binding("a",fixture.directory,aLease.incarnation,aLease.epoch);
+            var candidate=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
+            var scope=new SharedHandoffEvidence.Scope(fixture.config.cluster.id,"orders","frozen_assessment",revision,
+                    record.activeConfigurationVersion,original.directory(),candidate.directory());
+            var receipt=new SharedHandoffEvidence.ClosedReceipt("frozen_receipt_01","e".repeat(64),fixture.admin.id,"ADMIN",
+                    TaskRequest.Kind.ACTION,"SUCCEEDED","LOCAL_STOPPED");
+            var archive=new SharedHandoffEvidence.Archive("f".repeat(64),10,0,1);
+            var inventory=HandoffRecoveryInventory.observe(scope,
+                    Map.of("validationReports","ABSENT","failureEvidence","ABSENT","sourceEvidence","ABSENT"),
+                    false,new SharedHandoffEvidence.ReceiptPlan(List.of(receipt),null),archive);
+            var cut=new io.github.rivomesh.cdc.JournalWriterAssignment.CutProof(generation,nativeEvidence,List.of("pg"),true,
+                    new io.github.rivomesh.cdc.JournalWriterAssignment.ManagedCut("a",assignmentSha,9,2,checkpoint));
+            var evidence=new HandoffPreparations.Evidence(scope.assessment(),revision,scope.configuration(),original,candidate,
+                    new HandoffPreparations.JournalCut("9","2",checkpoint),"7".repeat(64),archive.sha256());
+            var enrolled=new HandoffPreparations.WriterActivation(assignmentSha,UUID.randomUUID().toString(),generation,nativeEvidence,true);
+            long now=fixture.a.database().now(c);
+            var prepared=fixture.a.preparations().prepare(c,record,"frozen_preparation",fixture.admin,evidence,enrolled,now);
+            var freeze=new HandoffPreparations.WriterFreeze("frozen_request_01","8".repeat(64),inventory,cut,
+                    new io.github.rivomesh.cdc.JournalWriterAssignment.OriginalFreeze(10,11),now);
+            return fixture.a.preparations().freezeOriginal(c,prepared,freeze);
+        });
+        var reopen=fixture.b.service((c,accounts)->fixture.b.preparations().byRequest(c,plan.id(),plan.expires()+5000));
+        assertEquals(plan,reopen);
+        var readback=entryB().invoke(currentPreparation(),fixture.admin);
+        assertEquals("ORIGINAL_FROZEN",readback.get("state"));
+        assertEquals(false,readback.get("executionAuthorized"));
+        assertFalse(Model.JSON.writeValueAsString(readback).contains(fixture.directory));
+        TaskRequest duplicate=freezeRequest(TaskRequest.Kind.HANDOFF_FREEZE_ORIGINAL,plan,plan.writerFreeze().request());
+        assertEquals(readback,b.invoke(duplicate,fixture.admin));
+        duplicate.handoffInventorySha256="9".repeat(64);
+        conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED",()->a.invoke(duplicate,fixture.admin));
+        conflict("HANDOFF_ORIGINAL_FROZEN",()->fixture.b.update("orders",revision,YAML,"edit_frozen_orders",fixture.admin));
+        TaskRequest start=stop("start_during_frozen");start.action="START";
+        conflict("HANDOFF_ORIGINAL_FROZEN",()->commands.enqueue(start,fixture.admin));
+        conflict("HANDOFF_ORIGINAL_FROZEN",()->a.invoke(release("ordinary_release_frozen",plan.id()),fixture.admin));
+        TaskRequest ordinaryCommit=TaskRequest.of(TaskRequest.Kind.HANDOFF_COMMIT_OWNER,"orders");
+        ordinaryCommit.reference=plan.id();ordinaryCommit.revision=revision;ordinaryCommit.identityHash=plan.evidence().proof();
+        ordinaryCommit.requestId="ordinary_commit_frozen";
+        conflict("HANDOFF_ORIGINAL_FROZEN",()->b.invoke(ordinaryCommit,fixture.admin));
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+        assertEquals(revision,fixture.b.get("orders",fixture.admin).revision);
+
+        fixture.a.service((c,accounts)->{
+            var current=fixture.a.preparations().byRequest(c,plan.id(),fixture.a.database().now(c));
+            fixture.a.preparations().cancelOriginalFreeze(c,current,"cancel_frozen_01",fixture.admin,fixture.a.database().now(c));
+            return null;
+        });
+        var cancelled=b.invoke(freezeRequest(TaskRequest.Kind.HANDOFF_CANCEL_FREEZE,plan,"cancel_frozen_01"),fixture.admin);
+        assertEquals("FREEZE_CANCELLED",cancelled.get("state"));
+        assertEquals("cancel_frozen_01",cancelled.get("releaseId"));
+        assertEquals(false,cancelled.get("executionAuthorized"));
+        duplicate.handoffInventorySha256=plan.writerFreeze().manifestSha256();
+        assertEquals(cancelled,b.invoke(duplicate,fixture.admin));
+        commands.enqueue(start,fixture.admin);
+        assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+    }
+
+    private TaskRequest freezeRequest(TaskRequest.Kind kind,HandoffPreparations.Plan plan,String requestId){
+        TaskRequest request=TaskRequest.of(kind,plan.task());
+        request.reference=plan.id();request.revision=plan.evidence().revision();request.identityHash=plan.evidence().proof();
+        request.handoffInventorySha256=plan.writerFreeze().manifestSha256();request.requestId=requestId;
+        return request;
+    }
+
     @Test void evidenceStageAloneDoesNotGrantInternalCommitAndSeparateStoresStayFenced()throws Exception{
         Map<String,Object> evidence=verifiedAssessment("handoff_guarded_commit_assessment",fixture.admin);
         TaskRequest prepared=prepare("handoff_guarded_commit",evidence);

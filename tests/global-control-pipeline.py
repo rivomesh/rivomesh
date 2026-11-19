@@ -51,6 +51,10 @@ parser.add_argument('--handoff-failure-custody', action='store_true',
                     help='Verify custody of a real retained failure record and its authority without a key export')
 parser.add_argument('--handoff-closed-receipts', action='store_true',
                     help='Verify shared closed operation receipts and refusal when a private original receipt is missing')
+parser.add_argument('--handoff-closed-only-inventory', action='store_true',
+                    help='Verify candidate-private complete custody of a stopped task with closed receipts only')
+parser.add_argument('--handoff-freeze-original', action='store_true',
+                    help='Test durable writer freeze and controlled same-directory cancellation')
 parser.add_argument('--handoff-preparation', action='store_true',
                     help='Reserve the candidate and verify durable review release without changing data authority')
 parser.add_argument('--handoff-managed-writer', action='store_true',
@@ -181,6 +185,12 @@ if args.handoff_preparation and not args.handoff_closed_receipts:
     parser.error('--handoff-preparation requires --handoff-closed-receipts')
 if args.handoff_managed_writer and (not args.handoff_preparation or args.control_product!='POSTGRESQL' or args.runtime_image):
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
+if args.handoff_closed_only_inventory and (not args.handoff_managed_writer or not args.handoff_staging
+        or any((args.handoff_split_store, args.handoff_raw_custody, args.handoff_failure_custody,
+                args.handoff_private_writer, args.handoff_preparation_browser))):
+    parser.error('--handoff-closed-only-inventory requires the same-store managed-writer staging profile')
+if args.handoff_freeze_original and not args.handoff_closed_only_inventory:
+    parser.error('--handoff-freeze-original requires --handoff-closed-only-inventory')
 if args.handoff_asymmetric_partition and (not args.handoff_original_outage or args.external_mysql_driver):
     parser.error('--handoff-asymmetric-partition requires --handoff-original-outage and the packaged MySQL driver')
 if args.handoff_asymmetric_inflight and (not args.handoff_asymmetric_partition
@@ -2988,7 +2998,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                  'both entries see the original drained data stream')
             if args.handoff_raw_custody:
                 raw_origin,raw_file,raw_bytes,raw_witness,raw_retain_request=retain_and_recover_handoff_capture()
-            if args.handoff_custody:
+            if args.handoff_custody and not args.handoff_closed_only_inventory:
                 validation,_=action('VALIDATE',complete=not args.handoff_auto_resume,
                                     validation={'targets':['pg','my'],'gateMillis':15000,'sourceMillis':60000,
                                                 'targetMillis':90000 if args.handoff_auto_resume else 30000})
@@ -3096,9 +3106,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 assert not bad['executionAuthorized'] and data_cut()==original_cut
                 passed('Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected')
                 if args.handoff_custody:
-                    assert bad['probe']['originalEvidence']['shareableReports']['state']=='ARCHIVED'
-                    assert bad['probe']['sharedReportCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
-                    passed('Candidate with a disjoint private mount cannot claim custody of the original completed report')
+                    category = 'closedReceipts' if args.handoff_closed_only_inventory else 'shareableReports'
+                    assert bad['probe']['originalEvidence'][category]['state']=='ARCHIVED'
+                    shared_category = 'sharedReceiptCustody' if args.handoff_closed_only_inventory else 'sharedReportCustody'
+                    assert bad['probe'][shared_category]=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
+                    kind='closed receipts' if args.handoff_closed_only_inventory else 'completed report'
+                    passed('Candidate with a disjoint private mount cannot claim custody of the original '+kind)
                     if args.handoff_raw_custody:
                         assert bad['probe']['originalEvidence']['rawCaptureEvidence']['state']=='ARCHIVED'
                         assert bad['probe']['sharedRawCaptureCustody']=={'state':'REFUSED','code':'HANDOFF_ARCHIVE_MISSING'}
@@ -3207,6 +3220,125 @@ cat <&3''').stdout
                 assert good['blockers']==['ORIGINAL_RECOVERY_EVIDENCE_UNVERIFIED'] and not good['executionAuthorized']
                 assert http('node-a',endpoint)==good and task()['ownerNodeId']==owner_node and data_cut()==original_cut
                 passed('Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data')
+                if args.handoff_closed_only_inventory:
+                    from zipfile import ZipFile
+                    checked=[good_plan,good]
+                    def certified_inventory():
+                        checked[:]=current_probe(checked[0])
+                        original=checked[1]['probe']['originalEvidence']
+                        manifest['originInventoryAttempt']={'paths':original['originInventory'],
+                            'closedReceipts':original['retainedReceipts'],
+                            'attested': 'offlineRecoveryInventory' in original}
+                        assert set(original['originInventory'].values())=={'ABSENT'}, manifest['originInventoryAttempt']
+                        return original.get('offlineRecoveryInventory')
+                    wait(certified_inventory,'original authenticated inventory for a stopped receipt-only task',seconds=20)
+                    good_plan,good=checked
+                    proof=good['probe']
+                    receipts=proof['sharedReceiptCustody']
+                    assert receipts['state']=='VERIFIED'
+                    assert receipts['archive']['closedReceipts']>0 and receipts['archive']['reports']==0
+                    assert receipts['archive'].get('failureRecords',0)==receipts['archive'].get('rawCaptures',0)==0
+                    assert original_cut==data_cut() and rows_match()
+                    preparation=endpoint+'/preparation'
+                    preparation_id='gc_receipt_prepare_'+uuid.uuid4().hex
+                    prepared_input={'expectedAssessment':good['id'],'expectedRevision':task()['revision'],
+                                    'expectedEvidenceSha256':good['preparationEvidenceSha256']}
+                    prepared=http('node-a',preparation,prepared_input,request=preparation_id)
+                    assert prepared['state']=='PREPARED' and prepared['writerActivation']['checkedInControlTransaction']
+                    stage_input={'expectedPreparation':preparation_id,'expectedRevision':prepared_input['expectedRevision'],
+                                 'expectedEvidenceSha256':prepared_input['expectedEvidenceSha256']}
+                    staged=http('node-b',preparation+'/stage',stage_input)
+                    inventory=staged['offlineInventory']
+                    assert inventory['profile']=='CLOSED_RECEIPTS_ONLY' and inventory['state']=='SEALED'
+                    assert not inventory['executionAuthorized']
+                    assert inventory['closedReceipts']==receipts['archive']['closedReceipts']
+                    assert inventory['originInventory']=={'validationReports':'ABSENT','failureEvidence':'ABSENT',
+                                                          'sourceEvidence':'ABSENT'}
+                    archive=next(path for path in (home/'handoff-shared').glob('handoff-*.zip')
+                                 if hashlib.sha256(path.read_bytes()).hexdigest()==staged['archiveSha256'])
+                    stage,=[path for path in (home/candidate/'controller'/'handoff-staging').iterdir() if path.is_dir()]
+                    retained=stage/'closed-receipts.json'
+                    before=retained.read_bytes()
+                    with ZipFile(archive) as transfer:
+                        assert before==transfer.read('closed-receipts.json')
+                    assert len(json.loads(before))==inventory['closedReceipts']
+                    passed('Both Controllers bind complete closed receipt custody to the same drained source and two SQL targets')
+                    archive.unlink()
+                    assert http('node-a',preparation+'/stage',stage_input)==staged
+                    retained.write_bytes(before[:-1]+(b'X' if before[-1:]!=b'X' else b'Y'))
+                    try:
+                        refused=http('node-b',preparation+'/stage',stage_input,expected=409)
+                        assert refused['code'].startswith('HANDOFF_STAGING_'), refused
+                    finally:
+                        retained.write_bytes(before)
+                    assert http('node-a',preparation+'/stage',stage_input)==staged
+                    assert data_cut()==original_cut and task()['ownerNodeId']==owner_node and rows_match()
+                    passed('Private closed receipt bytes survive transfer archive loss, reject corruption and retain the original writer and checkpoints')
+                    manifest['offlineInventory']={'profile':inventory['profile'],'closedReceipts':inventory['closedReceipts'],
+                                                  'manifestSha256':inventory['manifestSha256'],'sourceAndTargetCutsUnchanged':True}
+                    if args.handoff_freeze_original:
+                        freeze_path=preparation+'/freeze-original'
+                        cancel_path=preparation+'/cancel-freeze'
+                        args_body=dict(stage_input,expectedInventorySha256=inventory['manifestSha256'])
+                        freeze_id='gc_freeze_'+uuid.uuid4().hex
+                        http('node-b',freeze_path,args_body,request=freeze_id,expected=403,token=env['RM_GC_VIEWER'])
+                        frozen=http('node-a',freeze_path,args_body,request=freeze_id,expected=(200,202))
+                        assert frozen['state']=='ORIGINAL_FROZEN' and not frozen['executionAuthorized'], frozen
+                        original_epoch=int(original_cut[0].split('|',1)[0])
+                        assert int(frozen['originalFreeze']['journalEpoch'])==original_epoch+1
+                        assert http('node-b',freeze_path,args_body,request=freeze_id,expected=(200,202))==frozen
+                        parked="SELECT run_state,owner IS NULL,lease_until,format_version FROM transfer_journal.rm3_job"
+                        assert sql('store',parked)=='HANDOFF_PARKED|t|0|15'
+                        frozen_cut=data_cut()
+                        assert task()['ownerNodeId']==owner_node and task()['revision']==stage_input['expectedRevision']
+                        assert frozen_cut[0].split('|',1)[1]==original_cut[0].split('|',1)[1] and frozen_cut[1:]==original_cut[1:]
+                        action_start={'action':'START','expectedRevision':task()['revision']}
+                        assert http('node-b',route+'/actions',action_start,expected=409)['code']=='HANDOFF_ORIGINAL_FROZEN'
+                        passed('Original freeze parks the exact journal epoch with neither data changes nor new ownership')
+                        refusal='HANDOFF_ORIGINAL_FROZEN'
+                        assert http('node-a',preparation+'/release',{'expectedPreparation':preparation_id},
+                                    request='gc_release_'+uuid.uuid4().hex,expected=409)['code']==refusal
+                        assert http('node-b',preparation+'/commit-owner',stage_input,
+                                    request='gc_online_commit_'+uuid.uuid4().hex,expected=409)['code']==refusal
+                        original_worker_config='/fixture/'+owner_node+'/controller/worker-config/global_cdc.yml'
+                        found=compose('exec','-T',owner_node,'test','-f',original_worker_config,check=False)
+                        if found.returncode:
+                            original_worker_config='/fixture/'+owner_node+'/tasks/global_cdc.yml'
+                        generation=sql('store','SELECT error_generation FROM transfer_journal.rm3_job')
+                        direct=compose('exec','-T',owner_node,'java',*launch,'resume-pipeline',
+                                       original_worker_config,generation,check=False)
+                        assert direct.returncode and 'PIPELINE_PAUSED' in direct.stderr, (direct.returncode,direct.stderr[-1000:])
+                        old_worker=compose('exec','-T',owner_node,'timeout','14s','java',*launch,'run',
+                                           original_worker_config,check=False)
+                        assert old_worker.returncode==124 and 'PIPELINE_RETRY PipelinePaused' in old_worker.stderr, (
+                            old_worker.returncode,old_worker.stderr[-1000:])
+                        assert data_cut()==frozen_cut and rows_match()
+                        assert sql('store',parked)=='HANDOFF_PARKED|t|0|15'
+                        passed('Frozen original rejects ordinary release and ownership commands, direct Worker start and CLI resume')
+                        terminate_owner()
+                        assert http('node-a',preparation)['state']=='ORIGINAL_FROZEN'
+                        offline_cancel=http('node-b',cancel_path,args_body,request='gc_offline_'+uuid.uuid4().hex,expected=409)
+                        assert offline_cancel['code']=='HANDOFF_ORIGINAL_FREEZE_OWNER_UNAVAILABLE', offline_cancel
+                        assert http('node-a',route+'/actions',action_start,expected=409)['code']=='HANDOFF_ORIGINAL_FROZEN'
+                        assert data_cut()==frozen_cut
+                        restart_owner()
+                        assert http('node-b',route+'/actions',action_start,expected=409)['code']=='HANDOFF_ORIGINAL_FROZEN'
+                        cancel_id='gc_cancel_'+uuid.uuid4().hex
+                        cancelled=http('node-b',cancel_path,args_body,request=cancel_id,expected=(200,202))
+                        assert cancelled['state']=='FREEZE_CANCELLED' and not cancelled['executionAuthorized'], cancelled
+                        assert http('node-a',cancel_path,args_body,request=cancel_id,expected=(200,202))==cancelled
+                        assert sql('store',parked)=='RUNNING|t|0|11'
+                        cancelled_cut=data_cut()
+                        assert int(cancelled_cut[0].split('|',1)[0])==original_epoch+2
+                        assert cancelled_cut[0].split('|',1)[1]==original_cut[0].split('|',1)[1] and cancelled_cut[1:]==original_cut[1:]
+                        assert task()['ownerNodeId']==owner_node and task()['desired']=='STOPPED'
+                        passed('The same private original directory survives restart, cancels with explicit approval, and stays stopped')
+                        manifest['durableOriginalFreeze']={'originalEpoch':original_epoch,'frozenEpoch':original_epoch+1,
+                                                          'cancelledEpoch':original_epoch+2,'sameDirectoryRequired':True}
+                    manifest['status']='PASS'
+                    assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+                    print('GLOBAL_CONTROL_CLOSED_RECEIPT_INVENTORY_ACCEPTED artifact='+digest)
+                    raise SystemExit(0)
                 if args.handoff_custody:
                     import zipfile
                     custody=proof['sharedReportCustody']

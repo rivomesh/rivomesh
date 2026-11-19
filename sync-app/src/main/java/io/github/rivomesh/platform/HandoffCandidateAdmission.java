@@ -61,9 +61,10 @@ final class HandoffCandidateAdmission {
         if(successor.getBytes(StandardCharsets.UTF_8).length>MAX_YAML)
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         validator.validate(successor);
-        return HandoffStaging.withVerifiedStage(state,staged,cipher,stagingSha256->{
-            Ready receipt=new Ready(plan.id(),staged.candidate(),STOPPED,Codec.sha256(successor),stagingSha256,raw,staged.archive().failureRecords());
-            Seal intended=new Seal(1,staged,plan.evidence().original(),plan.activation(),receipt,successor);
+        return HandoffStaging.withVerifiedFiles(state,staged,cipher,verified->{
+            HandoffStaging.Binding retained=verified.manifest().binding();
+            Ready receipt=new Ready(plan.id(),retained.candidate(),STOPPED,Codec.sha256(successor),verified.sealSha256(),raw,retained.archive().failureRecords());
+            Seal intended=new Seal(1,retained,plan.evidence().original(),plan.activation(),receipt,successor);
             Path file=sealPath(state,plan,true);
             if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS)){
                 String envelope;

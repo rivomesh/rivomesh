@@ -13720,5 +13720,62 @@
     "configurationExamplesPassed": 25,
     "artifactGate": "PASS",
     "scope": "Standard Eclipse Temurin 21 artifact includes the Oracle national character implementation. Run-specific native source, target and topology evidence is linked separately."
+  },
+  "nativeManagedOriginalFreeze": {
+    "status": "PASS",
+    "exactNativeArtifactSha256": "2a471e04eb8bc99148cc5dce86c7179c8cb047786da82edfd845f8dea07f8f6b",
+    "nativeManifestSha256": "34f1cdb13dcf31b3426a79dad5b49c1afd6cb0f769aca81b34fa0a571e3c5ca4",
+    "harnessSourceSha256": "11d3e184aad61ffd93351f93212c92ad787c62c4cfc83874c354d6f141940031",
+    "sourceVersion": "8.4.13",
+    "controlAndJournal": "PostgreSQL 17.12, same database, separate native schemas",
+    "destinations": [
+      "PostgreSQL 17.12",
+      "MySQL 8.4.13"
+    ],
+    "nativeChecksPassed": 18,
+    "checks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Only the original Agent can admit the explicitly initialized managed writer",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+      "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+      "Concurrent refreshes against the same receipt allow exactly one replacement",
+      "Controller restart retains the assessed placement, original owner and masked cut proof",
+      "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+      "Candidate with a disjoint private mount cannot claim custody of the original closed receipts",
+      "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+      "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+      "Both Controllers bind complete closed receipt custody to the same drained source and two SQL targets",
+      "Private closed receipt bytes survive transfer archive loss, reject corruption and retain the original writer and checkpoints",
+      "Original freeze parks the exact journal epoch with neither data changes nor new ownership",
+      "Frozen original rejects ordinary release and ownership commands, direct Worker start and CLI resume",
+      "The same private original directory survives restart, cancels with explicit approval, and stays stopped"
+    ],
+    "offlineInventory": {
+      "profile": "CLOSED_RECEIPTS_ONLY",
+      "closedReceipts": 4,
+      "manifestSha256": "09fcc108490a75159a7c7f80f2cbe506fdfdb87b24870e99a0825a77a93f40db",
+      "sourceAndTargetCutsUnchanged": true
+    },
+    "originalFreeze": {
+      "originalEpoch": 1,
+      "frozenEpoch": 2,
+      "cancelledEpoch": 3,
+      "sameDirectoryRequired": true
+    },
+    "fixtureResourcesRemaining": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "integratedArtifactSha256": "320f0a6d36594b64f383464ea058e7af995e49bf1a760c4d88a49e5376913913",
+    "integratedSourceTree": "27cc92a352c50aa2a3f9ee2278343b5ab975c6fd",
+    "integratedFocusedJavaTestsPassed": 128,
+    "integratedDomTestsPassed": 166,
+    "integratedChromeChecksPassed": 14,
+    "scope": "Planned freeze of a healthy, completely drained original Agent with no private source, failure or report files. Exact candidate-private receipt payload survives loss of the transfer ZIP. The original writer cannot restart while frozen, including after process loss. Same-directory cancellation remains stopped and preserves both SQL cuts. Permanent-loss ownership transfer requires distinct acceptance.",
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-closed-only-inventory --handoff-freeze-original --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-durable-freeze"
   }
 }

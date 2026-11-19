@@ -169,6 +169,38 @@ class JournalTest {
             assertEquals(parked+2,continued.epoch);
         }
     }
+    @Test void frozenOriginalAssignmentUsesTheSameOrdinaryWriterFenceAndRetainsItsCut()throws Exception{
+        JdbcJournal.Settings origin=settings();origin.writerAssignment=UUID.randomUUID().toString();
+        origin.writerNode="original";origin.managedWriter=true;
+        try(JdbcJournal journal=new JdbcJournal(origin)){
+            journal.initializeStorage(Codec.sha256("config"),"generation",List.of("fast","slow"));
+            var former=journal.claim("old-worker",30000);
+            var expected=transaction(1);journal.append(former,expected);
+            journal.release(former);
+            long parked=former.epoch+1;
+            try(Connection c=journal.connect()){
+                c.setAutoCommit(false);
+                var cut=new JournalWriterAssignment.CutProof(Codec.sha256("generation"),"c".repeat(64),List.of("fast","slow"),true,
+                        new JournalWriterAssignment.ManagedCut("original",Codec.sha256(origin.writerAssignment),former.epoch,1,
+                                Codec.sha256(Codec.encode(expected.position))));
+                assertEquals("HANDOFF_MANAGED_CONTROL_CUT_INVALID",assertThrows(IllegalStateException.class,
+                        ()->JournalWriterAssignment.freezeOriginal(c,origin.namespace,origin.pipelineId,origin.writerAssignment,cut)).getMessage());
+                c.rollback();
+                JdbcJournal.execute(c,"UPDATE "+journal.table("job")+" SET epoch=?,format_version=15,run_state='HANDOFF_PARKED' WHERE pipeline_id=?",
+                        parked,origin.pipelineId);
+                c.commit();
+            }
+            assertThrows(JdbcJournal.PipelinePaused.class,()->initialize(journal));
+            assertThrows(JdbcJournal.PipelinePaused.class,()->journal.claim("from-old-configuration",30000));
+            assertThrows(JdbcJournal.PipelinePaused.class,()->journal.heartbeat(former,30000));
+            assertThrows(JdbcJournal.PipelinePaused.class,()->journal.resumePipeline(0));
+            assertThrows(JdbcJournal.PipelinePaused.class,()->journal.resume("fast",0));
+            assertThrows(JdbcJournal.PipelinePaused.class,()->journal.acknowledge(former,"fast",1));
+            assertEquals("HANDOFF_PARKED",journal.status().get("run_state"));
+            assertEquals(parked,((Number)journal.status().get("epoch")).longValue());
+            assertEquals(expected.position,journal.captured());
+        }
+    }
     @Test void byteBudgetLimitsBatchButKeepsAnOversizedHeadTransaction()throws Exception{
         try(JdbcJournal journal=new JdbcJournal(settings())){
             initialize(journal);

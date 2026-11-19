@@ -1159,10 +1159,7 @@ public final class TaskService implements AutoCloseable {
                 if(!"STOPPED".equals(task.desired)||!"STOPPED".equals(entry.workerState)
                         ||task.operations.stream().anyMatch(op->"PENDING".equals(op.status)))
                     throw new Conflict("HANDOFF_ORIGINAL_WORKER_CHANGED");
-                Map<String,String> inventory=Map.of(
-                        "validationReports",privateDirectoryState(reports(request.taskId)),
-                        "failureEvidence",privateDirectoryState(failureEvidenceDirectory(request.taskId)),
-                        "sourceEvidence",privateDirectoryState(captureEvidenceDirectory(request.taskId)));
+                Map<String,String> inventory=handoffOriginInventory(request.taskId);
                 long receipts=registry.requests.values().stream().filter(receipt->request.taskId.equals(receipt.taskId)).count();
                 originalEvidence=new LinkedHashMap<>(Map.of("state","REFUSED","code","ORIGINAL_PRIVATE_EVIDENCE_CUSTODY_UNPROVEN",
                         "originInventory",inventory,"retainedReceipts",receipts));
@@ -1189,6 +1186,11 @@ public final class TaskService implements AutoCloseable {
                     if(archive.reports()>0)originalEvidence.put("shareableReports",Map.of("state","ARCHIVED","archive",archive));
                     if(archive.closedReceipts()>0)originalEvidence.put("closedReceipts",Map.of("state","ARCHIVED","archive",archive));
                     if(archive.failureRecords()>0)originalEvidence.put("historicalFailureEvidence",Map.of("state","ARCHIVED","archive",archive));
+                    if(HandoffRecoveryInventory.receiptsOnly(archive)){
+                        var complete=offlineHandoffInventory(request,actor,archive);
+                        if(complete!=null&&complete.originInventory().equals(originalEvidence.get("originInventory")))
+                            originalEvidence.put("offlineRecoveryInventory",complete);
+                    }
                 }catch(Exception failed){
                     originalEvidence.put("shareableReports",archiveRefusal(failed));
                     if(!closedReceipts.receipts().isEmpty())originalEvidence.put("closedReceipts",archiveRefusal(failed));
@@ -1332,6 +1334,82 @@ public final class TaskService implements AutoCloseable {
                 ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS))
             throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
     }
+    Map<String,Object> verifyOriginalFreeze(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        boolean cancelling=request.kind==TaskRequest.Kind.HANDOFF_CANCEL_FREEZE_RPC;
+        HandoffPreparations.Plan plan=request.handoffPreparation;
+        if(!request.originalFreezeRpc()||plan==null||request.yaml==null||!request.reference.equals(plan.id())
+                ||!request.taskId.equals(plan.task()))
+            throw new IllegalArgumentException("HANDOFF_ORIGINAL_FREEZE_REQUEST_INVALID");
+        HandoffRecoveryInventory.ReceiptOnly inventory=cancelling
+                ?plan.writerFreeze()==null?null:plan.writerFreeze().inventory()
+                :request.handoffStaging==null?null:request.handoffStaging.offlineInventory();
+        if(inventory==null)throw new Conflict("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED");
+        TaskDefinition active;
+        synchronized(this){
+            active=parseTask(request.yaml);
+            requireOriginalFreezeInventory(request,actor,plan,active,inventory);
+        }
+        io.github.rivomesh.cdc.JournalWriterAssignment.CutProof checked;
+        if(cancelling){
+            checked=plan.writerFreeze().cut();
+            active.pipeline.verifyOriginalFreeze(checked,plan.writerFreeze().fence());
+        }else{
+            var cut=plan.evidence().cut();
+            checked=active.pipeline.verifyHandoffCut(new io.github.rivomesh.cdc.JournalWriterAssignment.ExpectedCut(
+                    Long.parseLong(cut.epoch()),Long.parseLong(cut.sequence()),cut.checkpointSha256()));
+        }
+        synchronized(this){
+            requireOriginalFreezeInventory(request,actor,plan,active,inventory);
+        }
+        return Map.of("cut",checked,"receiptPayloadSha256",inventory.receiptPayloadSha256());
+    }
+
+    private void requireOriginalFreezeInventory(TaskRequest request,AccessControl.Principal actor,HandoffPreparations.Plan plan,
+                                                TaskDefinition active,HandoffRecoveryInventory.ReceiptOnly inventory)throws Exception{
+        ensureOpen();currentActor(actor);
+        var evidence=plan.evidence();
+        if(!actor.administers()||!actor.task(request.taskId)||!actor.node(evidence.original().node())
+                ||!actor.node(evidence.candidate().node()))throw new SecurityException("FORBIDDEN");
+        if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()
+                ||!evidence.original().node().equals(nodeId())
+                ||!evidence.original().directory().equals(registry.ownerDirectoryIdentity)
+                ||!request.revision.equals(evidence.revision())||!request.identityHash.equals(evidence.proof()))
+            throw new Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        var scope=new SharedHandoffEvidence.Scope(config.cluster.id,plan.task(),evidence.assessment(),evidence.revision(),
+                evidence.configuration(),evidence.original().directory(),evidence.candidate().directory());
+        inventory.requireScope(scope);
+        Entry entry=require(request.taskId);
+        Control task=registry.tasks.get(request.taskId);
+        var yaml=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+        if(active.pipeline==null||!quietOriginal(entry,task)||task.recipientImport!=null
+                ||!yaml.readTree(entry.config.workerYaml).equals(yaml.readTree(active.workerYaml))
+                ||!inventory.originInventory().equals(handoffOriginInventory(request.taskId)))
+            throw new Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        inventory.requireReceipts(collectClosedHandoffReceipts(request.taskId,request.handoffClosedReceipts));
+    }
+
+    private static boolean quietOriginal(Entry entry,Control task){
+        return "STOPPED".equals(task.desired)&&"STOPPED".equals(entry.workerState)&&!entry.projectionPending
+                &&(entry.worker==null||!entry.worker.alive())
+                &&task.operations.stream().noneMatch(operation->"PENDING".equals(operation.status));
+    }
+
+    private synchronized HandoffRecoveryInventory.ReceiptOnly offlineHandoffInventory(
+            TaskRequest request,AccessControl.Principal actor,SharedHandoffEvidence.Archive archive)throws Exception{
+        ensureOpen();currentActor(actor);verifyHandoffEvidenceScope(request,true);
+        Entry entry=require(request.taskId);
+        Control task=registry.tasks.get(request.taskId);
+        if(!quietOriginal(entry,task))return null;
+        return HandoffRecoveryInventory.observe(request.handoffEvidenceScope,handoffOriginInventory(request.taskId),
+                task.recipientImport!=null,collectClosedHandoffReceipts(request.taskId,request.handoffClosedReceipts),archive);
+    }
+
+    private Map<String,String> handoffOriginInventory(String task){
+        return Map.of("validationReports",privateDirectoryState(reports(task)),
+                "failureEvidence",privateDirectoryState(failureEvidenceDirectory(task)),
+                "sourceEvidence",privateDirectoryState(captureEvidenceDirectory(task)));
+    }
+
     private SharedHandoffEvidence.ReceiptPlan collectClosedHandoffReceipts(String task,SharedHandoffEvidence.ReceiptPlan plan){
         if(plan==null)return new SharedHandoffEvidence.ReceiptPlan(List.of(),"HANDOFF_CLOSED_RECEIPT_UNPROVEN");
         if(plan.refusal()!=null)return plan;
