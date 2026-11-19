@@ -5,6 +5,7 @@ import io.github.rivomesh.cdc.TableSchema;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,11 +50,14 @@ final class SourceSchemaReview {
             changed++;
             if (details.size() >= MAX_TABLE_DETAILS) continue;
             TableSchema name = before == null ? now : before;
+            boolean retained = before != null && now != null;
             details.add(new Difference(name.database, name.name,
                     before == null ? "TABLE_ADDED" : now == null ? "TABLE_MISSING" : "TABLE_CHANGED",
                     before == null ? null : before.version, oldHash, liveHash, columns(before, now),
-                    before != null && now != null && (!before.primaryKey.equals(now.primaryKey)
-                            || !before.identityKey.equals(now.identityKey))));
+                    retained && (!before.primaryKey.equals(now.primaryKey)
+                            || !before.identityKey.equals(now.identityKey)),
+                    retained && columnOrderChanged(before, now),
+                    retained && !hash(recordedShape.indexes()).equals(hash(liveShape.indexes()))));
         }
         return Map.of("scope", scope.name(), "state", changed == 0 ? "NO_VISIBLE_CHANGE" : "CHANGES_VISIBLE",
                 "recordedTables", recorded.size(), "visibleTables", live.size(), "changedTables", changed,
@@ -83,9 +87,19 @@ final class SourceSchemaReview {
     private static Map<String, String> columnHashes(TableSchema table) {
         var columns = new TreeMap<String, String>();
         if (table != null) {
-            for (TableSchema.Column column : table.columns) columns.put(column.name, hash(column));
+            for (TableSchema.Column column : table.columns) {
+                columns.put(column.name, hash(new ColumnShape(column, table.properties.get("pg.modifier." + column.name))));
+            }
         }
         return columns;
+    }
+
+    private static boolean columnOrderChanged(TableSchema before, TableSchema now) {
+        var recorded = before.columns.stream().map(column -> column.name).toList();
+        var live = now.columns.stream().map(column -> column.name).toList();
+        var shared = new HashSet<>(live);
+        shared.retainAll(new HashSet<>(recorded));
+        return !recorded.stream().filter(shared::contains).toList().equals(live.stream().filter(shared::contains).toList());
     }
 
     private static List<String> limited(TreeSet<String> names) {
@@ -106,7 +120,10 @@ final class SourceSchemaReview {
                              List<String> identityKey, List<TableSchema.Index> indexes, Map<String, String> properties) {}
 
     private record Difference(String database, String table, String change, Integer recordedVersion,
-                              String recordedSha256, String liveSha256, ColumnChanges columns, boolean identityChanged) {}
+                              String recordedSha256, String liveSha256, ColumnChanges columns, boolean identityChanged,
+                              boolean columnOrderChanged, boolean indexesChanged) {}
+
+    private record ColumnShape(TableSchema.Column column, String postgresTypeModifier) {}
 
     private record ColumnChanges(List<String> added, List<String> removed, List<String> modified,
                                  int addedCount, int removedCount, int modifiedCount) {}

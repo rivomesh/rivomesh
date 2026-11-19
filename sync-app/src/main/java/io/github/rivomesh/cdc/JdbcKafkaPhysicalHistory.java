@@ -155,6 +155,10 @@ final class JdbcKafkaPhysicalHistory {
         return value;
     }
 
+    static Signed attested(JdbcJournal journal,Connection c,String target,String generation,String version)throws Exception{
+        return read(journal,c,target,generation,version,true);
+    }
+
     private static Signed read(JdbcJournal journal,Connection c,String target,String generation,String version,boolean attested)throws Exception{
         try(PreparedStatement p=c.prepareStatement("SELECT stream_seq,proof FROM "+journal.table(history(attested))
                 +" WHERE pipeline_id=? AND subscription_id=? AND generation=? AND configuration_version=?")){

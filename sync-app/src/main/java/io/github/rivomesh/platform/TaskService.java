@@ -1572,6 +1572,40 @@ public final class TaskService implements AutoCloseable {
         });
     }
 
+    Map<String,Object> reviewKafkaPhysicalReceipt(TaskRequest request,AccessControl.Principal actor,String authority,
+                                                  ControlCipher cipher)throws Exception{
+        var predecessor=request.kafkaNoticePredecessor;
+        TaskDefinition definition;
+        TaskDefinition current;
+        String localRevision;
+        synchronized(this){
+            Entry entry=kafkaNoticeTask(request,actor);
+            definition=entry.config;
+            localRevision=registry.tasks.get(request.taskId).revision;
+            current=parseTask(definition.workerYaml,entry.path.getParent());
+        }
+        var scope=new KafkaPhysicalReceipt.Scope(authority,request.taskId,predecessor.task().ownerDirectoryId(),
+                predecessor.task().configurationVersion(),io.github.rivomesh.cdc.Codec.sha256(definition.workerYaml.getBytes(StandardCharsets.UTF_8)));
+        Map<String,Object> result;
+        try{
+            result=backend.reviewKafkaPhysicalReceipt(current,scope,predecessor.receipt(),cipher.signature(scope.keyDomain()),
+                    witness->cipher.matches(witness.member().signatureDomain(),witness.signature()));
+        }catch(IllegalStateException rejected){
+            String code=rejected.getMessage();
+            if(code!=null&&code.matches("KAFKA_PHYSICAL_RECEIPT_[A-Z_]{1,70}"))throw new Conflict(code);
+            throw rejected;
+        }
+        synchronized(this){
+            if(kafkaNoticeTask(request,actor).config!=definition||!localRevision.equals(registry.tasks.get(request.taskId).revision))
+                throw new Conflict("REVISION_CHANGED");
+            AuditStore.Event event=new AuditStore.Event();
+            event.kind="KAFKA_PHYSICAL_RECEIPT_READ";event.action="READ_KAFKA_PHYSICAL_RECEIPT";event.taskId=request.taskId;
+            event.subjectId=request.reference;event.actorId=actor.id;event.actorRole=actor.role.name();
+            event.operationHash=(String)result.get("receiptSha256");event.status="RESPONSE_PREPARED";appendAudit(event);
+        }
+        return result;
+    }
+
     private Entry kafkaNoticeTask(TaskRequest request,AccessControl.Principal actor){
         ensureOpen();currentActor(actor);
         if(actor==null||!actor.administers()||!actor.task(request.taskId)||!nodeAllowed(actor))throw new SecurityException("FORBIDDEN");

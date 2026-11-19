@@ -863,8 +863,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。签名回执的管理端查询、历史全量归属、正式发送与恢复、跨适配器补偿待验。",
-        "en": "Both Kafka entries review physical topics and replay the blocked approval. A managed Worker records the Topic UUID, native offset, Agent membership lease and journal UTC for the first eligible newly observed COMMIT. Native Kafka with PostgreSQL, MySQL and H2 journals passed. Management readback, complete historical coverage, dispatch and recovery, and cross-adapter compensation remain."
+        "zh-CN": "Kafka 双入口复核物理 Topic 并重放受阻审批。托管 Worker 已在真实 Kafka 上为启用后首次可核验的 COMMIT 持久记录 Topic UUID、原生位点、Agent 成员租约及日志 UTC 时间。PostgreSQL、MySQL 和 H2 日志已通过，业务与消费位点保持独立。两个管理入口可在当前故障的精确前序 ACK 查验签名回执。真实 Kafka 查询、历史全量归属、正式发送与恢复、跨适配器补偿待验。",
+        "en": "Both Kafka entries review physical topics and replay the blocked approval. A managed Worker records the Topic UUID, native offset, Agent membership lease and journal UTC for the first eligible newly observed COMMIT. Native Kafka with PostgreSQL, MySQL and H2 journals passed. Both management entries can verify the signed receipt of the current failure's exact preceding ACK. Joint native Kafka readback, complete historical coverage, dispatch and recovery, and cross-adapter compensation remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -892,7 +892,8 @@
         "tests/kafka/ReplicatedKafkaAcceptance.java",
         "tests/kafka/KafkaPhysicalOwnershipAcceptance.java",
         "tests/kafka-journal-durability-run.py",
-        "docs/verification/README.md"
+        "docs/verification/README.md",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/KafkaPhysicalReceiptReviewTest.java"
       ]
     },
     {
@@ -1705,8 +1706,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 关系变化也已实测停留原 LSN 并可审阅当前发布差异。 JDBC 目标已回归验证身份列换序时仍保护 UNIQUE，显式全局主键和身份 GSI 在建表前要求分布方案。MySQL 源的 Gauss 目标可在管理预检审阅索引动作，覆盖完整统计及有界详情。商用多 CN/DN 和目标目录行为仍需实机验收。 openGauss 7.0.0-RC3 已核对源 UNIQUE(email) 降级与索引 OID 保留，目标主键和同步回执的唯一性保留。",
-        "en": "Allowlisted objects, UNIQUE/GSI policies and coordinated MySQL-to-PostgreSQL restore have native evidence. Two management entries expose read-only MySQL DDL differences between recorded schema and current catalog. Reviewed DDL execution, more types and other products remain. PostgreSQL relation drift also retained the original LSN and exposed a read-only current publication comparison. JDBC regressions cover reordered identity UNIQUE and pre-DDL refusal of global primary or identity indexes. Managed Gauss preflight for MySQL reports complete plan counts and bounded details. Native commercial multi-CN/DN and target catalog behavior still need deployment validation. openGauss 7.0.0-RC3 verified UNIQUE(email) downgrade and stable index OIDs while retaining business and receipt primary keys."
+        "zh-CN": "对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 17.12 关系变化已实测停留原 LSN。界面审阅包括原生类型声明变化、列顺序和目录已有的索引定义。 JDBC 目标已回归验证身份列换序时仍保护 UNIQUE，显式全局主键和身份 GSI 在建表前要求分布方案。MySQL 源的 Gauss 目标可在管理预检审阅索引动作，覆盖完整统计及有界详情。商用多 CN/DN 和目标目录行为仍需实机验收。 openGauss 7.0.0-RC3 已核对源 UNIQUE(email) 降级与索引 OID 保留，目标主键和同步回执的唯一性保留。",
+        "en": "Allowlisted objects, UNIQUE/GSI policies and coordinated MySQL-to-PostgreSQL restore have native evidence. Two management entries expose read-only MySQL DDL differences between recorded schema and current catalog. Reviewed DDL execution, more types and other products remain. PostgreSQL 17.12 relation drift retains the original LSN. Read-only catalog review includes native type modifiers, existing column order and collected index definitions. JDBC regressions cover reordered identity UNIQUE and pre-DDL refusal of global primary or identity indexes. Managed Gauss preflight for MySQL reports complete plan counts and bounded details. Native commercial multi-CN/DN and target catalog behavior still need deployment validation. openGauss 7.0.0-RC3 verified UNIQUE(email) downgrade and stable index OIDs while retaining business and receipt primary keys."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1727,7 +1728,8 @@
         "docs/zh-CN/gaussdb-index-policy.md",
         "sync-app/src/main/java/io/github/rivomesh/GaussIndexReview.java",
         "sync-app/src/test/java/io/github/rivomesh/GaussIndexReviewTest.java",
-        "tests/opengauss-index-native.py"
+        "tests/opengauss-index-native.py",
+        "tests/postgres-source-run.py"
       ]
     },
     {

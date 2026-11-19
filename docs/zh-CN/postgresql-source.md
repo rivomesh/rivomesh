@@ -71,6 +71,6 @@ PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复
 
 ## 审阅导致采集暂停的结构变化
 
-当 pgoutput 为行事务报告已变化的关系时，同步停在前一持久 LSN，提示 `POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN`。打开采集故障审阅，可对照当前发布与日志结构，查看表、原结构和当前结构摘要、变化的列名。当前发布可能包含故障发生后的 DDL。pgoutput 传输关系元数据和行变更，DDL 语句不在流中。当前发布超出支持范围时，审阅显示原生发现诊断并保留前一 LSN。审阅期间不执行 DDL，也不更新断点。 [PostgreSQL 逻辑复制限制](https://www.postgresql.org/docs/17/logical-replication-restrictions.html) · [Relation 消息](https://www.postgresql.org/docs/17/protocol-logical-replication.html)
+当 pgoutput 为行事务报告已变化的关系时，同步停在前一持久 LSN，提示 `POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN`。打开采集故障审阅，可对照当前发布与日志结构，查看表、原结构和当前结构摘要、变化的列名。如将 `TIMESTAMP` 改为 `TIMESTAMP(6)`，审阅会列出原生类型声明变化的列，也会提示已有列的相对顺序变化。当前发布可能包含故障发生后的 DDL。pgoutput 传输关系元数据和行变更，DDL 语句不在流中。当前发布超出支持范围时，审阅显示原生发现诊断并保留前一 LSN。审阅期间不执行 DDL，也不更新断点。 [PostgreSQL 逻辑复制限制](https://www.postgresql.org/docs/17/logical-replication-restrictions.html) · [Relation 消息](https://www.postgresql.org/docs/17/protocol-logical-replication.html)
 
 执行 `python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact <release jar> --output target/pg-ddl-review` 可复现。

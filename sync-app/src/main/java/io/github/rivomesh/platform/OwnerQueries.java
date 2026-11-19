@@ -81,7 +81,9 @@ final class OwnerQueries {
         if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");
         if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
         return tasks.transaction(request.taskId,actor,(c,task,current)->{
-            authorize(request,current);if(request.readAtRevision()&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
+            authorize(request,current);if(request.readAtRevision()&&!Objects.equals(request.revision,task.revision))throw new TaskService.Conflict("REVISION_CHANGED");
+            if(request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)requireKafkaPhysicalScope(task,current,request);
+            AgentDirectory.Binding owner=agents.owner(c,task.owner,task.directory);
             if(!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
             if(request.readsAdoptedEvidence())request.adoptedEvidence=adoptedEvidence(c,task);
             return insert(c,request,current,owner,reserve(c,1),null);
@@ -191,6 +193,17 @@ final class OwnerQueries {
         if(entry.request.readsAdoptedEvidence()&&!Objects.equals(entry.request.adoptedEvidence,adoptedEvidence(c,tasks.record(c,entry.task))))
             throw new TaskService.Conflict("HANDOFF_ADOPTED_SCOPE_CHANGED");
     }
+    private static void requireKafkaPhysicalScope(GlobalTaskStore.Record task,AccessControl.Principal actor,TaskRequest request){
+        var predecessor=request.kafkaNoticePredecessor;
+        if(predecessor==null||!task.id.equals(predecessor.task().taskId())||!task.revision.equals(predecessor.task().revision())
+                ||!task.owner.equals(predecessor.task().ownerNodeId())||!task.directory.equals(predecessor.task().ownerDirectoryId())
+                ||!Objects.equals(task.configurationVersion,predecessor.task().configurationVersion())
+                ||!Objects.equals(task.activeConfigurationVersion,predecessor.task().configurationVersion()))
+            throw new TaskService.Conflict("KAFKA_PHYSICAL_RECEIPT_SCOPE_CHANGED");
+        if(!actor.id.equals(predecessor.administrator().actorId())
+                ||!Objects.equals(actor.authorizationRevision,predecessor.administrator().authorizationRevision()))
+            throw new SecurityException("FORBIDDEN");
+    }
     private static void requireHandoffAgent(Entry entry,AgentDirectory.Binding target){
         if(!entry.owner.equals(target.node)||!entry.directory.equals(target.directory)||entry.epoch!=target.epoch
                 ||!entry.incarnation.equals(target.incarnation)||!"HEALTHY".equals(target.state))
@@ -224,6 +237,8 @@ final class OwnerQueries {
                     if(!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
                     return new Execution(entry.request,actor,KafkaNoticeCatalog.probeInput(tasks,c,entry.request));
                 }
+                if(entry.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)
+                    requireKafkaPhysicalScope(tasks.record(c,entry.task),actor,entry.request);
                 if(!entry.request.handoffRpc()){
                     verifyAdoptedEvidence(c,entry);
                     return new Execution(entry.request,actor);
@@ -244,7 +259,10 @@ final class OwnerQueries {
                 }
                 return new Execution(scoped,actor);
             });
-            Map<String,Object> returned=execution.kafkaCatalog==null?local.ownerQuery(execution.request,execution.actor)
+            Map<String,Object> returned;
+            if(execution.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)
+                returned=local.ownerKafkaPhysicalReceipt(execution.request,execution.actor,tasks.identity,cipher);
+            else returned=execution.kafkaCatalog==null?local.ownerQuery(execution.request,execution.actor)
                     :local.ownerKafkaCatalog(execution.kafkaCatalog,execution.actor);
             response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC?readinessResponse(entry,returned):returned;
             if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
@@ -262,6 +280,8 @@ final class OwnerQueries {
                 if(current.request.preparedHandoffRpc())
                     verifyPreparedHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
+                else if(current.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)
+                    requireKafkaPhysicalScope(tasks.record(c,current.task),actor,current.request);
                 else verifyAdoptedEvidence(c,current);
             }catch(SecurityException|TaskService.Conflict revoked){
                 current.phase="REJECTED";current.code=revoked instanceof SecurityException?"AUTHORIZATION_CHANGED":revoked.getMessage();
@@ -359,7 +379,8 @@ final class OwnerQueries {
             if(entry.request.preparedHandoffRpc())verifyPreparedHandoff(c,record,current,entry);
             else if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
             else{
-                verifyAdoptedEvidence(c,entry);
+                if(entry.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)requireKafkaPhysicalScope(record,current,entry.request);
+                else verifyAdoptedEvidence(c,entry);
                 AgentDirectory.Binding owner=agents.owner(c,record.owner,record.directory);
                 if(!entry.owner.equals(owner.node)||!entry.directory.equals(owner.directory)||entry.epoch!=owner.epoch||!entry.incarnation.equals(owner.incarnation)||!"HEALTHY".equals(owner.state))throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
             }

@@ -12868,5 +12868,53 @@
     ],
     "scope": "Single-PDB Oracle Free with one archived redo thread. Real LogMiner filters seven canceled writes and seven compensation rows. Two independent PostgreSQL subscriptions use distinct data and metadata schemas on one PostgreSQL instance, direct Controller/Worker restart and unchanged snapshots. Both cuts match native Flashback.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --savepoint-evidence --pipeline --savepoint-pipeline --output target/oracle-savepoint-proof"
+  },
+  "postgres17NativeSchemaTypeModifierReview": {
+    "artifactSha256": "fbc17326c8ee8fedb9d22710f175b6fbd9540e58e7ab7f1554e26745d13a12f5",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+      "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+      "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+      "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+      "Changed native Relation retains the cut and review identifies the new column and exact TIMESTAMP type modifier",
+      "A later DDL changes the advisory live digest while preserving the recorded schema and failure cut",
+      "An unsupported publication shape has an explicit unavailable diagnostic without changing either cut"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17.12",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "ddlReview": true,
+    "harnessSha256": "d1dec0e9722a2a743141f804048639e3fbeb28278425532baf5ad7f6fc9005f8",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "cleanupExitCode": 0,
+    "manifestSha256": "83c5722ec98f2c99ef77ae4c2c69cb4fc01829129f25f4451e5229588387f3fb",
+    "scope": "Real PostgreSQL 17.12 source and destination. A native relation change reports TIMESTAMP to TIMESTAMP(6) even if the normalized logical column is identical. No watermarks, snapshots or target rows are changed by review."
+  },
+  "managedKafkaPhysicalReceiptReadback": {
+    "integratedArtifactSha256": "fbc17326c8ee8fedb9d22710f175b6fbd9540e58e7ab7f1554e26745d13a12f5",
+    "applicationSourceTree": "f8b59e4a44ffe29bd7f3ea738c1ed8e32491b571",
+    "sourceTreeWithFinalNativeFixture": "e18ffbb8fb15718207eaa621e1e8e13afd9054ef",
+    "focusedJavaPassed": 158,
+    "domPassed": 162,
+    "realChromePassed": 14,
+    "browserManifestSha256": "b9cebb3be7b3ae6f0b0ce97fd6dd255fc3470e50876bbd46f768307a6ecca3ae",
+    "kafkaReadbackEvidenceSha256": "47271ec48e7f63389448ac837772b6429aa2e5543cf62a1d8ebe189370751b1b",
+    "kafkaReadbackPriorArtifactSha256": "21bcdcb382b4210d34c77707382ce115f06efc419406c5117c8893b0a2399886",
+    "kafkaNativeReadbackVerified": false,
+    "scope": "Two real Controller HTTP entries and owner routing test exact task revision, active configuration, failure and signed preceding ACK. Broker metadata is replaced by a controlled test double in this readback profile. Native Kafka receipt publication has separate evidence."
   }
 }

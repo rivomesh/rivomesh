@@ -2,10 +2,13 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.*;
 import io.github.rivomesh.cdc.KafkaNoticePlanning;
+import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
+import io.github.rivomesh.cdc.KafkaPhysicalReceiptReview;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import java.sql.*;
 import java.util.*;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 
 /** Database controls share the existing transactional lease/fencing protocol. */
 public interface TaskBackend {
@@ -20,6 +23,10 @@ public interface TaskBackend {
     default void subscription(TaskDefinition task,String id,String action,long generation)throws Exception{if(task.pipeline==null)throw new IllegalArgumentException("SUBSCRIPTION_ACTION_INVALID");PipelineBackend.subscription(task.pipeline,id,action,generation);}
     default KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String subscription,long generation)throws Exception{
         return KafkaRecoveryReview.inspect(task.pipeline,subscription,generation);
+    }
+    default Map<String,Object> reviewKafkaPhysicalReceipt(TaskDefinition task,KafkaPhysicalReceipt.Scope scope,
+            KafkaNoticePlanning.Predecessor predecessor,String key,Predicate<KafkaPhysicalReceipt.MemberWitness> verifyMember)throws Exception{
+        return KafkaPhysicalReceiptReview.inspect(task.pipeline,scope,predecessor,key,verifyMember);
     }
     default KafkaNoticePlanning.Prepared planKafkaNotice(TaskDefinition task,KafkaNoticePlanning.TaskScope scope,
             KafkaNoticePlanning.Administrator administrator,KafkaNoticePlanning.Predecessor predecessor,

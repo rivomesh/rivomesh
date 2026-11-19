@@ -56,6 +56,48 @@ window.RivomeshRecovery=(()=>{
   for(const item of proof.nativeReceipts)offsets.append(text('li',item.namespace+' · '+t('kafkaReceiptOffset')+' '+item.offset+' · '+item.payloadSha256));
   section.append(label('h3','kafkaReceiptTitle'),facts,offsets);return section;
  }
+ function kafkaPhysicalReceipt(task,receipt,current){
+  const scope=()=>bridge.task(task.id),proof=receipt.kafkaReview;
+  const eligible=latest=>receiptAllowed(latest)&&paused(latest)&&bridge.session()?.recoveryReview
+   &&typeof latest.activeConfigurationVersion==='string'
+   &&latest.destinations?.some(item=>item.id===receipt.subscriptionId&&item.product==='KAFKA');
+  if(!proof?.originalFailure||!eligible(scope()))return null;
+  const section=text('section'),button=label('button','kafkaPhysicalCheck'),result=text('div');
+  section.dataset.kafkaPhysicalReceipt='';result.setAttribute('aria-live','polite');
+  button.onclick=async()=>{
+   const previous=scope();
+   if(!current()||!eligible(previous)||button.disabled)return;
+   const revision=previous.revision,version=previous.activeConfigurationVersion;
+   const responseCurrent=()=>current()&&section.isConnected&&eligible(scope())
+    &&scope().revision===revision&&scope().activeConfigurationVersion===version;
+   button.disabled=true;result.replaceChildren();
+   try{
+    const data=await api(base(task)+'/kafka-physical-receipt',{method:'POST',headers:{'Content-Type':'application/json','X-Request-ID':requestId()},
+     body:JSON.stringify({expectedRevision:revision,predecessorRequestId:receipt.id})});
+    if(!responseCurrent())return;
+    const exact=data?.targetId===receipt.subscriptionId&&data?.configurationVersion===version
+     &&data?.acknowledgedSequence===proof.acknowledgedSequence;
+    if(data?.status==='UNREACHABLE'
+     &&((exact&&data.code==='KAFKA_PHYSICAL_RECEIPT_BROKER_UNAVAILABLE')
+      ||['OWNER_QUERY_UNAVAILABLE','OWNER_QUERY_FAILED','OWNER_QUERY_TIMEOUT','OWNER_QUERY_EXPIRED'].includes(data.code))){
+     result.append(label('p','kafkaPhysicalUnavailable'));return;
+    }
+    if(!exact)throw new Error(t('receiptMismatch'));
+    if(data.status==='MISSING'&&['KAFKA_PHYSICAL_RECEIPT_UNVERIFIED','KAFKA_PHYSICAL_RECEIPT_TOPIC_CHANGED'].includes(data.code)){
+     result.append(label('p','kafkaPhysicalMissing'));return;
+    }
+    if(data.status!=='VERIFIED'||data.code!=='KAFKA_PHYSICAL_RECEIPT_VERIFIED'||!digest.test(data.receiptSha256||'')
+     ||![data.publishedAt,data.acknowledgedAt].every(value=>typeof value==='string'&&Number.isFinite(Date.parse(value)))
+     ||Date.parse(data.publishedAt)>Date.parse(data.acknowledgedAt))throw new Error(t('receiptMismatch'));
+    const details=text('dl');
+    for(const [key,value] of [['kafkaPhysicalDigest',data.receiptSha256],['kafkaPhysicalPublished',data.publishedAt],
+     ['kafkaPhysicalAcknowledged',data.acknowledgedAt]])details.append(label('dt',key),text('dd',value));
+    result.append(label('p','kafkaPhysicalVerified'),details);
+   }catch(error){if(responseCurrent())result.append(text('p',error.message,'error'));}
+   finally{button.disabled=false;}
+  };
+  section.append(button,result);return section;
+ }
  function kafkaNoticePreview(task,receipt,current){
   const scope=()=>bridge.task(task.id);
   const eligible=latest=>receiptAllowed(latest)&&paused(latest)&&bridge.session()?.recoveryReview
@@ -182,6 +224,8 @@ window.RivomeshRecovery=(()=>{
     result.append(facts);
     if(nativeEvidence){
      result.append(nativeEvidence);
+     const physical=kafkaPhysicalReceipt(task,receipt,dialog.current);
+     if(physical)result.append(physical);
      const notice=kafkaNoticePreview(task,receipt,dialog.current);
      if(notice)result.append(notice);
     }
@@ -557,6 +601,9 @@ window.RivomeshRecovery=(()=>{
   review_kafka_receipts:'核对 Kafka 回执',kafkaReceiptTitle:'前一笔已确认事务的 Kafka 回执',
   kafkaReceiptObservedAt:'核对时间',kafkaReceiptEpoch:'任务代次',kafkaReceiptGeneration:'目标错误代次',
   kafkaReceiptAcknowledged:'已确认事务序号',kafkaReceiptFailed:'失败事务序号',kafkaReceiptTopic:'Topic 身份摘要',kafkaReceiptOffset:'位点',
+  kafkaPhysicalCheck:'查验物理收据',kafkaPhysicalVerified:'已核实本次故障的确切前序 ACK。',
+  kafkaPhysicalMissing:'本次故障的确切前序 ACK 缺少可核实的物理收据。',kafkaPhysicalUnavailable:'暂时无法读取物理收据。',
+  kafkaPhysicalDigest:'物理收据摘要',kafkaPhysicalPublished:'日志库发布检查点时间',kafkaPhysicalAcknowledged:'日志库 ACK 时间',
   kafkaNoticePreview:'核对 Kafka 通知计划',kafkaNoticeControlTopic:'专用控制 Topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'通知内容摘要',kafkaNoticePlanSha:'计划摘要',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'发布受阻。专用 Topic 的全局归属尚未确认。',
@@ -588,6 +635,9 @@ window.RivomeshRecovery=(()=>{
   review_kafka_receipts:'Review Kafka receipts',kafkaReceiptTitle:'Kafka receipts for the preceding acknowledged transaction',
   kafkaReceiptObservedAt:'Reviewed at',kafkaReceiptEpoch:'Pipeline epoch',kafkaReceiptGeneration:'Destination error generation',
   kafkaReceiptAcknowledged:'Acknowledged sequence',kafkaReceiptFailed:'Failed sequence',kafkaReceiptTopic:'Topic identity digest',kafkaReceiptOffset:'Offset',
+  kafkaPhysicalCheck:'Check physical receipt',kafkaPhysicalVerified:'Physical receipt verified for the exact preceding ACK.',
+  kafkaPhysicalMissing:'No verifiable physical receipt for the exact preceding ACK.',kafkaPhysicalUnavailable:'The physical receipt is temporarily unavailable.',
+  kafkaPhysicalDigest:'Physical receipt digest',kafkaPhysicalPublished:'Journal publication checkpoint time',kafkaPhysicalAcknowledged:'Journal ACK time',
   kafkaNoticePreview:'Review Kafka notice plan',kafkaNoticeControlTopic:'Dedicated control topic',kafkaNoticeTopicId:'Topic ID',
   kafkaNoticePayloadSha:'Notice payload digest',kafkaNoticePlanSha:'Plan digest',
   KAFKA_NOTICE_GLOBAL_OWNERSHIP_UNVERIFIED:'Publication is blocked until dedicated topic ownership is verified globally.',

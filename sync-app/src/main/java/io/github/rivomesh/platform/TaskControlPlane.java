@@ -10,4 +10,8 @@ interface TaskControlPlane {
     default Map<String,Object> ownerKafkaCatalog(KafkaNoticeCatalog.Selection selection,AccessControl.Principal actor)throws Exception{
         throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
     }
+    default Map<String,Object> ownerKafkaPhysicalReceipt(TaskRequest request,AccessControl.Principal actor,
+                                                         String authority,ControlCipher cipher)throws Exception{
+        throw new TaskService.Conflict("OWNER_QUERY_UNAVAILABLE");
+    }
 }

@@ -7,6 +7,7 @@ import io.github.rivomesh.Model;
 import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.KafkaNoticePlanning;
+import io.github.rivomesh.cdc.KafkaPhysicalReceipt;
 import io.github.rivomesh.cdc.KafkaRecoveryReview;
 import io.github.rivomesh.cdc.TargetProduct;
 import java.nio.file.Path;
@@ -17,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,6 +72,21 @@ class ManagedKafkaRecoveryReviewTest {
         volatile int planned;
         volatile String businessIdentity=Codec.sha256("test topic");
         volatile String controlIdentity=Codec.sha256("test control topic");
+        final AtomicInteger physicalReads=new AtomicInteger();
+
+        @Override public Map<String,Object> reviewKafkaPhysicalReceipt(TaskDefinition task,KafkaPhysicalReceipt.Scope scope,
+                KafkaNoticePlanning.Predecessor predecessor,String key,Predicate<KafkaPhysicalReceipt.MemberWitness> verifyMember){
+            physicalReads.incrementAndGet();
+            assertEquals("job",task.jobId);
+            assertEquals("b",predecessor.ownerNodeId());
+            assertEquals(ID,predecessor.requestId());
+            assertEquals(predecessor.configurationVersion(),scope.configurationVersion());
+            assertEquals(predecessor.ownerDirectoryId(),scope.ownerDirectory());
+            assertEquals(Codec.sha256(task.workerYaml),scope.workerProjectionSha256());
+            assertTrue(key.matches("[A-Za-z0-9_-]{43}"));
+            return Map.of("status","MISSING","code","KAFKA_PHYSICAL_RECEIPT_UNVERIFIED","targetId","kafka",
+                    "configurationVersion",scope.configurationVersion(),"acknowledgedSequence","6");
+        }
 
         @Override public KafkaRecoveryReview.Observation reviewKafkaReceipts(TaskDefinition task,String target,long generation)throws Exception{
             assertEquals("job",task.jobId);
@@ -181,6 +199,52 @@ class ManagedKafkaRecoveryReviewTest {
             ConsoleServer server=new ConsoleServer(controller,reopened)){
             server.start();
             assertEquals(verified,fixture.get(fixture.base(server),TASK+"/recovery-receipts/"+ID,PlatformTest.TOKEN));
+        }
+    }
+
+    @Test void physicalReceiptIsAnAdministratorOnlyReadThroughBothEndpoints()throws Exception{
+        var fixture=new GlobalControlHttpTest();fixture.directory=directory;
+        var controller=fixture.config("a");var owner=fixture.config("b");
+        controller.cluster.recoveryReview=true;owner.cluster.recoveryReview=true;
+        Backend backend=new Backend();
+        try(TaskService first=new TaskService(controller,new PlatformTest.Backend(),new PlatformTest.Workers());
+            ConsoleServer one=new ConsoleServer(controller,first)){
+            one.start();
+            String api=fixture.base(one),route=TASK+"/kafka-physical-receipt";
+            ObjectNode lookup;
+            try(TaskService second=new TaskService(owner,backend,new PlatformTest.Workers());
+                ConsoleServer two=new ConsoleServer(owner,second)){
+                two.start();create(fixture,api,false);createScopedOperator(fixture,api);
+                fixture.action(api,"job","PAUSE","physical_pause_job",PlatformTest.TOKEN);
+                PlatformTest.await(()->fixture.completed(api,"job","physical_pause_job"));
+                assertEquals(202,post(api,request(fixture,api),ID,PlatformTest.TOKEN).status);
+                awaitCode(fixture,api,ID,KafkaRecoveryReview.VERIFIED);
+                var task=fixture.get(api,TASK,PlatformTest.TOKEN);
+                String revision=task.path("revision").asText();
+                lookup=Model.JSON.createObjectNode().put("expectedRevision",revision).put("predecessorRequestId",ID);
+                assertEquals(403,PlatformTest.http(api,route,OPERATOR,lookup.toString(),null).status);
+                assertEquals(409,PlatformTest.http(api,route,PlatformTest.TOKEN,
+                        lookup.deepCopy().put("expectedRevision",UUID.randomUUID().toString()).toString(),null).status);
+                assertEquals(404,PlatformTest.http(api,route,PlatformTest.TOKEN,
+                        lookup.deepCopy().put("predecessorRequestId","nonexistent_review").toString(),null).status);
+                assertEquals(400,PlatformTest.http(api,route,PlatformTest.TOKEN,
+                        lookup.deepCopy().put("configurationVersion",UUID.randomUUID().toString()).toString(),null).status);
+                assertEquals(0,backend.physicalReads.get());
+                for(String endpoint:List.of(api,fixture.base(two))){
+                    var response=PlatformTest.http(endpoint,route,PlatformTest.TOKEN,lookup.toString(),null);
+                    assertEquals(200,response.status,response.text);
+                    var result=Model.JSON.readTree(response.text);
+                    assertEquals("MISSING",result.path("status").asText());
+                    assertEquals(task.path("activeConfigurationVersion").asText(),result.path("configurationVersion").asText());
+                    assertFalse(result.has("signature"));assertFalse(result.has("executionAuthorized"));assertFalse(result.has("nativeReceipts"));
+                }
+                assertEquals(revision,fixture.get(api,TASK,PlatformTest.TOKEN).path("revision").asText());
+                assertEquals(2,backend.physicalReads.get());
+            }
+            var result=PlatformTest.http(api,route,PlatformTest.TOKEN,lookup.toString(),null);
+            assertEquals(200,result.status,result.text);
+            assertEquals("UNREACHABLE",Model.JSON.readTree(result.text).path("status").asText());
+            assertEquals(2,backend.physicalReads.get());
         }
     }
 

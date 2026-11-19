@@ -389,6 +389,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
             WITH (publish='insert,update,delete');
         """)
+        if args.ddl_review:
+            sql('source', 'ALTER TABLE billing.ledger ADD COLUMN observed TIMESTAMP')
         if args.uuid:
             sql('source',"""
                 CREATE TABLE billing.identities(id UUID PRIMARY KEY,ref UUID);
@@ -586,7 +588,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
 
         if args.delivery_timing:
             assert initial['subscriptions'][0]['lastDeliveryTiming']=={'state':'UNKNOWN'}
-            xid=sql('source',"INSERT INTO billing.ledger VALUES(15,'delivery observation') RETURNING xmin").splitlines()[0]
+            xid=sql('source',"INSERT INTO billing.ledger(id,label) VALUES(15,'delivery observation') RETURNING xmin").splitlines()[0]
             assert xid.isdecimal()
             utc_commit=f"SELECT pg_xact_commit_timestamp('{xid}'::xid) AT TIME ZONE 'UTC'"
             source_time=datetime.fromisoformat(sql('source',utc_commit)+"+00:00")
@@ -823,7 +825,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
 
             original=target_cut()
             sql('source',"ALTER TABLE billing.ledger ADD COLUMN first_note TEXT; "
-                         "INSERT INTO billing.ledger VALUES(2,'unapplied','pending')")
+                         "ALTER TABLE billing.ledger ALTER COLUMN observed TYPE TIMESTAMP(6); "
+                         "INSERT INTO billing.ledger(id,label,first_note) VALUES(2,'unapplied','pending')")
 
             def ddl_fault():
                 status=task()['status']
@@ -840,7 +843,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             table,=diff['tables']
             assert (table['database'],table['table'],table['change'])==('billing','ledger','TABLE_CHANGED')
             assert table['columns']['added']==['first_note']
-            passed('Changed native Relation fails closed and review identifies its current publication shape')
+            assert table['columns']['modified']==['observed'] and not table['columnOrderChanged']
+            passed('Changed native Relation retains the cut and review identifies the new column and exact TIMESTAMP type modifier')
 
             sql('source','ALTER TABLE billing.ledger ADD COLUMN second_note VARCHAR(30)')
             later=http(route+'/capture-recovery')

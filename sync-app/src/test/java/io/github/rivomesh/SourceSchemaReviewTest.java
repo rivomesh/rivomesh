@@ -44,6 +44,44 @@ class SourceSchemaReviewTest {
     }
 
     @Test
+    void reportsPostgresTypeModifierAndDistinguishesNewColumnsFromReordering() throws Exception {
+        TableSchema baseline = table("orders", 1, "id", "clock");
+        baseline.properties.put("pg.modifier.clock", "-1");
+        TableSchema live = table("orders", 1, "id", "note", "clock");
+        live.properties.put("pg.modifier.clock", "6");
+        JsonNode difference = difference(CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL, baseline, live);
+        assertEquals("clock", difference.path("columns").path("modified").get(0).asText());
+        assertEquals("note", difference.path("columns").path("added").get(0).asText());
+        assertFalse(difference.path("columnOrderChanged").asBoolean());
+
+        TableSchema reordered = table("orders", 1, "clock", "id");
+        reordered.properties.putAll(baseline.properties);
+        difference = difference(CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL, baseline, reordered);
+        assertTrue(difference.path("columnOrderChanged").asBoolean());
+        assertEquals(0, difference.path("columns").path("modifiedCount").asInt());
+    }
+
+    @Test
+    void reportsIndexOnlyChangesWithoutExposingTheirExpressions() throws Exception {
+        TableSchema baseline = table("orders", 1, "id");
+        TableSchema live = table("orders", 1, "id");
+        var index = new TableSchema.Index();
+        index.name = "orders_index";
+        index.expression = "private index expression";
+        live.indexes.add(index);
+        JsonNode difference = difference(CURRENT_MYSQL_CATALOG_VS_JOURNAL, baseline, live);
+        assertTrue(difference.path("indexesChanged").asBoolean());
+        assertFalse(difference.path("identityChanged").asBoolean());
+        assertFalse(difference.toString().contains("private index expression"));
+    }
+
+    private static JsonNode difference(SourceSchemaReview.Scope scope, TableSchema before, TableSchema live)
+            throws Exception {
+        return Codec.JSON.readTree(Codec.encode(SourceSchemaReview.compare(scope, List.of(before), List.of(live))))
+                .path("tables").get(0);
+    }
+
+    @Test
     void versionsAloneAreEquivalentAndCurrentOnlyCatalogIsNotAPlan() {
         assertEquals("NO_VISIBLE_CHANGE", SourceSchemaReview.compare(CURRENT_MYSQL_CATALOG_VS_JOURNAL,
                 List.of(table("orders", 2, "id")), List.of(table("orders", 1, "id"))).get("state"));

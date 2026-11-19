@@ -42,7 +42,7 @@ public final class KafkaRecoveryReview {
     private static final Set<String> EVENT_KINDS=Set.of("SCHEMA","SNAPSHOT_BEGIN","SNAPSHOT_ROW","SNAPSHOT_END","ROW","BEGIN","COMMIT");
     private static final ObjectReader ENVELOPE=Codec.JSON.readerFor(MessageEvent.class)
             .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
-    private record Cut(String generation,long epoch,long acknowledged,long failedSequence,String rawHash,
+    record Cut(String generation,long epoch,long acknowledged,long failedSequence,String rawHash,
                        String normalizedHash,String transactionId,String transactionHash,String clusterHash,
                        OriginalFailure originalFailure){}
     private record Broker(String clusterId,Uuid topicId){}
@@ -118,32 +118,37 @@ public final class KafkaRecoveryReview {
     private static Cut cut(JdbcJournal journal,String target,long errorGeneration)throws Exception{
         try(Connection c=journal.connect();RepairConnectionGuard deadline=new RepairConnectionGuard(c,10000)){
             c.setAutoCommit(false);
-            Map<String,Object> job=journal.locked(c);
-            if(!"PAUSED".equals(job.get("state"))||job.get("owner")!=null)
-                throw rejected("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED");
-            Journal.FailureReview failure=new JdbcFailureReview(journal).inspect(c,target,errorGeneration,JdbcFailureReview.MAXIMUM_BYTES);
-            if(failure.failure.phase!=SubscriberFailure.Phase.TARGET_APPLY||failure.failure.sequence!=failure.sequence
-                    ||failure.normalizedHash==null)throw rejected("KAFKA_RECOVERY_REQUIRES_COMPLETE_APPLY_FAILURE");
-            String sql="SELECT p.generation,p.epoch,p.stream_seq,p.transaction_id,p.transaction_hash,s.payload_hash FROM "+journal.table("publication")+" p"
-                    +" JOIN "+journal.table("publication_schema")+" s ON s.pipeline_id=p.pipeline_id AND s.subscription_id=p.subscription_id"
-                    +" AND s.table_id='_transport' AND s.schema_version=0 WHERE p.pipeline_id=? AND p.subscription_id=?";
-            Cut result;
-            try(PreparedStatement query=c.prepareStatement(sql)){
-                query.setString(1,journal.settings.pipelineId);query.setString(2,target);
-                try(ResultSet rows=query.executeQuery()){
-                    if(!rows.next())throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
-                    long sequence=rows.getLong(3);
-                    String transaction=rows.getString(4),hash=rows.getString(5),cluster=rows.getString(6);
-                    if(!failure.generation.equals(rows.getString(1))||rows.getLong(2)!=failure.epoch
-                            ||sequence<1||sequence!=failure.subscription.acknowledged||transaction==null||transaction.isBlank()
-                            ||!FailureEvidence.hash(hash)||!FailureEvidence.hash(cluster))
-                        throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
-                    result=new Cut(failure.generation,failure.epoch,sequence,failure.sequence,failure.rawHash,
-                            failure.normalizedHash,transaction,hash,cluster,originalFailure(failure,cluster));
-                }
-            }
+            Cut result=cut(journal,c,target,errorGeneration);
             deadline.verify();c.rollback();return result;
         }
+    }
+
+    static Cut cut(JdbcJournal journal,Connection c,String target,long errorGeneration)throws Exception{
+        Map<String,Object> job=journal.locked(c);
+        if(!"PAUSED".equals(job.get("state"))||job.get("owner")!=null)
+            throw rejected("KAFKA_RECOVERY_REQUIRES_PIPELINE_PAUSED");
+        Journal.FailureReview failure=new JdbcFailureReview(journal).inspect(c,target,errorGeneration,JdbcFailureReview.MAXIMUM_BYTES);
+        if(failure.failure.phase!=SubscriberFailure.Phase.TARGET_APPLY||failure.failure.sequence!=failure.sequence
+                ||failure.normalizedHash==null)throw rejected("KAFKA_RECOVERY_REQUIRES_COMPLETE_APPLY_FAILURE");
+        String sql="SELECT p.generation,p.epoch,p.stream_seq,p.transaction_id,p.transaction_hash,s.payload_hash FROM "+journal.table("publication")+" p"
+                +" JOIN "+journal.table("publication_schema")+" s ON s.pipeline_id=p.pipeline_id AND s.subscription_id=p.subscription_id"
+                +" AND s.table_id='_transport' AND s.schema_version=0 WHERE p.pipeline_id=? AND p.subscription_id=?";
+        Cut result;
+        try(PreparedStatement query=c.prepareStatement(sql)){
+            query.setString(1,journal.settings.pipelineId);query.setString(2,target);
+            try(ResultSet rows=query.executeQuery()){
+                if(!rows.next())throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
+                long sequence=rows.getLong(3);
+                String transaction=rows.getString(4),hash=rows.getString(5),cluster=rows.getString(6);
+                if(!failure.generation.equals(rows.getString(1))||rows.getLong(2)!=failure.epoch
+                        ||sequence<1||sequence!=failure.subscription.acknowledged||transaction==null||transaction.isBlank()
+                        ||!FailureEvidence.hash(hash)||!FailureEvidence.hash(cluster))
+                    throw rejected("KAFKA_RECOVERY_PRECEDING_RECEIPT_UNAVAILABLE");
+                result=new Cut(failure.generation,failure.epoch,sequence,failure.sequence,failure.rawHash,
+                        failure.normalizedHash,transaction,hash,cluster,originalFailure(failure,cluster));
+            }
+        }
+        return result;
     }
 
     static String failureContentSha256(Journal.FailureReview failure){
@@ -205,6 +210,17 @@ public final class KafkaRecoveryReview {
     }
 
     static String topicIdentity(String clusterId,Uuid topicId){return Codec.sha256(clusterId+"/"+topicId);}
+
+    static KafkaPhysicalReceipt.Topic matchingPhysicalTopic(PipelineConfig.Target target,Observation expected)throws Exception{
+        long until=System.nanoTime()+NATIVE_LIMIT.toNanos();
+        Admin admin=Admin.create(KafkaMessagePublisher.connectionProperties(target));
+        try{
+            Broker first=broker(admin,target,until);
+            if(!first.equals(broker(admin,target,until))||!expected.observedTopicIdentitySha256().equals(topicIdentity(first.clusterId(),first.topicId())))
+                return null;
+            return new KafkaPhysicalReceipt.Topic(Codec.sha256("KAFKA:"+first.clusterId()),first.topicId().toString());
+        }finally{admin.close(CLOSE_LIMIT);}
+    }
 
     /** Owner-side metadata only. Both reads are made against the destination's configured connection. */
     public static String inspectTopicIdentity(PipelineConfig.Target target,long deadline)throws Exception{

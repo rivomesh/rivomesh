@@ -92,7 +92,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] The bounded active and restorable catalog verifies present physical topic identity under current Agent credential grants.
   - [x] Both entries can verify and replay a durable blocked approval, with the exact scope, authorization and audit anchor. Topic and consumer offsets remain at the original values.
   - [x] Native Kafka records a signed Topic receipt, Agent membership and journal UTC for the first new COMMIT with PostgreSQL, MySQL and H2 journals.
-  - [ ] Management readback, historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
+  - [x] Both management entries and the console read the exact preceding ACK for the current failure. Joint native Kafka readback remains in progress.
+  - [ ] Joint native Kafka readback, historical write custody, approved dispatch, failure recovery and broader adapter acceptance.
 ## Source compatibility
 
 - [x] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none
@@ -195,6 +196,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-LG-08
   - [x] Explicit global primary and identity GSI require a distribution plan before business DDL, including reordered identity columns.
   - [x] Console and CLI preflight share the MySQL-to-Gauss writer policy and report complete counts with bounded details.
+  - [x] Native PostgreSQL 17.12 review shows the TIMESTAMP type modifier change and retains the source LSN, snapshot and target rows.
   - [ ] Native commercial GaussDB multi-CN/DN and target catalog acceptance.
 - [x] T-LG-09 · Report retention and real-browser acceptance · P1 · Depends on: CP-06, SE-05, RC-09
   Deliver: Provide authorized report/receipt search,retention and active-file protection;real browsers verify cluster/session/confirmation/recovery/pagination and accessibility.

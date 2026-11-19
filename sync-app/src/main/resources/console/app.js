@@ -290,7 +290,7 @@ Object.assign(messages.zh,{
  schemaDriftCount:'变化的表',schemaDriftLimited:'仅显示前 64 张变化表。',
  schemaDriftNew:'新增表',schemaDriftMissing:'当前目录缺少',schemaDriftChanged:'结构变化',
  schemaDriftAdded:'新增列',schemaDriftRemoved:'移除列',schemaDriftModified:'修改列',
- schemaDriftIdentity:'行身份键已变化',schemaDriftSame:'当前目录未见结构差异。',
+ schemaDriftIdentity:'行身份键已变化',schemaDriftOrder:'已有列的相对顺序已变化',schemaDriftIndexes:'源目录索引定义已变化',schemaDriftSame:'当前目录未见结构差异。',
  schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。'
 });
 Object.assign(messages.en,{
@@ -298,7 +298,7 @@ Object.assign(messages.en,{
  schemaDriftCount:'Changed tables',schemaDriftLimited:'Showing the first 64 changed tables.',
  schemaDriftNew:'New table',schemaDriftMissing:'Missing from current catalog',schemaDriftChanged:'Changed definition',
  schemaDriftAdded:'Added columns',schemaDriftRemoved:'Removed columns',schemaDriftModified:'Modified columns',
- schemaDriftIdentity:'Row identity changed',schemaDriftSame:'The current catalog has no visible structural differences.',
+ schemaDriftIdentity:'Row identity changed',schemaDriftOrder:'Existing column order changed',schemaDriftIndexes:'Source index definitions changed',schemaDriftSame:'The current catalog has no visible structural differences.',
  schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.'
 });
 function showSourceSchemaDrift(content,review){
@@ -320,6 +320,8 @@ function showSourceSchemaDrift(content,review){
     if(count>0)columns.append(text('li',t(label)+' ('+count+') · '+row.columns[key].slice(0,32).join(', ')));
    }
    if(row.identityChanged)columns.append(text('li',t('schemaDriftIdentity')));
+   if(row.columnOrderChanged)columns.append(text('li',t('schemaDriftOrder')));
+   if(row.indexesChanged)columns.append(text('li',t('schemaDriftIndexes')));
    if(columns.children.length)detail.append(columns);
    tables.append(detail);
   }

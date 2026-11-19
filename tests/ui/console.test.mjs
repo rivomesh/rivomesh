@@ -335,6 +335,51 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  }finally{ui.dom.window.close();}
 });
 
+test('Kafka physical receipt is read-only and displays only evidence for the current configuration and ACK',async()=>{
+ const id='physical_receipt_review',target='kafka',code='PRECEDING_KAFKA_RECEIPTS_VERIFIED';
+ const version='f438d9a1-02ed-41c8-9c55-27eb804bd980';
+ const task={id:'physical-receipt',revision:'task-revision',activeConfigurationVersion:version,formatVersion:3,
+  workerState:'PAUSED',desired:'PAUSED',statusAvailable:true,status:{run_state:'PAUSED'},
+  destinations:[{id:target,product:'KAFKA'}],operations:[{id,action:'REVIEW_KAFKA_RECEIPTS',code,status:'SUCCEEDED'}]};
+ const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
+ const base='/api/tasks/'+task.id,requests=[];
+ const exact={targetId:target,configurationVersion:version,acknowledgedSequence:'6'};
+ let reply={...exact,status:'MISSING',code:'KAFKA_PHYSICAL_RECEIPT_UNVERIFIED'};
+ ui.w.fetch=async(path,options)=>{
+  if(path===base+'/recovery-receipts/'+id)return{ok:true,status:200,json:async()=>({kind:'CONTROL_OPERATION',taskId:task.id,
+   id,action:'REVIEW_KAFKA_RECEIPTS',status:'SUCCEEDED',code,subscriptionId:target,kafkaReview:{status:code,target,
+    observedAt:'2026-11-18T09:00:00Z',epoch:'3',errorGeneration:'17',acknowledgedSequence:'6',failedSequence:'7',
+    observedTopicIdentitySha256:'a'.repeat(64),originalFailure:{journalGeneration:'retained'},
+    nativeReceipts:[{namespace:'orders',offset:'31',payloadSha256:'b'.repeat(64)}]}})};
+  if(path!==base+'/kafka-physical-receipt')return fallback(path,options);
+  assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+  requests.push(JSON.parse(options.body));
+  return{ok:true,status:200,json:async()=>reply};
+ };
+ try{
+  await login(ui);ui.d.querySelector('[data-recovery-receipt-request="'+id+'"]').click();await flush();
+  const section=ui.d.querySelector('[data-kafka-physical-receipt]'),button=section.querySelector('button');
+  assert.equal(ui.d.querySelector('[data-kafka-notice-preview]'),null);
+  button.click();await flush();
+  assert.match(section.textContent,/缺少可核实的物理收据/);
+  reply={status:'UNREACHABLE',code:'OWNER_QUERY_UNAVAILABLE'};
+  button.click();await flush();
+  assert.match(section.textContent,/暂时无法读取物理收据/);
+  reply={...exact,status:'VERIFIED',code:'KAFKA_PHYSICAL_RECEIPT_VERIFIED',configurationVersion:'older',
+   receiptSha256:'d'.repeat(64),publishedAt:'2026-11-18T09:00:00Z',acknowledgedAt:'2026-11-18T09:00:01Z',
+   signature:'private data should never render'};
+  button.click();await flush();
+  assert.match(section.textContent,/回执与当前请求不符/);
+  reply.configurationVersion=version;
+  button.click();await flush();
+  assert.match(section.textContent,/已核实本次故障的确切前序 ACK/);
+  assert.ok(section.textContent.includes('d'.repeat(64)));
+  assert.ok(!section.textContent.includes('private data should never render'));
+  assert.equal(section.querySelectorAll('button').length,1);
+  assert.deepEqual(requests,Array(4).fill({expectedRevision:task.revision,predecessorRequestId:id}));
+ }finally{ui.dom.window.close();}
+});
+
 test('retention review shows the existing hold, requires approval, and retries the identical request',async()=>{
  const reportId='a4500000-1223-4abc-8abc-0123456789ab';
  const task={id:'retention-review',revision:'task-revision',formatVersion:3,workerState:'STOPPED',status:{},destinations:[],
@@ -489,7 +534,7 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
   return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],
    actions:['REPAIR_CAPTURE_CAUSE'],schemaDrift:{scope,state:'CHANGES_VISIBLE',
     changedTables:1,detailsLimited:false,tables:[{database:'sales',table:'orders',change:'TABLE_CHANGED',identityChanged:true,
-     columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
+     columnOrderChanged:true,indexesChanged:true,columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
       addedCount:2,removedCount:1,modifiedCount:0}}]}})};
  };
  try{
@@ -502,6 +547,8 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
   assert.match(dialog.textContent,/planned_field/);
   assert.match(dialog.textContent,/old_field/);
   assert.match(dialog.textContent,/行身份键已变化/);
+  assert.match(dialog.textContent,/已有列的相对顺序已变化/);
+  assert.match(dialog.textContent,/源目录索引定义已变化/);
   assert.equal(dialog.querySelector('img'),null);
   assert.equal(dialog.querySelectorAll('button').length,1);
   assert.equal(ui.calls.find(call=>call.path.endsWith('/capture-recovery')).method,undefined);
