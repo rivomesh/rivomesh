@@ -3,6 +3,7 @@
 import argparse
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -61,6 +62,10 @@ parser.add_argument('--handoff-split-store', action='store_true',
                     help='Verify private staging and ownership refusal when the journal and control databases are independent')
 parser.add_argument('--handoff-split-store-browser', type=Path,
                     help='Verify the split-store blocker and stage control in real Chrome')
+parser.add_argument('--handoff-asymmetric-inflight', action='store_true',
+                    help='Partition the original Agent while the PostgreSQL target is blocked on a real row lock')
+parser.add_argument('--partition-mysqlbinlog', type=Path,
+                    help='Executable mysqlbinlog used to read a bounded native log copy in the in-flight fixture')
 parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
@@ -173,6 +178,12 @@ if args.handoff_managed_writer and (not args.handoff_preparation or args.control
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
 if args.handoff_asymmetric_partition and (not args.handoff_original_outage or args.external_mysql_driver):
     parser.error('--handoff-asymmetric-partition requires --handoff-original-outage and the packaged MySQL driver')
+if args.handoff_asymmetric_inflight and (not args.handoff_asymmetric_partition
+        or not args.partition_mysqlbinlog or not args.partition_mysqlbinlog.is_file()
+        or not os.access(args.partition_mysqlbinlog,os.X_OK)):
+    parser.error('--handoff-asymmetric-inflight requires --handoff-asymmetric-partition and executable --partition-mysqlbinlog')
+if args.partition_mysqlbinlog and not args.handoff_asymmetric_inflight:
+    parser.error('--partition-mysqlbinlog requires --handoff-asymmetric-inflight')
 if args.handoff_original_outage and (not args.handoff_assessment or args.handoff_probe
         or not args.test_classes or not args.test_classes.is_dir()
         or args.control_product != 'POSTGRESQL' or args.runtime_image):
@@ -339,6 +350,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffManagedWriter': args.handoff_managed_writer or args.handoff_original_outage,
             'handoffOriginalOutage': args.handoff_original_outage,
             'handoffAsymmetricPartition': args.handoff_asymmetric_partition,
+            'handoffAsymmetricInflight': args.handoff_asymmetric_inflight,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffAutoResume': args.handoff_auto_resume,
             'handoffStaging': args.handoff_staging,
@@ -414,6 +426,9 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         'mysql-target': {'image': 'mysql:8.4', 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_DATA}', 'MYSQL_ROOT_HOST': '%'},
                          'command': ['--server-id=90']},
         'postgres': {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'sync_test'}}}
+    if args.handoff_asymmetric_inflight:
+        services['postgres']['command'] = ['-c','wal_level=logical']
+        services['mysql-target']['command'] += ['--log-bin=mysql-bin','--binlog-format=ROW','--binlog-row-image=FULL']
     if args.separate_execution:
         services['store'] = {'image': 'mysql:8.4', 'environment': {'MYSQL_ROOT_PASSWORD': '${RM_GC_CONTROL}', 'MYSQL_ROOT_HOST': '%', 'MYSQL_DATABASE': 'rivomesh_control'}} if args.control_product == 'MYSQL' else {'image': 'postgres:17', 'environment': {'POSTGRES_PASSWORD': '${RM_GC_CONTROL}', 'POSTGRES_DB': 'rivomesh_control'}}
     if args.mysql_async_failover:
@@ -520,9 +535,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             services[node]['networks'] = ['default', 'control']
     composition.write_text(json.dumps(compose_data))
 
+    def compose_args(*arguments):
+        return ['docker', 'compose', '-p', project, '-f', str(composition), *arguments]
+
     def compose(*arguments, check=True):
-        return subprocess.run(['docker', 'compose', '-p', project, '-f', str(composition), *arguments], env=env,
-                              cwd=ROOT, check=check, capture_output=True, text=True, timeout=180)
+        return subprocess.run(compose_args(*arguments), env=env, cwd=ROOT, check=check,
+                              capture_output=True, text=True, timeout=180)
 
     def sql(service, statement):
         if service in ('postgres','journal-store') or service == 'store' and args.control_product == 'POSTGRESQL':
@@ -586,7 +604,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             headers.update({'Content-Type': 'application/json', 'X-Request-ID': request or 'global_cdc_' + uuid.uuid4().hex})
         call = urllib.request.Request(bases[node] + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
         allowed = expected if isinstance(expected, tuple) else (expected,)
-        attempts = 5 if args.managed_binlog_evidence and 503 not in allowed else 1
+        retry_store_read = args.handoff_asymmetric_inflight and body is None and method is None
+        attempts = 5 if (args.managed_binlog_evidence or retry_store_read) and 503 not in allowed else 1
         for attempt in range(attempts):
             try:
                 handoff_probe = path.endswith('/handoff/probe') and (
@@ -600,9 +619,12 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                 response = error
             with response:
                 value = json.loads(response.read())
-                if (response.status==503 and value.get('code') in
-                        ('AUDIT_UNAVAILABLE','CONTROL_STORE_UNAVAILABLE') and attempt+1<attempts):
+                transient_store = value.get('code') == 'CONTROL_STORE_UNAVAILABLE'
+                transient_audit = args.managed_binlog_evidence and value.get('code') == 'AUDIT_UNAVAILABLE'
+                if response.status==503 and (transient_store or transient_audit) and attempt+1<attempts:
                     # The same read or request identity is safe to retry after a transient control-store outage.
+                    if retry_store_read:
+                        manifest['inflightControlReadRetries'] = manifest.get('inflightControlReadRetries',0) + 1
                     time.sleep(1)
                     continue
                 assert response.status in allowed, 'HTTP ' + str(response.status) + ': ' + str(value.get('code', 'unexpected response'))
@@ -757,6 +779,80 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             'dualEntryRefusal':True,'originalResumed':True,'sameNativeAssignmentAndSnapshots':True}
         passed('Releasing the reservation resumes only the original Agent from the same native assignment and snapshot generation')
 
+    @contextmanager
+    def locked_partition_row():
+        # The caller holds this test-only lock through loss of the original Agent's journal path.
+        lock_tag = 'rivomesh_fixture_partition_row_lock'
+        command = compose_args('exec','-T','postgres','psql','-h','127.0.0.1','-X','-v','ON_ERROR_STOP=1',
+                               '-U','postgres','-d','sync_test')
+        with subprocess.Popen(command, env=env, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, text=True) as holder:
+            try:
+                holder.stdin.write("BEGIN; SET LOCAL application_name='" + lock_tag + "'; "
+                                   "SELECT id FROM rm_pg_sales.items WHERE id=1 FOR UPDATE;\n")
+                holder.stdin.flush()
+                wait(lambda: sql('postgres', "SELECT count(*) FROM pg_stat_activity WHERE application_name='"
+                                 + lock_tag + "' AND state='idle in transaction'") == '1',
+                     'PostgreSQL holds the fixture business row lock', seconds=15)
+
+                def blocked_writer():
+                    return sql('postgres', "SELECT writer.pid FROM pg_stat_activity writer "
+                               "JOIN pg_stat_activity holder ON holder.pid=ANY(pg_blocking_pids(writer.pid)) "
+                               "WHERE holder.application_name='" + lock_tag + "' AND writer.wait_event_type='Lock' "
+                               "AND writer.query LIKE 'UPDATE %rm_pg_sales%items%'")
+
+                yield blocked_writer
+            finally:
+                try:
+                    holder.communicate(input="ROLLBACK;\n\\q\n", timeout=15)
+                except subprocess.TimeoutExpired:
+                    holder.kill()
+                    holder.communicate()
+                    raise AssertionError('Fixture row-lock session failed to exit')
+                assert holder.returncode == 0, 'Fixture row-lock session did not roll back'
+
+    def partition_target_write_witness():
+        binary = args.partition_mysqlbinlog.resolve()
+        manifest['partitionMysqlbinlogSha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+        manifest['partitionMysqlbinlogVersion'] = subprocess.check_output(
+            [str(binary),'--no-defaults','--version'],text=True,timeout=10).strip()
+        slot = 'rivomesh_partition_target'
+        assert sql('postgres', f"SELECT slot_name FROM pg_create_logical_replication_slot('{slot}','test_decoding')") == slot
+
+        def mysql_log_position():
+            fields = sql('mysql-target','SHOW BINARY LOG STATUS').split('|')
+            assert len(fields) >= 2 and re.fullmatch(r'mysql-bin\.[0-9]{6}',fields[0]) and fields[1].isdigit()
+            return fields[0],int(fields[1])
+
+        baseline,begin = mysql_log_position()
+
+        def counts():
+            pg = sql('postgres', "SELECT count(*) FILTER(WHERE starts_with(data,'table rm_pg_sales.items: INSERT:')),"
+                     "count(*) FILTER(WHERE starts_with(data,'table rm_pg_sales.items: UPDATE:')) "
+                     f"FROM pg_logical_slot_peek_changes('{slot}',NULL,NULL)").split('|')
+            current,end = mysql_log_position()
+            assert current == baseline and end >= begin, 'Fixture MySQL binlog unexpectedly rotated'
+            mysql_inserts = mysql_updates = 0
+            if end > begin:
+                assert 4 <= begin < end <= 4*1024*1024, 'Fixture binlog range is outside the expected bound'
+                received = subprocess.check_output(
+                    compose_args('exec','-T','mysql-target','head','-c',str(end),'/var/lib/mysql/'+baseline),
+                    env=env,cwd=ROOT,timeout=15)
+                assert len(received) == end and received.startswith(bytes.fromhex('fe62696e'))
+                copied = home/'partition-target-native.binlog'
+                copied.write_bytes(received)
+                events = subprocess.check_output(
+                    [str(binary),'--no-defaults','--force-if-open','--verify-binlog-checksum',
+                     '--base64-output=DECODE-ROWS','--verbose',f'--start-position={begin}',
+                     f'--stop-position={end}',str(copied)],text=True,timeout=15)
+                headers = [line.replace('`','').strip() for line in events.splitlines() if line.startswith('### ')]
+                mysql_inserts = headers.count('### INSERT INTO rm_my_sales.items')
+                mysql_updates = headers.count('### UPDATE rm_my_sales.items')
+            return {'pg':tuple(map(int,pg)), 'my':(mysql_inserts,mysql_updates)}
+
+        assert counts() == {'pg':(0,0), 'my':(0,0)}, 'Fixture target write witnesses did not start empty'
+        return counts
+
     def run_original_agent_outage():
         entries = ('node-a', 'node-b')
         endpoint = route + '/handoff'
@@ -765,6 +861,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         node_row = " FROM global_control.rmc_node WHERE cluster_id='global-cdc' AND node_id='node-worker'"
         job_row = " FROM transfer_journal.rm3_job WHERE pipeline_id='global_cdc'"
         targets = (('postgres', 'pg'), ('mysql-target', 'my'))
+        inflight = args.handoff_asymmetric_inflight
 
         def current_views():
             return [task(entry) for entry in entries]
@@ -780,7 +877,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                        "ON a.pipeline_id=h.pipeline_id AND a.assignment_id=h.assignment_id WHERE a.pipeline_id='global_cdc'")
 
         def target_receipts():
-            return [sql(service, f"SELECT epoch,stream_seq,transaction_hash FROM rm_{target}_meta.rm3_sink_job "
+            return [sql(service, f"SELECT epoch,stream_seq,transaction_hash,transaction_id FROM rm_{target}_meta.rm3_sink_job "
                         f"WHERE pipeline_id='global_cdc' AND subscription_id='{target}'").split('|')
                     for service, target in targets]
 
@@ -790,6 +887,23 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         def pending_row_counts():
             return [sql(service, f'SELECT COUNT(*) FROM rm_{target}_sales.items WHERE id=104')
                     for service, target in targets]
+
+        def acknowledged():
+            cut = sql('store', "SELECT subscription_id,acknowledged FROM transfer_journal.rm3_subscription "
+                      "WHERE pipeline_id='global_cdc' ORDER BY subscription_id")
+            return dict(row.split('|',1) for row in cut.splitlines())
+
+        def capture_expired():
+            return sql('store', 'SELECT COUNT(*)' + job_row + ' AND lease_until>' + clock) == '0'
+
+        def target_notes():
+            return [sql(service, f'SELECT note FROM rm_{target}_sales.items WHERE id=1')
+                    for service, target in targets]
+
+        def require_isolated(isolated):
+            wait(isolated, 'live original Agent isolates its Worker and holds relaunch during network partition', seconds=35)
+            time.sleep(1)
+            assert isolated(), 'The isolated Worker relaunched before the control path returned'
 
         def fully_applied():
             sequence = sql('store', 'SELECT normalized_seq' + job_row
@@ -814,7 +928,51 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert original_writer.split('|')[1] == owner_node
         assert all(int(receipt[1]) > 0 and len(receipt[2]) == 64 for receipt in original_targets)
 
-        if args.handoff_asymmetric_partition:
+        retained_cut = original_cut
+        retained_targets = original_targets
+        retained_counts = ['0', '0']
+        if inflight:
+            starting_notes = target_notes()
+            settled_sequence = original_targets[0][1]
+            next_sequence = str(int(settled_sequence) + 1)
+            retained_ack = {'my': next_sequence, 'pg': settled_sequence}
+            wait(lambda: acknowledged()==dict(my=settled_sequence,pg=settled_sequence),
+                 'both journal ACKs confirm the settled cut before the lock')
+            business_writes = partition_target_write_witness()
+            unreplayed_writes = {'pg':(0,0), 'my':(1,1)}
+            recovered_writes = {'pg':(1,1), 'my':(1,1)}
+            with locked_partition_row() as blocked_writer:
+                sql('mysql', "START TRANSACTION; "
+                    "INSERT INTO sales.items(id,note,payload) VALUES(104,'partition-inflight',JSON_OBJECT('n',104)); "
+                    "UPDATE sales.items SET note='partition-inflight' WHERE id=1; COMMIT")
+                wait(lambda: acknowledged()==retained_ack, 'MySQL target ACK advances while PostgreSQL is blocked')
+                waiter = wait(blocked_writer, 'native PostgreSQL writer waits on the locked business row')
+                assert waiter.isdigit(), 'Expected exactly one native writer waiting on the fixture row lock'
+                retained_targets = target_receipts()
+                retained_cut = journal_cut()
+                retained_counts = ['0', '1']
+                assert retained_targets[0] == original_targets[0]
+                assert retained_targets[1][0] == original_targets[1][0]
+                assert retained_targets[1][1] == next_sequence and retained_targets[1][2] != original_targets[1][2]
+                assert retained_targets[1][3] != original_targets[1][3]
+                recorded_epoch, next_position, normalized, captured = retained_cut.split('|',3)
+                assert recorded_epoch == old_capture_epoch and int(next_position) == int(next_sequence) + 1
+                assert normalized == next_sequence and captured != original_cut.split('|',3)[3]
+                assert pending_row_counts() == retained_counts
+                assert target_notes() == [starting_notes[0], 'partition-inflight']
+                assert business_writes() == unreplayed_writes
+                passed('PostgreSQL waits on the actual row lock with no native receipt while MySQL commits and the journal ACKs the transaction')
+                isolated, reconnect = partition_original_agent()
+                require_isolated(isolated)
+                wait(capture_expired,'former capture lease expires with the native target still locked')
+
+            wait(lambda: sql('postgres', 'SELECT count(*) FROM pg_stat_activity WHERE pid=' + waiter) == '0',
+                 'the former target connection disappears after the row lock is released', seconds=30)
+            assert pending_row_counts() == retained_counts and target_receipts() == retained_targets
+            assert target_notes() == [starting_notes[0], 'partition-inflight'] and business_writes() == unreplayed_writes
+            assert acknowledged() == retained_ack and journal_cut() == retained_cut
+            passed('Releasing the row lock while the Agent remains partitioned rolls back its partial PostgreSQL write and preserves MySQL commit evidence')
+        elif args.handoff_asymmetric_partition:
             isolated, reconnect = partition_original_agent()
         else:
             compose('kill', '-s', 'SIGKILL', owner_node)
@@ -824,8 +982,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                        and t.get('workerState') == t.get('captureLeaseState') == t.get('desired') == 'UNKNOWN'
                        and t['ownerNodeId'] == owner_node and t['revision'] == expected_revision for t in current_views())
         wait(lambda: unreachable(revision), 'expired original Agent control lease masks Worker, intent and capture observations')
-        wait(lambda: sql('store', 'SELECT COUNT(*)' + job_row + ' AND lease_until>' + clock) == '0',
-             'independent capture lease expires on the journal database clock')
+        wait(capture_expired, 'independent capture lease expires on the journal database clock')
         fault = 'Asymmetric partition' if args.handoff_asymmetric_partition else 'Original Agent SIGKILL'
         passed(fault + ' exposes expired control and unknown Worker, intent and capture at both Controllers')
 
@@ -839,23 +996,25 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert 'ORIGINAL_TASK_STATE_UNVERIFIED' in refreshed['blockers']
         assert http('node-a', endpoint + '/probe', {'expectedAssessment': refreshed['id']},
                     expected=409)['code'] == 'HANDOFF_ASSESSMENT_BLOCKED'
-        assert writer_authority() == original_writer and journal_cut() == original_cut
-        assert target_receipts() == original_targets
+        assert writer_authority() == original_writer and journal_cut() == retained_cut
+        assert target_receipts() == retained_targets
         passed('Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts')
 
-        sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(104,'offline-backlog',JSON_OBJECT('n',104))")
+        if not inflight:
+            sql('mysql', "INSERT INTO sales.items(id,note,payload) VALUES(104,'offline-backlog',JSON_OBJECT('n',104))")
         stop, accepted = action('STOP', node='node-b', complete=False)
         assert next(op for op in accepted['operations'] if op['id'] == stop)['deliveryStatus'] == 'PENDING'
         stop_revision = accepted['revision']
         assert stop_revision != revision
         assert not outcome(stop, 'node-a') and unreachable(stop_revision)
         if args.handoff_asymmetric_partition:
-            wait(isolated, 'live original Agent isolates its Worker and holds relaunch during network partition', seconds=35)
-            time.sleep(1)
-            assert isolated(), 'The isolated Worker relaunched before the control path returned'
-            assert pending_row_counts() == ['0', '0'] and journal_cut() == original_cut
-            assert target_receipts() == original_targets
-            passed('The isolated original Worker cannot consume the backlog with data endpoints still reachable')
+            require_isolated(isolated)
+            assert pending_row_counts() == retained_counts and journal_cut() == retained_cut
+            assert target_receipts() == retained_targets
+            if inflight:
+                assert acknowledged() == retained_ack and business_writes() == unreplayed_writes
+            else:
+                passed('The isolated original Worker cannot consume the backlog with data endpoints still reachable')
             reconnect()
         else:
             compose('up', '-d', owner_node)
@@ -872,10 +1031,14 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert int(new_control_epoch) > int(old_control_epoch)
         assert (new_incarnation == old_incarnation) == args.handoff_asymmetric_partition
         assert directory.read_bytes() == original_directory
-        assert pending_row_counts() == ['0', '0'] and journal_cut() == original_cut
-        assert writer_authority() == original_writer and target_receipts() == original_targets
+        assert pending_row_counts() == retained_counts and journal_cut() == retained_cut
+        assert writer_authority() == original_writer and target_receipts() == retained_targets
         restored = 'reconnected original Agent without a restart' if args.handoff_asymmetric_partition else 'restarted original Agent'
-        passed('Offline STOP completes on the ' + restored + ' before the backlog can reach either target')
+        if inflight:
+            assert acknowledged() == retained_ack and business_writes() == unreplayed_writes
+            passed('Offline STOP completes on the ' + restored + ' before the pending target replays')
+        else:
+            passed('Offline STOP completes on the ' + restored + ' before the backlog can reach either target')
 
         action('START', node='node-a')
         wait(streaming, 'same Agent explicitly reclaims capture using new generations')
@@ -887,6 +1050,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         recovered_targets = target_receipts()
         for old, new in zip(original_targets, recovered_targets):
             assert int(new[0]) == new_capture_epoch and int(new[1]) == int(old[1]) + 1 and new[2] != old[2]
+        if inflight:
+            wait(lambda: acknowledged() == {'my':next_sequence, 'pg':next_sequence},
+                 'both journals ACK the restored native target cut')
+            assert recovered_targets[1][1:] == retained_targets[1][1:]
+            assert recovered_targets[0][3] == retained_targets[1][3]
+            assert target_notes() == ['partition-inflight','partition-inflight'] and business_writes() == recovered_writes
+            passed('Only the missing PostgreSQL apply is replayed and each destination log shows one insert and one update')
         assert writer_authority() == original_writer
         recovered_cut = journal_cut()
         probe = compose('exec', '-T', owner_node, 'java', '-cp', '/app/rivomesh.jar:/fixture-tests',
@@ -897,7 +1067,21 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             'Former lease attempt was not fenced; fixture exit ' + str(probe.returncode))
         assert journal_cut() == recovered_cut and target_receipts() == recovered_targets
         assert pending_row_counts() == ['1', '1']
-        passed('Explicit START consumes one backlog transaction on both targets and rejects the former Agent and capture leases')
+        if inflight:
+            assert recovered_cut.split('|',1)[1] == retained_cut.split('|',1)[1]
+            assert hashlib.sha256(args.partition_mysqlbinlog.resolve().read_bytes()).hexdigest() == manifest['partitionMysqlbinlogSha256']
+            final_ack = acknowledged()
+            final_writes = business_writes()
+            assert final_writes == recovered_writes and final_ack == {'my':next_sequence, 'pg':next_sequence}
+            manifest['inflightWitness'] = dict(
+                capturedSequence=int(next_sequence),
+                capturedPositionUnchanged=True,
+                retainedJournalAcknowledgements={target:int(value) for target,value in retained_ack.items()},
+                restoredJournalAcknowledgements={target:int(value) for target,value in final_ack.items()},
+                nativeBusinessWrites={target:dict(insert=counts[0],update=counts[1]) for target,counts in final_writes.items()})
+            passed('Former Agent and capture leases are fenced after both target receipts converge')
+        else:
+            passed('Explicit START consumes one backlog transaction on both targets and rejects the former Agent and capture leases')
 
     def browser_check(scenario, **state):
         # Only a disposable loopback browser receives the random credential. Keep it out of args and evidence.

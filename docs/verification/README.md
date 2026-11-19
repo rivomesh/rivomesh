@@ -675,3 +675,7 @@ The scanner verified the external-driver candidate `02906330f9cc73efa8e4516ef383
 ### Artemis shared-store primary and backup
 
 The `b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3` package passed four native Artemis 2.57.0 checks. The passive backup opened its Core listener after the primary was killed. The publisher kept its existing receipt when its stable loopback ingress was isolated. After the ingress routed to the active backup, the publisher verified the original native receipt, identity and bytes, then confirmed the same pending event. The first fixture failed at JVM initialization. Both test projects were cleaned up. [Operations](../en/messaging-v3.md#shared-store-primary-and-backup) · [Manifest](baseline.json)
+
+### Native in-flight target rollback during Agent network isolation
+
+The `6f148bba` candidate passed 13 native checks. A PostgreSQL target row lock prevented it from committing while the MySQL target committed and reached journal ACK 2. Cutting the original Agent's control and journal path isolated its Worker. The PostgreSQL blocked transaction rolled back after that Worker exited. The same Agent reconnected and completed queued STOP. Explicit START filled only the missing PostgreSQL delivery. Both target logs recorded exactly one insert and one update, the MySQL receipt and source cut remained unchanged, and both old leases were rejected. The verification manifest records exact hashes and prior fixture failures. [Operations](../en/global-control.md#asymmetric-control-network-partition) · [Manifest](baseline.json)

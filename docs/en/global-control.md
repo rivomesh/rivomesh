@@ -159,6 +159,14 @@ The Agent disarms starts for managed journal Workers when it loses control autho
 
 To keep a task stopped while restoring the link, queue STOP through either Controller. Check the same request ID for `SUCCEEDED` and confirm the original task is stopped before starting it explicitly. Retain the source logs and verify both target receipts if a transaction was in flight. The candidate does not gain ownership from lease expiry. Separate control and journal stores, destination-specific cuts and approval without the original private evidence require their own validation.
 
+#### A SQL transaction in flight
+
+Each SQL destination has its own native transaction receipt and journal acknowledgement. During a control-path partition, the journal can already contain the source transaction while a destination still waits on a row lock. Compare the retained sequence and each destination receipt before deciding which delivery remains outstanding. PostgreSQL exposes blocking sessions through `pg_blocking_pids`. [PostgreSQL lock inspection](https://www.postgresql.org/docs/17/functions-info.html) · [PostgreSQL row locks](https://www.postgresql.org/docs/17/explicit-locking.html)
+
+The same-store fixture holds the PostgreSQL row lock until the former Worker has exited. The MySQL target already has a native commit and journal acknowledgement. Releasing the PostgreSQL lock while the original Agent is still partitioned leaves the former PostgreSQL transaction rolled back. After restoring the original Agent, wait for its queued STOP to succeed before explicitly starting it. The captured position stays at the recorded transaction and only the PostgreSQL delivery is replayed. The fixture checks the same transaction identity and counts one committed insert and one committed update in each target database log.
+
+This scenario covers an acknowledged commit on one destination and an uncommitted transaction on the other. A native target receipt ahead of its journal acknowledgement uses receipt reconciliation and requires separate acceptance for this partition profile. Use the same candidate, journal and task assignment when reviewing the retained evidence.
+
 ## Operations FAQ
 
 **How do I distinguish accepted from executed?** Inspect deliveryStatus, status, code and actual Worker/target checkpoints for the same request ID. HTTP 202 is not business commit evidence.

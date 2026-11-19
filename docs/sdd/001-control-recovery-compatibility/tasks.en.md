@@ -23,7 +23,8 @@ Each task requires implementation,appropriate fault tests,bilingual docs and sco
   - [x] The candidate revalidates both receipts and completes an approved drained same-store handoff after the accepting Controller exits.
   - [x] Both entries expose unknown task state after an Agent SIGKILL. Restart from its original directory preserves queued STOP, backlog and former lease fencing.
   - [x] An asymmetric same-store partition fences the former Worker. The original process reconnects, completes queued STOP and explicitly restarts with both former generations rejected.
-  - [ ] Cross-Agent automatic promotion after permanent loss, in-flight transactions, independently reachable stores and broader drain/move acceptance.
+  - [x] An in-flight target row lock rolls back after fencing. Explicit resume fills the PostgreSQL delivery once and preserves the MySQL receipt.
+  - [ ] Cross-Agent promotion after permanent loss, committed-but-unacknowledged outcomes and broader drain/move acceptance.
 - [x] T-CP-05 · Shared authorization,audit and secret references · P0 · Depends on: CP-02
   Deliver: Revocation at A is enforced at B;remote actions correlate by request/task/node/plan;secrets are not returned to UI and agents receive only authorized task references.
   Acceptance: AC-CP-05

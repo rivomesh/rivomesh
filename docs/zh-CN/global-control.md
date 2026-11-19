@@ -159,6 +159,14 @@ owner 失联期间 STOP 保持等待。恢复时使用原节点的私有目录�
 
 如果希望任务在链路恢复后保持停止，可从任一 Controller 提交 STOP。使用同一请求 ID 确认 `SUCCEEDED` 并检查原任务已停止，再显式启动。保留源日志，分区时若有在途事务也应核对两个目标的回执。租约过期不赋予候选 Agent 任务归属。控制库与日志库分离、特定目标链路中断或原 Agent 私有证据丢失时，需要独立核验。
 
+#### SQL 目标有在途事务
+
+每个 SQL 目标都有自己的原生事务回执和日志确认位置。控制链路分区时，日志中可能已经保存源事务，同时一个目标仍在等待行锁。先核对保留的事务序号及各目标回执，再判断哪些投递待完成。PostgreSQL 的 `pg_blocking_pids` 可查看阻塞会话。[PostgreSQL 锁检查](https://www.postgresql.org/docs/17/functions-info.html) · [PostgreSQL 行锁](https://www.postgresql.org/docs/17/explicit-locking.html)
+
+同库夹具保留 PostgreSQL 行锁，直至原 Worker 退出。MySQL 目标此时已有原生提交和日志确认。在原 Agent 仍然分区时释放行锁，原 PostgreSQL 事务回滚。恢复原 Agent 后，先确认此前排队的 STOP 执行成功，再显式启动。采集位置保留已记录的原事务，系统只补跑 PostgreSQL 的待投递事务。夹具核对两端具有相同事务标识，各自的数据库日志中均只有一笔已提交的插入和一笔更新。
+
+此场景包含一个已确认提交的目标和一个尚未提交的目标。目标已提交但日志尚未确认时，按原生回执对账处理，该组合需独立验收。审阅时沿用原候选、日志和任务归属。
+
 ## 运维 FAQ
 
 **如何判断已接受还是已执行？** 查看同一请求 ID 的 deliveryStatus、status、code 和实际 Worker/目标水位。不要把 HTTP 202 当作落库成功。

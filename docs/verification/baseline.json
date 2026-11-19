@@ -12220,5 +12220,79 @@
     },
     "scope": "Artemis 2.57.0 shared NIO journal primary and backup with a stable loopback entry. Standby automatically opens its Core listener after the primary is killed. The receipt, broker and queue identities and original event bytes survive; the same retry confirms after route restoration. Separate hosts, storage loss, TLS and automatic failback remain separate profiles.",
     "reproduce": "python3 tests/artemis-shared-store-run.py --artifact /path/to/rivomesh.jar --test-classes artemis-transport/target/test-classes --java-home /path/to/jdk --output target/artemis-shared-store"
+  },
+  "managedWorkerInflightControlPartition": {
+    "status": "PASS",
+    "native": {
+      "artifactSha256": "6f148bba51fb818282105b83319f6b6e16dab5e75983257da93df77192d6bd72",
+      "harnessSourceSha256": "776ebcd82e3785af12c5e7814b972850e8f33a85065e6cbbdad2f39ed2e584cc",
+      "testClassesSha256": "233ad37f7963e6180c2ccd5142b98a99cd3f6af53415c0cf755421346b974c18",
+      "sourceVersion": "8.4.13",
+      "sourceImage": "mysql:8.4",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "controlProduct": "POSTGRESQL",
+      "partitionMysqlbinlogSha256": "34088b1f798091e8f12fba6feb59773ecedba57fd9732177686c297aaa260d5e",
+      "inflightWitness": {
+        "capturedSequence": 2,
+        "capturedPositionUnchanged": true,
+        "retainedJournalAcknowledgements": {
+          "my": 2,
+          "pg": 1
+        },
+        "restoredJournalAcknowledgements": {
+          "my": 2,
+          "pg": 2
+        },
+        "nativeBusinessWrites": {
+          "pg": {
+            "insert": 1,
+            "update": 1
+          },
+          "my": {
+            "insert": 1,
+            "update": 1
+          }
+        }
+      },
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Only the original Agent can admit the explicitly initialized managed writer",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "PostgreSQL waits on the actual row lock with no native receipt while MySQL commits and the journal ACKs the transaction",
+        "Only the original Agent control and journal path is cut; its live container still reaches the source and both targets",
+        "Releasing the row lock while the Agent remains partitioned rolls back its partial PostgreSQL write and preserves MySQL commit evidence",
+        "Asymmetric partition exposes expired control and unknown Worker, intent and capture at both Controllers",
+        "Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts",
+        "Offline STOP completes on the reconnected original Agent without a restart before the pending target replays",
+        "Only the missing PostgreSQL apply is replayed and each destination log shows one insert and one update",
+        "Former Agent and capture leases are fenced after both target receipts converge"
+      ],
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "1b9411942c1a183613c83a098e893081e198a2e63fc1b5d4d9527085c2544737",
+    "mysqlbinlogVersion": "8.0.42 arm64 Homebrew",
+    "nativeCutObservationSha256": "8c3fdc776135e4767bfe92e194686b930d65d7ac96234d6b52dca89d22a626db",
+    "nativeRuntimeVersionsSha256": "594eb5659df003b9339f7224345ada4f0df1ce3ce107552b9fdb3928fcfe61f0",
+    "priorFixtureAttempts": [
+      {
+        "logSha256": "5c7597316dc14dfae711a5ab36015fbd259ed605bed056796dda9b4f4ce7e166",
+        "stage": "A transient HTTP 503 interrupted the initial read-only observation."
+      },
+      {
+        "logSha256": "2ff44e941cf8903e6028b1764e690033f9d82f94679cdce45f4c38291d8b2b00",
+        "stage": "The product refused disabled replay through the fixture business triggers."
+      },
+      {
+        "logSha256": "9d34d123da20400340d855425cab9e88b9bb525f032196acfe8338743b1a5c8a",
+        "stage": "The cached MySQL image lacks mysqlbinlog. The accepted fixture uses a pinned host client for bounded local capture bytes."
+      }
+    ],
+    "javaFocusedPassed": 50,
+    "integratedStaticTree": "0e41da3646b5aca9bb52bc8c05a69c04da08876e",
+    "integrationScope": "Four in-flight helper functions match the native AST. Split-store and Java 17 routing remain unchanged in the integrated harness. Combined fixture options and SDD were statically verified.",
+    "scope": "Settled start plus one captured transaction already committed and ACKed on MySQL, with an actual PostgreSQL row lock before commit. Agent loses its control/journal path. PostgreSQL aborts the partial transaction after old Worker isolation. Admin STOP precedes explicit START. PostgreSQL catches up, MySQL receipt and capture position stay the same, and both actual target logs prove one insert and one update.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --test-classes sync-app/target/test-classes --output target/native-inflight --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition --handoff-asymmetric-inflight --partition-mysqlbinlog /path/to/mysqlbinlog"
   }
 }
