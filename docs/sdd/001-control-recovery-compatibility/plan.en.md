@@ -1,6 +1,6 @@
 # Design boundaries,decisions and delivery order
 
-RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
+RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 
 [Spec](spec.en.md) · [Tasks](tasks.en.md) · [Acceptance](acceptance.en.md) · [中文](plan.md)
 
@@ -26,7 +26,7 @@ Each of the 48 records specifies the verified scope and remaining criteria. [Req
 
 ## Confirmed scope
 
-Unified multi-node management must control remote tasks from any entry,not just aggregate local pages. Login survives reload with effective logout/revocation. Reviewed manual skip/corrective data are required while automatic recovery remains no-skip by default. MySQL5.7/8.0/8.2/8.4,PostgreSQL and Oracle sources are committed scope rather than optional future placeholders. The release uses Temurin 21 LTS for build, deployment and native verification. Complete bilingual scenarios/FAQ and all earlier destination,mapping,optional-storage,deployment and migration requirements remain.
+Unified multi-node management must control remote tasks from any entry,not just aggregate local pages. Login survives reload with effective logout/revocation. Reviewed manual skip/corrective data are required while automatic recovery remains no-skip by default. MySQL5.7/8.0/8.2/8.4,PostgreSQL and Oracle sources are committed scope rather than optional future placeholders. The sole release runtime is Temurin 21 LTS for build, deployment and native verification. Complete bilingual scenarios/FAQ and all earlier destination,mapping,optional-storage,deployment and migration requirements remain.
 
 ## Proposed cluster architecture
 

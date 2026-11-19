@@ -113,7 +113,7 @@ python3 tests/catalog-benchmark.py --slow-target \
 
 ## 工具验证范围
 
-工具曾通过小型全量/增量及五JDK×两种日志的验证，摘要收敛到[验证基线](../verification/baseline.json)。旧候选的重复原始报告已移除；这些历史结果不代表当前候选、全连接器或硬件性能标准已验收。
+早期进程与日志结果保留当时的制品、JVM 和验收范围。当前候选容量测试统一使用 Eclipse Temurin 21 LTS，比较结果时核对原硬件、负载和存储。[验收基线](../verification/baseline.json) · [固定历史快照](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 ## 运行时与日志配置
 

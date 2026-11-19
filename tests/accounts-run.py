@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Current Java8 account/auth/audit/kill/recovery. Does not claim database synchronization."""
+"""Current Java 21 account/auth/audit/kill/recovery. Does not claim database synchronization."""
 import hashlib
 import importlib.util
 import json
@@ -161,7 +161,7 @@ def main():
         (directory / 'audit-export.json').write_text(json.dumps(exported)); (directory / 'audit-export.json').chmod(0o600)
         assert hashlib.sha256(artifact.read_bytes()).hexdigest() == original
         command('python3', 'tests/verify-artifact.py')
-        print('ACCOUNTS_NATIVE_ACCEPTED: Java8 actual release HTTP, explicit activation, grants, token rotation, last-admin guard, SIGKILL persistence, stale/missing directory refusal, controller lock, offline recovery preserving RUNNING intent without launching workers, and current chained audit proofs; artifact=' + original)
+        print('ACCOUNTS_NATIVE_ACCEPTED: Java 21 actual release HTTP, explicit activation, grants, token rotation, last-admin guard, SIGKILL persistence, stale/missing directory refusal, controller lock, offline recovery preserving RUNNING intent without launching workers, and current chained audit proofs; artifact=' + original)
     finally:
         if created:
             (directory / 'controller.log').write_text(command('docker', 'logs', '--tail', '100', name).stdout)

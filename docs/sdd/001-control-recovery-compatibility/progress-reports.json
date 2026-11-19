@@ -19,7 +19,7 @@
     "Java 17 native MySQL 8.4.13 asynchronous primary failure, external promotion and automatic dual-target GTID continuation. 9 native checks. Pushed 7aabd72."
   ],
   "inProgress": [
-    "JV-02 Java 11 prototype built with release 11, booted on Corretto 11 and entered native rolling validation. Record rewrites passed 62 focused Java 17 tests; default release sources are unchanged.",
+    "JV-02 continues with Temurin 21 only. Verify additional source, target, driver, TLS and recovery profiles against the same supported release runtime.",
     "RC-10 Kafka Worker physical receipt passed native TLS/SCRAM against the exact 5018320-integrated candidate. Independent startup-lock and journal-preflight fixes passed focused tests and are being integrated. Membership and journal-time evidence remain in progress.",
     "LG-10 OIDC mock identity provider and two Controller HTTP acceptance are in development. Existing local account authority remains unchanged.",
     "CP-04 The in-flight row-lock profile passed. Permanent original Agent loss, committed-but-unacknowledged outcomes and broader draining remain."
@@ -56,15 +56,17 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish Java 11 rolling verification and a maintainable build profile; evaluate Java 8 API differences.",
+    "Verify the single Temurin 21 build and deployment configuration, then extend the native connector and recovery coverage on that runtime.",
     "Integrate and verify Kafka receipt safeguards. Keep historical ownership and dispatch tracked separately.",
     "Verify cross-entry external identity mapping and revocation.",
     "Advance broader cutover, lost-node and missing-log profiles; commercial GaussDB, Oracle RAC and live AWS require their matching environments."
   ],
-  "currentCandidateArtifact": "393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24",
-  "currentCandidateScope": "Optional Java 17 native asynchronous MySQL promotion. Latest full standard reactor is recorded separately.",
+  "currentCandidateArtifact": "512742f469edf00f544911937cbc6013e988e2544d9519501aaec3f8ae777dca",
+  "currentCandidateScope": "Single Temurin 21 release baseline. 41 Java tests, package bytecode and 12 native rolling checks passed.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "Single Temurin 21 LTS release policy replaced multi-version support. 41 Java tests, fixed class-file gate and 12 native rolling checks passed."
+  ],
   "lastScheduledReportAt": "2026-11-19T15:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "5018320504ac4ded545c8a142b2a87940d814423",
@@ -95,5 +97,9 @@
   },
   "inactiveConversationMissedReportAt": [
     "2026-11-19T12:58:16+08:00"
-  ]
+  ],
+  "runtimeScope": {
+    "supported": "Eclipse Temurin 21 LTS",
+    "priorReportCommit": "419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c"
+  }
 }

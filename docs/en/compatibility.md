@@ -34,18 +34,9 @@ The V3 wizard reads `GET /api/capabilities` for source availability and limits d
 
 ## Release runtime
 
-Build, run and accept new candidates on Temurin 21 LTS. Record the real JVM version, architecture and artifact SHA on each live profile. The source and destination tables above include results from their tested development artifact. Earlier records are available as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` in the [verification manifests](../verification/baseline.json). Use the matching Java 21 fixture for unverified source, destination, journal or recovery combinations. [Reproduction commands](performance.md)
+**Eclipse Temurin 21 LTS is the sole supported build and runtime.** The release uses Java 21 class files. Controller, Agent and Worker processes use Temurin 21 on Linux, Docker and Kubernetes. Record the actual JVM version, architecture and artifact SHA in each native run. Use the matching Temurin 21 fixture to verify a new source, destination, journal or recovery profile. [Reproduction commands](performance.md)
 
-The standard release uses Java 21 class files and requires Java 21 or later. The standard Docker and Kubernetes configurations use Java 21. Temurin 25.0.5 on ARM64 passed a bounded MySQL 8.4.13 profile with two Controllers, an Agent and a Worker. PostgreSQL and MySQL targets received initial and incremental data and resumed from the original GTID after external replica promotion. Controller and Agent rolling replacement also preserved the original snapshots.
-
-Build an optional Java 17 bundle from source with a JDK 17 and Maven.
-
-```sh
-mvn -B -s build/settings.xml -Pjava17 package
-python3 tests/verify-artifact.py --java-release 17
-```
-
-This bundle passed native snapshot, CDC, and Controller and Agent rolling replacement with Temurin 17.0.21 on ARM64, MySQL 8.4.13 source and PostgreSQL and MySQL targets. The Worker reused the original GTID, snapshots and STOP receipt. A separate native run also verified both targets resume from the promoted GTID after MySQL 8.4.13 asynchronous failover. Use the verified bundle with Java 17 for that profile. The Java 8 and 11 process results in the historical manifests refer to earlier packages. Current bundles for those runtimes remain pending. [Verification and reproduction](../verification/baseline.json)
+Each result in the source and destination tables applies to its original candidate and environment. Earlier runtime experiments and profiles such as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` retain their original artifact hashes and reproduction commands in the archive. [Verification manifests](../verification/baseline.json) · [Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 ## Management requests
 

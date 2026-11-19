@@ -8,10 +8,10 @@ selected-consumer ACK, invalid-selector/purge refusal, restart and actual old
 nonempty-backup protection. MySQL8.4+PostgreSQL17 pipeline acceptance also passed snapshot/CDC, process kill,
 broker outage, SQL constraint repair/retry and purge isolation; this does not
 establish cluster acceptance.
-The fixture broker is Apache ActiveMQ 5.19.12. Java8 requires client5.16.8 (class
-version52); current5.18/5.19 clients require Java11. Client JMS/SLF4J/Hawtbuf
-packages are isolated from other SDKs. Client5.16 is an inactive line; maintain
-its dependency/security lifecycle separately from the current broker. See
+The fixture broker is Apache ActiveMQ 5.19.12. Rivomesh pins client 5.16.8 and
+isolates its JMS, SLF4J and Hawtbuf packages from other SDKs. The original Java 8
+profile remains in the verification archive. Current deployments use Temurin 21 LTS.
+Client 5.16 is inactive. Track its security lifecycle separately from the broker. See
 [Apache downloads](https://activemq.apache.org/components/classic/download/) and
 [archived releases](https://activemq.apache.org/components/classic/documentation/download-archives).
 
@@ -105,8 +105,7 @@ and Jolokia permissions. HTTP403 is not evidence of a missing queue. Queue
 existence uses successful exact-MBean searches because the server may redact
 exception types; failed management calls never authorize resource recreation.
 
-**Strict origin checks with a Java8 worker:** Java's URLConnection does not send
-a manually supplied Origin header by default. The client sends Referer containing
+**Strict origin checks:** The client sends Referer containing
 the management endpoint's own scheme/authority. Allow that exact origin in Jolokia
 CORS policy and retain strict checking; no global JVM header override is required.
 Jolokia explicitly supports Referer fallback in its [security manual](https://jolokia.org/reference/html/manual/security.html).

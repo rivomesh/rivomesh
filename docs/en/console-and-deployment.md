@@ -12,7 +12,7 @@ Local task control is the default. Opt in with `cluster.sharedAccess=true` and `
 
 ## Local startup
 
-Use Temurin 21 LTS for Maven and for the running process.
+Use Eclipse Temurin 21 LTS for Maven, the Controller, the Agent and each Worker.
 
 ```bash
 mvn -s build/settings.xml verify

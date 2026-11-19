@@ -47,7 +47,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Analytical targets | Initial ClickHouse/Doris/Hive materialization/recovery;production clustering,security/performance remain open |
 | Messaging | Eight broker profiles use confirmed at-least-once delivery. Native profiles include NATS TLS/quorum, RabbitMQ quorum, Kafka KRaft and externally promoted Redis Streams. [Messaging guide](messaging-v3.md) |
 | Deployment | Linux, Docker, Helm and native Kubernetes. Two live nodes verified same-volume remount, image replacement, configuration rollout, Secret rotation, cross-node automatic CDC and stale Worker fencing with an external journal. |
-| Java | Temurin 21 LTS is the build, runtime and acceptance baseline. Connector and security protocol profiles are tracked on Java 21. |
+| Java | Eclipse Temurin 21 LTS is the sole supported build and runtime. Connector, deployment and security protocol acceptance uses the exact Java 21 candidate. |
 
 See [design](platform-design.md),[console operations](console-and-deployment.md) and product guides for constraints. Protocol/data-format numbers identify internal modes,not compatibility promises for unreleased builds.
 

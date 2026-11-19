@@ -2,7 +2,7 @@
 
 当前尚未首次发布，不支持开发候选之间的原地升级、旧包名兼容或自动控制模式迁移。内部格式编号不等于已发布版本。
 
-首版统一使用 Eclipse Temurin 21 LTS 构建、部署和验收。Controller、Agent 和 Worker 使用同一 Java 大版本。
+首版构建、部署和验收仅支持 Eclipse Temurin 21 LTS。Controller、Agent 和 Worker 都使用 Temurin 21。
 
 首次部署前一次确定所有节点的控制库、访问模式、角色、密钥和持久目录。完整管理恢复能力使用一致的配置：
 

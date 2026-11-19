@@ -28,8 +28,7 @@ def file_hash(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--java", nargs="+", choices=("21",),
-                        default=["21"])
+    parser.add_argument("--java", choices=("21",), default="21")
     parser.add_argument("--journal-modes", nargs="+", choices=("LOCAL", "EXTERNAL"),
                         default=["LOCAL", "EXTERNAL"])
     parser.add_argument("--rows", type=int, default=1000)
@@ -70,21 +69,19 @@ def main():
 
     save()
     try:
-        configurations = [(runtime, mode, cpus) for runtime in dict.fromkeys(args.java)
-                          for mode in dict.fromkeys(args.journal_modes) for cpus in limits]
+        configurations = [(mode, cpus) for mode in dict.fromkeys(args.journal_modes) for cpus in limits]
         for trial in range(1, args.repeat + 1):
-            for index, (runtime, mode, cpus) in enumerate(configurations, 1):
-                profile = {"java": runtime, "journalMode": mode, "cpusPerContainer": cpus,
+            for index, (mode, cpus) in enumerate(configurations, 1):
+                profile = {"java": args.java, "journalMode": mode, "cpusPerContainer": cpus,
                            "trial": trial, "status": "RUNNING"}
                 report["profiles"].append(profile)
                 save()
                 run_profile(args, artifact, directory, profile, report, index)
                 save()
-        for runtime, mode, cpus in configurations:
-            trials = [p for p in report["profiles"] if
-                      (p["java"], p["journalMode"], p["cpusPerContainer"]) == (runtime, mode, cpus)]
+        for mode, cpus in configurations:
+            trials = [p for p in report["profiles"] if (p["journalMode"], p["cpusPerContainer"]) == (mode, cpus)]
             if all(p["status"] == "PASSED" for p in trials):
-                result = {"java": runtime, "journalMode": mode, "cpusPerContainer": cpus, "trials": len(trials)}
+                result = {"java": args.java, "journalMode": mode, "cpusPerContainer": cpus, "trials": len(trials)}
                 for metric in METRICS:
                     values = [p["measurements"][metric] for p in trials]
                     result[metric] = {"minimum": min(values), "median": statistics.median(values), "maximum": max(values)}

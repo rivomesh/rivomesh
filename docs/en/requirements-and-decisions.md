@@ -32,7 +32,7 @@ New/clarified scope and gaps use [SDD baseline RM-SDD-001](../sdd/001-control-re
 | D20 | Manage authorized remote tasks from any management entry | Shared node inventory, configuration and durable command routing are available. Stale Worker isolation passed. Automatic Agent placement remains |
 | D21 | Preserve login on reload with logout, expiry, revocation and cross-entry sessions | HttpOnly sessions passed actual Chrome reload and logout checks. Cross-entry shared sessions are verified |
 | D22 | Review transaction skips, source gaps and manual corrective data while retaining evidence | Native evidence covers destination skip, a keyed MySQL source exclusion and reviewed correction. Each runbook describes its supported profile |
-| D23 | Use Eclipse Temurin 21 LTS for the first release | Java 21 bytecode, actual Controller/Agent/Worker and dual-target resume passed. Acceptance expands by source, target, driver and deployment topology |
+| D23 | Use only Eclipse Temurin 21 LTS for the first release | Java 21 bytecode, actual Controller/Agent/Worker and dual-target resume passed. Acceptance expands by source, target, driver and deployment topology |
 | D24 | Trace requirements, design, tasks and acceptance in SDD and maintain bilingual manuals | Use current requirements.json, task and acceptance documents and the hourly progress record |
 
 The platform boundary is **one source per task, multiple tasks per platform**. No implicit source merging or cross-source transactions. Isolated workers may run under one console or as separate deployments.

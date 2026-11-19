@@ -176,7 +176,7 @@ messaging:
 
 客户端同步发送字节消息，关闭批处理/分片并限制待发送请求数。消息 properties 携带稳定事件 ID、逻辑通道与传输 header，Pulsar key 携带逻辑行/事务键。收到发送确认后才提交日志回执。Pulsar message ID 或 Broker 去重不能代替事件 ID 持久去重和事务暂存；这里不使用 Pulsar 原生事务，更换生产者或源租约接管后仍采用通用至少一次契约。
 
-Java 8 客户端固定为 Pulsar 4.0.14，通过 `rivomesh-pulsar-transport` 隔离其日志、加密、Jackson 注解和 protobuf，避免替换核心依赖。后续 Pulsar 客户端分支提高了 Java 最低版本，4.0 分支仍保留 Java 8；请用 `mvn verify` 构建整个 reactor，使私有 SDK 先完成打包。传输测试将核心 JAR 放在 classpath 最前，验证两套依赖共存，并验证只读检查、所有权、发布/读取、Broker 重启、错误保留策略拒绝及丢失 Topic 保护。完整混合链路恢复单独记录于[验证记录](../validation.md)。
+Rivomesh 固定 Pulsar 客户端 4.0.14，通过 `rivomesh-pulsar-transport` 隔离其日志、加密、Jackson 注解和 protobuf。Worker 使用 Temurin 21。请用 `mvn verify` 构建整个 reactor，使私有 SDK 先完成打包。传输测试将核心 JAR 放在 classpath 最前，验证两套依赖共存，并验证只读检查、所有权、发布/读取、Broker 重启、错误保留策略拒绝及丢失 Topic 保护。完整混合链路恢复单独记录于[验证记录](../validation.md)。
 
 Broker 启动与源事务追平分别测量：故障脚本先确认 Broker 停止时 SQL 继续、消息目标自动重试，再等待 Broker 健康，之后验证无需人工恢复即可追平。管理服务或存储尚在启动时，不能把目标当作已经就绪。诊断码可显示 `PULSAR_ADMIN_HTTP_503` 等安全状态，不向界面复制行数据或凭据。
 
@@ -256,7 +256,7 @@ Redis 依据：[WAITAOF 同连接语义和返回计数](https://redis.io/docs/la
 
 `ACTIVEMQ_ARTEMIS` 与 ActiveMQ Classic 是独立产品。填写 `artemis://host:61616`、用户名/密码、逐库映射，以及作为队列前缀的 `messaging.stream`；前缀 1–48 位，首位字母，其余仅字母、数字、下划线、连字符。`messaging.broker` 可选核对 Broker 名称。首批限定单入口、`replicas: 1`，不接受令牌或额外 endpoints。物理队列为 `<前缀>.<64位任务/订阅/代次绑定哈希>`，代次初始化后界面展示实际名称。
 
-通过独立 `rivomesh-artemis-transport` 使用 Core 协议。Java 8 兼容客户端采用 2.19.1，并隔离固定 Netty 4.1.130、日志和 JSON 库；不能把要求 Java 11 的新客户端直接放入 Java 8 Worker。真实验收 Broker 为 2.57.0，其运行 JDK 与 Worker 分开。这是经过测试的兼容配置，不代表任意旧版客户端/Broker/安全设置均已支持。
+通过独立 `rivomesh-artemis-transport` 使用 Core 协议。Rivomesh 固定 Core 客户端 2.19.1，并隔离 Netty 4.1.130、日志及 JSON 库。历史验收的 Broker 2.57.0 使用独立 JVM。当前 Worker 使用 Temurin 21。这是经过测试的兼容配置，不代表任意旧版客户端/Broker/安全设置均已支持。
 
 Broker 必须开启持久化、事务和非事务 journal sync，准备阶段读取这些运行属性。配置文件须保留 `journal-datasync=true`；当前使用的管理属性**没有独立暴露并核验该字段**。[Broker 夹具](../../tests/artemis-broker.xml) 显式开启并使用 NIO，物理存储和断电保证需另外验收。Core 同步事务提交成功后才推进发布回执；确认丢失仍可能按相同事件 ID 重放。
 
@@ -292,6 +292,6 @@ Artemis 2.57.0 双 Broker 实测使用一个本地命名卷和固定回环入口
 RIVOMESH_TEST_PREBUILT=1 bash tests/messaging-run.sh
 ```
 
-检查器拒绝变更后的 Java 源码、过期测试/界面资源及无效发布包，同时核验固定 Java 8 兼容 JUnit Console 的校验和。此模式只执行 **1 项链路用例**，不等于完整 Maven 的 54 项执行；默认命令仍构建并运行较完整的测试。失败时在 `target/broker-tests/<project>/` 留存完整 Pulsar 日志和其他 Broker 的有界日志，只清理该测试自己的项目资源。可选 `RIVOMESH_TEST_JAVA_OPTIONS` 向隔离测试与 Worker 提供 JVM 诊断参数，例如 Java 8 的 `-XX:+PrintGCDetails -XX:+PrintGCTimeStamps`；它是测试选项，不是生产容量建议。
+检查器拒绝变更后的 Java 源码、过期测试/界面资源及无效发布包，同时核验固定 Java 8 兼容 JUnit Console 的校验和。此模式只执行 **1 项链路用例**，不等于完整 Maven 的 54 项执行；默认命令仍构建并运行较完整的测试。失败时在 `target/broker-tests/<project>/` 留存完整 Pulsar 日志和其他 Broker 的有界日志，只清理该测试自己的项目资源。可选 `RIVOMESH_TEST_JAVA_OPTIONS` 向隔离测试与 Worker 提供 JVM 诊断参数，例如 Temurin 21 的 `-Xlog:gc`；它是测试选项，不是生产容量建议。
 
-最新定点验收 `target/messaging-pulsar-gc-diagnostics.log`：实际 Java 8 发布 JAR、256 MiB Worker 堆，**1 项真实链路用例通过、0 失败/跳过**。PostgreSQL 加 Kafka/RabbitMQ/NATS/Redis/Pulsar/RocketMQ/Artemis 完成全量/增量、Worker 强杀和三轮全部消息 Broker 停止/启动；Broker 停止期间 SQL 继续，重试诊断持久保留，自动追平后清除。最后删除已初始化 Artemis 队列，仅该目标暂停，其他订阅继续追平；原生回执跨重启恢复。在繁忙共享宿主机启用 Java 8 GC 诊断时约耗时 590 秒，没有增加堆或截止时间。这是 1 项定点用例，不等于完整 Maven 54 项重新通过，也不是通用容量或恢复时间承诺。
+历史定点验收 `target/messaging-pulsar-gc-diagnostics.log`：实际 Java 8 发布 JAR、256 MiB Worker 堆，**1 项真实链路用例通过、0 失败/跳过**。PostgreSQL 加 Kafka/RabbitMQ/NATS/Redis/Pulsar/RocketMQ/Artemis 完成全量/增量、Worker 强杀和三轮全部消息 Broker 停止/启动；Broker 停止期间 SQL 继续，重试诊断持久保留，自动追平后清除。最后删除已初始化 Artemis 队列，仅该目标暂停，其他订阅继续追平；原生回执跨重启恢复。在繁忙共享宿主机启用 Java 8 GC 诊断时约耗时 590 秒，没有增加堆或截止时间。这是 1 项定点用例，不等于完整 Maven 54 项重新通过，也不是通用容量或恢复时间承诺。

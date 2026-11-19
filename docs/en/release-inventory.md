@@ -2,7 +2,7 @@
 
 [中文](../zh-CN/release-inventory.md)
 
-Generate the dependency inventory from the repository root after building a release candidate. This produces one CycloneDX Maven SBOM and a comparison against the actual shaded JAR. [CycloneDX Maven plugin](https://cyclonedx.github.io/cyclonedx-maven-plugin/)
+Build the release candidate with Eclipse Temurin 21 LTS, then generate the dependency inventory from the repository root. This produces one CycloneDX Maven SBOM and a comparison against the actual shaded JAR. [CycloneDX Maven plugin](https://cyclonedx.github.io/cyclonedx-maven-plugin/)
 
 ```sh
 mvn -B -s build/settings.xml \

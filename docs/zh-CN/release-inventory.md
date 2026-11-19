@@ -2,7 +2,7 @@
 
 [English](../en/release-inventory.md)
 
-构建候选包后，在项目根目录生成 CycloneDX Maven SBOM，并将它与最终的 shaded JAR 核对。[CycloneDX Maven 插件](https://cyclonedx.github.io/cyclonedx-maven-plugin/)
+使用 Eclipse Temurin 21 LTS 构建候选包后，在项目根目录生成 CycloneDX Maven SBOM，并将它与最终的 shaded JAR 核对。[CycloneDX Maven 插件](https://cyclonedx.github.io/cyclonedx-maven-plugin/)
 
 ```sh
 mvn -B -s build/settings.xml \

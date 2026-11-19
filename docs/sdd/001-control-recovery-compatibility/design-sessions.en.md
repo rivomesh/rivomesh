@@ -33,7 +33,7 @@ Sign-in, sign-out and reauthentication after self-token rotation use one authent
 ## Acceptance scope
 
 - Eight real HTTP contract tests cover restoration, Origin/CSRF refusal, roles, identity conflicts, no fallback, directory-wide revocation, rotation/disable/grant changes, self-rotation, disabled sessions, restart invalidation, expiry/capacity and configuration validation.
-- Those eight tests run against the same candidate JAR on Java8/11/17/21/25. This is a session profile, not the full source/target/JDK matrix.
+- Run the session cases with the same Temurin 21 candidate JAR. Earlier multi-JDK results remain scoped to their recorded session fixtures and artifacts. [Historical verification](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 - A TLS proxy and real CookieJar verify HTTPS cookies, withholding Secure credentials on HTTP, CSRF/Origin refusal, replay refusal after logout, Bearer compatibility and absence of plaintext credentials in state.
 - DOM coverage includes reload/new pages, sign-out, multiple tabs, late401/login/refresh, failed server sign-out and self-token rotation, preserving editor/audit/validation/repair tests.
 - Artifact checks, root and artifact-first tests, Helm/native parity and the updated Docker preview are archived separately.

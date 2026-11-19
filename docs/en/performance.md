@@ -146,7 +146,7 @@ journaled SQL target with the stated quota and workload.
 
 ## Harness validation scope
 
-Small snapshot/CDC checks and a five-JDK/two-journal matrix previously passed;bounded provenance is consolidated in the [verification baseline](../verification/baseline.json). Duplicate old-candidate reports are removed. These historical results do not certify the current candidate,every connector or a hardware capacity standard.
+The earlier process and journal runs retain their tested artifacts, runtimes and scope. Current candidate measurements use Eclipse Temurin 21 LTS. Compare capacity only with the recorded host, workload and storage. [Verification baseline](../verification/baseline.json) · [Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 ## Runtime and journal profiles
 

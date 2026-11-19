@@ -58,6 +58,6 @@ public final class HiveMaterializerAcceptance {
             try(HiveSqlClient sql=new HiveSqlClient(s.jdbcUrl,s.username,s.password,300,4*1024*1024,16*1024*1024)){require(count(sql,name+".items")==1,"Restore is not an older nonempty target");}
             try(MessageSink target=sink(journal,lease,s)){target.activate(lease.epoch);try{target.prepare(lease.epoch,keyed);throw new AssertionError("Old nonempty native backup reused a newer checkpoint");}catch(IllegalStateException failure){require("HIVE_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED".equals(failure.getMessage()),"Wrong rollback guard: "+failure.getMessage());}require(target.checkpoint().sequence==2,"Rollback changed the saved checkpoint");}
         }
-        System.out.println("HIVE_MATERIALIZER_ACCEPTED: actual release Java8/isolated JDBC/native ACID ORC history/views, PK move/replay, keyless multiplicity/delete, injected native confirmation loss/replay, exact uint64/65digit-decimal/JSON/base64, stale-version refusal, server/client restart and actual older nonempty warehouse+metastore backup refusal");
+        System.out.println("HIVE_MATERIALIZER_ACCEPTED: actual release Java 21/isolated JDBC/native ACID ORC history/views, PK move/replay, keyless multiplicity/delete, injected native confirmation loss/replay, exact uint64/65digit-decimal/JSON/base64, stale-version refusal, server/client restart and actual older nonempty warehouse+metastore backup refusal");
     }
 }

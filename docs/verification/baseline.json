@@ -12483,5 +12483,217 @@
     "applicationTree": "0d268439afdd6d1d5d54b25c4047cb11441614fb",
     "scope": "ARM64 Temurin 17.0.21 with bundled Java 17 artifact. MySQL 8.4.13 GTID/ROW/FULL and async read-only replica. External promotion after primary SIGKILL, original source and target cuts remain during outage, both targets continue the promoted GTID on original snapshots and configuration.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/java17-rivomesh.jar --output target/java17-native-promotion --runtime-jdk 17 --separate-execution --mysql-async-failover --control-product POSTGRESQL --source-expected-version 8.4.13"
+  },
+  "singleTemurin21ReleaseBaseline": {
+    "status": "PASS",
+    "supportedRuntime": "Eclipse Temurin 21 LTS",
+    "applicationClassMajor": 65,
+    "nativeManifestSha256": "4062b7c0d40e1dbf50bf716fc5afe5d40c891e512531852084b2b1710f6a7fc1",
+    "native": {
+      "artifactSha256": "512742f469edf00f544911937cbc6013e988e2544d9519501aaec3f8ae777dca",
+      "status": "PASS",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 21",
+        "Actual Java 21 Controllers, Agent and Worker share the task, commands and initial CDC",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 21",
+        "Replacing one Java 21 Controller leaves the other management entry and original Worker available",
+        "The drained Agent opens the same task directory on Java 21 with the prior GTID and STOP receipt",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 21",
+        "Java 21 Worker replays native CDC to both SQL targets from original snapshots and checkpoint",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 21"
+      ],
+      "harnessSourceSha256": "4b9bb5b67ce170d5712663e6eea9076a2970210870494a608f7137724d4b1769",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "mysqlAsyncFailover": false,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "handoffCustody": false,
+      "handoffFailureCustody": false,
+      "handoffRawCustody": false,
+      "handoffClosedReceipts": false,
+      "handoffPreparation": false,
+      "handoffManagedWriter": false,
+      "handoffOriginalOutage": false,
+      "handoffAsymmetricPartition": false,
+      "handoffAsymmetricInflight": false,
+      "handoffPrivateWriter": false,
+      "handoffAutoResume": false,
+      "handoffStaging": false,
+      "handoffSplitStore": false,
+      "handoffPreparationBrowser": false,
+      "handoffAdoptedBrowser": false,
+      "handoffTargetFence": false,
+      "handoffWorkerStart": false,
+      "handoffApprovalDiagnostics": false,
+      "handoffPublicOwner": false,
+      "receiptLookup": false,
+      "retentionReview": false,
+      "reportArchive": false,
+      "reportReclaim": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": 21,
+      "rollingRestart": true,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "secretAudit": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI, source promotion and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "runtimeRollout": {
+        "initial": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          }
+        ],
+        "controllerReplaced": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          }
+        ],
+        "agentReplaced": [
+          {
+            "role": "CONTROLLER",
+            "node": "node-a",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "CONTROLLER",
+            "node": "node-b",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "AGENT",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          },
+          {
+            "role": "WORKER",
+            "node": "node-worker",
+            "version": "21.0.13",
+            "architecture": "aarch64",
+            "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+          }
+        ]
+      },
+      "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+      "runtimeArchitecture": "arm64",
+      "runtimeProcesses": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "21.0.13",
+          "architecture": "aarch64",
+          "imageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+        }
+      ],
+      "cleanupExitCode": 0
+    },
+    "sourceTree": "62a474b9904fe349ae91c48059d284fe87a8042b",
+    "buildRuntime": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "focusedJavaPassed": 41,
+    "packageGateSha256": "43bd5e1a08062bfdea674d25684be345562c3b182ff80afb7bd06aaeff041501",
+    "scope": "Single supported Java 21 build, release bytecode and product fixtures. Native ARM64 rolling Controller and Agent replacement preserves shared access, STOP and two target snapshots/checkpoints.",
+    "reproduce": "mvn -B -s build/settings.xml package && python3 tests/verify-artifact.py && python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-java21-only --runtime-jdk 21 --rolling-restart --separate-execution --control-product POSTGRESQL --source-expected-version 8.4.13"
   }
 }

@@ -1,6 +1,6 @@
 {
   "specId": "RM-SDD-001",
-  "version": "0.58",
+  "version": "0.59",
   "date": "2026-11-19",
   "state": "IMPLEMENTING",
   "scope": "CP-01,SE-01/02/03/04/05,CP-07,RC-02,RC-05 and bounded RC-03 original-Agent/LOCAL-journal PostgreSQL target profile accepted;verified gap closure,automatic relocation and full matrices stay open",
@@ -1178,8 +1178,8 @@
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。补充档案验证 Temurin 25.0.5 上 MySQL 8.4.13 异步复制切主后的双目标续传。同一候选通过 Controller 和 Agent 滚动替换。 可选 Java 17 制品已实测 ARM64 Temurin 17.0.21 全量、双目标 CDC 和 Controller、Agent 滚动替换。标准制品仍为 Java 21，当前 Java 8、11 制品仍待兼容。 Java 17 同样通过 MySQL 8.4.13 异步主库故障后的双目标 GTID 续传。",
-        "en": "Java 21 verified four standalone MySQL versions, MySQL 8.4.13 async GTID promotion with two destinations, automatic three-node single-primary group failover, PostgreSQL 17/18 and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain. The supplementary Temurin 25.0.5 profile passes MySQL 8.4.13 asynchronous promotion and dual-target continuation. The same candidate passes Controller and Agent rolling replacement. The optional Java 17 bundle passed ARM64 Temurin 17.0.21 snapshot, dual-destination CDC and Controller and Agent rolling replacement. The standard bundle stays at Java 21. Current Java 8 and 11 bundles remain open. Java 17 also passed dual-target GTID continuation after external MySQL 8.4.13 asynchronous promotion."
+        "zh-CN": "首版仅使用 Temurin 21 LTS。已实测四个 MySQL 版本的单机全量与增量、MySQL 8.4.13 异步 GTID 双目标续传与三节点单主组复制，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。",
+        "en": "Temurin 21 LTS is the sole first-release runtime. Native evidence covers four standalone MySQL versions, MySQL 8.4.13 async GTID continuation to two targets and three-node single-primary Group Replication, PostgreSQL 17/18, and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain in the Temurin 21 matrix."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",

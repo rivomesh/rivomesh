@@ -62,6 +62,6 @@ public final class DorisMaterializerAcceptance {
             try(MessageSink target=sink(journal,lease,s)){target.activate(lease.epoch);try{target.prepare(lease.epoch,keyed);throw new AssertionError("Old nonempty native backup reused a newer checkpoint");}catch(IllegalStateException failure){require("DORIS_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED".equals(failure.getMessage()),"Wrong rollback guard: "+failure.getMessage());}require(target.checkpoint().sequence==2,"Rollback changed the saved checkpoint");}
         }
         modeCase(directory,"");modeCase(directory,"NO_BACKSLASH_ESCAPES");
-        System.out.println("DORIS_MATERIALIZER_ACCEPTED: actual release Java8/JDBC/Stream Load, auto MoW schema/views, nonunique BTREE/GSI indexes, PK move/replay, keyless multiplicity/delete, server/client restart and actual older nonempty native backup refusal");
+        System.out.println("DORIS_MATERIALIZER_ACCEPTED: actual release Java 21/JDBC/Stream Load, auto MoW schema/views, nonunique BTREE/GSI indexes, PK move/replay, keyless multiplicity/delete, server/client restart and actual older nonempty native backup refusal");
     }
 }

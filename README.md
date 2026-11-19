@@ -6,7 +6,7 @@
 
 ## 启动
 
-首版构建和运行使用 Eclipse Temurin 21 LTS。请先确认 `mvn -version` 和 `java -version` 均指向 Java 21。
+首版只支持 Eclipse Temurin 21 LTS。构建、Controller、Agent 和 Worker 均使用该版本。请先确认 `mvn -version` 和 `java -version` 均指向 Temurin 21。
 
 ```sh
 mvn -s build/settings.xml package

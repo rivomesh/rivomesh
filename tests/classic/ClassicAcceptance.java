@@ -46,6 +46,6 @@ public final class ClassicAcceptance {
         phase("restart");String latest;
         try(ClassicTransport resumed=open(binding)){resumed.resumeProgress(token);resumed.prepare(true);require(identity.equals(resumed.identity()),"Owner identity changed across restart");resumed.publish(Collections.singletonList(event("third")));latest=resumed.confirmedProgress();}
         phase("restore");try(ClassicTransport rolledBack=open(binding)){rolledBack.resumeProgress(latest);rejected("CLASSIC_CONFIRMED_HISTORY_MISSING_REBUILD_REQUIRED",()->rolledBack.prepare(true));}
-        System.out.println("CLASSIC_TRANSPORT_ACCEPTED: actual-release Java8 OpenWire, persistent transactions, EVENT consumer ACK retains owner, invalid selector blocks, purge refusal, content/native receipt checks, broker/client restart and actual older nonempty backup rollback refusal");
+        System.out.println("CLASSIC_TRANSPORT_ACCEPTED: actual-release Java 21 OpenWire, persistent transactions, EVENT consumer ACK retains owner, invalid selector blocks, purge refusal, content/native receipt checks, broker/client restart and actual older nonempty backup rollback refusal");
     }
 }

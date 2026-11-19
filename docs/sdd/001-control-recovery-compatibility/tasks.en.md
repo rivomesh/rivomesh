@@ -127,9 +127,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
   Deliver: On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product.
   Acceptance: AC-JV-02
-  - [x] Supplementary Java 25 profile verifies dual-target continuation after MySQL 8.4.13 async promotion.
-  - [x] The optional Java 17 bundle passes native dual-target sync and rolling replacement on actual Controllers, Agent and Worker.
-  - [ ] Current Java 8 and 11 bundles and additional runtime, driver, source and destination profiles.
+  - [x] Temurin 21 native evidence covers four standalone MySQL versions and MySQL 8.4.13 async GTID promotion and single-primary Group Replication.
+  - [ ] Extend Temurin 21 acceptance across source topologies, destination drivers and recovery cases.
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03

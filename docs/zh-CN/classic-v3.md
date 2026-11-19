@@ -2,7 +2,7 @@
 
 English：[Classic](../en/classic-v3.md)。
 
-已实现 OpenWire 原生持久本地事务、业务事件队列和独立保留回执队列；实际发布包/Java8 独立原生传输已验收：持久发布、正常消费确认、错误选择器/清空保护、重启和实际旧非空备份保护均通过。MySQL8.4＋PostgreSQL17 联合全量/增量、进程强杀、Broker 故障、SQL 约束修复重试和清空隔离也已通过；不能视为集群验收。首批 Broker 为 Apache ActiveMQ5.19.12。Java8 使用客户端5.16.8（class版本52），5.18/5.19 客户端需要 Java11；JMS/SLF4J/Hawtbuf 已隔离。5.16 客户端属于停止维护的版本线，需要单独管理依赖和安全生命周期，不能把 Broker 当前版本等同于客户端也已更新。参见 [Apache 下载](https://activemq.apache.org/components/classic/download/)及[历史版本](https://activemq.apache.org/components/classic/documentation/download-archives)。
+已实现 OpenWire 原生持久本地事务、业务事件队列和独立保留回执队列；早期 Java 8 制品的独立原生传输已验收：持久发布、正常消费确认、错误选择器/清空保护、重启和实际旧非空备份保护均通过。MySQL8.4＋PostgreSQL17 联合全量/增量、进程强杀、Broker 故障、SQL 约束修复重试和清空隔离也已通过；不能视为集群验收。首批 Broker 为 Apache ActiveMQ5.19.12。Rivomesh 固定客户端 5.16.8，JMS/SLF4J/Hawtbuf 已隔离。当前部署统一使用 Temurin 21 LTS。5.16 客户端属于停止维护的版本线，需要单独管理依赖和安全生命周期，不能把 Broker 当前版本等同于客户端也已更新。参见 [Apache 下载](https://activemq.apache.org/components/classic/download/)及[历史版本](https://activemq.apache.org/components/classic/documentation/download-archives)。
 
 使用 [config/classic-v3.yml](../../config/classic-v3.yml)：`ACTIVEMQ_CLASSIC`，`activemq://host:61616` 或 `activemqs://host:61617`，显式填写 `messaging.broker`、队列前缀 `stream` 和以 `/api/jolokia/` 结尾的认证管理地址 `adminUrl`。密码不放入URL。`check` 连接 OpenWire 并读取管理能力，不创建业务队列；会核对两个通道的 Broker ID/名称，要求持久、非从节点、KahaDB。重定向、含糊的 JSON/JMX 响应不会成为成功确认。TLS 需要独立验证证书及 JVM 信任，目前尚无真实 TLS 验收。
 
@@ -40,7 +40,7 @@ rivomesh_record_type = 'EVENT'
 
 **当前 Broker 管理端返回403？** Classic5.19.12 的 Jetty 默认仅放行回环地址。应使用明确的 InetAccessHandler include 规则授权同步 Worker 的实际管理网络，同时保留认证和 Jolokia 权限。403 不能视为队列不存在；当前服务端还可能隐藏异常类型，因此存在性检查使用成功的精确 MBean 搜索，管理调用失败不会授权重建资源。
 
-**Java8 Worker 与严格来源检查：** URLConnection 默认不会发送手动指定的 Origin，客户端改用管理端地址自身 scheme/authority 的 Referer。请在 Jolokia CORS 策略中放行这个精确来源，并保留 strict-checking；不需要全局 JVM 头部覆盖设置。Jolokia [官方安全手册](https://jolokia.org/reference/html/manual/security.html)明确支持 Referer 回退。HTTP200 加 Jolokia status403 仍是访问失败，不能当成队列不存在。
+**严格来源检查：** 客户端使用管理端地址自身 scheme/authority 的 Referer。请在 Jolokia CORS 策略中放行这个精确来源，并保留 strict-checking；不需要全局 JVM 头部覆盖设置。Jolokia [官方安全手册](https://jolokia.org/reference/html/manual/security.html)明确支持 Referer 回退。HTTP200 加 Jolokia status403 仍是访问失败，不能当成队列不存在。
 
 已验收测试策略同时允许 `http://classic:8161` 和 `http://classic:8161/`；该 Jolokia 版本会按包含末尾斜线的完整 Referer 匹配。其他部署应放行精确的 `<管理scheme>://<管理authority>/`，继续保留严格检查。
 

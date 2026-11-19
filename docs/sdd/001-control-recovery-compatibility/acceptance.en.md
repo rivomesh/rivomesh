@@ -36,7 +36,7 @@ Each row records its acceptance contract and observed coverage. Verify success, 
 | AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | PARTIAL. Native slot promotion, stored generated columns and dual-target TIME(6) and extended NUMERIC passed. Dynamic DDL remains. |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | PARTIAL. Native single-PDB archive CDC, virtual integer columns, same-cut restart and BasicFiles and SecureFiles LOB refusal passed. |
 | AC-JV-01 | JV-01 | Run the same Temurin 21 candidate on Controller, Agent and Worker with native snapshot and CDC. Record JVM version, architecture, artifact SHA, bytecode and dependency checks. | PASS (Temurin 21 class major, live Controller/Agent/Worker and SQL CDC) |
-| AC-JV-02 | JV-02 | On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product. | PARTIAL. Java 21 is the standard bundle. The optional Java 17 bundle passed dual-target sync and rolling replacement. Java 25 passed asynchronous promotion and rolling replacement. |
+| AC-JV-02 | JV-02 | On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product. | PARTIAL. Standalone and failover evidence is recorded below. Further Temurin 21 connector and recovery profiles remain. |
 | AC-JV-03 | JV-03 | Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation. | PARTIAL (JDBC and reconnect profiles plus native private CA and JWT over Pulsar TLS) |
 | AC-JV-04 | JV-04 | Verify the Java 21 Linux, Docker and Kubernetes deployment paths. Rolling replacement preserves a management entry, commands and verified checkpoints. Document backup, restore and rollback boundaries. | PASS (manual Linux, nonroot Docker, both Kubernetes formats and exact candidate gate) |
 | AC-DO-01 | DO-01 | Each requirement has stable ID,status,gap,dependencies,priority,acceptance and task;ZH/EN IDs match and changes preserve evidence scope. | [PASS](../../verification/README.md#do-01-bilingual-sdd-verifier) |
@@ -67,18 +67,18 @@ Each row records its acceptance contract and observed coverage. Verify success, 
 | Gap ledger | Running remains visibly gapped,coverage is not applied;verification closes remediation while accepted loss stays distinct |
 | Deployment/upgrade | Linux/Docker/Helm/nativeK8s,persistence/local disk,node/controller/volume faults,secret/config rotation,state migration or explicit refusal |
 
-### Verified source and runtime profiles
+### Verified Temurin 21 source profiles
 
-| Source profile | Historical Java 8 and 11 | Verified current runtime | Remaining coverage |
-|---|---|---|---|
-| MySQL 5.7 | 5.7.44 standalone, GTID async and MGR profiles | Java 21 initial standalone snapshot and CDC | More topologies, targets and recovery combinations |
-| MySQL 8.0 | 8.0.46 three topologies and manual recovery | Java 21 initial standalone snapshot and CDC | More topologies, targets and recovery combinations |
-| MySQL 8.2 | 8.2.0 three topology profiles | Java 21 initial standalone snapshot and CDC | More topologies, targets and recovery combinations |
-| MySQL 8.4 | 8.4.13 three topologies and five-JDK historical process results | Java 21 standalone, async GTID and MGR, Java 17 dual-target rolling replacement, and Java 25 async promotion and rolling replacement | Current Java 8 and 11 bundles and further products and connectors |
-| PostgreSQL source | Earlier profiles are pinned to their tested artifacts | Java 21 on 17.12 slot promotion and dual-target types, and 18.7 stored generated columns | Dynamic DDL, further types, targets and runtimes |
-| Oracle source | Earlier profiles are pinned to their tested artifacts | Java 21 on Oracle Free 23.26.4.0.0 single-PDB archive CDC, virtual columns and LOB preflight | Complete LOB images, RAC and further releases and runtimes |
+| Source profile | Temurin 21 evidence | Remaining coverage |
+|---|---|---|
+| MySQL 5.7 | 5.7.44 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
+| MySQL 8.0 | 8.0.46 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
+| MySQL 8.2 | 8.2.0 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
+| MySQL 8.4 | 8.4.13 standalone, async GTID promotion and single-primary Group Replication | Further products, connectors and recovery cases |
+| PostgreSQL source | 17.12 synchronized-slot promotion and dual-target types, and 18.7 stored generated columns | Dynamic DDL, further types and targets |
+| Oracle source | Free 23.26.4.0.0 single-PDB archive CDC, virtual columns and LOB preflight | Complete LOB images, RAC and further database versions |
 
-Historical evidence applies to its exact artifact and profile. Verify each current JVM, source and destination version, TLS configuration, journal, topology and fault against the recorded tests. [Versions, artifacts and reproduction](../../verification/baseline.json)
+Temurin 21 LTS is the sole runtime for new acceptance. Each result applies to the recorded artifact, JVM, source and target versions, TLS, journal, topology and fault. Prior runtime experiments remain archived with their original artifacts and criteria. [Verification manifests](../../verification/baseline.json) · [Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 ### Release evidence fields
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual Java8 release HTTP, audit export and process-kill persistence; no real DB is claimed by this fixture."""
+"""Actual Java 21 release HTTP, audit export and process-kill persistence; no real DB is claimed by this fixture."""
 import hashlib
 import importlib.util
 import json
@@ -123,7 +123,7 @@ def main():
         assert exit_code != "0"
         assert "AUDIT_STORE_IDENTITY_CHANGED" in command("docker", "logs", name)
         assert original == hashlib.sha256(artifact.read_bytes()).hexdigest(), "Release changed during acceptance"
-        print("AUDIT_NATIVE_ACCEPTED: exact Java8 release; authenticated/denied HTTP, actor-attributed scoped asynchronous CHECK, exact task-list/direct-action scope and restart enforcement, multi-page native JSON hash verification/private export, SIGKILL/restart retains committed IDs, deleted audit store refuses silent reset; stub database backend")
+        print("AUDIT_NATIVE_ACCEPTED: exact Java 21 release; authenticated/denied HTTP, actor-attributed scoped asynchronous CHECK, exact task-list/direct-action scope and restart enforcement, multi-page native JSON hash verification/private export, SIGKILL/restart retains committed IDs, deleted audit store refuses silent reset; stub database backend")
         print("ARTIFACT_SHA256: " + original)
         print("EVIDENCE: " + str(relative))
     finally:

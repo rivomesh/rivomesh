@@ -24,6 +24,7 @@ from zipfile import ZipFile
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_JDK = 21
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
@@ -90,10 +91,10 @@ parser.add_argument('--handoff-adopted-browser', type=Path,
                     help='Verify installed read-only handoff evidence through both management entries in Chrome')
 parser.add_argument('--handoff-browser', type=Path, help='Open and refresh a live handoff assessment through both Controllers in Chrome')
 parser.add_argument('--control-product', choices=('POSTGRESQL', 'MYSQL'), default='POSTGRESQL')
-parser.add_argument('--runtime-jdk', type=int, choices=(17, 21, 25),
-                    help='Verify the selected JVM in running Controllers, the Agent and the Worker')
+parser.add_argument('--runtime-jdk', type=int, choices=(RUNTIME_JDK,),
+                    help='Verify Java 21 in running Controllers, the Agent and the Worker')
 parser.add_argument('--rolling-restart', action='store_true',
-                    help='Replace a Controller and drain/restart an Agent on the selected JVM while another entry stays online')
+                    help='Replace a Controller and drain/restart an Agent on Java 21 while another entry stays online')
 parser.add_argument('--external-mysql-driver', type=Path,
                     help='Operator-provided Connector/J JAR for the opt-in external MySQL candidate')
 parser.add_argument('--runtime-image', help='Locally built nonroot runtime image; separate Agent profile only')
@@ -324,8 +325,7 @@ if args.secret_audit:
 owner_node = 'node-worker' if args.separate_execution else 'node-b'
 execution_agents = (owner_node,'node-worker-alt') if args.automatic_placement else (owner_node,) if args.separate_execution else ()
 members = ('node-a','node-b',*execution_agents)
-runtime_major = args.runtime_jdk or 21
-runtime_image = {17:'eclipse-temurin:17-jre',21:'eclipse-temurin:21-jre-jammy',25:'eclipse-temurin:25-jre'}[runtime_major]
+runtime_image = 'eclipse-temurin:21-jre-jammy'
 if args.separate_execution:
     env['RM_GC_STORE_URL'] = 'jdbc:mysql://store:3306/rivomesh_control?allowPublicKeyRetrieval=true&sslMode=DISABLED' if args.control_product == 'MYSQL' else 'jdbc:postgresql://store:5432/rivomesh_control'
 journal_database = 'rivomesh_journal' if args.handoff_split_store else 'rivomesh_control'
@@ -588,7 +588,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             settings = compose('exec', '-T', node, binary, '-XshowSettings:properties', '-version').stderr
             version = re.search(r'(?m)^\s*java\.version = (\S+)$', settings).group(1)
             architecture = re.search(r'(?m)^\s*os\.arch = (\S+)$', settings).group(1)
-            assert version.split('.',1)[0] == str(runtime_major), 'unexpected active JVM release'
+            assert version.split('.',1)[0] == str(RUNTIME_JDK), 'unexpected active JVM release'
             assert architecture in ({'aarch64','arm64'} if image['Architecture']=='arm64' else {'amd64','x86_64'}), architecture
             processes.append(dict(role=role, node=node, version=version, architecture=architecture, imageId=image['Id']))
         if args.runtime_jdk:
@@ -1902,7 +1902,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
     def run_rolling_restart():
         rolls = manifest['runtimeRollout'] = {}
         rolls['initial'] = observe_jvms()
-        passed(f'Actual Java {runtime_major} Controllers, Agent and Worker share the task, commands and initial CDC')
+        passed(f'Actual Java {RUNTIME_JDK} Controllers, Agent and Worker share the task, commands and initial CDC')
 
         def replace_runtime(node):
             compose('up', '-d', '--no-deps', '--force-recreate', node)
@@ -1924,11 +1924,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         wait(lambda: outcome(check, 'node-a'), 'replaced Controller reads original durable command')
         assert before == snapshot_set() and worker_pids() == original_workers
         rolls['controllerReplaced'] = observe_jvms()
-        passed(f'Replacing one Java {runtime_major} Controller leaves the other management entry and original Worker available')
+        passed(f'Replacing one Java {RUNTIME_JDK} Controller leaves the other management entry and original Worker available')
 
         version = task('node-b')['configurationVersion']
         stop, _ = action('STOP', node='node-b')
-        wait(lambda: not worker_pids() and task('node-b').get('workerState') == 'STOPPED', f'drained Java {runtime_major} Worker exits')
+        wait(lambda: not worker_pids() and task('node-b').get('workerState') == 'STOPPED', f'drained Java {RUNTIME_JDK} Worker exits')
         wait(lambda: task('node-b').get('captureLeaseState') in ('UNCLAIMED', 'EXPIRED'), 'old capture lease has stopped')
         stopped_state = task('node-b')
         stopped = stopped_state['status']['capture_gtid']
@@ -1937,21 +1937,21 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert sql('postgres', 'SELECT note FROM rm_pg_sales.items WHERE id=3') == 'third'
         replace_runtime(owner_node)
         wait(lambda: http(owner_node, '/readyz')['status'] == 'UP' and task('node-b').get('ownerState') == 'HEALTHY',
-             f'replacement Java {runtime_major} Agent returns from the same directory')
+             f'replacement Java {RUNTIME_JDK} Agent returns from the same directory')
         assert not worker_pids(), 'STOPPED intent must survive Agent replacement'
         wait(lambda: outcome(stop, 'node-a') and task('node-a')['revision'] == stopped_state['revision'],
              'replacement preserves the original STOP receipt and its task revision')
         assert task('node-b')['status']['capture_gtid'] == stopped
-        passed(f'The drained Agent opens the same task directory on Java {runtime_major} with the prior GTID and STOP receipt')
+        passed(f'The drained Agent opens the same task directory on Java {RUNTIME_JDK} with the prior GTID and STOP receipt')
         action('START', node='node-a')
-        wait(rows_match, f'Java {runtime_major} Worker resumes both targets without resnapshot')
+        wait(rows_match, f'Java {RUNTIME_JDK} Worker resumes both targets without resnapshot')
         wait(lambda: task('node-b')['status']['capture_gtid'] != stopped, 'original GTID continues after restart')
         assert snapshot_set() == before
         left, right = task('node-a'), task('node-b')
         assert left['configurationVersion'] == right['configurationVersion'] == version
         assert left['revision'] == right['revision']
         rolls['agentReplaced'] = observe_jvms()
-        passed(f'Java {runtime_major} Worker replays native CDC to both SQL targets from original snapshots and checkpoint')
+        passed(f'Java {RUNTIME_JDK} Worker replays native CDC to both SQL targets from original snapshots and checkpoint')
 
     def run_source_diagnostics():
         def phase(expected):

@@ -4,6 +4,8 @@
 
 The compact [baseline](baseline.json) preserves the exact bounded acceptance provenance. Earlier results are not relabelled as fresh validation of cleanup changes. Current validation status is tracked in baseline.json. No production compatibility or full product matrix is implied.
 
+新增构建、运行和验收仅使用 Eclipse Temurin 21 LTS。其他 JDK 条目保留原制品、范围和复现命令。Reproduce earlier JVM profiles from the source and artifact specified by their records. [固定历史快照 / Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
+
 | SDD | 已验收范围 / Accepted scope | 原验收产物 SHA-256 |
 |---|---|---|
 | CP-01 | Bounded profile | `e42cd685bcc9fb38a1e0e82819230ac58869a54f40c4417d39cd596337b91d11` |
@@ -683,3 +685,7 @@ The `6f148bba` candidate passed 13 native checks. A PostgreSQL target row lock p
 ### Java 17 MySQL asynchronous source promotion
 
 The `393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24` bundle passed nine native checks on ARM64 Temurin 17.0.21. MySQL 8.4.13 replica and authorization checks kept it read-only during the primary outage. Both management entries reported the source fault and preserved both cuts. External promotion let the Agent consume the promoted GTID once on each SQL target. Original configuration and snapshots stayed in use. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
+
+### Single Temurin 21 release baseline
+
+Eclipse Temurin 21 LTS is the supported build and runtime for the Controller, Agent and Worker. The `512742f469edf00f544911937cbc6013e988e2544d9519501aaec3f8ae777dca` bundle passed the Java 21 class-file gate and 41 focused application tests. Twelve native checks observed the three roles on ARM64 Temurin 21. The Worker resumed MySQL 8.4.13 events to PostgreSQL and MySQL after rolling replacement with the original GTID, snapshots and STOP receipt. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)

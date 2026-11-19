@@ -36,7 +36,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-06 | SO-06 | 完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 | 部分验收。逻辑槽切主、存储型生成列及双目标 TIME(6)、扩展 NUMERIC 已实测，动态 DDL 待验。 |
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 部分验收。单 PDB 归档增量、整数虚拟列、断点恢复及 BasicFiles、SecureFiles LOB 预检已实测。 |
 | AC-JV-01 | JV-01 | 同一 Temurin 21 候选包的 Controller、Agent 和 Worker 须实际运行并完成全量与增量。记录 JVM 版本、架构、包 SHA、主类版本和依赖检查。 | 通过（Temurin 21 字节码、真实三类进程和 SQL 同步） |
-| AC-JV-02 | JV-02 | 各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。 | 部分验收。Java 21 为标准制品。可选 Java 17 双目标和滚动替换、Java 25 双目标切主及滚动替换已实测。 |
+| AC-JV-02 | JV-02 | 各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。 | 部分验收。下表列出已录入的单机与切主档案，更多 Temurin 21 连接器和恢复场景仍待验收。 |
 | AC-JV-03 | JV-03 | 验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。 | 部分验收（SQL 驱动和重连，含 Pulsar 私有 CA、Token 和重启实库） |
 | AC-JV-04 | JV-04 | 核验 Java 21 的 Linux、Docker 和 Kubernetes 部署路径。滚动更换应保留管理入口、原有命令和已验证的同步断点，说明备份恢复与回退边界。 | 通过（Linux 手动启动、非 root Docker、两种 Kubernetes 部署和发布证据门禁） |
 | AC-DO-01 | DO-01 | 每项需求有稳定ID、现状、未完成点、依赖、优先级、验收和任务；中英文ID一致；规格变化有记录，旧验收不可冒充新范围通过。 | [PASS](../../verification/README.md#do-01-bilingual-sdd-verifier) |
@@ -67,18 +67,18 @@ RM-SDD-001 · 2026-11-17
 | 缺口台账 | 跳过后仍显示缺口，不把覆盖当应用；补齐后凭对账证据关闭；接受丢失与验证修复分别记录 |
 | 部署与升级 | Linux/Docker/Helm/原生K8s、持久存储/本地磁盘、节点/控制器/卷故障、配置和密钥轮换、旧状态迁移或明确拒绝 |
 
-### 源与运行时已验范围
+### Temurin 21 源档案已验范围
 
-| 源档案 | 历史 Java 8、11 | 当前已验运行时 | 继续验收 |
-|---|---|---|---|
-| MySQL 5.7 | 5.7.44 的单机、GTID 主从和 MGR 历史档案 | Java 21 首版单机全量和增量 | 更多拓扑、目标与恢复组合 |
-| MySQL 8.0 | 8.0.46 的三种拓扑与人工恢复历史档案 | Java 21 首版单机全量和增量 | 更多拓扑、目标与恢复组合 |
-| MySQL 8.2 | 8.2.0 的三种拓扑历史档案 | Java 21 首版单机全量和增量 | 更多拓扑、目标与恢复组合 |
-| MySQL 8.4 | 8.4.13 的三种拓扑及五 JDK 历史进程档案 | Java 21 单机、异步 GTID 和 MGR，Java 17 双目标滚动替换，Java 25 异步提升与滚动替换 | 当前 Java 8、11 制品与其他产品、连接器组合 |
-| PostgreSQL 源 | 历史档案按制品记录 | Java 21 已实测 17.12 逻辑槽提升、双目标类型和 18.7 存储型生成列 | 动态 DDL 和更多类型、目标与运行时 |
-| Oracle 源 | 历史档案按制品记录 | Java 21 Oracle Free 23.26.4.0.0 单 PDB 归档、虚拟列和 LOB 预检 | 完整 LOB、RAC 及更多版本和运行时 |
+| 源档案 | Temurin 21 实测证据 | 继续验收 |
+|---|---|---|
+| MySQL 5.7 | 5.7.44 单机到 MySQL 和 PostgreSQL 的全量与增量 | 更多拓扑、目标和恢复场景 |
+| MySQL 8.0 | 8.0.46 单机到 MySQL 和 PostgreSQL 的全量与增量 | 更多拓扑、目标和恢复场景 |
+| MySQL 8.2 | 8.2.0 单机到 MySQL 和 PostgreSQL 的全量与增量 | 更多拓扑、目标和恢复场景 |
+| MySQL 8.4 | 8.4.13 单机、异步 GTID 提升和单主组复制 | 更多产品、连接器和恢复场景 |
+| PostgreSQL 源 | 17.12 同步槽提升与双目标类型，以及 18.7 存储型生成列 | 动态 DDL、更多类型和目标 |
+| Oracle 源 | Free 23.26.4.0.0 单 PDB 归档增量、虚拟列和 LOB 预检 | 完整 LOB、RAC 和更多数据库版本 |
 
-历史结论只适用于原制品及原配置。当前档案应按 JVM、源与目标版本、TLS、日志存储、拓扑和故障分别核对。[实测版本、制品与命令](../../verification/baseline.json)
+新增验收仅使用 Temurin 21 LTS。每项结果按原制品、JVM、源与目标版本、TLS、日志、拓扑和故障核对。早期 JVM 档案保留原始制品和验收标准。[验收清单](../../verification/baseline.json) · [固定历史快照](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 ### 发布证据模板
 

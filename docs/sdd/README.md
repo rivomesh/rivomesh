@@ -6,7 +6,7 @@ Use specifications to drive design,tasks,implementation and acceptance. Record r
 
 | 基线 / Baseline | 入口 / Entry | 状态 / State |
 |---|---|---|
-| RM-SDD-001 · 多节点、会话、恢复、源/JDK兼容和文档 | [中文规格](001-control-recovery-compatibility/spec.md) / [English](001-control-recovery-compatibility/spec.en.md) | v0.3实施中：节点目录+4项会话已验收，43项未完成 / registry+4session requirements accepted,43open |
+| RM-SDD-001 · 多节点、会话、恢复、连接器、Temurin 21 和文档 | [中文规格](001-control-recovery-compatibility/spec.md) / [English](001-control-recovery-compatibility/spec.en.md) | 实施中，进度见[验收](001-control-recovery-compatibility/acceptance.md) / In progress. See [acceptance](001-control-recovery-compatibility/acceptance.en.md). |
 
 每包包括spec、plan、tasks、acceptance及机器可读requirements.json。NEW/PARTIAL/DONE是实现状态，P0/P1/P2是建议优先级；不能用“规划中”冒充“支持”。
 

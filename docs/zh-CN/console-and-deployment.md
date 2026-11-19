@@ -12,7 +12,7 @@ Web 工作台支持中英文切换、创建向导、连接/源对象检查、启
 
 ## 本机启动
 
-构建和运行使用 Temurin 21 LTS。
+Maven 构建、Controller、Agent 及各 Worker 统一使用 Eclipse Temurin 21 LTS。
 
 ```bash
 mvn -s build/settings.xml verify

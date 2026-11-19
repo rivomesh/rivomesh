@@ -1,6 +1,6 @@
 # Rivomesh SDD requirements and incomplete scope
 
-RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
+RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 
 Implementation:48requirements,36 DONE, 12 PARTIAL and 0 NEW, with 12 open. RC-01/RC-02/RC-05/RC-03/RC-06/RC-07/RC-08/RC-09/SO-03/SO-04/SO-05/JV-01 bounded profiles are accepted. Automatic takeover, broader source recovery and complete matrices remain tracked.
 
@@ -60,7 +60,7 @@ Implementation:48requirements,36 DONE, 12 PARTIAL and 0 NEW, with 12 open. RC-01
 | ID | Priority/status | Requirement | Gap |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 first-release runtime | The current line builds Java 21 bytecode. Two Controllers, Agent, Worker and live MySQL fan-out were verified. JV-02 through JV-04 track connector and deployment profiles. |
-| JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Java 21 verified four standalone MySQL versions, MySQL 8.4.13 async GTID promotion with two destinations, automatic three-node single-primary group failover, PostgreSQL 17/18 and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain. The supplementary Temurin 25.0.5 profile passes MySQL 8.4.13 asynchronous promotion and dual-target continuation. The same candidate passes Controller and Agent rolling replacement. The optional Java 17 bundle passed ARM64 Temurin 17.0.21 snapshot, dual-destination CDC and Controller and Agent rolling replacement. The standard bundle stays at Java 21. Current Java 8 and 11 bundles remain open. |
+| JV-02 | P1 / PARTIAL | Java 21 source, sink and recovery profiles | Temurin 21 LTS is the sole first-release runtime. Native evidence covers four standalone MySQL versions, MySQL 8.4.13 async GTID continuation to two targets and three-node single-primary Group Replication, PostgreSQL 17/18, and single-PDB Oracle. Additional destinations, TLS and recovery profiles remain in the Temurin 21 matrix. |
 | JV-03 | P1 / PARTIAL | Driver isolation,dependencies and TLS compatibility | Java 21 verified MySQL/PostgreSQL TLS and reconnect, external Dameng native SQL repair, and external Kingbase native authentication, precision, reconnect and receipt continuation. Five external JDBC paths have verified classpath admission. Further vendor TLS and cluster profiles remain. Pulsar 4.0.14 passed a single-broker private-CA and JWT profile, wrong-host refusal and broker restart. |
 | JV-04 | P1 / DONE | Java 21 deployment and rolling replacement | Temurin 21 passed manual Linux startup, nonroot Docker with native data, Helm and native Kubernetes. The same build passed the release evidence gate. Rolling replacement and original-directory resume have live evidence. |
 

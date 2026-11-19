@@ -1,6 +1,6 @@
 # Rivomesh SDD需求基线与未完成事项
 
-RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
+RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 
 实施中：48项持续追踪，36项DONE、12项PARTIAL、0项NEW，余12项未闭环。RC-01、RC-02、RC-05、RC-03、RC-06、RC-07、RC-08、RC-09、SO-03、SO-04、SO-05 和 JV-01 限定档案已验收。自动接管、更多源恢复档案和完整兼容矩阵继续追踪。
 
@@ -60,7 +60,7 @@ RM-SDD-001 · v0.58 · 2026-11-19 · IMPLEMENTING
 | ID | 优先级/状态 | 需求 | 尚缺内容 |
 |---|---|---|---|
 | JV-01 | P0 / DONE | Temurin 21 首版运行基线 | 现行候选使用 Java 21 字节码。已实测两个 Controller、Agent、Worker 及 MySQL 双目标同步。后续连接器与部署组合由 JV-02 至 JV-04 跟踪。 |
-| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | Java 21 已实测四个 MySQL 版本的单机全量增量、MySQL 8.4.13 异步 GTID 双目标续传和三节点单主组复制自动续传，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 及恢复矩阵待验。补充档案验证 Temurin 25.0.5 上 MySQL 8.4.13 异步复制切主后的双目标续传。同一候选通过 Controller 和 Agent 滚动替换。 可选 Java 17 制品已实测 ARM64 Temurin 17.0.21 全量、双目标 CDC 和 Controller、Agent 滚动替换。标准制品仍为 Java 21，当前 Java 8、11 制品仍待兼容。 |
+| JV-02 | P1 / PARTIAL | Java 21 源、目标及恢复组合 | 首版仅使用 Temurin 21 LTS。已实测四个 MySQL 版本的单机全量与增量、MySQL 8.4.13 异步 GTID 双目标续传与三节点单主组复制，以及 PostgreSQL 17/18 和 Oracle 单 PDB。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。 |
 | JV-03 | P1 / PARTIAL | 驱动隔离、依赖与安全协议兼容 | Java 21 实测 MySQL/PostgreSQL TLS 与重连、达梦外置驱动及 SQL 修正、金仓外置驱动的身份验证、精度、故障重连和原回执续传。五路 JDBC 已核对外置加载。其他厂商 TLS 及集群组合继续验收。 Pulsar 4.0.14 已实测单 Broker 的私有 CA、Token、拒绝错误主机名和重启续传。 |
 | JV-04 | P1 / DONE | Java 21 部署及滚动替换 | Temurin 21 已通过手动 Linux 启动、非 root Docker 实库、Helm 和原生 Kubernetes 部署。同一构建通过发布证据门禁，滚动替换和原目录续传也有实库记录。 |
 

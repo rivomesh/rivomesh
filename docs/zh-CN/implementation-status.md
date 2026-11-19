@@ -47,7 +47,7 @@
 | 分析目标 | ClickHouse/Doris/Hive已有初步物化和恢复档案；生产集群、安全及性能矩阵待补 |
 | 消息目标 | 八种 Broker 已有确认式至少一次投递档案。实库包含 NATS TLS 和多数派、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升原副本。 [消息目标](messaging-v3.md) |
 | 部署 | Linux、Docker、Helm、原生 Kubernetes。双节点实测 RWO 重挂、配置更新、Secret 轮换、外部日志和旧 Worker 写入隔离。Helm 和原生 YAML 均通过应用镜像替换及跨节点挂载原 CSI 卷后的自动续传。 |
-| Java | Temurin 21 LTS 是构建、运行和验收基线。后续连接器和协议组合在 Java 21 上验证。 |
+| Java | Eclipse Temurin 21 LTS 是唯一支持的构建与运行时。连接器、部署和安全协议使用实际 Java 21 候选包验收。 |
 
 具体产品约束以[平台方案](platform-design.md)、[控制台](console-and-deployment.md)和各产品手册为准。协议和数据格式编号是内部状态标识，不是对开发版本升级的承诺。
 

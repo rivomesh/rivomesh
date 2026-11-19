@@ -33,7 +33,7 @@ POST /api/session 仅接受 Bearer，GET /api/session 支持 Bearer 或 Cookie�
 ## 验收边界
 
 - 服务端8项真实 HTTP 合同测试：刷新恢复、Origin/CSRF 拒绝、角色约束、身份冲突、不回退、全目录撤销、轮换/停用/授权变化、自身轮换、关闭会话功能、控制器重启失效、期限/容量与配置校验。
-- 同一候选 JAR 上 Java8/11/17/21/25 各运行上述8项；这是会话专项，不能替代全源/目标/JDK矩阵。
+- 使用同一 Temurin 21 候选 JAR 执行上述会话用例。早期多 JDK 结果按原会话档案和制品保存。[历史验证](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 - TLS 代理 + 实际 CookieJar：HTTPS 发送 Cookie、HTTP 不发送 Secure 凭证、CSRF/Origin 拒绝、退出后旧 Cookie 不可重放、Bearer 兼容、状态中无明文会话/令牌。
 - DOM 覆盖刷新/新页面、退出、跨标签页、迟到401/登录/刷新、服务端退出失败、自身令牌轮换；保留原编辑器/审计/校验/修复测试。
 - 制品门禁、根构建及制品优先应用测试、Helm/原生清单一致性和更新后的 Docker 预览另行归档。

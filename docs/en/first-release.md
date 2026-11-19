@@ -2,7 +2,7 @@
 
 No first release has been published. In-place upgrades between development candidates,old package aliases and automatic control-mode migration are unsupported. Internal format numbers are not released versions.
 
-The release builds and runs on Eclipse Temurin 21 LTS. Controllers, Agents and Workers use the same Java major version.
+Eclipse Temurin 21 LTS is the sole supported runtime for building and running the release. Controllers, Agents and Workers all use Temurin 21.
 
 Choose the control store,access mode,roles,keys and persistent directories before first deployment. Enable full managed recovery consistently across all members:
 
