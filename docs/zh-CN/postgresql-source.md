@@ -45,9 +45,11 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 
 ### 浮点类型
 
-PostgreSQL `REAL` 和 `DOUBLE PRECISION` 分别映射成 PostgreSQL 目标的同名类型，以及 MySQL 目标的 `FLOAT`、`DOUBLE`。快照和 pgoutput 会话固定使用精确的浮点文本输出。实库对比验证相邻浮点值、次正规数、SQL NULL、无主键重复及重启续传。行身份将正零和负零统一为零。[PostgreSQL 浮点类型](https://www.postgresql.org/docs/17/datatype-numeric.html#DATATYPE-FLOAT) · [MySQL 浮点类型](https://dev.mysql.com/doc/refman/8.4/en/floating-point-types.html)
+PostgreSQL `REAL` 和 `DOUBLE PRECISION` 分别映射成 PostgreSQL 目标的同名类型，以及 MySQL 目标的 `FLOAT`、`DOUBLE`。快照和 pgoutput 会话固定使用精确的浮点文本输出。实库对比验证相邻浮点值、次正规数、SQL NULL、无主键重复及重启续传。正零和负零统一写为零，使用同一行身份。[PostgreSQL 浮点类型](https://www.postgresql.org/docs/17/datatype-numeric.html#DATATYPE-FLOAT) · [MySQL 浮点类型](https://dev.mysql.com/doc/refman/8.4/en/floating-point-types.html)
 
 非有限值（NaN、正负无穷）触发 `POSTGRESQL_FLOAT_NONFINITE`。增量场景保持原 LSN、两个目标的 ACK 和业务行，整笔事务暂停。复验时在原生命令追加 `--source-image postgres:17.12 --floating-values`。[验收](../verification/README.md#postgresql-real-and-double-precision-to-two-sql-targets)
+
+### 实库验收命令
 
 实库验证运行 `python3 tests/postgres-source-run.py --artifact <发布包> --output target/pg-source-proof`。夹具在独立容器中模拟 PostgreSQL 槽丢失。
 

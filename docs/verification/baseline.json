@@ -13352,5 +13352,21 @@
     "earlierFixtureFailure": "The first run established TLS, JWKS and both Controller routes and stopped during synthetic account/task setup before authorization. The exact error was not captured. The retry used distinct task resources and the configured owner IDs.",
     "scope": "Real Keycloak 26.7.4 with trusted HTTPS, two separate Temurin 21 Controllers sharing PostgreSQL 17.12 and a common loopback HTTPS ingress. Real Chromium, local Viewer scope and revocation. Provider-initiated logout and automated key rotation have independent scope.",
     "reproduce": "tests/keycloak-oidc/README.md"
+  },
+  "temurin21FullReactorFloatAndAck": {
+    "artifactSha256": "56b3bc67f2250b98057be8a8dbd2ccf44e2a772481bb9ebf6c0bf8d015e249cf",
+    "sourceCommit": "309feaf6e902f4ebdc9d9d0c47f1007aa988d019",
+    "runtime": "Eclipse Temurin 21.0.13+9 ARM64",
+    "applicationPassed": 654,
+    "optionalIntegrationSkipped": 35,
+    "domPassed": 162,
+    "realChrome": "Chrome/157.0.8103.79",
+    "realChromePassed": 14,
+    "configurationExamplesPassed": 25,
+    "reactorLogSha256": "41684a2d2acdb8d4911029940bb372a72ede18ff5bb01929102d8b3e42624fb7",
+    "browserManifestSha256": "585b8717fc3b3f26225d7f056c7dd62ffba918c2a02bafb923b9bedfbd0e5417",
+    "domLogSha256": "7b4d8ffae06a86ba5f23bad9be22687918d8f93335f5b60a009e2a41ad2bad6f",
+    "configurationExamplesLogSha256": "69da7b0ae557e3a7d5c558ffec5e10c6f87388023bb3911ee4eec0465d9cb83a",
+    "scope": "Full standard build and application tests after native Kafka readback, managed journal ACK timeout and PostgreSQL finite floating-point support. Native product results remain tied to their exact artifacts."
   }
 }

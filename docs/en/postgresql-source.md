@@ -45,9 +45,11 @@ Append `--source-image postgres:17.12 --numeric-values` to the fixture command b
 
 ### Floating-point types
 
-PostgreSQL `REAL` and `DOUBLE PRECISION` map to the same types on a PostgreSQL target and to `FLOAT` and `DOUBLE` on MySQL. Snapshot and pgoutput sessions select exact floating-point text. Native checks cover adjacent representable values, subnormals, SQL NULL, keyless duplicates and continuation after restart. Row identity treats both signs of zero as zero. [PostgreSQL floating-point types](https://www.postgresql.org/docs/17/datatype-numeric.html#DATATYPE-FLOAT) · [MySQL floating-point types](https://dev.mysql.com/doc/refman/8.4/en/floating-point-types.html)
+PostgreSQL `REAL` and `DOUBLE PRECISION` map to the same types on a PostgreSQL target and to `FLOAT` and `DOUBLE` on MySQL. Snapshot and pgoutput sessions select exact floating-point text. Native checks cover adjacent representable values, subnormals, SQL NULL, keyless duplicates and continuation after restart. Both signs of zero are copied as zero and share the same row identity. [PostgreSQL floating-point types](https://www.postgresql.org/docs/17/datatype-numeric.html#DATATYPE-FLOAT) · [MySQL floating-point types](https://dev.mysql.com/doc/refman/8.4/en/floating-point-types.html)
 
 NaN and positive or negative infinity cause `POSTGRESQL_FLOAT_NONFINITE`. At the affected streaming transaction, capture holds its previous LSN, both target receipts and the business rows. Append `--source-image postgres:17.12 --floating-values` to the native fixture command. [Verification](../verification/README.md#postgresql-real-and-double-precision-to-two-sql-targets)
+
+### Native verification commands
 
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 

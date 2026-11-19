@@ -750,3 +750,7 @@ The `07488ef478826c2cd920f6bd8e94bbd52409cd6fc6895a4d1ce145605739e2b6` Temurin 2
 ### Native Keycloak login across two Controllers
 
 The `1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8` Temurin 21 application passed eight checks against Keycloak 26.7.4 and Chrome 156. Two real Controllers share PostgreSQL 17.12 and a trusted HTTPS ingress. Authorization starts on Controller A and the same browser completes the actual S256 PKCE callback on Controller B. A signed provider ADMIN claim leaves the local Viewer and its task/node grants in force. Revocation through B invalidates both entries while the provider session is still active. Authorized audit output records the operation and omits credentials and callback code. Both projects and their scoped browser images were removed. [Operator guide](../en/oidc-login.md) · [Reproduce](../../tests/keycloak-oidc/README.md) · [Manifest](baseline.json)
+
+### Temurin 21 full reactor after SQL recovery and type support
+
+The `56b3bc67f2250b98057be8a8dbd2ccf44e2a772481bb9ebf6c0bf8d015e249cf` package at `309feaf` passed the full Maven reactor and the Java 21 class-file gate. The application ran 654 tests with zero failures and 35 optional integration tests skipped. The exact artifact passed 14 real Chrome checks and all 25 shipped configuration examples. The console suite passed 162 DOM checks. Closely related native product profiles retain their separate exact recordings. [Manifest](baseline.json)
