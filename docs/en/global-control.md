@@ -165,7 +165,15 @@ Each SQL destination has its own native transaction receipt and journal acknowle
 
 The same-store fixture holds the PostgreSQL row lock until the former Worker has exited. The MySQL target already has a native commit and journal acknowledgement. Releasing the PostgreSQL lock while the original Agent is still partitioned leaves the former PostgreSQL transaction rolled back. After restoring the original Agent, wait for its queued STOP to succeed before explicitly starting it. The captured position stays at the recorded transaction and only the PostgreSQL delivery is replayed. The fixture checks the same transaction identity and counts one committed insert and one committed update in each target database log.
 
-This scenario covers an acknowledged commit on one destination and an uncommitted transaction on the other. A native target receipt ahead of its journal acknowledgement uses receipt reconciliation and requires separate acceptance for this partition profile. Use the same candidate, journal and task assignment when reviewing the retained evidence.
+#### A committed target with a missing journal acknowledgement
+
+During a partition a target's native checkpoint can be one transaction ahead of its journal acknowledgement. The target commits its business rows and native receipt together. Once the original Agent returns, the Worker compares the retained transaction's ID and projected hash with the target receipt. A matching receipt advances that destination's acknowledgement. The sibling target keeps its confirmed position. The accepted source position and both targets' prior business writes remain stable.
+
+The PostgreSQL-target fixture holds the journal acknowledgement row until the former Worker exits. This lets PostgreSQL commit the same transaction that MySQL already acknowledged. After the original Agent returns, confirm the queued STOP and explicitly start the task. The fixture checks the unchanged native receipt identities, the recovered acknowledgement and the commit history of both targets. MySQL as the target with the missing acknowledgement requires its own partition acceptance.
+
+Managed PostgreSQL acknowledgements set a transaction-local idle timeout before acquiring journal row locks. The existing capture lease duration bounds the timeout and a shorter nonzero PostgreSQL session setting takes precedence. When a disconnected client has left an idle acknowledgement transaction, PostgreSQL rolls it back and releases its locks even while the Agent route remains down. [PostgreSQL client connection defaults](https://www.postgresql.org/docs/17/runtime-config-client.html)
+
+A permanently unavailable original Agent keeps the handoff blocked while its signed stopped state and private recovery evidence are missing. Administrator approval still requires the original directory binding, current evidence for the reviewed cut and the original and candidate node grants. An intact target receipt can settle a delivery acknowledgement while ownership remains assigned to the original Agent.
 
 ## Operations FAQ
 

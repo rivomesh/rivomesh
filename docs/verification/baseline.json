@@ -12947,5 +12947,82 @@
     },
     "runtime": "Eclipse Temurin 21.0.13+9",
     "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-physical-receipt sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar"
+  },
+  "managedPostgresAckInterruptionRecovery": {
+    "artifactSha256": "c998862b85bb3da84c081de9de06e3d0bcd4567762ccf824e338b28a86440914",
+    "sourceVersion": "8.4.13",
+    "sourceServerProfile": "ON|ROW|FULL",
+    "executionProfile": "SEPARATE_AGENT",
+    "controlProduct": "POSTGRESQL",
+    "harnessSourceSha256": "f2ebdbde22e16c60bff6731232fa863d61550a70aa5592c26c7ab4c314d020c9",
+    "checks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "The live PostgreSQL ACK setting respects a shorter administrator timeout and is restored at rollback",
+      "Only the original Agent can admit the explicitly initialized managed writer",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "PostgreSQL waits on the actual row lock with no native receipt while MySQL commits and the journal ACKs the transaction",
+      "PostgreSQL business and receipt are committed while its journal ACK is blocked on a native row lock",
+      "Only the original Agent control and journal path is cut; its live container still reaches the source and both targets",
+      "Releasing the journal lock while the original Agent remains partitioned preserves both commits and the missing ACK",
+      "Asymmetric partition exposes expired control and unknown Worker, intent and capture at both Controllers",
+      "Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts",
+      "Offline STOP completes on the reconnected original Agent without a restart before the missing acknowledgement is reconciled",
+      "Native receipt reconciliation advances only the missing PostgreSQL ACK with no new business writes",
+      "Former Agent and capture leases are fenced after both target receipts converge"
+    ],
+    "cleanupExitCode": 0,
+    "formerAckBackendAfterUnlock": {
+      "present": true,
+      "state": "idle in transaction",
+      "waitEventType": "Client",
+      "waitEvent": "ClientRead",
+      "transactionAgeMillis": 13821,
+      "holdsAckRow": true
+    },
+    "formerAckBackendBeforeReconnect": {
+      "present": false,
+      "holdsAckRow": false
+    },
+    "formerAckBackendIdleTimeoutObserved": true,
+    "inflightWitness": {
+      "capturedSequence": 2,
+      "capturedPositionUnchanged": true,
+      "retainedJournalAcknowledgements": {
+        "my": 2,
+        "pg": 1
+      },
+      "restoredJournalAcknowledgements": {
+        "my": 2,
+        "pg": 2
+      },
+      "nativeBusinessWrites": {
+        "pg": {
+          "insert": 1,
+          "update": 1
+        },
+        "my": {
+          "insert": 1,
+          "update": 1
+        }
+      },
+      "retainedNativeSequences": {
+        "pg": 2,
+        "my": 2
+      },
+      "nativeReceiptIdentitiesUnchanged": true
+    },
+    "runtime": "Eclipse Temurin 21.0.13+9 ARM64",
+    "journalVersion": "PostgreSQL 17.12",
+    "firstIntegratedFixtureFailureSha256": "62c6ce79744fa6e7a1c5ff502d666d185549354221f68e883e6893cb1efb7dae",
+    "firstIntegratedFixtureFailure": "The new PostgreSQL timeout was observed, then an idempotent Controller status read failed with HTTP 503 AUDIT_UNAVAILABLE. The final run required no retries.",
+    "manifestSha256": "29f69b12a4eaf66f46295861475ea23b17a9125f38f09bf6c70ac8ac15dfd1e2",
+    "nativeLogSha256": "55b6f6ef6fefb8a1cbd6fadfe4cf44ad2c72bb6b933358f33222e3caa2cd18c7",
+    "integratedArtifactSha256": "1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8",
+    "integratedApplicationSourceTree": "e217d5a8c7679945fe3f92af61da462b48edfeca",
+    "integratedJavaPassed": 101,
+    "scope": "Two Controllers and an original Agent use PostgreSQL control and journal. PostgreSQL business target is committed with an interrupted journal ACK. MySQL confirms first. Network partition preserves data routes, the former journal session times out and STOP followed by START reconciles the same receipt.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --test-classes sync-app/target/test-classes --output target/pg-ack-interruption --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition --handoff-asymmetric-inflight --handoff-asymmetric-unacknowledged --partition-mysqlbinlog /path/to/mysqlbinlog"
   }
 }

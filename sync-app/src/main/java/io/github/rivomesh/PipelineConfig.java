@@ -193,6 +193,7 @@ public final class PipelineConfig {
     private Path localPath(){if(journal.path==null||journal.path.trim().isEmpty())throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_REQUIRED");return base.resolve(journal.path).normalize().toAbsolutePath();}
     public JdbcJournal.Settings journalSettings(){JdbcJournal.Settings s=new JdbcJournal.Settings();s.pipelineId=pipelineId;s.namespace=journal.namespace;s.maxPendingBytes=journal.maxBytes;
         s.writerAssignment=journal.writerAssignment;s.writerNode=nodeId;s.managedWriter=journal.managedWriter;
+        s.leaseMillis=leaseMillis;
         s.kafkaPublicationTargets=targets.stream().filter(target->target.product==TargetProduct.KAFKA)
                 .map(target->target.id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         s.kafkaPhysicalGrant=kafkaPhysicalGrant;

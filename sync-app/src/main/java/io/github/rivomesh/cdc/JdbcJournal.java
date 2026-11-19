@@ -19,6 +19,7 @@ public final class JdbcJournal implements NormalizedJournal {
         @com.fasterxml.jackson.annotation.JsonIgnore
         public KafkaPhysicalReceipt.Grant kafkaPhysicalGrant;
         public long maxPendingBytes=1024L*1024*1024;
+        public long leaseMillis=30000;
     }
     public static final class Busy extends IllegalStateException { public Busy(){super("JOURNAL_BUSY");} }
     public static final class Fenced extends IllegalStateException { public Fenced(){super("JOURNAL_LEASE_LOST");} }
@@ -35,7 +36,7 @@ public final class JdbcJournal implements NormalizedJournal {
         if(settings==null||settings.url==null||settings.driver==null||settings.pipelineId==null
                 ||!settings.pipelineId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
                 ||settings.namespace==null||!settings.namespace.matches("[A-Za-z_][A-Za-z0-9_]{0,62}")||settings.maxPendingBytes<1
-                ||settings.managedWriter&&settings.writerAssignment==null
+                ||settings.managedWriter&&(settings.writerAssignment==null||settings.leaseMillis<1)
                 ||settings.writerAssignment!=null&&(!JournalWriterAssignment.validId(settings.writerAssignment)
                 ||settings.writerNode==null||!settings.writerNode.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")))
             throw new IllegalArgumentException("JOURNAL_CONFIG_INVALID");
@@ -390,9 +391,25 @@ public final class JdbcJournal implements NormalizedJournal {
     @Override public void acknowledgeApplied(Lease lease,String subscription,long sequence)throws Exception{
         acknowledge(lease,subscription,sequence,settings.deliveryTiming?Instant.now():null);
     }
+    void boundAcknowledgementIdle(Connection c)throws SQLException{
+        // Install the bound before taking journal row locks in case the client disappears.
+        try(PreparedStatement p=c.prepareStatement(
+                "SELECT pg_catalog.set_config('idle_in_transaction_session_timeout', "
+                +"least(coalesce(nullif(setting::bigint,0),2147483647),?)::text || 'ms', true) "
+                +"FROM pg_catalog.pg_settings WHERE name='idle_in_transaction_session_timeout'")){
+            p.setLong(1,Math.min(settings.leaseMillis,Integer.MAX_VALUE));
+            try(ResultSet applied=p.executeQuery()){
+                if(!applied.next())throw new IllegalStateException("JOURNAL_ACK_IDLE_TIMEOUT_UNAVAILABLE");
+            }
+        }
+    }
+
     private void acknowledge(Lease lease,String subscription,long sequence,Instant confirmedAt)throws Exception{
+        boolean bounded=dialect==Dialect.POSTGRES&&settings.managedWriter;
         try(Connection c=connect()){
-            c.setAutoCommit(false);Map<String,Object> fenced=fence(c,lease);Subscription sub=subscription(c,subscription,true);
+            c.setAutoCommit(false);
+            if(bounded)boundAcknowledgementIdle(c);
+            Map<String,Object> fenced=fence(c,lease);Subscription sub=subscription(c,subscription,true);
             if(sequence>=0&&sequence<=sub.acknowledged){c.commit();return;}if(!"RUNNING".equals(sub.state))throw new Paused();
             if(sequence!=Math.addExact(sub.acknowledged,1))throw new IllegalStateException("ACK_WOULD_SKIP_TRANSACTION");
             try(PreparedStatement p=c.prepareStatement("SELECT 1 FROM "+table("log")+" WHERE pipeline_id=? AND stream_seq=?")){
@@ -402,6 +419,10 @@ public final class JdbcJournal implements NormalizedJournal {
             if(settings.kafkaPhysicalGrant!=null&&settings.kafkaPublicationTargets.contains(subscription))
                 JdbcKafkaPhysicalHistory.acknowledge(this,c,subscription,(String)fenced.get("generation"),lease.epoch,sequence);
             execute(c,"UPDATE "+table("subscription")+" SET acknowledged=? WHERE pipeline_id=? AND subscription_id=?",sequence,settings.pipelineId,subscription);c.commit();
+        }catch(SQLException failure){
+            if(bounded&&"25P03".equals(failure.getSQLState()))
+                throw new SQLTransientConnectionException("JOURNAL_ACK_CONNECTION_EXPIRED","08006",failure);
+            throw failure;
         }
     }
     @Override public void verifySkippedCheckpoint(String subscription,SinkAdapter.Checkpoint checkpoint)throws Exception{
