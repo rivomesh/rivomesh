@@ -125,6 +125,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Native BasicFiles and SecureFiles BLOB/CLOB archive evidence, storage-specific restricted-role preflight and independent migration instructions.
   - [x] Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN.
   - [x] Native binary JSON preflight refusal, missing LogMiner images and independent JDBC Flashback diagnostics passed.
+  - [x] Native AL32UTF8 and AL16UTF16 diagnostics match 40 character changes and 60 images. Both VARCHAR2 length forms passed preflight. CHAR, NCHAR and NVARCHAR2 implementation remains.
   - [ ] Other expressions, binary JSON, full LOB image capture and RAC promotion.
 ## Java runtime compatibility
 

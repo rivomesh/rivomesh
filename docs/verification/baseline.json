@@ -13472,5 +13472,40 @@
     "integrationJavaFocusedPassed": 112,
     "integrationDomPassed": 164,
     "scope": "Existing Admin handoff receipt and bilingual dialog show recorded STOPPED cut, active configuration/revision match and historical report/receipt inventory during original Agent outage. Preserved read-only behavior, durable seal and execution remain unavailable."
+  },
+  "oracleNationalCharacterArchiveDiagnosis": {
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "cleanupExitCode": 0,
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Closed LogMiner returns identical full SQL text and physical records across the same Unicode transaction window",
+      "Ordinary VARCHAR2 transaction markers validate the LogMiner value and presence functions",
+      "Oracle Flashback preserves Unicode scalars, character bytes, padding, NULL and keyless multiplicities",
+      "Product archive preview accepts both VARCHAR2 length forms and refuses the three unadmitted types"
+    ],
+    "manifestSha256": "bf64cf17662058450d648c7865b732e46e83a513efc9cac682eaca8b10350691",
+    "fixtureSha256": "e38ce89d89540db97c0068a8c6febc52d812592aa315f9aa8fba82a7ba4dc583",
+    "archiveSha256": "d795092eef7d9493f501a57c3ed5102a2e7779ce9ef3434a84c74ffb9508cf10",
+    "flashbackSha256": "f6a15f31fb6634eacd5270e59150a6d3fd01591499b2b1ba8a0006d4e6be409e",
+    "parserComparisonSha256": "2f8bc7740c585635e22276ea32691859329cd8985374079be9228bd7e13eb2f4",
+    "firstFixtureFailureSha256": "0cc6212e34f09370911befbc39f8f89095ccc3c81859cae29ad78cc943309d98",
+    "firstFixtureFailure": "Archive SQL JSON serialization exposed raw control characters. The same fixture checks preserve the native bytes using Oracle RAW hexadecimal encoding in the successful run.",
+    "nativeRows": 40,
+    "matchingRequiredImages": 60,
+    "scope": "Oracle 26ai Free one PDB, AL32UTF8 and AL16UTF16, keyed and keyless cases for VARCHAR2 BYTE, VARCHAR2 CHAR, CHAR, NVARCHAR2 and NCHAR. Product currently admits the VARCHAR2 types. Native CHAR simple literal values decode; national character output uses UNISTR and is currently refused.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --character-evidence --output target/oracle-character-proof"
   }
 }

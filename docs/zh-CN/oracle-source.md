@@ -55,6 +55,12 @@ Oracle Free 26ai 23.26.4.0.0 的实测覆盖 BasicFiles 和 SecureFiles 的 BLOB
 
 遇到预检拒绝时，与数据库管理员核对所选 OWNER、表和 LOB 存储。排查既有任务时保留持久化 SCN 及其归档。如果必须迁移该表，安排能处理 LOB 的独立迁移流程，切换前核对内容。LOB 定位器和片段不能单独代表完整值，空 LOB 和 SQL NULL 含义不同。
 
+### 字符类型与填充
+
+当前 Oracle 源档案允许按字节或字符声明长度的 `VARCHAR2`。Oracle Free 26ai 23.26.4.0.0 使用 `AL32UTF8` 和国家字符集 `AL16UTF16` 时，受测 Flashback 和归档事务保留了补充平面字符、组合码点、引号及尾随空格。空字符输入变为 SQL NULL。Oracle 的 `CHAR(8 CHAR)` 按字符填充，`NCHAR(8)` 按 UTF-16 代码单元填充。夹具独立核对字节长度、码点和无主键重复行。[Oracle 字符类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html) · [Oracle 空值](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Nulls.html)
+
+受测 `CHAR` 归档字面值与 Flashback 一致，LogMiner 列提取也与五种列定义的全部 60 个必需前后镜像吻合。原生国家字符行在归档中使用带转义的 `UNISTR` 表达式。现有归档解析器拒绝这种字面值，产品预检对 `CHAR`、`NVARCHAR2` 和 `NCHAR` 返回 `ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED`。使用 Temurin 21 和 Oracle JDBC 驱动执行 `tests/oracle-source-probe.py --logminer --character-evidence` 可复现实验。[Oracle LogMiner 支持类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
+
 ### 原生二进制 JSON
 
 Oracle SQL `JSON` 类型存储 OSON。所选表含该类型时，Rivomesh 预检返回 `ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED`。临时 Oracle Free 26ai 23.26.4.0.0 PDB 成功启用全列补充日志后，传统 LogMiner 的归档扫描返回 24 条原生 JSON 表记录，状态为 2，重做和撤销 SQL 均为 `Unsupported`。四笔事务覆盖有主键与无主键行插入、文档整体更新、路径更新和删除。每笔事务的普通 `VARCHAR2` 标记都正常解码，两遍已关闭归档的扫描结果一致。[Oracle JSON 数据类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/adjsn/json-data-type.html) · [Oracle LogMiner 支持类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)

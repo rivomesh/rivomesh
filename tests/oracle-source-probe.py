@@ -1357,6 +1357,8 @@ def main():
                         help='Verify the specific LOB refusal codes from the Java probe')
     parser.add_argument('--native-json-evidence', action='store_true',
                         help='Compare Oracle native JSON Flashback values and archived before/after records')
+    parser.add_argument('--character-evidence', action='store_true',
+                        help='Compare Oracle Unicode, fixed padding and national character archive images')
     parser.add_argument('--savepoint-evidence', action='store_true',
                         help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
     parser.add_argument('--savepoint-pipeline', action='store_true',
@@ -1381,6 +1383,8 @@ def main():
         parser.error('--lob-preflight requires --lob-evidence')
     if options.native_json_evidence and not options.logminer:
         parser.error('--native-json-evidence requires --logminer')
+    if options.character_evidence and not options.logminer:
+        parser.error('--character-evidence requires --logminer')
     if options.savepoint_evidence and not options.logminer:
         parser.error('--savepoint-evidence requires --logminer')
     if options.savepoint_pipeline and not options.pipeline:
@@ -1397,6 +1401,7 @@ def main():
               'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns,
               'lobEvidence':options.lob_evidence, 'lobPreflight':options.lob_preflight,
               'nativeJsonEvidence':options.native_json_evidence,
+              'characterEvidence':options.character_evidence,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
@@ -1462,6 +1467,9 @@ def main():
             seed_savepoint_tables(sql)
         if options.native_json_evidence:
             native_json_supplemental=seed_native_json(sql)
+        if options.character_evidence:
+            import oracle_character_evidence
+            oracle_character_evidence.seed(sql)
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'
         pdb_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREEPDB1'
         document = {
@@ -1594,6 +1602,8 @@ def main():
             if options.native_json_evidence:
                 native_json_evidence(options,sql,pdb_service,environment,observed,
                                      archive_preview,native_json_supplemental)
+            if options.character_evidence:
+                oracle_character_evidence.observe(sql,mine_archive,required,options.output,observed,archive_preview)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
         if options.virtual_evidence:

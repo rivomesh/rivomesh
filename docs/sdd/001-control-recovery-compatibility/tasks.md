@@ -125,6 +125,7 @@ RM-SDD-001 · 2026-11-17
   - [x] BasicFiles 与 SecureFiles 的 BLOB/CLOB 实库证据、受限账号分型预检和独立迁移说明。
   - [x] 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。
   - [x] 原生二进制 JSON 的受限预检、LogMiner 无镜像证据和 JDBC Flashback 诊断通过。
+  - [x] AL32UTF8 和 AL16UTF16 实库字符诊断已核对 40 个变更及 60 个镜像。当前支持两种 VARCHAR2 长度声明，CHAR/NCHAR/NVARCHAR2 正在接入。
   - [ ] 其他表达式、二进制 JSON、LOB 完整镜像采集与 RAC 切换。
 ## Java运行时兼容
 
