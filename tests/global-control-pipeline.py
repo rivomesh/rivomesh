@@ -2842,8 +2842,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                 assert {file.name for file in staged_report.iterdir()}=={'rows.staged.mv.db','summary.staged.json','validation.lock'}
                                 assert json.loads((destination/'closed-receipts.json').read_text())==closed
                                 assert (destination/'evidence.seal').read_text().startswith('v1.')
-                                if additional_report is None:
-                                    assert not (candidate_data/'validations'/'global_cdc').exists()
+                                assert not (candidate_data/'validations'/'global_cdc').exists()
                                 assert 'global_cdc' not in json.loads((candidate_data/'controller.json').read_text())['tasks']
                                 assert data_cut()==original_cut and task()['ownerNodeId']==owner_node
                                 passed('Prepared candidate privately stages exact report and receipt bytes with live ownership, checkpoints and registry untouched')
