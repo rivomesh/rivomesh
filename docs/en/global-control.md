@@ -51,7 +51,11 @@ The same measurement is available for direct MySQL 8.4 writes when `source.expec
 
 In the create wizard or YAML import, select **Assign an Agent automatically**. The control store chooses an authorized, live Agent with task capacity. It compares assigned tasks as a share of each Agent's `maxTasks` and reserves the chosen slot in the same transaction that persists the task. Use `placement: "AUTO"` with `POST /api/tasks`, the configuration and an `X-Request-ID`. To choose a specific Agent, send `ownerNodeId`.
 
-The saved task lists its actual owner. A repeat with the same payload and request identity returns that original assignment even when other tasks have filled the cluster. `AGENT_PLACEMENT_UNAVAILABLE` means no permitted healthy Agent has a free task slot. Provision required connector drivers, secret references and network access on eligible Agents. Automatic transfer of a running task is covered by the Agent handoff requirements.
+For V3 tasks with a MySQL source, MySQL or PostgreSQL destinations and an external PostgreSQL journal, automatic placement checks up to three eligible Agents in capacity order. Each Agent checks its Java 21 Worker launcher, installed MySQL and PostgreSQL components, and opens the configured journal with a bounded read-only `SELECT 1`. A failed candidate does not acquire the task. If all candidates fail, `AGENT_PLACEMENT_UNAVAILABLE` leaves the global task and journal unchanged. Fix the Agent's driver, credential or journal route and repeat the create request.
+
+This check confirms journal authentication at the time of placement. Use **Check connections and objects** on the saved task to inspect its source and destinations. Other connector and journal profiles still use the existing capacity-based placement rules.
+
+The saved task lists its actual owner. Repeating the accepted request ID and configuration from either Controller returns that owner even if the cluster has since filled its task slots.
 
 ### Assess transfer to another Agent
 

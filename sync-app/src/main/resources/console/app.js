@@ -20,8 +20,8 @@ Object.assign(messages.en,{filterTaskId:'Task ID',filterOwner:'Execution node ID
 
 Object.assign(messages.zh,{nodeController:'管理入口',nodeAgent:'执行 Agent',OWNER_ROLE_REQUIRED:'所选节点只负责管理，不能执行任务，请选择执行 Agent。',TASK_OWNER_REQUIRED:'请指定执行 Agent。',CONTROLLER_OWNS_TASKS:'该节点仍拥有执行任务，请保留原节点和目录作为 Agent。',CONTROLLER_EXECUTION_DIRECTORY_NOT_EMPTY:'含执行任务的目录不能作为纯管理入口打开。'});
 Object.assign(messages.en,{nodeController:'Management entry',nodeAgent:'Execution Agent',OWNER_ROLE_REQUIRED:'This node only serves management. Choose an execution Agent.',TASK_OWNER_REQUIRED:'Select an execution Agent.',CONTROLLER_OWNS_TASKS:'This node still owns tasks. Keep its original identity/directory as an Agent.',CONTROLLER_EXECUTION_DIRECTORY_NOT_EMPTY:'A directory with execution tasks cannot open as a controller-only entry.'});
-Object.assign(messages.zh,{automaticPlacement:'自动分配执行 Agent',AGENT_PLACEMENT_UNAVAILABLE:'当前授权范围内没有可用的 Agent 任务槽。请核对节点状态和任务容量。',TASK_PLACEMENT_INVALID:'请选择自动分配或指定节点。'});
-Object.assign(messages.en,{automaticPlacement:'Assign an Agent automatically',AGENT_PLACEMENT_UNAVAILABLE:'No authorized Agent currently has a free task slot. Check node status and capacity.',TASK_PLACEMENT_INVALID:'Choose automatic assignment or select a node.'});
+Object.assign(messages.zh,{automaticPlacement:'自动分配执行 Agent',AGENT_PLACEMENT_UNAVAILABLE:'没有符合任务条件的在线 Agent。请检查任务槽、Worker 运行环境和日志库连通。',TASK_PLACEMENT_INVALID:'请选择自动分配或指定节点。'});
+Object.assign(messages.en,{automaticPlacement:'Assign an Agent automatically',AGENT_PLACEMENT_UNAVAILABLE:'No online Agent qualified for this task. Check task capacity, the Worker runtime, and journal access.',TASK_PLACEMENT_INVALID:'Choose automatic assignment or select a node.'});
 function globalTasks(){return session?.taskControlScope==='GLOBAL';}
 function clearTaskPages(){taskTicket++;taskAfter='';taskHistory=[];taskLoading=false;}
 function clearTaskFilters(){taskFilters={};selectedDestination='';$('task-filter').reset();}

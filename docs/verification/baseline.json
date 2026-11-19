@@ -14000,5 +14000,52 @@
     "configurationExamplesPassed": 25,
     "artifactGate": "PASS",
     "scope": "Full standard Eclipse Temurin 21 verify for the published Oracle fault fingerprint, same-store frozen offline ownership UI and durable freeze timestamp. Native topology proofs retain their exact application digests."
+  },
+  "nativeVerifiedAutomaticAgentPlacement": {
+    "status": "PASS",
+    "nativeArtifactSha256": "3e486907b5289202d9e779c9515c42a58c83242d24052322cce832122e533022",
+    "nativeManifestSha256": "2de6a5d87b2aae3d9c9f6928267d9d19ba7a0367bfe943584de305df91700429",
+    "nativeChecksPassed": 4,
+    "checks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Two live Agents without the external journal route leave no task, configuration or CREATE authority",
+      "Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized",
+      "Separate START initializes the selected journal and the eligible Agent delivers full and incremental data"
+    ],
+    "nativeFixtureSha256": "69b0e1bfc08c080006070ff00a3e0297b5242b0861fbdc3f454027a7eeb3ddb2",
+    "sourceVersion": "MySQL 8.4.13",
+    "journal": "PostgreSQL 17.12 on an isolated Docker network",
+    "beforeNoRouteAuthorityRows": {
+      "authority": 1,
+      "version": 1,
+      "create": 1
+    },
+    "afterNoRouteAuthorityRows": {
+      "authority": 0,
+      "version": 0,
+      "create": 0
+    },
+    "oldBehaviorNativeManifestSha256": "1f0b8e2e3e40f978f367a535fb69748141c29754947c0196ed67cd71c6e28db5",
+    "automaticEligibility": {
+      "agents": 2,
+      "rejectedWithoutJournal": true,
+      "selected": "node-worker-alt",
+      "beforeStartJournalTables": 0
+    },
+    "maskedEligibilityReadback": [
+      "node-worker|REJECTED|PLACEMENT_JOURNAL_UNAVAILABLE",
+      "node-worker-alt|SUCCEEDED|NONE"
+    ],
+    "cleanupExitCode": 0,
+    "initialHostnameFixtureManifests": [
+      "ad0f1ba4def122edbf12bad180eb45039c6ad3ec8e6718dbf51007194ae6bec5",
+      "fe84e42047ecbe49efdb701a75d6ad02283112dea6174d53c9c89387ea83771b"
+    ],
+    "fixtureScope": "The JVM used by the Agent initially attempted a hostname on an isolated route. Immediate reuse after network attachment refused while independent fresh Worker/JDBC checks passed. The same artifact passed with the actual isolated IPv4 endpoint. The native proof uses an ordinary MySQL V3 task with PostgreSQL and MySQL targets and an external PostgreSQL journal.",
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --verified-placement --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/placement-native",
+    "integratedArtifactSha256": "2905f5a4dc9ac3d0fd1070f3d4797720b32998befd5b56c242c3b2e0c9442469",
+    "integratedFocusedJavaTestsPassed": 125,
+    "integratedDomTestsPassed": 167,
+    "integratedSourceTree": "e6490ceedb3c66f77a1ed00179f525f6e701b87e"
   }
 }

@@ -7,6 +7,7 @@ from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
+from ipaddress import IPv4Address
 import json
 import os
 import re
@@ -35,6 +36,8 @@ parser.add_argument('--mysql-async-failover', action='store_true',
 parser.add_argument('--separate-execution', action='store_true', help='Two management JVMs plus a separate probe-only execution Agent')
 parser.add_argument('--automatic-placement', action='store_true',
                     help='Create live tasks across two separate Agents with capacity-bound automatic placement')
+parser.add_argument('--verified-placement', action='store_true',
+                    help='Check native PostgreSQL journal reachability before creating an automatic owner')
 parser.add_argument('--task-authority', action='store_true',
                     help='Exercise global revisions, unique task IDs, independent sources and standalone control')
 parser.add_argument('--command-routing', action='store_true',
@@ -172,6 +175,9 @@ if args.command_routing and (not args.separate_execution or not args.test_classe
         args.task_views, args.mysql_delivery_timing, args.source_diagnostics, args.failure_diagnostics,
         args.snapshot_diagnostics, args.compensation, args.correction))):
     parser.error('--command-routing requires --separate-execution and compiled fault fixture --test-classes')
+if args.verified_placement and (not args.automatic_placement or args.control_product!='POSTGRESQL'
+        or any((args.handoff_assessment, args.handoff_original_outage, args.mysql_async_failover, args.task_authority))):
+    parser.error('--verified-placement requires the native PostgreSQL automatic placement baseline')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.handoff_probe and not args.handoff_assessment:
@@ -558,6 +564,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         compose_data['networks']={'default':{},'journal':{}}
         for agent in execution_agents:
             services[agent]['networks']=['default','journal']
+    if args.verified_placement:
+        services['placement-store']={'image':'postgres:17','networks':['placement-journal'],
+            'environment':{'POSTGRES_PASSWORD':'${RM_GC_CONTROL}','POSTGRES_DB':'rivomesh_placement'}}
+        compose_data['networks']={'default':{},'placement-journal':{}}
     if args.handoff_asymmetric_partition:
         compose_data['networks'] = {'default': {}, 'control': {}}
         services['store']['networks'] = ['control']
@@ -573,8 +583,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               capture_output=True, text=True, timeout=180)
 
     def sql(service, statement):
-        if service in ('postgres','journal-store') or service == 'store' and args.control_product == 'POSTGRESQL':
-            database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal'}[service]
+        if service in ('postgres','journal-store','placement-store') or service == 'store' and args.control_product == 'POSTGRESQL':
+            database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal','placement-store':'rivomesh_placement'}[service]
             result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d',
                              database, '-A', '-t', '-F', '|', '-c', statement)
         else:
@@ -2835,6 +2845,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             databases += ('mysql-replica',)
         if args.handoff_split_store:
             databases += (journal_service,)
+        if args.verified_placement:
+            databases += ('placement-store',)
         compose('up', '-d', *databases)
         for service in databases:
             wait(lambda s=service: sql(s, 'SELECT 1') == '1', service + ' SQL ready')
@@ -2912,6 +2924,62 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert wrong['code']=='MANAGED_WRITER_OWNER_REQUIRED'
             passed('Only the original Agent can admit the explicitly initialized managed writer')
         created = 'gc_create_' + uuid.uuid4().hex
+        if args.verified_placement:
+            sql('placement-store',"CREATE ROLE placement_writer LOGIN PASSWORD '"+env['RM_GC_DATA']
+                +"'; GRANT CREATE ON DATABASE rivomesh_placement TO placement_writer")
+            store_id=compose('ps','-q','placement-store').stdout.strip()
+            network=project+'_placement-journal'
+            address_template='{{(index .NetworkSettings.Networks "'+network+'").IPAddress}}'
+            journal_ip=str(IPv4Address(subprocess.check_output(
+                ['docker','inspect','-f',address_template,store_id],text=True,timeout=15).strip()))
+            def journal_reachable(node):
+                return compose('exec','-T',node,'timeout','3','bash','-c','exec 3<>/dev/tcp/"$1"/5432',
+                               'test-journal',journal_ip,check=False).returncode==0
+            assert not any(journal_reachable(node) for node in execution_agents)
+            document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'placement_journal',
+                                 'url':f'jdbc:postgresql://{journal_ip}:5432/rivomesh_placement?connectTimeout=2&socketTimeout=4',
+                                 'username':'placement_writer','password':env['RM_GC_DATA']}
+            placement_body={'placement':'AUTO','config':document}
+            authority="SELECT COUNT(*) FROM global_control.rmc_task_authority WHERE task_id='global_cdc'"
+            versions="SELECT COUNT(*) FROM global_control.rmc_task_version WHERE task_id='global_cdc'"
+            create_count="SELECT COUNT(*) FROM global_control.rmc_command WHERE request_id='"+created+"'"
+            tables="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='placement_journal'"
+            rejected=http('node-a','/api/tasks',placement_body,request=created,expected=(409,202))
+            before={'authority':int(sql('store',authority)),'version':int(sql('store',versions)),
+                    'create':int(sql('store',create_count))}
+            manifest['beforeJournalReachableRows']=before
+            assert rejected.get('code')=='AGENT_PLACEMENT_UNAVAILABLE', before
+            assert before=={'authority':0,'version':0,'create':0}, before
+            assert sql('placement-store',tables)=='0'
+            passed('Two live Agents without the external journal route leave no task, configuration or CREATE authority')
+
+            chosen='node-worker-alt'
+            node_container=compose('ps','-q',chosen).stdout.strip()
+            subprocess.run(['docker','network','connect',network,node_container],
+                           check=True,capture_output=True,text=True,timeout=15)
+            wait(lambda:journal_reachable(chosen),'selected Agent has the dedicated journal route',seconds=20)
+            assert not journal_reachable(owner_node)
+            http('node-a','/api/tasks',placement_body,request=created,expected=202)
+            wait(lambda:outcome(created), 'available Agent receives the original CREATE request')
+            assert task('node-a')['ownerNodeId']==task('node-b')['ownerNodeId']==chosen
+            http('node-b','/api/tasks',placement_body,request=created,expected=202)
+            assert all(sql('store',q)=='1' for q in (authority,versions,create_count))
+            assert sql('placement-store',tables)=='0'
+            passed('Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized')
+
+            owner_node=chosen
+            action('START')
+            wait(rows_match,'actual selected Worker snapshots both targets')
+            sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(144,'verified placement',JSON_OBJECT('n',144))")
+            wait(rows_match,'actual selected Worker captures another native source transaction')
+            assert int(sql('placement-store',tables))>0
+            assert task('node-b')['ownerNodeId']==chosen
+            passed('Separate START initializes the selected journal and the eligible Agent delivers full and incremental data')
+            manifest['verifiedPlacement']={'agents':2,'rejectedWithoutJournal':True,'selected':chosen,'beforeStartJournalTables':0}
+            manifest['status']='PASS'
+            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+            print('GLOBAL_CONTROL_VERIFIED_PLACEMENT_ACCEPTED artifact='+digest)
+            raise SystemExit(0)
         body = {'config':document,**({'placement':'AUTO'} if args.automatic_placement and not enrolled_writer else {'ownerNodeId':owner_node})}
         http('node-a','/api/tasks',body,request=created,expected=202)
         wait(lambda: outcome(created), 'remote create')

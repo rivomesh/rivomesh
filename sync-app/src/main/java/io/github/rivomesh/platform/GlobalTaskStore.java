@@ -19,6 +19,8 @@ final class GlobalTaskStore {
     interface AuthorityTransaction<T>{T run(Connection connection,AccountDirectory.State directory)throws Exception;}
     interface CommitHook{void commit(Connection connection,Record record,AccessControl.Principal actor)throws Exception;}
     interface Transaction<T>{T run(Connection connection,Record record,AccessControl.Principal actor)throws Exception;}
+    interface PlacementChoice{AgentDirectory.Binding choose(Connection connection,AccessControl.Principal actor)throws Exception;}
+    interface PlacementReview<T>{T run(Connection connection,AccessControl.Principal actor,Record replay)throws Exception;}
     interface RowView{Map<String,Object> read(Connection connection,Record record,AccessControl.Principal actor)throws Exception;}
     private final JdbcControlStore db;
     private final SharedAccessStore access;
@@ -111,20 +113,46 @@ final class GlobalTaskStore {
     }
     Record allocate(String id,String yaml,String request,AccessControl.Principal supplied,
                     AgentDirectory agents,CommitHook hook)throws Exception{
-        return create(id,null,null,yaml,request,supplied,hook,Objects.requireNonNull(agents));
+        return allocateQualified(id,yaml,request,supplied,agents::allocate,hook);
+    }
+    Record allocateQualified(String id,String yaml,String request,AccessControl.Principal supplied,
+                             PlacementChoice choice,CommitHook hook)throws Exception{
+        return create(id,null,null,yaml,request,supplied,hook,Objects.requireNonNull(choice));
+    }
+    <T>T reviewAutomaticCreate(TaskRequest request,AccessControl.Principal supplied,PlacementReview<T> review)throws Exception{
+        if(request.kind!=TaskRequest.Kind.CREATE||!"AUTO".equals(request.placement))throw new IllegalArgumentException("TASK_PLACEMENT_INVALID");
+        try(Connection c=db.connect()){
+            c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
+            c.setAutoCommit(false);
+            AccessControl.Principal actor=authorize(c,supplied);
+            if(!actor.task(request.taskId)||!actor.administers())throw new SecurityException("FORBIDDEN");
+            root(c);
+            Record existing=creationReplay(c,request.taskId,request.requestId,autoSignature(request.taskId,request.yaml),actor);
+            if(existing==null)requireNewTask(c,request.taskId);
+            T result=review.run(c,actor,existing);c.commit();return result;
+        }catch(SQLException failure){throw new ControlStore.Unavailable();}
+    }
+    void requireNewTask(Connection c,String task)throws Exception{
+        try{read(c,task);throw new TaskService.Conflict("TASK_ID_EXISTS");}
+        catch(NoSuchElementException absent){/* checked under the authority root lock */}
+    }
+    private static String autoSignature(String id,String yaml){return "CREATE_AUTO\n"+id+"\n"+yaml;}
+    private Record creationReplay(Connection c,String id,String request,String signature,AccessControl.Principal actor)throws Exception{
+        if(!replay(c,request,signature,id,actor))return null;
+        Record old=read(c,id);scope(actor,id,old.owner,true);configuration(c,old);return old;
     }
     private Record create(String id,String owner,String directory,String yaml,String request,AccessControl.Principal supplied,
-                          CommitHook hook,AgentDirectory agents)throws Exception{
+                          CommitHook hook,PlacementChoice choice)throws Exception{
         valid(id,"[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
         valid(request,"[A-Za-z0-9_-]{8,128}");
-        boolean automatic=agents!=null;
+        boolean automatic=choice!=null;
         if(!automatic){
             valid(owner,"[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
             valid(directory,"[a-f0-9-]{36}");
         }
         ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(yaml);
         if(declaration!=null)declaration.requireOwner(owner);
-        String signature=automatic?"CREATE_AUTO\n"+id+"\n"+yaml
+        String signature=automatic?autoSignature(id,yaml)
                 :"CREATE\n"+id+"\n"+owner+"\n"+directory+"\n"+yaml;
         try(Connection c=db.connect()){
             c.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
@@ -132,12 +160,13 @@ final class GlobalTaskStore {
             if(!actor.task(id)||!actor.administers())throw new SecurityException("FORBIDDEN");
             if(!automatic)scope(actor,id,owner,true);
             root(c);
-            if(replay(c,request,signature,id,actor)){Record old=read(c,id);scope(actor,id,old.owner,true);configuration(c,old);c.commit();return old;}
+            Record existing=creationReplay(c,id,request,signature,actor);
+            if(existing!=null){c.commit();return existing;}
             long registered;try(PreparedStatement p=db.prepare(c,"SELECT next_sequence FROM "+db.table("task_root")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();registered=r.getLong(1);if(registered>=maximum)throw new TaskService.Conflict("GLOBAL_TASK_CAPACITY");}
             try(PreparedStatement p=db.prepare(c,"SELECT COUNT(*) FROM "+db.table("task_authority")+" WHERE cluster_id=?",cluster);ResultSet r=p.executeQuery()){r.next();if(r.getLong(1)!=registered)throw new TaskService.Conflict("GLOBAL_TASK_CATALOG_INCOMPLETE");}
-            try{read(c,id);throw new TaskService.Conflict("TASK_ID_EXISTS");}catch(NoSuchElementException absent){/* checked under the authority root lock */}
+            requireNewTask(c,id);
             if(automatic){
-                AgentDirectory.Binding chosen=agents.allocate(c,actor);
+                AgentDirectory.Binding chosen=choice.choose(c,actor);
                 owner=chosen.node;directory=chosen.directory;
                 scope(actor,id,owner,true);
             }else requireReservedCapacity(c,owner);

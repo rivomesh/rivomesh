@@ -17,6 +17,9 @@ final class OwnerQueries {
         public Map<String,Object> response;
     }
     record HandoffQueries(String candidate,String originalEvidence){}
+    record PlacementReview(String query,String candidate,GlobalTaskStore.Record replay){}
+    record PlacementResult(boolean eligible,GlobalTaskStore.Record replay){}
+    private static final long PLACEMENT_QUERY_MILLIS=8500;
     private record Execution(TaskRequest request,AccessControl.Principal actor,KafkaNoticeCatalog.Selection kafkaCatalog){
         Execution(TaskRequest request,AccessControl.Principal actor){this(request,actor,null);}
     }
@@ -78,6 +81,7 @@ final class OwnerQueries {
     String submit(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();readonly(request);if(Model.JSON.writeValueAsBytes(request).length>512*1024)throw new IllegalArgumentException("OWNER_QUERY_REQUEST_LIMIT");
         if(request.handoffRpc())throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
+        if(request.placementProbe())throw new IllegalArgumentException("PLACEMENT_PROBE_INVALID");
         if(request.adoptedEvidence!=null)throw new IllegalArgumentException("HANDOFF_ADOPTED_SCOPE_CHANGED");
         if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");
         if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
@@ -90,6 +94,61 @@ final class OwnerQueries {
             return insert(c,request,current,owner,reserve(c,1),null);
         });
     }
+    PlacementReview submitPlacement(TaskRequest create,AccessControl.Principal actor,Set<String> excluded)throws Exception{
+        return tasks.reviewAutomaticCreate(create,actor,(c,current,replay)->{
+            if(replay!=null)return new PlacementReview(null,null,replay);
+            var candidate=agents.allocate(c,current,excluded);
+            TaskRequest probe=TaskRequest.of(TaskRequest.Kind.AUTO_PLACEMENT_PROBE,create.taskId);
+            probe.ownerNodeId=candidate.node;probe.requestId=create.requestId;probe.yaml=create.yaml;
+            probe.identityHash=AuditStore.hash(create.yaml);probe.validate();
+            return new PlacementReview(insert(c,probe,current,candidate,reserve(c,1),null),candidate.node,null);
+        });
+    }
+
+    PlacementResult awaitPlacement(PlacementReview attempt,TaskRequest create,AccessControl.Principal actor)throws Exception{
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(Math.min(lifetime,PLACEMENT_QUERY_MILLIS));
+        while(System.nanoTime()<deadline){
+            PlacementResult ready=tasks.reviewAutomaticCreate(create,actor,(c,current,replay)->{
+                if(replay!=null)return new PlacementResult(false,replay);
+                Entry entry;
+                try{entry=read(c,attempt.query());}
+                catch(NoSuchElementException expired){return new PlacementResult(false,null);}
+                bindPlacement(entry,create,current);
+                if(entry.expiresAt<=db.now(c)||"REJECTED".equals(entry.phase))return new PlacementResult(false,null);
+                return "SUCCEEDED".equals(entry.phase)?new PlacementResult(true,null):null;
+            });
+            if(ready!=null)return ready;
+            Thread.sleep(50);
+        }
+        return new PlacementResult(false,null);
+    }
+
+    AgentDirectory.Binding qualifiedPlacement(Connection c,String query,TaskRequest create,AccessControl.Principal actor)throws Exception{
+        Entry entry;
+        try{entry=read(c,query);}
+        catch(NoSuchElementException expired){throw new TaskService.Conflict("AGENT_PLACEMENT_CHANGED");}
+        bindPlacement(entry,create,actor);
+        if(!"SUCCEEDED".equals(entry.phase)||entry.expiresAt<=db.now(c)
+                ||!AutomaticPlacement.receipt(entry.request).equals(entry.response))
+            throw new TaskService.Conflict("AGENT_PLACEMENT_CHANGED");
+        return agents.requirePlacement(c,actor,entry.owner,entry.directory,entry.incarnation,entry.epoch);
+    }
+
+    private static void bindPlacement(Entry entry,TaskRequest create,AccessControl.Principal actor){
+        if(!actor.id.equals(entry.actor)||!actor.authorizationRevision.equals(entry.actorRevision))
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        if(!entry.request.placementProbe()||!entry.task.equals(create.taskId)
+                ||!entry.request.requestId.equals(create.requestId)||!entry.request.identityHash.equals(AuditStore.hash(create.yaml)))
+            throw new TaskService.Conflict("PLACEMENT_PROBE_INVALID");
+    }
+
+    private void verifyPlacementRoute(Connection c,Entry entry,AccessControl.Principal actor)throws Exception{
+        if(!entry.owner.equals(entry.request.ownerNodeId)||!entry.request.identityHash.equals(AuditStore.hash(entry.request.yaml)))
+            throw new TaskService.Conflict("PLACEMENT_PROBE_INVALID");
+        tasks.requireNewTask(c,entry.task);
+        agents.requirePlacement(c,actor,entry.owner,entry.directory,entry.incarnation,entry.epoch);
+    }
+
     HandoffQueries submitHandoff(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();
         if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_PROBE)
@@ -181,7 +240,8 @@ final class OwnerQueries {
                           long now,String activeVersion)throws Exception{
         Entry entry=new Entry();entry.id=UUID.randomUUID().toString();entry.task=request.taskId;
         entry.owner=target.node;entry.directory=target.directory;entry.epoch=target.epoch;entry.incarnation=target.incarnation;
-        entry.actor=actor.id;entry.actorRevision=actor.authorizationRevision;entry.request=request;entry.expiresAt=now+lifetime;
+        entry.actor=actor.id;entry.actorRevision=actor.authorizationRevision;entry.request=request;
+        entry.expiresAt=now+(request.placementProbe()?Math.min(lifetime,PLACEMENT_QUERY_MILLIS):lifetime);
         entry.handoffConfiguration=activeVersion;
         db.update(c,"INSERT INTO "+db.table("owner_query")
                 +" (cluster_id,query_id,task_id,owner_id,node_epoch,phase,expires_at,envelope) VALUES (?,?,?,?,?,?,?,?)",
@@ -284,6 +344,10 @@ final class OwnerQueries {
         try{
             Execution execution=tasks.service((c,accounts)->{
                 agents.require(c,lease,directory);AccessControl.Principal actor=actor(accounts,entry);
+                if(entry.request.placementProbe()){
+                    verifyPlacementRoute(c,entry,actor);
+                    return new Execution(entry.request,actor);
+                }
                 if(entry.request.kind==TaskRequest.Kind.KAFKA_CATALOG_PROBE){
                     if(!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");
                     return new Execution(entry.request,actor,KafkaNoticeCatalog.probeInput(tasks,c,entry.request));
@@ -331,6 +395,8 @@ final class OwnerQueries {
                     :local.ownerKafkaCatalog(execution.kafkaCatalog,execution.actor);
             response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC||entry.request.offlineReadyRpc()?readinessResponse(entry,returned)
                     :entry.request.originalFreezeRpc()?freezeOriginResponse(entry,returned):returned;
+            if(entry.request.placementProbe()&&!AutomaticPlacement.receipt(entry.request).equals(response))
+                throw new TaskService.Conflict("PLACEMENT_PROBE_INVALID");
             if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
         }catch(TaskService.Conflict rejected){failure=rejected.getMessage()!=null&&rejected.getMessage().matches("[A-Z0-9_]{1,120}")?rejected.getMessage():"OWNER_QUERY_REJECTED";}
         catch(SecurityException denied){failure="AUTHORIZATION_CHANGED";}
@@ -343,7 +409,8 @@ final class OwnerQueries {
             if(current.request.readAtRevision()&&!Objects.equals(current.request.revision,tasks.record(c,current.task).revision)){current.phase="REJECTED";current.code="REVISION_CHANGED";current.response=null;write(c,current);return null;}
             try{
                 AccessControl.Principal actor=actor(accounts,current);
-                if(current.request.preparedHandoffRpc())
+                if(current.request.placementProbe())verifyPlacementRoute(c,current,actor);
+                else if(current.request.preparedHandoffRpc())
                     verifyPreparedHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.originalFreezeRpc())verifyFreezeOrigin(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.offlineReadyRpc())verifyOfflineCandidate(c,tasks.record(c,current.task),actor,current);
@@ -453,7 +520,9 @@ final class OwnerQueries {
     Map<String,Object> poll(String id,AccessControl.Principal supplied)throws Exception{
         String task;try(Connection c=db.connect();PreparedStatement p=db.prepare(c,"SELECT task_id FROM "+db.table("owner_query")+" WHERE cluster_id=? AND query_id=?",cluster,id);ResultSet r=p.executeQuery()){if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");task=r.getString(1);}catch(SQLException failure){throw new ControlStore.Unavailable();}
         return tasks.transaction(task,supplied,(c,record,current)->{
-            Entry entry=read(c,id);if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
+            Entry entry=read(c,id);
+            if(entry.request.placementProbe())throw new IllegalArgumentException("PLACEMENT_PROBE_INVALID");
+            if(!entry.actor.equals(current.id))throw new SecurityException("FORBIDDEN");if(!entry.actorRevision.equals(current.authorizationRevision))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");authorize(entry.request,current);
             if(entry.request.readAtRevision()&&!Objects.equals(entry.request.revision,record.revision))throw new TaskService.Conflict("REVISION_CHANGED");
             if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
             if(entry.request.preparedHandoffRpc())verifyPreparedHandoff(c,record,current,entry);

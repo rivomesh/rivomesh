@@ -61,10 +61,11 @@ public interface TaskWorker {
                 }
             };
         }
+        static Path javaExecutable(){return Paths.get(System.getProperty("java.home"),"bin","java");}
         private Jvm(Path config,Path log,int heapMiB,Set<String> protectedNames,Map<String,List<String>> grants,
                     Map<String,String> parent,String main,io.github.rivomesh.cdc.KafkaPhysicalReceipt.Grant grant)throws Exception{
             String cp = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
-            ProcessBuilder builder=new ProcessBuilder(Paths.get(System.getProperty("java.home"),"bin","java").toString(),"-Xmx"+heapMiB+"m","-cp",cp,main,"run",config.toAbsolutePath().toString()).redirectErrorStream(true);
+            ProcessBuilder builder=new ProcessBuilder(javaExecutable().toString(),"-Xmx"+heapMiB+"m","-cp",cp,main,"run",config.toAbsolutePath().toString()).redirectErrorStream(true);
             byte[] projection=PrivateFiles.read(config,1024*1024);
             String definition=new String(projection,StandardCharsets.UTF_8);
             Map<String,String> environment=environment(parent,definition,protectedNames,grants);

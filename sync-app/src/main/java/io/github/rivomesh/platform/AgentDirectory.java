@@ -92,7 +92,8 @@ final class AgentDirectory {
     }
     Binding owner(String node)throws Exception{return tasks.service((c,accountDirectory)->owner(c,node,null));}
     /** The caller holds the task authority lock through selection and creation. */
-    Binding allocate(Connection c,AccessControl.Principal actor)throws Exception{
+    Binding allocate(Connection c,AccessControl.Principal actor)throws Exception{return allocate(c,actor,Set.of());}
+    Binding allocate(Connection c,AccessControl.Principal actor,Set<String> excluded)throws Exception{
         List<Capacity> candidates=new ArrayList<>();
         Map<String,Long> reservations=tasks.preparations().reservations(c);
         String sql="SELECT n.node_id,n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")
@@ -103,12 +104,12 @@ final class AgentDirectory {
         try(PreparedStatement p=db.prepare(c,sql,cluster,db.now(c));ResultSet rows=p.executeQuery()){
             while(rows.next()){
                 String node=rows.getString(1);
-                if(!actor.node(node))continue;
+                if(!actor.node(node)||excluded.contains(node))continue;
                 ControlStore.Node metadata=io.github.rivomesh.Model.JSON.readValue(rows.getString(2),ControlStore.Node.class);
                 long reserved=reservations.getOrDefault(node,0L);
                 long used=rows.getLong(3)+reserved;
-                if(node.equals(metadata.id)&&metadata.executes()&&metadata.taskCapacity>used&&metadata.runningCapacity>0
-                        &&(reserved==0||metadata.runningCapacity>used))
+                if(node.equals(metadata.id)&&metadata.executes()
+                        &&roomForAutomatic(metadata.taskCapacity,metadata.runningCapacity,rows.getLong(3),reserved))
                     candidates.add(new Capacity(node,metadata.taskCapacity,used));
             }
         }
@@ -118,6 +119,20 @@ final class AgentDirectory {
             if("HEALTHY".equals(ready.state))return ready;
         }
         throw new TaskService.Conflict("AGENT_PLACEMENT_UNAVAILABLE");
+    }
+    private static boolean roomForAutomatic(int taskSlots,int workerSlots,long assigned,long reserved){
+        long used=assigned+reserved;
+        return taskSlots>used&&workerSlots>0&&(reserved==0||workerSlots>used);
+    }
+    Binding requirePlacement(Connection c,AccessControl.Principal actor,String node,String directory,String incarnation,long epoch)throws Exception{
+        if(!actor.node(node))throw new SecurityException("FORBIDDEN");
+        var capacity=handoffCapacity(c,node);
+        Binding current=capacity.binding();
+        if(!"HEALTHY".equals(current.state)||!directory.equals(current.directory)
+                ||!incarnation.equals(current.incarnation)||epoch!=current.epoch
+                ||!roomForAutomatic(capacity.taskSlots(),capacity.workerSlots(),capacity.assignedTasks(),capacity.reservedTasks()))
+            throw new TaskService.Conflict("AGENT_PLACEMENT_CHANGED");
+        return current;
     }
     Binding owner(Connection c,String node,String directory)throws Exception{
         if(node==null||!node.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))throw new IllegalArgumentException("AGENT_NODE_INVALID");

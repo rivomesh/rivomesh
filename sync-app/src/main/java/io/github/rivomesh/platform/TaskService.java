@@ -612,6 +612,25 @@ public final class TaskService implements AutoCloseable {
         // The durable pointer is authoritative, including a crash before either projection is written.
         persist(next);Entry entry=new Entry(stored.document,path,task);entries.put(task.jobId,entry);project(entry);return view(task.jobId);
     }
+    Map<String,Object> automaticPlacementProbe(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        TaskDefinition candidate;
+        synchronized(this){
+            ensureOpen();currentActor(actor);
+            if(!request.placementProbe()||actor==null||!actor.administers()||!actor.task(request.taskId)
+                    ||!actor.node(nodeId())||!nodeId().equals(request.ownerNodeId)||!request.identityHash.equals(AuditStore.hash(request.yaml)))
+                throw new SecurityException("FORBIDDEN");
+            candidate=parseTask(request.yaml);
+            if(!candidate.jobId.equals(request.taskId)||!AutomaticPlacement.applies(document(candidate)))
+                throw new Conflict("PLACEMENT_PROBE_INVALID");
+            validateTask(candidate,null);
+            if(!Files.notExists(configurationFile(candidate.jobId+".yml"),LinkOption.NOFOLLOW_LINKS))
+                throw new Conflict("PLACEMENT_LOCAL_CONFIGURATION_PRESENT");
+        }
+        AutomaticPlacement.requireWorker(TaskWorker.Jvm.environment(System.getenv(),request.yaml,config.protectedEnvironment,
+                config.workerSecretReferences));
+        AutomaticPlacement.probeJournal(candidate.pipeline);
+        return AutomaticPlacement.receipt(request);
+    }
     private com.fasterxml.jackson.databind.JsonNode document(TaskDefinition task)throws Exception{return new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).readTree(task.workerYaml);}
     synchronized Map<String,Object> configuration(String id)throws Exception{Entry entry=require(id);Control state=registry.tasks.get(id);Map<String,Object> result=new LinkedHashMap<>();result.put("revision",state.revision);result.put("configurationVersion",state.configurationVersion);result.put("config",documents.redact(document(entry.config),id,state.revision));return result;}
     private TaskDefinition candidate(String id,com.fasterxml.jackson.databind.JsonNode supplied,String revision)throws Exception{

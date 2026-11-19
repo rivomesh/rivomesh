@@ -20,6 +20,7 @@ final class LocalTaskPlane implements TaskControlPlane {
         if(request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC)return tasks.prepareHandoffCandidate(request,actor);
         if(request.originalFreezeRpc())return tasks.verifyOriginalFreeze(request,actor);
         if(request.offlineReadyRpc())return tasks.prepareOfflineHandoffCandidate(request,actor);
+        if(request.placementProbe())return tasks.automaticPlacementProbe(request,actor);
         if(request.kind==TaskRequest.Kind.HANDOFF_FAILURE_HISTORY)
             return tasks.adoptedFailureHistory(request.taskId,actor,request.adoptedEvidence);
         if(request.kind==TaskRequest.Kind.HANDOFF_RAW_HISTORY)return tasks.adoptedRawHistory(request.taskId,actor,request.adoptedEvidence);

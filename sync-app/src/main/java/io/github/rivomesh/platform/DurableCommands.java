@@ -157,10 +157,11 @@ final class DurableCommands {
         });
     }
     void requireRecovery(TaskRequest request){if(request.skipRecovery()&&!recoverySkip)throw new TaskService.Conflict("SKIP_DISABLED");if(request.commitRecovery()&&!recoveryCommit)throw new TaskService.Conflict("FAILURE_ACK_DISABLED");if(request.failureReview()&&!recoveryReview)throw new TaskService.Conflict("FAILURE_REVIEW_DISABLED");}
-    private static void definition(String id,String yaml)throws Exception{
+    private static com.fasterxml.jackson.databind.JsonNode definition(String id,String yaml)throws Exception{
         com.fasterxml.jackson.databind.ObjectMapper mapper=new com.fasterxml.jackson.databind.ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()).enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         com.fasterxml.jackson.databind.JsonNode document=mapper.readTree(yaml);
         if(document==null||!document.isObject()||!id.equals(document.path(document.path("formatVersion").asInt()==3?"pipelineId":"jobId").asText()))throw new TaskService.Conflict("COMMAND_TASK_ID_CHANGED");ConfigurationDocuments.validate(document);
+        return document;
     }
     private void write(Connection c,Stored command)throws Exception{
         if(db.update(c,"UPDATE "+db.table("command")+" SET phase=?,envelope=? WHERE cluster_id=? AND request_id=?",command.phase,cipher.seal("command/"+command.id,Model.JSON.writeValueAsString(command)),cluster,command.id)!=1)throw new TaskService.Conflict("COMMAND_STATE_REQUIRED");
@@ -277,15 +278,32 @@ final class DurableCommands {
         TaskRequest request=supplied.snapshot();if(request.kind!=TaskRequest.Kind.CREATE)throw new IllegalArgumentException("COMMAND_CREATE_REQUIRED");request.taskId=id;definition(id,request.yaml);
         return tasks.create(id,owner,directory,request.yaml,request.requestId,actor,(c,task,current)->insert(c,task,request,current));
     }
-    GlobalTaskStore.Record allocate(String id,TaskRequest supplied,AccessControl.Principal actor,AgentDirectory agents)throws Exception{
+    GlobalTaskStore.Record allocate(String id,TaskRequest supplied,AccessControl.Principal actor,AgentDirectory agents,
+                                    OwnerQueries queries)throws Exception{
         TaskRequest request=supplied.snapshot();
         if(request.kind!=TaskRequest.Kind.CREATE||!"AUTO".equals(request.placement))
             throw new IllegalArgumentException("TASK_PLACEMENT_INVALID");
         request.taskId=id;
-        definition(id,request.yaml);
+        boolean qualifies=AutomaticPlacement.applies(definition(id,request.yaml));
         TaskRequest template=request.snapshot();
         template.placement=null;
-        return tasks.allocate(id,request.yaml,request.requestId,actor,agents,(c,task,current)->insert(c,task,request,current,template));
+        GlobalTaskStore.CommitHook command=(c,task,current)->insert(c,task,request,current,template);
+        if(!qualifies)return tasks.allocate(id,request.yaml,request.requestId,actor,agents,command);
+        Set<String> excluded=new HashSet<>();
+        for(int attempt=0;attempt<3;attempt++){
+            var review=queries.submitPlacement(request,actor,excluded);
+            if(review.replay()!=null)return review.replay();
+            excluded.add(review.candidate());
+            var result=queries.awaitPlacement(review,request,actor);
+            if(result.replay()!=null)return result.replay();
+            if(result.eligible())try{
+                return tasks.allocateQualified(id,request.yaml,request.requestId,actor,
+                        (c,current)->queries.qualifiedPlacement(c,review.query(),request,current),command);
+            }catch(TaskService.Conflict changed){
+                if(!"AGENT_PLACEMENT_CHANGED".equals(changed.getMessage()))throw changed;
+            }
+        }
+        throw new TaskService.Conflict("AGENT_PLACEMENT_UNAVAILABLE");
     }
     GlobalTaskStore.Record update(String id,String yaml,TaskRequest supplied,AccessControl.Principal actor)throws Exception{
         TaskRequest request=supplied.snapshot();if((request.kind!=TaskRequest.Kind.CONFIG_UPDATE&&request.kind!=TaskRequest.Kind.RESTORE)||!id.equals(request.taskId))throw new IllegalArgumentException("COMMAND_CONFIGURATION_REQUIRED");definition(id,yaml);
