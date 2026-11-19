@@ -13984,5 +13984,21 @@
     },
     "scope": "Native already-frozen closed-receipt profile, initial managed assignment, original Agent and transfer archive unavailable, and same PostgreSQL control/journal. The healthy candidate is separately approved for two SQL fences and Worker start. Both original target snapshots and all three journal snapshot IDs persist. Earlier unsealed and broader evidence profiles require separate work.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-closed-only-inventory --handoff-freeze-original --handoff-offline-owner --handoff-offline-authorization-change --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-offline-owner"
+  },
+  "temurin21FullReactorOfflineOwner": {
+    "status": "PASS",
+    "artifactSha256": "2a2c91cf1837a037e0c6da547b957f96929bb3d74be37947509bb06bca475966",
+    "sourceCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
+    "reactorLogSha256": "9c6342cfb180ac3492908277a99bd02a32fe08a1ccb1876f62ce24f024810633",
+    "browserManifestSha256": "564962b6e0943d6ffbff8a113d9b95e4488f0a2b4c5b9d7f69918ef2b0a81d7c",
+    "javaTestsEnumerated": 718,
+    "applicationTestsPassed": 683,
+    "optionalIntegrationSkipped": 35,
+    "domTestsPassed": 167,
+    "nativeBrowserChecksPassed": 14,
+    "browser": "Chrome/157.0.8103.79",
+    "configurationExamplesPassed": 25,
+    "artifactGate": "PASS",
+    "scope": "Full standard Eclipse Temurin 21 verify for the published Oracle fault fingerprint, same-store frozen offline ownership UI and durable freeze timestamp. Native topology proofs retain their exact application digests."
   }
 }
