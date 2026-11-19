@@ -13704,5 +13704,21 @@
       "cross-controller HTTP and UI validated with controlled broker results; exact broker behavior awaits native acceptance"
     ],
     "scope": "Two Controller HTTP entries and UI use a controlled Kafka backend. Only the original approver can recheck an authenticated approval, exact failure, independent physical control topic and signed preceding ACK. Missing full historical route scope blocks sender authorization. The internal receipt prototype requires exact native body and offset on replay."
+  },
+  "temurin21FullReactorOracleAndMySqlFailover": {
+    "status": "PASS",
+    "sourceCommit": "6491ea3a51967a024b02983fe0dc8f7bbcf57090",
+    "artifactSha256": "33c95ba4ab9c39ed98a7d6cba377fa236aa493a4846019c04cb2d3d8ea7d585c",
+    "reactorLogSha256": "924f24143f5847ba3808b1d08f4f88a4ec9d3938f6b71b3a8290ad4f47a14298",
+    "browserManifestSha256": "af5ce15102bad92f4911ffe3d9a174e0a67231c9a99754cf80aebac1c92889fb",
+    "javaTestsEnumerated": 699,
+    "javaTestsPassed": 664,
+    "optionalIntegrationSkipped": 35,
+    "domTestsPassed": 164,
+    "nativeBrowserChecksPassed": 14,
+    "browser": "Chrome/157.0.8103.79",
+    "configurationExamplesPassed": 25,
+    "artifactGate": "PASS",
+    "scope": "Standard Eclipse Temurin 21 artifact includes the Oracle national character implementation. Run-specific native source, target and topology evidence is linked separately."
   }
 }
