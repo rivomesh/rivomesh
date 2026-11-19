@@ -3,6 +3,7 @@ package io.github.rivomesh;
 import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Change;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.OracleDdlEvidence;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
 
@@ -14,6 +15,7 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,6 +32,20 @@ final class OracleArchiveRead {
 
     @FunctionalInterface
     interface Receiver { void committed(SourceTransaction transaction)throws Exception; }
+
+    private static final class DdlBlocked extends IllegalStateException {
+        final OracleDdlEvidence evidence;
+        DdlBlocked(OracleDdlEvidence evidence){
+            super("ORACLE_REDO_DDL_REQUIRES_PLAN");
+            this.evidence=evidence;
+        }
+    }
+
+    static OracleDdlEvidence failedDdl(Throwable failure){
+        for(Throwable cause=failure;cause!=null;cause=cause.getCause())
+            if(cause instanceof DdlBlocked blocked)return blocked.evidence;
+        return null;
+    }
 
     static Map<String,Object> inspect(Connection root,String pdb,OracleArchiveWindow.Coverage range,
                                      Map<String,TableSchema> tables,SourcePosition anchor)throws Exception{
@@ -74,7 +90,7 @@ final class OracleArchiveRead {
                              Map<String,TableSchema> tables,SourcePosition anchor,BigInteger after,String generation,
                              int maxTransactionRows,Receiver receiver)throws Exception{
         String scope=String.join(" OR ",Collections.nCopies(tables.size(),"(seg_owner=? AND table_name=?)"));
-        String sql="SELECT operation,seg_owner,table_name,start_scn,commit_scn,RAWTOHEX(xid),csf,status,sql_redo,sql_undo,rollback,RAWTOHEX(src_con_guid),src_con_uid "
+        String sql="SELECT operation,seg_owner,table_name,start_scn,commit_scn,RAWTOHEX(xid),csf,status,sql_redo,sql_undo,rollback,RAWTOHEX(src_con_guid),src_con_uid,scn,rs_id,ssn,info "
                 +"FROM v$logmnr_contents WHERE operation='MISSING_SCN' OR ((src_con_name=? OR RAWTOHEX(src_con_guid)=? OR src_con_uid=?) AND ("
                 +(after==null?scope:"(operation='DDL' AND scn>?) OR (commit_scn>? AND ("+scope+"))") +")) "
                 +"ORDER BY CASE WHEN operation IN ('MISSING_SCN','DDL') THEN 0 ELSE 1 END,commit_scn,RAWTOHEX(xid),scn,rs_id,ssn";
@@ -98,7 +114,7 @@ final class OracleArchiveRead {
                 while(rows.next()){
                     String operation=rows.getString(1);
                     if("MISSING_SCN".equals(operation))throw invalid("ORACLE_ARCHIVE_LOG_GAP");
-                    if("DDL".equals(operation))throw invalid("ORACLE_REDO_DDL_REQUIRES_PLAN");
+                    if("DDL".equals(operation))throw new DdlBlocked(after==null?null:ddlEvidence(anchor,range,rows));
                     requirePdb(anchor,rows.getString(12),rows.getString(13));
                     if(!Arrays.asList("INSERT","UPDATE","DELETE").contains(operation))
                         throw invalid("ORACLE_REDO_OPERATION_UNSUPPORTED");
@@ -187,12 +203,44 @@ final class OracleArchiveRead {
     }
 
     private static void requirePdb(SourcePosition anchor,String guid,String uid){
+        if(!matchesPdb(anchor,guid,uid))throw invalid("ORACLE_REDO_PDB_IDENTITY_CHANGED");
+    }
+
+    private static boolean matchesPdb(SourcePosition anchor,String guid,String uid){
         boolean guidPresent=guid!=null&&!guid.matches("0{32}");
         boolean uidPresent=uid!=null&&!"0".equals(uid);
-        if(!guidPresent&&!uidPresent
-                ||guidPresent&&!anchor.getPayload().get("pdbGuid").equals(guid)
-                ||uidPresent&&!anchor.getPayload().get("pdbUid").equals(uid))
-            throw invalid("ORACLE_REDO_PDB_IDENTITY_CHANGED");
+        return (guidPresent||uidPresent)
+                &&(!guidPresent||guid.equals(anchor.getPayload().get("pdbGuid")))
+                &&(!uidPresent||uid.equals(anchor.getPayload().get("pdbUid")));
+    }
+
+    private static OracleDdlEvidence ddlEvidence(SourcePosition anchor,OracleArchiveWindow.Coverage range,ResultSet row){
+        try{
+            return ddlEvidence(anchor,range,row.getString(12),row.getString(13),row.getString(7),row.getString(8),
+                    row.getString(11),row.getString(14),row.getString(15),row.getString(16),row.getString(17),row.getString(9));
+        }catch(SQLException unavailable){
+            // Reading optional evidence cannot change the archive DDL stop.
+            return null;
+        }
+    }
+
+    static OracleDdlEvidence ddlEvidence(SourcePosition anchor,OracleArchiveWindow.Coverage range,
+            String guid,String uid,String continues,String status,String rollback,
+            String eventScn,String recordSet,String statementSequence,String info,String redo){
+        if(!matchesPdb(anchor,guid,uid)||!"0".equals(continues)||!"0".equals(status)||!"0".equals(rollback)
+                ||redo==null||redo.isBlank()||redo.length()>4000||recordSet==null
+                ||redo.codePoints().anyMatch(cp->cp>=Character.MIN_SURROGATE&&cp<=Character.MAX_SURROGATE))return null;
+        OracleDdlEvidence.Kind kind=switch(info==null?"":info){
+            case "USER DDL","USER DDL (PlSql=0 RecDep=0)"->OracleDdlEvidence.Kind.USER_DDL;
+            case "INTERNAL DDL"->OracleDdlEvidence.Kind.INTERNAL_DDL;
+            default->null;
+        };
+        try{
+            return new OracleDdlEvidence(Codec.sha256(Codec.encode(anchor)),range.start.toString(),range.end.toString(),
+                    eventScn,recordSet.trim(),statementSequence,kind,Codec.sha256(redo));
+        }catch(IllegalArgumentException unavailable){
+            return null;
+        }
     }
 
     private static BigInteger scn(String value){

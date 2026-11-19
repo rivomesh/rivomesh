@@ -47,6 +47,10 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 临时实库夹具使用 `tests/oracle-source-probe.py --logminer --pipeline --ddl-review`，并提供 Temurin 21 构件及 Oracle JDBC 驱动。夹具用同一个日志库断点分别对比第一次可见的当前结构、之后的修改，以及超出当前支持范围的结构。
 
+如果触发停止的扫描获得一条完整、PDB 身份已核实的 `USER DDL` 或 `INTERNAL DDL` 记录，报告还会提供 `blockedArchiveEvent`。Oracle Free 26ai 实测的顶层 `USER DDL (PlSql=0 RecDep=0)` 也适用。报告包含 SCN、`RS_ID`、`SSN`、归档区间和 JDBC 所读 SQL 文本的 SHA-256。日志库在同一个采集租约事务内将事件指纹和故障代次一并记录，读取时再次核对断点摘要。后续目录查询或归档读取无法为同一故障替换记录。每个任务最多保留一条观测，新故障可用其自身代次更新存档。
+
+旧故障、记录不完整或证据写入失败时，返回 `ORACLE_DDL_EVIDENCE_UNRECORDED`。记录损坏或绑定的断点不同，返回 `ORACLE_DDL_EVIDENCE_INVALID`。这两种结果都保留原 DDL 停止状态。指纹记录在线目录会话观察到的行。审批新增可空列仍需核实边界两侧的历史字典、完整 DML、结构差异和原断点的目标回执。为临时 DDL 评审夹具追加 `--ddl-fingerprint`，可用原归档记录核对指纹，再归档之后的 DDL 和 DML。
+
 ### 保存点和部分回滚
 
 归档采集使用 LogMiner 的 `COMMITTED_DATA_ONLY`。Oracle Free 26ai 23.26.4.0.0 的嵌套 `SAVEPOINT` 与 `ROLLBACK TO` 夹具在未过滤归档中产生 7 条已撤销的写入和 7 条补偿记录。仅已提交模式两遍均只返回该事务的 4 条有效变更。测试覆盖同一有主键行的连续更新、撤销主键修改、撤销删除，以及重复的无主键行。[Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 重做记录字段](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-LOGMNR_CONTENTS.html)

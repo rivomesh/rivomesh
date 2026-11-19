@@ -1358,8 +1358,47 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert original_table['recordedVersion']==1 and ddl_cut()==original_cut
                     observed('Oracle capture review reports the saved schema against the current PDB without changing either cut')
 
+                    if options.ddl_fingerprint:
+                        evidence=first.get('blockedArchiveEvent',{})
+                        event=evidence.get('event',{})
+                        anchor=review_start['sourcePosition']['payload']
+                        upper=event.get('archiveEndScnExclusive') or sql(
+                            "SELECT MAX(next_change#) FROM v$archived_log WHERE archived='YES' AND "
+                            "resetlogs_change#=(SELECT resetlogs_change# FROM v$database);").stdout.strip()
+                        assert upper.isdecimal() and durable.isdecimal()
+                        raw=mine_archive(sql,anchor['archiveStartScn'],upper,f"""
+                            SET LONG 32767 LONGCHUNKSIZE 32767
+                            SELECT JSON_OBJECT('eventScn' VALUE TO_CHAR(scn),'recordSetId' VALUE TRIM(rs_id),
+                                'statementSequence' VALUE TO_CHAR(ssn),'info' VALUE info,'status' VALUE status,
+                                'continues' VALUE csf,'rollback' VALUE rollback,'pdbUid' VALUE TO_CHAR(src_con_uid),
+                                'pdbGuid' VALUE RAWTOHEX(src_con_guid),
+                                'redoHex' VALUE RAWTOHEX(UTL_RAW.CAST_TO_RAW(sql_redo)) NULL ON NULL RETURNING CLOB)
+                            FROM v$logmnr_contents WHERE operation='DDL' AND src_con_name='FREEPDB1' AND scn>{durable}
+                            ORDER BY commit_scn,RAWTOHEX(xid),scn,rs_id,ssn;
+                        """).stdout
+                        rows=[json.loads(line) for line in raw.splitlines() if line.lstrip().startswith('{')]
+                        (output/'oracle-ddl-blocked-archive.json').write_text(
+                            json.dumps({'report':evidence,'rows':rows},indent=2)+'\n')
+                        assert evidence.get('state')=='OBSERVED',evidence
+                        matches=[row for row in rows if all(row.get(key)==event.get(key)
+                                 for key in ('eventScn','recordSetId','statementSequence'))]
+                        item,=matches
+                        assert item['status']==item['continues']==item['rollback']==0
+                        kinds={'USER DDL':'USER_DDL','USER DDL (PlSql=0 RecDep=0)':'USER_DDL',
+                               'INTERNAL DDL':'INTERNAL_DDL'}
+                        assert kinds[item['info']]==event['kind']
+                        assert hashlib.sha256(bytes.fromhex(item['redoHex'])).hexdigest()==event['decodedSqlSha256']
+                        assert event['checkpointSha256']==first['checkpointHash']
+                        observed('The blocked failure fingerprint matches the exact archived DDL row')
+
                     sql('ALTER SESSION SET CONTAINER=FREEPDB1;\n'
                         'ALTER TABLE rivo_app.rivo_orders ADD EXTRA_NOTE VARCHAR2(30 BYTE);')
+                    if options.ddl_fingerprint:
+                        sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                            INSERT INTO rivo_app.rivo_orders (id,note,extra_note) VALUES
+                                (84,'later-load','later-unapplied');
+                            COMMIT;""")
+                        rotate()
                     later=required(lambda:report('CHANGES_VISIBLE',['EXTRA','EXTRA_NOTE']),
                                    'Oracle schema review sees a later DDL',45)
                     later_table,=later['schemaDrift']['tables']
@@ -1374,10 +1413,14 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     for lookup in (later,unavailable):
                         assert lookup['checkpointHash']==first['checkpointHash']
                         assert lookup['errorGeneration']==first['errorGeneration']
+                        if options.ddl_fingerprint:
+                            assert lookup['blockedArchiveEvent']==first['blockedArchiveEvent']
                     assert progress()['sourcePosition']==review_start['sourcePosition'] and ddl_cut()==original_cut
                     (output/'oracle-ddl-capture-review.json').write_text(
                         json.dumps({'first':first,'later':later,'unavailable':unavailable},indent=2)+'\n')
                     observed('An unsupported current Oracle shape reports its cause without moving the durable source and target cuts')
+                    if options.ddl_fingerprint:
+                        observed('Later archived Oracle DDL and DML leave the recorded fault fingerprint unchanged')
                 if options.date_values:
                     start=sql('SELECT current_scn FROM v$database;').stdout.strip()
                     sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
@@ -1439,6 +1482,8 @@ def main():
                         help='Verify Oracle character snapshots and recovery through two PostgreSQL subscriptions')
     parser.add_argument('--ddl-review', action='store_true',
                         help='Verify the current PDB schema comparison at a preserved archived DDL fault')
+    parser.add_argument('--ddl-fingerprint', action='store_true',
+                        help='Match the original fault fingerprint to its archive record before later DDL and DML')
     parser.add_argument('--savepoint-evidence', action='store_true',
                         help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
     parser.add_argument('--savepoint-pipeline', action='store_true',
@@ -1471,6 +1516,8 @@ def main():
         parser.error('--character-pipeline uses its own archive transactions and target restart')
     if options.ddl_review and (not options.pipeline or options.character_pipeline or options.savepoint_pipeline):
         parser.error('--ddl-review requires --pipeline with the normal Oracle DDL fault scenario')
+    if options.ddl_fingerprint and not options.ddl_review:
+        parser.error('--ddl-fingerprint requires --ddl-review')
     if options.savepoint_evidence and not options.logminer:
         parser.error('--savepoint-evidence requires --logminer')
     if options.savepoint_pipeline and not options.pipeline:
@@ -1490,6 +1537,7 @@ def main():
               'characterEvidence':options.character_evidence,
               'characterPipeline':options.character_pipeline,
               'ddlReview':options.ddl_review,
+              'ddlFingerprint':options.ddl_fingerprint,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}

@@ -13884,5 +13884,42 @@
     },
     "scope": "Synthetic document assembly on a separate output. Both exact original Temurin 21 input JARs preserve their bytes. The temporary candidates start and preserve recognized dependency attributions. Release rights and bundled-driver review are independent.",
     "reproduce": "python3 tests/prepare-release-documents-test.py"
+  },
+  "oracleBlockedArchiveDdlFingerprint": {
+    "status": "PASS",
+    "artifactSha256": "5663cc1b47783f7dd05f8a4335f4684cdeeb65a33be0d06343004140f3e90a7d",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "sourceVersion": "23.26.4.0.0",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase",
+      "Oracle capture review reports the saved schema against the current PDB without changing either cut",
+      "The blocked failure fingerprint matches the exact archived DDL row",
+      "A later PDB DDL updates the advisory live digest while preserving the recorded schema hash",
+      "An unsupported current Oracle shape reports its cause without moving the durable source and target cuts",
+      "Later archived Oracle DDL and DML leave the recorded fault fingerprint unchanged"
+    ],
+    "cleanupExitCode": 0,
+    "nativeChecksPassed": 18,
+    "focusedJavaTestsPassed": 38,
+    "domTestsPassed": 165,
+    "manifestSha256": "d3de3d692df65199001eb0c83a9bd36d3e48ff0eab0a8d23cefeab4a4f8bd2e7",
+    "firstFailureManifestSha256": "551eadfdc4cf232d96b9cad2bdef2468b35ed3e2b3c7b510ef3aa42083423a5e",
+    "firstAttempt": "The first artifact accepted only the abbreviated LogMiner INFO form. Oracle 26ai actually reported USER DDL (PlSql=0 RecDep=0). The corrected package accepts the exact observed top-level form.",
+    "scope": "One closed top-level Oracle PDB DDL is fingerprinted from its failing LogMiner scan. Exact archived redo hash, record set, SCN and logical statement sequence match. Later DDL and DML preserve the frozen error generation, checkpoint, target receipts and snapshot. Approval and continued apply require separate verification.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --logminer --pipeline --ddl-review --ddl-fingerprint --output target/oracle-ddl-fingerprint"
   }
 }

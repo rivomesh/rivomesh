@@ -139,6 +139,10 @@ public final class CaptureRecoveryReview {
                 }
             }
             Map<String,Object> nativeEvidence=new LinkedHashMap<>();
+            if("ORACLE".equals(config.effectiveSourceType())&&"DDL".equals(phase)
+                    &&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(before.get("errorCode")))
+                nativeEvidence.put("blockedArchiveEvent",journal.oracleDdlEvidence(
+                        ((Number)before.get("errorGeneration")).longValue(),checkpoint));
             ByteArrayOutputStream retained=archiveDirectory==null?null:new ByteArrayOutputStream();
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":
                     probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence,verifyContents,retained,request==null?null:request.boundaryHash);

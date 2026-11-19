@@ -149,7 +149,8 @@ public final class PipelineEngine implements AutoCloseable {
                 boolean capacity=hasCapacityCause(failure);
                 Phase failedPhase=capacity?Phase.JOURNAL_STORAGE:PipelineFailure.phase(failure,phase);
                 if(!stopped&&!Sql.retryable(failure)){
-                    try{journal.failPipeline(lease,capacity?"JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN":sourceErrorCode(failure),failedPhase);}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
+                    try{journal.failPipeline(lease,capacity?"JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN":sourceErrorCode(failure),
+                            failedPhase,OracleArchiveRead.failedDdl(failure));}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
                 }
                 throw new PipelineFailure(failedPhase,failure);
             }finally{scheduler.shutdown();scheduler.awaitTermination(5,TimeUnit.SECONDS);journal.release(lease);}

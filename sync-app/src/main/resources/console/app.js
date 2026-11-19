@@ -291,7 +291,9 @@ Object.assign(messages.zh,{
  schemaDriftNew:'新增表',schemaDriftMissing:'当前目录缺少',schemaDriftChanged:'结构变化',
  schemaDriftAdded:'新增列',schemaDriftRemoved:'移除列',schemaDriftModified:'修改列',
  schemaDriftIdentity:'行身份键已变化',schemaDriftOrder:'已有列的相对顺序已变化',schemaDriftIndexes:'源目录索引定义已变化',schemaDriftSame:'当前目录未见结构差异。',
- schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。'
+ schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。',
+ oracleArchiveEvent:'Oracle 归档故障指纹',oracleArchiveEventUnavailable:'当前无可核对的原始故障指纹。',
+ oracleArchiveWindow:'归档区间',oracleDecodedSqlDigest:'SQL 文本摘要'
 });
 Object.assign(messages.en,{
  schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',oracleSchemaDriftTitle:'Oracle PDB schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
@@ -299,7 +301,9 @@ Object.assign(messages.en,{
  schemaDriftNew:'New table',schemaDriftMissing:'Missing from current catalog',schemaDriftChanged:'Changed definition',
  schemaDriftAdded:'Added columns',schemaDriftRemoved:'Removed columns',schemaDriftModified:'Modified columns',
  schemaDriftIdentity:'Row identity changed',schemaDriftOrder:'Existing column order changed',schemaDriftIndexes:'Source index definitions changed',schemaDriftSame:'The current catalog has no visible structural differences.',
- schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.'
+ schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.',
+ oracleArchiveEvent:'Blocked Oracle archive event',oracleArchiveEventUnavailable:'The original fault fingerprint is unavailable.',
+ oracleArchiveWindow:'Archive interval',oracleDecodedSqlDigest:'SQL text digest'
 });
 function showSourceSchemaDrift(content,review){
  const titles={CURRENT_MYSQL_CATALOG_VS_JOURNAL:'schemaDriftTitle',
@@ -333,6 +337,21 @@ function showSourceSchemaDrift(content,review){
  }
  content.append(section);
 }
+function showOracleArchiveEvent(content,review){
+ if(!review)return;
+ const section=text('section','','callout');
+ section.append(text('h3',t('oracleArchiveEvent')));
+ if(review.state==='OBSERVED'&&review.event){
+  const event=review.event;
+  section.append(text('p',`SCN ${event.eventScn} · ${event.kind} · ${event.recordSetId} / ${event.statementSequence}`),
+   text('p',t('oracleArchiveWindow')+` · [${event.archiveStartScn}, ${event.archiveEndScnExclusive})`),
+   text('code',review.fingerprint),
+   text('p',t('oracleDecodedSqlDigest')+' · '+event.decodedSqlSha256));
+ }else{
+  section.append(text('p',t('oracleArchiveEventUnavailable')),text('code',review.code||''));
+ }
+ content.append(section);
+}
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -349,6 +368,7 @@ async function openCaptureRecovery(task){
    text('p',t('sourceAdmission')+' · '+explain(report.sourceAdmission)),
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
   showSourceSchemaDrift(content,report.schemaDrift);
+  showOracleArchiveEvent(content,report.blockedArchiveEvent);
   const boundary=report.nextTransactionHeaders;
   if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
    const evidence=text('section','','callout');

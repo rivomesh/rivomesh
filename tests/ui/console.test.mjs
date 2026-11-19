@@ -555,7 +555,12 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
  ui.w.fetch=async(path,options)=>{
   if(path!=='/api/tasks/ddl-review/capture-recovery')return fallback(path,options);
   ui.calls.push({path,...options});
-  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],
+  const blockedArchiveEvent=product==='Oracle PDB'?{
+   state:'OBSERVED',fingerprint:'a'.repeat(64),
+   event:{eventScn:'110',archiveStartScn:'80',archiveEndScnExclusive:'120',recordSetId:'0x000005.00000010.0010',
+    statementSequence:'0',kind:'USER_DDL',decodedSqlSha256:'b'.repeat(64)}
+  }:undefined;
+  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],blockedArchiveEvent,
    actions:['REPAIR_CAPTURE_CAUSE'],schemaDrift:{scope,state:'CHANGES_VISIBLE',
     changedTables:1,detailsLimited:false,tables:[{database:'sales',table:'orders',change:'TABLE_CHANGED',identityChanged:true,
      columnOrderChanged:true,indexesChanged:true,columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
@@ -573,6 +578,12 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
   assert.match(dialog.textContent,/行身份键已变化/);
   assert.match(dialog.textContent,/已有列的相对顺序已变化/);
   assert.match(dialog.textContent,/源目录索引定义已变化/);
+  if(product==='Oracle PDB'){
+   assert.match(dialog.textContent,/Oracle 归档故障指纹/);
+   assert.match(dialog.textContent,/SCN 110/);
+   assert.match(dialog.textContent,/\[80, 120\)/);
+   assert.match(dialog.textContent,new RegExp('a'.repeat(64)));
+  }
   assert.equal(dialog.querySelector('img'),null);
   assert.equal(dialog.querySelectorAll('button').length,1);
   assert.equal(ui.calls.find(call=>call.path.endsWith('/capture-recovery')).method,undefined);
