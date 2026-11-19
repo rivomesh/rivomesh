@@ -35,6 +35,15 @@ public final class ReplicatedRedisAcceptance {
     public static void main(String[] args) throws Exception {
         String phase = args[0];
         var target = target();
+        if ("connection-refused".equals(phase)) {
+            try {
+                MessagePublishers.check(target);
+                throw new AssertionError("Redis accepted the invalid connection");
+            } catch (SyncFailure rejected) {
+                System.out.println(Codec.encode(Map.of("retryCode", rejected.code)));
+            }
+            return;
+        }
         if ("replica-refused".equals(phase)) {
             try {
                 MessagePublishers.check(target);
@@ -76,11 +85,13 @@ public final class ReplicatedRedisAcceptance {
         var target = new PipelineConfig.Target();
         target.id = TARGET;
         target.product = TargetProduct.REDIS_STREAMS;
-        target.url = "redis://redis-rw:6379/2";
+        target.url = System.getenv().getOrDefault("RIVOMESH_TEST_REDIS_URL", "redis://redis-rw:6379/2");
+        target.username = System.getenv("RIVOMESH_TEST_REDIS_USER");
+        target.password = System.getenv("RIVOMESH_TEST_REDIS_PASSWORD");
         target.mappings.put("sales", "orders");
         target.messaging = new PipelineConfig.Messaging();
         target.messaging.stream = "rivomesh-events";
-        target.messaging.replicas = 2;
+        target.messaging.replicas = Integer.parseInt(System.getenv().getOrDefault("RIVOMESH_TEST_REDIS_REPLICAS", "2"));
         target.messaging.requestTimeoutMillis = 1800;
         target.messaging.connectTimeoutMillis = 2000;
         return target;
@@ -127,7 +138,7 @@ public final class ReplicatedRedisAcceptance {
                                                 PipelineConfig.Target target) throws Exception {
         int sequence = switch (phase) {
             case "initial" -> 1;
-            case "no-replica", "restored" -> 2;
+            case "no-replica", "restored", "after-cold-restart" -> 2;
             default -> throw new IllegalArgumentException("Unknown Redis fixture phase");
         };
         Map<String, Object> result = new LinkedHashMap<>();

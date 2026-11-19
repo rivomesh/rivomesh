@@ -13777,5 +13777,43 @@
     "integratedChromeChecksPassed": 14,
     "scope": "Planned freeze of a healthy, completely drained original Agent with no private source, failure or report files. Exact candidate-private receipt payload survives loss of the transfer ZIP. The original writer cannot restart while frozen, including after process loss. Same-directory cancellation remains stopped and preserves both SQL cuts. Permanent-loss ownership transfer requires distinct acceptance.",
     "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-closed-only-inventory --handoff-freeze-original --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-durable-freeze"
+  },
+  "redis8PrivateCaAofRestart": {
+    "status": "PASS",
+    "artifactSha256": "320f0a6d36594b64f383464ea058e7af995e49bf1a760c4d88a49e5376913913",
+    "sourceSha256": "0f4ab795d52ed6033cb052c74b53ccaf4dca4f33f91c64cccff4f6f4c013f74e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "redisVersion": "Redis server v=8.0.2 sha=00000000:1 malloc=libc bits=64 build=cae79a57bde56b23",
+    "checks": [
+      "Private CA trust, certificate hostname and ACL password failures create no native keys",
+      "Authenticated restricted publisher writes a native snapshot and CDC to Redis DB 2 with AOF",
+      "Cold AOF restart preserves native stream ids and original snapshot while JDBC ACK reaches 2"
+    ],
+    "caSha256": "eb43e4b90fb1e7239484184ab9c0fd80b7d4a1f4580064cb75bbc3026a684772",
+    "rejections": {
+      "untrustedCa": {
+        "retryCode": "REDIS_CONNECTION_LOST"
+      },
+      "ipWithoutCertificateSan": {
+        "retryCode": "REDIS_CONNECTION_LOST"
+      },
+      "badAclPassword": {
+        "retryCode": "REDIS_COMMAND_REJECTED"
+      }
+    },
+    "stoppedPublisher": {
+      "retryCode": "REDIS_CONNECTION_LOST"
+    },
+    "unchangedSnapshotId": "c0d5aa43-5d07-423f-8d50-b1c0183d96cb",
+    "nativeEntries": [
+      7,
+      10
+    ],
+    "fixtureProcessGone": true,
+    "manifestSha256": "ce6b9117f603dd22380258530fe65f0b1a999e42474689e5061d90d30bf689c9",
+    "nativeChecksPassed": 3,
+    "fixtureSha256": "4ed5ea4140343ad170d30c79664273b7cc2ab435a8e09429b14c8f938197b729",
+    "scope": "One loopback Redis 8.0.2 process with private CA TLS and a password-protected restricted ACL in database 2. AOF restart retains native stream IDs, ownership and snapshot through a publisher JVM restart. TLS replication and client certificates require separate acceptance.",
+    "reproduce": "python3 tests/redis-tls-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --java-home \"$JAVA_HOME\" --output target/redis-tls-proof"
   }
 }

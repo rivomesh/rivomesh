@@ -142,7 +142,7 @@ NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`�
 
 ### Redis Streams
 
-首个 Redis 档案支持 **Redis 7.2 及以上的直连独立主节点**。使用 `redis://host:6379/0` 或 `rediss://host:6379/0`、数据库编号、独立 ACL 用户名/密码和 `messaging.stream`。本档案尚不支持额外入口、Sentinel、Cluster 路由或代理故障切换。`rediss` 开启主机名验证并使用 JVM 信任配置，真实 TLS 验收仍待完成。
+首个 Redis 档案支持 **Redis 7.2 及以上的直连独立主节点**。使用 `redis://host:6379/0` 或 `rediss://host:6379/0`、数据库编号、独立 ACL 用户名/密码和 `messaging.stream`。本档案尚不支持额外入口、Sentinel、Cluster 路由或代理故障切换。`rediss` 使用 JVM 信任配置校验服务端主机名。
 
 全部逻辑通道合并到一个物理 Stream。每条记录含 `body`、`rivomesh_event_id`、`rivomesh_channel`、可选 `rivomesh_key` 及传输 header。Redis 自动生成的 entry ID 只是传输位置，不是事件身份或 MySQL 顺序；消费者仍需按包络持久暂存和去重。保留消费者组 `_rivomesh_stream_marker_v1` 用于创建空 Stream，避免塞入伪业务记录；它不是消费者业务断点。
 
@@ -156,7 +156,9 @@ NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`�
 
 先持久暂存原事件和流条目 ID，再执行 `XACK`。消费确认也要落到 AOF 副本时，在 `XACK` 后用同一连接调用 `WAITAOF`，核对本地及副本数。使用 `XAUTOCLAIM` 认领失联消费者的待确认条目，再读取新记录。空闲阈值应考虑正常消费者完成处理所需的时间。[Redis Streams 复制](https://redis.io/docs/latest/develop/data-types/streams/) · [XAUTOCLAIM](https://redis.io/docs/latest/commands/xautoclaim/)
 
-[Redis 实库夹具](../../tests/redis-promotion-run.py) 使用 Redis 7.4.2、Temurin 21 和写入发布包 JDBC 日志的确定性源事务，验收运维提升、副本 fsync 暂缺及恢复、原字节重投、消费者 ACK 和待确认条目恢复，以及使用提升节点原 AOF 卷冷重启。Sentinel、Redis Cluster、TLS 和已确认存储本身丢失需分别验收。
+[Redis 实库夹具](../../tests/redis-promotion-run.py) 使用 Redis 7.4.2、Temurin 21 和写入发布包 JDBC 日志的确定性源事务，验收运维提升、副本 fsync 暂缺及恢复、原字节重投、消费者 ACK 和待确认条目恢复，以及使用提升节点原 AOF 卷冷重启。Sentinel、Redis Cluster、跨节点 TLS 复制和已确认存储本身丢失需分别验收。
+
+Redis 8.0.2 私有 CA 档案在 Temurin 21 验证主机名、限定 ACL 账号和 DB 2。未受信的 CA、证书未覆盖的主机名和错误账号密码均未创建键。AOF 冷重启保留原 Stream ID 和快照，发布器续传到 ACK 2。使用本机 Redis 7.2 及以上和 OpenSSL 执行 `python3 tests/redis-tls-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --java-home "$JAVA_HOME" --output target/redis-tls-proof`。 [验收记录](../verification/baseline.json)
 
 六项实库检查中，第二份 fsync 恢复前发布回执停在序列 1，恢复后用原事务推进到序列 2。11 个流条目对应 10 个事件 ID，重复事件的字节一致。此前四条消费确认继续有效，恢复消费者认领了原有三条待确认记录。提升后的主库重启后，原流条目 ID、消费组位点和空待确认列表均保留。
 
