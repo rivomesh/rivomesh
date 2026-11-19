@@ -145,21 +145,48 @@ public final class JdbcSink implements SinkAdapter {
                                Map<String,Journal.SnapshotState> expected)throws Exception{
         try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,30000)){
             c.setAutoCommit(false);boundRecoveryLocks(c);Checkpoint checkpoint=locked(c,null);
-            boolean validReceipt=sequence==0?checkpoint.transactionId==null&&checkpoint.transactionHash==null:
-                    checkpoint.transactionId!=null&&io.github.rivomesh.recovery.FailureEvidence.hash(checkpoint.transactionHash);
-            if(checkpoint.epoch<1||checkpoint.epoch>maximumEpoch||sequence!=checkpoint.sequence||!validReceipt)
-                throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_CHECKPOINT_CHANGED");
-            for(TableSchema table:tables){
-                SnapshotCheckpoint actual=snapshotCheckpoint(c,table);
-                Journal.SnapshotState original=expected.get(table.id);
-                if(!"COMPLETE".equals(actual.state)||!original.snapshotId.equals(actual.snapshotId)
-                        ||original.nextPart!=actual.nextPart||original.rows!=actual.rows)
-                    throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_SNAPSHOT_CHANGED");
-                validateShape(c,table);
-            }
+            requireWriterCut(c,checkpoint,maximumEpoch,sequence,tables,expected);
             guard.verify();c.rollback();return checkpoint;
         }
     }
+
+    private void requireWriterCut(Connection c,Checkpoint checkpoint,long maximumEpoch,long sequence,
+                                  List<TableSchema> tables,Map<String,Journal.SnapshotState> expected)throws Exception{
+        boolean validReceipt=sequence==0?checkpoint.transactionId==null&&checkpoint.transactionHash==null:
+                checkpoint.transactionId!=null&&io.github.rivomesh.recovery.FailureEvidence.hash(checkpoint.transactionHash);
+        if(checkpoint.epoch<1||checkpoint.epoch>maximumEpoch||sequence!=checkpoint.sequence||!validReceipt)
+            throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_CHECKPOINT_CHANGED");
+        for(TableSchema table:tables){
+            SnapshotCheckpoint actual=snapshotCheckpoint(c,table);
+            Journal.SnapshotState original=expected.get(table.id);
+            if(!"COMPLETE".equals(actual.state)||!original.snapshotId.equals(actual.snapshotId)
+                    ||original.nextPart!=actual.nextPart||original.rows!=actual.rows)
+                throw new IllegalStateException("WRITER_ASSIGNMENT_TARGET_SNAPSHOT_CHANGED");
+            validateShape(c,table);
+        }
+    }
+
+    /** The exact business checkpoint and snapshot must still be visible under the target writer lock. */
+    Checkpoint fenceWriterCut(long parkedEpoch,Checkpoint prior,List<TableSchema> tables,
+                              Map<String,Journal.SnapshotState> snapshots,JournalWriterAssignment.FenceAuthorization authorize)throws Exception{
+        if(prior.epoch<1||parkedEpoch<=prior.epoch||parkedEpoch-prior.epoch!=1)
+            throw new IllegalArgumentException("HANDOFF_TARGET_EPOCH_INVALID");
+        try(Connection c=connect();RepairConnectionGuard guard=new RepairConnectionGuard(c,5000)){
+            c.setAutoCommit(false);boundRecoveryLocks(c);
+            Checkpoint actual=locked(c,null);
+            requireWriterCut(c,actual,parkedEpoch,prior.sequence,tables,snapshots);
+            long observed=actual.epoch;
+            if(observed!=prior.epoch&&observed!=parkedEpoch)throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
+            actual.epoch=prior.epoch;
+            if(!Codec.encode(actual).equals(Codec.encode(prior)))throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
+            guard.verify();authorize.verify();
+            if(observed!=parkedEpoch&&sql(c,"UPDATE "+metadata("job")+" SET epoch=? WHERE pipeline_id=? AND subscription_id=? AND epoch=?",
+                    parkedEpoch,settings.pipelineId,settings.id,observed)!=1)
+                throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
+            guard.verify();c.commit();actual.epoch=parkedEpoch;return actual;
+        }
+    }
+
     interface CheckpointAction<T>{T run(Checkpoint checkpoint)throws Exception;}
     /** Recovery caller must already hold a PAUSED pipeline's journal job/subscription locks. */
     <T>T withRecoveryCheckpoint(long epoch,Checkpoint expected,CheckpointAction<T> action)throws Exception{

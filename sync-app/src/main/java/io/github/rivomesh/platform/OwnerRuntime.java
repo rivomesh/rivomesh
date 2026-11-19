@@ -23,6 +23,7 @@ final class OwnerRuntime implements AutoCloseable {
     private final ScheduledExecutorService commandLoop,queryLoop;
     private final ThreadPoolExecutor readers;
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<String,Long> fenceRetries=new ConcurrentHashMap<>();
     private Set<String> retiredTasks=Set.of();
     private String recipientCursor="";
     private long nextRecipientPoll;
@@ -71,6 +72,34 @@ final class OwnerRuntime implements AutoCloseable {
             return null;
         });
     }
+    private void fenceRecipientTargets(String task,String preparation,ControlStore.Lease lease)throws Exception{
+        ManagedRecipientImport.Grant expected=authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            var verified=authority.verifiedEvidenceRecipient(c,task,preparation,lease,directory);
+            requireFenceAuthor(accounts,verified.committed());
+            return verified;
+        });
+        local.installAdoptedHandoffEvidence(expected);
+        var config=local.parkedFenceConfig(expected);
+        authority.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            var current=authority.verifiedEvidenceRecipient(c,task,preparation,lease,directory);
+            if(!expected.equals(current))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+            requireFenceAuthor(accounts,current.committed());
+            authority.fenceParkedTargets(c,current,config,()->agents.require(c,lease,directory));
+            return null;
+        });
+    }
+    private static void requireFenceAuthor(AccountDirectory.State accounts,HandoffPreparations.Plan plan){
+        var request=plan.targetFence();
+        if(!"FENCE_PENDING".equals(plan.phase())||request==null)throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        AccountDirectory.User author=accounts.users.get(request.actor());
+        if(!Objects.equals(accounts.revision,request.actorRevision())||author==null||!author.enabled||author.deleted)
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        var actor=new AccessControl.Principal(author.id,author.role,author.taskIds,accounts.revision,author.nodeIds);
+        if(!actor.administers()||!actor.task(plan.task())||!actor.node(plan.evidence().candidate().node())
+                ||!actor.node(plan.evidence().original().node()))throw new SecurityException("FORBIDDEN");
+    }
     private void verifyDefinitions()throws Exception{
         Map<String,String> documents=local.ownerDocuments();
         Set<String> retired=authority.service((c,accounts)->{
@@ -117,15 +146,25 @@ final class OwnerRuntime implements AutoCloseable {
         recipientCursor=pending.size()<10?"":pending.getLast().preparation();
         for(HandoffPreparations.PendingRecipient task:pending){
             String id="handoff:"+task.preparation();
+            boolean fencing="FENCE_PENDING".equals(task.phase());
+            Long retryAt=fenceRetries.get(id);
+            if(fencing&&retryAt!=null&&System.nanoTime()-retryAt<0)continue;
             if(!queued.add(id))continue;
             try{readers.execute(()->{
                 try{
                     ControlStore.Lease current=leases.get();
-                    if("PROJECTED".equals(task.phase()))adoptRecipientEvidence(task.task(),task.preparation(),current);
+                    if(fencing){fenceRecipientTargets(task.task(),task.preparation(),current);fenceRetries.remove(id);}
+                    else if("PROJECTED".equals(task.phase()))adoptRecipientEvidence(task.task(),task.preparation(),current);
                     else importCommittedWriter(task.task(),current);
                 }
                 catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
-                catch(Exception deferred){/* The committed receipt stays pending and all new commands remain blocked. */}
+                catch(Exception deferred){
+                    if(fencing){
+                        fenceRetries.put(id,System.nanoTime()+TimeUnit.SECONDS.toNanos(6));
+                        System.err.println("HANDOFF_TARGET_FENCE " + code(deferred));
+                    }
+                    // The committed receipt stays pending and new generic commands remain blocked.
+                }
                 finally{queued.remove(id);}
             });}catch(RejectedExecutionException full){queued.remove(id);}
         }
@@ -148,6 +187,6 @@ final class OwnerRuntime implements AutoCloseable {
     public void close(){
         if(!closed.compareAndSet(false,true))return;commandLoop.shutdownNow();queryLoop.shutdownNow();readers.shutdownNow();
         for(ExecutorService executor:Arrays.asList(commandLoop,queryLoop,readers))try{executor.awaitTermination(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
-        queued.clear();
+        queued.clear();fenceRetries.clear();
     }
 }

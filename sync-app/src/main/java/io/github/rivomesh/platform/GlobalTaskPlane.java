@@ -44,6 +44,9 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case HANDOFF_STAGE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return queries.await(queries.submitHandoffStaging(request,actor),actor);
+            case HANDOFF_TARGET_FENCE:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return handoff.requestTargetFence(request,actor);
             case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return switch(request.kind){
@@ -89,7 +92,7 @@ final class GlobalTaskPlane implements TaskControlPlane {
         Map<String,Object> retained=commands.recoveryReceipt(request.taskId,request.reference,actor);
         boolean adopted=tasks.transaction(request.taskId,actor,(c,task,current)->{
             HandoffPreparations.Plan plan=tasks.preparations().latest(c,task.id,tasks.database().now(c));
-            return plan!=null&&"EVIDENCE_ADOPTED".equals(plan.phase())
+            return HandoffPreparations.evidenceInstalled(plan)
                     &&task.revision.equals(plan.writerCommit().revision())
                     &&task.owner.equals(plan.evidence().candidate().node())&&task.directory.equals(plan.evidence().candidate().directory())
                     &&Objects.equals(retained.get("ownerNodeId"),plan.evidence().original().node());

@@ -13,7 +13,7 @@
     "Removed 50 additional generated intermediate files totaling 716,335,497 logical bytes."
   ],
   "inProgress": [
-    "CP-04 administrator-approved SQL target fencing while the journal remains parked. Exact Java 21 candidate passed 59 focused tests, with one conditional test skipped. Native status when recorded: RUNNING, 21 passed.",
+    "CP-04 native target fences are implemented and verified for the bounded same-store SQL profile. Explicit Worker admission is next.",
     "Worker admission after native fencing still needs a durable grant and scheduler recovery acceptance.",
     "RC-10 Kafka actual notice dispatch still needs broad managed resource proofs and broker-side authorization.",
     "SO-07 Oracle virtual source values still need integration and restart acceptance."
@@ -44,14 +44,15 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish native parked SQL target fence and same-request resume.",
     "Bind explicit Worker admission to the current candidate and all native SQL fence receipts.",
     "Verify the restarted Worker reuses the original journal, snapshot and destination receipts."
   ],
   "currentCandidateArtifact": "4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a",
-  "currentCandidateScope": "CP-04 administrator-approved SQL target fencing while the journal remains parked. Exact Java 21 candidate passed 59 focused tests, with one conditional test skipped. Native status when recorded: RUNNING, 21 passed.",
+  "currentCandidateScope": "Exact approved parked target fencing package. 59 Java, 151 DOM and 22 native checks.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [],
+  "newSinceLastReport": [
+    "CP-04 administrator-approved target epoch fences passed 22 native checks. Same request across both Controllers, candidate offline approval, restart, first target already fenced, and preserved original cut. 59 Java and 151 DOM passed."
+  ],
   "lastScheduledReportAt": "2026-11-19T09:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",

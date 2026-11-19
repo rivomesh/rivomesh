@@ -150,6 +150,9 @@ window.RivomeshHandoff=(()=>{
   handoffCommittedHelp:'任务归属已变更。候选 Agent 正在等待安装已审阅的任务配置。',
   handoffProjectedHelp:'候选 Agent 已保存停止状态的任务配置。接收报告和回执后会更新交接状态。',
   handoffEvidenceAdoptedHelp:'候选 Agent 已接收经核验的报告和已办结回执。交接回执记录的任务状态为停止。',
+  handoffFencePending:'等待目标隔离',handoffTargetsFenced:'目标已隔离',
+  handoffFencePendingHelp:'候选 Agent 正在核验并提高目标端纪元。Worker 保持停止。',
+  handoffTargetsFencedHelp:'目标端已拒绝旧纪元写入。候选 Worker 保持停止。',handoffFencedCount:'已隔离的目标数',
   handoffCommittedRevision:'已提交任务修订',handoffCommittedConfig:'已提交配置版本',handoffJournalEpoch:'已提交日志代次',
   handoffFormerOwner:'原 Agent',handoffCurrentOwner:'当前归属 Agent',handoffTransferId:'交接准备 ID',handoffRefreshProgress:'刷新交接状态'
  },{
@@ -158,6 +161,9 @@ window.RivomeshHandoff=(()=>{
   handoffCommittedHelp:'Task ownership has changed. The candidate Agent is waiting to install the reviewed configuration.',
   handoffProjectedHelp:'The candidate Agent saved the task configuration in a stopped state. Handoff status will update when it receives the reports and receipts.',
   handoffEvidenceAdoptedHelp:'The candidate Agent received the verified reports and closed receipts. The handoff receipt records the task as stopped.',
+  handoffFencePending:'Target fencing pending',handoffTargetsFenced:'Targets fenced',
+  handoffFencePendingHelp:'The candidate is verifying and advancing the target epochs. The Worker remains stopped.',
+  handoffTargetsFencedHelp:'The targets reject writes from the previous epoch. The candidate Worker remains stopped.',handoffFencedCount:'Fenced targets',
   handoffCommittedRevision:'Committed task revision',handoffCommittedConfig:'Committed configuration version',handoffJournalEpoch:'Committed journal epoch',
   handoffFormerOwner:'Original Agent',handoffCurrentOwner:'Current owner Agent',handoffTransferId:'Preparation ID',handoffRefreshProgress:'Refresh handoff status'
  });
@@ -168,7 +174,7 @@ window.RivomeshHandoff=(()=>{
  const sha256=/^[0-9a-f]{64}$/;
  const stateLabels={BLOCKED:'handoffStateBlocked',EVIDENCE_REQUIRED:'handoffStateEvidence',STALE:'handoffStateStale'};
  const preparationLabels={PREPARED:'handoffPrepared',RELEASED:'handoffReleased',EXPIRED:'handoffExpired'};
- const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted'};
+ const transferLabels={COMMITTED:'handoffCommitted',PROJECTED:'handoffProjected',EVIDENCE_ADOPTED:'handoffEvidenceAdopted',FENCE_PENDING:'handoffFencePending',TARGETS_FENCED:'handoffTargetsFenced'};
  let view=null;
 
  function node(tag,value='',className){
@@ -230,7 +236,12 @@ window.RivomeshHandoff=(()=>{
    ||!revisionId.test(preparation.committedConfigurationVersion||'')||typeof preparation.activatedJournalEpoch!=='string'
    ||!/^[1-9][0-9]{0,18}$/.test(preparation.activatedJournalEpoch))return false;
   const evidence=preparation.adoptedEvidence;
-  return preparation.state==='EVIDENCE_ADOPTED'?evidence!=null
+  const fence=preparation.targetFence;
+  if(['FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)){
+   if(!requestPattern.test(fence?.requestId||'')||!Number.isSafeInteger(fence.destinationsFenced)
+    ||(preparation.state==='FENCE_PENDING'?fence.destinationsFenced!==0:fence.destinationsFenced<1||fence.destinationsFenced>8))return false;
+  }else if(fence!=null)return false;
+  return ['EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED'].includes(preparation.state)?evidence!=null
     &&Number.isSafeInteger(evidence.validationReports)&&evidence.validationReports>=0
     &&Number.isSafeInteger(evidence.closedReceipts)&&evidence.closedReceipts>0:evidence==null;
  }
@@ -381,9 +392,10 @@ window.RivomeshHandoff=(()=>{
    ['handoffFormerOwner',preparation.originalNodeId],['handoffCurrentOwner',preparation.candidateNodeId],
    ['handoffJournalEpoch',preparation.activatedJournalEpoch]
   ];
-  if(preparation.state==='EVIDENCE_ADOPTED')values.push(
+  if(preparation.adoptedEvidence)values.push(
    ['handoffStageReports',preparation.adoptedEvidence.validationReports],
    ['handoffStageReceipts',preparation.adoptedEvidence.closedReceipts]);
+  if(preparation.targetFence)values.push(['handoffFencedCount',preparation.targetFence.destinationsFenced]);
   for(const [label,value] of values)facts.append(node('dt',t(label)),node('dd',value));
   const details=node('details');
   details.append(node('summary',t('handoffTransferId')),node('code',preparation.id),

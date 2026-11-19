@@ -352,6 +352,21 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('handoff refreshes target fencing and preserves the parked read-only controls',async()=>{
+  let plan=completed('FENCE_PENDING',{adoptedEvidence:{validationReports:2,closedReceipts:5},
+   targetFence:{requestId:'approved-fence',destinationsFenced:0}});
+  const ui=fixture({taskState:transferredTask,readPreparation:()=>reply(plan)});
+  try{
+   await open(ui);assert.match(reservation(ui).textContent,/等待目标隔离.*已隔离的目标数0/s);assertReadOnly(ui);
+   plan={...plan,state:'TARGETS_FENCED',targetFence:{...plan.targetFence,destinationsFenced:2}};
+   button(ui,'reload').click();await flush();
+   assert.match(reservation(ui).textContent,/目标已隔离.*保持停止.*校验报告2.*已隔离的目标数2/s);assertReadOnly(ui);
+   plan={...plan,targetFence:{...plan.targetFence,destinationsFenced:9}};
+   button(ui,'reload').click();await flush();
+   assert.match(feedback(ui),/回执无法核验/);assert.ok(reservation(ui).hidden);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff refuses transferred status with wrong authority, adoption shape or missing original grant',async()=>{
   for(const invalid of [
    {committedRevision:revision},{committedConfigurationVersion:revision},{candidateNodeId:'offline-agent'},

@@ -14,7 +14,7 @@ import java.util.Set;
 final class HandoffCandidateAdmission {
     private static final int MAX_YAML=1024*1024,MAX_ENVELOPE=3*1024*1024;
     private static final String STOPPED="STOPPED";
-    private static final Set<String> COMMITTED_PHASES=Set.of("COMMITTED","PROJECTED","EVIDENCE_ADOPTED");
+    private static final Set<String> COMMITTED_PHASES=Set.of("COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED");
 
     @FunctionalInterface interface Validator { void validate(String successorYaml)throws Exception; }
     @FunctionalInterface interface AdmittedEvidence<T>{ T accept(ReadyConfig ready,HandoffStaging.Verified staged)throws Exception; }

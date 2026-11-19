@@ -243,6 +243,13 @@ public final class TaskService implements AutoCloseable {
         synchronized(this){requireEvidenceRecipient(grant);}
         return result;
     }
+    synchronized io.github.rivomesh.PipelineConfig parkedFenceConfig(ManagedRecipientImport.Grant grant)throws Exception{
+        requireEvidenceRecipient(grant);
+        var configured=require(grant.committed().task()).config.pipeline;
+        if(configured==null||!"FENCE_PENDING".equals(grant.committed().phase()))
+            throw new Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        return configured;
+    }
     private void requireEvidenceRecipient(ManagedRecipientImport.Grant grant)throws Exception{
         ensureOpen();
         HandoffPreparations.Plan plan=grant.committed();
@@ -251,7 +258,7 @@ public final class TaskService implements AutoCloseable {
         if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()
                 ||!candidate.node().equals(nodeId())||!grant.authority().equals(registry.globalTaskIdentity)
                 ||!candidate.directory().equals(registry.ownerDirectoryIdentity))throw new ControlStore.Fenced();
-        if(commit==null||!Set.of("PROJECTED","EVIDENCE_ADOPTED").contains(plan.phase()))
+        if(commit==null||!HandoffPreparations.evidenceEligible(plan))
             throw new Conflict("HANDOFF_RECIPIENT_PROJECTION_REQUIRED");
         Control local=registry.tasks.get(plan.task());
         Entry entry=entries.get(plan.task());

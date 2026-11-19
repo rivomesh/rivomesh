@@ -71,6 +71,35 @@ class JdbcSinkTest {
         }
     }
     @Test void atomicBusinessCheckpointRecoveryAndEpochFencing()throws Exception{contract(settings());}
+    @Test void parkedFenceRechecksTheExactSnapshotAndReceiptAndReplaysOnlyTheSameCut()throws Exception{
+        JdbcSink.Settings config=settings();
+        TableSchema table=schema(false);
+        Journal.SnapshotState snapshot=snapshot(table);
+        try(JdbcSink sink=new JdbcSink(config)){
+            sink.activate(3);sink.prepare(3,table);
+            sink.beginSnapshot(3,table,snapshot);sink.finishSnapshot(3,table,snapshot);
+            sink.apply(3,1,transaction(1,insert(table,1,"original")));
+            Map<String,Journal.SnapshotState> snapshots=Map.of(table.id,snapshot);
+            var cut=sink.verifyWriterCut(3,1,List.of(table),snapshots);
+            var changed=Codec.decode(Codec.encode(cut),SinkAdapter.Checkpoint.class);
+            changed.transactionHash=Codec.sha256("different event");
+            assertEquals("HANDOFF_TARGET_CUT_CHANGED",assertThrows(IllegalStateException.class,
+                    ()->sink.fenceWriterCut(4,changed,List.of(table),snapshots,()->{})).getMessage());
+            assertThrows(IllegalStateException.class,()->sink.fenceWriterCut(4,cut,List.of(table),
+                    Map.of(table.id,snapshot(table)),()->{}));
+            assertThrows(SecurityException.class,()->sink.fenceWriterCut(4,cut,List.of(table),snapshots,
+                    ()->{throw new SecurityException("FORBIDDEN");}));
+            assertEquals(Codec.encode(cut),Codec.encode(sink.checkpoint()));
+            var fenced=sink.fenceWriterCut(4,cut,List.of(table),snapshots,()->{});
+            assertEquals(Codec.encode(fenced),Codec.encode(sink.fenceWriterCut(4,cut,List.of(table),snapshots,()->{})));
+            assertEquals(4,fenced.epoch);
+            assertEquals(cut.sequence,fenced.sequence);
+            assertEquals(cut.transactionHash,fenced.transactionHash);
+            assertEquals("SINK_FENCED",assertThrows(IllegalStateException.class,
+                    ()->sink.apply(3,2,transaction(2,insert(table,2,"stale")))).getMessage());
+            assertEquals(1,count(config,table.name));
+        }
+    }
     @Test void keylessSnapshotPreservesMultiplicityAndRetriesWithoutDuplicates()throws Exception{
         JdbcSink.Settings settings=settings();TableSchema t=schema(true);Journal.SnapshotState snapshot=snapshot(t);
         Journal.SnapshotPart part=new Journal.SnapshotPart();part.rows=Arrays.asList(row(1,"duplicate"),row(1,"duplicate"));snapshot.nextPart=1;snapshot.rows=2;

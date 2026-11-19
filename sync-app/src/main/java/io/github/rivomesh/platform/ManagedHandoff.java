@@ -347,6 +347,24 @@ final class ManagedHandoff {
             throw concurrent;
         }
     }
+    Map<String,Object> requestTargetFence(TaskRequest supplied,AccessControl.Principal principal)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(request.kind!=TaskRequest.Kind.HANDOFF_TARGET_FENCE)throw new IllegalArgumentException("HANDOFF_TARGET_FENCE_REQUEST_INVALID");
+        return tasks.transaction(request.taskId,principal,(c,task,actor)->{
+            var plan=tasks.preparations().latest(c,task.id,db.now(c));
+            if(!HandoffPreparations.evidenceInstalled(plan)||!plan.id().equals(request.reference))
+                throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+            requirePlanGrants(actor,task,plan);
+            if(!task.revision.equals(request.revision)||!task.revision.equals(plan.writerCommit().revision())
+                    ||!task.activeConfigurationVersion.equals(plan.writerCommit().configuration())
+                    ||!task.configurationVersion.equals(task.activeConfigurationVersion)
+                    ||!task.owner.equals(plan.evidence().candidate().node())||!task.directory.equals(plan.evidence().candidate().directory()))
+                throw new TaskService.Conflict("REVISION_CHANGED");
+            var approved=tasks.preparations().bindTargetFence(c,plan,request.requestId,actor);
+            if(!approved.equals(plan))auditPreparation(c,approved,actor,request.requestId,"MANAGED_HANDOFF_TARGET_FENCE_APPROVED");
+            return HandoffPreparations.summary(approved);
+        });
+    }
     Map<String,Object> bindOrReplayExecution(TaskRequest supplied,AccessControl.Principal principal)throws Exception{
         TaskRequest request=supplied.snapshot();
         if(request.kind!=TaskRequest.Kind.HANDOFF_STAGE||request.yaml!=null)

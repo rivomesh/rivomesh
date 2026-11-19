@@ -188,6 +188,51 @@ public final class JournalWriterAssignment {
         }
     }
 
+    public record TargetFence(long epoch,String cutSha256,Map<String,String> destinations){}
+    @FunctionalInterface public interface FenceAuthorization { void verify()throws Exception; }
+
+    /** Keeps the shared journal parked while pinning its original SQL target cut. */
+    public static TargetFence fenceParkedRecipient(Connection control,PipelineConfig candidate,String previousAssignment,
+                                                    CutProof proof,SourceConnection sources,FenceAuthorization authorize)throws Exception{
+        candidate.validate();
+        JdbcJournal.Settings settings=candidate.existingJournalSettings();
+        if(!settings.managedWriter||!"EXTERNAL".equals(candidate.journal.mode)||candidate.journal.product!=TargetProduct.POSTGRESQL
+                ||!"MYSQL".equals(candidate.effectiveSourceType())||candidate.targets.size()>8
+                ||candidate.targets.stream().anyMatch(t->t.product!=TargetProduct.POSTGRESQL&&t.product!=TargetProduct.MYSQL))
+            throw new IllegalArgumentException("HANDOFF_JOURNAL_PROFILE_UNSUPPORTED");
+        long parked=proof.managedWriter().epoch();
+        if(parked<2||parked==Long.MAX_VALUE)throw new IllegalStateException("HANDOFF_TARGET_EPOCH_INVALID");
+        try(JdbcJournal journal=new JdbcJournal(settings);
+            RepairConnectionGuard deadline=new RepairConnectionGuard(control,20000)){
+            verifyRecipientControlCut(control,settings.namespace,candidate.pipelineId,previousAssignment,settings.writerAssignment,proof);
+            Map<String,Object> job=journal.assignmentLock(control);
+            if(!MANAGED_PARKED.equals(job.get("state"))||!candidate.fingerprint().equals(job.get("fingerprint")))
+                throw new IllegalStateException("HANDOFF_TARGET_FENCE_REQUIRES_PARKED");
+            if(JdbcJournal.hasTargetGaps((int)job.get("format")))JdbcSkipJournal.requireNoPending(journal,control,null);
+            long sequence=proof.managedWriter().sequence();
+            String generation=(String)job.get("generation");
+            WriterCut cut=readWriterCut(candidate,journal,control,job,generation,parked,sequence,(String)job.get("captured"),sources);
+            // A replay may observe an already fenced destination. Restore the old epoch for the signed digest.
+            for(SinkAdapter.Checkpoint target:cut.targets.values()){
+                if(target.epoch!=parked-1&&target.epoch!=parked)
+                    throw new IllegalStateException("HANDOFF_TARGET_EPOCH_PROFILE_UNSUPPORTED");
+                target.epoch=parked-1;
+            }
+            if(!proof.nativeEvidenceSha256().equals(cut.digest()))throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
+            Map<String,String> receipts=new TreeMap<>();
+            for(PipelineConfig.Target target:candidate.targets){
+                deadline.verify();authorize.verify();
+                try(JdbcSink sink=JdbcSink.existing(candidate.targetSettings(target,generation))){
+                    List<TableSchema> mapped=cut.schemas.stream().filter(sink::includes).toList();
+                    SinkAdapter.Checkpoint fenced=sink.fenceWriterCut(parked,cut.targets.get(target.id),mapped,cut.snapshots,()->{deadline.verify();authorize.verify();});
+                    receipts.put(target.id,Codec.sha256(Codec.encode(fenced)));
+                }
+            }
+            deadline.verify();authorize.verify();
+            return new TargetFence(parked,proof.nativeEvidenceSha256(),Map.copyOf(receipts));
+        }
+    }
+
     private static String checkpointDigest(String captured)throws Exception{
         return Codec.sha256(Model.JSON.writeValueAsString(Codec.decode(captured,SourcePosition.class)));
     }
@@ -315,8 +360,18 @@ public final class JournalWriterAssignment {
         return sequence;
     }
 
+    private record WriterCut(List<TableSchema> schemas,Map<String,Journal.SnapshotState> snapshots,
+                             Map<String,SinkAdapter.Checkpoint> targets){
+        String digest(){return Codec.sha256(Codec.encode(List.of(snapshots,targets)));}
+    }
+
     private static String verifyOriginalCut(PipelineConfig config,JdbcJournal j,Connection c,Map<String,Object> job,String generation,
                                             long sequence,String captured,SourceConnection sources)throws Exception{
+        return readWriterCut(config,j,c,job,generation,(long)job.get("epoch"),sequence,captured,sources).digest();
+    }
+
+    private static WriterCut readWriterCut(PipelineConfig config,JdbcJournal j,Connection c,Map<String,Object> job,String generation,
+                                           long maximumEpoch,long sequence,String captured,SourceConnection sources)throws Exception{
         Map<String,Journal.SnapshotState> snapshots=new TreeMap<>();
         List<TableSchema> schemas;
         try(SourceAdapter source=sources.open(generation)){
@@ -353,12 +408,12 @@ public final class JournalWriterAssignment {
             List<TableSchema> mapped=schemas.stream().filter(sink::includes).toList();
             // The dispatcher acknowledges every source manifest and writes only the mapped tables.
             requireSnapshotAcknowledgements(j,c,target.id,snapshots);
-            SinkAdapter.Checkpoint checkpoint=sink.verifyWriterCut((long)job.get("epoch"),sequence,mapped,snapshots);
+            SinkAdapter.Checkpoint checkpoint=sink.verifyWriterCut(maximumEpoch,sequence,mapped,snapshots);
             requireTransactionAt(j,c,sequence,checkpoint.transactionId);
             if(checkpoint.skipOperation!=null)JdbcSkipJournal.verifyCheckpoint(j,c,job,target.id,checkpoint);
             targetEvidence.put(target.id,checkpoint);
         }
-        return Codec.sha256(Codec.encode(List.of(snapshots,targetEvidence)));
+        return new WriterCut(schemas,snapshots,targetEvidence);
     }
 
     private static void requireTransactionAt(JdbcJournal j,Connection c,long sequence,String transaction)throws SQLException{

@@ -1,6 +1,7 @@
 package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
+import io.github.rivomesh.cdc.JournalWriterAssignment;
 import java.sql.*;
 import java.time.Instant;
 import java.util.*;
@@ -15,6 +16,8 @@ final class HandoffPreparations {
     record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
                             String nativeEvidenceSha256,boolean checkedInControlTransaction){}
     record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch){}
+    record TargetFenceRequest(String id,String actor,String actorRevision,
+                              JournalWriterAssignment.TargetFence result){}
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -24,7 +27,16 @@ final class HandoffPreparations {
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                 String executionRequest,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-                HandoffEvidenceAdoption.Receipt evidenceAdoption){}
+                HandoffEvidenceAdoption.Receipt evidenceAdoption,
+                @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                TargetFenceRequest targetFence){
+        Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
+             long created,long expires,String releaseId,String releasedBy,long closedAt,WriterActivation activation,
+             WriterCommit writerCommit,String executionRequest,HandoffEvidenceAdoption.Receipt evidenceAdoption){
+            this(id,task,sequence,phase,actor,actorRevision,evidence,created,expires,releaseId,releasedBy,closedAt,
+                    activation,writerCommit,executionRequest,evidenceAdoption,null);
+        }
+    }
 
     private final JdbcControlStore db;
     private final ControlCipher cipher;
@@ -61,11 +73,12 @@ final class HandoffPreparations {
                     case "PREPARED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt==0&&p.writerCommit==null;
                     case "RELEASED"->p.releaseId!=null&&p.releasedBy!=null&&p.closedAt>=p.created&&p.writerCommit==null;
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
-                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
+                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
                             &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor);
                     default->false;
                 })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
-                ||("EVIDENCE_ADOPTED".equals(p.phase)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null))
+                ||(evidenceInstalled(p)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null)
+                ||!validTargetFence(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
     }
@@ -166,7 +179,7 @@ final class HandoffPreparations {
     List<PendingRecipient> pendingRecipient(Connection c,String candidate,String directory,String after,int limit)throws Exception{
         List<PendingRecipient> pending=new ArrayList<>();
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND candidate_id=? AND phase IN ('COMMITTED','PROJECTED') AND request_id>? ORDER BY request_id LIMIT ?",
+                +" WHERE cluster_id=? AND candidate_id=? AND phase IN ('COMMITTED','PROJECTED','FENCE_PENDING') AND request_id>? ORDER BY request_id LIMIT ?",
                 cluster,candidate,after,limit);ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
@@ -191,7 +204,7 @@ final class HandoffPreparations {
     }
 
     static boolean evidenceEligible(Plan plan){
-        return plan!=null&&("PROJECTED".equals(plan.phase)||"EVIDENCE_ADOPTED".equals(plan.phase));
+        return plan!=null&&("PROJECTED".equals(plan.phase)||evidenceInstalled(plan));
     }
 
     private static boolean validAdoption(Plan plan,HandoffEvidenceAdoption.Receipt receipt){
@@ -217,9 +230,53 @@ final class HandoffPreparations {
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
     }
 
+    static boolean evidenceInstalled(Plan plan){
+        return plan!=null&&Set.of("EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED").contains(plan.phase());
+    }
+    private static boolean validTargetFence(Plan plan){
+        if(!Set.of("FENCE_PENDING","TARGETS_FENCED").contains(plan.phase()))return plan.targetFence==null;
+        TargetFenceRequest request=plan.targetFence;
+        if(request==null||!validExecutionId(plan,request.id)||request.id.equals(plan.executionRequest)
+                ||request.actor==null||request.actorRevision==null)return false;
+        JournalWriterAssignment.TargetFence result=request.result;
+        return "FENCE_PENDING".equals(plan.phase())?result==null:result!=null&&result.epoch()==plan.writerCommit.journalEpoch()
+                &&plan.activation.nativeEvidenceSha256().equals(result.cutSha256())&&result.destinations()!=null
+                &&!result.destinations().isEmpty()&&result.destinations().size()<=8
+                &&result.destinations().values().stream().allMatch(hash->hash!=null&&hash.matches("[a-f0-9]{64}"));
+    }
+    Plan bindTargetFence(Connection c,Plan plan,String request,AccessControl.Principal actor)throws Exception{
+        TargetFenceRequest bound=plan.targetFence();
+        if(bound!=null){
+            if("FENCE_PENDING".equals(plan.phase)&&!bound.id.equals(request)
+                    &&!bound.actorRevision.equals(actor.authorizationRevision))
+                return updateTargetFence(c,plan,"FENCE_PENDING",new TargetFenceRequest(request,actor.id,actor.authorizationRevision,null));
+            if(!bound.id.equals(request))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+            if(!bound.actor.equals(actor.id)||!bound.actorRevision.equals(actor.authorizationRevision))
+                throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+            return plan;
+        }
+        if(!"EVIDENCE_ADOPTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
+        return updateTargetFence(c,plan,"FENCE_PENDING",new TargetFenceRequest(request,actor.id,actor.authorizationRevision,null));
+    }
+    Plan recordTargetFence(Connection c,Plan plan,JournalWriterAssignment.TargetFence result)throws Exception{
+        if(!"FENCE_PENDING".equals(plan.phase)||plan.targetFence==null)
+            throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        TargetFenceRequest pending=plan.targetFence;
+        return updateTargetFence(c,plan,"TARGETS_FENCED",new TargetFenceRequest(pending.id,pending.actor,pending.actorRevision,result));
+    }
+    private Plan updateTargetFence(Connection c,Plan plan,String phase,TargetFenceRequest request)throws Exception{
+        Plan next=new Plan(plan.id,plan.task,plan.sequence,phase,plan.actor,plan.actorRevision,plan.evidence,plan.created,
+                plan.expires,plan.releaseId,plan.releasedBy,plan.closedAt,plan.activation,plan.writerCommit,
+                plan.executionRequest,plan.evidenceAdoption,request);
+        if(!validTargetFence(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase=?",phase,seal(next),cluster,plan.id,plan.phase)!=1)
+            throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        return next;
+    }
+
     Plan retirement(Connection c,String task,String original,String directory)throws Exception{
         try(PreparedStatement statement=db.prepare(c,"SELECT * FROM "+db.table("task_handoff_plan")
-                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED','EVIDENCE_ADOPTED') ORDER BY ordinal DESC",cluster,task);
+                +" WHERE cluster_id=? AND task_id=? AND phase IN ('COMMITTED','PROJECTED','EVIDENCE_ADOPTED','FENCE_PENDING','TARGETS_FENCED') ORDER BY ordinal DESC",cluster,task);
             ResultSet rows=statement.executeQuery()){
             while(rows.next()){
                 Plan p=read(rows);
@@ -248,6 +305,8 @@ final class HandoffPreparations {
         }
         if(p.evidenceAdoption!=null)view.put("adoptedEvidence",Map.of(
                 "validationReports",p.evidenceAdoption.reports(),"closedReceipts",p.evidenceAdoption.closedReceipts()));
+        if(p.targetFence!=null)view.put("targetFence",Map.of("requestId",p.targetFence.id(),
+                "destinationsFenced",p.targetFence.result()==null?0:p.targetFence.result().destinations().size()));
         if(p.activation!=null)view.put("writerActivation",Map.of(
                 "checkedInControlTransaction",p.activation.checkedInControlTransaction,
                 "activationSha256",AuditStore.hash(p.id+"\n"+e.proof+"\n"+p.activation.nextAssignment),

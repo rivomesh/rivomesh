@@ -303,16 +303,41 @@ final class GlobalTaskStore {
                 ||!AuditStore.hash(successor).equals(commit.configurationSha256())
                 ||!successor.equals(ManagedWriterDeclaration.successorYaml(historical,former.node(),candidate.node(),plan.activation().nextAssignment())))
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        JournalWriterAssignment.CutProof proof=recipientCut(plan,newWriter,successor);
+        JournalWriterAssignment.verifyRecipientControlCut(c,newWriter.namespace(),task,previous.assignment(),newWriter.assignment(),proof);
+        return new ManagedRecipientImport.Grant(identity,plan,successor);
+    }
+    private static JournalWriterAssignment.CutProof recipientCut(HandoffPreparations.Plan plan,ManagedWriterDeclaration newWriter,
+                                                                 String successor)throws Exception{
+        HandoffPreparations.WriterCommit commit=plan.writerCommit();
+        HandoffPreparations.Binding candidate=plan.evidence().candidate();
         HandoffPreparations.JournalCut prior=plan.evidence().cut();
         long previousEpoch=Long.parseLong(prior.epoch());
         if(previousEpoch<1||previousEpoch==Long.MAX_VALUE||commit.journalEpoch()!=previousEpoch+1)
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
-        JournalWriterAssignment.CutProof proof=new JournalWriterAssignment.CutProof(plan.activation().journalGenerationSha256(),
+        return new JournalWriterAssignment.CutProof(plan.activation().journalGenerationSha256(),
                 plan.activation().nativeEvidenceSha256(),ManagedWriterDeclaration.subscriptions(successor),true,
                 new JournalWriterAssignment.ManagedCut(candidate.node(),AuditStore.hash(newWriter.assignment()),commit.journalEpoch(),
                         Long.parseLong(prior.sequence()),prior.checkpointSha256()));
-        JournalWriterAssignment.verifyRecipientControlCut(c,newWriter.namespace(),task,previous.assignment(),newWriter.assignment(),proof);
-        return new ManagedRecipientImport.Grant(identity,plan,successor);
+    }
+    void fenceParkedTargets(Connection c,ManagedRecipientImport.Grant grant,io.github.rivomesh.PipelineConfig config,
+                            JournalWriterAssignment.FenceAuthorization authorize)throws Exception{
+        HandoffPreparations.Plan plan=grant.committed();
+        if(!"FENCE_PENDING".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        ManagedWriterDeclaration previous=ManagedWriterDeclaration.read(version(c,plan.task(),plan.evidence().configuration()).yaml);
+        ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(grant.successorYaml());
+        if(previous==null||successor==null||!plan.task().equals(config.pipelineId)||!successor.assignment().equals(config.journal.writerAssignment)
+                ||!successor.node().equals(config.nodeId)||!successor.namespace().equals(config.journal.namespace)
+                ||!successor.journalUrl().equals(config.journal.url))throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        var proof=recipientCut(plan,successor,grant.successorYaml());
+        var fenced=config.fenceParkedHandoff(c,previous.assignment(),proof,authorize);
+        if(!fenced.destinations().keySet().equals(new TreeSet<>(proof.destinations())))
+            throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
+        preparations.recordTargetFence(c,plan,fenced);
+        AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_TARGETS_FENCED";event.taskId=plan.task();
+        event.actorId=plan.targetFence().actor();event.actorRole="ADMIN";event.subjectId=plan.evidence().candidate().node();
+        event.clientRequestHash=AuditStore.hash(plan.targetFence().id());event.operationHash=fenced.cutSha256();event.status="STOPPED";
+        access.append(c,event);
     }
     void recordRecipientProjection(Connection c,String task,ControlStore.Lease lease,String directory,
                                    ManagedRecipientImport.Receipt receipt)throws Exception{

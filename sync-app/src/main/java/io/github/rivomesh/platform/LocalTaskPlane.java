@@ -29,7 +29,7 @@ final class LocalTaskPlane implements TaskControlPlane {
             case VIEW:return tasks.view(r.taskId);
             case RECOVERY_RECEIPT:case KAFKA_NOTICE_PLAN:throw new TaskService.Conflict("GLOBAL_RECOVERY_RECEIPTS_REQUIRED");
             case HANDOFF_ASSESS:case HANDOFF_LATEST:case HANDOFF_PROBE:
-            case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:case HANDOFF_STAGE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+            case HANDOFF_PREPARE:case HANDOFF_PREPARATION:case HANDOFF_RELEASE:case HANDOFF_STAGE:case HANDOFF_TARGET_FENCE:throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
             case CREATE:if(r.placement!=null)throw new TaskService.Conflict("GLOBAL_PLACEMENT_REQUIRED");return tasks.create(r.yaml,r.requestId,actor);
             case CONFIGURATION:return tasks.configuration(r.taskId);
             case CONFIG_HISTORY:return tasks.configurationHistory(r.taskId,r.cursor);

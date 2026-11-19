@@ -228,6 +228,18 @@ public final class ConsoleServer implements AutoCloseable {
                 request.identityHash=input.path("expectedEvidenceSha256").textValue();
                 json(exchange,200,control.invoke(request,principal));return;
             }
+            if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")
+                    &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&parts[6].equals("fence-targets")&&method.equals("POST")){
+                if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                JsonNode input=body(exchange);
+                if(input.size()!=2||!input.path("expectedPreparation").isTextual()||!input.path("expectedRevision").isTextual())
+                    throw new IllegalArgumentException("HANDOFF_TARGET_FENCE_REQUEST_INVALID");
+                TaskRequest request=TaskRequest.of(TaskRequest.Kind.HANDOFF_TARGET_FENCE,parts[3]);
+                request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
+                request.reference=input.path("expectedPreparation").textValue();
+                request.revision=input.path("expectedRevision").textValue();
+                json(exchange,202,control.invoke(request,principal));return;
+            }
             if((parts.length==6||parts.length==7)&&parts[1].equals("api")&&parts[2].equals("tasks")
                     &&parts[4].equals("handoff")&&parts[5].equals("preparation")){
                 boolean release=parts.length==7&&"release".equals(parts[6]);

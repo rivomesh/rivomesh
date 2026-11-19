@@ -97,6 +97,14 @@ After the control transaction commits ownership, open the handoff panel and sele
 
 The verified same-store profile installs original reports and closed receipts after the internal transfer. The candidate can serve that history read-only from either Controller at the original cut. While it is stopped, `HANDOFF_PARKED` and journal formats 15–18 block direct Worker launch and generic resume. Upgrade the Controllers and Agents that share this journal before running the new handoff profile. Older units refuse the new format. Explicit Worker activation and operator-driven transfer remain separate.
 
+### Fence the parked SQL targets
+
+An administrator can approve target fencing after a candidate has adopted the signed report and receipt history. Use `POST /api/tasks/{id}/handoff/preparation/fence-targets` with `X-Request-ID` and the JSON fields `expectedPreparation` and `expectedRevision`. Use the preparation ID and the **committed** task revision displayed in the handoff panel. `202` acknowledges durable approval. Read `GET /api/tasks/{id}/handoff/preparation` or refresh the handoff panel to follow `FENCE_PENDING` and `TARGETS_FENCED`.
+
+The first profile uses a MySQL source, one shared PostgreSQL control and journal database, and at most eight PostgreSQL or MySQL targets at a common original epoch. The candidate independently verifies its installed configuration, archived evidence, source log coverage, and original target checkpoints and snapshots. Each target transaction advances its writer epoch under its checkpoint row lock. Transaction receipts, snapshot IDs and source position remain at the reviewed cut. The journal stays parked and the Worker stays stopped.
+
+Keep the same request ID to read the receipt from either Controller. If the candidate or a database stops during execution, the approved request stays pending and the candidate resumes from the native target epochs when it returns. A different request cannot replace a current approval. If account authorization has changed while fencing is pending, an eligible administrator can explicitly approve again with a fresh request ID. A changed cut or lost snapshot keeps the request pending. Check the sanitized `HANDOFF_TARGET_FENCE` diagnostic on the candidate. Worker activation requires separate admission.
+
 ## Admission and recovery
 
 PENDING is durable queueing. DISPATCHED saves the exact original local request/revision before invocation. ACCEPTED is local durable admission. SUCCEEDED/FAILED come from actual operation receipts. UNKNOWN requires reconciliation, not a success claim or reissue under a new revision. Startup restores receipt protection and validates local configuration against shared authority before scheduling.

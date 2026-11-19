@@ -39,4 +39,8 @@ The private same-store handoff binds one signed request before the placement tra
 
 The same transaction parks the journal and advances its managed format to the corresponding 15–18 variant. This preserves enabled target-gap and source-exclusion features. Earlier binaries reject the new format during identity validation. The current runtime refuses both ordinary Worker claims and generic resume for the parked owner. Explicit activation needs fresh candidate evidence and target-native epoch fences before issuing one admission for the exact assignment.
 
+### Target fencing before Worker admission
+
+A separate administrator request binds its identity and current authorization revision to the signed adopted preparation. The candidate verifies the same source position and snapshot set. It compares each destination’s recent checkpoint and writing epoch against the signed original evidence, then raises the destination epoch under its local transaction lock. Retry can accept a destination already at the parked epoch only when the original receipt and snapshots still match the signed cut. The published fence receipt covers every configured SQL target. This bounded operation leaves the journal parked for the independent Worker admission step.
+
 [中文](design-agent-handoff.md) · [Existing lifecycle](design-execution-lifecycle.en.md)

@@ -551,3 +551,7 @@ The `45bcb211eb41891d4b3b9142b639e2e6f8c274c2e49b6217ab688cdce5a2dc06` package p
 ### Native physical Kafka Topic evidence for managed notice preview
 
 The `7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275` package passed 55 Java tests, 150 DOM tests and three native Kafka checks. Both Controllers returned the same signed notice plan with the observed business and control Topic identity digests. Two configured Kafka destinations returned the explicit missing-evidence result. The dedicated Topic stayed at offset zero while business, healthy peer and consumer positions remained unchanged during review. [Operations](../en/messaging-v3.md) · [Manifest](baseline.json)
+
+### Approved native fencing of a parked Agent’s SQL targets
+
+The `4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a` package passed 22 native checks, 59 focused Java tests and 151 DOM tests. The administrator bound the approval while the candidate was offline and replayed it at the other Controller. PostgreSQL began at the parked epoch to model a previously committed first fence. The candidate rechecked both original checkpoints and completed the MySQL epoch update after restart. Both targets kept their original receipts and rows. The journal and candidate Worker stayed parked and stopped. A stale revision and replacement request were refused. All disposable resources were cleaned. [Operator guide](../en/global-control.md#fence-the-parked-sql-targets) · [Manifest](baseline.json)

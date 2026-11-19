@@ -57,6 +57,8 @@ parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
                     help='Exercise internal signed Agent transfer and paused local projection without granting execution')
+parser.add_argument('--handoff-target-fence', action='store_true',
+                    help='Approve and replay parked SQL target fences after a native handoff')
 parser.add_argument('--previous-handoff-runtime', type=Path,
                     help='Compare actual prior runtime refusal on a newly parked successor')
 parser.add_argument('--handoff-preparation-browser', type=Path,
@@ -156,6 +158,8 @@ if args.handoff_staging and not args.handoff_preparation:
 if args.handoff_private_writer and (not args.handoff_managed_writer or not args.test_classes
         or not args.test_classes.is_dir() or args.handoff_failure_custody or args.handoff_raw_custody):
     parser.error('--handoff-private-writer requires --handoff-managed-writer and --test-classes with source/failure evidence absent')
+if args.handoff_target_fence and not args.handoff_private_writer:
+    parser.error('--handoff-target-fence requires --handoff-private-writer')
 if args.previous_handoff_runtime and (not args.handoff_private_writer or not args.previous_handoff_runtime.is_file()
         or args.previous_handoff_runtime.resolve()==args.artifact.resolve()):
     parser.error('--previous-handoff-runtime requires --handoff-private-writer and a distinct prior JAR')
@@ -289,6 +293,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffStaging': args.handoff_staging,
             'handoffPreparationBrowser': bool(args.handoff_preparation_browser),
             'handoffAdoptedBrowser': bool(args.handoff_adopted_browser),
+            'handoffTargetFence': args.handoff_target_fence,
             'receiptLookup': args.receipt_lookup,
             'retentionReview': args.retention_review,
             'reportArchive': args.report_archive,
@@ -2576,6 +2581,45 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                                               preparationId=replay['id'],adoption=replay['adoptedEvidence'],
                                               validationReportId=report_id,closedReceiptId=validation)
                                 assert data_cut()==actual and rows_match()
+                            if args.handoff_target_fence:
+                                fence_url=preparation+'/fence-targets'
+                                fence_id='gc_fence_'+uuid.uuid4().hex
+                                fence_input={'expectedPreparation':replay['id'],'expectedRevision':replay['committedRevision']}
+                                refused=http('node-a',fence_url,dict(fence_input,expectedRevision=prepared_input['expectedRevision']),
+                                             request='gc_stale_'+uuid.uuid4().hex,expected=409)
+                                assert refused['code']=='REVISION_CHANGED' and data_cut()==actual
+                                parked=int(actual[0].split('|',1)[0])
+                                assert all(int(position.split('|',1)[0])==parked-1 for position in actual[1:])
+                                # Model a lost result after the first target commits its epoch-only transaction.
+                                sql('postgres',f'UPDATE rm_pg_meta.rm3_sink_job SET epoch={parked}')
+                                interrupted=data_cut()
+                                assert interrupted[0]==actual[0] and interrupted[2]==actual[2]
+                                compose('kill','-s','SIGKILL',candidate)
+                                approved=http('node-a',fence_url,fence_input,request=fence_id,expected=202)
+                                assert approved['state']=='FENCE_PENDING' and approved['targetFence']['requestId']==fence_id
+                                assert approved['executionAuthorized'] is False
+                                refused=http('node-b',fence_url,fence_input,request='gc_replacement_'+uuid.uuid4().hex,expected=409)
+                                assert refused['code']=='HANDOFF_TARGET_FENCE_REQUEST_CHANGED'
+                                assert approved==http('node-b',fence_url,fence_input,request=fence_id,expected=202)
+                                assert data_cut()==interrupted
+                                wait(lambda:sql('store',"SELECT COUNT(*) FROM global_control.rmc_node WHERE cluster_id='global-cdc'"
+                                                " AND node_id='"+candidate+"' AND lease_until>"+clock)=='0','approved fence candidate lease expires')
+                                compose('up','-d',candidate);address(candidate)
+                                def fence_ready():
+                                    receipt=http('node-b',preparation)
+                                    return receipt if receipt['state']=='TARGETS_FENCED' else None
+                                fenced=wait(fence_ready,'candidate records both parked target epochs')
+                                assert fenced['targetFence']=={'requestId':fence_id,'destinationsFenced':2}
+                                assert fenced==http('node-a',fence_url,fence_input,request=fence_id,expected=202)
+                                assert fenced==http('node-b',fence_url,fence_input,request=fence_id,expected=202)
+                                current=data_cut()
+                                assert current[0]==actual[0] and all(int(position.split('|',1)[0])==parked for position in current[1:])
+                                assert [item.split('|',1)[1] for item in current[1:]]==[item.split('|',1)[1] for item in actual[1:]]
+                                assert sql('store',parked_status)=='HANDOFF_PARKED|t|0|15' and rows_match()
+                                assert task()['workerState']=='STOPPED' and not fenced['executionAuthorized']
+                                adopted_reads()
+                                manifest['targetFence']={'epoch':parked,'destinations':2,'requestReplay':True}
+                                passed('An explicit approved fence revalidates the signed SQL cut and resumes an already raised first target')
                             manifest['status']='PASS'
                             assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
                             print('GLOBAL_CONTROL_PRIVATE_HANDOFF_ACCEPTED artifact='+digest)

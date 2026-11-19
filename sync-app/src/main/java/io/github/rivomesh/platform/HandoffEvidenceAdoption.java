@@ -16,7 +16,6 @@ final class HandoffEvidenceAdoption {
     private static final String ROOT="handoff-adopted",SEAL=ValidationStore.HANDOFF_ADOPTION_SEAL,
             RECEIPTS="closed-receipts.json",ROWS="rows.mv.db",SUMMARY="summary.json",LOCK="validation.lock";
     private static final int MAX_SEAL=64*1024,MAX_RECEIPTS=128*1024;
-    private static final Set<String> ADOPTABLE=Set.of("PROJECTED","EVIDENCE_ADOPTED");
     record Receipt(String preparation,String task,HandoffPreparations.Binding candidate,String committedRevision,
                    String configurationSha256,String stagingSha256,String adoptionSha256,int reports,int closedReceipts){}
     private record Seal(int version,String preparation,String task,String originalNode,HandoffPreparations.Binding candidate,String committedRevision,
@@ -32,7 +31,7 @@ final class HandoffEvidenceAdoption {
     private HandoffEvidenceAdoption(){}
 
     static Receipt install(Path state,HandoffPreparations.Plan plan,ControlCipher cipher)throws Exception{
-        if(!ADOPTABLE.contains(plan.phase()))throw refused("HANDOFF_RECIPIENT_PROJECTION_REQUIRED");
+        if(!HandoffPreparations.evidenceEligible(plan))throw refused("HANDOFF_RECIPIENT_PROJECTION_REQUIRED");
         return HandoffCandidateAdmission.withCommittedEvidence(state,plan,cipher,(ready,verified)->{
             SharedHandoffEvidence.Archive archive=verified.manifest().binding().archive();
             if(archive.rawCaptures()!=0||archive.failureRecords()!=0)throw refused("HANDOFF_EVIDENCE_PROFILE_UNSUPPORTED");
@@ -42,7 +41,7 @@ final class HandoffEvidenceAdoption {
             Seal intended=new Seal(1,plan.id(),plan.task(),plan.evidence().original().node(),ready.receipt().binding(),commit.revision(),
                     ready.receipt().configurationSha256(),verified.sealSha256(),archive.reports(),archive.closedReceipts(),adopted);
             Receipt receipt=intended.receipt();
-            if("EVIDENCE_ADOPTED".equals(plan.phase())&&!receipt.equals(plan.evidenceAdoption()))
+            if(HandoffPreparations.evidenceInstalled(plan)&&!receipt.equals(plan.evidenceAdoption()))
                 throw refused("HANDOFF_ADOPTED_SCOPE_CHANGED");
             Path owner=state.toRealPath(),root=owner.resolve(ROOT);
             if(Files.notExists(root,LinkOption.NOFOLLOW_LINKS)){HandoffStaging.createDirectory(root);HandoffStaging.force(owner);}

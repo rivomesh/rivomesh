@@ -163,7 +163,7 @@ final class OwnerQueries {
     }
     private HandoffEvidenceAdoption.Receipt adoptedEvidence(Connection c,GlobalTaskStore.Record record)throws Exception{
         HandoffPreparations.Plan plan=tasks.preparations().latest(c,record.id,db.now(c));
-        if(plan==null||!"EVIDENCE_ADOPTED".equals(plan.phase()))return null;
+        if(!HandoffPreparations.evidenceInstalled(plan))return null;
         var receipt=plan.evidenceAdoption();
         if(receipt==null||!record.revision.equals(receipt.committedRevision())||!record.owner.equals(receipt.candidate().node())
                 ||!record.directory.equals(receipt.candidate().directory())

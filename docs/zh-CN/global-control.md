@@ -97,6 +97,14 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 同库档案通过内部换权安装原报告和闭合回执。候选 Agent 在原断点只读提供历史，两入口均可访问。候选停止期间，`HANDOFF_PARKED` 和日志格式 15–18 隔离直接 Worker 启动及通用恢复。使用该档案前升级共享此日志的 Controller 和 Agent。老版本程序会拒绝新格式。候选 Worker 显式启动和运营人员换权仍需独立验收。
 
+### 隔离已停驻任务的 SQL 目标
+
+候选 Agent 接收签名报告和回执历史后，管理员可审批目标隔离。提交 `POST /api/tasks/{id}/handoff/preparation/fence-targets`，携带 `X-Request-ID`，请求体传入 `expectedPreparation` 和 `expectedRevision`。使用交接面板里的准备 ID 和**已提交的任务修订**。返回 `202` 表示审批已持久化。刷新交接面板或调用 `GET /api/tasks/{id}/handoff/preparation`，可查看 `FENCE_PENDING` 和 `TARGETS_FENCED`。
+
+首个档案覆盖 MySQL 源、同一个 PostgreSQL 控制与日志库，以及最多八个原纪元相同的 PostgreSQL 或 MySQL 目标。候选 Agent 独立核对已安装配置、归档证据、源日志覆盖、原目标断点和快照。每个目标在自己的断点行锁下提高写入纪元。目标事务回执、快照 ID、源断点都保留在原切点。日志继续停驻，候选 Worker 保持停止。
+
+用同一个请求 ID 可从两个 Controller 读取同一审批和回执。候选 Agent 或数据库中断时，原审批保持待处理，候选恢复后根据原生目标纪元续跑。已有审批有效时拒绝替换请求。审批账号的授权在待处理期间变化时，有权限的管理员可用新的请求 ID 重新审批。若发现切点或快照变化，状态保持待处理，可在候选 Agent 查看 `HANDOFF_TARGET_FENCE` 诊断。批准 Worker 启动是后续独立步骤。
+
 ## 接受、执行和恢复
 
 PENDING 表示持久排队；DISPATCHED 表示交给固定 owner，调用前保存原本机请求与原修订；ACCEPTED 表示本机已持久接受；SUCCEEDED/FAILED 来自实际操作回执。UNKNOWN 表示证据不足，不能伪装成功，也不能换新修订重新执行。重启先恢复原回执保护及配置权威校验，再允许本机调度。
