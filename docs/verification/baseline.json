@@ -13303,5 +13303,54 @@
     "sourcePrecisionDefault": "extra_float_digits=0",
     "scope": "Finite PostgreSQL real and double precision into PostgreSQL and MySQL. Tested adjacent and subnormal representations, SQL NULL, zero normalization, keyless multiset changes and restart. A non-finite transaction leaves original target state.",
     "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/pg-float-proof --source-image postgres:17.12 --floating-values"
+  },
+  "keycloakNativeOidcCrossController": {
+    "status": "PASS",
+    "artifactSha256": "1c8798bff626c02c50227b8813e1deecbda1200090b5f301b87a57d29e29b7e8",
+    "keycloakImage": "quay.io/keycloak/keycloak:26.7.4",
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "checks": [
+      "One trusted ephemeral root signs both distinct HTTPS origins",
+      "Keycloak discovery matches fixed TLS endpoints and provides its RS256 public key",
+      "Both actual ingress Controller routes run the same Temurin 21 JAR",
+      "A real browser administrator binds a local Viewer through Controller B with CSRF required",
+      "Actual Keycloak HTTPS code flow with S256 PKCE starts on Controller A and successfully calls back through Controller B",
+      "The signed provider role does not expand local Viewer, task or node grants, and reload keeps a Secure HttpOnly cookie",
+      "Revoking the binding through Controller B invalidates both browser routes and denies the still-authenticated Keycloak subject",
+      "The authorized audit export records the binding, callback and revocation without the fixture credentials or callback code"
+    ],
+    "fixtureImageDigests": {
+      "postgres:17.12": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+      "quay.io/keycloak/keycloak:26.7.4": "sha256:dc0f6a6c61f4170f154b6dd89dfc160c839fd24989d2c798af2a7072498bfbac",
+      "python:3.13-slim": "sha256:1c0252262bd9a91b72301c941e478fff5c3dfeb23f146d034d590631cdc75e87",
+      "rivomesh-keycloak-oidc-67848fc474:chromium": "sha256:083dc26bfb5b02eddf3955a50d903fb423fec593babf010c7b2ee08c7b8fdcec",
+      "eclipse-temurin:21-jre-jammy": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4"
+    },
+    "fixtureSourcesSha256": {
+      "keycloak-oidc.py": "f0e131f628cb3c6d4cc18cffbeabf299784ef4f699b80e992f30e06c9adc4b09",
+      "oidc-ingress.py": "53f0d1a2863ea4a847b03cea8ef772bbe848284759f39c8ef55eb3707bc125f5",
+      "oidc-browser.mjs": "d08cce586f05633a61bba239afcba6a56e79f462c1550c687b084ede87672c46",
+      "chromium.mjs": "53c98f45f3905ca3fca97c9d9f7a39affd6f9305b333eefa948f20d70f057e3f",
+      "Browser.Dockerfile": "42072a06666d796934f3ebb03dbb81cbdf2a25fc67d3ab85dd4c1c3f93af7d7f"
+    },
+    "browser": {
+      "status": "PASS",
+      "browser": "Chrome/156.0.8078.79",
+      "checks": [
+        "A real browser administrator binds a local Viewer through Controller B with CSRF required",
+        "Actual Keycloak HTTPS code flow with S256 PKCE starts on Controller A and successfully calls back through Controller B",
+        "The signed provider role does not expand local Viewer, task or node grants, and reload keeps a Secure HttpOnly cookie",
+        "Revoking the binding through Controller B invalidates both browser routes and denies the still-authenticated Keycloak subject",
+        "The authorized audit export records the binding, callback and revocation without the fixture credentials or callback code"
+      ]
+    },
+    "cleanupExitCode": 0,
+    "browserImageCleanupExitCode": 0,
+    "finishedAt": "2026-11-19T09:20:19.636160+00:00",
+    "manifestSha256": "a0b67f88ab258f42fe09983a2c83f93e02d211619c0f2e5b7ea80c0e2d65108c",
+    "earlierFixtureFailureSha256": "e3e3fa5b4921546b885837f52bb185fed3228645c9933666045b8710f35b48ad",
+    "earlierFixtureFailure": "The first run established TLS, JWKS and both Controller routes and stopped during synthetic account/task setup before authorization. The exact error was not captured. The retry used distinct task resources and the configured owner IDs.",
+    "scope": "Real Keycloak 26.7.4 with trusted HTTPS, two separate Temurin 21 Controllers sharing PostgreSQL 17.12 and a common loopback HTTPS ingress. Real Chromium, local Viewer scope and revocation. Provider-initiated logout and automated key rotation have independent scope.",
+    "reproduce": "tests/keycloak-oidc/README.md"
   }
 }

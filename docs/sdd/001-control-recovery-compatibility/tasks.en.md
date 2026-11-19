@@ -212,7 +212,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Full audit events and their signed head share one immutable version. Native storage verifies continuity, exact recovery and offline verification.
   - [x] The exact-package inventory reviews outer and nested dependencies. Explicit review blocks unidentified JARs and incomplete legacy coverage.
   - [x] Fixed HTTPS OIDC account mapping and revocation passed two real Controller endpoints and the Accounts UI.
-  - [ ] Live AWS, production identity-provider and ingress, and source rights remain.
+  - [x] Real Keycloak code and S256 PKCE login passed across two Controller routes. Local Viewer grants and both session revocations were verified.
+  - [ ] Real AWS, production deployment ingress, provider-initiated revocation and distribution approval remain.
 
 ## Recent deliverables (not additional parent requirements)
 

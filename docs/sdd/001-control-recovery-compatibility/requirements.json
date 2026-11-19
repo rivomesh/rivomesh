@@ -1787,8 +1787,8 @@
         "en": "External identity,immutable audit and Apache preparation"
       },
       "gap": {
-        "zh-CN": "签名检查点与完整原始审计事件都可独立核验并写入 S3 Object Lock。本地 MinIO 已实测精确版本、COMPLIANCE 保留、同版重试、跨批次连续性及离线还原。SBOM 与五路外置 JDBC 包已有证据。真实 AWS 权限、项目授权、LICENSE/NOTICE 及外部身份仍待完成。 精确发行包扫描已识别外置版本的 151 个包内组件，并记录 46 个 Maven BOM 缺项。显式分发审查会阻止未知嵌套制品。 单固定 HTTPS OIDC 提供方已通过模拟实测及账号界面绑定和撤销，同一共享控制库的两个入口均执行本地账号权限和撤权。真实身份提供方、入口代理及提供方主动撤销仍待验。",
-        "en": "The checkpoint and complete original audit events can be verified independently and retained with S3 Object Lock. Local MinIO verified exact versions, COMPLIANCE retention, identical retries, continuity and offline retrieval. SBOM and five external JDBC drivers have evidence. Live AWS permissions, source rights, LICENSE/NOTICE and external identity remain. Exact external-vendor package inventory identifies 151 packaged coordinates and 46 absent from the Maven BOM. Explicit distribution review blocks unidentified embedded JARs. The fixed HTTPS OIDC provider and Accounts UI binding and revocation passed the local fixture. Both shared-store Controllers enforce local account grants and revocation. Production identity providers, ingress and provider-driven revocation remain."
+        "zh-CN": "本地 MinIO 已验收签名检查点、完整审计事件、Object Lock COMPLIANCE、精确版本及跨批次恢复。已核对五路外置 JDBC、SBOM 和发行包嵌套依赖。Keycloak 26.7.4、真实 Chrome、共享 PostgreSQL 控制库及双 Controller HTTPS 入口通过登录、本地账号权限和撤销。真实 AWS、生产入口、提供方主动撤销、项目授权和最终 LICENSE/NOTICE 待完成。",
+        "en": "Native MinIO covers signed checkpoints, complete audit events, Object Lock COMPLIANCE, exact versions and continuity. Five external JDBC drivers, the SBOM and nested package review have evidence. Real Keycloak 26.7.4 and Chrome passed OIDC login, local account grants and revocation over two Controller HTTPS routes with shared PostgreSQL. Real AWS, production ingress, provider-initiated revocation, source rights and final LICENSE/NOTICE remain."
       },
       "acceptance": {
         "zh-CN": "核验外部身份映射/撤销、外部审计留存和依赖分发条件，补齐许可证NOTICE/SBOM/贡献文档；Rivomesh不自称已获Apache身份或商标权。",
@@ -1813,7 +1813,8 @@
         "tests/release-inventory-test.py",
         "docs/en/oidc-login.md",
         "docs/zh-CN/oidc-login.md",
-        "sync-app/src/test/java/io/github/rivomesh/platform/OidcBrowserLoginTest.java"
+        "sync-app/src/test/java/io/github/rivomesh/platform/OidcBrowserLoginTest.java",
+        "tests/keycloak-oidc/keycloak-oidc.py"
       ]
     }
   ],
