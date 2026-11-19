@@ -31,6 +31,8 @@ type_profile.add_argument('--floating-values', action='store_true',
                           help='Verify finite PostgreSQL REAL and DOUBLE PRECISION in two SQL destinations')
 type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
+type_profile.add_argument('--bytea-values', action='store_true',
+                          help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
 parser.add_argument('--previous-numeric-artifact', type=Path,
                     help='Check a prior release against the same native numeric declarations before the candidate')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
@@ -44,7 +46,9 @@ parser.add_argument('--reject-old-primary', action='store_true',
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
-dual_targets = temporal_targets or args.numeric_values or args.floating_values
+dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values
+if args.bytea_values and (args.generated or args.failover):
+    parser.error('--bytea-values exercises the direct PostgreSQL 17.12 profile')
 if args.previous_numeric_artifact and not args.numeric_values:
     parser.error('--previous-numeric-artifact requires --numeric-values')
 if args.reject_old_primary and not args.failover:
@@ -70,6 +74,8 @@ if args.numeric_values:
     report.update(numericValues=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.floating_values:
     report.update(floatingValues=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.bytea_values:
+    report.update(byteaValues=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.ddl_review:
     report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -170,6 +176,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             MYSQL_ROOT_PASSWORD='${RM_PG_PASSWORD}',MYSQL_ROOT_HOST='%'))
     if args.floating_values:
         services['source']['command']+=['-c','extra_float_digits=0']
+    if args.bytea_values:
+        services['target']['image']='postgres:17.12'
     if args.timestamp_values or args.clock_values:
         services['source']['command']+=['-c','timezone=America/New_York']
         report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -220,7 +228,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     composition.write_text(json.dumps(document))
 
     def compose(*arguments,check=True):
-        return subprocess.run(['docker','compose','-p',project,'-f',str(composition),*arguments],
+        env_file=['--env-file',os.devnull] if args.bytea_values else []
+        return subprocess.run(['docker','compose',*env_file,'-p',project,'-f',str(composition),*arguments],
                               cwd=ROOT,env=environment,capture_output=True,text=True,check=check,timeout=180)
 
     def sql(service,statement):
@@ -341,6 +350,48 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         receipt='SELECT epoch,stream_seq,transaction_hash FROM copy_meta.rm3_sink_job'
         return numeric_rows()[1:],sql('target',receipt),mysql(receipt)
 
+    def bytea_rows():
+        def normalized(read,billing,sales,columns,separator):
+            def rows(prefix,schema,table):
+                values=read(f"SELECT {prefix},{columns} FROM {schema}.{table}")
+                return sorted(tuple(row.split(separator)) for row in values.splitlines())
+            return rows('id,label',billing,'bytea_key'),rows('label',sales,'bytea_keyless')
+
+        postgres=("CASE WHEN data IS NULL THEN '<NULL>' "
+                  "WHEN octet_length(data)<=32 THEN 'hex:'||encode(data,'hex') "
+                  "ELSE octet_length(data)||':sha256:'||encode(sha256(data),'hex') END")
+        mysql_binary=("CASE WHEN data IS NULL THEN '<NULL>' "
+                      "WHEN octet_length(data)<=32 THEN CONCAT('hex:',LOWER(HEX(data))) "
+                      "ELSE CONCAT(octet_length(data),':sha256:',SHA2(data,256)) END")
+        return (normalized(lambda query:sql('source',query),'billing','sales',postgres,'|'),
+                normalized(lambda query:sql('target',query),'copy_billing','copy_sales',postgres,'|'),
+                normalized(mysql,'copy_billing','copy_sales',mysql_binary,'\t'))
+
+    def bytea_value(value):
+        if value is None:
+            return '<NULL>'
+        if len(value)<=32:
+            return 'hex:'+value.hex()
+        return f'{len(value)}:sha256:{hashlib.sha256(value).hexdigest()}'
+
+    def bytea_fixture_rows(keyed,keyless):
+        return (sorted((str(key),label,bytea_value(data)) for key,label,data in keyed),
+                sorted((label,bytea_value(data)) for label,data in keyless))
+
+    def bytea_receipt():
+        current=task()['status']
+        cut=current['capture_lsn']
+        query=('SELECT generation,stream_seq,transaction_id,transaction_hash FROM copy_meta.rm3_sink_job '
+               "WHERE pipeline_id='postgres_source'")
+        postgres=sql('target',query).split('|')
+        mysql_receipt=mysql(query).split('\t')
+        subscriptions={row['id']:int(row['pendingTransactions']) for row in current['subscriptions']}
+        if (postgres!=mysql_receipt or len(postgres)!=4 or subscriptions!={'pg':0,'mysql':0}
+                or postgres[2]!='pg:'+cut or not re.fullmatch('[0-9a-f]{64}',postgres[3])):
+            return None
+        return dict(lsn=cut,generation=postgres[0],sequence=int(postgres[1]),transactionId=postgres[2],
+                    transactionHash=postgres[3])
+
     def source_timeline():
         identity=compose('exec','-T',live_source,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres',
                          '-d','dbname=sync_test replication=database','-A','-t','-F','|',
@@ -386,6 +437,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.floating_values:
             source,pg,my=floating_rows()
             return source==pg==my
+        if args.bytea_values:
+            source,pg,my=bytea_rows()
+            return source==pg==my
         return True
 
     def stream_ready():
@@ -407,12 +461,20 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     try:
         endpoints=['source','target']+(['mysql'] if dual_targets else [])
         compose('up','-d',*endpoints)
+        if args.bytea_values:
+            for service in ('source','target'):
+                require(lambda s=service:compose('exec','-T',s,'pg_isready','-h','127.0.0.1',
+                                                 '-U','postgres','-d','sync_test',check=False).returncode==0,
+                        service+' accepts TCP after initialization')
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
         report['sourceVersion']=sql('source',"SHOW server_version")
         if dual_targets:
             report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL target ready')
             report['postgresTargetVersion']=sql('target','SHOW server_version')
+        if args.bytea_values:
+            assert report['sourceVersion'].split()[0]==report['postgresTargetVersion'].split()[0]=='17.12'
+            assert report['mysqlVersion'].split('.')[0:2]==['8','4']
         if temporal_targets:
             assert sql('source','SHOW DateStyle')=='SQL, DMY'
         if args.timestamp_values:
@@ -445,6 +507,33 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                     ('ffffffff-ffff-ffff-ffff-ffffffffffff','00000000-0000-0000-0000-000000000000');
                 ALTER PUBLICATION rivomesh_test ADD TABLE billing.identities;
             """)
+        if args.bytea_values:
+            raw_bytes=bytes.fromhex('00ff5c8000ff')
+            updated_bytes=bytes.fromhex('ff00017f')
+            original_toast=b''.join(hashlib.md5(f'snapshot-{n}'.encode()).digest() for n in range(1,1025))
+            next_toast=b''.join(hashlib.md5(f'after-restart-{n}'.encode()).digest() for n in range(1,2049))
+            sql('source',"""
+                CREATE TABLE billing.bytea_key(id BIGINT PRIMARY KEY,label VARCHAR(24) NOT NULL,data BYTEA);
+                CREATE TABLE sales.bytea_keyless(label VARCHAR(24) NOT NULL,data BYTEA);
+                ALTER TABLE billing.bytea_key ALTER COLUMN data SET STORAGE EXTERNAL;
+                ALTER TABLE sales.bytea_keyless ALTER COLUMN data SET STORAGE EXTERNAL;
+                ALTER TABLE billing.bytea_key REPLICA IDENTITY FULL;
+                ALTER TABLE sales.bytea_keyless REPLICA IDENTITY FULL;
+                WITH payload(data) AS (
+                    SELECT decode(string_agg(md5('snapshot-'||i),'' ORDER BY i),'hex')
+                    FROM generate_series(1,1024) i
+                )
+                INSERT INTO billing.bytea_key
+                    SELECT * FROM (VALUES (1,'null',NULL::bytea),(2,'empty',decode('','hex')),
+                                          (3,'raw',decode('00ff5c8000ff','hex'))) small
+                    UNION ALL SELECT 4,'toast',data FROM payload;
+                INSERT INTO sales.bytea_keyless
+                    SELECT label,data FROM billing.bytea_key CROSS JOIN generate_series(1,2);
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.bytea_key,sales.bytea_keyless;
+            """)
+            assert sql('source',"SELECT count(*) FROM pg_class WHERE oid IN "
+                               "('billing.bytea_key'::regclass,'sales.bytea_keyless'::regclass) "
+                               "AND pg_relation_size(reltoastrelid)>8192")=='2'
         if args.date_values:
             sql('source',"""
                 CREATE TABLE billing.date_key(event_date DATE PRIMARY KEY,follow_up DATE);
@@ -603,6 +692,17 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
             dual_target_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+        if args.bytea_values:
+            types=("SELECT data_type FROM information_schema.columns WHERE table_schema='copy_billing' "
+                   "AND table_name='bytea_key' AND column_name='data'")
+            assert sql('target',types)=='bytea' and mysql(types)=='longblob'
+            expected=bytea_fixture_rows(
+                [(1,'null',None),(2,'empty',b''),(3,'raw',raw_bytes),(4,'toast',original_toast)],
+                [(label,data) for label,data in (('null',None),('empty',b''),('raw',raw_bytes),
+                                                ('toast',original_toast)) for _ in range(2)])
+            assert bytea_rows()==(expected,expected,expected)
+            report['byteaToastBytes']=[len(original_toast),len(next_toast)]
+            passed('BYTEA snapshot preserves NULL, empty, binary bytes, out-of-line values and keyless multiplicity')
         if args.floating_values:
             types=("SELECT column_name,data_type FROM information_schema.columns "
                    "WHERE table_schema='copy_billing' AND table_name='floating_key' "
@@ -700,6 +800,29 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             COMMIT""")
         require(lambda:equal() and task()['status'].get('capture_lsn')!=initial['capture_lsn'],'pgoutput transaction delivered')
         passed('A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence')
+        if args.bytea_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.bytea_key SET label='was-null',data=decode('','hex') WHERE id=1;
+                UPDATE billing.bytea_key SET label='was-empty',data=decode('00ff5c8000ff','hex') WHERE id=2;
+                UPDATE billing.bytea_key SET label='was-raw',data=NULL WHERE id=3;
+                UPDATE billing.bytea_key SET label='toast-retained' WHERE id=4;
+                UPDATE sales.bytea_keyless SET label='raw-updated',data=decode('ff00017f','hex')
+                    WHERE ctid=(SELECT ctid FROM sales.bytea_keyless WHERE label='raw' LIMIT 1);
+                DELETE FROM sales.bytea_keyless WHERE ctid=(
+                    SELECT ctid FROM sales.bytea_keyless WHERE label='null' AND data IS NULL LIMIT 1);
+                UPDATE sales.bytea_keyless SET label='toast-retained' WHERE ctid=(
+                    SELECT ctid FROM sales.bytea_keyless WHERE label='toast' LIMIT 1);
+                COMMIT;
+            """)
+            require(equal,'BYTEA pgoutput transaction delivered to both destinations')
+            expected=bytea_fixture_rows(
+                [(1,'was-null',b''),(2,'was-empty',raw_bytes),(3,'was-raw',None),
+                 (4,'toast-retained',original_toast)],
+                [('null',None),('empty',b''),('empty',b''),('raw',raw_bytes),('raw-updated',updated_bytes),
+                 ('toast',original_toast),('toast-retained',original_toast)])
+            assert bytea_rows()==(expected,expected,expected)
+            passed('Pgoutput retains unchanged out-of-line bytes and changes exactly one matching keyless occurrence')
         if args.floating_values:
             sql('source',"""
                 BEGIN;
@@ -811,6 +934,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert int(restored['sequence'])>int(last_success['sequence'])
             passed('A paused destination keeps its previous sample until the failed transaction directly commits')
 
+        if args.bytea_values:
+            before_bytea_restart=require(bytea_receipt,'dual BYTEA receipts agree at the drained journal LSN')
+            report['byteaBeforeRestart']=before_bytea_restart
         previous=task()['status']['capture_lsn']
         compose('kill','-s','SIGKILL','runner')
         sql('source',"UPDATE billing.ledger SET label='offline commit' WHERE id=1; DELETE FROM sales.duplicates WHERE value=7")
@@ -827,6 +953,23 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.clock_values:
             sql('source',"UPDATE billing.clock_key SET slot='23:59:59.999999' WHERE slot='24:00:00'; "
                          "INSERT INTO sales.clock_keyless VALUES('00:00:00.000001')")
+        if args.bytea_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.bytea_key SET label='back-online',data=decode('ff00017f','hex') WHERE id=3;
+                UPDATE billing.bytea_key SET label='toast-replaced',data=(
+                    SELECT decode(string_agg(md5('after-restart-'||i),'' ORDER BY i),'hex')
+                    FROM generate_series(1,2048) i
+                ) WHERE id=4;
+                INSERT INTO billing.bytea_key VALUES(5,'new-null',NULL);
+                DELETE FROM sales.bytea_keyless WHERE ctid=(
+                    SELECT ctid FROM sales.bytea_keyless WHERE label='empty' AND octet_length(data)=0 LIMIT 1);
+                DELETE FROM sales.bytea_keyless WHERE ctid=(
+                    SELECT ctid FROM sales.bytea_keyless WHERE label='toast' LIMIT 1);
+                INSERT INTO sales.bytea_keyless
+                    SELECT 'toast-new',data FROM billing.bytea_key WHERE id=4;
+                COMMIT;
+            """)
         if args.floating_values:
             sql('source',"""
                 BEGIN;
@@ -851,6 +994,26 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if dual_targets:
             assert slot==dual_target_slot
             assert mysql_snapshots==mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+        if args.bytea_values:
+            expected=bytea_fixture_rows(
+                [(1,'was-null',b''),(2,'was-empty',raw_bytes),(3,'back-online',updated_bytes),
+                 (4,'toast-replaced',next_toast),(5,'new-null',None)],
+                [('null',None),('empty',b''),('raw',raw_bytes),('raw-updated',updated_bytes),
+                 ('toast-retained',original_toast),('toast-new',next_toast)])
+            assert bytea_rows()==(expected,expected,expected)
+            after_bytea_restart=require(bytea_receipt,'original-generation receipts cover the offline BYTEA writes')
+            assert after_bytea_restart['lsn']==durable
+            assert after_bytea_restart['generation']==before_bytea_restart['generation']
+            assert after_bytea_restart['sequence']>before_bytea_restart['sequence']
+            assert after_bytea_restart['transactionHash']!=before_bytea_restart['transactionHash']
+            assert snapshot_ids==mysql_snapshots
+            require(lambda:sql('source',"SELECT confirmed_flush_lsn='"+durable+"'::pg_lsn "
+                                        "FROM pg_replication_slots WHERE slot_name='"+slot+"'")=='t',
+                    'original PostgreSQL slot feedback reaches durable BYTEA LSN')
+            report['byteaAfterRestart']=after_bytea_restart
+            report['byteaSourceSlot']=slot
+            report['byteaSnapshotIds']=snapshot_ids.splitlines()
+            passed('Offline BYTEA changes retain both original snapshots and advance the original slot and both target receipts')
         if args.floating_values:
             keyed,keyless=floating_rows()[0]
             assert '9|bf800001|3ff0000000000002' in keyed
@@ -1086,6 +1249,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     finally:
         cleanup=compose('down','-v','--remove-orphans',check=False)
         report['cleanupExitCode']=cleanup.returncode
+        if args.bytea_values:
+            label='label=com.docker.compose.project='+project
+            resources={'containers':['ps','-aq'],'volumes':['volume','ls','-q'],'networks':['network','ls','-q']}
+            report['remaining']={kind:len(subprocess.check_output(
+                ['docker',*command,'--filter',label],text=True,timeout=30).splitlines())
+                for kind,command in resources.items()}
+            if any(report['remaining'].values()):
+                report['status']='FAIL'
         (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-        if cleanup.returncode:
+        if cleanup.returncode or (args.bytea_values and any(report['remaining'].values())):
             raise RuntimeError('Test fixture cleanup failed')

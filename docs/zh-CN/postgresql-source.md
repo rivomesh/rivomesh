@@ -18,6 +18,7 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 ## 支持边界与故障处理
 
 - 初始类型包括有符号整数、布尔、有明确精度的小数、文本、JSON/JSONB 和 BYTEA。表可有主键，也可使用完整行身份的无主键表。
+- PostgreSQL `BYTEA` 映射为 PostgreSQL `BYTEA` 和 MySQL `LONGBLOB`。已验收的源端使用默认 `bytea_output=hex`。原生夹具可加 `--source-image postgres:17.12 --bytea-values`，核对全量、CDC 和重启时的 SQL `NULL`、空字节串、原始字节和无主键重复数，同时校验未修改的外置 TOAST 字段及 16–32 KiB 内容。[PostgreSQL 二进制类型](https://www.postgresql.org/docs/17/datatype-binary.html)
 - PostgreSQL UUID 以小写标准格式写入目标 `VARCHAR(36)`。PostgreSQL 17.12 到 PostgreSQL 17.12 档案已验证 NULL 和 UUID 主键变更。夹具追加 `--uuid` 可复现。[PostgreSQL UUID 格式](https://www.postgresql.org/docs/17/datatype-uuid.html)
 - PostgreSQL `DATE` 在 PostgreSQL 和 MySQL 目标上均映射为 `DATE`。支持 1000-01-01 至 9999-12-31，保留 SQL `NULL`。快照和 pgoutput 共用 ISO 格式，日期不因 Worker 时区或公历切换而改变。[PostgreSQL 日期时间](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL DATE 取值范围](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
 - PostgreSQL 的 `TIME WITHOUT TIME ZONE` 在 PostgreSQL 和 MySQL 目标均使用 `TIME(6)`，区分 `00:00:00` 和一天结束时的 `24:00:00`，并保留微秒及 SQL `NULL`。`TIMETZ` 仍不支持。[PostgreSQL 日期时间类型](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL TIME 精度](https://dev.mysql.com/doc/refman/8.4/en/date-and-time-type-syntax.html)

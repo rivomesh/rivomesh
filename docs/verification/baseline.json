@@ -14202,5 +14202,46 @@
     },
     "reproduce": "bash tests/clickhouse-materializer-run.sh",
     "pending": "Replicated ClickHouse failover, distributed writers and independent TLS profiles."
+  },
+  "postgresqlByteaToastTemurin21": {
+    "scope": "PostgreSQL 17.12 default bytea_output=hex to PostgreSQL 17.12 and MySQL 8.4.13. One publication with two mapped schemas and an original logical slot.",
+    "nativeManifestSha256": "1f82c52be3edebb7ac17adc33e94d21b66d9751631418dc1d08f5f6058f8fcde",
+    "artifactSha256": "f39cf9cc1c65711cae5f0e02368a5beb924f31bf059fdb7de743e01aee6bf6d5",
+    "fixtureSha256": "3db025ffb6106d1f5ce26a0976cdde30c9ed83062b6f3969fd434049b23420dd",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "BYTEA snapshot preserves NULL, empty, binary bytes, out-of-line values and keyless multiplicity",
+      "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+      "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+      "Pgoutput retains unchanged out-of-line bytes and changes exactly one matching keyless occurrence",
+      "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+      "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+      "Offline BYTEA changes retain both original snapshots and advance the original slot and both target receipts"
+    ],
+    "javaVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "nativeChecksPassed": 8,
+    "toastBytes": [
+      16384,
+      32768
+    ],
+    "sameGeneration": true,
+    "retainedSnapshotCount": 5,
+    "sequenceBeforeAndAfter": [
+      3,
+      5
+    ],
+    "lsnBeforeAndAfter": [
+      "0/19a55b0",
+      "0/19bf088"
+    ],
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-bytea --source-image postgres:17.12 --bytea-values --jdk 21"
   }
 }
