@@ -316,6 +316,8 @@ final class PostgresqlCdcSource implements SourceAdapter {
             case 16:column.type=TableSchema.Type.BOOLEAN;break;
             case 17:column.type=TableSchema.Type.BYTES;break;
             case 20:case 21:case 23:column.type=TableSchema.Type.INT64;break;
+            case 700:column.type=TableSchema.Type.FLOAT32;break;
+            case 701:column.type=TableSchema.Type.FLOAT64;break;
             case 25:case 1043:
                 column.type=TableSchema.Type.STRING;
                 if(oid==1043&&modifier>=4)column.length=modifier-4;
@@ -376,6 +378,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 st.execute("SET LOCAL bytea_output='hex'");
                 st.execute("SET LOCAL DateStyle TO 'ISO, YMD'");
                 st.execute("SET LOCAL TimeZone TO 'UTC'");
+                st.execute("SET LOCAL extra_float_digits TO 3");
             }
             StringBuilder query=new StringBuilder("SELECT ");
             for(TableSchema.Column column:table.columns){
@@ -431,6 +434,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                     session.setQueryTimeout(15);
                     session.execute("SET DateStyle TO 'ISO, YMD'");
                     session.execute("SET TimeZone TO 'UTC'");
+                    session.execute("SET extra_float_digits TO 3");
                 }
                 stream=connection.unwrap(PGConnection.class).getReplicationAPI().replicationStream().logical()
                         .withSlotName(slot).withStartPosition(LogSequenceNumber.valueOf(start))

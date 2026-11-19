@@ -43,6 +43,12 @@ Preflight reports `POSTGRESQL_NUMERIC_PRECISION_REQUIRED` for unconstrained `NUM
 
 Append `--source-image postgres:17.12 --numeric-values` to the fixture command below to verify PostgreSQL and MySQL snapshots, key changes, duplicate keyless updates and deletes, restart at the original LSN, and rejection of a transaction containing `NaN`.
 
+### Floating-point types
+
+PostgreSQL `REAL` and `DOUBLE PRECISION` map to the same types on a PostgreSQL target and to `FLOAT` and `DOUBLE` on MySQL. Snapshot and pgoutput sessions select exact floating-point text. Native checks cover adjacent representable values, subnormals, SQL NULL, keyless duplicates and continuation after restart. Row identity treats both signs of zero as zero. [PostgreSQL floating-point types](https://www.postgresql.org/docs/17/datatype-numeric.html#DATATYPE-FLOAT) · [MySQL floating-point types](https://dev.mysql.com/doc/refman/8.4/en/floating-point-types.html)
+
+NaN and positive or negative infinity cause `POSTGRESQL_FLOAT_NONFINITE`. At the affected streaming transaction, capture holds its previous LSN, both target receipts and the business rows. Append `--source-image postgres:17.12 --floating-values` to the native fixture command. [Verification](../verification/README.md#postgresql-real-and-double-precision-to-two-sql-targets)
+
 Reproduce the native checks with `python3 tests/postgres-source-run.py --artifact <release jar> --output target/pg-source-proof`. The fixture simulates a lost PostgreSQL slot in disposable containers.
 
 Add `--source-image postgres:17.12 --date-values` to run the civil date fixture against PostgreSQL and MySQL destinations. It covers a DATE primary-key change, an exact keyless occurrence, restart from the original slot and snapshot, and refusal of an infinite date without applying its transaction. BCE dates and dates outside the profile range produce the same `POSTGRESQL_DATE_OUT_OF_RANGE` diagnostic. Review source values and the retained LSN before retrying.

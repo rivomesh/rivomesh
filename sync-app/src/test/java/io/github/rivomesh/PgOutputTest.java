@@ -88,6 +88,28 @@ class PgOutputTest {
                     ()->PgOutput.value(amount,special)).getMessage());
     }
 
+    @Test void finiteFloatsRoundTripAtTheSourcePrecision(){
+        var real=new TableSchema.Column();
+        real.type=TableSchema.Type.FLOAT32;
+        var wide=new TableSchema.Column();
+        wide.type=TableSchema.Type.FLOAT64;
+        for(float value:new float[]{Float.MIN_VALUE,Float.MIN_NORMAL,1.0000001f,-Float.MAX_VALUE}){
+            String wire=Float.toString(value);
+            assertEquals(Float.floatToIntBits(value),Float.floatToIntBits(Float.parseFloat(PgOutput.value(real,wire).value)));
+        }
+        for(double value:new double[]{Double.MIN_VALUE,Double.MIN_NORMAL,1.0000000000000002,-Double.MAX_VALUE}){
+            String wire=Double.toString(value);
+            assertEquals(Double.doubleToLongBits(value),Double.doubleToLongBits(Double.parseDouble(PgOutput.value(wide,wire).value)));
+        }
+        for(var column:new TableSchema.Column[]{real,wide}){
+            assertEquals("0",PgOutput.value(column,"-0").value);
+            assertNull(PgOutput.value(column,null).value);
+            for(String special:new String[]{"NaN","Infinity","-Infinity"})
+                assertEquals("POSTGRESQL_FLOAT_NONFINITE",assertThrows(IllegalStateException.class,
+                        ()->PgOutput.value(column,special)).getMessage());
+        }
+    }
+
     @Test void civilDatesShareOneBoundedCanonicalRepresentation(){
         TableSchema.Column day=new TableSchema.Column();
         day.type=TableSchema.Type.DATE;

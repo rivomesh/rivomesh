@@ -168,6 +168,14 @@ final class PgOutput {
                 if("NaN".equals(text)||"Infinity".equals(text)||"-Infinity".equals(text))
                     throw invalid("POSTGRESQL_NUMERIC_NONFINITE");
                 return Cell.value(new BigDecimal(text).toPlainString());
+            case FLOAT32:
+                float single=Float.parseFloat(text);
+                if(!Float.isFinite(single))throw invalid("POSTGRESQL_FLOAT_NONFINITE");
+                return Cell.value(single==0?"0":Float.toString(single));
+            case FLOAT64:
+                double wide=Double.parseDouble(text);
+                if(!Double.isFinite(wide))throw invalid("POSTGRESQL_FLOAT_NONFINITE");
+                return Cell.value(wide==0?"0":Double.toString(wide));
             case DATE:return Cell.value(PostgresDate.canonicalSource(text));
             case TIME:return Cell.value(PostgresClock.canonical(text));
             case DATETIME:return Cell.value(PostgresTimestamp.canonicalSource(text,false));

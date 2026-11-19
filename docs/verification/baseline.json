@@ -13272,5 +13272,36 @@
     "retainedInitialFailure": "Initial PDB-qualified control marker raised ORA-00904. The final diagnostic uses the PDB dictionary and unqualified owner.table.column name, and verifies all four positive control values.",
     "scope": "A single Oracle Free PDB with ALL supplemental logging. CDC has no reliable native binary JSON images in the accepted profile. Product refuses these tables during preflight. The JDBC and Flashback findings are separate.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --native-json-evidence --output target/oracle-native-json-proof"
+  },
+  "postgres17NativeFloatingPoint": {
+    "artifactSha256": "07488ef478826c2cd920f6bd8e94bbd52409cd6fc6895a4d1ce145605739e2b6",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "mysqlVersion": "8.4.13",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "Binary32 and binary64 snapshots agree at adjacent values, subnormals, SQL NULL and duplicates",
+      "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+      "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+      "Pgoutput preserves binary precision despite rounded server defaults, including one keyless update",
+      "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+      "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+      "Binary32 and binary64 changes made offline reuse the logical slot and both target snapshots",
+      "A non-finite floating-point value refuses the entire transaction and retains both native receipts"
+    ],
+    "runtimeVersion": "21.0.13",
+    "runtimeArchitecture": "arm64",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "harnessSha256": "dc945b660b187de864a2e1022966c55fc25dcc7a6eee0ff022a1ebfbbb8355be",
+    "cleanupExitCode": 0,
+    "manifestSha256": "e88c92c3deb9f1589a7abdc000f5edd480c610823f3dff842f03975c9b51488e",
+    "nativeLogSha256": "cebb8d79dda627d0a9e57d787c4f7250c6cd05029bbdc6ed77a942a0ecd47170",
+    "mavenLogSha256": "e360a4597bebe75633cc4294c6748721f287a3de95f202930af03bfc63d7df2a",
+    "javaFocusedPassed": 45,
+    "firstFixtureFailureSha256": "c21b198c4900db191c90017b6102b9889c213a40fcccabc8fc8c1390abb4302c",
+    "firstFixtureFailure": "The Unix socket saw MySQL's initialization server before it opened TCP. The same application passed when the fixture waited for TCP readiness.",
+    "sourcePrecisionDefault": "extra_float_digits=0",
+    "scope": "Finite PostgreSQL real and double precision into PostgreSQL and MySQL. Tested adjacent and subnormal representations, SQL NULL, zero normalization, keyless multiset changes and restart. A non-finite transaction leaves original target state.",
+    "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/pg-float-proof --source-image postgres:17.12 --floating-values"
   }
 }

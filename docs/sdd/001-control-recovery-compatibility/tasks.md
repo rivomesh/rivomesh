@@ -116,6 +116,7 @@ RM-SDD-001 · 2026-11-17
   交付：完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。
   验收：AC-SO-06
   - [x] PostgreSQL 17.12 扩展 NUMERIC 标度双目标同步，保留 65 位精度和无主键重数，NaN 使整笔停在原断点。
+  - [x] REAL 和 DOUBLE PRECISION 双目标复制、无主键重复、原快照恢复和非有限值整笔拒绝通过。
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07

@@ -116,6 +116,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs.
   Acceptance: AC-SO-06
   - [x] PostgreSQL 17.12 extended NUMERIC scale and exact 65-digit and keyless delivery to two targets. A NaN transaction holds the original cut.
+  - [x] REAL and DOUBLE PRECISION passed dual-target snapshots, keyless changes, original-slot restart and complete non-finite transaction refusal.
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07

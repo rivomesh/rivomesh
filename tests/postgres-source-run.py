@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import struct
 import subprocess
 import tempfile
 import time
@@ -26,6 +27,8 @@ type_profile = parser.add_mutually_exclusive_group()
 type_profile.add_argument('--date-values', action='store_true', help='Exercise civil DATE through PostgreSQL and MySQL targets')
 type_profile.add_argument('--timestamp-values', action='store_true', help='Exercise civil and UTC timestamps through both targets')
 type_profile.add_argument('--clock-values', action='store_true', help='Exercise PostgreSQL clock values, including 24:00')
+type_profile.add_argument('--floating-values', action='store_true',
+                          help='Verify finite PostgreSQL REAL and DOUBLE PRECISION in two SQL destinations')
 type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 parser.add_argument('--previous-numeric-artifact', type=Path,
@@ -41,7 +44,7 @@ parser.add_argument('--reject-old-primary', action='store_true',
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
-dual_targets = temporal_targets or args.numeric_values
+dual_targets = temporal_targets or args.numeric_values or args.floating_values
 if args.previous_numeric_artifact and not args.numeric_values:
     parser.error('--previous-numeric-artifact requires --numeric-values')
 if args.reject_old_primary and not args.failover:
@@ -65,6 +68,8 @@ report = dict(artifactSha256=digest,status='RUNNING',checks=[],jdk=args.jdk,runt
               clockValues=args.clock_values,deliveryTiming=args.delivery_timing,tls=args.tls)
 if args.numeric_values:
     report.update(numericValues=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.floating_values:
+    report.update(floatingValues=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.ddl_review:
     report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -163,6 +168,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     if dual_targets:
         services['mysql']=dict(image='mysql:8.4',environment=dict(
             MYSQL_ROOT_PASSWORD='${RM_PG_PASSWORD}',MYSQL_ROOT_HOST='%'))
+    if args.floating_values:
+        services['source']['command']+=['-c','extra_float_digits=0']
     if args.timestamp_values or args.clock_values:
         services['source']['command']+=['-c','timezone=America/New_York']
         report['harnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -224,7 +231,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
 
     def mysql(statement):
         return compose('exec','-T','mysql','sh','-c',
-                       'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -NB -e "$1"',
+                       'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP --host=127.0.0.1 -uroot -NB -e "$1"',
                        'rivomesh-date',statement).stdout.strip()
 
     def date_rows():
@@ -291,6 +298,41 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                 read(lambda query:sql('target',query),'TEXT','copy_billing','copy_sales'),
                 read(lambda query:mysql(query).replace('\t','|'),'CHAR','copy_billing','copy_sales'))
 
+    def floating_rows():
+        def zero_bits(entry):
+            return {'80000000':'00000000','8000000000000000':'0000000000000000'}.get(entry,entry)
+
+        def postgres(service,billing,sales):
+            values="COALESCE(encode(float4send(narrow),'hex'),'<NULL>'),COALESCE(encode(float8send(wide),'hex'),'<NULL>')"
+            keyed=sql(service,f"SELECT id,{values} FROM {billing}.floating_key ORDER BY id")
+            keyless=sql(service,f"SELECT {values} FROM {sales}.floating_keyless")
+            return (
+                ['|'.join((key,*map(zero_bits,fields))) for key,*fields in (row.split('|') for row in keyed.splitlines())],
+                sorted('|'.join(map(zero_bits,row.split('|'))) for row in keyless.splitlines()),
+            )
+
+        def packed(value,kind):
+            if value=='<NULL>':
+                return value
+            numeric=float(value)
+            return struct.pack(kind,0 if numeric==0 else numeric).hex()
+
+        expressions=("COALESCE(CAST(CAST(narrow AS DOUBLE) AS CHAR),'<NULL>'),"
+                     "COALESCE(CAST(wide AS CHAR),'<NULL>')")
+        keyed=mysql(f"SELECT id,{expressions} FROM copy_billing.floating_key ORDER BY id")
+        keyless=mysql(f"SELECT {expressions} FROM copy_sales.floating_keyless")
+        mysql_rows=(
+            ['|'.join((key,packed(narrow,'>f'),packed(wide,'>d')))
+             for key,narrow,wide in (row.split('\t') for row in keyed.splitlines())],
+            sorted('|'.join((packed(narrow,'>f'),packed(wide,'>d')))
+                   for narrow,wide in (row.split('\t') for row in keyless.splitlines())),
+        )
+        return postgres('source','billing','sales'),postgres('target','copy_billing','copy_sales'),mysql_rows
+
+    def floating_target_cut():
+        receipt='SELECT epoch,stream_seq,transaction_hash FROM copy_meta.rm3_sink_job'
+        return floating_rows()[1:],sql('target',receipt),mysql(receipt)
+
     def numeric_storage_shape(read):
         return read("SELECT column_name,numeric_precision,numeric_scale,is_nullable FROM information_schema.columns "
                     "WHERE table_schema='copy_billing' AND table_name='numeric_key' ORDER BY ordinal_position")
@@ -340,6 +382,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             return source==pg==my
         if args.numeric_values:
             source,pg,my=numeric_rows()
+            return source==pg==my
+        if args.floating_values:
+            source,pg,my=floating_rows()
             return source==pg==my
         return True
 
@@ -447,6 +492,21 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
             sql('source','DROP TABLE sales.zoned_clock')
             passed('TIMETZ is refused by native discovery before creating a logical slot')
+        if args.floating_values:
+            assert sql('source','SHOW extra_float_digits')=='0'
+            sql('source',"""
+                CREATE TABLE billing.floating_key(id BIGINT PRIMARY KEY, narrow REAL, wide DOUBLE PRECISION);
+                CREATE TABLE sales.floating_keyless(narrow REAL, wide DOUBLE PRECISION);
+                ALTER TABLE billing.floating_key REPLICA IDENTITY FULL;
+                ALTER TABLE sales.floating_keyless REPLICA IDENTITY FULL;
+                INSERT INTO billing.floating_key VALUES
+                    (1,1.0000001,1.0000000000000002),(2,'-0','-0'),
+                    (3,'1.40129846e-45','4.9406564584124654e-324'),(4,NULL,NULL);
+                INSERT INTO sales.floating_keyless VALUES
+                    (0.1,-0.10000000000000002),(0.1,-0.10000000000000002),
+                    (-1.0000001,NULL),(NULL,1.0000000000000002);
+                ALTER PUBLICATION rivomesh_test ADD TABLE billing.floating_key,sales.floating_keyless;
+            """)
         if args.numeric_values:
             sql('source',"""
                 CREATE TABLE sales.unportable_numeric(amount NUMERIC(65,-1));
@@ -543,6 +603,18 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
             dual_target_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+        if args.floating_values:
+            types=("SELECT column_name,data_type FROM information_schema.columns "
+                   "WHERE table_schema='copy_billing' AND table_name='floating_key' "
+                   "AND column_name IN ('narrow','wide') ORDER BY ordinal_position")
+            assert sql('target',types)=='narrow|real\nwide|double precision'
+            assert mysql(types)=='narrow\tfloat\nwide\tdouble'
+            first,second,third=floating_rows()
+            assert first==second==third
+            assert first[0]==['1|3f800001|3ff0000000000001','2|00000000|0000000000000000',
+                              '3|00000001|0000000000000001','4|<NULL>|<NULL>']
+            assert first[1].count('3dcccccd|bfb999999999999b')==2
+            passed('Binary32 and binary64 snapshots agree at adjacent values, subnormals, SQL NULL and duplicates')
         if args.numeric_values:
             expected_shape='rounded|6|0|NO\nfractional|4|4|YES\nwide|65|30|YES'
             assert numeric_storage_shape(lambda query:sql('target',query))==expected_shape
@@ -628,6 +700,20 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             COMMIT""")
         require(lambda:equal() and task()['status'].get('capture_lsn')!=initial['capture_lsn'],'pgoutput transaction delivered')
         passed('A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence')
+        if args.floating_values:
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.floating_key SET id=11,narrow=1.0000002,wide=1.0000000000000004 WHERE id=1;
+                UPDATE sales.floating_keyless SET wide=0.10000000000000003 WHERE ctid=(
+                    SELECT ctid FROM sales.floating_keyless WHERE narrow=0.1::real LIMIT 1);
+                COMMIT;
+            """)
+            require(equal,'bit-exact pgoutput floating-point transaction delivered to both targets')
+            keyed,keyless=floating_rows()[0]
+            assert keyed[-1]=='11|3f800002|3ff0000000000002'
+            assert keyless.count('3dcccccd|bfb999999999999b')==1
+            assert keyless.count('3dcccccd|3fb999999999999c')==1
+            passed('Pgoutput preserves binary precision despite rounded server defaults, including one keyless update')
         if args.numeric_values:
             sql('source',"""
                 BEGIN;
@@ -741,6 +827,13 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.clock_values:
             sql('source',"UPDATE billing.clock_key SET slot='23:59:59.999999' WHERE slot='24:00:00'; "
                          "INSERT INTO sales.clock_keyless VALUES('00:00:00.000001')")
+        if args.floating_values:
+            sql('source',"""
+                BEGIN;
+                INSERT INTO billing.floating_key VALUES(9,-1.0000001,1.0000000000000004);
+                DELETE FROM sales.floating_keyless WHERE wide=-0.10000000000000002;
+                COMMIT;
+            """)
         if args.numeric_values:
             sql('source',"""
                 BEGIN;
@@ -758,6 +851,11 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if dual_targets:
             assert slot==dual_target_slot
             assert mysql_snapshots==mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+        if args.floating_values:
+            keyed,keyless=floating_rows()[0]
+            assert '9|bf800001|3ff0000000000002' in keyed
+            assert '3dcccccd|bfb999999999999b' not in keyless
+            passed('Binary32 and binary64 changes made offline reuse the logical slot and both target snapshots')
         if args.numeric_values:
             assert numeric_rows()[0]==(
                 f'-1500|<NULL>|<NULL>\n1500|0.0050|{wide}',
@@ -894,6 +992,23 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert refused['error_stage']=='SOURCE_DECODE' and refused['capture_lsn']==before_timestamp_fault
             assert timestamp_rows()[1:]==finished
             passed('An infinite timestamp refuses the complete transaction at the original LSN for both targets')
+        elif args.floating_values:
+            prior_lsn=task()['status']['capture_lsn']
+            prior_cut=floating_target_cut()
+            sql('source',"""
+                BEGIN;
+                UPDATE billing.floating_key SET id=20 WHERE id=4;
+                INSERT INTO sales.floating_keyless VALUES('NaN','Infinity');
+                COMMIT;
+            """)
+            def floating_fault():
+                status=task()['status']
+                return status if status.get('error_code')=='POSTGRESQL_FLOAT_NONFINITE' else None
+
+            refused=require(floating_fault,'non-finite float aborts the complete logical transaction')
+            assert refused['error_stage']=='SOURCE_DECODE' and refused['capture_lsn']==prior_lsn
+            assert floating_target_cut()==prior_cut
+            passed('A non-finite floating-point value refuses the entire transaction and retains both native receipts')
         elif args.numeric_values:
             prior_lsn=task()['status']['capture_lsn']
             prior_cut=numeric_target_cut()

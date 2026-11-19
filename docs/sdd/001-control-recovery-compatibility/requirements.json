@@ -1083,8 +1083,8 @@
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 PostgreSQL 17.12 扩展 NUMERIC 标度已实测 PostgreSQL 和 MySQL 双目标，涉及源端舍入、65 位精度、无主键重数及 NaN 整笔暂停。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE, microsecond timestamp and TIME(6) recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain. A native read-only comparison shows the current PostgreSQL publication while capture stays at the pre-change LSN. PostgreSQL 17.12 extended NUMERIC scales passed PostgreSQL and MySQL native delivery, including source rounding, 65 digits, keyless multiplicity and whole-transaction refusal of NaN."
+        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 PostgreSQL 17.12 扩展 NUMERIC 标度已实测 PostgreSQL 和 MySQL 双目标，涉及源端舍入、65 位精度、无主键重数及 NaN 整笔暂停。 PostgreSQL 17.12 的有限 REAL 与 DOUBLE PRECISION 已实测映射到 PostgreSQL 和 MySQL。相邻浮点、次正规数、无主键重复及原位重启保留值。非有限值阻断整笔事务。",
+        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE, microsecond timestamp and TIME(6) recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain. A native read-only comparison shows the current PostgreSQL publication while capture stays at the pre-change LSN. PostgreSQL 17.12 extended NUMERIC scales passed PostgreSQL and MySQL native delivery, including source rounding, 65 digits, keyless multiplicity and whole-transaction refusal of NaN. Finite PostgreSQL 17.12 REAL and DOUBLE PRECISION passed with PostgreSQL and MySQL targets. Adjacent values, subnormals, keyless duplicates and restart preserve values. Non-finite values block the whole transaction."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
