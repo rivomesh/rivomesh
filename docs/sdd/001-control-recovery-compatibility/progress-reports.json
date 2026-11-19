@@ -2,23 +2,21 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T08:58:29+08:00",
-  "nextReportAt": "2026-11-19T09:58:16+08:00",
+  "lastReportAt": "2026-11-19T09:58:36+08:00",
+  "nextReportAt": "2026-11-19T10:58:16+08:00",
   "completedSincePrevious": [
-    "CP-04 private writer transfer and STOPPED configuration were published with 17 native checks. The actual staging UI passed 20 native checks including six browser cases.",
-    "A normal Java 21 package from bbe4fc8 passed 578 Java tests including two isolated transport tests; 35 explicit optional external checks were skipped.",
-    "LG-03 external PostgreSQL Hive Metastore passed all seven native checks and stock schema validation. Worker SIGKILL and isolated SQL recovery retained the original snapshot and four Hive receipts.",
-    "JV-03 Kingbase external JDBC passed five native checks including wrong authentication, atomic rollback, restart, exact receipt replay and precision.",
-    "LG-02 added a native binary NO PAD UNIQUE(email) profile. Six native checks and 68 Java tests validated original ordinary index, approved constraint restoration, writer activation, pre-write failback and original-snapshot CDC.",
-    "SO-06 PostgreSQL native TIME(6) passed nine native checks and 37 integrated Java. Both targets retain 24:00, microseconds, NULL, exact keyless multiplicity and their snapshots across restart.",
-    "RC-10 Kafka read-only notice planning passed three native checks on four brokers and two entries. An extra partial BEGIN blocks planning. The integrated package passed 46 Java and 146 DOM tests.",
-    "LG-10 offline audit signature and independent store pinning passed 13 checks each with OpenSSL 3.6.2 and LibreSSL 3.3.6. Private signing keys remain in external custody.",
-    "Removed 170 generated output files totaling 2,936,795,719 logical bytes from completed runs while retaining final packages, native manifests, active files and user data."
+    "PostgreSQL publication drift review passed eight native checks. Capture preserves its previous LSN and target cut when a relation changes.",
+    "Oracle virtual NUMBER feasibility passed 12 native checks. Historical reads and archived physical operands are confirmed. The production adapter still needs integration.",
+    "Same-store Agent handoff and installed evidence passed 24 native checks, including two real Chrome entries, both Agent restarts, and direct launch refusal from old and current builds.",
+    "Managed Kafka Topic previews bind observed business and control Topic identities. Four brokers and two Controllers passed three native checks, including the explicit block for missing ownership evidence on another output.",
+    "Chrome at 320 and 390 pixels confirmed the parked dialog hides inactive fields.",
+    "Removed 50 additional generated intermediate files totaling 716,335,497 logical bytes."
   ],
   "inProgress": [
-    "CP-04 explicit Candidate Worker activation awaits native target-epoch fencing and authorized single admission.",
-    "RC-10 broader durable physical Kafka ownership and approved publication require coverage of all active and recoverable configurations.",
-    "SO-07 Oracle virtual NUMBER integration and Worker restart follow the bounded native feasibility result."
+    "CP-04 administrator-approved SQL target fencing while the journal remains parked. Exact Java 21 candidate passed 59 focused tests, with one conditional test skipped. Native status when recorded: RUNNING, 21 passed.",
+    "Worker admission after native fencing still needs a durable grant and scheduler recovery acceptance.",
+    "RC-10 Kafka actual notice dispatch still needs broad managed resource proofs and broker-side authorization.",
+    "SO-07 Oracle virtual source values still need integration and restart acceptance."
   ],
   "reportContents": [
     "Current totals",
@@ -33,15 +31,12 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "78eeb525ce09234ba84de6e7d096bf8c4f21e423",
-    "1d442f632572ae5042d92ce3eb870e7d6696e671",
-    "7657cd92b1011deb207e07634bda4d44d539bcbb",
-    "8ae952262cc8562e75e2b713da9a17b4244000e0",
-    "a1fe55f4ae385db1424a2158731c47de407612f1",
-    "c2e84f69dd552a42b01dcdf2285905fe23e7eb28",
-    "200fe62a7b9c692863f71374b2549ad797f6cdf3",
-    "fd1d8b62afcf531c988028b68039858511ce089e",
-    "bbe4fc81025e482208fbed6b1687093cdfed3529"
+    "ff2bad409713e0009a7e094e768c139e946edc4e",
+    "b4afa9ce6ad4e0e41146200ceb5c5de186599e9f",
+    "1e6559276947acb82c31546e0ca8ad5ee9646083",
+    "a6f16ce84216eeeedb0bedc89a74ee003d1942e4",
+    "0dd2c044d2f191410e258c742a350c65b21b14c5",
+    "b0b5a3c7c1ceed6917dde059c07850d9d1316642"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -49,21 +44,15 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Implement explicit reviewed Agent activation with native target epoch receipts.",
-    "Extend Kafka identity evidence to multiple managed tasks and retained configurations and separately prove broker-side authority.",
-    "Integrate the bounded Oracle virtual calculation and verify original archive checkpoint resume."
+    "Finish native parked SQL target fence and same-request resume.",
+    "Bind explicit Worker admission to the current candidate and all native SQL fence receipts.",
+    "Verify the restarted Worker reuses the original journal, snapshot and destination receipts."
   ],
-  "currentCandidateArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "currentCandidateScope": "Latest integrated managed Kafka Topic identity preview. 55 Java, 150 DOM and three native checks.",
+  "currentCandidateArtifact": "4d00c07d8db11cbf3d72f811e639bf11477f8d742df5f1d5453693634a100b6a",
+  "currentCandidateScope": "CP-04 administrator-approved SQL target fencing while the journal remains parked. Exact Java 21 candidate passed 59 focused tests, with one conditional test skipped. Native status when recorded: RUNNING, 21 passed.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [
-    "PostgreSQL native read-only publication drift shipped. Eight native checks preserve the pause LSN and destination cut while reviewing current catalog changes.",
-    "Oracle virtual NUMBER feasibility shipped with 12 native observations. Archived physical operands and Flashback are verified. Adapter integration and restart are pending.",
-    "Signed candidate history installation and parked mixed-runtime fencing shipped. 24 native checks include both Agent restarts, two actual browser entries and both versions of direct Worker/restore refusal.",
-    "Managed Kafka native Topic identity preview passed three real checks across four brokers and two Controllers. Second Kafka output requests ownership evidence while every business and consumer cut remains unchanged.",
-    "An additional 94 obsolete or byte-identical generated intermediate files were cleaned, totaling 2,482,469,369 logical bytes."
-  ],
-  "lastScheduledReportAt": "2026-11-19T08:58:16+08:00",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T09:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",
     "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
