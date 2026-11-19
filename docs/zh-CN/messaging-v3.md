@@ -164,7 +164,9 @@ messaging:
 
 此档案的 `replicas` 表示 **BookKeeper 最少 ACK 副本数**。新 Topic 的 ensemble/write/ACK quorum 都设置为该值；已有兼容 Topic 可以使用更大的 ensemble/write quorum，但 ACK quorum 不能低于配置下限。它不会部署 bookie、Broker 副本或故障域。确认依赖 BookKeeper 的持久 journal、复制配置及可恢复元数据；单 bookie 测试不是生产高可用或断电保证。无限保留需要规划容量、归档和消费者安全清理。
 
-本机故障夹具使用 Pulsar 4.0.14、两个活动 Broker、三个 BookKeeper 节点和一个 ZooKeeper 节点。验收核对原 Topic 绑定及 2/2/2 的集合、写入和确认策略。服务 Topic 的 Broker 退出后，发布端可通过幸存服务入口重新打开原 Topic。消息写入端在发布未确认时关闭旧连接，并用新连接重试相同事件。两个 bookie 离线时，需要两份确认的发布保持未确认。原 bookie 使用各自的持久卷恢复后，传输端打开原 Topic，并重试同一个稳定事件 ID。消费者应按事件 ID 去重。此档案使用隔离明文网络。集群 TLS、元数据服务冗余、存储故障域和负载容量需要单独验收。 [Pulsar 集群配置](https://pulsar.apache.org/docs/4.0.x/deploy-bare-metal/) · [验收记录](../verification/README.md)
+本机故障夹具使用 Pulsar 4.0.14、两个活动 Broker、三个 BookKeeper 节点和一个 ZooKeeper 节点。验收核对原 Topic 绑定及 2/2/2 的集合、写入和确认策略。服务 Topic 的 Broker 退出后，发布端可通过幸存服务入口重新打开原 Topic。消息写入端在发布未确认时关闭旧连接，并用新连接重试相同事件。两个 bookie 离线时，需要两份确认的发布保持未确认。原 bookie 使用各自的持久卷恢复后，传输端打开原 Topic，并重试同一个稳定事件 ID。消费者应按事件 ID 去重。此档案使用隔离明文网络。安全集群档案同时验证 Broker TLS、Token 与三节点元数据多数派。存储故障域和负载容量仍需单独验收。 [Pulsar 集群配置](https://pulsar.apache.org/docs/4.0.x/deploy-bare-metal/) · [验收记录](../verification/README.md)
+
+安全夹具使用私有 CA，并分别为两个 Broker 的公布主机名签发证书。两个 Broker 入口均要求 HTTPS、Pulsar TLS 与 Token。终止 ZooKeeper 主节点后，剩余两节点重新选主。传输端随后能创建并确认新的已绑定 Topic，且再次核对原 Topic 的已确认历史。BookKeeper 与 ZooKeeper 内部链路位于本机测试网络，生产内部链路加密和跨主机持久性需独立验证。 [Pulsar TLS](https://pulsar.apache.org/docs/4.0.x/security-tls-transport/) · [ZooKeeper 与 BookKeeper](https://pulsar.apache.org/docs/4.0.x/administration-zk-bk/)
 
 客户端同步发送字节消息，关闭批处理/分片并限制待发送请求数。消息 properties 携带稳定事件 ID、逻辑通道与传输 header，Pulsar key 携带逻辑行/事务键。收到发送确认后才提交日志回执。Pulsar message ID 或 Broker 去重不能代替事件 ID 持久去重和事务暂存；这里不使用 Pulsar 原生事务，更换生产者或源租约接管后仍采用通用至少一次契约。
 

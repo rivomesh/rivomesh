@@ -11,7 +11,13 @@
     "CP-04 the candidate completes one preapproved and drained handoff after its accepting Controller exits. Both native cuts are rechecked before parking the assignment. 18 native, 70 integrated Java and 156 DOM; pushed b8ca754.",
     "Temurin 25.0.5 on ARM64 passed external MySQL asynchronous GTID promotion and Controller and Agent rolling replacement on the integrated package."
   ],
-  "inProgress": [],
+  "inProgress": [
+    "CP-04 asymmetric network partition with managed Worker fencing and queued STOP.",
+    "LG-05 combined raw MySQL archive and failure-history handoff.",
+    "RC-10 immutable conditional Kafka notice approval.",
+    "SO-07 Oracle BasicFiles and SecureFiles LOB archive and preflight.",
+    "JV-02 Java 17 optional package and native runtime acceptance."
+  ],
   "reportContents": [
     "Current totals",
     "New completions since previous report",
@@ -51,7 +57,8 @@
     "CP-04 Native Agent SIGKILL, same-directory restart with queued STOP, exact backlog and former-generation fencing. Nine native, 61 Java and 157 DOM tests. Pushed da11cde.",
     "RC-10 Bounded current physical Kafka route proof for active and restorable configurations. Four brokers, two Controllers, three retained versions and four routes. The current secret policy blocks withdrawn references before any connection. Pushed b7f3d70.",
     "LG-04 Pulsar 4.0.14 with two brokers, three bookies and one ZooKeeper node passed four outage and recovery checks. Pushed 7e0a523.",
-    "LG-05 Signed original failure history and recovery receipt survive approved PostgreSQL same-database transfer and candidate restart. 29 native checks, including 3 Chrome checks."
+    "LG-05 Signed original failure history and recovery receipt survive approved PostgreSQL same-database transfer and candidate restart. 29 native checks, including 3 Chrome checks.",
+    "LG-04 Pulsar two-broker private TLS/Token, three BookKeeper nodes, ZooKeeper leadership change and fresh metadata commit passed six native cases."
   ],
   "lastScheduledReportAt": "2026-11-19T13:58:16+08:00",
   "lastVerifiedReactor": {

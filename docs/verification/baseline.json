@@ -11174,5 +11174,47 @@
     "matchingProductEntries": 24951,
     "scope": "One original signed native constraint-failure record and its closed review receipt through approved PostgreSQL same-database ownership handoff. Candidate verifies the adopted read-only history after losing the original share and local staging. Combined raw-capture and failure-history adoption remains a separate profile.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/native-failure-history --test-classes sync-app/target/test-classes --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-failure-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-private-writer --handoff-public-owner --handoff-public-owner-browser /path/to/chrome --handoff-adopted-browser /path/to/chrome"
+  },
+  "pulsarTlsAndZooKeeperQuorumRecovery": {
+    "status": "PASS",
+    "native": {
+      "status": "PASS",
+      "artifactSha256": "81888b8f09d266cc45f3a7bfbff435667f25351f77ed8c2cb0f08a775513522c",
+      "testClassSha256": "dd11bf339a7b07f1b39ab7c8be4606af60b8ba9faba34665f75007421d679a2d",
+      "harnessSourceSha256": "7f7cf9c663d58038a642352cbcdec7ea47ef1896d0825f04a529415c03513233",
+      "brokerImage": "apachepulsar/pulsar:4.0.14",
+      "brokerImageId": "sha256:eefc3bbe50639ee3feea05f49700dcccf4de6d3bdfe05acdade091e388de047b",
+      "runnerImageId": "sha256:7a778cdeeac4b03922576109e382c1804eac9e546e03efac7a99e8341193da64",
+      "brokerCount": 2,
+      "bookieCount": 3,
+      "metadataNodes": 3,
+      "tlsAndToken": true,
+      "topicQuorum": [
+        2,
+        2,
+        2
+      ],
+      "checks": [
+        "An active broker confirms a message with the configured two-BookKeeper quorum",
+        "Both discovered brokers are verified with private TLS and Token; missing authentication and wrong SAN are rejected",
+        "After the owning broker is killed the retry path confirms at the original topic binding through the survivor",
+        "One surviving bookie cannot confirm a publication requiring two acknowledgements",
+        "Restarted bookies recover exact confirmed history and the pending stable event identity",
+        "Surviving ZooKeeper quorum elects a new leader and preserves the original topic while committing new metadata"
+      ],
+      "metadataElection": {
+        "formerLeader": "zookeeper-b",
+        "electedLeader": "zookeeper-c"
+      },
+      "cleanupVerified": true
+    },
+    "nativeManifestSha256": "a17d2b7801e4378b97bae5c6f46004846249ff6eb388f5ddd4a64ed5fda6afe2",
+    "priorInitialization": {
+      "status": "FAIL",
+      "manifestSha256": "6d3a3cc7f84f486e694ba03b6d17c87ec9cdea04d5ab5ecc05cff76c7126bf8f",
+      "phase": "Mandatory metadata CLI web URL omitted before broker startup"
+    },
+    "scope": "Two TLS-only Pulsar brokers with per-host private CA certificates and Token authorization, three BookKeeper nodes, and a three-node local ZooKeeper ensemble. The test verifies six recovery and rejection cases, including effective election plus new metadata and preservation of the existing topic. Internal BookKeeper and peer network TLS are deployment-specific.",
+    "reproduce": "python3 tests/pulsar-quorum-run.py --artifact /path/to/rivomesh.jar --test-classes pulsar-transport/target/test-classes --output target/native-pulsar-secure --secure-metadata-quorum"
   }
 }
