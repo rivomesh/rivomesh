@@ -11216,5 +11216,48 @@
     },
     "scope": "Two TLS-only Pulsar brokers with per-host private CA certificates and Token authorization, three BookKeeper nodes, and a three-node local ZooKeeper ensemble. The test verifies six recovery and rejection cases, including effective election plus new metadata and preservation of the existing topic. Internal BookKeeper and peer network TLS are deployment-specific.",
     "reproduce": "python3 tests/pulsar-quorum-run.py --artifact /path/to/rivomesh.jar --test-classes pulsar-transport/target/test-classes --output target/native-pulsar-secure --secure-metadata-quorum"
+  },
+  "managedWorkerAsymmetricControlPartition": {
+    "status": "PASS",
+    "sourceBase": "89598e1",
+    "native": {
+      "artifactSha256": "e37f3e3cb70c0399fc7c8d507c0ba6b51f6c5da1e98f86b2aae072422f7d11e6",
+      "harnessSourceSha256": "5dadf2f61350901e0681cc34bc61d4b6ce4125e5dc05237578bb420158ebe2f9",
+      "testClassesSha256": "233ad37f7963e6180c2ccd5142b98a99cd3f6af53415c0cf755421346b974c18",
+      "sourceImage": "mysql:8.4",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "checks": [
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Only the original Agent can admit the explicitly initialized managed writer",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "Only the original Agent control and journal path is cut; its live container still reaches the source and both targets",
+        "Asymmetric partition exposes expired control and unknown Worker, intent and capture at both Controllers",
+        "Expired leases invalidate a historical assessment and refuse candidate probing without changing native authority or cuts",
+        "The isolated original Worker cannot consume the backlog with data endpoints still reachable",
+        "Offline STOP completes on the reconnected original Agent without a restart before the backlog can reach either target",
+        "Explicit START consumes one backlog transaction on both targets and rejects the former Agent and capture leases"
+      ],
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "680b840d446651e9f7a15dadc3759c0cb25871c69ef957e9ee00dacc195342a5",
+    "prior": {
+      "status": "FAIL",
+      "artifactSha256": "88679b98e0966d7e214a66b51520545bed616b0d321a8dc0845fa78faa10ae95",
+      "harnessSourceSha256": "f48fc0944de807b81336cfbff264de5e4b88ab4c828c7541224a773378a8853f",
+      "manifestSha256": "f2c28c18961801bb054106aabd9978f981f23ee011d2e66c8666f230abd77d01",
+      "passedChecks": 8,
+      "cleanupExitCode": 0,
+      "failure": "Timed out waiting for the live original Agent to fence its Worker while the control and journal path was isolated."
+    },
+    "javaFocusedPassed": 57,
+    "candidateTree": "da4da20612f91227163c8d13b3524599b5c70198",
+    "scope": "Shared PostgreSQL control and journal, an original managed writer with an established settled cut, two management Controllers, a MySQL source and two SQL targets. Network isolation only removed the original Agent’s PostgreSQL path. Independent control and journal reachability, transactions in flight and permanently unavailable original private evidence need their own profiles.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --test-classes sync-app/target/test-classes --output target/native-asymmetric-partition --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition"
   }
 }

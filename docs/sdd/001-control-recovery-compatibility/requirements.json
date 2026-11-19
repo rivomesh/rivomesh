@@ -133,8 +133,8 @@
         "en": "Failover,fencing and placement"
       },
       "gap": {
-        "zh-CN": "双 Agent 同库切换、报告及回执接收、双 SQL 围栏和候选显式启动已实测，已审批排空的交接也能在 Controller 退出后续办。原 Agent 强制终止时，两入口区分节点租约过期与任务状态未知。原目录重启先执行离线 STOP，再经显式 START 续传，旧 Agent 和采集代次均已隔离。原 Agent 无法恢复时的跨 Agent 提升、网络分区和完整排空矩阵仍待验。",
-        "en": "Native tests cover same-store dual-Agent transfer, evidence, dual SQL fencing, approved Worker continuation and an approved drained handoff after Controller loss. When the original Agent is killed, both entries distinguish the expired node lease from unknown task state. Same-directory restart first executes the queued STOP. Explicit START consumes the retained backlog while former Agent and capture epochs remain fenced. Cross-Agent promotion after permanent loss, partitions and broader drain acceptance remain."
+        "zh-CN": "双 Agent 同库切换、报告及回执接收、双 SQL 围栏和候选显式启动已实测，已审批排空的交接也能在 Controller 退出后续办。原 Agent 强制终止时，两入口区分节点租约过期与任务状态未知。原目录重启先执行离线 STOP，再经显式 START 续传，旧 Agent 和采集代次均已隔离。已实测原 Agent 仅失去同库控制和日志路径时停止旧 Worker，原进程重连后先办离线 STOP，显式启动后双目标各应用一次。原 Agent 永久失联、在途事务、独立库可达性和完整排空矩阵仍待验。",
+        "en": "Native tests cover same-store dual-Agent transfer, evidence, dual SQL fencing, approved Worker continuation and an approved drained handoff after Controller loss. When the original Agent is killed, both entries distinguish the expired node lease from unknown task state. Same-directory restart first executes the queued STOP. Explicit START consumes the retained backlog while former Agent and capture epochs remain fenced. A native control and journal path partition stopped the former Worker. The original process completed queued STOP after reconnecting. Explicit START consumed the backlog once on each target. Permanent loss, in-flight transactions, independently reachable stores and broader drain acceptance remain."
       },
       "acceptance": {
         "zh-CN": "节点断电/网络分区/旧节点恢复时同一任务无双写；未确认停机可标记未知并隔离；按JDK、连接器、存储可达性和配额调度；排空迁移保留断点。",
@@ -167,7 +167,8 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/OwnerRuntime.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/GlobalTaskViews.java",
         "sync-app/src/test/java/io/github/rivomesh/platform/OriginalAgentOutageFixture.java",
-        "tests/global-control-pipeline.py"
+        "tests/global-control-pipeline.py",
+        "sync-app/src/main/java/io/github/rivomesh/platform/OwnerWorkerLease.java"
       ]
     },
     {

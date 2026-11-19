@@ -13,6 +13,7 @@ public interface TaskWorker {
     int exitCode();
     void stop() throws Exception;
     default void requestStop() {}
+    default void fence() { requestStop(); }
     default Diagnostic diagnostic(){return null;}
 
     final class Diagnostic {
@@ -117,6 +118,7 @@ public interface TaskWorker {
             if(stopRequested==0)stopRequested=System.nanoTime();
             process.destroy();
         }
+        @Override public void fence() { process.destroyForcibly(); }
         public void stop() throws Exception {
             if (process.isAlive()) {
                 requestStop();

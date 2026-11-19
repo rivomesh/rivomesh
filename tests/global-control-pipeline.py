@@ -55,6 +55,8 @@ parser.add_argument('--handoff-managed-writer', action='store_true',
                     help='Enroll an Agent writer and verify the same PostgreSQL connection can lock the original cut')
 parser.add_argument('--handoff-original-outage', action='store_true',
                     help='Observe a killed original Agent through both entries and fence its former leases on return')
+parser.add_argument('--handoff-asymmetric-partition', action='store_true',
+                    help='Cut only the original Agent path to PostgreSQL control and journal while all data endpoints stay reachable')
 parser.add_argument('--handoff-staging', action='store_true',
                     help='Stage prepared report and receipt bytes privately on the selected Agent')
 parser.add_argument('--handoff-private-writer', action='store_true',
@@ -165,6 +167,8 @@ if args.handoff_preparation and not args.handoff_closed_receipts:
     parser.error('--handoff-preparation requires --handoff-closed-receipts')
 if args.handoff_managed_writer and (not args.handoff_preparation or args.control_product!='POSTGRESQL' or args.runtime_image):
     parser.error('--handoff-managed-writer requires --handoff-preparation and a PostgreSQL control store')
+if args.handoff_asymmetric_partition and (not args.handoff_original_outage or args.external_mysql_driver):
+    parser.error('--handoff-asymmetric-partition requires --handoff-original-outage and the packaged MySQL driver')
 if args.handoff_original_outage and (not args.handoff_assessment or args.handoff_probe
         or not args.test_classes or not args.test_classes.is_dir()
         or args.control_product != 'POSTGRESQL' or args.runtime_image):
@@ -323,6 +327,7 @@ manifest = {'artifactSha256': digest, 'status': 'RUNNING', 'checks': checks,
             'handoffPreparation': args.handoff_preparation,
             'handoffManagedWriter': args.handoff_managed_writer or args.handoff_original_outage,
             'handoffOriginalOutage': args.handoff_original_outage,
+            'handoffAsymmetricPartition': args.handoff_asymmetric_partition,
             'handoffPrivateWriter': args.handoff_private_writer,
             'handoffAutoResume': args.handoff_auto_resume,
             'handoffStaging': args.handoff_staging,
@@ -489,7 +494,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             'io.github.rivomesh.platform.RecoveryAgentFixture',
             '/fixture/' + owner_node + '.json', '/fixture/kill-after-recovery-commit']
     composition = home / 'compose.json'
-    composition.write_text(json.dumps({'services': services, 'volumes': volumes}))
+    compose_data = {'services': services, 'volumes': volumes}
+    if args.handoff_asymmetric_partition:
+        compose_data['networks'] = {'default': {}, 'control': {}}
+        services['store']['networks'] = ['control']
+        for node in members:
+            services[node]['networks'] = ['default', 'control']
+    composition.write_text(json.dumps(compose_data))
 
     def compose(*arguments, check=True):
         return subprocess.run(['docker', 'compose', '-p', project, '-f', str(composition), *arguments], env=env,
@@ -602,6 +613,54 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             wait(lambda: outcome(request, node, task_path), name)
         return request, accepted
 
+    def partition_original_agent():
+        # Inspect and disconnect only endpoints belonging to this disposable Compose project.
+        network = project + '_control'
+        original = compose('ps', '-q', owner_node).stdout.strip()
+        store = compose('ps', '-q', 'store').stdout.strip()
+        assert original and store
+
+        def inspect(container, template):
+            return subprocess.check_output(['docker', 'inspect', '--format', template, container],
+                                           text=True, timeout=15).strip()
+
+        address_template = '{{(index .NetworkSettings.Networks "' + network + '").IPAddress}}'
+        store_ip = inspect(store, address_template)
+        assert store_ip and inspect(original, address_template)
+        original_pid = inspect(original, '{{.State.Pid}}')
+        assert int(original_pid) > 0
+
+        def tcp(host, port):
+            return compose('exec', '-T', owner_node, 'timeout', '3', 'bash', '-c',
+                           'exec 3<>/dev/tcp/"$1"/"$2"', 'tcp-check', host, str(port),
+                           check=False).returncode == 0
+
+        def data_is_reachable():
+            return all(tcp(host, port) for host, port in
+                       [('mysql', 3306), ('postgres', 5432), ('mysql-target', 3306)])
+
+        assert tcp('store', 5432) and tcp(store_ip, 5432) and data_is_reachable()
+        removed_workers = worker_pids()
+        assert len(removed_workers) == 1
+
+        def network_change(action):
+            subprocess.run(['docker', 'network', action, network, original], check=True,
+                           capture_output=True, text=True, timeout=15)
+
+        network_change('disconnect')
+        assert not tcp('store', 5432) and not tcp(store_ip, 5432) and data_is_reachable()
+        assert inspect(original, '{{.State.Pid}}') == original_pid
+        passed('Only the original Agent control and journal path is cut; its live container still reaches the source and both targets')
+
+        def isolated():
+            assert inspect(original, '{{.State.Pid}}') == original_pid and data_is_reachable()
+            return not worker_pids()
+        def reconnect():
+            network_change('connect')
+            wait(lambda: tcp('store', 5432), 'original Agent regains the PostgreSQL control path', seconds=20)
+            assert inspect(original, '{{.State.Pid}}') == original_pid
+        return isolated, reconnect
+
     def run_original_agent_outage():
         entries = ('node-a', 'node-b')
         endpoint = route + '/handoff'
@@ -659,8 +718,11 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert original_writer.split('|')[1] == owner_node
         assert all(int(receipt[1]) > 0 and len(receipt[2]) == 64 for receipt in original_targets)
 
-        compose('kill', '-s', 'SIGKILL', owner_node)
-        assert compose('ps', '-q', owner_node).stdout.strip() == ''
+        if args.handoff_asymmetric_partition:
+            isolated, reconnect = partition_original_agent()
+        else:
+            compose('kill', '-s', 'SIGKILL', owner_node)
+            assert compose('ps', '-q', owner_node).stdout.strip() == ''
         def unreachable(expected_revision):
             return all(t.get('ownerControlState') == 'STALE' and not t.get('statusAvailable')
                        and t.get('workerState') == t.get('captureLeaseState') == t.get('desired') == 'UNKNOWN'
@@ -668,7 +730,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         wait(lambda: unreachable(revision), 'expired original Agent control lease masks Worker, intent and capture observations')
         wait(lambda: sql('store', 'SELECT COUNT(*)' + job_row + ' AND lease_until>' + clock) == '0',
              'independent capture lease expires on the journal database clock')
-        passed('Original Agent SIGKILL exposes expired control and unknown Worker, intent and capture at both Controllers')
+        fault = 'Asymmetric partition' if args.handoff_asymmetric_partition else 'Original Agent SIGKILL'
+        passed(fault + ' exposes expired control and unknown Worker, intent and capture at both Controllers')
 
         for entry in entries:
             prior = http(entry, endpoint)
@@ -690,9 +753,18 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         stop_revision = accepted['revision']
         assert stop_revision != revision
         assert not outcome(stop, 'node-a') and unreachable(stop_revision)
-        compose('up', '-d', owner_node)
-        address(owner_node)
-        wait(lambda: all(outcome(stop, entry) for entry in entries), 'durable STOP from the original Agent after restart')
+        if args.handoff_asymmetric_partition:
+            wait(isolated, 'live original Agent isolates its Worker and holds relaunch during network partition', seconds=35)
+            time.sleep(1)
+            assert isolated(), 'The isolated Worker relaunched before the control path returned'
+            assert pending_row_counts() == ['0', '0'] and journal_cut() == original_cut
+            assert target_receipts() == original_targets
+            passed('The isolated original Worker cannot consume the backlog with data endpoints still reachable')
+            reconnect()
+        else:
+            compose('up', '-d', owner_node)
+            address(owner_node)
+        wait(lambda: all(outcome(stop, entry) for entry in entries), 'durable STOP from the original Agent after recovery')
 
         def stopped():
             return all(t.get('ownerControlState') == 'HEALTHY' and t.get('workerState') == 'STOPPED'
@@ -701,11 +773,13 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
 
         wait(stopped, 'both Controllers confirm explicit STOP on the same recovered Agent')
         new_incarnation, new_control_epoch = sql('store', 'SELECT incarnation,epoch' + node_row).split('|')
-        assert new_incarnation != old_incarnation and int(new_control_epoch) > int(old_control_epoch)
+        assert int(new_control_epoch) > int(old_control_epoch)
+        assert (new_incarnation == old_incarnation) == args.handoff_asymmetric_partition
         assert directory.read_bytes() == original_directory
         assert pending_row_counts() == ['0', '0'] and journal_cut() == original_cut
         assert writer_authority() == original_writer and target_receipts() == original_targets
-        passed('Offline STOP survives original directory and Agent restart before the backlog can reach either target')
+        restored = 'reconnected original Agent without a restart' if args.handoff_asymmetric_partition else 'restarted original Agent'
+        passed('Offline STOP completes on the ' + restored + ' before the backlog can reach either target')
 
         action('START', node='node-a')
         wait(streaming, 'same Agent explicitly reclaims capture using new generations')

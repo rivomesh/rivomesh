@@ -20,7 +20,8 @@ final class OwnerRuntime implements AutoCloseable {
     private final Supplier<ControlStore.Lease> leases;
     private final String directory;
     private final OwnerExecution execution;
-    private final ScheduledExecutorService commandLoop,queryLoop;
+    private final ScheduledExecutorService commandLoop,queryLoop,workerMonitor;
+    private final OwnerWorkerLease workerLease;
     private final ThreadPoolExecutor readers;
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String,Long> handoffRetries=new ConcurrentHashMap<>();
@@ -32,13 +33,20 @@ final class OwnerRuntime implements AutoCloseable {
 
     OwnerRuntime(PlatformConfig config,TaskService local,GlobalTaskStore authority,DurableCommands commands,AgentDirectory agents,GlobalTaskViews views,OwnerQueries queries,Supplier<ControlStore.Lease> leases,String directory){
         this.config=config;this.local=local;this.authority=authority;durable=commands;this.agents=agents;this.views=views;this.queries=queries;this.leases=leases;this.directory=directory;execution=new OwnerExecution(commands,agents,leases,directory,local);
+        workerLease=new OwnerWorkerLease(this.leases);
+        workerMonitor=Executors.newSingleThreadScheduledExecutor(threads("rivomesh-owner-worker-lease"));
         commandLoop=Executors.newSingleThreadScheduledExecutor(threads("rivomesh-owner-commands"));queryLoop=Executors.newSingleThreadScheduledExecutor(threads("rivomesh-owner-queries"));readers=new ThreadPoolExecutor(2,2,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(20),threads("rivomesh-owner-reader"),new ThreadPoolExecutor.AbortPolicy());
     }
     private static ThreadFactory threads(String name){return run->{Thread thread=new Thread(run,name);thread.setDaemon(true);return thread;};}
     void start()throws Exception{
         if(closed.get()||!started.compareAndSet(false,true))throw new TaskService.Conflict("OWNER_RUNTIME_ALREADY_STARTED");
         try{
-            agents.register(leases.get(),directory);execution.restoreReceipts();verifyDefinitions();execution.prepareStartupStops();publish();local.beginOwnerScheduling();
+            local.bindOwnerWorkerLease(workerLease);
+            if(!restoreWorkerLease(leases.get()))throw new ControlStore.Fenced();
+            publish();
+            long monitorMillis=Math.min(250,config.cluster.heartbeatMillis);
+            workerMonitor.scheduleWithFixedDelay(workerLease::monitor,0,monitorMillis,TimeUnit.MILLISECONDS);
+            local.beginOwnerScheduling();
             commandLoop.scheduleWithFixedDelay(this::commands,0,Math.max(100,Math.min(config.pollMillis,1000)),TimeUnit.MILLISECONDS);
             queryLoop.scheduleWithFixedDelay(this::queries,0,100,TimeUnit.MILLISECONDS);
         }catch(Exception failure){commandProblem=code(failure);close();throw failure;}
@@ -150,13 +158,29 @@ final class OwnerRuntime implements AutoCloseable {
         if(!retiredTasks.isEmpty())tasks=tasks.stream().filter(t->!retiredTasks.contains(t.get("id"))).toList();
         for(int offset=0;offset<tasks.size();offset+=20)views.publish(leases.get(),directory,tasks.subList(offset,Math.min(tasks.size(),offset+20)));
     }
+    private boolean restoreWorkerLease(ControlStore.Lease lease)throws Exception{
+        workerLease.suspend();
+        if(!workerLease.quiescent())return false;
+        execution.restoreReceipts();
+        verifyDefinitions();
+        execution.prepareStartupStops();
+        return workerLease.admit(lease);
+    }
     private void commands(){
         if(closed.get())return;
         try{
+            ControlStore.Lease lease=leases.get();
+            if(!workerLease.admitted(lease)&&!restoreWorkerLease(lease)){
+                commandProblem="OWNER_WORKER_STOP_UNCONFIRMED";
+                return;
+            }
             execution.cycle();
             try{publish();}
             catch(ControlStore.Fenced changed){verifyDefinitions();publish();}
             commandProblem=null;
+        }catch(ControlStore.Unavailable|ControlStore.Expired|ControlStore.Fenced unavailable){
+            workerLease.suspend();
+            commandProblem=code(unavailable);
         }catch(Exception failure){commandProblem=code(failure);}
     }
     private void queueRecipients(ControlStore.Lease lease)throws Exception{
@@ -247,8 +271,8 @@ final class OwnerRuntime implements AutoCloseable {
     boolean ready(){if(!started.get()||closed.get()||problem()!=null)return false;try{leases.get();return local.accessReady();}catch(Exception unavailable){return false;}}
     String problem(){return commandProblem!=null?commandProblem:queryProblem;}
     public void close(){
-        if(!closed.compareAndSet(false,true))return;commandLoop.shutdownNow();queryLoop.shutdownNow();readers.shutdownNow();
-        for(ExecutorService executor:Arrays.asList(commandLoop,queryLoop,readers))try{executor.awaitTermination(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
+        if(!closed.compareAndSet(false,true))return;commandLoop.shutdownNow();queryLoop.shutdownNow();workerMonitor.shutdownNow();readers.shutdownNow();
+        for(ExecutorService executor:Arrays.asList(commandLoop,queryLoop,workerMonitor,readers))try{executor.awaitTermination(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
         queued.clear();handoffRetries.clear();
     }
 }

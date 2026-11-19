@@ -145,6 +145,14 @@ Offline STOP waits for the original owner. Restore its private directory or volu
 
 The control lease and journal capture lease each have their own native fence. The original Agent registers a new control generation when it reuses its directory, and the Worker acquires a new capture generation on start. Lease expiry alone is insufficient evidence of a drained Worker, complete private recovery evidence or the reviewed cut on both targets. The atomic handoff with control and journal in the same PostgreSQL database still requires current original Agent, source and target proofs and administrator approval. If the original Agent cannot return or the partition persists, keep the existing assignment while you recover that evidence.
 
+### Asymmetric control-network partition
+
+For a managed writer with control and journal in the same PostgreSQL database, the Agent and its targets can remain reachable while the Agent loses its database path. Both management entries report the shared control lease as `STALE` after it expires. The Worker, run intent and capture lease are `UNKNOWN` while the entries lack a current signed observation.
+
+The Agent disarms starts for managed journal Workers when it loses control authority and terminates their local processes. It keeps the saved run intent and journal position. Once the link is restored, the same Agent must revalidate its signed directory, current lease generation and task configuration. It waits for former Worker processes to exit and loads durable STOP and PAUSE commands before allowing managed Workers to launch. This happens inside the original Agent process.
+
+To keep a task stopped while restoring the link, queue STOP through either Controller. Check the same request ID for `SUCCEEDED` and confirm the original task is stopped before starting it explicitly. Retain the source logs and verify both target receipts if a transaction was in flight. The candidate does not gain ownership from lease expiry. Separate control and journal stores, destination-specific cuts and approval without the original private evidence require their own validation.
+
 ## Operations FAQ
 
 **How do I distinguish accepted from executed?** Inspect deliveryStatus, status, code and actual Worker/target checkpoints for the same request ID. HTTP 202 is not business commit evidence.

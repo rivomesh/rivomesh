@@ -117,6 +117,7 @@ public final class TaskService implements AutoCloseable {
     private final Map<String,AtomicBoolean> recoveryCancellations=new HashMap<>();
     private final Set<String> ownerRequests=new HashSet<>();
     private final Set<String> ownerStartBlocks=new HashSet<>(),retiredOwners=new HashSet<>();
+    private volatile OwnerWorkerLease ownerWorkerLease;
     private final List<Map<String,String>> invalid=new ArrayList<>();
     private final Path statePath, logDirectory, workerDirectory;
     private final FileChannel lockChannel;
@@ -197,6 +198,11 @@ public final class TaskService implements AutoCloseable {
         if(config.cluster==null||!config.cluster.sharedAccess)throw new IllegalArgumentException("OWNER_SHARED_STORE_REQUIRED");return new TaskService(config,backend,workers,false);
     }
     synchronized void beginOwnerScheduling(){ensureOpen();if(config.cluster!=null&&!config.cluster.executes())throw new Conflict("OWNER_ROLE_REQUIRED");if(!schedulingStarted){scheduler.scheduleWithFixedDelay(this::schedule,0,config.pollMillis,TimeUnit.MILLISECONDS);schedulingStarted=true;}}
+    void bindOwnerWorkerLease(OwnerWorkerLease lease){ownerWorkerLease=Objects.requireNonNull(lease);}
+
+    private OwnerWorkerLease managedWorkerLease(Entry entry){
+        return entry.config.pipeline!=null&&entry.config.pipeline.journal.managedWriter?ownerWorkerLease:null;
+    }
     synchronized void holdOwnerStart(String task,boolean hold){if(hold)ownerStartBlocks.add(task);else ownerStartBlocks.remove(task);}
     synchronized ManagedRecipientImport.Receipt installStoppedRecipient(ManagedRecipientImport.Grant grant,
             ManagedRecipientImport.FrozenConfig frozen)throws Exception{
@@ -985,16 +991,30 @@ public final class TaskService implements AutoCloseable {
         }
         if(!"RUNNING".equals(desired)){stop(entry);entry.workerState="PAUSED".equals(desired)?"PAUSED":"STOPPED";}
         else if(!closed) {
+            OwnerWorkerLease workerLease=managedWorkerLease(entry);
             synchronized(entry){if(entry.worker!=null&&!entry.worker.alive()) {
+                boolean fenced=workerLease!=null&&workerLease.retired(entry.worker);
                 entry.problem="WORKER_EXIT_"+entry.worker.exitCode();entry.workerDiagnostic=entry.worker.diagnostic();entry.worker=null;
                 if(entry.permit){slots.release();entry.permit=false;}
-                entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
+                if(fenced){entry.retryAt=0;entry.exits=0;}
+                else entry.retryAt=System.currentTimeMillis()+Math.min(60000,1000L<<Math.min(entry.exits++,6));
             }}
-            if(entry.worker==null&&entry.exits<5&&System.currentTimeMillis()>=entry.retryAt) {
+            if(entry.worker==null&&entry.exits<5&&System.currentTimeMillis()>=entry.retryAt
+                    &&(workerLease==null||workerLease.permitsStart())) {
                 try {synchronized(this){if(!closed&&!ownerStartBlocks.contains(id)&&!retiredOwners.contains(id)&&(registry.tasks.get(id).recipientImport==null||registry.tasks.get(id).recipientStart!=null)&&"RUNNING".equals(registry.tasks.get(id).desired))synchronized(entry){
                     if(slots.tryAcquire()){
                         entry.permit=true;
-                        try{Control committed=registry.tasks.get(id);if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));entry.config.holdLocalJournal();entry.worker=workers.start(entry.path,logDirectory.resolve(id+".log"),config.workerHeapMiB);entry.workerState="RUNNING";}
+                        try{
+                            Control committed=registry.tasks.get(id);
+                            if(committed.configurationVersion!=null)versions.read(id,committed.configurationVersion,committed.configurationHash);
+                            else PrivateFiles.write(entry.path,entry.config.workerYaml.getBytes(StandardCharsets.UTF_8));
+                            entry.config.holdLocalJournal();
+                            Path log=logDirectory.resolve(id+".log");
+                            entry.worker=workerLease==null?workers.start(entry.path,log,config.workerHeapMiB)
+                                    :workerLease.launch(()->workers.start(entry.path,log,config.workerHeapMiB));
+                            if(entry.worker==null){slots.release();entry.permit=false;}
+                            else entry.workerState="RUNNING";
+                        }
                         catch(Exception e){slots.release();entry.permit=false;try{entry.config.closeLocalJournal();}catch(Exception close){e.addSuppressed(close);}throw e;}
                     }
                 }}}
@@ -1020,7 +1040,19 @@ public final class TaskService implements AutoCloseable {
             if(current!=null)entry.workerDiagnostic=current.diagnostic();
         }
     }
-    private void stop(Entry e) throws Exception {synchronized(e){if(e.worker!=null){e.worker.stop();if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");e.worker=null;}if(e.permit){slots.release();e.permit=false;}e.workerState="STOPPED";}}
+    private void stop(Entry e) throws Exception {
+        synchronized(e){
+            if(e.worker!=null){
+                e.worker.stop();
+                if(e.worker.alive())throw new Conflict("WORKER_STOP_UNCONFIRMED");
+                OwnerWorkerLease workerLease=managedWorkerLease(e);
+                if(workerLease!=null)workerLease.retired(e.worker);
+                e.worker=null;
+            }
+            if(e.permit){slots.release();e.permit=false;}
+            e.workerState="STOPPED";
+        }
+    }
     private static Map<String,Object> publicStatus(Map<String,Object> db,TaskDefinition config) {
         Map<String,Object> out=new LinkedHashMap<>();
         for(String key:Arrays.asList("phase","run_state","node_id","source_address","capture_gtid","capture_lsn","capture_scn","required_gtid","applied_sequence","covered_sequence","captured_sequence","updated_at","error_code","error_stage","error_sqlstate","error_vendor","error_table","error_sequence","error_gtid","error_count","pending_transactions","table_count","epoch","lastSequence","pendingBytes","snapshotBytes","identityBytes","maxBytes","completed_tables","sourcePosition","dataFormat","hasGaps","gapCount","gapCountLimited","openGapCount","verifiedGapCount","hasOpenGaps","hasSourceExclusions"))
