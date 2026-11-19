@@ -12773,5 +12773,45 @@
     "configurationCheckLogSha256": "9463308b5a5aabba71365312987e173eca892029c7cbc50d4018be58d400afc9",
     "helmVerificationLogSha256": "5394a7db4b781addd3ffa196ce45f5c90a2f3f8d11dff0e3bc448e0f3dfdb1f1",
     "scope": "Full standard Maven reactor with shared OIDC and Kafka physical custody features. Browser checks run against the exact shaded artifact. The distinct Helm verification covers render parity, OIDC and Kafka opt-in settings, and Secret references. Live Kubernetes and driver combinations remain individually scoped."
+  },
+  "classicSharedKahaDbFailover": {
+    "status": "PASS",
+    "checks": [
+      "The primary holds the KahaDB lock and the live standby cannot accept OpenWire",
+      "The packaged publisher confirms native receipts and selected EVENT consumption retains ownership",
+      "The isolated publication fails retryably and retains the prior confirmation",
+      "The original standby validates the same owner and native receipt and confirms the exact retry at the unchanged endpoints",
+      "The restarted former primary stays passive and the active broker confirms another exact EVENT and receipt"
+    ],
+    "project": "rivomesh-classic-ha-115bb771f2",
+    "artifactSha256": "0af9fa942a901e4dbd696ce03382648d7d8bfc587aa285ad31f1626c184508eb",
+    "harnessSha256": "14412ffd98508b0223fb4824911f96c2a3ca512f7160fb8fa0fa5a039ae554ec",
+    "testSourceSha256": "cac64bd7334514137ae1bbd6dce3ac32d7c9eb58cad8952227dfdaa97150f410",
+    "fixtureSources": {
+      "classic-broker.xml": "4a11de05d07efb25636a53571883885281c9e69da8891ab91df55059440cb20b",
+      "classic-jetty-realm.properties": "e2b1b1893fec516f65ca30a853b68e884dfacdb125b84ec5eeb8d468cdfe0379",
+      "classic-jolokia-access.xml": "ad43ba03b710a1d53d0fc1b66e5a5181d0c558dce447d9e0b4f5a0bca3805521"
+    },
+    "brokerImage": "apache/activemq:5.19.12",
+    "javaVersion": [
+      "openjdk version \"21.0.13\" 2026-10-20 LTS",
+      "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+      "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+    ],
+    "brokerImageDetails": "sha256:9d9a051d038b730f33a2b48b91a5804ce02e31b7e6c1e4e159e9ff1f639a71aa arm64",
+    "testClassSha256": "983462b58de9d8c438cea6fc9a2054f0fd615251893cd67bb7b75d822f3cc366",
+    "primaryStartedAt": "2026-11-19T08:35:15.870448+00:00",
+    "standbyStartedAt": "2026-11-19T08:34:51.794947+00:00",
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "manifestSha256": "30227056f285a6629bdbd0abb418c4efa93bb6c06ff9c49f30f33fcf750ce074",
+    "earlierFixtureFailureSha256": "93f38e54fa35aa4e53f9c7bcdad3ca86402d2df2a634e0a4b1c1b7315259e506",
+    "earlierFixtureFailure": "The disposable shared volume started with root ownership. The broker image could not initialize KahaDB. The same app passed after initializing the volume for the broker account.",
+    "scope": "Two ActiveMQ Classic processes share one Docker volume under the native KahaDB exclusive lock. External stable OpenWire and Jolokia entrances switch together. Real packaged publisher and retained consumer. The fixture runs without a source Worker.",
+    "reproduce": "python3 tests/classic-shared-store-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --java-home \"$JAVA_HOME\" --output target/classic-shared-store-proof"
   }
 }

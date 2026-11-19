@@ -78,8 +78,49 @@ events is not a complete-history checksum and cannot be repaired by ordinary res
 
 Receipt retention/compaction is not implemented. Metadata grows per publication
 batch, and native message lookup can scan retained queue history. Capacity/soak,
-replication/failover, network connectors, TLS and broader mixed-product pipeline acceptance remain
-required; do not extrapolate single-broker transport checks to those profiles.
+separate-store replication, network connectors, TLS and broader mixed-product
+pipeline acceptance are outside the shared KahaDB proof described below.
+
+## Shared KahaDB primary and standby
+
+Classic 5.19.12 can start two broker processes with the same broker name and the
+same KahaDB directory on a filesystem that enforces exclusive locks between the
+processes. One process acquires the lock and opens OpenWire. The other waits for
+the lock, then opens OpenWire after the active process releases it. Verify the
+filesystem lock semantics for the actual deployment. Configure a positive
+`lockKeepAlivePeriod` and retain the file lock throughout operation.
+[Shared-file-system failover](https://activemq.apache.org/components/classic/documentation/shared-file-system-master-slave),
+[storage lockers](https://activemq.apache.org/components/classic/documentation/pluggable-storage-lockers),
+[5.19.12 release](https://activemq.apache.org/components/classic/download/classic-05-19-12).
+
+Keep one stable OpenWire address and one stable authenticated Jolokia address.
+Route both to the same current lock holder. Rivomesh compares active broker
+name and ID across the two connections and requires the saved OWNER and receipt
+when opening a new publisher. Whole-store recovery requires the shared store
+itself to remain available. Each broker can keep its process-local temporary
+files in its own data directory.
+
+Run the isolated native profile with the packaged candidate and Temurin 21:
+
+```bash
+python3 tests/classic-shared-store-run.py \
+  --artifact /path/to/rivomesh.jar --java-home /path/to/temurin-21 \
+  --output /path/to/new-classic-ha-report
+```
+
+All five checks passed with the ARM64 Classic 5.19.12 image and a Temurin 21
+Rivomesh process. The fixture starts two real brokers with a common Docker
+KahaDB volume. A loopback forwarder routes OpenWire and Jolokia together.
+The checks cover the initial standby lock wait, native EVENT and receipt
+confirmation, a retryable publication attempt during isolation, and the same
+original standby PID taking over after the primary is killed. The reopened
+publisher reads the saved native receipt under the same ownership identity,
+consumes the retained and retried EVENTs, and continues after the old primary
+rejoins in standby. It records artifact, broker image, fixture hashes and
+cleanup in the output manifest. It covers the real publisher/consumer path
+with an external endpoint switch. It does not cover an independent storage
+failure, production load-balancer automation, multi-host filesystem or a
+complete MySQL-to-Classic Worker promotion.
 
 ## FAQ
 
@@ -94,9 +135,11 @@ transaction; it never recreates ownership over initialized empty queues.
 checkpoint. Authentication, policy or confirmed-history failures pause this target.
 Other target subscriptions keep their independent checkpoints.
 
-**Can I use a failover URI or several independent brokers?** Not in this first
-profile. Keep one direct endpoint and management for that same broker; future
-replicated/failover profiles need separate identity and store acceptance.
+**How do I route Classic traffic after broker promotion?** Keep the configured
+OpenWire and Jolokia addresses stable and switch both upstreams to the active
+broker. The connector accepts a direct `activemq://` or `activemqs://` address.
+Independent KahaDB stores and ActiveMQ client `failover:` URIs have separate
+requirements and are outside this shared-store profile.
 
 **HTTP403 from a current broker?** Classic5.19.12 also defaults Jetty management
 access to loopback IPs. Authorize the synchronization worker's actual management

@@ -26,7 +26,26 @@ rivomesh_record_type = 'EVENT'
 
 重连时先检查两份归属及最后保存回执，再允许建资源/投递。已初始化队列缺失、OWNER 改变、回执缺失或内容改变，需要恢复/重建计划。正常 EVENT 消费不会移除归属和回执；整库旧备份即使保留旧身份，也必须包含源日志要求的后续回执。该机制不是全部历史校验，不能凭普通恢复修复任意选择性删除的历史事件。
 
-回执压缩/保留治理尚未实现；每批次增加元数据，原生消息查询也可能扫描保留历史。容量长稳、复制切换、网络桥、TLS 和更广泛的多产品联合矩阵仍需独立验收，不能从单 Broker 传输验证推导全部场景支持。
+每个批次保留回执，原生消息查询可能扫描保留历史。回执压缩、容量长稳、独立存储复制、网络桥、TLS 和更广泛的多产品联合矩阵需要单独验收。
+
+## 共享 KahaDB 主备
+
+Classic 5.19.12 的两个 Broker 进程可以使用相同 Broker 名称和同一 KahaDB 目录。该文件系统必须支持两个进程之间的排他锁。持锁进程打开 OpenWire 监听，备用进程等待锁。持锁进程释放锁后，备用进程接手并打开监听。部署时须验证实际存储的文件锁行为，并启用大于零的 `lockKeepAlivePeriod`。
+[共享文件系统主备](https://activemq.apache.org/components/classic/documentation/shared-file-system-master-slave)、
+[存储锁配置](https://activemq.apache.org/components/classic/documentation/pluggable-storage-lockers)、
+[5.19.12 发布说明](https://activemq.apache.org/components/classic/download/classic-05-19-12)。
+
+为 OpenWire 和已认证的 Jolokia 各配置一个固定地址，始终将两者路由到同一持锁 Broker。Rivomesh 核对两个通道的 Broker 名称和 ID，重开发布者后验证已保存的 OWNER 和原生回执。接手依赖原共享存储继续可用。两个 Broker 的进程临时文件可分别保存在本地目录。
+
+使用候选发布包和 Temurin 21 执行原生夹具。
+
+```bash
+python3 tests/classic-shared-store-run.py \
+  --artifact /path/to/rivomesh.jar --java-home /path/to/temurin-21 \
+  --output /path/to/new-classic-ha-report
+```
+
+使用 ARM64 Classic 5.19.12 镜像与 Temurin 21 Rivomesh 进程完成五项实测。夹具在同一个 Docker KahaDB 卷上启动两个真实 Broker，本机转发层同时切换 OpenWire 和 Jolokia。夹具检查原备用进程等待锁、原生 EVENT 和回执确认、双入口断开时发布可重试且断点未前进、强杀主进程后原备用 PID 接手，以及重开发布者后验证同一 OWNER 和已有回执。消费者核对切换前保留和切换后重试的 EVENT。旧主重新加入后保持备用，现任主继续投递。输出目录记录包、Broker 镜像、试验输入摘要和清理结果。该档案覆盖实际发布者、消费者和外部入口切换。独立存储失效、生产负载均衡自动切换、跨主机文件系统和完整 MySQL 到 Classic Worker 切换需要另外验收。
 
 ## FAQ
 
@@ -36,7 +55,7 @@ rivomesh_record_type = 'EVENT'
 
 **Broker 停机？** 连接和管理HTTP传输故障按持久断点重试；认证、策略或确认历史错误暂停此目标，其他目标保持独立进度。
 
-**能否配置 failover URI 或多个独立 Broker？** 首批只支持固定直连单 Broker，管理接口必须属于同一节点；复制/切换需后续独立身份和存储验收。
+**Broker 切换后怎么路由？** 保持 OpenWire 和 Jolokia 配置地址固定，同时将两个上游指向当前持有锁的 Broker。连接配置使用直连 `activemq://` 或 `activemqs://`。独立 KahaDB 存储和客户端 `failover:` URI 需要另外验收。
 
 **当前 Broker 管理端返回403？** Classic5.19.12 的 Jetty 默认仅放行回环地址。应使用明确的 InetAccessHandler include 规则授权同步 Worker 的实际管理网络，同时保留认证和 Jolokia 权限。403 不能视为队列不存在；当前服务端还可能隐藏异常类型，因此存在性检查使用成功的精确 MBean 搜索，管理调用失败不会授权重建资源。
 

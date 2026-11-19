@@ -701,3 +701,7 @@ The `31cd403ccdf60664533d0a4b3e5a837445af7eb18ae4a23f2acb300f77c37af3` Java 21 p
 ### Integrated Temurin 21 release checks
 
 The `f31cb970e9f64b522a8546bd0e741f81aa9a0412c3dd27bce81dbb39f4ed6a44` package on Eclipse Temurin 21.0.13 ARM64 passed the full standard Maven reactor, including 646 application tests and 35 optional integration skips. The Java 21 package gate, 161 DOM tests, 14 checks on actual Chrome 157 and 25 shipped configuration examples passed. Separate Helm checks at `39ed017` verified manual-manifest render parity plus the OIDC Controller Secret reference and the Kafka Agent receipt option. The Helm checks validate generated manifests. [Manifest](baseline.json) · [Deployment](../en/console-and-deployment.md)
+
+### ActiveMQ Classic shared KahaDB failover
+
+The `0af9fa942a901e4dbd696ce03382648d7d8bfc587aa285ad31f1626c184508eb` package passed five native checks with two ActiveMQ Classic 5.19.12 brokers on ARM64 and Eclipse Temurin 21. The primary holds KahaDB's exclusive lock and the passive standby does not accept OpenWire. Killing the primary and isolating both stable entries preserves the old confirmation. After both entries route to the standby, the publisher verifies the original ownership and native receipt, then confirms the exact retry. The former primary returns as standby. Both fixtures were cleaned up, including the first run that exposed incorrect test-volume permissions. [Operations](../en/classic-v3.md) · [Manifest](baseline.json)

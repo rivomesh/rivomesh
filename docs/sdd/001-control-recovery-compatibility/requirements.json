@@ -1568,8 +1568,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升及消费恢复已有原生档案。Pulsar 4.0.14 已验证单 Broker 私有 CA/Token，以及双 Broker、三 BookKeeper 下的原 Topic 恢复、确认不足时暂停确认和同事件重试。双 Broker 私有 CA/Token 与三节点 ZooKeeper 主节点故障后的元数据写入也已通过。跨主机存储故障域、内部链路加密、负载容量和其他消息目标档案待验。 Artemis 2.57.0 主进程强杀后由共享卷备进程接管。相同入口复用原生回执及队列身份并确认同一重试。",
-        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion and consumer recovery passed. Pulsar 4.0.14 covers single-broker TLS and Token and a two-broker, three-bookie profile with original topic recovery, withheld confirmations below quorum and stable-event retry. Two-broker private TLS and Token, and new metadata after loss of a leader in the three-node ZooKeeper quorum, also passed. Cross-host storage failure domains, internal network cryptography, capacity and other queue profiles remain. The Artemis 2.57.0 shared-store backup activated after primary SIGKILL. The same ingress reused the native receipt and queue identity and confirmed the same retry."
+        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升及消费恢复已有原生档案。Pulsar 4.0.14 已验证单 Broker 私有 CA/Token，以及双 Broker、三 BookKeeper 下的原 Topic 恢复、确认不足时暂停确认和同事件重试。双 Broker 私有 CA/Token 与三节点 ZooKeeper 主节点故障后的元数据写入也已通过。跨主机存储故障域、内部链路加密、负载容量和其他消息目标档案待验。 Artemis 2.57.0 主进程强杀后由共享卷备进程接管。相同入口复用原生回执及队列身份并确认同一重试。 ActiveMQ Classic 5.19.12 已实测同一 KahaDB 卷的主备切换。固定 OpenWire 和 Jolokia 入口切换后，发行包发布器核验原归属和回执，确认同一重试事件。旧主重启保持备用。",
+        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion and consumer recovery passed. Pulsar 4.0.14 covers single-broker TLS and Token and a two-broker, three-bookie profile with original topic recovery, withheld confirmations below quorum and stable-event retry. Two-broker private TLS and Token, and new metadata after loss of a leader in the three-node ZooKeeper quorum, also passed. Cross-host storage failure domains, internal network cryptography, capacity and other queue profiles remain. The Artemis 2.57.0 shared-store backup activated after primary SIGKILL. The same ingress reused the native receipt and queue identity and confirmed the same retry. ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",
@@ -1586,7 +1586,8 @@
         "tests/kafka-cluster-run.py",
         "tests/redis-promotion-run.py",
         "tests/pulsar-quorum-run.py",
-        "tests/artemis-shared-store-run.py"
+        "tests/artemis-shared-store-run.py",
+        "tests/classic-shared-store-run.py"
       ]
     },
     {
