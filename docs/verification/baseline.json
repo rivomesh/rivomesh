@@ -8964,5 +8964,15 @@
       "cleanupExitCode": 0
     },
     "scope": "An independently frozen internal-only prototype on four real Kafka 3.9.2 KRaft brokers using a separately provisioned RF3 control topic. It fences the previous producer and recovers exact committed offset after lost response and H2 reopen. Durable evidence shows one visible notice and original business/consumer acknowledgements. Public operator execution remains in development."
+  },
+  "privateManagedAgentFullReactor": {
+    "commit": "bbe4fc8",
+    "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
+    "verifiedAppTree": "5e771f86a9124011db3cbd1dbafa037688d1b9d9",
+    "javaTestsPassed": 578,
+    "appTestsPassed": 576,
+    "isolatedTransportTestsPassed": 2,
+    "optionalSkips": 35,
+    "scope": "Normal Temurin 21 packaging reactor from the exact staged app tree. Package binary gate passed. The independent 17-case private Agent native scope uses its separately archived original artifact."
   }
 }

@@ -509,3 +509,5 @@ The isolated exact published console `0ce387c8dc554b17e70fff3ed82a399c713eeec4ef
 ### Internal Kafka gap notice lost-response recovery
 
 Separately frozen prototype `ffd2ae3e9156c3078de98e1ef811dadca6d25055ce5a4dc15d4f3e3a50a32874` passed two real Kafka 3.9.2 KRaft cases on a dedicated RF3 control topic. The previous producer lost authority and its uncommitted record remained invisible. A committed notice with a lost response recovered the stored exact offset after H2 reopen. Replay returned one visible notice, with original failure payload and business, consumer and journal positions intact. [Manifests](baseline.json)
+
+The exact `bbe4fc8` application passed a normal Temurin 21 packaging run with 576 Java app tests, two isolated transport tests and 35 optional skips. The final artifact `d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79` passed the binary package gate. [Manifests](baseline.json)

@@ -52,18 +52,19 @@
     "CP-04 private dual-Agent same-store transfer and STOPPED projection published. Seventeen exact native checks and 65 integrated Java. Real lost response replays at the other Controller, one epoch transfer, old Agent cannot reclaim after restart, both target cuts remain. Public transfer and next Worker activation are separately fenced.",
     "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes.",
     "The published evidence staging console passed 20 exact dual-Controller native checks including six real Chrome cases. Entry A staged and revalidated, entry B checked and released. Task revision and all cuts remained exact.",
-    "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development."
+    "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development.",
+    "The exact bbe4fc8 Temurin 21 normal packaging reactor passed 576 app and two isolated transport Java tests. Thirty-five explicitly optional external-profile tests skipped. Binary package gate passed."
   ],
   "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
   "lastVerifiedReactor": {
-    "commit": "18d7a77",
-    "artifactSha256": "934d37fad4df87aa94588012d1953d692281d696432098911a8124ff7bf3745f",
-    "verifiedAppTree": "30cfd027470bc70d738c509e48957c408604cdcd",
-    "javaTestsPassed": 567,
-    "optionalSkips": 35,
-    "appTestsPassed": 565,
+    "commit": "bbe4fc8",
+    "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
+    "verifiedAppTree": "5e771f86a9124011db3cbd1dbafa037688d1b9d9",
+    "javaTestsPassed": 578,
+    "appTestsPassed": 576,
     "isolatedTransportTestsPassed": 2,
-    "earlierInvocation": "The test-only Maven reactor did not package relocated vendor driver classes. A clean normal package lifecycle on the 18d7a77 application passed the driver coexistence check and all enabled tests."
+    "optionalSkips": 35,
+    "scope": "Normal Temurin 21 packaging reactor from the exact staged app tree. Package binary gate passed. The independent 17-case private Agent native scope uses its separately archived original artifact."
   },
   "hostInterruptedReporting": {
     "elapsedScheduledTimes": [
