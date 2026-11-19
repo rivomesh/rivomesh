@@ -119,6 +119,7 @@ RM-SDD-001 · 2026-11-17
   验收：AC-SO-07
   - [x] 有界整数虚拟列的乘法与双物理列加减法，实库验证 Flashback、归档重放和原快照重启。
   - [x] BasicFiles 与 SecureFiles 的 BLOB/CLOB 实库证据、受限账号分型预检和独立迁移说明。
+  - [x] 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。
   - [ ] 其他表达式、二进制 JSON、LOB 完整镜像采集与 RAC 切换。
 ## Java运行时兼容
 

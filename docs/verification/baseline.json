@@ -12813,5 +12813,60 @@
     "earlierFixtureFailure": "The disposable shared volume started with root ownership. The broker image could not initialize KahaDB. The same app passed after initializing the volume for the broker account.",
     "scope": "Two ActiveMQ Classic processes share one Docker volume under the native KahaDB exclusive lock. External stable OpenWire and Jolokia entrances switch together. Real packaged publisher and retained consumer. The fixture runs without a source Worker.",
     "reproduce": "python3 tests/classic-shared-store-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --java-home \"$JAVA_HOME\" --output target/classic-shared-store-proof"
+  },
+  "oracleSinglePdbSavepointRollback": {
+    "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "textJson": false,
+    "dateValues": false,
+    "virtualEvidence": false,
+    "virtualColumns": false,
+    "lobEvidence": false,
+    "lobPreflight": false,
+    "savepointEvidence": true,
+    "savepointPipeline": true,
+    "startupTimeoutSeconds": 900,
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "The closed Oracle archive produces the same savepoint records on repeated reads",
+      "The committed-only archive excludes the separate fully rolled back transaction",
+      "Committed-only LogMiner removes seven canceled changes and their seven incomplete compensation records",
+      "Flashback proves the surviving same-row update, restored primary key, delete and keyless multiplicities",
+      "The exact product probe decodes only four surviving changes and one independently selected clean commit",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Both PostgreSQL subscriptions apply the surviving savepoint changes and retain duplicate keyless rows",
+      "Both original PostgreSQL receipts advance after SIGKILL with no canceled row changes or resnapshot"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0,
+    "manifestSha256": "f23e3cf44ef69dd6a4c7364be4f5b8e94b46d0593f0f8117033ded2d46724a9c",
+    "fixtureSha256": "20c2ff1d41bec9ce40c1f14fa3d2ec4e8c47d7dda5f49e472d6d9cf85c5c9b79",
+    "pairedTargetEvidenceSha256": "3d3af7146fe543e153a049e3589a7634b4c18af8e22f68058a0a94f5b72ddd63",
+    "committedArchiveSha256": "5d6fc6d37cd4502d2bb1e27f0e893ae3fcec5e4ec8697eabae8ddb13853b6758",
+    "earlierFixtureFailures": [
+      {
+        "manifestSha256": "aa468cabfba1d3ae180d62b7dff1aa72970c88b7771d62fb37982d11b81c8250",
+        "reason": "Initial Flashback SCN preceded visibility of the test table metadata and returned ORA-01466."
+      },
+      {
+        "manifestSha256": "755546414acd130bd3ce8dfc8a110aa300b4a87a6b5d95347504880545f9511f",
+        "reason": "Initial Flashback SCN preceded visibility of the test table metadata and returned ORA-01466."
+      }
+    ],
+    "scope": "Single-PDB Oracle Free with one archived redo thread. Real LogMiner filters seven canceled writes and seven compensation rows. Two independent PostgreSQL subscriptions use distinct data and metadata schemas on one PostgreSQL instance, direct Controller/Worker restart and unchanged snapshots. Both cuts match native Flashback.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --driver \"$ORACLE_JDBC\" --logminer --savepoint-evidence --pipeline --savepoint-pipeline --output target/oracle-savepoint-proof"
   }
 }

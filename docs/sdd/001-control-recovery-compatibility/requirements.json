@@ -1111,8 +1111,8 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。",
-        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in bounded virtual integer multiplication, addition and subtraction. Keyless duplicates, SQL NULL and original-snapshot archive replay passed. Other expressions, native binary JSON, LOB and RAC failover remain. Native Oracle Free evidence shows incomplete LOB before-images for BasicFiles and SecureFiles changes. Restricted-role preflight exposes the matching refusal. Full LOB capture remains open."
+        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。",
+        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in bounded virtual integer multiplication, addition and subtraction. Keyless duplicates, SQL NULL and original-snapshot archive replay passed. Other expressions, native binary JSON, LOB and RAC failover remain. Native Oracle Free evidence shows incomplete LOB before-images for BasicFiles and SecureFiles changes. Restricted-role preflight exposes the matching refusal. Full LOB capture remains open. Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN."
       },
       "acceptance": {
         "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",

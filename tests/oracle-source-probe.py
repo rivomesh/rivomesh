@@ -30,8 +30,11 @@ def required(check, description, timeout=240):
     raise AssertionError(description + ' timed out')
 
 
-def mine_archive(sql, start, end, select_rows, *, checked=True):
+def mine_archive(sql, start, end, select_rows, *, checked=True, committed_only=True):
     assert start.isdecimal() and end.isdecimal() and int(end)>int(start)
+    options='dbms_logmnr.dict_from_online_catalog'
+    if committed_only:
+        options+=' + dbms_logmnr.committed_data_only'
     return sql(f"""
         DECLARE
             added NUMBER := 0;
@@ -49,7 +52,7 @@ def mine_archive(sql, start, end, select_rows, *, checked=True):
             END LOOP;
             dbms_logmnr.start_logmnr(
                 startscn=>{start}, endscn=>{end},
-                options=>dbms_logmnr.dict_from_online_catalog + dbms_logmnr.committed_data_only);
+                options=>{options});
         END;
         /
         {select_rows}
@@ -291,6 +294,156 @@ def lob_evidence(sql, output, observed, *, verify_preflight=None):
         observed('The restricted Oracle source role receives the expected BasicFiles and SecureFiles preflight errors')
 
 
+def seed_savepoint_tables(sql):
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        CREATE TABLE rivo_app.rivo_savepoint_rows (id NUMBER(12) PRIMARY KEY, note VARCHAR2(60));
+        CREATE TABLE rivo_app.rivo_savepoint_keyless (note VARCHAR2(60));
+        ALTER TABLE rivo_app.rivo_savepoint_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+        ALTER TABLE rivo_app.rivo_savepoint_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+        GRANT SELECT, FLASHBACK ON rivo_app.rivo_savepoint_rows TO C##RIVO_PROBE;
+        GRANT SELECT, FLASHBACK ON rivo_app.rivo_savepoint_keyless TO C##RIVO_PROBE;""")
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (1,'initial');
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (2,'move-restored');
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (3,'delete-restored');
+        INSERT INTO rivo_app.rivo_savepoint_keyless VALUES ('duplicate');
+        INSERT INTO rivo_app.rivo_savepoint_keyless VALUES ('duplicate');
+        INSERT INTO rivo_app.rivo_savepoint_keyless VALUES ('untouched');
+        COMMIT;""")
+
+
+def savepoint_evidence(sql, output, observed, review):
+    tables=['RIVO_APP.RIVO_SAVEPOINT_ROWS','RIVO_APP.RIVO_SAVEPOINT_KEYLESS']
+
+    def evidence(name, content):
+        (output/('savepoint-'+name+'.json')).write_text(json.dumps(content,indent=2)+'\n')
+
+    def snapshot(at, *, after_ddl=False):
+        result=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            SELECT 'ROW|'||id||'|'||note FROM rivo_app.rivo_savepoint_rows AS OF SCN {at} ORDER BY id;
+            SELECT 'KEYLESS|'||note||'|'||COUNT(*) FROM rivo_app.rivo_savepoint_keyless AS OF SCN {at}
+                GROUP BY note ORDER BY note;""",checked=False)
+        if after_ddl and result.returncode and 'ORA-01466' in result.stdout:
+            return None
+        assert result.returncode==0,(at,result.stdout,result.stderr)
+        return [line.strip() for line in result.stdout.splitlines() if line.strip().startswith(('ROW|','KEYLESS|'))]
+
+    def flashback_baseline():
+        scn=sql('SELECT current_scn FROM v$database;').stdout.strip()
+        assert scn.isdecimal()
+        data=snapshot(scn,after_ddl=True)
+        return (scn,data) if data else None
+
+    start,baseline=required(flashback_baseline,'Savepoint Flashback anchor after fixture DDL',30)
+    assert baseline==['ROW|1|initial','ROW|2|move-restored','ROW|3|delete-restored',
+                      'KEYLESS|duplicate|2','KEYLESS|untouched|1'],baseline
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (4,'prefix-kept');
+        SAVEPOINT outer_step;
+        UPDATE rivo_app.rivo_savepoint_rows SET note='first-unsaved' WHERE id=1;
+        SAVEPOINT inner_step;
+        UPDATE rivo_app.rivo_savepoint_rows SET note='second-unsaved' WHERE id=1;
+        DELETE FROM rivo_app.rivo_savepoint_rows WHERE id=3;
+        DELETE FROM rivo_app.rivo_savepoint_keyless WHERE note='duplicate' AND ROWNUM=1;
+        ROLLBACK TO inner_step;
+        UPDATE rivo_app.rivo_savepoint_rows SET id=20,note='move-unsaved' WHERE id=2;
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (98,'insert-unsaved');
+        INSERT INTO rivo_app.rivo_savepoint_keyless VALUES ('keyless-unsaved');
+        ROLLBACK TO outer_step;
+        UPDATE rivo_app.rivo_savepoint_rows SET note='retained-after' WHERE id=1;
+        DELETE FROM rivo_app.rivo_savepoint_keyless WHERE note='duplicate' AND ROWNUM=1;
+        INSERT INTO rivo_app.rivo_savepoint_keyless VALUES ('retained-new');
+        COMMIT;""")
+    middle=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        UPDATE rivo_app.rivo_savepoint_rows SET note='full-rollback-sentinel' WHERE id=2;
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (99,'full-rollback-insert');
+        ROLLBACK;
+        INSERT INTO rivo_app.rivo_savepoint_rows VALUES (5,'tail-kept');
+        COMMIT;""")
+    end=sql('SELECT current_scn FROM v$database;').stdout.strip()
+    assert all(scn.isdecimal() for scn in (start,middle,end)) and int(start)<int(middle)<int(end)
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+
+    table_scope="""seg_owner='RIVO_APP' AND table_name IN ('RIVO_SAVEPOINT_ROWS','RIVO_SAVEPOINT_KEYLESS')
+                   AND src_con_name='FREEPDB1'"""
+    def rows(condition, *, committed_only=True):
+        query=f"""
+            SET LONG 32767 LONGCHUNKSIZE 32767
+            SELECT JSON_OBJECT('table' VALUE table_name, 'operation' VALUE operation,
+                'scn' VALUE TO_CHAR(scn), 'startScn' VALUE TO_CHAR(start_scn), 'commitScn' VALUE TO_CHAR(commit_scn),
+                'xid' VALUE RAWTOHEX(xid), 'rollback' VALUE rollback, 'rowId' VALUE row_id,
+                'rsId' VALUE rs_id, 'ssn' VALUE ssn, 'sequence' VALUE sequence#,
+                'ubaFile' VALUE ubafil, 'ubaBlock' VALUE ubablk, 'ubaRecord' VALUE ubarec, 'ubaSequence' VALUE ubasqn,
+                'object' VALUE data_obj#, 'status' VALUE status, 'continues' VALUE csf,
+                'redo' VALUE sql_redo, 'undo' VALUE sql_undo NULL ON NULL RETURNING CLOB)
+            FROM v$logmnr_contents WHERE {condition}
+            ORDER BY commit_scn,rawtohex(xid),scn,rs_id,ssn;
+        """
+        result=mine_archive(sql,start,end,query,committed_only=committed_only)
+        return [json.loads(line) for line in result.stdout.splitlines() if line.lstrip().startswith('{')]
+
+    committed=rows(table_scope)
+    repeated=rows(table_scope)
+    evidence('committed-archive',committed)
+    evidence('committed-replay',repeated)
+    assert committed and committed==repeated
+    observed('The closed Oracle archive produces the same savepoint records on repeated reads')
+    unfiltered=rows(table_scope,committed_only=False)
+    evidence('unfiltered-archive',unfiltered)
+    assert any('full-rollback-sentinel' in (record['redo'] or '') for record in unfiltered)
+    assert all('full-rollback-sentinel' not in ((record['undo'] or '')+(record['redo'] or ''))
+               and 'full-rollback-insert' not in ((record['undo'] or '')+(record['redo'] or ''))
+               for record in committed)
+    observed('The committed-only archive excludes the separate fully rolled back transaction')
+
+    prefix={record['xid'] for record in committed if 'prefix-kept' in (record['redo'] or '')}
+    suffix={record['xid'] for record in committed if 'tail-kept' in (record['redo'] or '')}
+    assert len(prefix)==len(suffix)==1 and prefix.isdisjoint(suffix)
+    mixed_xid=next(iter(prefix))
+    assert len(mixed_xid)==16 and all(digit in '0123456789ABCDEF' for digit in mixed_xid)
+    transactions=rows(f"RAWTOHEX(xid)='{mixed_xid}'")
+    evidence('mixed-xid-archive',transactions)
+    assert transactions and all(record['xid']==mixed_xid for record in transactions)
+    mixed=[record for record in committed if record['xid']==mixed_xid]
+    raw_mixed=[record for record in unfiltered if record['xid']==mixed_xid]
+    assert len(mixed)==4 and all(record['rollback']==record['status']==record['continues']==0 for record in mixed)
+    assert len(raw_mixed)==18 and sum(record['rollback']==1 for record in raw_mixed)==7,raw_mixed
+    assert all(record['undo'] is None for record in raw_mixed if record['rollback']==1)
+    for value in ('first-unsaved','second-unsaved','move-unsaved','insert-unsaved','keyless-unsaved'):
+        assert any(value in (record['redo'] or '') for record in raw_mixed)
+        assert all(value not in ((record['redo'] or '')+(record['undo'] or '')) for record in mixed)
+    observed('Committed-only LogMiner removes seven canceled changes and their seven incomplete compensation records')
+
+    snapshots={scn:snapshot(scn) for scn in (start,middle,end)}
+    evidence('flashback',snapshots)
+    assert snapshots[start]==baseline,snapshots
+    retained=['ROW|1|retained-after','ROW|2|move-restored','ROW|3|delete-restored','ROW|4|prefix-kept']
+    keyless=['KEYLESS|duplicate|1','KEYLESS|retained-new|1','KEYLESS|untouched|1']
+    assert snapshots[middle]==retained+keyless and snapshots[end]==retained+['ROW|5|tail-kept']+keyless,snapshots
+    observed('Flashback proves the surviving same-row update, restored primary key, delete and keyless multiplicities')
+
+    preview={}
+    for name,lower,upper in [('mixed',start,middle),('tail',middle,end)]:
+        result=review(tables,lower,upper)
+        preview[name]={'exitCode':result.returncode}
+        if result.returncode==0:
+            preview[name]['decoded']=json.loads(result.stdout)['archiveWindow']['decoded']
+        else:
+            preview[name]['error']=next((line.strip().split(': ')[-1]
+                                          for line in result.stderr.splitlines() if 'ORACLE_' in line),'UNKNOWN')
+    evidence('product-preflight',preview)
+    assert preview['mixed']['exitCode']==0,preview
+    assert preview['mixed']['decoded']['committedTransactions']==1,preview
+    assert preview['mixed']['decoded']['operations']=={'INSERT':2,'UPDATE':1,'DELETE':1},preview
+    assert preview['tail']['exitCode']==0,preview
+    assert preview['tail']['decoded']['committedTransactions']==1,preview
+    assert preview['tail']['decoded']['operations']=={'INSERT':1},preview
+    observed('The exact product probe decodes only four surviving changes and one independently selected clean commit')
+
+
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
     target = oracle + '-pg'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
@@ -473,6 +626,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                             'metadataSchema':'copy_meta'}],
                 'chunkSize':2,'heartbeatMillis':500,'leaseMillis':5000,'pollIntervalMillis':150,
             }
+            if options.savepoint_pipeline:
+                pipeline['targets'].append(dict(
+                    pipeline['targets'][0],id='pg_peer',metadataSchema='copy_peer_meta',
+                    mappings={'RIVO_APP':'copy_peer_app'},
+                ))
             if options.virtual_columns:
                 pipeline['source']['oracle']['allowVirtualNumericColumns']=True
             task_file=tasks/'oracle_native.yml'
@@ -682,6 +840,123 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                     observed('PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs')
 
+                if options.savepoint_pipeline:
+                    required(lambda:target_sql('SELECT "NOTE" FROM copy_peer_app."RIVO_ORDERS" WHERE "ID"=4',
+                                               checked=False)=='offline',
+                             'Secondary Oracle subscription reaches the original good commit',60)
+
+                    def receipt_and_rows(schema, metadata):
+                        state=target_sql(f"""
+                            SELECT json_build_object(
+                                'orders',(SELECT json_agg(json_build_array("ID","NOTE") ORDER BY "ID")
+                                          FROM {schema}."RIVO_ORDERS"),
+                                'keyless',(SELECT json_agg("VALUE" ORDER BY "VALUE")
+                                           FROM {schema}."RIVO_KEYLESS"),
+                                'snapshots',(SELECT json_agg(json_build_array(table_id,snapshot_id,next_part,row_count)
+                                                             ORDER BY table_id) FROM {metadata}.rm3_sink_table),
+                                'checkpoint',(SELECT json_build_array(stream_seq,transaction_id,transaction_hash)
+                                              FROM {metadata}.rm3_sink_job));
+                        """)
+                        return json.loads(state)
+
+                    def native_cut():
+                        return {key:receipt_and_rows(schema,metadata) for key,schema,metadata in (
+                            ('pg','copy_app','copy_meta'),('pg_peer','copy_peer_app','copy_peer_meta'))}
+
+                    def source_rows(scn):
+                        assert scn.isdecimal()
+                        result=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+                            SELECT 'ORDER|'||id||'|'||note FROM rivo_app.rivo_orders AS OF SCN {scn} ORDER BY id;
+                            SELECT 'KEYLESS|'||value FROM rivo_app.rivo_keyless AS OF SCN {scn} ORDER BY value;
+                            """,checked=False)
+                        assert result.returncode==0,(scn,result.stdout,result.stderr)
+                        lines=[line.strip().split('|',2) for line in result.stdout.splitlines() if '|' in line]
+                        return {
+                            'orders':[[int(row[1]),row[2]] for row in lines if row[0]=='ORDER'],
+                            'keyless':[int(row[1]) for row in lines if row[0]=='KEYLESS'],
+                        }
+
+                    def drained_cut():
+                        status=progress()
+                        if not status.get('capture_scn') or 'captured_sequence' not in status:
+                            return None
+                        views=native_cut()
+                        if all(item['checkpoint'][0]==int(status['captured_sequence']) for item in views.values()):
+                            return status,views
+                        return None
+
+                    before_savepoint,previous=required(drained_cut,'Both target receipts reach the captured position',45)
+                    assert previous['pg']['orders']==previous['pg_peer']['orders']
+                    assert previous['pg']['keyless']==previous['pg_peer']['keyless']
+
+                    def retained_cut(prior, orders, keyless, description):
+                        def retained():
+                            point=drained_cut()
+                            if point is None:
+                                return None
+                            status,views=point
+                            for target,view in views.items():
+                                if view['orders']!=orders or view['keyless']!=keyless:
+                                    return None
+                                assert view['snapshots']==prior[target]['snapshots']
+                                assert view['checkpoint'][0]>prior[target]['checkpoint'][0]
+                                assert view['checkpoint'][1] and view['checkpoint'][2]
+                            assert all(status.get(field) is None for field in ('error_code','error_stage')), status
+                            return status,views
+                        return required(retained,description,75)
+
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        INSERT INTO rivo_app.rivo_orders VALUES (71,'savepoint-prefix-kept');
+                        INSERT INTO rivo_app.rivo_keyless VALUES (887);
+                        INSERT INTO rivo_app.rivo_keyless VALUES (887);
+                        SAVEPOINT fixture_cut;
+                        UPDATE rivo_app.rivo_orders SET note='savepoint-rolled-back' WHERE id=1;
+                        DELETE FROM rivo_app.rivo_keyless WHERE value=887 AND ROWNUM=1;
+                        INSERT INTO rivo_app.rivo_keyless VALUES (889);
+                        ROLLBACK TO fixture_cut;
+                        UPDATE rivo_app.rivo_orders SET note='savepoint-suffix-kept' WHERE id=1;
+                        COMMIT;""")
+                    rotate()
+                    old_orders=previous['pg']['orders']
+                    old_keyless=previous['pg']['keyless'] or []
+                    assert all(row[0]<71 for row in old_orders) and all(value<887 for value in old_keyless)
+                    orders=[[key,'savepoint-suffix-kept' if key==1 else note] for key,note in old_orders]
+                    orders.append([71,'savepoint-prefix-kept'])
+                    online_status,online=retained_cut(previous,orders,old_keyless+[887,887],
+                                                       'Both targets reach the first committed savepoint result')
+                    online_source=source_rows(online_status['capture_scn'])
+                    assert online_source=={'orders':orders,'keyless':old_keyless+[887,887]},online_source
+                    observed('Both PostgreSQL subscriptions apply the surviving savepoint changes and retain duplicate keyless rows')
+
+                    stop_platform(force=True)
+                    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+                        UPDATE rivo_app.rivo_orders SET note='savepoint-offline-kept' WHERE id=71;
+                        SAVEPOINT offline_cut;
+                        UPDATE rivo_app.rivo_orders SET id=73 WHERE id=71;
+                        DELETE FROM rivo_app.rivo_orders WHERE id=1;
+                        INSERT INTO rivo_app.rivo_keyless VALUES (889);
+                        ROLLBACK TO offline_cut;
+                        DELETE FROM rivo_app.rivo_keyless WHERE value=887 AND ROWNUM=1;
+                        INSERT INTO rivo_app.rivo_orders VALUES (72,'offline-tail-kept');
+                        COMMIT;""")
+                    rotate()
+                    assert native_cut()==online
+                    start_platform(config,'worker-savepoint-restart.log')
+                    offline_orders=[[key,'savepoint-offline-kept' if key==71 else note] for key,note in orders]
+                    offline_orders.append([72,'offline-tail-kept'])
+                    offline_status,offline=retained_cut(online,offline_orders,old_keyless+[887],
+                                                         'Both original subscriptions resume with only offline survivors')
+                    offline_source=source_rows(offline_status['capture_scn'])
+                    assert offline_source=={'orders':offline_orders,'keyless':old_keyless+[887]},offline_source
+                    assert int(before_savepoint['capture_scn'])<int(online_status['capture_scn'])<int(offline_status['capture_scn'])
+                    (output/'savepoint-target-receipts.json').write_text(json.dumps({
+                        'before':{'sourcePosition':before_savepoint['sourcePosition'],'targets':previous},
+                        'online':{'sourcePosition':online_status['sourcePosition'],'targets':online,'flashback':online_source},
+                        'restart':{'sourcePosition':offline_status['sourcePosition'],'targets':offline,'flashback':offline_source},
+                    },indent=2)+'\n')
+                    observed('Both original PostgreSQL receipts advance after SIGKILL with no canceled row changes or resnapshot')
+                    return
+
                 durable=progress()['capture_scn']
                 sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
                 rotate()
@@ -742,6 +1017,10 @@ def main():
                         help='Inspect native BasicFiles and SecureFiles BLOB/CLOB Flashback and archived DML')
     parser.add_argument('--lob-preflight', action='store_true',
                         help='Verify the specific LOB refusal codes from the Java probe')
+    parser.add_argument('--savepoint-evidence', action='store_true',
+                        help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
+    parser.add_argument('--savepoint-pipeline', action='store_true',
+                        help='Verify archived savepoints and SIGKILL restart through two PostgreSQL subscriptions')
     parser.add_argument('--output', required=True, type=Path)
     options = parser.parse_args()
     if options.startup_timeout<1:
@@ -760,6 +1039,10 @@ def main():
         parser.error('--lob-evidence requires --logminer')
     if options.lob_preflight and not options.lob_evidence:
         parser.error('--lob-preflight requires --lob-evidence')
+    if options.savepoint_evidence and not options.logminer:
+        parser.error('--savepoint-evidence requires --logminer')
+    if options.savepoint_pipeline and not options.pipeline:
+        parser.error('--savepoint-pipeline requires --pipeline')
     options.output.mkdir(parents=True, exist_ok=True)
     name = 'rivomesh-oracle-source-' + secrets.token_hex(5)
     password = 'Rm9x' + secrets.token_hex(20)
@@ -771,6 +1054,7 @@ def main():
               'textJson': options.text_json, 'dateValues': options.date_values,
               'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns,
               'lobEvidence':options.lob_evidence, 'lobPreflight':options.lob_preflight,
+              'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
 
@@ -831,6 +1115,8 @@ def main():
                 ALTER TABLE rivo_app.rivo_orders ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
                 ALTER TABLE rivo_app.rivo_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
             sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+        if options.savepoint_evidence:
+            seed_savepoint_tables(sql)
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'
         pdb_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREEPDB1'
         document = {
@@ -949,15 +1235,17 @@ def main():
                 assert extended['lastCommit']['payload']['xid']!=last['payload']['xid']
                 assert extended['contentSha256']!=typed['contentSha256']
                 observed('After archive rotation, a second complete commit has a distinct typed SCN and XID')
-            if options.lob_evidence:
-                def lob_preflight(table,start,end):
-                    document['tables']=[f'RIVO_APP.{table}']
-                    document['archiveWindow']={'startScn':start,'endScnExclusive':end,'decodeCommitted':True}
-                    profile.write_text(json.dumps(document))
-                    return execute(*program,env=environment,checked=False)
+            def archive_preview(selected,start,end):
+                document['tables']=selected
+                document['archiveWindow']={'startScn':start,'endScnExclusive':end,'decodeCommitted':True}
+                profile.write_text(json.dumps(document))
+                return execute(*program,env=environment,checked=False)
 
-                lob_evidence(sql,options.output,observed,
-                             verify_preflight=lob_preflight if options.lob_preflight else None)
+            if options.lob_evidence:
+                lob_preflight=lambda table,start,end:archive_preview([f'RIVO_APP.{table}'],start,end)
+                lob_evidence(sql,options.output,observed,verify_preflight=lob_preflight if options.lob_preflight else None)
+            if options.savepoint_evidence:
+                savepoint_evidence(sql,options.output,observed,archive_preview)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
         if options.virtual_evidence:

@@ -119,6 +119,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-SO-07
   - [x] Native Flashback, archive replay and original-snapshot restart for bounded virtual integer multiplication and two-column sums and differences.
   - [x] Native BasicFiles and SecureFiles BLOB/CLOB archive evidence, storage-specific restricted-role preflight and independent migration instructions.
+  - [x] Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN.
   - [ ] Other expressions, binary JSON, full LOB image capture and RAC promotion.
 ## Java runtime compatibility
 

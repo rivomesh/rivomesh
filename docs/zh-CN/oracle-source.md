@@ -37,7 +37,15 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
-归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式、部分回滚及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+
+### 保存点和部分回滚
+
+归档采集使用 LogMiner 的 `COMMITTED_DATA_ONLY`。Oracle Free 26ai 23.26.4.0.0 的嵌套 `SAVEPOINT` 与 `ROLLBACK TO` 夹具在未过滤归档中产生 7 条已撤销的写入和 7 条补偿记录。仅已提交模式两遍均只返回该事务的 4 条有效变更。测试覆盖同一有主键行的连续更新、撤销主键修改、撤销删除，以及重复的无主键行。[Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 重做记录字段](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-LOGMNR_CONTENTS.html)
+
+此验收限于单 Oracle 实例、已关闭归档和受测的标量列。如果所选记录仍带回滚标记，采集可能在 `SOURCE_DECODE` 阶段报 `ORACLE_REDO_PARTIAL_ROLLBACK_UNSUPPORTED` 并停止推进。与 DBA 检查采集状态，保留持久化 SCN、最早所需归档位置和日志库。目标跳过和补数据功能适用于已经入日志库的事务。源端解码失败需排查源端，或审核后按新快照基线重建。
+
+提供用 Temurin 21 运行的 JAR 和 Oracle JDBC 驱动，执行 `tests/oracle-source-probe.py --logminer --savepoint-evidence` 可复现归档和 Flashback 对比。追加 `--pipeline --savepoint-pipeline` 可验证独立数据和元数据 Schema 的两个 PostgreSQL 订阅，并核查强制终止 Controller 和 Worker 后的原快照和目标回执。
 
 ### BLOB 与 CLOB 预检
 
