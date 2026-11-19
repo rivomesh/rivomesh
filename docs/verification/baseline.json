@@ -10922,5 +10922,21 @@
       "manifestSha256": "2fc64b797a5ab420cef227d08326279cfdbdb83c0cccd928106f2dcec881f429"
     },
     "scope": "ARM64 Temurin 25.0.5 in the two Controller JVMs, execution Agent and Worker. MySQL 8.4.13 asynchronous GTID failover with separately promoted replica and PostgreSQL/MySQL targets. Full release compatibility uses the recorded Java 21 matrix."
+  },
+  "gaussManagedIndexReview": {
+    "status": "PASS",
+    "verificationScope": "Offline Java and DOM. Shared v3 CHECK return path for console and CLI through the JDBC IndexPolicy.",
+    "artifactSha256": "cef5e54f077c2e4fa8c13d04d103211ae36256cd93030262ffa57934cb232726",
+    "candidateFeaturePatchSha256": "58e5baca4dacb66e5acd53d889b6e180420d6dc78fd4e16f8bb04b11660e3922",
+    "integratedJavaPassed": 43,
+    "integratedDomPassed": 156,
+    "checks": [
+      "Exact projected CREATE, DOWNGRADE_UNIQUE, REPLACE_GSI and REQUIRES_PLAN actions",
+      "Complete mapped-object totals under independent 24-entry and 8 KiB caps for blocked and planned details",
+      "Source metadata unavailable for PostgreSQL and Oracle",
+      "No configuration credentials, SQL or expressions are included in the projection"
+    ],
+    "remainingScope": "Native openGauss catalog comparison and commercial GaussDB multi-CN/DN deployment",
+    "reproduce": "mvn -pl sync-app -am -Dtest=GaussIndexReviewTest,JdbcSinkTest,TaskPlaneTest -Dsurefire.failIfNoSpecifiedTests=false test"
   }
 }

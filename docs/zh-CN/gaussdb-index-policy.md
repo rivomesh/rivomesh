@@ -22,6 +22,21 @@ MySQL 是数据权威源。同步期间目标仅由同步服务写入，业务�
 
 本专题适用于 openGauss/分布式 GaussDB。其他目标在约束不兼容时也已允许降级业务次级 UNIQUE，具体方式由各适配器声明；主键/候选定位键和内部正确性约束不能降级。分析引擎的 Unique Key/物化键也不属于可任意降级的次级约束，详见[平台设计](platform-design.md)。
 
+## 启动前审阅索引计划
+
+在 v3 控制台执行**检查连接与对象**，然后展开该次操作的**检查结果与操作详情**。v3 CLI 的 `check` 命令返回同一份 `gaussIndexReview`。预检读取每个 Gauss 目标所映射 MySQL 库的源索引元数据。PostgreSQL 和 Oracle 的源端发现目前不提供次级索引定义，对应检查结果为 `SOURCE_INDEX_METADATA_UNAVAILABLE`。
+
+| 动作 | 预期结果 |
+|---|---|
+| `CREATE` | 写入端计划按列序及唯一性属性创建普通索引。 |
+| `DOWNGRADE_UNIQUE` | 写入端计划将业务 UNIQUE 转为非唯一普通索引。业务应用接管写入前需恢复必要约束。 |
+| `REPLACE_GSI` | 写入端计划将已建模的业务 GSI 转为非唯一普通索引，失去全局路由及唯一性。MySQL 源端发现不会返回 Gauss 原生 GSI 定义。 |
+| `REQUIRES_PLAN` | 启动前须处理对应索引。原因 `GLOBAL_IDENTITY_REQUIRES_DISTRIBUTION_PLAN` 表示分布方案须保留行身份。表达式、前缀、倒序列和其他不支持的定义另有原因。 |
+
+计数覆盖全部 Gauss 映射中的索引决策，同一源对象可按不同目标分别计数。分布计划项 `distributionPlanRequired` 包含在 `requiresPlan` 内。普通主键独立建表，不计入此次审阅。详情优先展示阻断项，阻断与可执行计划两组各最多 24 条且紧凑 UTF-8 JSON 各不超过 8 KiB。`omittedEntries` 表示未展示的详情条数。详情仅包含标识符、动作、原因与计划索引属性，排除源表达式、SQL 和连接凭据。
+
+连接检查成功时仍可能返回 `REQUIRES_PLAN`。实际写入端启动时按同一策略重新判断，遇到阻断索引会在业务 DDL 前停止。预检不执行 DDL、不读取既有目标索引，也不验证分布能力。请单独验收 openGauss 的目录与写入行为。商业分布式 GaussDB 需用准备部署的确切版本、兼容模式、GTM 模式及 JDBC 驱动完成下文的多 CN/DN 实机验收。
+
 ## UNIQUE(email) 的含义
 
 源表示意：

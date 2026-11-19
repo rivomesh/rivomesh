@@ -22,6 +22,21 @@ An ordinary index cannot replace a PK. Replacing a global UNIQUE with `UNIQUE(em
 
 This topic covers openGauss/distributed GaussDB. Other adapters may also relax incompatible business secondary UNIQUE constraints under declared policies. Preserve PK/candidate identity and internal correctness; analytical Unique Key/materialization identity is not an optional secondary constraint. See [platform design](platform-design.md).
 
+## Review the index plan before starting
+
+In the v3 console, run **Check connections & objects**, then expand **Check results and operation details** for that operation. The v3 CLI `check` command returns the same `gaussIndexReview` section. It reads source index metadata for the MySQL databases mapped to each Gauss target. PostgreSQL and Oracle currently report `SOURCE_INDEX_METADATA_UNAVAILABLE` because their source discovery does not supply secondary index definitions.
+
+| Action | Expected outcome |
+|---|---|
+| `CREATE` | The sink plans an ordinary index with the indicated columns and uniqueness. |
+| `DOWNGRADE_UNIQUE` | The sink plans a nonunique ordinary index for a business UNIQUE. Restore any required constraint before application writes. |
+| `REPLACE_GSI` | The sink plans a nonunique ordinary index for a modeled business GSI. Global routing and uniqueness are lost. MySQL discovery does not report native Gauss GSI definitions. |
+| `REQUIRES_PLAN` | Resolve the reported index requirement before starting. `GLOBAL_IDENTITY_REQUIRES_DISTRIBUTION_PLAN` calls for a distribution plan that preserves row identity. Expressions, prefixes, descending columns and other unsupported definitions have a separate reason. |
+
+The counts cover all discovered index decisions across Gauss mappings, so the same source object may count once per target. `distributionPlanRequired` is part of `requiresPlan`. Ordinary primary keys are created separately and excluded from this review. Details place blockers first and allow up to 24 entries and 8 KiB of compact UTF-8 JSON for each of the blocker and planned groups. `omittedEntries` counts details outside this limit. Details contain identifiers, actions, reasons and planned index properties. Source expressions, SQL and connection credentials are excluded.
+
+A successful connection check can still report `REQUIRES_PLAN`. The live writer recalculates the same policy at startup and stops before business DDL for a blocked index. This check does not execute DDL, inspect existing target indexes or confirm distribution capabilities. Validate openGauss catalog and writer behavior separately. For commercial distributed GaussDB, perform the multi-CN/DN acceptance below on the exact build, compatibility mode, GTM mode and JDBC driver you will deploy.
+
 ## What UNIQUE(email) means
 
 Example source definition:

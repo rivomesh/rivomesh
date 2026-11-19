@@ -607,3 +607,7 @@ The `9a7200d6942bdd8aeca1645666b3dd01d524ed76dc90065b8df6af7c3d2d5db6` package p
 ### Temurin 25 with MySQL GTID failover
 
 The published application package `c69e00d9d33d0a5f95bc1b828565c106bda7a471324c6243b156379a62467880` passed nine native source-promotion checks with Temurin 25.0.5 on ARM64. Both Controller JVMs, the Agent and the Worker ran the observed runtime. The asynchronous replica remained read-only during the primary outage. After external promotion, both SQL targets received the promoted GTID on the original snapshots and configuration. The rolling profile passed 12 checks. Controller replacement preserved management access. The replacement Agent retained the earlier STOP receipt and restarted the Worker at the original GTID and snapshots. The initial failure is retained in the evidence, along with a standalone H2 journal probe. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)
+
+### Managed Gauss index review
+
+The `cef5e54f077c2e4fa8c13d04d103211ae36256cd93030262ffa57934cb232726` package passed 43 Java tests, 156 DOM tests and the package gate. The same index policy drives the v3 console or CLI check and the JDBC writer. MySQL mappings expose complete counts and bounded details, with separate budgets for blockers and planned indexes. PostgreSQL and Oracle report when their source discovery lacks index definitions. Commercial multi-CN/DN behavior requires deployment validation. [Gauss index guide](../en/gaussdb-index-policy.md#review-the-index-plan-before-starting) · [Manifest](baseline.json)

@@ -176,7 +176,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits.
   Acceptance: AC-LG-08
   - [x] Explicit global primary and identity GSI require a distribution plan before business DDL, including reordered identity columns.
-  - [ ] Commercial distributed GaussDB multi-CN/DN acceptance and managed preflight.
+  - [x] Console and CLI preflight share the MySQL-to-Gauss writer policy and report complete counts with bounded details.
+  - [ ] Native commercial GaussDB multi-CN/DN and target catalog acceptance.
 - [x] T-LG-09 · Report retention and real-browser acceptance · P1 · Depends on: CP-06, SE-05, RC-09
   Deliver: Provide authorized report/receipt search,retention and active-file protection;real browsers verify cluster/session/confirmation/recovery/pagination and accessibility.
   Acceptance: AC-LG-09
