@@ -133,6 +133,85 @@ class ExportTest(unittest.TestCase):
         self.saved_window(earlier, 2, 3)
         self.assertEqual(1, audit.verify_export(earlier, against_anchor=trusted))
 
+    def test_signed_checkpoint_requires_the_trusted_key_exact_bytes_and_pinned_store(self):
+        directory = self.output.parent
+        earlier = directory / "earlier.jsonl"
+        checkpoint = directory / "checkpoint.json"
+        signature = directory / "checkpoint.sig"
+        updated = directory / "updated.json"
+        private_key = directory / "private.pem"
+        public_key = directory / "public.pem"
+        wrong_private_key = directory / "wrong-private.pem"
+        wrong_public_key = directory / "wrong-public.pem"
+        for private, public in ((private_key, public_key), (wrong_private_key, wrong_public_key)):
+            subprocess.run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256",
+                            "-out", str(private)], check=True, capture_output=True)
+            subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                           check=True, capture_output=True)
+
+        def sign():
+            subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(private_key), "-out", str(signature),
+                            str(checkpoint)], check=True, capture_output=True)
+
+        def verify(key=public_key, store="store-1", environment=None):
+            return subprocess.run([sys.executable, audit.__file__, "--verify", str(self.output),
+                                   "--against-anchor", str(checkpoint), "--anchor-signature", str(signature),
+                                   "--anchor-public-key", str(key), "--anchor-store-id", store,
+                                   "--anchor-out", str(updated)], text=True, capture_output=True, env=environment)
+
+        def assert_rejected(error, **options):
+            result = verify(**options)
+            self.assertEqual(1, result.returncode, result)
+            self.assertEqual(error, result.stderr.strip())
+            self.assertEqual("", result.stdout)
+            self.assertFalse(updated.exists())
+
+        self.saved_window(earlier, 0, 1)
+        self.saved_window(self.output, 1, 3)
+        audit.verify_export(earlier, anchor_out=checkpoint)
+        sign()
+        accepted = verify()
+        self.assertEqual(0, accepted.returncode, accepted)
+        self.assertIn("AUDIT_ANCHOR_SIGNATURE_VERIFIED", accepted.stdout)
+        self.assertIn("AUDIT_ANCHOR_MATCHED", accepted.stdout)
+        self.assertEqual(self.events[-1]["hash"], json.loads(updated.read_text())["hash"])
+        updated.unlink()
+
+        assert_rejected("AUDIT_ANCHOR_SIGNATURE_INVALID", key=wrong_public_key)
+        assert_rejected("AUDIT_ANCHOR_SIGNATURE_VERIFIER_UNAVAILABLE", environment={"PATH": str(directory)})
+        raw = checkpoint.read_bytes()
+        for modified in (raw + b" ", raw.replace(b"store-1", b"store-2")):
+            checkpoint.write_bytes(modified)
+            assert_rejected("AUDIT_ANCHOR_SIGNATURE_INVALID")
+        checkpoint.write_bytes(raw)
+        signature.write_bytes(b"malformed signature")
+        assert_rejected("AUDIT_ANCHOR_SIGNATURE_INVALID")
+        signature.unlink()
+        assert_rejected("AUDIT_ANCHOR_SIGNATURE_UNREADABLE")
+
+        # The alternate scope uses the same key, sequence and chain hashes, with a valid signature.
+        checkpoint.write_bytes(raw.replace(b"store-1", b"store-2"))
+        sign()
+        self.saved_window(self.output, 1, 3, store="store-2")
+        assert_rejected("AUDIT_ANCHOR_STORE_CHANGED")
+        self.saved_window(self.output, 1, 3)
+        assert_rejected("AUDIT_ANCHOR_STORE_CHANGED", store="store-2")
+
+    def test_signed_checkpoint_options_cannot_be_partially_supplied(self):
+        self.saved_window(self.output, 0, 3)
+        directory = self.output.parent
+        options = ["--against-anchor", str(directory / "earlier.json"),
+                   "--anchor-signature", str(directory / "earlier.sig"),
+                   "--anchor-public-key", str(directory / "public.pem"),
+                   "--anchor-store-id", "store-1"]
+        for index in range(0, len(options), 2):
+            with self.subTest(missing=options[index]):
+                result = subprocess.run([sys.executable, audit.__file__, "--verify", str(self.output),
+                                         *options[:index], *options[index + 2:]], text=True, capture_output=True)
+                self.assertEqual(1, result.returncode, result)
+                self.assertEqual("AUDIT_ANCHOR_SIGNATURE_OPTIONS_REQUIRED", result.stderr.strip())
+                self.assertEqual("", result.stdout)
+
     def test_recomputed_chain_cannot_replace_an_independently_anchored_tail(self):
         self.run_export()
         trusted = self.output.with_name("prior-head.json")

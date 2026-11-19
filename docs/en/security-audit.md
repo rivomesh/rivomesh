@@ -57,6 +57,28 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 `AUDIT_ANCHOR_MATCHED` confirms that the export contains the trusted sequence and hash for the same store. It can match either an exported event or the boundary immediately before the first event. Retain the newer checkpoint separately after a successful verification. The tool reports `AUDIT_ANCHOR_TAIL_ROLLBACK` for an older tail, `AUDIT_ANCHOR_HASH_MISMATCH` for changed history, or `AUDIT_ANCHOR_STORE_CHANGED` for a different store. If retention advances beyond the trusted sequence, `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW` requires an independently retained intermediate export to establish continuity.
 
+### Signed checkpoints
+
+An independent custodian can sign the checkpoint using OpenSSL. The example uses an existing ECDSA P-256 key on the custodian's machine. Verify the initial export's provenance and store identity before signing the first checkpoint. Keep the private key outside Rivomesh and the checkpoint archive. Preserve the original JSON bytes and detached signature as a pair. [OpenSSL signature commands](https://docs.openssl.org/3.0/man1/openssl-dgst/)
+
+```sh
+openssl dgst -sha256 -sign /custodian/keys/audit-signing.pem \
+  -out /custodian/checkpoints/rivomesh-head.sig /custodian/checkpoints/rivomesh-head.json
+```
+
+Configure the PEM public key and expected `storeId` in the verifier's independent trust configuration. Obtain them from the trusted enrollment process. Read the latest trusted checkpoint from custody, then verify a later export using Python 3 and OpenSSL on `PATH`. Replace `your-enrolled-store-id` with the actual enrolled ID.
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
+  --against-anchor /independent/rivomesh-head.json \
+  --anchor-signature /independent/rivomesh-head.sig \
+  --anchor-public-key /trusted/audit-public.pem \
+  --anchor-store-id your-enrolled-store-id \
+  --anchor-out /private/rivomesh-head-later.json
+```
+
+`AUDIT_ANCHOR_SIGNATURE_VERIFIED` confirms signature validation and that the signed checkpoint matched the expected store and verified export. A missing required option, invalid signature, wrong key, changed store, or unavailable verifier fails the command without writing the next checkpoint. Once verification succeeds, the custodian can sign the new checkpoint separately. The signed checkpoint establishes the history hash at its sequence. A later portion of the export gains an independently authenticated hash when the custodian signs a newer checkpoint.
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`: ADMIN pages, events/next/storeId and integrity boundaries.
@@ -66,6 +88,6 @@ Only those three nonnegative integer query parameters are accepted; limit is 1â€
 
 ## Security and acceptance boundaries
 
-The local chain and registry detect ordinary corruption, missing rows and replacement by an empty store. The offline comparison's trust comes from the earlier checkpoint and its independent custody. Signature verification and automatically writing checkpoints to an immutable external store remain separate work. See the [authorization handbook](task-authorization.md) for task grants and [verification](../verification/README.md) for tested profiles.
+The local chain and registry detect ordinary corruption, missing rows and replacement by an empty store. Offline comparison relies on independent custody of the latest trusted checkpoint. A signature authenticates checkpoint bytes and can remain valid on an older checkpoint. Keep the latest accepted sequence and enforce archive retention independently. Automated delivery to immutable external storage remains open. See the [authorization handbook](task-authorization.md) for task grants and [verification](../verification/README.md) for tested profiles.
 
 Local account changes record ACCOUNT_COMMITTED with subjectId and directory version; the UI shows the affected task/account. Directory mutation and audit outbox are saved together, with a separate durable version anchor unaffected by event retention. Legacy export payload/hash bytes are preserved; see [accounts](account-management.md).

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 from urllib.error import HTTPError
@@ -38,15 +39,45 @@ def audit_anchor(store_id, sequence, chain_hash):
     return {"formatVersion": 1, "storeId": store_id, "sequence": sequence, "hash": chain_hash}
 
 
-def load_anchor(path):
+def verify_anchor_signature(raw, signature_path, public_key_path):
     try:
-        with Path(path).open(encoding="utf-8") as stream:
+        with Path(signature_path).open("rb") as stream:
+            signature = stream.read(16385)
+        with Path(public_key_path).open("rb") as stream:
+            public_key = stream.read(16385)
+    except OSError as error:
+        raise AuditAnchorError("AUDIT_ANCHOR_SIGNATURE_UNREADABLE") from error
+    if not 0 < len(signature) <= 16384 or not 0 < len(public_key) <= 16384:
+        raise AuditAnchorError("AUDIT_ANCHOR_SIGNATURE_INVALID")
+    try:
+        with tempfile.TemporaryDirectory() as directory:
+            signature_file = Path(directory) / "checkpoint.sig"
+            public_key_file = Path(directory) / "audit-public.pem"
+            signature_file.write_bytes(signature)
+            public_key_file.write_bytes(public_key)
+            result = subprocess.run(
+                ["openssl", "dgst", "-sha256", "-keyform", "PEM", "-verify", str(public_key_file),
+                 "-signature", str(signature_file)], input=raw, timeout=10,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise AuditAnchorError("AUDIT_ANCHOR_SIGNATURE_VERIFIER_UNAVAILABLE") from error
+    if result.returncode != 0:
+        raise AuditAnchorError("AUDIT_ANCHOR_SIGNATURE_INVALID")
+
+
+def load_anchor(path, signature=None, public_key=None):
+    try:
+        with Path(path).open("rb") as stream:
             raw = stream.read(4097)
-        if len(raw) > 4096:
-            raise ValueError("Anchor exceeds limit")
-        record = json.loads(raw, object_pairs_hook=strict_pairs)
     except OSError as error:
         raise AuditAnchorError("AUDIT_ANCHOR_UNREADABLE") from error
+    if len(raw) > 4096:
+        raise AuditAnchorError("AUDIT_ANCHOR_INVALID")
+    if signature is not None:
+        verify_anchor_signature(raw, signature, public_key)
+    try:
+        record = json.loads(raw.decode("utf-8"), object_pairs_hook=strict_pairs)
     except ValueError as error:
         raise AuditAnchorError("AUDIT_ANCHOR_INVALID") from error
     if (not isinstance(record, dict) or set(record) != {"formatVersion", "storeId", "sequence", "hash"}
@@ -93,9 +124,15 @@ def verify_page(page, after=None, through=None, previous=None):
     return sequence, current
 
 
-def verify_export(path, against_anchor=None, anchor_out=None):
+def verify_export(path, against_anchor=None, anchor_out=None, *, anchor_signature=None, anchor_public_key=None,
+                  anchor_store_id=None):
     """Verify a saved JSONL export with bounded memory, including its completion marker."""
-    trusted = load_anchor(against_anchor) if against_anchor else None
+    signed_options = (anchor_signature, anchor_public_key, anchor_store_id)
+    if any(value is not None for value in signed_options) and (against_anchor is None or None in signed_options):
+        raise AuditAnchorError("AUDIT_ANCHOR_SIGNATURE_OPTIONS_REQUIRED")
+    trusted = load_anchor(against_anchor, anchor_signature, anchor_public_key) if against_anchor is not None else None
+    if anchor_store_id is not None and trusted["storeId"] != anchor_store_id:
+        raise AuditAnchorError("AUDIT_ANCHOR_STORE_CHANGED")
     with Path(path).open(encoding="utf-8") as stream:
         def record():
             line = stream.readline(1024 * 1024 + 1)
@@ -210,15 +247,23 @@ def main():
     parser.add_argument("--verify", type=Path, help="Verify a saved complete JSONL export without authentication")
     parser.add_argument("--against-anchor", type=Path, help="Trusted offline audit checkpoint to require during export verification")
     parser.add_argument("--anchor-out", type=Path, help="Put the verified audit head into a new checkpoint file")
+    parser.add_argument("--anchor-signature", type=Path, help="Detached OpenSSL SHA-256 signature of --against-anchor")
+    parser.add_argument("--anchor-public-key", type=Path, help="Independently trusted PEM public key for --anchor-signature")
+    parser.add_argument("--anchor-store-id", help="Independently trusted audit storeId required with --anchor-signature")
     args = parser.parse_args()
-    if (args.against_anchor or args.anchor_out) and (not args.verify or args.verify_page or args.url or args.output):
+    anchor_options = (args.against_anchor, args.anchor_out, args.anchor_signature, args.anchor_public_key, args.anchor_store_id)
+    if any(value is not None for value in anchor_options) and (not args.verify or args.verify_page or args.url or args.output):
         parser.error("Anchor options require --verify of a saved complete export")
     try:
         if args.verify:
-            count = verify_export(args.verify, args.against_anchor, args.anchor_out)
+            count = verify_export(args.verify, args.against_anchor, args.anchor_out,
+                                  anchor_signature=args.anchor_signature, anchor_public_key=args.anchor_public_key,
+                                  anchor_store_id=args.anchor_store_id)
             print("AUDIT_EXPORT_VERIFIED: " + str(count) + " events")
             if args.against_anchor:
                 print("AUDIT_ANCHOR_MATCHED")
+            if args.anchor_signature:
+                print("AUDIT_ANCHOR_SIGNATURE_VERIFIED")
             if args.anchor_out:
                 print("AUDIT_ANCHOR_WRITTEN")
         elif args.verify_page:

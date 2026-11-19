@@ -57,6 +57,28 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 `AUDIT_ANCHOR_MATCHED` 表示同一审计库的导出与可信的序号及摘要一致。该检查点可以对应一个导出事件，也可以正好位于第一条事件之前。校验成功后独立保存新的检查点。末尾回退返回 `AUDIT_ANCHOR_TAIL_ROLLBACK`，历史被改写返回 `AUDIT_ANCHOR_HASH_MISMATCH`，审计库改变返回 `AUDIT_ANCHOR_STORE_CHANGED`。保留窗口越过可信检查点时返回 `AUDIT_ANCHOR_OUTSIDE_EXPORT_WINDOW`，需要用独立留存的中间导出核对连续性。
 
+### 签名检查点
+
+独立的审计保管方可使用 OpenSSL 给检查点签名。示例使用保管方已有的 ECDSA P-256 密钥。首次签名前核实导出的来源及审计库标识。签名私钥在 Rivomesh 和检查点档案之外保管。原始 JSON 字节与分离签名成对保存。[OpenSSL 签名命令](https://docs.openssl.org/3.0/man1/openssl-dgst/)
+
+```sh
+openssl dgst -sha256 -sign /custodian/keys/audit-signing.pem \
+  -out /custodian/checkpoints/rivomesh-head.sig /custodian/checkpoints/rivomesh-head.json
+```
+
+在验证端独立配置信任的 PEM 公钥和预期 `storeId`。这两项取自可信的初始登记流程。从保管方取得最新的可信检查点，再使用 Python 3 和 `PATH` 中的 OpenSSL 核验后续导出。将 `your-enrolled-store-id` 替换为登记的标识。
+
+```sh
+python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
+  --against-anchor /independent/rivomesh-head.json \
+  --anchor-signature /independent/rivomesh-head.sig \
+  --anchor-public-key /trusted/audit-public.pem \
+  --anchor-store-id your-enrolled-store-id \
+  --anchor-out /private/rivomesh-head-later.json
+```
+
+`AUDIT_ANCHOR_SIGNATURE_VERIFIED` 表示签名有效，且签名检查点与预期的审计库及已核验的导出一致。签名参数缺失、签名无效、公钥错误、审计库改变或签名验证器不可用时，命令失败且不写出下一检查点。核验后可由保管方另行签名。签名检查点认证到其对应序号的历史摘要，后续记录的摘要在保管方签署更新的检查点后获得独立认证。
+
 ## API
 
 - `GET /api/audit?after=0&through=0&limit=100`：ADMIN查询，返回events、next、storeId及链边界。
@@ -66,6 +88,6 @@ python3 tools/audit-export.py --verify /private/rivomesh-audit-later.jsonl \
 
 ## 安全及验收边界
 
-本地链和注册表可检测普通损坏、缺行和新空库替换。离线核验依赖旧检查点的独立保管。签名校验和定期写入外部不可变存储仍待实现。精确任务授权见[授权手册](task-authorization.md)，实际验证范围见[验收记录](../verification/README.md)。
+本地链和注册表可检测普通损坏、缺行和新空库替换。离线核验依赖独立保管的最新可信检查点。签名验证检查点字节，旧检查点的签名也可能仍然有效。应独立维护最新接受的序号及档案留存策略。自动写入外部不可变存储仍待实现。精确任务授权见[授权手册](task-authorization.md)，实际验证范围见[验收记录](../verification/README.md)。
 
 本地账号变更记录 ACCOUNT_COMMITTED，包含目标账号 subjectId 与目录版本；界面显示“任务 / 账号”。账号变更与审计待写记录原子保存，目录版本另有持久锚点，审计保留清理不删除该锚点；旧载荷导出保留原字节/哈希，见[账号管理](account-management.md)。
