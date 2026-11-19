@@ -33,6 +33,7 @@ type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
+parser.add_argument('--bytea-escape-output', action='store_true', help='Use escape as the source server BYTEA output default')
 parser.add_argument('--previous-numeric-artifact', type=Path,
                     help='Check a prior release against the same native numeric declarations before the candidate')
 parser.add_argument('--delivery-timing', action='store_true', help='Verify exact native commit time and delivery observation')
@@ -47,6 +48,8 @@ parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
 dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values
+if args.bytea_escape_output and not args.bytea_values:
+    parser.error('--bytea-escape-output requires --bytea-values')
 if args.bytea_values and (args.generated or args.failover):
     parser.error('--bytea-values exercises the direct PostgreSQL 17.12 profile')
 if args.previous_numeric_artifact and not args.numeric_values:
@@ -206,6 +209,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         report['tlsProfile']={'driver':'pgJDBC 42.7.14','protocol':'TLSv1.3',
                               'sslmode':'verify-full','channelBinding':'require'}
     (tasks/'postgres_source.yml').write_text(json.dumps(pipeline))
+    if args.bytea_escape_output:
+        services['source']['command']+=['-c','bytea_output=escape']
     if args.delivery_timing:
         services['source']['command']+=['-c','track_commit_timestamp=on']
     if args.failover:
@@ -670,6 +675,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         metadata=json.loads(subprocess.check_output(['docker','image','inspect',image],text=True))[0]
         report['runtimeImageId']=metadata['Id']
         report['runtimeArchitecture']=metadata['Architecture']
+        if args.bytea_escape_output:
+            assert sql('source','SHOW bytea_output')=='escape'
+            report['sourceByteaOutput']='escape'
         require(stream_ready,'native consistent snapshot')
         if args.tls:
             require(lambda: int(active_tls('source','rivomesh-tls-source'))>0

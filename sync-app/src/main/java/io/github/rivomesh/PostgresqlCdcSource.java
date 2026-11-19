@@ -432,6 +432,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 requireIdentity(connection);
                 try(Statement session=connection.createStatement()){
                     session.setQueryTimeout(15);
+                    session.execute("SET bytea_output TO 'hex'");
                     session.execute("SET DateStyle TO 'ISO, YMD'");
                     session.execute("SET TimeZone TO 'UTC'");
                     session.execute("SET extra_float_digits TO 3");

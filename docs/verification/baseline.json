@@ -14266,5 +14266,59 @@
     "configurationExamplesPassed": 25,
     "configurationLogSha256": "e67ddac8a203fe5dbbe06740999e25b39703ec2ba1c4883d5ca452e80a4328fd",
     "scope": "Standard build, packaged assets and Web console smoke after PostgreSQL eligibility, with the new optional MySQL group fixture compiled. Optional native tests retain their own exact manifests."
+  },
+  "postgresqlByteaEscapeServerDefaultTemurin21": {
+    "scope": "PostgreSQL logical receiver sets its own bytea_output to hex, independently of the source server setting. It preserves the existing snapshot encoding and leaves the server setting intact.",
+    "sourceCommit": "bc8898c6bf8623353fd04f9c31a80452f1481838",
+    "artifactSha256": "4d0f130b48a97c2a8cbd7e475fb3c0e8ba20fd9d73a3855d6185720ec0d7d271",
+    "oldArtifactSha256": "f39cf9cc1c65711cae5f0e02368a5beb924f31bf059fdb7de743e01aee6bf6d5",
+    "oldFailureManifestSha256": "05058ac4239700a271ecfdb9a66aa494af778fafda25f39b2128ed2af67aed42",
+    "oldBehavior": "The older JAR passed the snapshot and idle checks against bytea_output=escape and timed out at the first published transaction.",
+    "nativeFixtureSha256": "581833ae70cab0f01278e7808aa5f9d38607738ce997448fef7dc508be8ffcea",
+    "logicalSourceSha256": "8ba5985b19eb6e3f52130475b2f3352772227f662a79ff0c4cb1eb22cc8cf9a8",
+    "focusedJavaPassed": 27,
+    "profiles": {
+      "escape": {
+        "status": "PASS",
+        "nativeChecksPassed": 8,
+        "fixtureManifestSha256": "0d1053fab5d93246153a07119c474532d1c5fdc060427f97be92c8e02a691a5a",
+        "runtime": "21.0.13",
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "mysqlTargetVersion": "8.4.13",
+        "checkpointSequence": [
+          3,
+          5
+        ],
+        "retainedSnapshotCount": 5,
+        "cleanupExitCode": 0,
+        "remaining": {
+          "containers": 0,
+          "volumes": 0,
+          "networks": 0
+        }
+      },
+      "hex": {
+        "status": "PASS",
+        "nativeChecksPassed": 8,
+        "fixtureManifestSha256": "6c51e2fe3f689dffcec845788290f4a74caa8357c9828a9aad083bd7d669b984",
+        "runtime": "21.0.13",
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "postgresTargetVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "mysqlTargetVersion": "8.4.13",
+        "checkpointSequence": [
+          3,
+          5
+        ],
+        "retainedSnapshotCount": 5,
+        "cleanupExitCode": 0,
+        "remaining": {
+          "containers": 0,
+          "volumes": 0,
+          "networks": 0
+        }
+      }
+    },
+    "reproduce": "python3 tests/postgres-source-run.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-bytea-escape --source-image postgres:17.12 --bytea-values --bytea-escape-output --jdk 21"
   }
 }
