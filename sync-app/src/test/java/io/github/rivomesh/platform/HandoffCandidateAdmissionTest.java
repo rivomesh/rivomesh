@@ -2,6 +2,7 @@ package io.github.rivomesh.platform;
 
 import io.github.rivomesh.Model;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.JournalWriterAssignment;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -120,15 +121,70 @@ class HandoffCandidateAdmissionTest {
                 ()->HandoffCandidateAdmission.verifyCommitted(f.state(),committed,cipher())).getMessage());
     }
 
+    @Test void frozenCandidateCanVerifyItsExactPrivateReceiptsWithoutAnOriginalOrSharedArchive()throws Exception{
+        Fixture f=stage(true);
+        var inventory=f.staged().offlineInventory();
+        assertNotNull(inventory);
+        var frozen=frozen(f,inventory);
+        Files.delete(f.archive());
+        var ready=HandoffCandidateAdmission.prepareFrozen(f.state(),scope,frozen,originalYaml,cipher(),yaml->{
+            var declaration=ManagedWriterDeclaration.read(yaml);
+            assertEquals(candidate.node(),declaration.node());
+            assertEquals(successorAssignment,declaration.assignment());
+        });
+        assertEquals("STOPPED",ready.desired());
+        assertEquals(frozen.writerFreeze().manifestSha256(),ready.stagingSha256());
+        assertEquals(ready,HandoffCandidateAdmission.prepareFrozen(f.state(),scope,frozen,originalYaml,cipher(),yaml->{}));
+        Path receipts=f.custody().resolve("closed-receipts.json");
+        byte[] originalBytes=Files.readAllBytes(receipts);
+        Files.writeString(receipts,Files.readString(receipts).replace("completed_01","completed_02"));
+        assertEquals("HANDOFF_STAGING_BYTES_CHANGED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffCandidateAdmission.prepareFrozen(f.state(),scope,frozen,originalYaml,cipher(),yaml->{})).getMessage());
+        Files.write(receipts,originalBytes);
+        assertEquals(ready,HandoffCandidateAdmission.prepareFrozen(f.state(),scope,frozen,originalYaml,cipher(),yaml->{}));
+        assertFalse(Files.exists(f.state().resolve("tasks")));
+        assertFalse(Files.exists(f.state().resolve("controller.json")));
+    }
+
+    @Test void ordinaryStageCannotSatisfyFrozenAdmissionDespiteAnEquivalentArchive()throws Exception{
+        Fixture f=stage();
+        var receipts=List.of(Model.JSON.readValue(Files.readAllBytes(f.custody().resolve("closed-receipts.json")),
+                SharedHandoffEvidence.ClosedReceipt[].class));
+        var inventory=HandoffRecoveryInventory.observe(scope,emptyPrivateInventory(),false,
+                new SharedHandoffEvidence.ReceiptPlan(receipts,null),f.staged().archive());
+        var frozen=frozen(f,inventory);
+        assertEquals("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED",assertThrows(TaskService.Conflict.class,
+                ()->HandoffCandidateAdmission.prepareFrozen(f.state(),scope,frozen,originalYaml,cipher(),yaml->{})).getMessage());
+        assertFalse(Files.exists(f.state().resolve("handoff-admission")));
+    }
+
+    private static Map<String,String> emptyPrivateInventory(){
+        return Map.of("validationReports","ABSENT","failureEvidence","ABSENT","sourceEvidence","ABSENT");
+    }
+
+    private HandoffPreparations.Plan frozen(Fixture fixture,HandoffRecoveryInventory.ReceiptOnly inventory)throws Exception{
+        var p=fixture.plan();
+        var cut=new JournalWriterAssignment.CutProof(p.activation().journalGenerationSha256(),p.activation().nativeEvidenceSha256(),
+                List.of("pg"),true,new JournalWriterAssignment.ManagedCut(original.node(),p.activation().originalAssignmentSha256(),
+                9,21,p.evidence().cut().checkpointSha256()));
+        var freeze=new HandoffPreparations.WriterFreeze("original_frozen_01",Codec.sha256(Files.readAllBytes(fixture.custody().resolve("evidence.seal"))),
+                inventory,cut,new JournalWriterAssignment.OriginalFreeze(10,11),200);
+        return new HandoffPreparations.Plan(p.id(),p.task(),p.sequence(),"ORIGINAL_FROZEN",p.actor(),p.actorRevision(),p.evidence(),
+                p.created(),p.expires(),null,null,200,p.activation(),null,null,null,null,null,freeze);
+    }
+
     private record Fixture(Path state,Path custody,Path archive,HandoffStaging.Binding staged,HandoffPreparations.Plan plan){}
-    private Fixture stage()throws Exception{
+    private Fixture stage()throws Exception{return stage(false);}
+    private Fixture stage(boolean complete)throws Exception{
         Path root=home.toRealPath();
         Path source=root.resolve("original"),shared=root.resolve("shared"),state=root.resolve("candidate");
         for(Path directory:List.of(source,shared,state))HandoffStaging.createDirectory(directory);
         var receipt=new SharedHandoffEvidence.ClosedReceipt("completed_01","a".repeat(64),"admin","ADMIN",
                 TaskRequest.Kind.ACTION,"SUCCEEDED","LOCAL_STOPPED");
         var archive=SharedHandoffEvidence.export(shared,scope,source,List.of(receipt));
-        var staged=new HandoffStaging.Binding("prepared_01","b".repeat(64),candidate,scope,archive);
+        var inventory=complete?HandoffRecoveryInventory.observe(scope,emptyPrivateInventory(),false,
+                new SharedHandoffEvidence.ReceiptPlan(List.of(receipt),null),archive):null;
+        var staged=new HandoffStaging.Binding("prepared_01","b".repeat(64),candidate,scope,archive,inventory);
         var evidence=new HandoffPreparations.Evidence(scope.assessment(),scope.revision(),scope.configuration(),
                 original,candidate,new HandoffPreparations.JournalCut("9","21","c".repeat(64)),staged.evidence(),archive.sha256());
         var activation=new HandoffPreparations.WriterActivation(Codec.sha256(originalAssignment),successorAssignment,

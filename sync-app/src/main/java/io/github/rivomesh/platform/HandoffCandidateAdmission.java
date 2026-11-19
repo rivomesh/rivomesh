@@ -51,31 +51,50 @@ final class HandoffCandidateAdmission {
         RawCaptureHandoffStaging.Proof raw=rawBinding==null?null:RawCaptureHandoffStaging.requireProof(state,rawBinding,cipher);
         if(raw!=null&&(!raw.matches(plan)||!rawBinding.scope().equals(staged.scope())))
             throw refused("HANDOFF_RAW_STAGING_SCOPE_CHANGED");
+        String successor=successorConfiguration(plan,originalYaml,validator);
+        return HandoffStaging.withVerifiedFiles(state,staged,cipher,
+                verified->sealReady(state,plan,cipher,raw,successor,verified));
+    }
+
+    static Ready prepareFrozen(Path state,SharedHandoffEvidence.Scope scope,HandoffPreparations.Plan plan,String originalYaml,
+                               ControlCipher cipher,Validator validator)throws Exception{
+        if(!"ORIGINAL_FROZEN".equals(plan.phase())||plan.writerFreeze()==null||plan.writerFreeze().offlineCommit()!=null
+                ||plan.activation()==null||!plan.activation().checkedInControlTransaction())
+            throw refused("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        String successor=successorConfiguration(plan,originalYaml,validator);
+        return HandoffStaging.withFrozenInventory(state,scope,plan,cipher,
+                verified->sealReady(state,plan,cipher,null,successor,verified));
+    }
+
+    private static String successorConfiguration(HandoffPreparations.Plan plan,String originalYaml,Validator validator)throws Exception{
         if(originalYaml==null||originalYaml.getBytes(StandardCharsets.UTF_8).length>MAX_YAML)
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         ManagedWriterDeclaration original=ManagedWriterDeclaration.read(originalYaml);
         if(original==null||!Objects.equals(plan.activation().originalAssignmentSha256(),Codec.sha256(original.assignment())))
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_CHANGED");
         String successor=ManagedWriterDeclaration.successorYaml(originalYaml,plan.evidence().original().node(),
-                staged.candidate().node(),plan.activation().nextAssignment());
+                plan.evidence().candidate().node(),plan.activation().nextAssignment());
         if(successor.getBytes(StandardCharsets.UTF_8).length>MAX_YAML)
             throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");
         validator.validate(successor);
-        return HandoffStaging.withVerifiedFiles(state,staged,cipher,verified->{
-            HandoffStaging.Binding retained=verified.manifest().binding();
-            Ready receipt=new Ready(plan.id(),retained.candidate(),STOPPED,Codec.sha256(successor),verified.sealSha256(),raw,retained.archive().failureRecords());
-            Seal intended=new Seal(1,retained,plan.evidence().original(),plan.activation(),receipt,successor);
-            Path file=sealPath(state,plan,true);
-            if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS)){
-                String envelope;
-                try{envelope=cipher.seal(purpose(plan),Model.JSON.writeValueAsString(intended));}
-                catch(IllegalArgumentException tooLarge){throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");}
-                PrivateFiles.write(file,envelope.getBytes(StandardCharsets.US_ASCII));
-            }
-            Seal current=read(file,plan,cipher);
-            if(!intended.equals(current))throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
-            return current.receipt();
-        });
+        return successor;
+    }
+
+    private static Ready sealReady(Path state,HandoffPreparations.Plan plan,ControlCipher cipher,RawCaptureHandoffStaging.Proof raw,
+                                   String successor,HandoffStaging.Verified verified)throws Exception{
+        HandoffStaging.Binding retained=verified.manifest().binding();
+        Ready receipt=new Ready(plan.id(),retained.candidate(),STOPPED,Codec.sha256(successor),verified.sealSha256(),raw,retained.archive().failureRecords());
+        Seal intended=new Seal(1,retained,plan.evidence().original(),plan.activation(),receipt,successor);
+        Path file=sealPath(state,plan,true);
+        if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS)){
+            String envelope;
+            try{envelope=cipher.seal(purpose(plan),Model.JSON.writeValueAsString(intended));}
+            catch(IllegalArgumentException tooLarge){throw refused("HANDOFF_CANDIDATE_CONFIGURATION_LIMIT");}
+            PrivateFiles.write(file,envelope.getBytes(StandardCharsets.US_ASCII));
+        }
+        Seal current=read(file,plan,cipher);
+        if(!intended.equals(current))throw refused("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        return current.receipt();
     }
 
     static ReadyConfig verifyCommitted(Path state,HandoffPreparations.Plan plan,ControlCipher cipher)throws Exception{

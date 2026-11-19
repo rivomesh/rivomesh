@@ -32,11 +32,11 @@ export function registerHandoffTests({setup,flush,login}){
    expiresAt:expiration,reservedTaskSlots:slots,reservedWorkerSlots:slots,...(releaseId?{releaseId}:{})};
  }
  function fixture({role='ADMIN',scope=['original-agent','target-agent','offline-agent'],mode='GLOBAL',
-  read,submit,probe,readPreparation,prepare,release,stage,fence,start,commit,taskState}={}){
+  read,submit,probe,readPreparation,prepare,release,stage,fence,start,commit,offlineCommit,taskState}={}){
   const task={id:'handoff-task',revision,ownerNodeId:'original-agent',formatVersion:3,
    workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[],...taskState};
   const ui=setup([task],role,{authenticated:false,taskControlScope:mode,nodeRole:'CONTROLLER',nodeIds:scope}),fallback=ui.w.fetch;
-  const requests=[],reserves=[],releases=[],probes=[],stages=[],fences=[],starts=[],commits=[];
+  const requests=[],reserves=[],releases=[],probes=[],stages=[],fences=[],starts=[],commits=[],offlineCommits=[];
   ui.w.fetch=async(path,options={})=>{
    if(path.startsWith('/api/nodes?')){
     if(path.includes('after='))return reply({nodes:[agent('target-agent'),agent('offline-agent','AGENT','STALE')],next:null});
@@ -73,6 +73,11 @@ export function registerHandoffTests({setup,flush,login}){
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
     return commit(options);
    }
+   if(path===preparationRoute+'/commit-offline-owner'){
+    offlineCommits.push(options);
+    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+    return offlineCommit(options);
+   }
    if(path===preparationRoute+'/start-worker'){
     starts.push(options);
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
@@ -85,7 +90,7 @@ export function registerHandoffTests({setup,flush,login}){
    }
    return fallback(path,options);
   };
-  return{...ui,task,requests,reserves,releases,probes,stages,fences,starts,commits};
+  return{...ui,task,requests,reserves,releases,probes,stages,fences,starts,commits,offlineCommits};
  }
  const launcher=ui=>ui.d.querySelector('[data-handoff-task]');
  const dialog=ui=>ui.d.querySelector('.handoff-dialog');
@@ -468,6 +473,60 @@ export function registerHandoffTests({setup,flush,login}){
    assert.match(reservation(ui).textContent,/归属已提交/);
    assert.ok(button(ui,'stage').disabled&&button(ui,'fence').disabled);
    assert.equal(ui.starts.length+ui.fences.length,0);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('a frozen stale owner requires explicit offline approval and reuses the approval after a timeout',async()=>{
+  const originalFreeze={requestId:'freeze-request',manifestSha256:archiveDigest,journalEpoch:'9007199254740993',
+   frozenAt:'2026-11-18T09:10:00Z'};
+  let plan={...preparation('completed-handoff','fresh-assessment','ORIGINAL_FROZEN'),originalFreeze,
+   writerActivation:{checkedInControlTransaction:true}};
+  const ui=fixture({readPreparation:()=>reply(plan),taskState:{formatVersion:undefined,statusAvailable:false,
+   ownerControlState:'UNKNOWN',workerState:'UNKNOWN',desired:'UNKNOWN'},offlineCommit:options=>{
+   if(ui.offlineCommits.length===1)return error('OWNER_QUERY_TIMEOUT',409);
+   const commitRequestId=options.headers['X-Request-ID'];
+   plan=completed('COMMITTED',{commitRequestId,offlineOwnerCommit:{requestId:commitRequestId,
+    freezeRequestId:originalFreeze.requestId,committedAt:'2026-11-19T09:00:00Z'}});
+   Object.assign(ui.task,{...transferredTask,ownerControlState:'HEALTHY'});
+   return reply(plan);
+  }});
+  try{
+   await open(ui);
+   assert.ok(button(ui,'offline-confirm').closest('[hidden]'));
+   assert.ok(button(ui,'fence').disabled);
+   ui.task.ownerControlState='STALE';
+   button(ui,'reload').click();await flush();
+   const confirmation=button(ui,'offline-confirm');
+   assert.equal(confirmation.type,'checkbox');
+   assert.equal(confirmation.checked,false);
+   assert.equal(confirmation.closest('[hidden]'),null);
+   assert.match(confirmation.labels[0].textContent,/我确认原 Agent 已无法使用/);
+   assert.match(reservation(ui).textContent,/原 Agent 控制状态.*冻结请求 ID.*freeze-request.*冻结库存摘要/s);
+   assert.ok(reservation(ui).textContent.includes(archiveDigest));
+   assert.equal(button(ui,'fence').dataset.handoffAction,'commit-offline-owner');
+   button(ui,'fence').click();
+   assert.equal(ui.offlineCommits.length,0);
+   confirmation.click();
+   assert.equal(button(ui,'fence').disabled,false);
+   assert.equal(ui.offlineCommits.length,0);
+   button(ui,'fence').click();await flush();
+   assert.match(feedback(ui),/归属切换结果待确认/);
+   assert.equal(ui.offlineCommits.length,1);
+   assert.notEqual(ui.offlineCommits[0].headers['X-Request-ID'],originalFreeze.requestId);
+   assert.deepEqual(JSON.parse(ui.offlineCommits[0].body),{expectedPreparation:'completed-handoff',
+    expectedRevision:revision,expectedEvidenceSha256:digest,expectedInventorySha256:archiveDigest,confirmOriginalUnavailable:true});
+   button(ui,'reload').click();await flush();
+   ui.d.getElementById('language').click();
+   assert.match(button(ui,'fence').textContent,/Retry the same offline transfer/);
+   button(ui,'fence').click();await flush();
+   assert.equal(ui.offlineCommits.length,2);
+   assert.deepEqual(ui.offlineCommits[0],ui.offlineCommits[1]);
+   assert.equal(ui.task.ownerNodeId,'target-agent');
+   if(!dialog(ui))await open(ui);
+   assert.match(reservation(ui).textContent,/Offline transfer approval ID/);
+   assert.match(reservation(ui).textContent,/Ownership committed/);
+   assert.ok(button(ui,'offline-confirm').closest('[hidden]'));
+   assert.equal(ui.commits.length+ui.fences.length+ui.starts.length,0);
   }finally{ui.dom.window.close();}
  });
 

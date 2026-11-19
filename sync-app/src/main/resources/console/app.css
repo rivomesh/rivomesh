@@ -362,6 +362,8 @@ progress{display:block;width:100%;height:10px;margin:12px 0;accent-color:var(--a
 }
 
 .handoff-dialog [hidden] { display: none !important; }
+.handoff-dialog .handoff-confirmation { display: flex; align-items: baseline; gap: 8px; margin: 12px 0; }
+.handoff-confirmation input { flex: 0 0 auto; width: auto; accent-color: var(--accent); }
 
 .handoff-dialog dl {
   display: grid;

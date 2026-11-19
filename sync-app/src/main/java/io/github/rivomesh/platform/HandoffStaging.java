@@ -39,7 +39,7 @@ final class HandoffStaging {
                     ||archive==null||archive.closedReceipts()==0)throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
             if(offlineInventory!=null)offlineInventory.requireArchive(scope,archive);
         }
-        String key(){return Codec.sha256(Codec.encode(List.of(scope.cluster(),scope.task(),preparation)));}
+        String key(){return stagingKey(scope,preparation);}
         boolean matchesStored(Binding stored){
             return stored!=null&&preparation.equals(stored.preparation)&&evidence.equals(stored.evidence)
                     &&candidate.equals(stored.candidate)&&scope.equals(stored.scope)&&archive.equals(stored.archive)
@@ -54,7 +54,36 @@ final class HandoffStaging {
 
     @FunctionalInterface interface VerifiedFiles<T>{ T accept(Verified verified)throws Exception; }
 
-    static synchronized <T> T withVerifiedFiles(Path state,Binding binding,ControlCipher cipher,VerifiedFiles<T> use)throws Exception{
+    @FunctionalInterface private interface LockedStage<T>{ T read(Path stage,long deadline)throws Exception; }
+
+    static <T> T withVerifiedFiles(Path state,Binding binding,ControlCipher cipher,VerifiedFiles<T> use)throws Exception{
+        return withStageLock(state,binding.key(),(stage,deadline)->use.accept(verifyStage(stage,binding,cipher,deadline)));
+    }
+
+    static <T> T withFrozenInventory(Path state,SharedHandoffEvidence.Scope scope,HandoffPreparations.Plan plan,
+                                    ControlCipher cipher,VerifiedFiles<T> use)throws Exception{
+        var freeze=plan.writerFreeze();
+        if(!"ORIGINAL_FROZEN".equals(plan.phase())||freeze==null||freeze.offlineCommit()!=null)
+            throw refusal("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        freeze.inventory().requireScope(scope);
+        String key=stagingKey(scope,plan.id());
+        return withStageLock(state,key,(stage,deadline)->{
+            Verified retained=readStage(stage,key,cipher);
+            Binding actual=retained.manifest().binding();
+            if(!plan.id().equals(actual.preparation())||!plan.evidence().proof().equals(actual.evidence())
+                    ||!plan.evidence().candidate().equals(actual.candidate())||!scope.equals(actual.scope())
+                    ||!freeze.inventory().equals(actual.offlineInventory())||!freeze.manifestSha256().equals(retained.sealSha256()))
+                throw refusal("HANDOFF_OFFLINE_INVENTORY_UNVERIFIED");
+            checkFiles(stage,retained.manifest(),deadline);
+            return use.accept(retained);
+        });
+    }
+
+    private static String stagingKey(SharedHandoffEvidence.Scope scope,String preparation){
+        return Codec.sha256(Codec.encode(List.of(scope.cluster(),scope.task(),preparation)));
+    }
+
+    private static synchronized <T> T withStageLock(Path state,String key,LockedStage<T> use)throws Exception{
         Path root=state.toRealPath().resolve("handoff-staging");
         secureDirectory(root);
         Path lockFile=root.resolve("staging.lock");
@@ -63,7 +92,7 @@ final class HandoffStaging {
             FileLock lock=channel.tryLock()){
             if(lock==null)throw refusal("HANDOFF_STAGING_BUSY");
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(12);
-            return use.accept(verifyStage(root.resolve(binding.key()),binding,cipher,deadline));
+            return use.read(root.resolve(key),deadline);
         }catch(OverlappingFileLockException busy){throw refusal("HANDOFF_STAGING_BUSY");}
     }
 
@@ -212,13 +241,18 @@ final class HandoffStaging {
     }
 
     private static Verified verifyStage(Path stage,Binding expected,ControlCipher cipher,long deadline)throws Exception{
+        Verified retained=readStage(stage,expected.key(),cipher);
+        if(!expected.matchesStored(retained.manifest().binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
+        checkFiles(stage,retained.manifest(),deadline);
+        return retained;
+    }
+
+    private static Verified readStage(Path stage,String key,ControlCipher cipher)throws Exception{
         secureDirectory(stage);
-        Path seal=stage.resolve(SEAL);
-        byte[] sealedBytes=readFile(seal,MAX_SEAL);
+        byte[] sealedBytes=readFile(stage.resolve(SEAL),MAX_SEAL);
         String envelope=new String(sealedBytes,java.nio.charset.StandardCharsets.UTF_8);
-        Stage stored=Model.JSON.readValue(cipher.open("handoff-stage/"+expected.key(),envelope),Stage.class);
-        if(stored==null||stored.version()!=1||!expected.matchesStored(stored.binding()))throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
-        checkFiles(stage,stored,deadline);
+        Stage stored=Model.JSON.readValue(cipher.open("handoff-stage/"+key,envelope),Stage.class);
+        if(stored==null||stored.version()!=1||stored.binding()==null)throw refusal("HANDOFF_STAGING_SCOPE_CHANGED");
         return new Verified(stage,stored,Codec.sha256(sealedBytes));
     }
 

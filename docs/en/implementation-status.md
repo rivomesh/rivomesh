@@ -40,7 +40,7 @@ The [single verification baseline](../verification/README.md) retains scoped pro
 | Oracle source | Oracle Free 26ai single-PDB Flashback and archived LogMiner CDC. Two PostgreSQL subscriptions preserve original SCNs through savepoint rollback and forced restart. The profile accepts strict text JSON and the tested AL32UTF8 and AL16UTF16 character declarations. Preflight blocks native JSON when redo images are missing. [Source guide](oracle-source.md) |
 | Capture recovery | Inspect the original position and affected targets, verify MySQL GTID boundaries and original binlog bytes, and approve one verified source transaction exclusion on the bounded profile. [Operator guide](capture-recovery.md) |
 | Management | Bilingual wizard, shared revisions, isolated Workers and cross-entry control. Real Chrome verified retained sessions, report and receipt lookup, and approved report recovery. Keycloak 26.7.4 passed HTTPS code login with S256 PKCE and cross-entry revocation. [Global control](global-control.md) · [OIDC](oidc-login.md) |
-| Interrupted journal ACK | With a PostgreSQL journal, native tests cover a committed MySQL or PostgreSQL target. After the original Agent reconnects, explicit START completes only the missing ACK. Permanent original Agent loss still requires a durable fence and archived recovery evidence. [Operator guide](global-control.md#asymmetric-control-network-partition) |
+| Interrupted journal ACK | With a PostgreSQL journal, native tests cover a committed MySQL or PostgreSQL target. After the original Agent reconnects, explicit START completes only the missing ACK. For a stopped task with an already frozen writer and complete closed receipts, the same-store offline handoff preserves both SQL cuts through candidate start. [Operator guide](global-control.md#asymmetric-control-network-partition) |
 | Compare/repair | Common-cut row comparison and reviewed repair plans;bounded MySQL/PostgreSQL profiles |
 | Gap verification | Reviewed plans,administrator confirmation,fresh scans,atomic receipts and cross-entry cancellation;bounded PG/MySQL,see [guide](gap-verification.md) for acceptance |
 | Transaction compensation | Administrator review and approval for PostgreSQL and MySQL with atomic target receipts and original transaction replay. See the [operator guide](transaction-compensation.md) |
@@ -58,7 +58,7 @@ The first-release runbooks describe the current artifact and state formats. Use 
 
 ## Next work
 
-1. Authoritative drained handoff when the original Agent is permanently unavailable, with durable fencing and complete recovery evidence.
+1. Extend offline handoff to additional evidence inventories and storage profiles. Preserve safety when the original task disappears before a freeze.
 2. Reviewed report reclamation, formal nonempty adoption and writer handover or failback.
 3. Per-target recovery protocols and native database, analytical and broker compatibility profiles.
 4. Reviewed PostgreSQL/Oracle schema changes, Oracle RAC and additional vendor modes. Production ingress and audit retention, distribution licensing and required notices remain under review.

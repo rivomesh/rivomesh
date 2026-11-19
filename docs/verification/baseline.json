@@ -13921,5 +13921,68 @@
     "firstAttempt": "The first artifact accepted only the abbreviated LogMiner INFO form. Oracle 26ai actually reported USER DDL (PlSql=0 RecDep=0). The corrected package accepts the exact observed top-level form.",
     "scope": "One closed top-level Oracle PDB DDL is fingerprinted from its failing LogMiner scan. Exact archived redo hash, record set, SCN and logical statement sequence match. Later DDL and DML preserve the frozen error generation, checkpoint, target receipts and snapshot. Approval and continued apply require separate verification.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --logminer --pipeline --ddl-review --ddl-fingerprint --output target/oracle-ddl-fingerprint"
+  },
+  "nativeFrozenOriginalOfflineOwnerTransfer": {
+    "status": "PASS",
+    "artifactSha256": "7960fda128f462185ae87b323d947e7f5436102ac2626e29d039740c11c6cdab",
+    "sourceTree": "f32fccad40968e0f94d1d26a461380da8ed63ba5",
+    "nativeManifestSha256": "c3c298a34a8a1ace46cc2ef295c0eac3673fbb16dd95c76ad15e8a8624b73712",
+    "harnessSourceSha256": "d1a34c7ee945e985a7a2ddbf1933279d3eb072465e4e1ecdf150227b556b7d69",
+    "initialNativeArtifactSha256": "4286c3d59239ca43c39f98c2447942c7ed9ca4131615d9cf5664f8b7f7625546",
+    "initialNativeManifestSha256": "2527aecd43886f2a65a5acf945d868cf99c1116aec390ff53e20dca506bf3f7d",
+    "sourceVersion": "8.4.13",
+    "controlAndJournal": "Same PostgreSQL 17.12 database",
+    "destinations": [
+      "PostgreSQL 17.12",
+      "MySQL 8.4.13"
+    ],
+    "nativeChecksPassed": 22,
+    "focusedJavaTestsPassed": 144,
+    "domTestsPassed": 167,
+    "chromeChecksPassed": 14,
+    "tests": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Only the original Agent can admit the explicitly initialized managed writer",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+      "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+      "Concurrent refreshes against the same receipt allow exactly one replacement",
+      "Controller restart retains the assessed placement, original owner and masked cut proof",
+      "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+      "Candidate with a disjoint private mount cannot claim custody of the original closed receipts",
+      "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+      "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+      "Both Controllers bind complete closed receipt custody to the same drained source and two SQL targets",
+      "Private closed receipt bytes survive transfer archive loss, reject corruption and retain the original writer and checkpoints",
+      "Original freeze parks the exact journal epoch with neither data changes nor new ownership",
+      "Frozen original rejects ordinary release and ownership commands, direct Worker start and CLI resume",
+      "Offline ownership refuses an original that still holds a live control lease",
+      "The frozen cut survives an unrelated change to the live authorization directory",
+      "Exact private receipts survive loss of the original and transfer archive. One offline owner is committed and stays STOPPED.",
+      "Separate fencing and START apply new MySQL data to the two original SQL snapshots while the original stays offline",
+      "The original same directory can return without reclaiming ownership or replacing snapshots"
+    ],
+    "offlineOwnerTransfer": {
+      "sourceAuthorityRetained": true,
+      "closedReceipts": 4,
+      "destinationsFenced": 2,
+      "originalSnapshots": 3,
+      "authorizationDirectoryChanged": true
+    },
+    "inventory": {
+      "profile": "CLOSED_RECEIPTS_ONLY",
+      "closedReceipts": 4,
+      "manifestSha256": "cfe9d2bcd5731c88fa43af3d72e6b0db3125ccf46bb71d47c357eed177dd33b6",
+      "sourceAndTargetCutsUnchanged": true
+    },
+    "remainingFixtures": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "scope": "Native already-frozen closed-receipt profile, initial managed assignment, original Agent and transfer archive unavailable, and same PostgreSQL control/journal. The healthy candidate is separately approved for two SQL fences and Worker start. Both original target snapshots and all three journal snapshot IDs persist. Earlier unsealed and broader evidence profiles require separate work.",
+    "reproduce": "python3 tests/global-control-pipeline.py --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-closed-only-inventory --handoff-freeze-original --handoff-offline-owner --handoff-offline-authorization-change --source-expected-version 8.4.13 --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-offline-owner"
   }
 }

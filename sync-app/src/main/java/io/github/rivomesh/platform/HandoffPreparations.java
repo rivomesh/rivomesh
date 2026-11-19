@@ -41,8 +41,16 @@ final class HandoffPreparations {
                        PendingProblem problem){
         WorkerStart(String id,String actor,String actorRevision){this(id,actor,actorRevision,null);}
     }
+    record OfflineOwnerCommit(String request,String actor,String actorRevision,long committedAt){}
     record WriterFreeze(String request,String manifestSha256,HandoffRecoveryInventory.ReceiptOnly inventory,
-                        JournalWriterAssignment.CutProof cut,JournalWriterAssignment.OriginalFreeze fence,long frozenAt){}
+                        JournalWriterAssignment.CutProof cut,JournalWriterAssignment.OriginalFreeze fence,long frozenAt,
+                        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                        OfflineOwnerCommit offlineCommit){
+        WriterFreeze(String request,String manifestSha256,HandoffRecoveryInventory.ReceiptOnly inventory,
+                     JournalWriterAssignment.CutProof cut,JournalWriterAssignment.OriginalFreeze fence,long frozenAt){
+            this(request,manifestSha256,inventory,cut,fence,frozenAt,null);
+        }
+    }
     record Plan(String id,String task,int sequence,String phase,String actor,String actorRevision,Evidence evidence,
                 long created,long expires,String releaseId,String releasedBy,long closedAt,
                 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
@@ -111,8 +119,9 @@ final class HandoffPreparations {
                     case "EXPIRED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.expires&&p.writerCommit==null;
                     case "ORIGINAL_FROZEN"->p.releaseId==null&&p.releasedBy==null;
                     case "FREEZE_CANCELLED"->validExecutionId(p,p.releaseId)&&p.releasedBy!=null;
-                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created&&p.closedAt<p.expires
-                            &&p.activation!=null&&p.writerCommit!=null&&p.actor.equals(p.writerCommit.actor)
+                    case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created
+                            &&(p.writerFreeze!=null||p.closedAt<p.expires)
+                            &&p.activation!=null&&p.writerCommit!=null&&Objects.equals(writerActor(p),p.writerCommit.actor)
                             &&HandoffFailureHistory.bounded(p.writerCommit.failureRecords())
                             &&(p.writerCommit.rawCapture()==null||p.writerCommit.rawCapture().matches(p)
                                 &&cluster.equals(p.writerCommit.rawCapture().binding().scope().cluster()));
@@ -123,25 +132,44 @@ final class HandoffPreparations {
             throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
     }
+    private static String writerActor(Plan plan){
+        return plan.writerFreeze!=null&&plan.writerFreeze.offlineCommit()!=null
+                ?plan.writerFreeze.offlineCommit().actor():plan.actor;
+    }
+
+    private static String commitRequestId(Plan plan){
+        return plan.writerFreeze!=null&&plan.writerFreeze.offlineCommit()!=null
+                ?plan.writerFreeze.offlineCommit().request():plan.executionRequest;
+    }
+
     private static boolean validFreeze(Plan plan){
         WriterFreeze freeze=plan.writerFreeze;
-        boolean open="ORIGINAL_FROZEN".equals(plan.phase);
-        if(!open&&!"FREEZE_CANCELLED".equals(plan.phase))return freeze==null;
-        if(freeze==null||plan.executionRequest!=null||plan.writerCommit!=null||plan.activation==null
-                ||!plan.activation.checkedInControlTransaction()||!validExecutionId(plan,freeze.request())
-                ||freeze.request().equals(plan.releaseId)||freeze.manifestSha256()==null
-                ||!freeze.manifestSha256().matches("[a-f0-9]{64}")||freeze.inventory()==null||freeze.fence()==null
-                ||freeze.cut()==null||!freeze.cut().writerPlacementEnrolled()||freeze.cut().managedWriter()==null
-                ||freeze.frozenAt()<plan.created||freeze.frozenAt()>=plan.expires||open&&plan.closedAt!=freeze.frozenAt()
-                ||plan.closedAt<freeze.frozenAt())return false;
+        boolean open="ORIGINAL_FROZEN".equals(plan.phase),cancelled="FREEZE_CANCELLED".equals(plan.phase);
+        if(freeze==null)return !open&&!cancelled;
+        if(plan.executionRequest!=null||plan.activation==null||!plan.activation.checkedInControlTransaction()
+                ||!validExecutionId(plan,freeze.request())||freeze.request().equals(plan.releaseId)
+                ||freeze.manifestSha256()==null||!freeze.manifestSha256().matches("[a-f0-9]{64}")
+                ||freeze.inventory()==null||freeze.fence()==null||freeze.cut()==null||!freeze.cut().writerPlacementEnrolled()
+                ||freeze.cut().managedWriter()==null||freeze.frozenAt()<plan.created||freeze.frozenAt()>=plan.expires
+                ||open&&plan.closedAt!=freeze.frozenAt()||plan.closedAt<freeze.frozenAt())return false;
         var cut=freeze.cut().managedWriter();
-        return plan.evidence.original.node.equals(cut.originalNode())&&cut.epoch()==freeze.fence().epoch()-1
-                &&plan.evidence.custody.equals(freeze.inventory().archiveSha256())
-                &&plan.evidence.cut.epoch.equals(Long.toString(cut.epoch()))&&plan.evidence.cut.sequence.equals(Long.toString(cut.sequence()))
-                &&plan.evidence.cut.checkpointSha256.equals(cut.checkpointSha256())
-                &&plan.activation.originalAssignmentSha256().equals(cut.originalAssignmentSha256())
-                &&plan.activation.journalGenerationSha256().equals(freeze.cut().journalGenerationSha256())
-                &&plan.activation.nativeEvidenceSha256().equals(freeze.cut().nativeEvidenceSha256());
+        if(!plan.evidence.original.node.equals(cut.originalNode())||cut.epoch()!=freeze.fence().epoch()-1
+                ||!plan.evidence.custody.equals(freeze.inventory().archiveSha256())
+                ||!plan.evidence.cut.epoch.equals(Long.toString(cut.epoch()))
+                ||!plan.evidence.cut.sequence.equals(Long.toString(cut.sequence()))
+                ||!plan.evidence.cut.checkpointSha256.equals(cut.checkpointSha256())
+                ||!plan.activation.originalAssignmentSha256().equals(cut.originalAssignmentSha256())
+                ||!plan.activation.journalGenerationSha256().equals(freeze.cut().journalGenerationSha256())
+                ||!plan.activation.nativeEvidenceSha256().equals(freeze.cut().nativeEvidenceSha256()))return false;
+        var approval=freeze.offlineCommit();
+        if(open||cancelled)return approval==null&&plan.writerCommit==null;
+        return approval!=null&&validExecutionId(plan,approval.request())&&!freeze.request().equals(approval.request())
+                &&Objects.equals(plan.actor,approval.actor())&&approval.actorRevision()!=null&&!approval.actorRevision().isBlank()
+                &&approval.committedAt()==plan.closedAt
+                &&plan.writerCommit!=null&&Objects.equals(approval.actor(),plan.writerCommit.actor())
+                &&freeze.manifestSha256().equals(plan.writerCommit.stagingSha256())
+                &&freeze.fence().epoch()==plan.writerCommit.journalEpoch()&&plan.writerCommit.rawCapture()==null
+                &&plan.writerCommit.failureRecords()==0;
     }
 
     private String seal(Plan p)throws Exception{return cipher.seal(purpose(p.id),Model.JSON.writeValueAsString(p));}
@@ -259,6 +287,18 @@ final class HandoffPreparations {
             throw new TaskService.Conflict("HANDOFF_EXECUTION_REQUEST_CHANGED");
     }
 
+    Plan consumeFrozenWriter(Connection c,Plan plan,WriterCommit receipt,String request,AccessControl.Principal actor,long now)throws Exception{
+        if(!"ORIGINAL_FROZEN".equals(plan.phase)||plan.writerFreeze==null||plan.writerFreeze.offlineCommit()!=null)
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        var freeze=plan.writerFreeze;
+        var consumed=new WriterFreeze(freeze.request(),freeze.manifestSha256(),freeze.inventory(),freeze.cut(),freeze.fence(),
+                freeze.frozenAt(),new OfflineOwnerCommit(request,actor.id,actor.authorizationRevision,now));
+        var committed=new Plan(plan.id,plan.task,plan.sequence,"COMMITTED",plan.actor,plan.actorRevision,plan.evidence,
+                plan.created,plan.expires,null,null,now,plan.activation,receipt,null,null,null,null,consumed);
+        if(!validFreeze(committed))throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        return writeFreeze(c,plan,committed);
+    }
+
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
         if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires
                 ||!HandoffFailureHistory.bounded(receipt.failureRecords())||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
@@ -298,7 +338,8 @@ final class HandoffPreparations {
         if(evidenceEligible(plan))return;
         if(!"COMMITTED".equals(plan.phase))throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
         Plan projected=new Plan(plan.id,plan.task,plan.sequence,"PROJECTED",plan.actor,plan.actorRevision,plan.evidence,
-                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,null);
+                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,
+                null,null,null,plan.writerFreeze);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase='COMMITTED'",projected.phase,seal(projected),cluster,plan.id)!=1)
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_COMMIT_REQUIRED");
@@ -327,7 +368,8 @@ final class HandoffPreparations {
             return;
         }
         Plan adopted=new Plan(plan.id,plan.task,plan.sequence,"EVIDENCE_ADOPTED",plan.actor,plan.actorRevision,plan.evidence,
-                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,receipt);
+                plan.created,plan.expires,null,null,plan.closedAt,plan.activation,plan.writerCommit,plan.executionRequest,
+                receipt,null,null,plan.writerFreeze);
         if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase='PROJECTED'",adopted.phase,seal(adopted),cluster,plan.id)!=1)
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_EVIDENCE_CHANGED");
@@ -339,7 +381,7 @@ final class HandoffPreparations {
     private static boolean validTargetFence(Plan plan){
         if(!Set.of("FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED").contains(plan.phase()))return plan.targetFence==null;
         TargetFenceRequest request=plan.targetFence;
-        if(request==null||!validExecutionId(plan,request.id)||request.id.equals(plan.executionRequest)
+        if(request==null||!validExecutionId(plan,request.id)||request.id.equals(commitRequestId(plan))
                 ||request.actor==null||request.actorRevision==null)return false;
         JournalWriterAssignment.TargetFence result=request.result;
         if(!validProblem(request.problem,"FENCE_PENDING".equals(plan.phase())))return false;
@@ -371,7 +413,7 @@ final class HandoffPreparations {
     private Plan updateTargetFence(Connection c,Plan plan,String phase,TargetFenceRequest request)throws Exception{
         Plan next=new Plan(plan.id,plan.task,plan.sequence,phase,plan.actor,plan.actorRevision,plan.evidence,plan.created,
                 plan.expires,plan.releaseId,plan.releasedBy,plan.closedAt,plan.activation,plan.writerCommit,
-                plan.executionRequest,plan.evidenceAdoption,request,null);
+                plan.executionRequest,plan.evidenceAdoption,request,null,plan.writerFreeze);
         if(!validTargetFence(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase=?",phase,seal(next),cluster,plan.id,plan.phase)!=1)
             throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
@@ -385,7 +427,7 @@ final class HandoffPreparations {
         boolean expected=workerAdmitted(plan)||"START_PENDING".equals(plan.phase);
         WorkerStart start=plan.workerStart;
         if(!expected)return start==null;
-        return start!=null&&validExecutionId(plan,start.id)&&!start.id.equals(plan.executionRequest)
+        return start!=null&&validExecutionId(plan,start.id)&&!start.id.equals(commitRequestId(plan))
                 &&plan.targetFence!=null&&!start.id.equals(plan.targetFence.id)
                 &&start.actor!=null&&start.actorRevision!=null&&validProblem(start.problem,"START_PENDING".equals(plan.phase));
     }
@@ -436,7 +478,7 @@ final class HandoffPreparations {
     private Plan updateWorkerStart(Connection c,Plan plan,String phase,WorkerStart request)throws Exception{
         Plan next=new Plan(plan.id,plan.task,plan.sequence,phase,plan.actor,plan.actorRevision,plan.evidence,plan.created,
                 plan.expires,plan.releaseId,plan.releasedBy,plan.closedAt,plan.activation,plan.writerCommit,
-                plan.executionRequest,plan.evidenceAdoption,plan.targetFence,request);
+                plan.executionRequest,plan.evidenceAdoption,plan.targetFence,request,plan.writerFreeze);
         if(!validWorkerStart(next)||!validTargetFence(next)||db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET phase=?,envelope=?"
                 +" WHERE cluster_id=? AND request_id=? AND phase=?",phase,seal(next),cluster,plan.id,plan.phase)!=1)
             throw new TaskService.Conflict("HANDOFF_WORKER_START_REQUEST_CHANGED");
@@ -469,11 +511,16 @@ final class HandoffPreparations {
         if("PREPARED".equals(p.phase)&&p.activation!=null&&!p.activation.checkedInControlTransaction())
             view.put("commitBlocker","HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
-        if(p.executionRequest!=null&&(p.writerCommit!=null||"PREPARED".equals(p.phase)))
-            view.put("commitRequestId",p.executionRequest);
-        if(p.writerFreeze!=null)view.put("originalFreeze",Map.of("requestId",p.writerFreeze.request(),
-                "manifestSha256",p.writerFreeze.manifestSha256(),"journalEpoch",Long.toString(p.writerFreeze.fence().epoch()),
-                "frozenAt",Instant.ofEpochMilli(p.writerFreeze.frozenAt()).toString()));
+        String commitment=commitRequestId(p);
+        if(commitment!=null&&(p.writerCommit!=null||"PREPARED".equals(p.phase)))view.put("commitRequestId",commitment);
+        if(p.writerFreeze!=null){
+            var freeze=p.writerFreeze;
+            if(freeze.offlineCommit()==null)view.put("originalFreeze",Map.of("requestId",freeze.request(),
+                    "manifestSha256",freeze.manifestSha256(),"journalEpoch",Long.toString(freeze.fence().epoch()),
+                    "frozenAt",Instant.ofEpochMilli(freeze.frozenAt()).toString()));
+            else view.put("offlineOwnerCommit",Map.of("requestId",freeze.offlineCommit().request(),
+                    "freezeRequestId",freeze.request(),"committedAt",Instant.ofEpochMilli(freeze.offlineCommit().committedAt()).toString()));
+        }
         if(p.writerCommit!=null){
             view.put("activatedJournalEpoch",Long.toString(p.writerCommit.journalEpoch));
             view.put("committedRevision",p.writerCommit.revision);

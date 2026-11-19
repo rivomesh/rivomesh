@@ -40,7 +40,7 @@
 | Oracle 源 | Oracle Free 26ai 单 PDB 的 Flashback 和归档 LogMiner 已通过。两路 PostgreSQL 保留原 SCN，支持保存点回滚及强制重启。严格文本 JSON 和限定 AL32UTF8、AL16UTF16 字符类型已验收。预检拦截缺少重做镜像的原生 JSON。 [源库手册](oracle-source.md) |
 | 采集故障恢复 | 检查原断点及受影响目标，核对 MySQL GTID 边界和原始日志，限定档案支持审批后排除一个已核验事务。 [操作说明](capture-recovery.md) |
 | 管理 | 中英文向导、共享修订、独立 Worker 和跨入口控制。真实 Chrome 已验证登录保持、报告和回执检索、审批后恢复报告。Keycloak 26.7.4 已通过 HTTPS 授权码、S256 PKCE 和跨入口撤权。 [全局控制](global-control.md) · [OIDC](oidc-login.md) |
-| 日志 ACK 中断 | 共享 PostgreSQL 日志下，已实测 MySQL 或 PostgreSQL 目标先提交。原 Agent 重连并显式启动后只补缺失 ACK。永久丢失原 Agent 的接管仍缺持久围栏和完整恢复归档。 [操作手册](global-control.md#控制网络非对称分区) |
+| 日志 ACK 中断 | 共享 PostgreSQL 日志下，已实测 MySQL 或 PostgreSQL 目标先提交。原 Agent 重连并显式启动后只补缺失 ACK。已冻结写入并封存完整结案回执的同库档案通过离线接管，候选启动保持两目标原切点。 [操作手册](global-control.md#控制网络非对称分区) |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
 | 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |
 | 事务补偿 | PostgreSQL 和 MySQL 的管理员预览、确认、目标原子凭据和原事务重放。见[操作说明](transaction-compensation.md) |
@@ -58,7 +58,7 @@
 
 ## 下一步
 
-1. 完善原 Agent 永久失联后的已排空接管，核验持久写入围栏和完整恢复归档。
+1. 扩展离线接管可核验的库存类型和存储组合，继续验证原任务未冻结即丢失时的安全边界。
 2. 已审批归档的报告回收、非空目标正式接管、业务切换和回切。
 3. 分目标恢复协议，以及事务库、分析库和消息队列的实库兼容组合。
 4. PostgreSQL/Oracle 的审批式动态 DDL、Oracle RAC 和更多厂商模式。继续核验实际身份入口、外部审计留存、项目授权及发行包许可证。

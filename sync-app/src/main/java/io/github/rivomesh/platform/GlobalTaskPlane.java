@@ -59,6 +59,9 @@ final class GlobalTaskPlane implements TaskControlPlane {
             case HANDOFF_COMMIT_OWNER:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return handoff.orchestratePreparedWriter(request,actor,queries);
+            case HANDOFF_OFFLINE_OWNER_COMMIT:
+                if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
+                return handoff.orchestrateOfflineOwner(request,actor,queries);
             case HANDOFF_FREEZE_ORIGINAL:case HANDOFF_CANCEL_FREEZE:
                 if(handoff==null)throw new TaskService.Conflict("GLOBAL_HANDOFF_REQUIRED");
                 return handoff.changeOriginalFreeze(request,actor,queries);

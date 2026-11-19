@@ -55,6 +55,10 @@ parser.add_argument('--handoff-closed-only-inventory', action='store_true',
                     help='Verify candidate-private complete custody of a stopped task with closed receipts only')
 parser.add_argument('--handoff-freeze-original', action='store_true',
                     help='Test durable writer freeze and controlled same-directory cancellation')
+parser.add_argument('--handoff-offline-owner', action='store_true',
+                    help='Recover a frozen original throughout permanent loss and admit one candidate Worker')
+parser.add_argument('--handoff-offline-authorization-change', action='store_true',
+                    help='Update unrelated account grants after original freeze and before offline ownership')
 parser.add_argument('--handoff-preparation', action='store_true',
                     help='Reserve the candidate and verify durable review release without changing data authority')
 parser.add_argument('--handoff-managed-writer', action='store_true',
@@ -191,6 +195,10 @@ if args.handoff_closed_only_inventory and (not args.handoff_managed_writer or no
     parser.error('--handoff-closed-only-inventory requires the same-store managed-writer staging profile')
 if args.handoff_freeze_original and not args.handoff_closed_only_inventory:
     parser.error('--handoff-freeze-original requires --handoff-closed-only-inventory')
+if args.handoff_offline_owner and not args.handoff_freeze_original:
+    parser.error('--handoff-offline-owner requires --handoff-freeze-original')
+if args.handoff_offline_authorization_change and not args.handoff_offline_owner:
+    parser.error('--handoff-offline-authorization-change requires --handoff-offline-owner')
 if args.handoff_asymmetric_partition and (not args.handoff_original_outage or args.external_mysql_driver):
     parser.error('--handoff-asymmetric-partition requires --handoff-original-outage and the packaged MySQL driver')
 if args.handoff_asymmetric_inflight and (not args.handoff_asymmetric_partition
@@ -3315,12 +3323,102 @@ cat <&3''').stdout
                         assert data_cut()==frozen_cut and rows_match()
                         assert sql('store',parked)=='HANDOFF_PARKED|t|0|15'
                         passed('Frozen original rejects ordinary release and ownership commands, direct Worker start and CLI resume')
+                        if args.handoff_offline_owner:
+                            offline_path=preparation+'/commit-offline-owner'
+                            offline_input=dict(args_body,confirmOriginalUnavailable=True)
+                            early=http('node-a',offline_path,offline_input,request='gc_live_owner_'+uuid.uuid4().hex,expected=409)
+                            assert early['code']=='HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED', early
+                            assert data_cut()==frozen_cut and task()['ownerNodeId']==owner_node
+                            passed('Offline ownership refuses an original that still holds a live control lease')
                         terminate_owner()
                         assert http('node-a',preparation)['state']=='ORIGINAL_FROZEN'
                         offline_cancel=http('node-b',cancel_path,args_body,request='gc_offline_'+uuid.uuid4().hex,expected=409)
                         assert offline_cancel['code']=='HANDOFF_ORIGINAL_FREEZE_OWNER_UNAVAILABLE', offline_cancel
                         assert http('node-a',route+'/actions',action_start,expected=409)['code']=='HANDOFF_ORIGINAL_FROZEN'
                         assert data_cut()==frozen_cut
+                        if args.handoff_offline_owner:
+                            wait(lambda:all(task(node).get('ownerControlState')=='STALE' for node in ('node-a','node-b')),
+                                 'former original Agent lease expired in both Controllers')
+                            assert not archive.exists()
+                            if args.handoff_offline_authorization_change:
+                                account_route='/api/accounts'
+                                original_grants=http('node-a',account_route)['revision']
+                                unrelated={'expectedRevision':original_grants,'role':'OPERATOR','enabled':True,
+                                           'nodeIds':[candidate],'taskIds':[]}
+                                http('node-b',account_route+'/review-operator',unrelated,method='PUT',
+                                     request='gc_unrelated_auth_'+uuid.uuid4().hex)
+                                assert http('node-a',account_route)['revision']!=original_grants
+                                assert data_cut()==frozen_cut and task()['ownerNodeId']==owner_node
+                                passed('The frozen cut survives an unrelated change to the live authorization directory')
+                            offline_id='gc_offline_owner_'+uuid.uuid4().hex
+                            http('node-b',offline_path,offline_input,request=offline_id,expected=403,token=env['RM_GC_VIEWER'])
+                            retained.write_bytes(before[:-1]+(b'X' if before[-1:]!=b'X' else b'Y'))
+                            try:
+                                corrupt=http('node-b',offline_path,offline_input,
+                                             request='gc_corrupt_'+uuid.uuid4().hex,expected=409)
+                                assert corrupt.get('code'), corrupt
+                                assert task('node-a')['ownerNodeId']==owner_node and data_cut()==frozen_cut
+                            finally:
+                                retained.write_bytes(before)
+                            transferred=http('node-b',offline_path,offline_input,request=offline_id,expected=(200,202))
+                            assert transferred['offlineOwnerCommit']['requestId']==offline_id
+                            assert transferred['offlineOwnerCommit']['freezeRequestId']==freeze_id
+                            assert not transferred['executionAuthorized'], transferred
+                            def adopted_offline():
+                                result=http('node-a',preparation)
+                                return result if result.get('state')=='EVIDENCE_ADOPTED' else None
+                            adopted=wait(adopted_offline,'candidate verifies and adopts complete closed-receipt custody after commit')
+                            assert adopted['adoptedEvidence']=={'validationReports':0,'closedReceipts':inventory['closedReceipts']}
+                            assert adopted==http('node-a',offline_path,offline_input,request=offline_id,expected=(200,202))
+                            replaced=http('node-a',offline_path,offline_input,request='gc_offline_new_'+uuid.uuid4().hex,expected=409)
+                            assert replaced['code']=='HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED', replaced
+                            refused=http('node-a',cancel_path,args_body,request='gc_late_cancel_'+uuid.uuid4().hex,expected=409)
+                            assert refused['code']=='HANDOFF_ORIGINAL_FREEZE_CONSUMED', refused
+                            wait(lambda:all(task(node).get('ownerNodeId')==candidate and task(node).get('desired')=='STOPPED'
+                                            for node in ('node-a','node-b')), 'both entries observe the adopted candidate stopped')
+                            assert sql('store',parked)=='HANDOFF_PARKED|t|0|15' and data_cut()==frozen_cut
+                            snapshots_query='SELECT table_id,snapshot_id FROM transfer_journal.rm3_snapshot ORDER BY table_id'
+                            snapshots=sql('store',snapshots_query)
+                            assert len(snapshots.splitlines())==3
+                            passed('Exact private receipts survive loss of the original and transfer archive. One offline owner is committed and stays STOPPED.')
+                            fence_input={'expectedPreparation':preparation_id,'expectedRevision':adopted['committedRevision']}
+                            result=http('node-b',preparation+'/start-worker',fence_input,
+                                        request='gc_early_start_'+uuid.uuid4().hex,expected=409)
+                            assert result['code']=='HANDOFF_TARGET_FENCE_REQUIRED', result
+                            fence_id='gc_offline_fence_'+uuid.uuid4().hex
+                            http('node-a',preparation+'/fence-targets',fence_input,request=fence_id,expected=202)
+                            def fenced_targets():
+                                result=http('node-b',preparation)
+                                return result if result.get('state')=='TARGETS_FENCED' else None
+                            fenced=wait(fenced_targets,'both native destination epochs fenced after offline ownership')
+                            assert fenced['targetFence']['destinationsFenced']==2 and not fenced['executionAuthorized']
+                            fenced_cut=data_cut()
+                            assert fenced_cut[0]==frozen_cut[0]
+                            assert [row.split('|',1)[1] for row in fenced_cut[1:]]==[row.split('|',1)[1] for row in frozen_cut[1:]]
+                            assert all(int(row.split('|',1)[0])==original_epoch+1 for row in fenced_cut[1:])
+                            sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(92,'after-offline-transfer',JSON_OBJECT('n',92))")
+                            assert not rows_match() and data_cut()==fenced_cut
+                            start_id='gc_offline_start_'+uuid.uuid4().hex
+                            http('node-b',preparation+'/start-worker',fence_input,request=start_id,expected=202)
+                            wait(rows_match,'candidate applies the new MySQL transaction to both original targets')
+                            after=data_cut()
+                            assert all(int(new.split('|')[1])>int(old.split('|')[1]) for old,new in zip(fenced_cut[1:],after[1:]))
+                            assert sql('store',snapshots_query)==snapshots
+                            assert task('node-a')['ownerNodeId']==candidate and task('node-b')['desired']=='RUNNING'
+                            assert not compose('ps','-q','--status','running',owner_node).stdout.strip()
+                            passed('Separate fencing and START apply new MySQL data to the two original SQL snapshots while the original stays offline')
+                            restart_owner()
+                            assert task('node-a')['ownerNodeId']==task('node-b')['ownerNodeId']==candidate
+                            assert data_cut()[1:]==after[1:], 'Old Agent restart must preserve exact destination cuts'
+                            assert rows_match() and sql('store',snapshots_query)==snapshots
+                            passed('The original same directory can return without reclaiming ownership or replacing snapshots')
+                            manifest['offlineOwnerTransfer']={'sourceAuthorityRetained':True,'closedReceipts':inventory['closedReceipts'],
+                                                              'destinationsFenced':2,'originalSnapshots':3,
+                                                              'authorizationDirectoryChanged':args.handoff_offline_authorization_change}
+                            manifest['status']='PASS'
+                            assert hashlib.sha256(jar.read_bytes()).hexdigest()==digest
+                            print('GLOBAL_CONTROL_OFFLINE_OWNER_ACCEPTED artifact='+digest)
+                            raise SystemExit(0)
                         restart_owner()
                         assert http('node-b',route+'/actions',action_start,expected=409)['code']=='HANDOFF_ORIGINAL_FROZEN'
                         cancel_id='gc_cancel_'+uuid.uuid4().hex

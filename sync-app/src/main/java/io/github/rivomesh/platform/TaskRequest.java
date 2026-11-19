@@ -14,7 +14,7 @@ import java.util.Arrays;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder(alphabetic=true)
 final class TaskRequest {
-    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_FREEZE_ORIGINAL,HANDOFF_CANCEL_FREEZE,HANDOFF_FREEZE_ORIGINAL_RPC,HANDOFF_CANCEL_FREEZE_RPC,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_NOTICE_APPROVAL,KAFKA_NOTICE_PREFLIGHT,KAFKA_CATALOG_PROBE,KAFKA_PHYSICAL_RECEIPT,ACTION }
+    enum Kind { LIST,VIEW,CREATE,CONFIGURATION,CONFIG_HISTORY,CONFIG_PREVIEW,CONFIG_UPDATE,RESTORE_PREVIEW,RESTORE,VALIDATION_REPORTS,VALIDATION_REPORT,VALIDATION_DIFFERENCES,VALIDATION_STORAGE,REPAIR_PLAN,CAPTURE_RECOVERY,CAPTURE_EXCLUSIONS,DIAGNOSTICS,FAILURE_EVIDENCE_SUMMARY,FAILURE_EVIDENCE_EVENTS,SKIP_PLAN,SKIP_PLANS,GAPS,GAP_VERIFICATION,CORRECTION_SCHEMA,CORRECTION_PREVIEW,HANDOFF_ASSESS,HANDOFF_LATEST,HANDOFF_PROBE,HANDOFF_PREPARE,HANDOFF_PREPARATION,HANDOFF_RELEASE,HANDOFF_TARGET_FENCE,HANDOFF_START_WORKER,HANDOFF_STAGE,HANDOFF_COMMIT_OWNER,HANDOFF_FREEZE_ORIGINAL,HANDOFF_CANCEL_FREEZE,HANDOFF_OFFLINE_OWNER_COMMIT,HANDOFF_OFFLINE_READY_RPC,HANDOFF_FREEZE_ORIGINAL_RPC,HANDOFF_CANCEL_FREEZE_RPC,HANDOFF_CANDIDATE_PROBE,HANDOFF_EVIDENCE_PROBE,HANDOFF_CUSTODY_PROBE,HANDOFF_STAGING_RPC,HANDOFF_READINESS_RPC,HANDOFF_RAW_HISTORY,HANDOFF_FAILURE_HISTORY,RECOVERY_RECEIPT,KAFKA_NOTICE_PLAN,KAFKA_NOTICE_APPROVAL,KAFKA_NOTICE_PREFLIGHT,KAFKA_CATALOG_PROBE,KAFKA_PHYSICAL_RECEIPT,ACTION }
     public int version=1;
     public Kind kind;
     public String taskId,requestId,revision,yaml,reference,cursor,reportId,planId,target,tableId,after,identityHash,action,subscriptionId,ownerNodeId;
@@ -39,13 +39,15 @@ final class TaskRequest {
     public HandoffStaging.Binding handoffStaging;
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     public String handoffInventorySha256;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public Boolean confirmOriginalUnavailable;
     public RawCaptureHandoffStaging.Binding handoffRawStaging;
     public DurableCommands.KafkaNoticePredecessor kafkaNoticePredecessor;
     public HandoffPreparations.Plan handoffPreparation;
     public HandoffEvidenceAdoption.Receipt adoptedEvidence;
     TaskRequest(){}
     static TaskRequest of(Kind kind,String task){TaskRequest request=new TaskRequest();request.kind=kind;request.taskId=task;return request;}
-    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER||kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||kind==Kind.HANDOFF_FREEZE_ORIGINAL||kind==Kind.HANDOFF_CANCEL_FREEZE||kind==Kind.KAFKA_NOTICE_APPROVAL||kind==Kind.ACTION;}
+    boolean mutation(){return kind==Kind.CREATE||kind==Kind.CONFIG_UPDATE||kind==Kind.RESTORE||kind==Kind.HANDOFF_ASSESS||kind==Kind.HANDOFF_PREPARE||kind==Kind.HANDOFF_RELEASE||kind==Kind.HANDOFF_TARGET_FENCE||kind==Kind.HANDOFF_START_WORKER||kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||kind==Kind.HANDOFF_FREEZE_ORIGINAL||kind==Kind.HANDOFF_CANCEL_FREEZE||kind==Kind.HANDOFF_OFFLINE_OWNER_COMMIT||kind==Kind.KAFKA_NOTICE_APPROVAL||kind==Kind.ACTION;}
     boolean admin(){return kind!=Kind.LIST&&kind!=Kind.VIEW&&kind!=Kind.VALIDATION_REPORT&&kind!=Kind.VALIDATION_REPORTS&&(kind!=Kind.ACTION||!Arrays.asList("CHECK","START","STOP","PAUSE","RESUME","RESUME_TARGET").contains(action));}
     void validate(){
         if(version!=1)throw new IllegalArgumentException("TASK_REQUEST_VERSION_INVALID");
@@ -70,7 +72,10 @@ final class TaskRequest {
         if((handoffRpc()||kind==Kind.HANDOFF_PROBE)&&(reference==null||!reference.matches("[A-Za-z0-9_-]{8,128}")
                 ||handoffRpc()&&(revision==null||!revision.matches("[0-9a-f-]{36}"))))
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
-        boolean freeze=kind==Kind.HANDOFF_FREEZE_ORIGINAL||kind==Kind.HANDOFF_CANCEL_FREEZE||originalFreezeRpc();
+        boolean offline=kind==Kind.HANDOFF_OFFLINE_OWNER_COMMIT||offlineReadyRpc();
+        if(offline?!Boolean.TRUE.equals(confirmOriginalUnavailable):confirmOriginalUnavailable!=null)
+            throw new IllegalArgumentException("HANDOFF_OFFLINE_COMMIT_REQUEST_INVALID");
+        boolean freeze=kind==Kind.HANDOFF_FREEZE_ORIGINAL||kind==Kind.HANDOFF_CANCEL_FREEZE||originalFreezeRpc()||offline;
         if(freeze?(handoffInventorySha256==null||!handoffInventorySha256.matches("[a-f0-9]{64}")):handoffInventorySha256!=null)
             throw new IllegalArgumentException("HANDOFF_ORIGINAL_FREEZE_REQUEST_INVALID");
         if((kind==Kind.HANDOFF_STAGE||kind==Kind.HANDOFF_COMMIT_OWNER||preparedHandoffRpc()||freeze)
@@ -79,7 +84,7 @@ final class TaskRequest {
                 ||requestId==null||!requestId.matches("[A-Za-z0-9_-]{8,128}")||requestId.equals(reference))
                 ||handoffStaging!=null&&!preparedHandoffRpc()&&kind!=Kind.HANDOFF_FREEZE_ORIGINAL_RPC
                 ||handoffRawStaging!=null&&!preparedHandoffRpc()
-                ||handoffPreparation!=null&&kind!=Kind.HANDOFF_READINESS_RPC&&!originalFreezeRpc())
+                ||handoffPreparation!=null&&kind!=Kind.HANDOFF_READINESS_RPC&&!originalFreezeRpc()&&!offlineReadyRpc())
             throw new IllegalArgumentException("HANDOFF_STAGING_REQUEST_INVALID");
         if(handoffCut!=null&&kind!=Kind.HANDOFF_CANDIDATE_PROBE)
             throw new IllegalArgumentException("HANDOFF_REQUEST_INVALID");
@@ -183,7 +188,8 @@ final class TaskRequest {
     boolean correctionAction(){return kind==Kind.ACTION&&"CORRECTION_EXECUTE".equals(action);}
     boolean correctionRead(){return kind==Kind.CORRECTION_SCHEMA||kind==Kind.CORRECTION_PREVIEW;}
     boolean handoffRpc(){return kind==Kind.HANDOFF_CANDIDATE_PROBE||kind==Kind.HANDOFF_EVIDENCE_PROBE
-            ||kind==Kind.HANDOFF_CUSTODY_PROBE||preparedHandoffRpc()||originalFreezeRpc();}
+            ||kind==Kind.HANDOFF_CUSTODY_PROBE||preparedHandoffRpc()||originalFreezeRpc()||offlineReadyRpc();}
+    boolean offlineReadyRpc(){return kind==Kind.HANDOFF_OFFLINE_READY_RPC;}
     boolean originalFreezeRpc(){return kind==Kind.HANDOFF_FREEZE_ORIGINAL_RPC||kind==Kind.HANDOFF_CANCEL_FREEZE_RPC;}
     boolean preparedHandoffRpc(){return kind==Kind.HANDOFF_STAGING_RPC||kind==Kind.HANDOFF_READINESS_RPC;}
     boolean readsAdoptedEvidence(){return kind==Kind.VALIDATION_REPORTS||kind==Kind.VALIDATION_REPORT

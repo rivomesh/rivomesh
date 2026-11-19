@@ -1334,6 +1334,63 @@ public final class TaskService implements AutoCloseable {
                 ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS))
             throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
     }
+    Map<String,Object> prepareOfflineHandoffCandidate(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        HandoffPreparations.Plan plan=request.handoffPreparation;
+        ControlCipher guard;
+        TaskDefinition original;
+        SharedHandoffEvidence.Scope scope;
+        synchronized(this){
+            requireOfflineCandidate(request,actor);
+            var evidence=plan.evidence();
+            scope=new SharedHandoffEvidence.Scope(config.cluster.id,plan.task(),evidence.assessment(),evidence.revision(),
+                    evidence.configuration(),evidence.original().directory(),evidence.candidate().directory());
+            guard=new ControlCipher(config.cluster.taskKey,config.cluster.id,registry.globalTaskIdentity);
+            original=parseTask(request.yaml,Paths.get(config.tasksDirectory),evidence.original().node());
+            if(original.pipeline==null||!request.taskId.equals(original.jobId))
+                throw new Conflict("HANDOFF_CANDIDATE_CONFIGURATION_CHANGED");
+        }
+        original.pipeline.verifyOriginalFreeze(plan.writerFreeze().cut(),plan.writerFreeze().fence());
+        HandoffCandidateAdmission.Ready ready=HandoffCandidateAdmission.prepareFrozen(statePath.getParent(),scope,plan,
+                request.yaml,guard,successor->{
+                    synchronized(this){
+                        requireOfflineCandidate(request,actor);
+                        TaskDefinition task=parseTask(successor);
+                        if(!request.taskId.equals(task.jobId))throw new Conflict("HANDOFF_CANDIDATE_CONFIGURATION_CHANGED");
+                        validateTask(task,null);
+                    }
+                });
+        synchronized(this){
+            requireOfflineCandidate(request,actor);
+            AuditStore.Event event=new AuditStore.Event();event.kind="MANAGED_HANDOFF_OFFLINE_CANDIDATE_READY";
+            event.taskId=request.taskId;event.subjectId=plan.id();event.actorId=actor.id;event.actorRole=actor.role.name();
+            event.clientRequestHash=AuditStore.hash(request.requestId);event.operationHash=ready.configurationSha256();
+            event.status=ready.desired();appendAudit(event);
+        }
+        return Model.JSON.convertValue(ready,Map.class);
+    }
+
+    private void requireOfflineCandidate(TaskRequest request,AccessControl.Principal actor)throws Exception{
+        ensureOpen();currentActor(actor);
+        var plan=request.handoffPreparation;
+        if(!request.offlineReadyRpc()||!Boolean.TRUE.equals(request.confirmOriginalUnavailable)
+                ||plan==null||request.yaml==null||plan.writerFreeze()==null||plan.writerFreeze().offlineCommit()!=null
+                ||!"ORIGINAL_FROZEN".equals(plan.phase())||!plan.id().equals(request.reference)||!plan.task().equals(request.taskId)
+                ||!plan.evidence().revision().equals(request.revision)||!plan.evidence().proof().equals(request.identityHash)
+                ||!plan.writerFreeze().manifestSha256().equals(request.handoffInventorySha256))
+            throw new Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        var evidence=plan.evidence();
+        if(!actor.administers()||!actor.task(request.taskId)||!actor.node(evidence.original().node())
+                ||!actor.node(evidence.candidate().node()))throw new SecurityException("FORBIDDEN");
+        if(config.cluster==null||!config.cluster.sharedTasks||!config.cluster.executes()||registry.globalTaskIdentity==null
+                ||!nodeId().equals(evidence.candidate().node())
+                ||!evidence.candidate().directory().equals(registry.ownerDirectoryIdentity))
+            throw new Conflict("HANDOFF_OFFLINE_CANDIDATE_CHANGED");
+        if(entries.containsKey(request.taskId)||registry.tasks.containsKey(request.taskId)
+                ||!Files.notExists(reports(request.taskId),LinkOption.NOFOLLOW_LINKS)
+                ||!Files.notExists(configurationFile(request.taskId+".yml"),LinkOption.NOFOLLOW_LINKS))
+            throw new Conflict("CANDIDATE_TASK_ALREADY_PRESENT");
+    }
+
     Map<String,Object> verifyOriginalFreeze(TaskRequest request,AccessControl.Principal actor)throws Exception{
         boolean cancelling=request.kind==TaskRequest.Kind.HANDOFF_CANCEL_FREEZE_RPC;
         HandoffPreparations.Plan plan=request.handoffPreparation;

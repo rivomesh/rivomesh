@@ -343,6 +343,20 @@ public final class JournalWriterAssignment {
         return locked;
     }
 
+    /** Consumes the already reserved, unclaimed frozen epoch for the STOPPED recipient. */
+    public static Placement placeFrozenRecipient(Connection c,String namespace,String task,String originalAssignment,
+                                                  CutProof proof,OriginalFreeze frozen,String next,String candidate)throws Exception{
+        if(proof==null||proof.managedWriter()==null||!validId(next)||next.equals(originalAssignment)
+                ||candidate==null||!candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+                ||candidate.equals(proof.managedWriter().originalNode()))
+            throw new IllegalStateException("HANDOFF_MANAGED_PLACEMENT_INVALID");
+        LockedControlCut locked=lockFrozenOriginal(c,namespace,task,originalAssignment,proof,frozen);
+        var placement=new Placement(next,candidate,originalAssignment,locked.generation(),frozen.epoch(),
+                proof.managedWriter().sequence(),Codec.sha256(locked.captured()),proof.nativeEvidenceSha256());
+        writeControlAssignment(c,Sql.pg(namespace),task,placement);
+        return placement;
+    }
+
     /** Writes the journal half on the caller's control transaction. The caller must commit both halves together. */
     public static Placement writeManagedControlPlacement(Connection c,String namespace,String task,String previous,
                                                          CutProof proof,String next,String candidate)throws Exception{
@@ -357,18 +371,23 @@ public final class JournalWriterAssignment {
         Placement placement=new Placement(next,candidate,previous,locked.generation,nextEpoch,cut.sequence(),
                 Codec.sha256(locked.captured),proof.nativeEvidenceSha256());
         String schema=Sql.pg(namespace);
-        JdbcJournal.execute(c,"INSERT INTO "+schema+".rm3_writer_assignment_history"
-                        +" (pipeline_id,assignment_id,node_id,previous_assignment,generation,activated_epoch,last_sequence,checkpoint_hash,evidence_hash)"
-                        +" VALUES (?,?,?,?,?,?,?,?,?)",task,next,candidate,previous,locked.generation,nextEpoch,cut.sequence(),
-                placement.checkpointSha256(),placement.evidenceSha256());
-        if(JdbcJournal.execute(c,"UPDATE "+schema+".rm3_writer_assignment SET assignment_id=?"
-                +" WHERE pipeline_id=? AND assignment_id=?",next,task,previous)!=1
-                ||JdbcJournal.execute(c,"UPDATE "+schema+".rm3_job SET epoch=?,owner=NULL,lease_until=0,run_state=?,format_version=?"
+        writeControlAssignment(c,schema,task,placement);
+        if(JdbcJournal.execute(c,"UPDATE "+schema+".rm3_job SET epoch=?,owner=NULL,lease_until=0,run_state=?,format_version=?"
                 +" WHERE pipeline_id=? AND epoch=? AND generation=? AND next_seq=? AND format_version=? AND run_state='RUNNING'",
                 nextEpoch,MANAGED_PARKED,JdbcJournal.withParkedAdmission(locked.format),task,cut.epoch(),locked.generation,
                 Math.addExact(cut.sequence(),1),locked.format)!=1)
             throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
         return placement;
+    }
+
+    private static void writeControlAssignment(Connection c,String schema,String task,Placement placement)throws SQLException{
+        JdbcJournal.execute(c,"INSERT INTO "+schema+".rm3_writer_assignment_history"
+                        +" (pipeline_id,assignment_id,node_id,previous_assignment,generation,activated_epoch,last_sequence,checkpoint_hash,evidence_hash)"
+                        +" VALUES (?,?,?,?,?,?,?,?,?)",task,placement.assignment(),placement.node(),placement.previousAssignment(),
+                placement.generation(),placement.epoch(),placement.sequence(),placement.checkpointSha256(),placement.evidenceSha256());
+        if(JdbcJournal.execute(c,"UPDATE "+schema+".rm3_writer_assignment SET assignment_id=?"
+                +" WHERE pipeline_id=? AND assignment_id=?",placement.assignment(),task,placement.previousAssignment())!=1)
+            throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
     }
 
     /** A stopped recipient must see the exact committed native history before writing its local configuration. */

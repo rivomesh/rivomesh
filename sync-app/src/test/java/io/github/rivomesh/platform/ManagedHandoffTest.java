@@ -660,9 +660,9 @@ class ManagedHandoffTest {
         assertEquals("a",fixture.b.get(task.id,fixture.admin).owner);
     }
 
-    @Test void originalFreezeReceiptSurvivesExpiryAndFencesOrdinaryControlUntilExplicitCancellation()throws Exception{
+    private HandoffPreparations.Plan frozenReceipt()throws Exception{
         String assignmentSha="a".repeat(64),generation="b".repeat(64),nativeEvidence="c".repeat(64),checkpoint="d".repeat(64);
-        var plan=fixture.a.service((c,accounts)->{
+        return fixture.a.service((c,accounts)->{
             var record=fixture.a.record(c,"orders");
             var original=new HandoffPreparations.Binding("a",fixture.directory,aLease.incarnation,aLease.epoch);
             var candidate=new HandoffPreparations.Binding("b",candidateDirectory,bLease.incarnation,bLease.epoch);
@@ -685,6 +685,10 @@ class ManagedHandoffTest {
                     new io.github.rivomesh.cdc.JournalWriterAssignment.OriginalFreeze(10,11),now);
             return fixture.a.preparations().freezeOriginal(c,prepared,freeze);
         });
+    }
+
+    @Test void originalFreezeReceiptSurvivesExpiryAndFencesOrdinaryControlUntilExplicitCancellation()throws Exception{
+        var plan=frozenReceipt();
         var reopen=fixture.b.service((c,accounts)->fixture.b.preparations().byRequest(c,plan.id(),plan.expires()+5000));
         assertEquals(plan,reopen);
         var readback=entryB().invoke(currentPreparation(),fixture.admin);
@@ -719,6 +723,63 @@ class ManagedHandoffTest {
         assertEquals(cancelled,b.invoke(duplicate,fixture.admin));
         commands.enqueue(start,fixture.admin);
         assertEquals("a",fixture.b.get("orders",fixture.admin).owner);
+    }
+
+    @Test void offlineOwnerApprovalOnlyReplaysItsOwnActorRequestAndSeal()throws Exception{
+        var plan=frozenReceipt();
+        TaskRequest offline=freezeRequest(TaskRequest.Kind.HANDOFF_OFFLINE_OWNER_COMMIT,plan,"approved_offline_01");
+        assertEquals("HANDOFF_OFFLINE_COMMIT_REQUEST_INVALID",
+                assertThrows(IllegalArgumentException.class,()->a.invoke(offline,fixture.admin)).getMessage());
+        offline.confirmOriginalUnavailable=true;
+        conflict("HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED",()->b.invoke(offline,fixture.admin));
+        offline.requestId=plan.writerFreeze().request();
+        conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED",()->a.invoke(offline,fixture.admin));
+        offline.requestId="approved_offline_01";
+
+        String token="another-offline-administrator-test-token";
+        fixture.access.mutate("CREATE",null,Model.JSON.valueToTree(Map.of("expectedRevision",fixture.access.accounts().revision,
+                "id","anotherAdmin","role","ADMIN","enabled",true,"token",token)),"offline_create_other",fixture.admin);
+        var approver=currentAdmin();
+        var other=AccountDirectory.authenticate(fixture.access.accounts(),"Bearer "+token);
+        assertNotEquals(plan.actorRevision(),approver.authorizationRevision);
+        conflict("AUTHORIZATION_CHANGED",()->a.invoke(offline,fixture.admin));
+        conflict("AUTHORIZATION_CHANGED",()->b.invoke(offline,other));
+        conflict("HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED",()->entryB().invoke(offline,approver));
+
+        // The ledger is tested independently here. Only PostgreSQL can perform the real native placement.
+        var saved=fixture.a.service((c,accounts)->{
+            var ready=new HandoffPreparations.WriterCommit(fixture.admin.id,plan.writerFreeze().manifestSha256(),"6".repeat(64),
+                    UUID.randomUUID().toString(),UUID.randomUUID().toString(),plan.writerFreeze().fence().epoch());
+            return fixture.a.preparations().consumeFrozenWriter(c,plan,ready,offline.requestId,approver,plan.expires()+1000);
+        });
+        var receipt=HandoffPreparations.summary(saved);
+        assertEquals("COMMITTED",receipt.get("state"));
+        assertEquals(false,receipt.get("executionAuthorized"));
+        assertEquals(offline.requestId,receipt.get("commitRequestId"));
+        assertFalse(receipt.containsKey("originalFreeze"));
+        assertEquals(approver.authorizationRevision,saved.writerFreeze().offlineCommit().actorRevision());
+        assertEquals(receipt,a.invoke(offline,approver));
+        assertEquals(receipt,entryB().invoke(offline,approver));
+        conflict("AUTHORIZATION_CHANGED",()->a.invoke(offline,other));
+        fixture.access.mutate("UPDATE","anotherAdmin",Model.JSON.valueToTree(Map.of(
+                "expectedRevision",fixture.access.accounts().revision,"role","ADMIN","enabled",false)),
+                "offline_disable_other",approver);
+        var reader=currentAdmin();
+        assertNotEquals(reader.authorizationRevision,approver.authorizationRevision);
+        conflict("AUTHORIZATION_CHANGED",()->a.invoke(offline,approver));
+        assertEquals(receipt,entryB().invoke(offline,reader));
+        offline.requestId="different_offline_01";
+        conflict("HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED",()->a.invoke(offline,reader));
+        offline.requestId="approved_offline_01";
+        offline.handoffInventorySha256="9".repeat(64);
+        conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED",()->entryB().invoke(offline,reader));
+
+        var online=TaskRequest.of(TaskRequest.Kind.HANDOFF_COMMIT_OWNER,plan.task());
+        online.reference=plan.id();online.revision=plan.evidence().revision();online.identityHash=plan.evidence().proof();
+        online.requestId="approved_offline_01";
+        conflict("HANDOFF_OFFLINE_COMMIT_REQUIRED",()->a.invoke(online,reader));
+        var cancel=freezeRequest(TaskRequest.Kind.HANDOFF_CANCEL_FREEZE,plan,"cancel_consumed_01");
+        conflict("HANDOFF_ORIGINAL_FREEZE_CONSUMED",()->entryB().invoke(cancel,reader));
     }
 
     private TaskRequest freezeRequest(TaskRequest.Kind kind,HandoffPreparations.Plan plan,String requestId){

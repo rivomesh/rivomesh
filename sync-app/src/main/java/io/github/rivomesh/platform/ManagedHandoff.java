@@ -33,6 +33,7 @@ final class ManagedHandoff {
                       JournalWriterAssignment.ExpectedCut cut){}
     record StageRoute(HandoffStaging.Binding binding,AgentDirectory.Binding candidate,HandoffPreparations.Plan plan,
                       RawCaptureHandoffStaging.Binding rawCapture){}
+    record OfflineRoute(HandoffPreparations.Plan plan,AgentDirectory.Binding candidate){}
     private record Assessment(int version,String task,String request,String replaces,String revision,String activeVersion,
                               Agent original,Agent candidate,int taskSlots,int workerSlots,long assigned,
                               String actor,String actorRevision,long assessedAt,OriginalCut originalCut,List<String> blockers,
@@ -437,6 +438,7 @@ final class ManagedHandoff {
         if(frozen==null)return null;
         boolean sameManifest=request.handoffInventorySha256.equals(frozen.manifestSha256());
         if(cancelling){
+            if(frozen.offlineCommit()!=null)throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CONSUMED");
             if("ORIGINAL_FROZEN".equals(plan.phase()))return null;
             if(!sameManifest||!request.requestId.equals(plan.releaseId())||!actor.id.equals(plan.releasedBy()))
                 throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED");
@@ -444,6 +446,73 @@ final class ManagedHandoff {
             throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_REQUEST_REUSED");
         }
         return HandoffPreparations.summary(plan);
+    }
+
+    Map<String,Object> orchestrateOfflineOwner(TaskRequest supplied,AccessControl.Principal principal,OwnerQueries transport)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(request.kind!=TaskRequest.Kind.HANDOFF_OFFLINE_OWNER_COMMIT||request.yaml!=null||request.document!=null)
+            throw new IllegalArgumentException("HANDOFF_OFFLINE_COMMIT_REQUEST_INVALID");
+        Map<String,Object> replay=readOfflineReplay(request,principal);
+        if(replay!=null)return replay;
+        CandidateAdmission ready;
+        try{
+            ready=transport.offlineCandidateReadiness(request,principal);
+        }catch(TaskService.Conflict concurrent){
+            replay=readOfflineReplay(request,principal);
+            if(replay!=null)return replay;
+            throw concurrent;
+        }
+        return tasks.transaction(request.taskId,principal,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            Map<String,Object> repeated=offlineReplay(offlinePlan(c,task,actor,request),request,actor);
+            if(repeated!=null)return repeated;
+            var route=offlineRoute(c,task,actor,request);
+            return HandoffPreparations.summary(tasks.commitFrozenWriter(c,task,route.plan(),actor,ready,request.requestId));
+        });
+    }
+
+    private Map<String,Object> readOfflineReplay(TaskRequest request,AccessControl.Principal principal)throws Exception{
+        return tasks.transaction(request.taskId,principal,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->
+                offlineReplay(offlinePlan(c,task,actor,request),request,actor));
+    }
+
+    private HandoffPreparations.Plan offlinePlan(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                                                 TaskRequest request)throws Exception{
+        var plan=freezePlan(c,task,actor,request);
+        var frozen=plan.writerFreeze();
+        if(frozen==null||!Boolean.TRUE.equals(request.confirmOriginalUnavailable)
+                ||!request.handoffInventorySha256.equals(frozen.manifestSha256())||request.requestId.equals(frozen.request()))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        if(!plan.actor().equals(actor.id))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        return plan;
+    }
+
+    private static Map<String,Object> offlineReplay(HandoffPreparations.Plan plan,TaskRequest request,AccessControl.Principal actor){
+        var consumed=plan.writerFreeze().offlineCommit();
+        if(consumed==null)return null;
+        if(!consumed.actor().equals(actor.id))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        if(!consumed.request().equals(request.requestId))throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED");
+        return HandoffPreparations.summary(plan);
+    }
+
+    OfflineRoute offlineRoute(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,TaskRequest request)throws Exception{
+        var plan=offlinePlan(c,task,actor,request);
+        var evidence=plan.evidence();
+        if(!"ORIGINAL_FROZEN".equals(plan.phase())||plan.writerFreeze().offlineCommit()!=null
+                ||plan.executionRequest()!=null||plan.activation()==null||!plan.activation().checkedInControlTransaction())
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        if(!task.owner.equals(evidence.original().node())||!task.directory.equals(evidence.original().directory())
+                ||!task.revision.equals(evidence.revision())||!Objects.equals(task.activeConfigurationVersion,evidence.configuration())
+                ||!Objects.equals(task.configurationVersion,evidence.configuration())||commands.hasUnresolved(c,task.id))
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        agents.requireExpiredOriginal(c,evidence.original());
+        var capacity=agents.handoffCapacity(c,evidence.candidate().node());
+        var candidate=capacity.binding();
+        if(!"HEALTHY".equals(candidate.state)||!evidence.candidate().directory().equals(candidate.directory)
+                ||!evidence.candidate().incarnation().equals(candidate.incarnation)||evidence.candidate().epoch()!=candidate.epoch)
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_CANDIDATE_CHANGED");
+        if(!capacity.roomForPreparation())throw new TaskService.Conflict("HANDOFF_CANDIDATE_CAPACITY_CHANGED");
+        plan.writerFreeze().inventory().requireReceipts(closedReceipts(c,task));
+        return new OfflineRoute(plan,candidate);
     }
 
     /** From the candidate's authenticated private admission proof, after durable staging. */
@@ -653,6 +722,8 @@ final class ManagedHandoff {
         if(!plan.evidence().revision().equals(request.revision)||!plan.evidence().proof().equals(request.identityHash))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         if("ORIGINAL_FROZEN".equals(plan.phase()))throw new TaskService.Conflict("HANDOFF_ORIGINAL_FROZEN");
+        if(plan.writerFreeze()!=null&&plan.writerFreeze().offlineCommit()!=null)
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_REQUIRED");
         return plan;
     }
     private static void requireExecutionReplay(HandoffPreparations.Plan plan,AccessControl.Principal actor,String executionRequest){

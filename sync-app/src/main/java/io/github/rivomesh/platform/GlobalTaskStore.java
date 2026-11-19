@@ -286,6 +286,46 @@ final class GlobalTaskStore {
             throw new TaskService.Conflict("HANDOFF_MANAGED_PLACEMENT_INVALID");
         JournalWriterAssignment.Placement placement=JournalWriterAssignment.writeManagedControlPlacement(c,
                 declaration.namespace(),record.id,declaration.assignment(),cut,activation.nextAssignment(),evidence.candidate().node());
+        var commit=installWriterProjection(c,record,plan,actor,successorYaml,candidateStagingSha256,placement.epoch(),rawCapture,failureRecords);
+        HandoffPreparations.Plan committed=preparations.commitWriter(c,plan,commit,db.now(c));
+        access.append(c,event(record,plan.id(),actor,"MANAGED_HANDOFF_WRITER_COMMITTED"));
+        return committed;
+    }
+
+    HandoffPreparations.Plan commitFrozenWriter(Connection c,Record record,HandoffPreparations.Plan plan,
+            AccessControl.Principal actor,ManagedHandoff.CandidateAdmission candidate,String offlineRequest)throws Exception{
+        var evidence=plan.evidence();var freeze=plan.writerFreeze();
+        if(!actor.administers()||!actor.node(evidence.original().node())||!actor.node(evidence.candidate().node()))
+            throw new SecurityException("FORBIDDEN");
+        if(!"ORIGINAL_FROZEN".equals(plan.phase())||freeze==null||freeze.offlineCommit()!=null
+                ||plan.activation()==null||!plan.activation().checkedInControlTransaction()
+                ||!record.id.equals(plan.task())||!record.owner.equals(evidence.original().node())
+                ||!record.directory.equals(evidence.original().directory())||!record.revision.equals(evidence.revision())
+                ||!evidence.configuration().equals(record.activeConfigurationVersion)||!evidence.configuration().equals(record.configurationVersion))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        if(candidate==null||!candidate.valid()||!plan.id().equals(candidate.preparation())||!evidence.candidate().equals(candidate.binding())
+                ||candidate.rawCapture()!=null||candidate.failureRecords()!=0||!freeze.manifestSha256().equals(candidate.stagingSha256()))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_CANDIDATE_CHANGED");
+        String originalYaml=activeYaml(c,record);
+        ManagedWriterDeclaration original=ManagedWriterDeclaration.read(originalYaml);
+        if(original==null||!db.sharesPostgresUrl(original.journalUrl())
+                ||!plan.activation().originalAssignmentSha256().equals(AuditStore.hash(original.assignment())))
+            throw new TaskService.Conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
+        String successor=ManagedWriterDeclaration.successorYaml(originalYaml,record.owner,candidate.binding().node(),plan.activation().nextAssignment());
+        if(!AuditStore.hash(successor).equals(candidate.configurationSha256()))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_CANDIDATE_CHANGED");
+        var placement=JournalWriterAssignment.placeFrozenRecipient(c,original.namespace(),record.id,original.assignment(),
+                freeze.cut(),freeze.fence(),plan.activation().nextAssignment(),candidate.binding().node());
+        var receipt=installWriterProjection(c,record,plan,actor,successor,candidate.stagingSha256(),placement.epoch(),null,0);
+        HandoffPreparations.Plan committed=preparations.consumeFrozenWriter(c,plan,receipt,offlineRequest,actor,db.now(c));
+        access.append(c,event(record,offlineRequest,actor,"MANAGED_HANDOFF_OFFLINE_OWNER_COMMITTED"));
+        return committed;
+    }
+
+    private HandoffPreparations.WriterCommit installWriterProjection(Connection c,Record record,HandoffPreparations.Plan plan,
+            AccessControl.Principal actor,String successorYaml,String candidateStagingSha256,long epoch,
+            RawCaptureHandoffStaging.Proof rawCapture,int failureRecords)throws Exception{
+        var evidence=plan.evidence();
         record.owner=evidence.candidate().node();record.directory=evidence.candidate().directory();record.revision=UUID.randomUUID().toString();
         record.previousConfigurationVersion=record.configurationVersion;record.configurationVersion=UUID.randomUUID().toString();
         record.activeConfigurationVersion=record.configurationVersion;record.configurationIndex=Math.addExact(record.configurationIndex,1);
@@ -298,10 +338,8 @@ final class GlobalTaskStore {
                 evidence.original().node(),evidence.original().directory(),evidence.revision(),evidence.configuration())!=1)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         db.update(c,"DELETE FROM "+db.table("task_observation")+" WHERE cluster_id=? AND task_id=?",cluster,record.id);
-        HandoffPreparations.Plan committed=preparations.commitWriter(c,plan,new HandoffPreparations.WriterCommit(actor.id,
-                candidateStagingSha256,AuditStore.hash(successorYaml),record.revision,record.configurationVersion,placement.epoch(),rawCapture,failureRecords),db.now(c));
-        access.append(c,event(record,plan.id(),actor,"MANAGED_HANDOFF_WRITER_COMMITTED"));
-        return committed;
+        return new HandoffPreparations.WriterCommit(actor.id,candidateStagingSha256,AuditStore.hash(successorYaml),
+                record.revision,record.configurationVersion,epoch,rawCapture,failureRecords);
     }
     ManagedRecipientImport.Grant verifiedStoppedRecipient(Connection c,String task,ControlStore.Lease lease,String directory)throws Exception{
         Record current=read(c,task);

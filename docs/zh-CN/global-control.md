@@ -105,7 +105,17 @@ PostgreSQL 源写入事务型 SQL 目标时，任务状态的 `lastDeliveryTimin
 
 向 `POST /api/tasks/{task}/handoff/preparation/freeze-original` 提交新的 `X-Request-ID` 及四个 JSON 字段 `expectedPreparation`、`expectedRevision`、`expectedEvidenceSha256`、`expectedInventorySha256`。库存字段填写暂存清单摘要。候选复核准确的私有副本，原 Agent 复核停止任务、完整本地回执与当前原生切点。共享 PostgreSQL 事务提高日志纪元、清除原日志租约并记录 `ORIGINAL_FROZEN`。可从任一 Controller 的准备回执查看冻结纪元。任务仍归原 Agent，目标数据保留在原切点。冻结期间拦截普通 START、配置变更、解除预留和归属确认。
 
-取消冻结时向 `POST /api/tasks/{task}/handoff/preparation/cancel-freeze` 提交相同四个校验值及另一请求 ID。原 Agent 必须使用同一私有目录并处于健康状态，进程重启后也可重新认证。取消会再次核对原库存与原生切点，只允许操作仍处于冻结阶段的记录。原分配在更高的未领取日志纪元恢复可用，任务仍需显式启动。重放同一请求返回已记录的阶段。原 Agent 离线时先恢复该节点。
+取消冻结时向 `POST /api/tasks/{task}/handoff/preparation/cancel-freeze` 提交相同四个校验值及另一请求 ID。原 Agent 必须使用同一私有目录并处于健康状态，进程重启后也可重新认证。取消会再次核对原库存与原生切点，只允许操作仍处于冻结阶段的记录。原分配在更高的未领取日志纪元恢复可用，任务仍需显式启动。重放同一请求返回已记录的阶段。原 Agent 离线时，取消冻结须先恢复该节点。
+
+### 原 Agent 丢失后切换已冻结任务
+
+使用原 Agent 健康时记录的冻结回执和候选 Agent 绑定。原节点须在数据库时钟判定其已登记租约过期后显示 `STALE`，管理员须确认原 Agent 已无法使用。租约仍有效、原租约身份变化或候选不可用时拒绝切换。若意外丢失发生在持久冻结之前，须恢复原 Agent 及其私有状态。
+
+在交接面板打开冻结准备回执，刷新到原 Agent 租约显示过期。核对冻结请求和库存摘要，确认原 Agent 已无法使用，然后点击 **切换已冻结任务的归属**。如需自动化，发起冻结的管理员可从任一 Controller 提交 `POST /api/tasks/{task}/handoff/preparation/commit-offline-owner`。使用新的 `X-Request-ID`，保留冻结请求的四个校验值，并添加 JSON 布尔值 `"confirmOriginalUnavailable": true`。提交时按当前授权核对原冻结管理员的任务和两 Agent 权限。候选再次核验私有密封库存与源库、各目标的原生切点。候选副本核验通过后允许共享归档暂不可用。候选副本缺失或被修改时拒绝切换。
+
+共享 PostgreSQL 事务切换任务归属，并将冻结时尚无 Worker 领取的日志纪元分配给候选。候选以停止状态安装配置及已办结回执。可从任一 Controller 查询签名准备回执，`offlineOwnerCommit` 中包含冻结和审批请求标识。响应丢失后由同一管理员携原请求 ID 重试同一内容。提交后原写入分配已退役，旧 Agent 即使带原目录返回也无法夺回写权。
+
+等回执显示 `EVIDENCE_ADOPTED` 后，审批 **隔离 SQL 目标**，等待 `TARGETS_FENCED`，再另外审批 **启动候选 Worker**。候选从同一切点恢复写入。该流程要求初始受管 MySQL 源日志分配、控制与日志共用一个 PostgreSQL 数据库、目标为 PostgreSQL 或 MySQL，以及完整的 `CLOSED_RECEIPTS_ONLY` 冻结档案。
 
 ### 确认归属切换
 

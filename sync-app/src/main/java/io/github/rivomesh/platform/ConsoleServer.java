@@ -302,21 +302,25 @@ public final class ConsoleServer implements AutoCloseable {
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")
                     &&parts[4].equals("handoff")&&parts[5].equals("preparation")&&method.equals("POST")
-                    &&(parts[6].equals("freeze-original")||parts[6].equals("cancel-freeze"))){
+                    &&(parts[6].equals("freeze-original")||parts[6].equals("cancel-freeze")||parts[6].equals("commit-offline-owner"))){
                 if(!principal.administers())throw new SecurityException("FORBIDDEN");
+                boolean offline=parts[6].equals("commit-offline-owner");
                 boolean cancelling=parts[6].equals("cancel-freeze");
                 JsonNode input=body(exchange);
-                if(input.size()!=4||!input.path("expectedPreparation").isTextual()
+                if(input.size()!=(offline?5:4)||!input.path("expectedPreparation").isTextual()
                         ||!input.path("expectedRevision").isTextual()||!input.path("expectedEvidenceSha256").isTextual()
-                        ||!input.path("expectedInventorySha256").isTextual())
-                    throw new IllegalArgumentException("HANDOFF_ORIGINAL_FREEZE_REQUEST_INVALID");
-                TaskRequest request=TaskRequest.of(cancelling?TaskRequest.Kind.HANDOFF_CANCEL_FREEZE:
-                        TaskRequest.Kind.HANDOFF_FREEZE_ORIGINAL,parts[3]);
+                        ||!input.path("expectedInventorySha256").isTextual()
+                        ||offline&&!input.path("confirmOriginalUnavailable").isBoolean())
+                    throw new IllegalArgumentException(offline?"HANDOFF_OFFLINE_COMMIT_REQUEST_INVALID":"HANDOFF_ORIGINAL_FREEZE_REQUEST_INVALID");
+                TaskRequest.Kind kind=offline?TaskRequest.Kind.HANDOFF_OFFLINE_OWNER_COMMIT:cancelling?
+                        TaskRequest.Kind.HANDOFF_CANCEL_FREEZE:TaskRequest.Kind.HANDOFF_FREEZE_ORIGINAL;
+                TaskRequest request=TaskRequest.of(kind,parts[3]);
                 request.requestId=exchange.getRequestHeaders().getFirst("X-Request-ID");
                 request.reference=input.path("expectedPreparation").textValue();
                 request.revision=input.path("expectedRevision").textValue();
                 request.identityHash=input.path("expectedEvidenceSha256").textValue();
                 request.handoffInventorySha256=input.path("expectedInventorySha256").textValue();
+                if(offline)request.confirmOriginalUnavailable=input.path("confirmOriginalUnavailable").booleanValue();
                 json(exchange,200,control.invoke(request,principal));return;
             }
             if(parts.length==7&&parts[1].equals("api")&&parts[2].equals("tasks")

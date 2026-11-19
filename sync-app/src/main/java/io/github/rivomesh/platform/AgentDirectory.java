@@ -129,6 +129,18 @@ final class AgentDirectory {
         if(directory!=null&&!Objects.equals(directory,b.directory))throw new TaskService.Conflict("AGENT_DIRECTORY_CHANGED");
         b.state=incarnation==null?"UNKNOWN":!"RUNNING".equals(lifecycle)?"STOPPED":until<=db.now(c)?"STALE":epoch!=b.epoch||!incarnation.equals(b.incarnation)?"REGISTERING":"HEALTHY";return b;
     }
+    void requireExpiredOriginal(Connection c,HandoffPreparations.Binding expected)throws Exception{
+        Binding original=owner(c,expected.node(),expected.directory());
+        if(original.epoch!=expected.epoch()||!expected.incarnation().equals(original.incarnation))
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_ORIGINAL_CHANGED");
+        if(!"STALE".equals(original.state))throw new TaskService.Conflict("HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED");
+        // owner() holds this row, but its STALE observation alone does not bind the lease incarnation.
+        try(PreparedStatement p=db.prepare(c,"SELECT incarnation,epoch FROM "+db.table("node")
+                +" WHERE cluster_id=? AND node_id=?",cluster,expected.node());ResultSet r=p.executeQuery()){
+            if(!r.next()||!expected.incarnation().equals(r.getString(1))||expected.epoch()!=r.getLong(2))
+                throw new TaskService.Conflict("HANDOFF_OFFLINE_ORIGINAL_CHANGED");
+        }
+    }
     HandoffCapacity handoffCapacity(Connection c,String node)throws Exception{
         Binding binding=owner(c,node,null);
         String sql="SELECT n.metadata,(SELECT COUNT(*) FROM "+db.table("task_authority")

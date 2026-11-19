@@ -62,7 +62,7 @@ final class OwnerQueries {
         try(PreparedStatement p=db.prepare(c,"SELECT * FROM "+db.table("owner_query")+" WHERE cluster_id=? AND query_id=?",cluster,id);ResultSet r=p.executeQuery()){
             if(!r.next())throw new NoSuchElementException("OWNER_QUERY_NOT_FOUND");Entry entry=Model.JSON.readValue(cipher.open("owner-query/"+id,r.getString("envelope")),Entry.class);
             if(entry.version!=1||!id.equals(entry.id)||!Objects.equals(entry.task,r.getString("task_id"))||!Objects.equals(entry.owner,r.getString("owner_id"))||entry.epoch!=r.getLong("node_epoch")||!Objects.equals(entry.phase,r.getString("phase"))||entry.expiresAt!=r.getLong("expires_at")||entry.request==null||!entry.task.equals(entry.request.taskId))throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");readonly(entry.request);
-            if((entry.request.preparedHandoffRpc()||entry.request.originalFreezeRpc())&&(entry.request.handoffStaging!=null
+            if((entry.request.preparedHandoffRpc()||entry.request.originalFreezeRpc()||entry.request.offlineReadyRpc())&&(entry.request.handoffStaging!=null
                     ||entry.request.handoffRawStaging!=null||entry.request.handoffPreparation!=null
                     ||entry.request.handoffClosedReceipts!=null||entry.request.yaml!=null))
                 throw new TaskService.Conflict("OWNER_QUERY_RECORD_INVALID");
@@ -154,6 +154,21 @@ final class OwnerQueries {
             return insert(c,scoped,current,route.candidate(),reserve(c,1),route.binding().scope().configuration());
         });
     }
+    ManagedHandoff.CandidateAdmission offlineCandidateReadiness(TaskRequest supplied,AccessControl.Principal actor)throws Exception{
+        TaskRequest request=supplied.snapshot();
+        if(handoff==null||request.kind!=TaskRequest.Kind.HANDOFF_OFFLINE_OWNER_COMMIT||request.yaml!=null||request.document!=null)
+            throw new IllegalArgumentException("HANDOFF_OFFLINE_COMMIT_REQUEST_INVALID");
+        String query=tasks.transaction(request.taskId,actor,Connection.TRANSACTION_READ_COMMITTED,(c,task,current)->{
+            var route=handoff.offlineRoute(c,task,current,request);
+            TaskRequest scoped=TaskRequest.of(TaskRequest.Kind.HANDOFF_OFFLINE_READY_RPC,task.id);
+            scoped.reference=request.reference;scoped.revision=request.revision;scoped.identityHash=request.identityHash;
+            scoped.requestId=request.requestId;scoped.handoffInventorySha256=request.handoffInventorySha256;
+            scoped.confirmOriginalUnavailable=request.confirmOriginalUnavailable;
+            return insert(c,scoped,current,route.candidate(),reserve(c,1),route.plan().evidence().configuration());
+        });
+        return Model.JSON.convertValue(await(query,actor),ManagedHandoff.CandidateAdmission.class);
+    }
+
     private long reserve(Connection c,int slots)throws SQLException{
         long now=db.now(c);
         db.update(c,"DELETE FROM "+db.table("owner_query")+" WHERE cluster_id=? AND expires_at<=?",cluster,now);
@@ -191,6 +206,17 @@ final class OwnerQueries {
         if(!entry.handoffConfiguration.equals(route.plan().evidence().configuration()))
             throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
         requireHandoffAgent(entry,route.original());
+        return route;
+    }
+
+    private ManagedHandoff.OfflineRoute verifyOfflineCandidate(Connection c,GlobalTaskStore.Record record,
+                                                               AccessControl.Principal actor,Entry entry)throws Exception{
+        if(handoff==null||entry.handoffConfiguration==null)
+            throw new TaskService.Conflict("HANDOFF_OFFLINE_COMMIT_FREEZE_REQUIRED");
+        var route=handoff.offlineRoute(c,record,actor,entry.request);
+        if(!entry.handoffConfiguration.equals(route.plan().evidence().configuration()))
+            throw new TaskService.Conflict("HANDOFF_ORIGINAL_FREEZE_CHANGED");
+        requireHandoffAgent(entry,route.candidate());
         return route;
     }
 
@@ -271,6 +297,12 @@ final class OwnerQueries {
                 GlobalTaskStore.Record record=tasks.record(c,entry.task);
                 TaskRequest scoped=entry.request.snapshot();
                 if(scoped.preparedHandoffRpc())return preparedExecution(c,record,actor,entry);
+                if(scoped.offlineReadyRpc()){
+                    var route=verifyOfflineCandidate(c,record,actor,entry);
+                    scoped.handoffPreparation=route.plan();
+                    scoped.yaml=tasks.activeYaml(c,record);
+                    return new Execution(scoped,actor);
+                }
                 if(scoped.originalFreezeRpc()){
                     var route=verifyFreezeOrigin(c,record,actor,entry);
                     scoped.handoffPreparation=route.plan();
@@ -297,7 +329,7 @@ final class OwnerQueries {
                 returned=local.ownerKafkaPhysicalReceipt(execution.request,execution.actor,tasks.identity,cipher);
             else returned=execution.kafkaCatalog==null?local.ownerQuery(execution.request,execution.actor)
                     :local.ownerKafkaCatalog(execution.kafkaCatalog,execution.actor);
-            response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC?readinessResponse(entry,returned)
+            response=entry.request.kind==TaskRequest.Kind.HANDOFF_READINESS_RPC||entry.request.offlineReadyRpc()?readinessResponse(entry,returned)
                     :entry.request.originalFreezeRpc()?freezeOriginResponse(entry,returned):returned;
             if(response==null||Model.JSON.writeValueAsBytes(response).length>1024*1024){response=null;failure="OWNER_QUERY_RESULT_LIMIT";}
         }catch(TaskService.Conflict rejected){failure=rejected.getMessage()!=null&&rejected.getMessage().matches("[A-Z0-9_]{1,120}")?rejected.getMessage():"OWNER_QUERY_REJECTED";}
@@ -314,6 +346,7 @@ final class OwnerQueries {
                 if(current.request.preparedHandoffRpc())
                     verifyPreparedHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.originalFreezeRpc())verifyFreezeOrigin(c,tasks.record(c,current.task),actor,current);
+                else if(current.request.offlineReadyRpc())verifyOfflineCandidate(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.handoffRpc())verifyHandoff(c,tasks.record(c,current.task),actor,current);
                 else if(current.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)
                     requireKafkaPhysicalScope(tasks.record(c,current.task),actor,current.request);
@@ -412,7 +445,8 @@ final class OwnerQueries {
         try{ready=Model.JSON.convertValue(response,ManagedHandoff.CandidateAdmission.class);}
         catch(IllegalArgumentException invalid){throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");}
         var expected=new HandoffPreparations.Binding(entry.owner,entry.directory,entry.incarnation,entry.epoch);
-        if(!ready.valid()||!entry.request.reference.equals(ready.preparation())||!expected.equals(ready.binding()))
+        if(!ready.valid()||!entry.request.reference.equals(ready.preparation())||!expected.equals(ready.binding())
+                ||entry.request.offlineReadyRpc()&&(ready.rawCapture()!=null||ready.failureRecords()!=0))
             throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
         return Model.JSON.convertValue(ready,Map.class);
     }
@@ -424,6 +458,7 @@ final class OwnerQueries {
             if(entry.expiresAt<=db.now(c))throw new TaskService.Conflict("OWNER_QUERY_EXPIRED");
             if(entry.request.preparedHandoffRpc())verifyPreparedHandoff(c,record,current,entry);
             else if(entry.request.originalFreezeRpc())verifyFreezeOrigin(c,record,current,entry);
+            else if(entry.request.offlineReadyRpc())verifyOfflineCandidate(c,record,current,entry);
             else if(entry.request.handoffRpc())verifyHandoff(c,record,current,entry);
             else{
                 if(entry.request.kind==TaskRequest.Kind.KAFKA_PHYSICAL_RECEIPT)requireKafkaPhysicalScope(record,current,entry.request);

@@ -154,6 +154,16 @@ window.RivomeshHandoff=(()=>{
   handoffProgress:'查看 Agent 交接状态',handoffTransferReceipt:'交接回执',handoffNoPreparation:'该任务暂无交接准备记录。',
   handoffOriginalFrozen:'原写入者已冻结',handoffOriginalFreezeCancelled:'原写入者冻结已取消',
   handoffOriginalFrozenHelp:'归属保留在原 Agent。原写入者保持停止，普通启动、配置修改和解除预留受阻。',
+  handoffOfflineOriginalState:'原 Agent 控制状态',handoffFreezeInventory:'冻结库存摘要',
+  handoffOfflineCommit:'切换已冻结任务的归属',handoffOfflineCommitRetry:'重试同一离线切换',
+  handoffOfflineCommitHelp:'冻结管理员可切换归属。候选仍停止，隔离目标和启动 Worker 需要另外审批。',
+  handoffOfflineConfirm:'我确认原 Agent 已无法使用，批准切换此冻结任务的归属。',
+  handoffOfflineCommitted:'离线切换审批 ID',
+  HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED:'原 Agent 的已登记租约尚未过期。请刷新交接状态。',
+  HANDOFF_OFFLINE_ORIGINAL_CHANGED:'原 Agent 的登记绑定已变化。请重新核对冻结回执。',
+  HANDOFF_OFFLINE_CANDIDATE_CHANGED:'候选 Agent 的绑定或密封配置已变化。请重新核对冻结回执。',
+  HANDOFF_OFFLINE_INVENTORY_UNVERIFIED:'候选的冻结库存无法验证。请核对受保护的暂存副本。',
+  HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED:'此冻结已由另一个离线请求消费。请刷新交接状态。',
   handoffFreezeRequest:'冻结请求 ID',handoffFreezeEpoch:'冻结日志纪元',
   handoffCommitted:'归属已提交',handoffProjected:'候选配置已安装',handoffEvidenceAdopted:'证据已接收',
   handoffCommittedHelp:'任务归属已变更。候选 Agent 正在等待安装已审阅的任务配置。',
@@ -187,6 +197,16 @@ window.RivomeshHandoff=(()=>{
   handoffProgress:'View Agent handoff status',handoffTransferReceipt:'Handoff receipt',handoffNoPreparation:'This task has no handoff preparation.',
   handoffOriginalFrozen:'Original writer frozen',handoffOriginalFreezeCancelled:'Original writer freeze cancelled',
   handoffOriginalFrozenHelp:'The original Agent keeps ownership and stays stopped. A freeze blocks ordinary start, configuration changes and reservation release.',
+  handoffOfflineOriginalState:'Original Agent control state',handoffFreezeInventory:'Frozen inventory digest',
+  handoffOfflineCommit:'Transfer frozen task ownership',handoffOfflineCommitRetry:'Retry the same offline transfer',
+  handoffOfflineCommitHelp:'The administrator who froze the task can transfer ownership. The candidate stays stopped. Target fencing and Worker start require separate approvals.',
+  handoffOfflineConfirm:'I confirm that the original Agent is unavailable and approve transferring this frozen task.',
+  handoffOfflineCommitted:'Offline transfer approval ID',
+  HANDOFF_OFFLINE_ORIGINAL_NOT_EXPIRED:'The registered original Agent lease is still valid. Refresh the handoff status.',
+  HANDOFF_OFFLINE_ORIGINAL_CHANGED:'The original Agent registration changed. Review the frozen preparation.',
+  HANDOFF_OFFLINE_CANDIDATE_CHANGED:'The candidate Agent binding or sealed configuration changed. Review the frozen preparation.',
+  HANDOFF_OFFLINE_INVENTORY_UNVERIFIED:'The candidate could not verify the frozen inventory. Check its protected staged copy.',
+  HANDOFF_OFFLINE_COMMIT_REQUEST_REUSED:'A different offline request already consumed the freeze. Refresh the handoff status.',
   handoffFreezeRequest:'Freeze request ID',handoffFreezeEpoch:'Frozen journal epoch',
   handoffCommitted:'Ownership committed',handoffProjected:'Candidate configuration installed',handoffEvidenceAdopted:'Evidence received',
   handoffCommittedHelp:'Task ownership has changed. The candidate Agent is waiting to install the reviewed configuration.',
@@ -320,8 +340,17 @@ window.RivomeshHandoff=(()=>{
    &&['STALE','BLOCKED'].includes(receipt.state);
  }
  function evidenceCount(value){return Number.isSafeInteger(value)&&value>0&&value<=64;}
+ function validOfflineCommit(preparation){
+  const approval=preparation.offlineOwnerCommit;
+  if(approval==null)return true;
+  return transferred(preparation)&&requestPattern.test(approval.requestId||'')
+   &&requestPattern.test(approval.freezeRequestId||'')&&approval.requestId===preparation.commitRequestId
+   &&approval.requestId!==preparation.id&&approval.freezeRequestId!==preparation.id
+   &&approval.requestId!==approval.freezeRequestId&&Number.isFinite(Date.parse(approval.committedAt))
+   &&Date.parse(approval.committedAt)>=Date.parse(preparation.createdAt);
+ }
  function validTransfer(preparation){
-  if(!revisionId.test(preparation.committedRevision||'')||preparation.committedRevision===preparation.taskRevision
+  if(!validOfflineCommit(preparation)||!revisionId.test(preparation.committedRevision||'')||preparation.committedRevision===preparation.taskRevision
    ||!revisionId.test(preparation.committedConfigurationVersion||'')||typeof preparation.activatedJournalEpoch!=='string'
    ||!/^[1-9][0-9]{0,18}$/.test(preparation.activatedJournalEpoch))return false;
   const evidence=preparation.adoptedEvidence;
@@ -351,6 +380,10 @@ window.RivomeshHandoff=(()=>{
  function nextHandoffAction(v){
   const plan=v.preparation;
   if(!v.preparationLoaded||!plan||!preparationScope(v,plan))return null;
+  const task=bridge.task(v.taskId);
+  if(plan.state==='ORIGINAL_FROZEN'&&validOriginalFreeze(plan)&&plan.writerActivation?.checkedInControlTransaction===true
+   &&task?.statusAvailable===false&&task.ownerControlState==='STALE'&&task.revision===plan.taskRevision)
+   return 'commit-offline-owner';
   if(plan.state==='PREPARED'&&!readOnly(v)&&plan.writerActivation?.checkedInControlTransaction===true
    &&v.stageAttempt?.counts
    &&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
@@ -410,7 +443,7 @@ window.RivomeshHandoff=(()=>{
     ||!sha256.test(response.evidenceSha256||'')||!Number.isFinite(Date.parse(response.createdAt))
     ||!(Date.parse(response.expiresAt)>Date.parse(response.createdAt))
     ||(['RELEASED','FREEZE_CANCELLED'].includes(state)?!requestPattern.test(response.releaseId||''):response.releaseId!=null)
-    ||!validOriginalFreeze(response)
+    ||!validOriginalFreeze(response)||!transferredState&&response.offlineOwnerCommit!=null
     ||attempt&&!matchesPreparation(response,attempt)){
    throw new Error(t('handoffReservationInvalid'));
   }
@@ -499,9 +532,11 @@ window.RivomeshHandoff=(()=>{
  function renderPreparation(v,readonly){
   const preparation=v.preparation,proof=!readonly&&reviewReady(v)?v.receipt.preparationEvidenceSha256:null;
   const empty=readonly&&v.preparationLoaded&&!preparation,locale=document.documentElement.lang;
+  const ownerControlState=preparation?.state==='ORIGINAL_FROZEN'?bridge.task(v.taskId)?.ownerControlState||'UNKNOWN':null;
   if(v.drawnPreparation?.receipt===preparation&&v.drawnPreparation?.proof===proof
-   &&v.drawnPreparation?.empty===empty&&v.drawnPreparation?.locale===locale)return;
-  v.drawnPreparation={receipt:preparation,proof,empty,locale};
+   &&v.drawnPreparation?.empty===empty&&v.drawnPreparation?.locale===locale
+   &&v.drawnPreparation?.ownerControlState===ownerControlState)return;
+  v.drawnPreparation={receipt:preparation,proof,empty,locale,ownerControlState};
   v.preparationResult.replaceChildren();
   if(empty)v.preparationResult.append(node('p',t('handoffNoPreparation'),'subtle'));
   if(!preparation&&!proof)return;
@@ -526,8 +561,12 @@ window.RivomeshHandoff=(()=>{
    const freeze=preparation.originalFreeze;
    if(freeze){
     facts.append(node('dt',t('handoffFreezeEpoch')),node('dd',freeze.journalEpoch));
-    details.append(node('p',t('handoffFreezeRequest')),node('code',freeze.requestId));
-    if(preparation.state==='ORIGINAL_FROZEN')v.preparationResult.append(node('p',t('handoffOriginalFrozenHelp'),'callout warning'));
+    details.append(node('p',t('handoffFreezeRequest')),node('code',freeze.requestId),
+     node('p',t('handoffFreezeInventory')),node('code',freeze.manifestSha256));
+    if(preparation.state==='ORIGINAL_FROZEN'){
+     facts.append(node('dt',t('handoffOfflineOriginalState')),node('dd',t(ownerControlState)));
+     v.preparationResult.append(node('p',t('handoffOriginalFrozenHelp'),'callout warning'));
+    }
    }
    if(active)v.preparationResult.append(node('p',t('handoffActiveHelp'),'subtle'));
    if(active&&preparation.commitBlocker==='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
@@ -554,6 +593,7 @@ window.RivomeshHandoff=(()=>{
   if(preparation.adoptedEvidence?.rawCaptures)values.push(['handoffAdoptedRawCapture',preparation.adoptedEvidence.rawCaptures]);
   if(preparation.adoptedEvidence?.failureRecords)values.push(['handoffAdoptedFailureHistory',preparation.adoptedEvidence.failureRecords]);
   if(preparation.targetFence)values.push(['handoffFencedCount',preparation.targetFence.destinationsFenced]);
+  if(preparation.offlineOwnerCommit)values.push(['handoffOfflineCommitted',preparation.offlineOwnerCommit.requestId]);
   for(const [label,value] of values)facts.append(node('dt',t(label)),node('dd',value));
   const details=node('details');
   details.append(node('summary',t('handoffTransferId')),node('code',preparation.id),
@@ -582,11 +622,12 @@ window.RivomeshHandoff=(()=>{
    +(counts.failureRecords?' · '+t('handoffStageFailureHistory')+' '+counts.failureRecords:''):'';
   if(v.stageStatus.textContent!==status)v.stageStatus.textContent=status;
  }
+ function ownershipChange(action){return action==='commit-owner'||action==='commit-offline-owner';}
  function update(v){
   if(!current(v)){
    if(view===v){
     const task=bridge.task(v.taskId);
-    if(v.fenceAttempt?.action==='commit-owner'&&task?.ownerNodeId===v.fenceAttempt.candidate
+    if(ownershipChange(v.fenceAttempt?.action)&&task?.ownerNodeId===v.fenceAttempt.candidate
       &&bridge.session()?.id===v.actor&&eligible(task))open(task);
     else close();
    }
@@ -636,10 +677,21 @@ window.RivomeshHandoff=(()=>{
   const labels={
    'fence-targets':['handoffFence','handoffFenceRetry','handoffFenceHelp'],
    'start-worker':['handoffStartWorker','handoffStartRetry','handoffStartWorkerHelp'],
-   'commit-owner':['handoffCommitOwner','handoffCommitRetry','handoffCommitOwnerHelp']
+   'commit-owner':['handoffCommitOwner','handoffCommitRetry','handoffCommitOwnerHelp'],
+   'commit-offline-owner':['handoffOfflineCommit','handoffOfflineCommitRetry','handoffOfflineCommitHelp']
   };
   const [label,retry,help]=labels[offer]||labels['fence-targets'];
-  v.fencePanel.hidden=!offer;v.fence.disabled=busy||!offer;
+  const offline=offer==='commit-offline-owner';
+  const frozen=offline?v.preparation.originalFreeze:null;
+  const freezeReview=frozen?[v.preparation.id,v.preparation.evidenceSha256,frozen.requestId,frozen.manifestSha256].join(':'):null;
+  if(freezeReview!==v.offlineFreezeReview){
+   v.offlineFreezeReview=freezeReview;v.offlineConfirmation.checked=false;
+   if(offline&&v.fenceAttempt?.action===offer)v.fenceAttempt=null;
+  }
+  v.offlineConfirmField.hidden=!offline;
+  v.offlineConfirmation.disabled=!offline||busy||v.fenceAttempt?.action===offer;
+  v.offlineConfirmationText.textContent=t('handoffOfflineConfirm');
+  v.fencePanel.hidden=!offer;v.fence.disabled=busy||!offer||offline&&!v.offlineConfirmation.checked;
   v.fence.dataset.handoffAction=offer||'';
   const pending=v.preparation?.state;
   const reapprove=offer==='start-worker'&&pending==='START_PENDING'?'handoffStartReapprove'
@@ -705,7 +757,7 @@ window.RivomeshHandoff=(()=>{
  }
  async function refreshDialog(v){
   v.feedback.textContent='';
-  if(v.fenceAttempt?.action==='commit-owner')await bridge.refresh();
+  if(ownershipChange(v.fenceAttempt?.action)||v.preparation?.state==='ORIGINAL_FROZEN')await bridge.refresh();
   if(!current(v))return;
   await readPreparation(v);
   if(!current(v))return;
@@ -770,11 +822,15 @@ window.RivomeshHandoff=(()=>{
  async function submitHandoffAction(v){
   const action=nextHandoffAction(v);
   if(!current(v)||v.fence.disabled||!action)return;
-  const plan=v.preparation,committing=action==='commit-owner';
+  const plan=v.preparation,committing=ownershipChange(action),offline=action==='commit-offline-owner';
   const input={expectedPreparation:plan.id,expectedRevision:committing?plan.taskRevision:plan.committedRevision};
   if(committing)input.expectedEvidenceSha256=plan.evidenceSha256;
+  if(offline){
+   input.expectedInventorySha256=plan.originalFreeze.manifestSha256;
+   input.confirmOriginalUnavailable=true;
+  }
   const attempt=v.fenceAttempt??={action,preparation:plan.id,candidate:plan.candidateNodeId,
-   id:committing&&plan.commitRequestId||requestId(),body:JSON.stringify(input)};
+   id:action==='commit-owner'&&plan.commitRequestId||requestId(),body:JSON.stringify(input)};
   v.fencing=true;v.feedback.textContent='';update(v);
   try{
    const reply=await api(preparationEndpoint(v)+'/'+action,postOptions(attempt.body,attempt.id));
@@ -784,7 +840,9 @@ window.RivomeshHandoff=(()=>{
     if(!transferred(reply)||!validTransfer(reply)||reply.executionAuthorized!==workerAdmitted(reply.state)
       ||reply.commitRequestId!==attempt.id||reply.id!==plan.id||reply.taskId!==v.taskId
       ||reply.taskRevision!==plan.taskRevision||reply.evidenceSha256!==plan.evidenceSha256
-      ||reply.originalNodeId!==v.owner||reply.candidateNodeId!==attempt.candidate||!nodeGrant(attempt.candidate))
+      ||reply.originalNodeId!==v.owner||reply.candidateNodeId!==attempt.candidate||!nodeGrant(attempt.candidate)
+      ||(offline?reply.offlineOwnerCommit?.freezeRequestId!==plan.originalFreeze.requestId
+        ||reply.activatedJournalEpoch!==plan.originalFreeze.journalEpoch:reply.offlineOwnerCommit!=null))
      throw new Error(t('handoffReservationInvalid'));
     await bridge.refresh();
     if(current(v))v.feedback.textContent=t('handoffCommitUnknown');
@@ -804,7 +862,9 @@ window.RivomeshHandoff=(()=>{
    if(uncertain){
     v.feedback.textContent=t(committing?'handoffCommitUnknown':'handoffFenceUnknown');return;
    }
-   v.fenceAttempt=null;v.feedback.textContent=error.message;
+   v.fenceAttempt=null;
+   if(offline)v.offlineConfirmation.checked=false;
+   v.feedback.textContent=offline&&error.code&&t(error.code)!==error.code?t(error.code):error.message;
    await reconcile(v,error);
    if(current(v))await readPreparation(v);
   }finally{if(current(v)){v.fencing=false;update(v);}}
@@ -916,10 +976,12 @@ window.RivomeshHandoff=(()=>{
    release=node('button',t('handoffRelease')),preparationPanel=node('section','','recovery-retry'),
    preparationResult=node('div'),stagePanel=node('div'),stageStatus=node('p','','subtle'),
    stageButton=node('button',t('handoffStage')),help=node('p',t('handoffHelp'),'callout'),
-   fencePanel=node('div'),fence=node('button',t('handoffFence'),'primary'),actionHelp=node('p','','subtle');
+   fencePanel=node('div'),fence=node('button',t('handoffFence'),'primary'),actionHelp=node('p','','subtle'),
+   offlineConfirmField=node('label','','handoff-confirmation'),offlineConfirmation=node('input'),offlineConfirmationText=node('span');
   const v={dialog,taskId:task.id,owner:task.ownerNodeId,actor:bridge.session().id,select,candidateMessage,
    feedback,result,more,reload,submit:submitButton,probe:probeButton,reserve,release,preparationPanel,preparationResult,
-   stage:stageButton,stagePanel,stageStatus,fencePanel,fence,actionHelp,header:heading,help,original,field,nodes:new Map()};
+   stage:stageButton,stagePanel,stageStatus,fencePanel,fence,actionHelp,offlineConfirmField,offlineConfirmation,
+   offlineConfirmationText,header:heading,help,original,field,nodes:new Map()};
   view=v;
   heading.id='handoff-title';dialog.setAttribute('aria-labelledby',heading.id);
   select.name='candidateNodeId';field.append(node('span',t('handoffCandidate')),select);
@@ -943,7 +1005,10 @@ window.RivomeshHandoff=(()=>{
   actions.append(exit,more,reload,submitButton);
   form.append(field,candidateMessage,actions);
   stagePanel.append(node('p',t('handoffStageHelp'),'subtle'),stageButton,stageStatus);
-  fencePanel.append(actionHelp,fence);
+  offlineConfirmation.type='checkbox';offlineConfirmation.dataset.handoffOfflineConfirm='';
+  offlineConfirmation.onchange=()=>update(v);
+  offlineConfirmField.append(offlineConfirmation,offlineConfirmationText);
+  fencePanel.append(actionHelp,offlineConfirmField,fence);
   preparationPanel.append(preparationResult,stagePanel,reserve,release,fencePanel);
   dialog.append(heading,node('p',task.id,'subtle'),help,original,form,feedback,
    result,probeButton,preparationPanel);
