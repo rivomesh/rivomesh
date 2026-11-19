@@ -2,21 +2,18 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T09:58:36+08:00",
-  "nextReportAt": "2026-11-19T10:58:16+08:00",
+  "lastReportAt": "2026-11-19T10:58:39+08:00",
+  "nextReportAt": "2026-11-19T11:58:16+08:00",
   "completedSincePrevious": [
-    "PostgreSQL publication drift review passed eight native checks. Capture preserves its previous LSN and target cut when a relation changes.",
-    "Oracle virtual NUMBER feasibility passed 12 native checks. Historical reads and archived physical operands are confirmed. The production adapter still needs integration.",
-    "Same-store Agent handoff and installed evidence passed 24 native checks, including two real Chrome entries, both Agent restarts, and direct launch refusal from old and current builds.",
-    "Managed Kafka Topic previews bind observed business and control Topic identities. Four brokers and two Controllers passed three native checks, including the explicit block for missing ownership evidence on another output.",
-    "Chrome at 320 and 390 pixels confirmed the parked dialog hides inactive fields.",
-    "Removed 50 additional generated intermediate files totaling 716,335,497 logical bytes."
+    "Published SQL target epoch fencing for parked handoff. The 22-check candidate recovered a previously fenced target, preserved the native cut and kept the Worker stopped.",
+    "Published the fence approval console. Its exact candidate passed 24 native checks including two Chrome checks, 59 Java tests and 152 DOM tests.",
+    "The ownership and Worker admission candidate passes 94 Java tests and 154 DOM tests. Native Chrome committed the bound ownership change through another Controller. Both management entries read the original evidence after the candidate restarts. The live Worker request stays parked when a target receipt differs.",
+    "The Oracle virtual integer column candidate passed 29 Java tests, 152 DOM tests and native opt-in and expression refusal in Oracle Free. Full snapshot and archive replay remain under native verification."
   ],
   "inProgress": [
-    "CP-04 native target fences are implemented and verified for the bounded same-store SQL profile. Explicit Worker admission is next.",
-    "Worker admission after native fencing still needs a durable grant and scheduler recovery acceptance.",
-    "RC-10 Kafka actual notice dispatch still needs broad managed resource proofs and broker-side authorization.",
-    "SO-07 Oracle virtual source values still need integration and restart acceptance."
+    "CP-04 proves fence-to-start continuation, old binary refusal at the admitted journal, and ordinary STOP and restart from the original snapshot.",
+    "SO-07 runs the opt-in integer virtual column native pipeline after correcting the verification query and waiting for a current post-DDL Flashback anchor.",
+    "Automatic owner takeover, partition recovery and drain remain open within CP-04."
   ],
   "reportContents": [
     "Current totals",
@@ -31,12 +28,8 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "ff2bad409713e0009a7e094e768c139e946edc4e",
-    "b4afa9ce6ad4e0e41146200ceb5c5de186599e9f",
-    "1e6559276947acb82c31546e0ca8ad5ee9646083",
-    "a6f16ce84216eeeedb0bedc89a74ee003d1942e4",
-    "0dd2c044d2f191410e258c742a350c65b21b14c5",
-    "b0b5a3c7c1ceed6917dde059c07850d9d1316642"
+    "26bbad10d7e9cd2d05e80276bec53fde0a527594",
+    "56de77fdb0e42510da80167c128fc0bdf7abc728"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -44,17 +37,14 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Bind explicit Worker admission to the current candidate and all native SQL fence receipts.",
-    "Verify the restarted Worker reuses the original journal, snapshot and destination receipts."
+    "Finish both exact-package native runs and publish their results.",
+    "Continue automatic Agent takeover and partition acceptance after the explicit handoff is verified."
   ],
   "currentCandidateArtifact": "f458c5f066ceceed95b451f8c1de5f12d5e2f1399c7edb3a431e791ef4711289",
   "currentCandidateScope": "Exact parked target fence console package. 59 Java, 152 DOM and 24 native checks including dual-entry Chrome.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [
-    "CP-04 administrator-approved target epoch fences passed 22 native checks. Same request across both Controllers, candidate offline approval, restart, first target already fenced, and preserved original cut. 59 Java and 151 DOM passed.",
-    "Handoff SQL target fence approval is available in the console. Two real Chrome checks cover the visible action across both Controllers. A DOM case verifies same-request network retry."
-  ],
-  "lastScheduledReportAt": "2026-11-19T09:58:16+08:00",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T10:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",
     "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
