@@ -16,7 +16,11 @@ import java.util.TreeSet;
 final class SourceSchemaReview {
     private static final int MAX_TABLE_DETAILS = 64;
     private static final int MAX_COLUMN_NAMES = 32;
-    enum Scope { CURRENT_MYSQL_CATALOG_VS_JOURNAL, CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL }
+    enum Scope {
+        CURRENT_MYSQL_CATALOG_VS_JOURNAL,
+        CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL,
+        CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL
+    }
 
     private SourceSchemaReview() {}
 

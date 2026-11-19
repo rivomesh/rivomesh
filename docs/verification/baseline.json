@@ -13598,5 +13598,39 @@
       "Purging the uncaptured range blocks capture and preserves the exact prior checkpoint and sequence"
     ],
     "reproduce": "RIVOMESH_TEST_PREBUILT=1 SYNC_V3_HA_POSTGRES_ONLY=1 SYNC_MYSQL_IMAGE=mysql:8.2.0 bash tests/v3-ha-run.sh"
+  },
+  "oracleArchivedDdlReadOnly": {
+    "status": "PASS",
+    "artifactSha256": "9b3b1a210691805871ba73f522a05b35260d5611e46795cb9b1f99d144e25b79",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "sourceVersion": "23.26.4.0.0",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase",
+      "Oracle capture review reports the saved schema against the current PDB without changing either cut",
+      "A later PDB DDL updates the advisory live digest while preserving the recorded schema hash",
+      "An unsupported current Oracle shape reports its cause without moving the durable source and target cuts"
+    ],
+    "cleanupExitCode": 0,
+    "nativeChecksPassed": 16,
+    "focusedJavaTestsPassed": 17,
+    "domTestsPassed": 165,
+    "manifestSha256": "8fbd297c7e8b0796b3d7e4c74bcb1ca2dd572e9979ec097a433bd0d7b8bab2ee",
+    "nativeReviewSha256": "61f3f82102e20c9f3a0d54f1a9a50d9fe49c9938354a4037ec87608a5536458d",
+    "scope": "Oracle Free single PDB archived DDL and PostgreSQL target. Two successive current definitions have distinct advisory digests, and an unsupported definition returns its domain cause. Original captured SCN, failure generation, PostgreSQL snapshots and receipts stay fixed. Read-only review has no Oracle DDL execution or bypass.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --logminer --pipeline --ddl-review --output target/oracle-ddl-proof"
   }
 }

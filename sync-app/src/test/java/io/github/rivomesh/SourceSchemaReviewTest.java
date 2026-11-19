@@ -6,6 +6,7 @@ import io.github.rivomesh.cdc.TableSchema;
 import org.junit.jupiter.api.Test;
 
 import static io.github.rivomesh.SourceSchemaReview.Scope.CURRENT_MYSQL_CATALOG_VS_JOURNAL;
+import static io.github.rivomesh.SourceSchemaReview.Scope.CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL;
 import static io.github.rivomesh.SourceSchemaReview.Scope.CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL;
 
 import java.util.List;
@@ -15,6 +16,39 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SourceSchemaReviewTest {
+    @Test void oracleArchiveDdlReviewKeepsTheRecordedDefinitionAndReadOnlyRecoveryActions() throws Exception {
+        assertEquals(CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL, CaptureRecoveryReview.schemaScope("ORACLE","DDL"));
+        assertNull(CaptureRecoveryReview.schemaScope("ORACLE","SOURCE_DECODE"));
+        assertEquals(List.of("PRESERVE_SOURCE_LOGS","REVIEW_NEW_BASELINE"),
+                CaptureRecoveryReview.actions("SOURCE_CHECKPOINT_AVAILABLE","DDL","ORACLE",
+                        "ORACLE_REDO_DDL_REQUIRES_PLAN"));
+        assertEquals(List.of("PRESERVE_SOURCE_LOGS","REPAIR_CAPTURE_CAUSE","RETRY_ORIGINAL_CHECKPOINT"),
+                CaptureRecoveryReview.actions("SOURCE_CHECKPOINT_AVAILABLE","DDL","POSTGRESQL",
+                        "POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN"));
+
+        TableSchema recorded=table("RIVO_ORDERS",2,"ID","PAYLOAD");
+        TableSchema live=table("RIVO_ORDERS",1,"ID","PAYLOAD","EXTRA");
+        for(TableSchema table:List.of(recorded,live)){
+            table.database="RIVO_APP";
+            table.id=TableSchema.identity("FREEPDB1",table.database,table.name);
+            table.sourceEngine="ORACLE";
+            table.primaryKey=List.of("ID");
+            table.columns.get(1).type=TableSchema.Type.STRING;
+            table.columns.get(1).sourceType="NVARCHAR2";
+            table.columns.get(1).charset="AL16UTF16";
+        }
+        recorded.columns.get(1).length=20;
+        live.columns.get(1).length=40;
+        JsonNode change=difference(CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL,recorded,live);
+        assertEquals("RIVO_APP",change.path("database").asText());
+        assertEquals(2,change.path("recordedVersion").asInt());
+        assertEquals("EXTRA",change.path("columns").path("added").get(0).asText());
+        assertEquals("PAYLOAD",change.path("columns").path("modified").get(0).asText());
+        assertNotEquals(change.path("recordedSha256").asText(),change.path("liveSha256").asText());
+        assertEquals(Map.of("scope","CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL","state","UNAVAILABLE",
+                "code","ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED"),
+                SourceSchemaReview.unavailable(CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL,"ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED"));
+    }
     @Test void unavailablePostgresqlPublicationKeepsItsOwnScope() {
         assertEquals(Map.of("scope", "CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL", "state", "UNAVAILABLE",
                         "code", "POSTGRESQL_TYPE_UNSUPPORTED"),

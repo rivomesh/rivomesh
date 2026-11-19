@@ -523,7 +523,10 @@ test('capture recovery explains a source gap without offering a target skip',asy
  }
 });
 
-for(const [product,scope] of [['MySQL', 'CURRENT_MYSQL_CATALOG_VS_JOURNAL'], ['PostgreSQL', 'CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL']]){
+for(const [product,scope] of [
+ ['MySQL', 'CURRENT_MYSQL_CATALOG_VS_JOURNAL'],
+ ['PostgreSQL', 'CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL'],
+ ['Oracle PDB', 'CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL']]){
 test(`the ${product} DDL review shows advisory recorded and current schema differences`,async()=>{
  const task={id:'ddl-review',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'ERROR',error_stage:'DDL',error_code:'DDL_PLAN_REQUIRED'}};

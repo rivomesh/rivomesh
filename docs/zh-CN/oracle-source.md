@@ -39,6 +39,14 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-sou
 
 归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
 
+### 归档 DDL 评审
+
+所选 PDB 的归档 DDL 触发 `ORACLE_REDO_DDL_REQUIRES_PLAN` 后，在失败任务打开 **采集恢复**，也可以通过只读的 `GET /api/tasks/{id}/capture-recovery` 查询。报告绑定故障代次和末次持久化断点的哈希。`CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` 对比会列出所选表的日志库结构版本、原定义摘要和当前可见定义的独立摘要，报告所支持的列名、类型、长度、可空性、列顺序和已记录主键的变化。断点准入用于核查保留的 Oracle 源能否重新读取该位置。
+
+当前目录可能包含之后的 DDL，无法证明被阻断归档记录处的历史结构或实际 SQL。Oracle LogMiner 的多版本字典跟踪需要使用不同于当前在线目录的字典模式。当前结构超出支持范围或目录读取无法完成时，结果为 `UNAVAILABLE`，并附源端错误。所选表或已记录的元数据可能没有包含被修改对象，此时目录没有可见差异，归档仍可能有阻断记录。保留最早所需的源归档并审查替代基线。应用 Oracle DDL 或越过该归档边界须另行审批和验收。[Oracle LogMiner 字典跟踪](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
+
+临时实库夹具使用 `tests/oracle-source-probe.py --logminer --pipeline --ddl-review`，并提供 Temurin 21 构件及 Oracle JDBC 驱动。夹具用同一个日志库断点分别对比第一次可见的当前结构、之后的修改，以及超出当前支持范围的结构。
+
 ### 保存点和部分回滚
 
 归档采集使用 LogMiner 的 `COMMITTED_DATA_ONLY`。Oracle Free 26ai 23.26.4.0.0 的嵌套 `SAVEPOINT` 与 `ROLLBACK TO` 夹具在未过滤归档中产生 7 条已撤销的写入和 7 条补偿记录。仅已提交模式两遍均只返回该事务的 4 条有效变更。测试覆盖同一有主键行的连续更新、撤销主键修改、撤销删除，以及重复的无主键行。[Oracle LogMiner](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html) · [Oracle 重做记录字段](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-LOGMNR_CONTENTS.html)

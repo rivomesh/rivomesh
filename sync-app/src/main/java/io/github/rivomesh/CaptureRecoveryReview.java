@@ -159,7 +159,7 @@ public final class CaptureRecoveryReview {
             report.put("sourceAdmission",admission);
             report.put("affectedSubscriptions",config.subscribers());
             report.put("scope","UNPROVEN_SOURCE_RANGE");
-            report.put("actions",actions(admission,phase));
+            report.put("actions",actions(admission,phase,config.effectiveSourceType(),(String)before.get("errorCode")));
             report.putAll(nativeEvidence);
             if(archiveDirectory!=null){
                 if(request!=null)request.authorize.call();
@@ -270,17 +270,21 @@ public final class CaptureRecoveryReview {
         }
     }
 
-    private static SourceSchemaReview.Scope schemaScope(String sourceType,String phase){
+    static SourceSchemaReview.Scope schemaScope(String sourceType,String phase){
         if(!"DDL".equals(phase))return null;
         if("MYSQL".equals(sourceType))return SourceSchemaReview.Scope.CURRENT_MYSQL_CATALOG_VS_JOURNAL;
         if("POSTGRESQL".equals(sourceType))return SourceSchemaReview.Scope.CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL;
+        if("ORACLE".equals(sourceType))return SourceSchemaReview.Scope.CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL;
         return null;
     }
 
-    private static List<String> actions(String admission,String phase){
+    static List<String> actions(String admission,String phase,String sourceType,String failureCode){
         if("SOURCE_POSITION_UNAVAILABLE".equals(admission))
             return Arrays.asList("PRESERVE_SOURCE_LOGS","REPAIR_CAPTURE_CAUSE","REVIEW_NEW_BASELINE");
         if("SOURCE_CHECKPOINT_AVAILABLE".equals(admission)){
+            if("ORACLE".equals(sourceType)&&"DDL".equals(phase)
+                    &&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(failureCode))
+                return Arrays.asList("PRESERVE_SOURCE_LOGS","REVIEW_NEW_BASELINE");
             if("SOURCE_CONNECT".equals(phase)||"SOURCE_READ".equals(phase))
                 return Arrays.asList("PRESERVE_SOURCE_LOGS","RETRY_ORIGINAL_CHECKPOINT");
             return Arrays.asList("PRESERVE_SOURCE_LOGS","REPAIR_CAPTURE_CAUSE","RETRY_ORIGINAL_CHECKPOINT");

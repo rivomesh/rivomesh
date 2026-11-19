@@ -1304,13 +1304,80 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     observed('Both original PostgreSQL receipts advance after SIGKILL with no canceled row changes or resnapshot')
                     return
 
-                durable=progress()['capture_scn']
+                if options.ddl_review:
+                    def ddl_cut():
+                        return (
+                            target_sql('SELECT stream_seq,transaction_id,transaction_hash FROM copy_meta.rm3_sink_job'),
+                            target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id'),
+                            target_sql('SELECT "ID","NOTE" FROM copy_app."RIVO_ORDERS" ORDER BY "ID"'),
+                            target_sql("SELECT column_name FROM information_schema.columns WHERE table_schema='copy_app' "
+                                       "AND table_name='RIVO_ORDERS' ORDER BY ordinal_position"),
+                        )
+
+                    def drained_ddl_cut():
+                        status=progress()
+                        if status.get('capture_scn') and status.get('captured_sequence')==target_sql(
+                                'SELECT stream_seq FROM copy_meta.rm3_sink_job'):
+                            return status,ddl_cut()
+                        return None
+
+                    review_start,original_cut=required(drained_ddl_cut,'Oracle target reaches the original DDL cut',45)
+                    durable=review_start['capture_scn']
+                else:
+                    durable=progress()['capture_scn']
                 sql('ALTER SESSION SET CONTAINER=FREEPDB1;\nALTER TABLE rivo_app.rivo_orders ADD EXTRA NUMBER(12);')
                 rotate()
                 result=required(lambda:(p if (p:=progress()).get('error_code')=='ORACLE_REDO_DDL_REQUIRES_PLAN' else None),
                                 'Oracle DDL accepted as a typed refusal',60)
                 assert result['capture_scn']==durable and result['error_stage']=='DDL'
                 observed('Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase')
+                if options.ddl_review:
+                    route='/api/tasks/oracle_native/capture-recovery'
+                    scope='CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL'
+
+                    def report(state,columns=None,code=None):
+                        current=api(route)
+                        schema=current.get('schemaDrift',{})
+                        if schema.get('scope')!=scope or schema.get('state')!=state:
+                            return None
+                        if code is not None and schema.get('code')!=code:
+                            return None
+                        if columns is not None:
+                            changes=schema.get('tables',[])
+                            if len(changes)!=1 or changes[0]['columns']['added']!=columns:
+                                return None
+                        return current
+
+                    first=required(lambda:report('CHANGES_VISIBLE',['EXTRA']),'Oracle current PDB schema diff',45)
+                    assert first['phase']=='DDL' and first['sourceAdmission']=='SOURCE_CHECKPOINT_AVAILABLE'
+                    assert first['scope']=='UNPROVEN_SOURCE_RANGE' and first['affectedSubscriptions']==['pg']
+                    assert first['actions']==['PRESERVE_SOURCE_LOGS','REVIEW_NEW_BASELINE']
+                    original_table,=first['schemaDrift']['tables']
+                    assert (original_table['database'],original_table['table'],original_table['change'])==(
+                        'RIVO_APP','RIVO_ORDERS','TABLE_CHANGED')
+                    assert original_table['recordedVersion']==1 and ddl_cut()==original_cut
+                    observed('Oracle capture review reports the saved schema against the current PDB without changing either cut')
+
+                    sql('ALTER SESSION SET CONTAINER=FREEPDB1;\n'
+                        'ALTER TABLE rivo_app.rivo_orders ADD EXTRA_NOTE VARCHAR2(30 BYTE);')
+                    later=required(lambda:report('CHANGES_VISIBLE',['EXTRA','EXTRA_NOTE']),
+                                   'Oracle schema review sees a later DDL',45)
+                    later_table,=later['schemaDrift']['tables']
+                    assert later_table['recordedSha256']==original_table['recordedSha256']
+                    assert later_table['liveSha256']!=original_table['liveSha256']
+                    observed('A later PDB DDL updates the advisory live digest while preserving the recorded schema hash')
+
+                    sql('ALTER SESSION SET CONTAINER=FREEPDB1;\n'
+                        'ALTER TABLE rivo_app.rivo_orders ADD EXTRA_TIME TIMESTAMP(6);')
+                    unavailable=required(lambda:report('UNAVAILABLE',code='ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED'),
+                                         'Out-of-profile Oracle schema view',45)
+                    for lookup in (later,unavailable):
+                        assert lookup['checkpointHash']==first['checkpointHash']
+                        assert lookup['errorGeneration']==first['errorGeneration']
+                    assert progress()['sourcePosition']==review_start['sourcePosition'] and ddl_cut()==original_cut
+                    (output/'oracle-ddl-capture-review.json').write_text(
+                        json.dumps({'first':first,'later':later,'unavailable':unavailable},indent=2)+'\n')
+                    observed('An unsupported current Oracle shape reports its cause without moving the durable source and target cuts')
                 if options.date_values:
                     start=sql('SELECT current_scn FROM v$database;').stdout.strip()
                     sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
@@ -1370,6 +1437,8 @@ def main():
                         help='Compare Oracle Unicode, fixed padding and national character archive images')
     parser.add_argument('--character-pipeline', action='store_true',
                         help='Verify Oracle character snapshots and recovery through two PostgreSQL subscriptions')
+    parser.add_argument('--ddl-review', action='store_true',
+                        help='Verify the current PDB schema comparison at a preserved archived DDL fault')
     parser.add_argument('--savepoint-evidence', action='store_true',
                         help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
     parser.add_argument('--savepoint-pipeline', action='store_true',
@@ -1400,6 +1469,8 @@ def main():
         parser.error('--character-pipeline requires --pipeline')
     if options.character_pipeline and (options.character_evidence or options.savepoint_pipeline):
         parser.error('--character-pipeline uses its own archive transactions and target restart')
+    if options.ddl_review and (not options.pipeline or options.character_pipeline or options.savepoint_pipeline):
+        parser.error('--ddl-review requires --pipeline with the normal Oracle DDL fault scenario')
     if options.savepoint_evidence and not options.logminer:
         parser.error('--savepoint-evidence requires --logminer')
     if options.savepoint_pipeline and not options.pipeline:
@@ -1418,6 +1489,7 @@ def main():
               'nativeJsonEvidence':options.native_json_evidence,
               'characterEvidence':options.character_evidence,
               'characterPipeline':options.character_pipeline,
+              'ddlReview':options.ddl_review,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}

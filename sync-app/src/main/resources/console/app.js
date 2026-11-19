@@ -286,7 +286,7 @@ Object.assign(messages.en,{
  firstSourceExclusion:'First source transaction skip after sequence',viewCaptureExclusions:'View source gaps',captureExclusionsNext:'Next source gaps'
 });
 Object.assign(messages.zh,{
- schemaDriftTitle:'MySQL 结构差异',postgresSchemaDriftTitle:'PostgreSQL 结构差异',schemaDriftScope:'当前源目录与日志中记录的结构对比。当前目录可能包含后续 DDL。',
+ schemaDriftTitle:'MySQL 结构差异',postgresSchemaDriftTitle:'PostgreSQL 结构差异',oracleSchemaDriftTitle:'Oracle PDB 结构差异',schemaDriftScope:'当前源目录与日志中记录的结构对比。当前目录可能包含后续 DDL。',
  schemaDriftCount:'变化的表',schemaDriftLimited:'仅显示前 64 张变化表。',
  schemaDriftNew:'新增表',schemaDriftMissing:'当前目录缺少',schemaDriftChanged:'结构变化',
  schemaDriftAdded:'新增列',schemaDriftRemoved:'移除列',schemaDriftModified:'修改列',
@@ -294,7 +294,7 @@ Object.assign(messages.zh,{
  schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。'
 });
 Object.assign(messages.en,{
- schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
+ schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',oracleSchemaDriftTitle:'Oracle PDB schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
  schemaDriftCount:'Changed tables',schemaDriftLimited:'Showing the first 64 changed tables.',
  schemaDriftNew:'New table',schemaDriftMissing:'Missing from current catalog',schemaDriftChanged:'Changed definition',
  schemaDriftAdded:'Added columns',schemaDriftRemoved:'Removed columns',schemaDriftModified:'Modified columns',
@@ -303,7 +303,8 @@ Object.assign(messages.en,{
 });
 function showSourceSchemaDrift(content,review){
  const titles={CURRENT_MYSQL_CATALOG_VS_JOURNAL:'schemaDriftTitle',
-  CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL:'postgresSchemaDriftTitle'};
+  CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL:'postgresSchemaDriftTitle',
+  CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL:'oracleSchemaDriftTitle'};
  if(!Object.hasOwn(titles,review?.scope))return;
  const title=titles[review.scope];
  const section=text('section','','callout');
