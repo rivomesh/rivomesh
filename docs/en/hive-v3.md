@@ -6,7 +6,7 @@
 
 **The first independent native and actual mixed recovery profiles passed; the catalog retains an experimental label.** CLI/Web V3 configuration, isolated JDBC, native HiveServer2 checks, ACID ORC history and latest-version views are implemented. Hive4.0.1/Java8 independent acceptance covered PK moves, keyless multiplicity, precision, lost-confirmation replay, case-folding, restart and older nonempty backup refusal. Actual MySQL8.4.13→PostgreSQL17.12+Hive passed snapshot/CDC, independent Hive outage and catch-up, worker SIGKILL resume, SQL constraint repair/retry, missing-view isolation and truthful pause fences. The final artifact/worktree-assets gate passed too; see [evidence](../verification/README.md). This does not accept every Hive version, cluster or production capacity profile.
 
-The first fixture is official `apache/hive:4.0.1` ARM64, one HiveServer2, persistent embedded Derby and local warehouse. It is not a production/HA deployment. HDFS/S3, external Metastore, Tez, Kerberos, TLS, clusters and other JDKs remain unverified.
+The first fixture used the official `apache/hive:4.0.1` ARM64 image, one HiveServer2, embedded Derby and a local warehouse. The Temurin 21 fixture also verifies a standalone Hive Metastore backed by PostgreSQL. HDFS/S3, Tez, Kerberos, TLS and clustered failover require separate acceptance. [External PostgreSQL Metastore fixture](#external-postgresql-metastore-fixture)
 
 ## Layout and consistency
 

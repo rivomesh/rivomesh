@@ -69,7 +69,7 @@ Stream Load要求零过滤、严格模式、完整输入行数确认。返回Pub
 
 ## 官方依据与验收边界
 
-设计依据：[Stream Load](https://doris.apache.org/docs/4.x/data-operate/import/import-way/stream-load-manual/)、[Unique Key并发更新](https://doris.apache.org/docs/4.x/data-operate/update/unique-update-concurrent-control/)、[JSON导入精度](https://doris.apache.org/docs/4.x/data-operate/import/file-format/json/)、[Tablet权限与身份](https://doris.apache.org/docs/4.x/sql-manual/sql-statements/table-and-view/data-and-status-management/SHOW-TABLET/)、[官方测试镜像](https://doris.apache.org/community/developer-guide/all-in-one-image/)。这些产品文档不是本项目的验收证明；实际范围见[验证记录](../validation.md)。完整集群/存算分离、FE/BE联合故障、TLS、各JDK、海量表/巨型事务、接管/修复/迁移及吞吐矩阵仍待完成。
+设计依据：[Stream Load](https://doris.apache.org/docs/4.x/data-operate/import/import-way/stream-load-manual/)、[Unique Key并发更新](https://doris.apache.org/docs/4.x/data-operate/update/unique-update-concurrent-control/)、[JSON导入精度](https://doris.apache.org/docs/4.x/data-operate/import/file-format/json/)、[Tablet权限与身份](https://doris.apache.org/docs/4.x/sql-manual/sql-statements/table-and-view/data-and-status-management/SHOW-TABLET/)、[官方测试镜像](https://doris.apache.org/community/developer-guide/all-in-one-image/)。这些产品文档不是本项目的验收证明；实际范围见[验证记录](../validation.md)。完整集群/存算分离、FE/BE联合故障、TLS、海量表/巨型事务、接管/修复/迁移及吞吐矩阵仍待完成。
 
 ## SQL 模式与字符校验
 

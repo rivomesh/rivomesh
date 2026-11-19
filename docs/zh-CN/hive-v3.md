@@ -6,7 +6,7 @@ English：[Hive V3](../en/hive-v3.md)。配置：[hive-v3.yml](../../config/hive
 
 **首批独立原生与真实联合恢复已通过，仍保留实验标记。** 已接通 CLI/Web V3 配置、隔离 JDBC、原生 HiveServer2 检查、ACID ORC 历史表与最新版本视图。Hive 4.0.1 / Java 8 的独立用例通过主键移动、无主键重复行、精度、确认丢失重放、大小写、服务重启及旧非空备份拒绝；真实 MySQL 8.4.13→PostgreSQL 17.12＋Hive 联合用例通过全量/增量、Hive 停机时 PostgreSQL 继续、自动追平、Worker 强杀续传、SQL 约束修复重试、视图丢失隔离和暂停结果检查。最终发布包一致性检查也通过，见[证据](../verification/README.md)。这不代表所有 Hive 版本、集群或生产容量验收完成。
 
-首批测试使用官方 `apache/hive:4.0.1` ARM64、单 HiveServer2、持久嵌入式 Derby 和本地 warehouse。这是隔离验收夹具，不是生产部署或高可用方案；HDFS/S3、外部 Metastore、Tez、Kerberos、TLS、集群和其他 JDK 尚未验收。
+首批测试使用官方 `apache/hive:4.0.1` ARM64、单 HiveServer2、嵌入式 Derby 和本地 warehouse。Temurin 21 档案还验收了由 PostgreSQL 支持的独立 Hive Metastore。HDFS/S3、Tez、Kerberos、TLS 和集群切换需单独验收。[外置 PostgreSQL Metastore 夹具](#外置-postgresql-metastore-夹具)
 
 ## 数据布局与一致性
 
