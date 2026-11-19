@@ -2,21 +2,25 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T08:03:44+08:00",
-  "nextReportAt": "2026-11-19T08:58:16+08:00",
+  "lastReportAt": "2026-11-19T08:58:29+08:00",
+  "nextReportAt": "2026-11-19T09:58:16+08:00",
   "completedSincePrevious": [
-    "LG-02 moved to DONE in SDD v0.58. One frozen MySQL cut binds approved PostgreSQL UNIQUE restoration, real writer grants, pre-write failback and continued CDC from the original snapshot.",
-    "LG-03 external PostgreSQL Hive Metastore fixture and partial native evidence published. Four milestones include stock schema, snapshot/CDC, native catalog identity and coordinated restart/catch-up. Documented host clamshell sleep interrupted Worker/SQL-error phases; scoped resources cleaned.",
-    "LG-08 MySQL native DDL comparison and UI published. Eight real integration cases show both entries, unchanged checkpoint and target schemas, and exact live catalog drift following a subsequent DDL. Normal recovered package passes 37 Java and 145 DOM.",
-    "CP-04 curated console action to stage private evidence published. Exact baseline has 144 DOM, 14 standalone Chrome and six Chrome cases with a synthetic dual-entry API. Native backend was already validated separately; actual browser cluster acceptance needs a stable host rerun.",
-    "Merged console and DDL native scope package recovered after filling missing local Maven cache artifacts using previously downloaded public-central data and unchanged dependency versions.",
-    "A separately frozen internal Kafka notice prototype passed two native KRaft cases with a stable old-producer fence and same-offset lost-response replay, without touching business offsets or subscription ACKs. Public notice publication is still in development."
+    "CP-04 private writer transfer and STOPPED configuration were published with 17 native checks. The actual staging UI passed 20 native checks including six browser cases.",
+    "A normal Java 21 package from bbe4fc8 passed 578 Java tests including two isolated transport tests; 35 explicit optional external checks were skipped.",
+    "LG-03 external PostgreSQL Hive Metastore passed all seven native checks and stock schema validation. Worker SIGKILL and isolated SQL recovery retained the original snapshot and four Hive receipts.",
+    "JV-03 Kingbase external JDBC passed five native checks including wrong authentication, atomic rollback, restart, exact receipt replay and precision.",
+    "LG-02 added a native binary NO PAD UNIQUE(email) profile. Six native checks and 68 Java tests validated original ordinary index, approved constraint restoration, writer activation, pre-write failback and original-snapshot CDC.",
+    "SO-06 PostgreSQL native TIME(6) passed nine native checks and 37 integrated Java. Both targets retain 24:00, microseconds, NULL, exact keyless multiplicity and their snapshots across restart.",
+    "RC-10 Kafka read-only notice planning passed three native checks on four brokers and two entries. An extra partial BEGIN blocks planning. The integrated package passed 46 Java and 146 DOM tests.",
+    "LG-10 offline audit signature and independent store pinning passed 13 checks each with OpenSSL 3.6.2 and LibreSSL 3.3.6. Private signing keys remain in external custody.",
+    "Removed 170 generated output files totaling 2,936,795,719 logical bytes from completed runs while retaining final packages, native manifests, active files and user data."
   ],
   "inProgress": [
-    "CP-04 candidate activation following the completed internal signed dual-Agent proof. Live recovery evidence adoption and public operator authorization are still open.",
-    "CP-04 managed evidence staging is published and its exact dual-entry stage and release passed six real Chrome checks as part of the 20-case native profile.",
-    "LG-03 external PostgreSQL Hive Metastore recovery passed its bounded native profile. Distributed warehouse, production HA, backup and capacity coverage remain.",
-    "RC-10 internal Kafka dedicated-topic notice is natively verified. Operator plan, approved dispatch and final durability semantics remain."
+    "CP-04 and LG-05 signed STOPPED evidence adoption passed 20 native checks, 101 integrated Java and 148 integrated DOM tests. Native verification of the new durable parked journal fence is running before publication.",
+    "SO-06 PostgreSQL publication drift review for a paused Relation change is implemented in a scoped candidate. The focused Java package and 147 DOM tests passed. Native verification is queued behind the Agent test.",
+    "RC-10 native ownership prerequisites for explicit Kafka notice dispatch are in implementation. Global physical Topic ownership remains open.",
+    "SO-07 Oracle archived SQL_REDO/UNDO retains physical operands across two same-row changes, NULL and keyless deletion. The generated value is absent in those statements. Independent virtual-column and Flashback checks remain in scope.",
+    "LG-10 external identity, automated immutable audit storage, source rights and release notices remain open."
   ],
   "reportContents": [
     "Current totals",
@@ -31,9 +35,15 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "9fb379619f08f036594aa30b63808a7c8eda4f4c",
-    "065f5e9badb7c802bb2d6c0172bd7515691e8ecc",
-    "27ccec173cad63927acad0ef96a975f14d27747c"
+    "78eeb525ce09234ba84de6e7d096bf8c4f21e423",
+    "1d442f632572ae5042d92ce3eb870e7d6696e671",
+    "7657cd92b1011deb207e07634bda4d44d539bcbb",
+    "8ae952262cc8562e75e2b713da9a17b4244000e0",
+    "a1fe55f4ae385db1424a2158731c47de407612f1",
+    "c2e84f69dd552a42b01dcdf2285905fe23e7eb28",
+    "200fe62a7b9c692863f71374b2549ad797f6cdf3",
+    "fd1d8b62afcf531c988028b68039858511ce089e",
+    "bbe4fc81025e482208fbed6b1687093cdfed3529"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -41,24 +51,15 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Verify the disposable dual-Agent signed readiness, atomic writer transition and STOPPED candidate install.",
-    "Release the exact verified private transition scope and continue explicit operator authorization.",
-    "Finish stable external Hive recovery and actual dual-entry browser staging validation."
+    "Complete the native direct-start and direct-resume refusal proof, publish signed evidence adoption with parked protection, then authorize strictly bounded candidate activation.",
+    "Run the PostgreSQL publication drift fixture and preserve exact checkpoints during advisory review.",
+    "Verify native Kafka Topic policy against known aliases and trusted authority before controlled dispatch."
   ],
-  "currentCandidateArtifact": "0ce387c8dc554b17e70fff3ed82a399c713eeec4ef472dd43d3d2f5c272a7bb3",
-  "currentCandidateScope": "Current merged console, candidate evidence staging and read-only native MySQL schema comparison. 37 Java, 145 DOM and binary checks.",
-  "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
-  "newSinceLastReport": [
-    "CP-04 private dual-Agent same-store transfer and STOPPED projection published. Seventeen exact native checks and 65 integrated Java. Real lost response replays at the other Controller, one epoch transfer, old Agent cannot reclaim after restart, both target cuts remain. Public transfer and next Worker activation are separately fenced.",
-    "Removed 81 intermediate transport outputs from completed reactors, 1,274,060,214 logical bytes.",
-    "The published evidence staging console passed 20 exact dual-Controller native checks including six real Chrome cases. Entry A staged and revalidated, entry B checked and released. Task revision and all cuts remained exact.",
-    "Independently frozen Kafka gap notice prototype passed two native checks. Previous producer fenced; exact committed offset recovered on ledger reopen without duplicate publication or changing business positions. Planned public call remains in development.",
-    "The exact bbe4fc8 Temurin 21 normal packaging reactor passed 576 app and two isolated transport Java tests. Thirty-five explicitly optional external-profile tests skipped. Binary package gate passed.",
-    "LG-03 stable external PostgreSQL Hive Metastore rerun passed all seven native markers plus stock schema validation. Worker SIGKILL preserved the original snapshot and four exact catalog-bound Hive receipts. The isolated PostgreSQL constraint recovery did not alter Hive receipts. All disposable resources were cleared.",
-    "JV-03 Kingbase external JDBC native proof published. Five checks cover class origin, authentication, precision, atomic rollback, original endpoint restart and native receipt replay. One real vendor target with synthetic source row transactions.",
-    "Removed 110 generated outputs totaling 2,077,421,012 logical bytes, preserving packaged evidence and active test files."
-  ],
-  "lastScheduledReportAt": "2026-11-19T07:58:16+08:00",
+  "currentCandidateArtifact": "74c66b4a97404daa04e58d5ea639fc94b99f76d90b11af09b26c51c6ca6c833d",
+  "currentCandidateScope": "Parked dual-Agent native control-journal fence candidate. 102 focused Java tests; native verification pending when reported.",
+  "lastAcceptedPublicWorkflowArtifact": "a9125326fc919655c15d64fa84ebaab0134fb6692ca9562d968f10497cd556c8",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T08:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",
     "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
