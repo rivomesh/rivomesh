@@ -679,3 +679,7 @@ The `b7d06077949d02659d27a4798d99d920162d2da17565022fd4aafa214426f2d3` package p
 ### Native in-flight target rollback during Agent network isolation
 
 The `6f148bba` candidate passed 13 native checks. A PostgreSQL target row lock prevented it from committing while the MySQL target committed and reached journal ACK 2. Cutting the original Agent's control and journal path isolated its Worker. The PostgreSQL blocked transaction rolled back after that Worker exited. The same Agent reconnected and completed queued STOP. Explicit START filled only the missing PostgreSQL delivery. Both target logs recorded exactly one insert and one update, the MySQL receipt and source cut remained unchanged, and both old leases were rejected. The verification manifest records exact hashes and prior fixture failures. [Operations](../en/global-control.md#asymmetric-control-network-partition) · [Manifest](baseline.json)
+
+### Java 17 MySQL asynchronous source promotion
+
+The `393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24` bundle passed nine native checks on ARM64 Temurin 17.0.21. MySQL 8.4.13 replica and authorization checks kept it read-only during the primary outage. Both management entries reported the source fault and preserved both cuts. External promotion let the Agent consume the promoted GTID once on each SQL target. Original configuration and snapshots stayed in use. [Compatibility](../en/compatibility.md#release-runtime) · [Manifest](baseline.json)

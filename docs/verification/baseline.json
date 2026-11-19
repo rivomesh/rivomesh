@@ -12294,5 +12294,194 @@
     "integrationScope": "Four in-flight helper functions match the native AST. Split-store and Java 17 routing remain unchanged in the integrated harness. Combined fixture options and SDD were statically verified.",
     "scope": "Settled start plus one captured transaction already committed and ACKed on MySQL, with an actual PostgreSQL row lock before commit. Agent loses its control/journal path. PostgreSQL aborts the partial transaction after old Worker isolation. Admin STOP precedes explicit START. PostgreSQL catches up, MySQL receipt and capture position stay the same, and both actual target logs prove one insert and one update.",
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --test-classes sync-app/target/test-classes --output target/native-inflight --source-expected-version 8.4.13 --control-product POSTGRESQL --separate-execution --automatic-placement --handoff-assessment --handoff-original-outage --handoff-asymmetric-partition --handoff-asymmetric-inflight --partition-mysqlbinlog /path/to/mysqlbinlog"
+  },
+  "java17MysqlAsyncSourcePromotion": {
+    "status": "PASS",
+    "native": {
+      "artifactSha256": "393dfd186f2633d2faf45939940881e5547f9e2c63ba75e110dfd00de0a1da24",
+      "status": "PASS",
+      "checks": [
+        "The GTID replica starts read-only and MySQL denies promotion privileges to the Rivomesh capture account",
+        "Agent command opens probes only; management roles are visible through controller sessions",
+        "Controllers create Agent-owned task and share revision",
+        "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+        "Cross-database transaction insert/update/delete and keyless multiplicity",
+        "The original source UUID, GTID, snapshot and both target receipts agree before the replica is eligible",
+        "A primary SIGKILL leaves both controllers waiting, the replica read-only and capture/target positions unchanged",
+        "Observed the real Controller, Agent and Worker JVM executables on Java 17",
+        "After external promotion both SQL destinations commit the promoted GTID and match all rows without a configuration change or resnapshot"
+      ],
+      "harnessSourceSha256": "6734d7a0cda94d3e5572625f8437aaf5ac484fd03bd9d83ad22deca02be58175",
+      "executionProfile": "SEPARATE_AGENT",
+      "controlProduct": "POSTGRESQL",
+      "taskAuthority": false,
+      "commandRouting": false,
+      "mysqlAsyncFailover": true,
+      "automaticPlacement": false,
+      "handoffAssessment": false,
+      "handoffProbe": false,
+      "handoffCustody": false,
+      "handoffFailureCustody": false,
+      "handoffRawCustody": false,
+      "handoffClosedReceipts": false,
+      "handoffPreparation": false,
+      "handoffManagedWriter": false,
+      "handoffOriginalOutage": false,
+      "handoffAsymmetricPartition": false,
+      "handoffPrivateWriter": false,
+      "handoffAutoResume": false,
+      "handoffStaging": false,
+      "handoffPreparationBrowser": false,
+      "handoffAdoptedBrowser": false,
+      "handoffTargetFence": false,
+      "handoffWorkerStart": false,
+      "handoffApprovalDiagnostics": false,
+      "handoffPublicOwner": false,
+      "receiptLookup": false,
+      "retentionReview": false,
+      "reportArchive": false,
+      "reportReclaim": false,
+      "failureDiagnostics": false,
+      "snapshotDiagnostics": false,
+      "managedFailureReview": false,
+      "checkpointInspection": false,
+      "managedCommit": false,
+      "managedSkip": false,
+      "compensation": false,
+      "correction": false,
+      "recoveryJobs": false,
+      "runtimeJdk": 17,
+      "rollingRestart": false,
+      "workerDiagnostics": false,
+      "headerBoundary": false,
+      "verifyBinlogContents": false,
+      "managedBinlogEvidence": false,
+      "approvedBinlogExclusion": false,
+      "taskViews": false,
+      "secretAudit": false,
+      "mysqlDeliveryTiming": false,
+      "sourceDiagnostics": null,
+      "sourceImage": "mysql:8.4",
+      "notCovered": "Automatic owner relocation, live Kubernetes/CSI and full connector matrix",
+      "sourceVersion": "8.4.13",
+      "sourceServerProfile": "ON|ROW|FULL",
+      "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+      "sourceFailover": {
+        "before": {
+          "generation": "963647e9-cc4e-4ed0-8457-3a2dc7442bb7",
+          "epoch": 1,
+          "sequence": 1,
+          "source": {
+            "file": "mysql-bin.000003",
+            "gtidSet": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:1-14",
+            "offset": "3213",
+            "serverUuid": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b"
+          },
+          "revision": "e29ab663-ff82-428a-b9b6-660b23a873c6",
+          "configurationVersion": "b740ce69-5cf1-438b-a2fd-e9a256f49193",
+          "targets": {
+            "pg": {
+              "sequence": 1,
+              "transactionId": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:14"
+            },
+            "my": {
+              "sequence": 1,
+              "transactionId": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:14"
+            }
+          }
+        },
+        "duringOutage": {
+          "generation": "963647e9-cc4e-4ed0-8457-3a2dc7442bb7",
+          "epoch": 1,
+          "sequence": 1,
+          "source": {
+            "file": "mysql-bin.000003",
+            "gtidSet": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:1-14",
+            "offset": "3213",
+            "serverUuid": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b"
+          },
+          "revision": "e29ab663-ff82-428a-b9b6-660b23a873c6",
+          "configurationVersion": "b740ce69-5cf1-438b-a2fd-e9a256f49193",
+          "targets": {
+            "pg": {
+              "sequence": 1,
+              "transactionId": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:14"
+            },
+            "my": {
+              "sequence": 1,
+              "transactionId": "d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:14"
+            }
+          }
+        },
+        "after": {
+          "generation": "963647e9-cc4e-4ed0-8457-3a2dc7442bb7",
+          "epoch": 2,
+          "sequence": 2,
+          "source": {
+            "file": "mysql-bin.000001",
+            "gtidSet": "d99a6ff9-e3ed-11f1-a25c-92c84f75dd3b:1-1,d9cf3e39-e3ed-11f1-bd9e-9afc0410fd9b:1-14",
+            "offset": "4154",
+            "serverUuid": "d99a6ff9-e3ed-11f1-a25c-92c84f75dd3b"
+          },
+          "revision": "e29ab663-ff82-428a-b9b6-660b23a873c6",
+          "configurationVersion": "b740ce69-5cf1-438b-a2fd-e9a256f49193",
+          "targets": {
+            "pg": {
+              "sequence": 2,
+              "transactionId": "d99a6ff9-e3ed-11f1-a25c-92c84f75dd3b:1"
+            },
+            "my": {
+              "sequence": 2,
+              "transactionId": "d99a6ff9-e3ed-11f1-a25c-92c84f75dd3b:1"
+            }
+          }
+        },
+        "replicaReceiverErrorNumber": 2005,
+        "sourceErrorCode": "SOURCE_REPLICATION_ERROR",
+        "snapshotMetadata": {
+          "journal": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|57db119c-eb1b-4516-bf98-344762b203b6|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|25e6e2ea-1f59-45af-a7ce-4e7e7c9b3eb4|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|99726d99-bde4-4723-a1b3-a070fd5b71fa|2|COMPLETE",
+          "pg": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|57db119c-eb1b-4516-bf98-344762b203b6|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|25e6e2ea-1f59-45af-a7ce-4e7e7c9b3eb4|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|99726d99-bde4-4723-a1b3-a070fd5b71fa|2|COMPLETE",
+          "my": "21a125dddcf0c0ceb37a4524d697dda7247da29e4cb53328530ffdc760b1c14a|57db119c-eb1b-4516-bf98-344762b203b6|1|COMPLETE\n2b3e9d91ab8200c2cddaf8a745c611da90f7645724bbd73ef0215c6647e41eff|25e6e2ea-1f59-45af-a7ce-4e7e7c9b3eb4|2|COMPLETE\na505a19a6994f5a561fb06434181d934a4ec560c2cfc39ad37d92ed3410cb7f5|99726d99-bde4-4723-a1b3-a070fd5b71fa|2|COMPLETE"
+        },
+        "promotedTransaction": "d99a6ff9-e3ed-11f1-a25c-92c84f75dd3b:1"
+      },
+      "runtimeImageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990",
+      "runtimeArchitecture": "arm64",
+      "runtimeProcesses": [
+        {
+          "role": "CONTROLLER",
+          "node": "node-a",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        },
+        {
+          "role": "CONTROLLER",
+          "node": "node-b",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        },
+        {
+          "role": "AGENT",
+          "node": "node-worker",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        },
+        {
+          "role": "WORKER",
+          "node": "node-worker",
+          "version": "17.0.21",
+          "architecture": "aarch64",
+          "imageId": "sha256:bf3d5071418fd500fb3c3ce16ba6802182fe7d2223672a416ae44a632e4b2990"
+        }
+      ],
+      "cleanupExitCode": 0
+    },
+    "nativeManifestSha256": "fe1c5514fecf67cffeb962992fcdfa5c32048f2b723ab6dad6dc023b6a432735",
+    "applicationTree": "0d268439afdd6d1d5d54b25c4047cb11441614fb",
+    "scope": "ARM64 Temurin 17.0.21 with bundled Java 17 artifact. MySQL 8.4.13 GTID/ROW/FULL and async read-only replica. External promotion after primary SIGKILL, original source and target cuts remain during outage, both targets continue the promoted GTID on original snapshots and configuration.",
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/java17-rivomesh.jar --output target/java17-native-promotion --runtime-jdk 17 --separate-execution --mysql-async-failover --control-product POSTGRESQL --source-expected-version 8.4.13"
   }
 }

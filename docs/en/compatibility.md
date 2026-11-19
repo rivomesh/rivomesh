@@ -45,7 +45,7 @@ mvn -B -s build/settings.xml -Pjava17 package
 python3 tests/verify-artifact.py --java-release 17
 ```
 
-This bundle passed native snapshot, CDC, and Controller and Agent rolling replacement with Temurin 17.0.21 on ARM64, MySQL 8.4.13 source and PostgreSQL and MySQL targets. The Worker reused the original GTID, snapshots and STOP receipt. Use the verified bundle with Java 17 for that profile. The Java 8 and 11 process results in the historical manifests refer to earlier packages. Current bundles for those runtimes remain pending. [Verification and reproduction](../verification/baseline.json)
+This bundle passed native snapshot, CDC, and Controller and Agent rolling replacement with Temurin 17.0.21 on ARM64, MySQL 8.4.13 source and PostgreSQL and MySQL targets. The Worker reused the original GTID, snapshots and STOP receipt. A separate native run also verified both targets resume from the promoted GTID after MySQL 8.4.13 asynchronous failover. Use the verified bundle with Java 17 for that profile. The Java 8 and 11 process results in the historical manifests refer to earlier packages. Current bundles for those runtimes remain pending. [Verification and reproduction](../verification/baseline.json)
 
 ## Management requests
 

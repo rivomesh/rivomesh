@@ -45,7 +45,7 @@ mvn -B -s build/settings.xml -Pjava17 package
 python3 tests/verify-artifact.py --java-release 17
 ```
 
-该包已在 ARM64 Temurin 17.0.21 验证 MySQL 8.4.13 源到 PostgreSQL 和 MySQL 两个目标的全量、增量，以及 Controller、Agent 滚动替换。Worker 复用原 GTID、快照和 STOP 回执。在这个已验档案中可用 Java 17 运行该包。档案内的 Java 8、11 进程结果来自较早的制品，当前版本的相应运行包仍待兼容。[验收证据和复现命令](../verification/baseline.json)
+该包已在 ARM64 Temurin 17.0.21 验证 MySQL 8.4.13 源到 PostgreSQL 和 MySQL 两个目标的全量、增量，以及 Controller、Agent 滚动替换。Worker 复用原 GTID、快照和 STOP 回执。另一个实库档案验证了 MySQL 8.4.13 异步主库故障、外部提升备库后，两目标从提升后的 GTID 自动续传。在这个已验档案中可用 Java 17 运行该包。档案内的 Java 8、11 进程结果来自较早的制品，当前版本的相应运行包仍待兼容。[验收证据和复现命令](../verification/baseline.json)
 
 ## 管理端请求
 
