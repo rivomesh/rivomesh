@@ -235,8 +235,19 @@ public final class CaptureRecoveryReview {
                                 ByteArrayOutputStream retained,String expectedBoundary)throws Exception{
         // Read journal dependencies before the source probe so storage errors cannot look like source failures.
         List<SourcePosition> dependencies=journal.dependencies();
+        boolean compareSchema="MYSQL".equals(config.effectiveSourceType())&&"DDL".equals(phase);
+        List<TableSchema> history=compareSchema?journal.schemas():List.of();
         try(SourceAdapter source=PipelineSources.open(config,generation)){
             source.validateFailover(checkpoint,dependencies);
+            if(compareSchema){
+                try{
+                    nativeEvidence.put("schemaDrift",MysqlSchemaReview.compare(history,source.discover()));
+                }catch(InterruptedException interrupted){
+                    throw interrupted;
+                }catch(Exception unavailable){
+                    nativeEvidence.put("schemaDrift",MysqlSchemaReview.unavailable(PipelineEngine.sourceErrorCode(unavailable)));
+                }
+            }
             if(source instanceof MysqlCdcSource&&"SOURCE_DECODE".equals(phase)){
                 try{
                     Map<String,Object> boundary=((MysqlCdcSource)source).inspectDecodeBoundary(checkpoint);

@@ -7,6 +7,7 @@ export function registerHandoffTests({setup,flush,login}){
  const route='/api/tasks/handoff-task/handoff';
  const preparationRoute=route+'/preparation';
  const digest='a'.repeat(64);
+ const archiveDigest='4'.repeat(64);
  const expiration='2026-11-18T09:15:00Z';
  const reply=(data,status=200)=>({ok:status<400,status,json:async()=>data});
  const error=(code,status)=>reply({code},status);
@@ -26,15 +27,15 @@ export function registerHandoffTests({setup,flush,login}){
  function preparation(id,assessmentId='fresh-assessment',state='PREPARED',releaseId=null){
   const slots=state==='PREPARED'?1:0;
   return {id,taskId:'handoff-task',state,assessmentId,taskRevision:revision,originalNodeId:'original-agent',
-   candidateNodeId:'target-agent',executionAuthorized:false,evidenceSha256:digest,createdAt:'2026-11-18T09:00:00Z',
+   candidateNodeId:'target-agent',executionAuthorized:false,evidenceSha256:digest,custodySha256:archiveDigest,createdAt:'2026-11-18T09:00:00Z',
    expiresAt:expiration,reservedTaskSlots:slots,reservedWorkerSlots:slots,...(releaseId?{releaseId}:{})};
  }
  function fixture({role='ADMIN',scope=['original-agent','target-agent','offline-agent'],mode='GLOBAL',
-  read,submit,probe,readPreparation,prepare,release}={}){
+  read,submit,probe,readPreparation,prepare,release,stage}={}){
   const task={id:'handoff-task',revision,ownerNodeId:'original-agent',formatVersion:3,
    workerState:'STOPPED',desired:'STOPPED',status:{},operations:[],destinations:[]};
   const ui=setup([task],role,{authenticated:false,taskControlScope:mode,nodeRole:'CONTROLLER',nodeIds:scope}),fallback=ui.w.fetch;
-  const requests=[],reserves=[],releases=[],probes=[];
+  const requests=[],reserves=[],releases=[],probes=[],stages=[];
   ui.w.fetch=async(path,options={})=>{
    if(path.startsWith('/api/nodes?')){
     if(path.includes('after='))return reply({nodes:[agent('target-agent'),agent('offline-agent','AGENT','STALE')],next:null});
@@ -61,9 +62,14 @@ export function registerHandoffTests({setup,flush,login}){
     assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
     return release(options);
    }
+   if(path===preparationRoute+'/stage'){
+    stages.push(options);
+    assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
+    return stage(options);
+   }
    return fallback(path,options);
   };
-  return{...ui,task,requests,reserves,releases,probes};
+  return{...ui,task,requests,reserves,releases,probes,stages};
  }
  const launcher=ui=>ui.d.querySelector('[data-handoff-task]');
  const dialog=ui=>ui.d.querySelector('.handoff-dialog');
@@ -72,6 +78,7 @@ export function registerHandoffTests({setup,flush,login}){
  const receipt=ui=>dialog(ui).querySelector('[data-handoff-receipt]');
  const reservation=ui=>dialog(ui).querySelector('[data-handoff-preparation]');
  const button=(ui,action)=>dialog(ui).querySelector('[data-handoff-'+action+']');
+ const staged=ui=>dialog(ui).querySelector('[data-handoff-stage-status]');
  const feedback=ui=>dialog(ui).querySelector('[data-handoff-feedback]').textContent;
  async function open(ui){await login(ui);launcher(ui).click();await flush();}
  async function choices(ui){dialog(ui).querySelector('[data-handoff-more]').click();await flush();}
@@ -210,6 +217,88 @@ export function registerHandoffTests({setup,flush,login}){
     assert.ok(!reservation(ui).textContent.includes('预留中'));
    }finally{ui.dom.window.close();}
   }
+ });
+
+ function stagingReply(plan,overrides={}){
+  return reply({state:'STAGED',preparationId:plan.id,taskRevision:plan.taskRevision,candidateNodeId:plan.candidateNodeId,
+   evidenceSha256:plan.evidenceSha256,archiveSha256:plan.custodySha256,reports:2,closedReceipts:5,
+   executionAuthorized:false,privatePath:'/private/staged/report.json',...overrides});
+ }
+
+ test('handoff explicitly stages exact active evidence, shows masked counts and reverifies with the same request',async()=>{
+  const plan=preparation('staging-preparation');
+  let pending;
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply({...plan}),
+   stage:()=>new Promise(resolve=>{pending=resolve;})});
+  try{
+   await open(ui);
+   assert.equal(ui.stages.length,0);
+   assert.ok(!button(ui,'stage').parentElement.hidden&&!button(ui,'stage').disabled);
+   assert.equal(staged(ui).textContent,'');
+   button(ui,'stage').click();await flush();
+   assert.ok(button(ui,'release').disabled&&button(ui,'stage').disabled);
+   assert.deepEqual(JSON.parse(ui.stages[0].body),{expectedPreparation:plan.id,expectedRevision:revision,expectedEvidenceSha256:digest});
+   pending(stagingReply(plan));await flush();
+   assert.match(staged(ui).textContent,/候选 Agent 已核验暂存文件。.*校验报告 2.*已办结回执 5/);
+   assert.doesNotMatch(reservation(ui).textContent,/private\/staged/);
+   assert.match(button(ui,'stage').textContent,/复核已暂存/);
+   button(ui,'reload').click();await flush();
+   assert.equal(ui.stages.length,1);
+   assert.match(staged(ui).textContent,/候选 Agent 已核验暂存文件/);
+   button(ui,'stage').click();await flush();pending(stagingReply(plan));await flush();
+   assert.equal(ui.stages[1].headers['X-Request-ID'],ui.stages[0].headers['X-Request-ID']);
+   assert.equal(ui.stages[1].body,ui.stages[0].body);
+   assert.equal(ui.task.ownerNodeId,plan.originalNodeId);
+   assert.equal(ui.task.revision,revision);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff staging retries uncertainty and never promotes a mismatched staging receipt',async()=>{
+  const plan=preparation('staging-preparation');
+  let attempts=0;
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),stage:()=>{
+   if(++attempts===1)return error('OWNER_QUERY_TIMEOUT',409);
+   if(attempts===2)return stagingReply(plan,{archiveSha256:'0'.repeat(64)});
+   if(attempts===3)return stagingReply(plan,{executionAuthorized:true});
+   if(attempts===4)return stagingReply(plan,{candidateNodeId:'offline-agent'});
+   return stagingReply(plan);
+  }});
+  try{
+   await open(ui);
+   for(const phrase of [/暂存结果未知/,/暂存回执与当前准备记录不匹配/,/暂存回执与当前准备记录不匹配/,/暂存回执与当前准备记录不匹配/]){
+    button(ui,'stage').click();await flush();
+    assert.match(feedback(ui),phrase);
+    assert.match(button(ui,'stage').textContent,/重试同一暂存请求/);
+    assert.equal(staged(ui).textContent,'');
+   }
+   button(ui,'stage').click();await flush();
+   assert.match(staged(ui).textContent,/已核验暂存文件/);
+   assert.equal(new Set(ui.stages.map(stage=>stage.headers['X-Request-ID'])).size,1);
+   assert.equal(new Set(ui.stages.map(stage=>stage.body)).size,1);
+  }finally{ui.dom.window.close();}
+ });
+
+ test('handoff forgets the staged receipt when the reservation expires or scope changes',async()=>{
+  let plan=preparation('staging-preparation');
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),stage:()=>stagingReply(plan)});
+  try{
+   await open(ui);button(ui,'stage').click();await flush();
+   assert.match(staged(ui).textContent,/已核验暂存文件/);
+   plan=preparation('staging-preparation','fresh-assessment','EXPIRED');
+   button(ui,'reload').click();await flush();
+   assert.ok(button(ui,'stage').parentElement.hidden);
+   assert.equal(staged(ui).textContent,'');
+   plan={...preparation('other-preparation'),custodySha256:null};
+   button(ui,'reload').click();await flush();
+   assert.ok(button(ui,'stage').parentElement.hidden);
+   plan=preparation('other-preparation');
+   button(ui,'reload').click();await flush();
+   assert.ok(!button(ui,'stage').parentElement.hidden);
+   assert.match(button(ui,'stage').textContent,/^暂存报告和回执$/);
+   ui.task.revision=newRevision;ui.w.RivomeshConfiguration.render();
+   assert.ok(button(ui,'stage').parentElement.hidden);
+   assert.equal(ui.stages.length,1);
+  }finally{ui.dom.window.close();}
  });
 
  test('handoff replacement reads a concurrent receipt and requires another deliberate submit with its ID',async()=>{

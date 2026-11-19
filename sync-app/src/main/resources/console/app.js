@@ -285,6 +285,48 @@ Object.assign(messages.en,{
  sourceExclusionOpen:'This pipeline has an unreconciled source gap. Review and repair affected tables before cutover.',
  firstSourceExclusion:'First source transaction skip after sequence',viewCaptureExclusions:'View source gaps',captureExclusionsNext:'Next source gaps'
 });
+Object.assign(messages.zh,{
+ schemaDriftTitle:'MySQL 结构差异',schemaDriftScope:'当前源目录与日志中记录的结构对比。当前目录可能包含后续 DDL。',
+ schemaDriftCount:'变化的表',schemaDriftLimited:'仅显示前 64 张变化表。',
+ schemaDriftNew:'新增表',schemaDriftMissing:'当前目录缺少',schemaDriftChanged:'结构变化',
+ schemaDriftAdded:'新增列',schemaDriftRemoved:'移除列',schemaDriftModified:'修改列',
+ schemaDriftIdentity:'行身份键已变化',schemaDriftSame:'当前目录未见结构差异。',
+ schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。'
+});
+Object.assign(messages.en,{
+ schemaDriftTitle:'MySQL schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
+ schemaDriftCount:'Changed tables',schemaDriftLimited:'Showing the first 64 changed tables.',
+ schemaDriftNew:'New table',schemaDriftMissing:'Missing from current catalog',schemaDriftChanged:'Changed definition',
+ schemaDriftAdded:'Added columns',schemaDriftRemoved:'Removed columns',schemaDriftModified:'Modified columns',
+ schemaDriftIdentity:'Row identity changed',schemaDriftSame:'The current catalog has no visible structural differences.',
+ schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.'
+});
+function showMysqlSchemaDrift(content,review){
+ if(review?.scope!=='CURRENT_MYSQL_CATALOG_VS_JOURNAL')return;
+ const section=text('section','','callout');
+ section.append(text('h3',t('schemaDriftTitle')),text('p',t('schemaDriftScope')));
+ if(review.state==='CHANGES_VISIBLE'){
+  const tableLabels={TABLE_ADDED:'schemaDriftNew',TABLE_MISSING:'schemaDriftMissing',TABLE_CHANGED:'schemaDriftChanged'};
+  const tables=text('ul');
+  section.append(text('p',t('schemaDriftCount')+' · '+review.changedTables),tables);
+  for(const row of review.tables.slice(0,64)){
+   const detail=text('li',row.database+'.'+row.table+' · '+t(tableLabels[row.change]));
+   const columns=text('ul');
+   for(const [key,label] of [['added','schemaDriftAdded'],['removed','schemaDriftRemoved'],['modified','schemaDriftModified']]){
+    const count=row.columns[key+'Count'];
+    if(count>0)columns.append(text('li',t(label)+' ('+count+') · '+row.columns[key].slice(0,32).join(', ')));
+   }
+   if(row.identityChanged)columns.append(text('li',t('schemaDriftIdentity')));
+   if(columns.children.length)detail.append(columns);
+   tables.append(detail);
+  }
+  if(review.detailsLimited)section.append(text('p',t('schemaDriftLimited')));
+ }else{
+  const labels={NO_VISIBLE_CHANGE:'schemaDriftSame',NO_JOURNAL_SCHEMA:'schemaDriftNoHistory',UNAVAILABLE:'schemaDriftUnavailable'};
+  section.append(text('p',t(labels[review.state]||'schemaDriftUnavailable')));
+ }
+ content.append(section);
+}
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -300,6 +342,7 @@ async function openCaptureRecovery(task){
   content.replaceChildren(text('p',t('UNPROVEN_SOURCE_RANGE')),
    text('p',t('sourceAdmission')+' · '+explain(report.sourceAdmission)),
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
+  showMysqlSchemaDrift(content,report.schemaDrift);
   const boundary=report.nextTransactionHeaders;
   if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
    const evidence=text('section','','callout');

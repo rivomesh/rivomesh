@@ -404,6 +404,35 @@ test('capture recovery explains a source gap without offering a target skip',asy
  }
 });
 
+test('the MySQL DDL review shows advisory recorded and current schema differences',async()=>{
+ const task={id:'ddl-review',formatVersion:3,workerState:'STOPPED',desired:'RUNNING',operations:[],destinations:[],
+  status:{run_state:'ERROR',error_stage:'DDL',error_code:'DDL_PLAN_REQUIRED'}};
+ const ui=setup([task]),fallback=ui.w.fetch;
+ ui.w.fetch=async(path,options)=>{
+  if(path!=='/api/tasks/ddl-review/capture-recovery')return fallback(path,options);
+  ui.calls.push({path,...options});
+  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],
+   actions:['REPAIR_CAPTURE_CAUSE'],schemaDrift:{scope:'CURRENT_MYSQL_CATALOG_VS_JOURNAL',state:'CHANGES_VISIBLE',
+    changedTables:1,detailsLimited:false,tables:[{database:'sales',table:'orders',change:'TABLE_CHANGED',identityChanged:true,
+     columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
+      addedCount:2,removedCount:1,modifiedCount:0}}]}})};
+ };
+ try{
+  await login(ui);
+  ui.d.querySelector('.pipeline-failure button').click();await flush();
+  const dialog=ui.d.querySelector('dialog.failure-review-dialog');
+  assert.match(dialog.textContent,/MySQL 结构差异/);
+  assert.match(dialog.textContent,/当前目录可能包含后续 DDL/);
+  assert.match(dialog.textContent,/sales.orders/);
+  assert.match(dialog.textContent,/planned_field/);
+  assert.match(dialog.textContent,/old_field/);
+  assert.match(dialog.textContent,/行身份键已变化/);
+  assert.equal(dialog.querySelector('img'),null);
+  assert.equal(dialog.querySelectorAll('button').length,1);
+  assert.equal(ui.calls.find(call=>call.path.endsWith('/capture-recovery')).method,undefined);
+ }finally{ui.dom.window.close();}
+});
+
 test('a running worker and an expired capture lease remain separate in the console',async()=>{
  const task={id:'lease',formatVersion:3,workerState:'RUNNING',desired:'RUNNING',operations:[],destinations:[],
   status:{run_state:'RUNNING'},captureLeaseState:'EXPIRED',statusAvailable:true};

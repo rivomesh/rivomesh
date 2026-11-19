@@ -67,7 +67,9 @@
   "lastAcceptedPublicWorkflowArtifact": "5726e5c369f06bc6abcf622f7bf6672440b0e5eafaa1a142331bc1c015cb5c40",
   "newSinceLastReport": [
     "LG-02 moved to DONE in SDD v0.58. One frozen MySQL cut binds approved PostgreSQL UNIQUE restoration, real writer grants, pre-write failback and continued CDC from the original snapshot.",
-    "LG-03 external PostgreSQL Hive Metastore fixture and partial native evidence published. Four milestones include stock schema, snapshot/CDC, native catalog identity and coordinated restart/catch-up. Documented host clamshell sleep interrupted Worker/SQL-error phases; scoped resources cleaned."
+    "LG-03 external PostgreSQL Hive Metastore fixture and partial native evidence published. Four milestones include stock schema, snapshot/CDC, native catalog identity and coordinated restart/catch-up. Documented host clamshell sleep interrupted Worker/SQL-error phases; scoped resources cleaned.",
+    "LG-08 MySQL native DDL comparison and UI published. Eight real integration cases show both entries, unchanged checkpoint and target schemas, and exact live catalog drift following a subsequent DDL. Normal recovered package passes 37 Java and 145 DOM.",
+    "CP-04 curated console action to stage private evidence published. Exact baseline has 144 DOM, 14 standalone Chrome and six Chrome cases with a synthetic dual-entry API. Native backend was already validated separately; actual browser cluster acceptance needs a stable host rerun."
   ],
   "lastScheduledReportAt": "2026-11-18T23:58:16+08:00",
   "lastVerifiedReactor": {

@@ -1383,6 +1383,28 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
         assert reviews[0]['sourceAdmission']=='SOURCE_CHECKPOINT_AVAILABLE'
         assert set(reviews[0]['affectedSubscriptions'])=={sub['id'] for sub in observed['subscriptions']}
         assert 'REPAIR_CAPTURE_CAUSE' in reviews[0]['actions']
+        if expected == 'DDL':
+            review = reviews[0]['schemaDrift']
+            assert review['scope'] == 'CURRENT_MYSQL_CATALOG_VS_JOURNAL'
+            assert review['state'] == 'CHANGES_VISIBLE' and review['changedTables'] == 1
+            item, = review['tables']
+            assert (item['database'], item['table'], item['change']) == ('sales','items','TABLE_CHANGED')
+            assert item['recordedVersion'] == 1 and not item['identityChanged']
+            assert item['columns']['added'] == ['planned_field'] and item['columns']['addedCount'] == 1
+            for key in ('recordedSha256','liveSha256'):
+                assert re.fullmatch(r'[0-9a-f]{64}',item[key])
+            assert item['recordedSha256'] != item['liveSha256']
+            sql('mysql','ALTER TABLE sales.items ADD COLUMN later_field INT')
+            updated = [http(node,route+'/capture-recovery') for node in ('node-a','node-b')]
+            assert updated[0] == updated[1] and updated[0]['checkpointHash'] == reviews[0]['checkpointHash']
+            later, = updated[0]['schemaDrift']['tables']
+            assert later['recordedSha256'] == item['recordedSha256'] and later['liveSha256'] != item['liveSha256']
+            assert later['columns']['added'] == ['later_field','planned_field']
+            assert sql('postgres',"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='rm_pg_sales' "
+                                  "AND table_name='items' AND column_name IN ('later_field','planned_field')") == '0'
+            assert sql('mysql-target',"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='rm_my_sales' "
+                                     "AND table_name='items' AND column_name IN ('later_field','planned_field')") == '0'
+            passed('DDL review compares the original journal schema with the current MySQL catalog across both entries')
         if args.header_boundary:
             boundary = reviews[0]['nextTransactionHeaders']
             assert boundary['scope']=='BINLOG_HEADERS_ONLY' and boundary['tables']==['sales.items']

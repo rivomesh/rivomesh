@@ -91,7 +91,7 @@ For a new fixed-owner MySQL task with a PostgreSQL external journal and MySQL or
 
 A verified preparation records the original assignment and a private successor assignment for this request. The response reports digests through `writerActivation`. When both stores use the same PostgreSQL JDBC URL and the control database role can lock the journal rows, `checkedInControlTransaction` confirms that the control transaction checked the same expired or released journal lease, capture cut, and acknowledged subscription positions. The task and writer placement stay with the original Agent during this check.
 
-In the console, open **Assess Agent handoff**. After verifying the current evidence, choose **Reserve task and Worker slots** and confirm. You can view the same receipt and expiration from either Controller. Select **Release reservation** before sending a new command to the original task.
+In the console, open **Assess Agent handoff**. After verifying the current evidence, choose **Reserve task and Worker slots**. You can view the same receipt and expiration from either Controller. During an active reservation, choose **Stage reports and receipts** to copy the verified report archive and closed receipts into private storage on the candidate. The console shows their counts after the candidate verifies them. Select **Reverify staged reports and receipts** to check the same files again. After reopening the panel from either Controller, **Stage reports and receipts** also verifies an existing staged copy for that reservation. Select **Release reservation** before sending a new command to the original task.
 
 ## Admission and recovery
 

@@ -491,3 +491,11 @@ The earlier exact `18d7a77` application passed a full Temurin 21 packaging react
 ### Hive external PostgreSQL Metastore, partial native profile
 
 The Hive 4.0.1 fixture uses stock catalog schema 4.0.0 on a dedicated PostgreSQL 17.12 server and a separate PostgreSQL business destination. It passed stock initialization and validation, native snapshot/CDC and coordinated service outage recovery. Catalog bytes and physical PostgreSQL, Hive table, owner, resource and warehouse identity remained identical after the catalog server restarted. The SQL destination advanced during the outage, and Hive caught up when the services returned. Host power logs recorded Clamshell Sleep during Worker restart, after which the test timed out. All named fixtures and private test configurations were cleaned. Worker continuation and subsequent native SQL recovery remain open for this external profile. [Hive external Metastore](../en/hive-v3.md) · [Manifests](baseline.json)
+
+### MySQL DDL comparison in both management entries
+
+Artifact `729fb2106d22572789e52d26d5bb242e7bf03386d90064991fba0431bb0a481a` passed eight native checks and 37 focused Java tests. A real MySQL ALTER stopped capture at the original GTID. Both entries compared the journal schema and current catalog, then showed a later ALTER in the observed source comparison. Both target schemas and the original task checkpoint stayed unchanged. The combined package `0ce387c8dc554b17e70fff3ed82a399c713eeec4ef472dd43d3d2f5c272a7bb3` passed 37 Java, 145 DOM and binary package verification. [Capture review](../en/capture-recovery.md) · [Manifests](baseline.json)
+
+### Console controls for private evidence staging
+
+The staged console candidate `5370a8018ae954e8d2aa7ecd5d4dcaa77538e6e27ae8babff5d889a72c6a67e6` passed 144 DOM and 14 standalone Chrome cases. Six Chrome checks with a synthetic two-entry API passed exact operation replay and revalidation. The two live cluster attempts stopped before the browser staging interaction. Their disposables were cleaned. The independent native staging API proof above covers the exact evidence behavior on real Agents. [Private staging operations](../en/global-control.md) · [Manifests](baseline.json)

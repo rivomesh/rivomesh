@@ -17,6 +17,8 @@ The review checks the pipeline identity, original position and snapshot dependen
 | `SOURCE_CHECKPOINT_AVAILABLE` after decode, DDL or snapshot failure | Preserve the original event, resolve the decoder, schema or read permissions, then retry. Admission confirms the original source position meets the recovery checks. |
 | `UNPROVEN_SOURCE_RANGE` | Verify transaction boundaries and contents against the original logs and checkpoint. Include every subscription in the potential impact. |
 
+For a MySQL DDL failure, the report can compare the latest recorded schema with the current catalog. It lists bounded changed-table details, visible column changes, identity-key changes and definition hashes. The source catalog may already include later DDL. Resolve the required schema changes before retrying, and preserve the original binlog position.
+
 ### FAQ
 
 **Why does the destination have data while capture remains paused?** The destination may retain data delivered before the failure. Check the source checkpoint and each subscription acknowledgment to establish its progress.

@@ -60,6 +60,30 @@ window.RivomeshHandoff=(()=>{
  });
 
  bridge.register({
+  handoffStage:'暂存报告和回执',handoffStageAgain:'复核已暂存的报告和回执',handoffStageRetry:'重试同一暂存请求',
+  handoffStageHelp:'在候选 Agent 的私有目录暂存已核验的校验报告和已办结回执。暂存后仍由原 Agent 负责该任务。',
+  handoffStageDone:'候选 Agent 已核验暂存文件。',handoffStageReports:'校验报告',handoffStageReceipts:'已办结回执',
+  handoffStageUnknown:'暂存结果未知。可重试同一请求来核验候选 Agent 上的文件。',
+  handoffStageInvalid:'暂存回执与当前准备记录不匹配。请重试核验。',
+  HANDOFF_AGENT_CHANGED:'Agent 的登记已变化，请重新评估。',
+  HANDOFF_STAGING_BUSY:'候选 Agent 正在处理暂存文件，稍后可重试。',
+  HANDOFF_STAGING_CAPACITY:'候选 Agent 的私有暂存目录已达到容量上限。',
+  HANDOFF_STAGING_BYTES_CHANGED:'候选 Agent 上已暂存文件的内容发生变化，未通过核验。',
+  HANDOFF_ARCHIVE_BYTES_CHANGED:'原证据归档摘要已变化，请重新核对归档。'
+ },{
+  handoffStage:'Stage reports and receipts',handoffStageAgain:'Reverify staged reports and receipts',handoffStageRetry:'Retry the same staging request',
+  handoffStageHelp:'Stage verified validation reports and closed receipts in the candidate Agent’s private directory. The original Agent keeps ownership.',
+  handoffStageDone:'The candidate Agent verified the staged files.',handoffStageReports:'Validation reports',handoffStageReceipts:'Closed receipts',
+  handoffStageUnknown:'The staging outcome is unknown. Retry the same request to verify the candidate’s files.',
+  handoffStageInvalid:'The staging receipt does not match this preparation. Retry to verify.',
+  HANDOFF_AGENT_CHANGED:'An Agent registered again. Reassess before staging.',
+  HANDOFF_STAGING_BUSY:'The candidate is working with the staging files. Retry shortly.',
+  HANDOFF_STAGING_CAPACITY:'The candidate’s private staging directories reached their capacity limit.',
+  HANDOFF_STAGING_BYTES_CHANGED:'The candidate’s staged contents changed and could not be verified.',
+  HANDOFF_ARCHIVE_BYTES_CHANGED:'The original evidence archive digest changed. Review the archive again.'
+ });
+
+ bridge.register({
   handoffProbe:'核验位点与回执',handoffCheckedAt:'核验时间',handoffProbeExpired:'核验结果已过期，请重新核验。',
   handoffReviewReady:'预留所需证据已核验',handoffOriginEvidence:'原 Agent 回执',
   handoffReports:'校验报告',handoffFailures:'历史失败证据',handoffEvidenceDigest:'准备证据 SHA-256',
@@ -170,6 +194,15 @@ window.RivomeshHandoff=(()=>{
    &&sha256.test(v.receipt.preparationEvidenceSha256||'');
  }
  function activeReservation(v){return v.preparation?.state==='PREPARED';}
+ function stagePreparation(v){
+  return activeReservation(v)&&v.preparation.taskRevision===bridge.task(v.taskId)?.revision
+   &&sha256.test(v.preparation.custodySha256||'')?v.preparation:null;
+ }
+ function sameStagePreparation(plan,binding){
+  return plan?.id===binding.id&&plan.taskRevision===binding.taskRevision
+   &&plan.candidateNodeId===binding.candidateNodeId&&plan.evidenceSha256===binding.evidenceSha256
+   &&plan.custodySha256===binding.custodySha256;
+ }
  function timestamp(value){
   const time=node('time',new Date(value).toLocaleString(document.documentElement.lang,{dateStyle:'medium',timeStyle:'long'}));
   time.dateTime=value;
@@ -296,9 +329,21 @@ window.RivomeshHandoff=(()=>{
    v.preparationResult.append(review,digest,node('p',t('handoffReserveImpact'),'callout warning'));
   }
  }
+ function renderStaging(v,busy){
+  const plan=stagePreparation(v);
+  if(v.stageAttempt&&!sameStagePreparation(plan,v.stageAttempt.plan))v.stageAttempt=null;
+  const attempted=v.stageAttempt;
+  v.stagePanel.hidden=!plan;
+  v.stage.disabled=busy||!!v.preparationAttempt||!v.preparationLoaded||!plan;
+  v.stage.textContent=t(attempted?.uncertain?'handoffStageRetry':attempted?.counts?'handoffStageAgain':'handoffStage');
+  const counts=attempted?.counts;
+  const status=counts?t('handoffStageDone')+' '+t('handoffStageReports')+' '+counts.reports+' · '
+   +t('handoffStageReceipts')+' '+counts.closedReceipts:'';
+  if(v.stageStatus.textContent!==status)v.stageStatus.textContent=status;
+ }
  function update(v){
   if(!current(v)){if(view===v)close();return;}
-  const busy=v.posting||v.reading||v.probing||v.preparationReading||v.preparationPosting;
+  const busy=v.posting||v.reading||v.probing||v.preparationReading||v.preparationPosting||v.staging;
   v.dialog.setAttribute('aria-busy',String(Boolean(busy||v.loadingNodes)));
   for(const option of [...v.select.options])if(option.value&&!nodeGrant(option.value)){
    v.nodes.delete(option.value);option.remove();
@@ -333,6 +378,7 @@ window.RivomeshHandoff=(()=>{
   v.preparationPanel.hidden=!v.preparation&&!reserveShown&&!releaseShown;
   renderReceipt(v);
   renderPreparation(v);
+  renderStaging(v,busy);
   if((focused===v.reserve&&!reserveShown)||(focused===v.release&&!releaseShown)){
    const next=releaseShown?v.release:reserveShown?v.reserve:v.reload;
    if(!next.disabled)next.focus({preventScroll:true});
@@ -431,6 +477,36 @@ window.RivomeshHandoff=(()=>{
    await reconcile(v,error);
   }finally{if(current(v)){v.preparationPosting=false;update(v);}}
  }
+ async function stageEvidence(v){
+  if(!current(v)||v.stage.disabled)return;
+  const plan=stagePreparation(v);
+  if(!plan)return;
+  const attempt=v.stageAttempt??={plan,id:requestId()};
+  const body=JSON.stringify({expectedPreparation:plan.id,expectedRevision:plan.taskRevision,
+   expectedEvidenceSha256:plan.evidenceSha256});
+  v.staging=true;v.feedback.textContent='';update(v);
+  try{
+   const result=await api(preparationEndpoint(v)+'/stage',postOptions(body,attempt.id));
+   if(!current(v)||v.stageAttempt!==attempt)return;
+   if(result?.state!=='STAGED'||result.executionAuthorized!==false||result.preparationId!==plan.id
+     ||result.taskRevision!==plan.taskRevision||result.candidateNodeId!==plan.candidateNodeId
+     ||result.evidenceSha256!==plan.evidenceSha256||result.archiveSha256!==plan.custodySha256
+     ||!Number.isSafeInteger(result.reports)||result.reports<0
+     ||!Number.isSafeInteger(result.closedReceipts)||result.closedReceipts<1){
+    attempt.counts=null;attempt.uncertain=true;v.feedback.textContent=t('handoffStageInvalid');
+    return;
+   }
+   attempt.counts={reports:result.reports,closedReceipts:result.closedReceipts};attempt.uncertain=false;
+  }catch(error){
+   if(!current(v)||v.stageAttempt!==attempt)return;
+   attempt.counts=null;
+   attempt.uncertain=!(error.status>=400&&error.status<500)||[408,429].includes(error.status)
+    ||['OWNER_QUERY_TIMEOUT','OWNER_QUERY_EXPIRED','HANDOFF_STAGING_TIMEOUT'].includes(error.code);
+   v.feedback.textContent=attempt.uncertain?t('handoffStageUnknown'):error.message;
+   if(['HANDOFF_PREPARATION_CHANGED','HANDOFF_PREPARATION_EVIDENCE_CHANGED','HANDOFF_AGENT_CHANGED',
+    'REVISION_CHANGED','FORBIDDEN','TASK_NOT_FOUND'].includes(error.code))await reconcile(v,error);
+  }finally{if(current(v)){v.staging=false;update(v);}}
+ }
  async function candidates(v,after=''){
   v.loadingNodes=true;update(v);
   try{
@@ -500,20 +576,22 @@ window.RivomeshHandoff=(()=>{
    submitButton=node('button',t('handoffAssess'),'primary'),exit=node('button',t('handoffClose'),'quiet'),
    probeButton=node('button',t('handoffProbe')),reserve=node('button',t('handoffReserve'),'primary'),
    release=node('button',t('handoffRelease')),preparationPanel=node('section','','recovery-retry'),
-   preparationResult=node('div');
+   preparationResult=node('div'),stagePanel=node('div'),stageStatus=node('p','','subtle'),
+   stageButton=node('button',t('handoffStage'));
   const v={dialog,taskId:task.id,owner:task.ownerNodeId,actor:bridge.session().id,select,candidateMessage,
    feedback,result,more,reload,submit:submitButton,probe:probeButton,reserve,release,preparationPanel,preparationResult,
-   nodes:new Map()};
+   stage:stageButton,stagePanel,stageStatus,nodes:new Map()};
   view=v;
   heading.id='handoff-title';dialog.setAttribute('aria-labelledby',heading.id);
   select.name='candidateNodeId';field.append(node('span',t('handoffCandidate')),select);
   feedback.setAttribute('role','status');result.setAttribute('aria-live','polite');
   preparationResult.setAttribute('aria-live','polite');
-  for(const button of [more,reload,exit,probeButton,reserve,release])button.type='button';
+  for(const button of [more,reload,exit,probeButton,reserve,release,stageButton])button.type='button';
   submitButton.type='submit';submitButton.dataset.handoffAssess='';
   reload.dataset.handoffReload='';more.dataset.handoffMore='';result.dataset.handoffReceipt='';
   probeButton.dataset.handoffProbe='';reserve.dataset.handoffPrepare='';release.dataset.handoffRelease='';
   preparationPanel.dataset.handoffPreparation='';feedback.dataset.handoffFeedback='';
+  stageButton.dataset.handoffStage='';stageStatus.dataset.handoffStageStatus='';stageStatus.setAttribute('role','status');
   exit.onclick=()=>close(true);dialog.addEventListener('cancel',event=>{event.preventDefault();close(true);});
   select.onchange=()=>update(v);
   more.onclick=()=>candidates(v,v.next);
@@ -521,9 +599,11 @@ window.RivomeshHandoff=(()=>{
   form.onsubmit=event=>{event.preventDefault();submit(v);};
   probeButton.onclick=()=>probe(v);reserve.onclick=()=>mutatePreparation(v,false);
   release.onclick=()=>mutatePreparation(v,true);
+  stageButton.onclick=()=>stageEvidence(v);
   actions.append(exit,more,reload,submitButton);
   form.append(field,candidateMessage,actions);
-  preparationPanel.append(preparationResult,reserve,release);
+  stagePanel.append(node('p',t('handoffStageHelp'),'subtle'),stageButton,stageStatus);
+  preparationPanel.append(preparationResult,stagePanel,reserve,release);
   dialog.append(heading,node('p',task.id,'subtle'),node('p',t('handoffHelp'),'callout'),original,form,feedback,
    result,probeButton,preparationPanel);
   document.body.append(dialog);dialog.showModal();

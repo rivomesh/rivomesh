@@ -80,14 +80,32 @@ try{
   assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
   checks.push('The live reservation keeps the writer unchanged, shows expiry and reserved slots, and fits the narrow viewport');
 
+  const stageButton='document.querySelector("[data-handoff-stage]")';
+  const stageStatus='document.querySelector("[data-handoff-stage-status]")';
+  async function stageReports(){
+   await clickByKeyboard('[data-handoff-stage]');
+   return poll(`${stageStatus}?.textContent.includes("已核验暂存文件")&&!${stageButton}.disabled&&${stageStatus}.textContent`,
+               'candidate verifies staged evidence');
+  }
+  const staged=await stageReports();
+  assert.match(staged,/校验报告 1 · 已办结回执 [1-9][0-9]*/);
+  assert.match(await evaluate(stageButton+'.textContent'),/复核已暂存/);
+  assert.equal(await stageReports(),staged);
+  assert.equal((await readPreparation()).id,plan.id);
+  checks.push('The first entry stages actual private reports and closed receipts, then explicitly reverifies the same receipt');
+
   await navigate(second,'node-b');await open();
   await poll(`${reservation}.querySelector("details code")?.textContent===${quote(plan.id)}`,
              'same preparation receipt through the second management entry');
+  assert.equal(await stageReports(),staged);
+  assert(await evaluate('document.querySelector(".handoff-dialog").scrollWidth<=document.querySelector(".handoff-dialog").clientWidth'));
+  checks.push('The second entry explicitly verifies the same staged evidence and shows only counts');
   await clickByKeyboard('[data-handoff-release]');
   await poll(`${reservation}.textContent.includes("已解除")`,'release through the second management entry');
   const released=await readPreparation();
   assert.equal(released.id,plan.id);assert.equal(released.state,'RELEASED');
   assert.equal(released.reservedTaskSlots,0);assert.equal(released.reservedWorkerSlots,0);
+  assert.equal(await evaluate(stageButton+'.parentElement.hidden'),true);
   const task=await evaluate(`fetch(${quote('/api/tasks/'+encodeURIComponent(taskId))}).then(response=>response.json())
     .then(value=>({owner:value.ownerNodeId,revision:value.revision,worker:value.workerState}))`);
   assert.deepEqual(task,{owner,revision,worker:'STOPPED'});
