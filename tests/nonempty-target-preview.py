@@ -31,6 +31,7 @@ def main():
     profile.add_argument('--only-writer-readiness', action='store_true', help='Verify a durable business writer readiness receipt')
     profile.add_argument('--only-writer-transition', action='store_true', help='Verify target writer authority and write-free failback')
     profile.add_argument('--only-adopted-unique-chain', action='store_true', help='Verify adoption, UNIQUE restoration and authority at one cut')
+    profile.add_argument('--only-adopted-email-chain', action='store_true', help='Verify same-cut adoption and UNIQUE(email) text equality')
     profile.add_argument('--only-constraints', action='store_true', help='Verify a managed PostgreSQL UNIQUE review at a common cut')
     profile.add_argument('--only-restoration-plan', action='store_true', help='Verify read-only UNIQUE restoration planning at a frozen cut')
     profile.add_argument('--only-restore-execution', action='store_true', help='Verify approved PostgreSQL DDL and native receipt recovery')
@@ -48,7 +49,8 @@ def main():
     with artifact.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     restoration_profile = args.only_restoration_plan or args.only_restore_execution
-    profile_name = ('ADOPTED_UNIQUE_CHAIN' if args.only_adopted_unique_chain else
+    profile_name = ('ADOPTED_EMAIL_CHAIN' if args.only_adopted_email_chain else
+                    'ADOPTED_UNIQUE_CHAIN' if args.only_adopted_unique_chain else
                     'WRITER_TRANSITION' if args.only_writer_transition else
                     'WRITER_READINESS' if args.only_writer_readiness else
                     'ADOPTION_EXECUTION' if args.only_adoption_execution else
@@ -625,27 +627,40 @@ def main():
             assert mysql('SELECT @@global.read_only AND @@global.super_read_only') == '1'
             passed('A committed write followed by identical row contents remains witnessed across PostgreSQL restart and blocks failback')
 
-        def same_cut_unique_chain():
+        def same_cut_unique_chain(email=False):
             acknowledgement = '--acknowledge-exclusive-freeze'
             actor = 'fixture-chain-operator'
             target = dict(case['targets'][0], username='postgres', metadataSchema='chain_sink', mappings={'sales': 'review'})
             journal = {'mode': 'EXTERNAL', 'product': 'POSTGRESQL', 'url': target['url'],
                        'username': 'postgres', 'password': '${RM_ADOPTION_PASSWORD}', 'namespace': 'chain_journal'}
-            (directory / 'same-cut.yml').write_text(json.dumps(dict(case, journal=journal, targets=[target])))
-            mysql("""
+            config = dict(case, journal=journal, targets=[target])
+            (directory / 'same-cut.yml').write_text(json.dumps(config))
+            key = 'email' if email else 'business_key'
+            source_index = 'uq_' + key
+            source_type = 'VARCHAR(320) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin' if email else 'BIGINT'
+            target_type = 'VARCHAR(320) COLLATE pg_catalog."C"' if email else 'BIGINT'
+            first_key = "'Member@example.invalid'" if email else '100'
+            rolled_back_key = "'rollback@example.invalid'" if email else '150'
+            updated_key = "'updated🙂@example.invalid '" if email else '105'
+            variants = ["'member@example.invalid'", "'member@example.invalid '", "'é@example.invalid'", "'e\u0301@example.invalid'",
+                        "'" + '🙂' * (320 - len('@example.invalid')) + "@example.invalid'"] if email else []
+            additional = ''.join(f",({i},{value},'variant',NULL)" for i, value in enumerate(variants, 4))
+            row_count = 3 + len(variants)
+            mysql(f"""
+                SET NAMES utf8mb4;
                 CREATE DATABASE sales CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin;
-                CREATE TABLE sales.items(id BIGINT PRIMARY KEY,business_key BIGINT,name VARCHAR(80),doc JSON,
-                                         UNIQUE KEY uq_business_key(business_key)) ENGINE=InnoDB;
-                INSERT INTO sales.items VALUES (1,100,'sensitive-row-value','{"b":2,"a":1.0}'),(2,NULL,'tail ',NULL),(3,NULL,'other',NULL);
+                CREATE TABLE sales.items(id BIGINT PRIMARY KEY,{key} {source_type},name VARCHAR(80),doc JSON,
+                                         UNIQUE KEY {source_index}({key})) ENGINE=InnoDB;
+                INSERT INTO sales.items VALUES (1,{first_key},'sensitive-row-value','{{"b":2,"a":1.0}}'),(2,NULL,'tail ',NULL),(3,NULL,'other',NULL){additional};
             """)
-            postgres('''
+            postgres(f'''
                 CREATE SCHEMA review;
-                CREATE TABLE review.items(id BIGINT PRIMARY KEY,business_key BIGINT,name VARCHAR(80) COLLATE "C",doc JSONB);
-                INSERT INTO review.items VALUES (1,100,'sensitive-row-value','{"a":1,"b":2.0}'),(2,NULL,'drift',NULL),(3,NULL,'other',NULL);
+                CREATE TABLE review.items(id BIGINT PRIMARY KEY,{key} {target_type},name VARCHAR(80) COLLATE "C",doc JSONB);
+                INSERT INTO review.items VALUES (1,{first_key},'sensitive-row-value','{{"a":1,"b":2.0}}'),(2,NULL,'drift',NULL),(3,NULL,'other',NULL){additional};
             ''')
 
-            def cli(operation, *parameters, check=True):
-                return compose('run', '--rm', '-T', 'runner', operation, '/fixture/same-cut.yml', *parameters, check=check)
+            def cli(operation, *parameters, check=True, config_path='same-cut.yml'):
+                return compose('run', '--rm', '-T', 'runner', operation, '/fixture/' + config_path, *parameters, check=check)
 
             def refused(answer, code):
                 assert answer.returncode != 0 and not answer.stdout.strip()
@@ -655,14 +670,39 @@ def main():
             assert before['status'] == 'DIFFERENCES_FOUND' and before['tables'][0]['changed'] == 1
             ordinary = before['tables'][0]['indexPlan'][0]['targetName']
             assert re.fullmatch(r'rm_[a-f0-9]+_[a-f0-9]+', ordinary)
-            postgres(f"UPDATE review.items SET name='tail ' WHERE id=2; CREATE INDEX {ordinary} ON review.items(business_key)")
+            postgres("UPDATE review.items SET name='tail ' WHERE id=2")
+            email_refusals = [
+                ('email_pad_space', 'utf8mb4_bin', 320, 'email', 'ADOPTED_UNIQUE_SOURCE_TEXT_SEMANTICS_UNSUPPORTED'),
+                ('email_case_fold', 'utf8mb4_0900_ai_ci', 320, 'email', 'ADOPTED_UNIQUE_SOURCE_TEXT_SEMANTICS_UNSUPPORTED'),
+                ('email_prefix', 'utf8mb4_0900_bin', 320, 'email(64)', 'ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED'),
+                ('email_wide', 'utf8mb4_0900_bin', 321, 'email', 'ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED'),
+            ]
+            if email:
+                for database, collation, width, index_key, _ in email_refusals:
+                    mysql(f'CREATE DATABASE {database}; CREATE TABLE {database}.items(id BIGINT PRIMARY KEY, '
+                          f'email VARCHAR({width}) CHARACTER SET utf8mb4 COLLATE {collation}, '
+                          f'UNIQUE KEY uq_email({index_key})) ENGINE=InnoDB')
+                    invalid_config = dict(config, databases=[database], targets=[dict(target, mappings={database: 'review'})])
+                    (directory / f'{database}.yml').write_text(json.dumps(invalid_config))
+            postgres(f'CREATE INDEX {ordinary} ON review.items({key})')
+            mysql('SET PERSIST read_only=ON; SET PERSIST super_read_only=ON')
+            if email:
+                for database, _, _, _, rejection in email_refusals:
+                    refused(cli('plan-adoption', 'pg', check=False, config_path=f'{database}.yml'), rejection)
+                postgres(f'''DROP INDEX review.{ordinary};
+                              CREATE COLLATION review.email_case_fold (provider=icu,locale='und-u-ks-level2',deterministic=false);
+                              CREATE INDEX {ordinary} ON review.items(email COLLATE review.email_case_fold)''')
+                refused(cli('plan-adoption', 'pg', check=False), 'UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED')
+                postgres(f'DROP INDEX review.{ordinary}; CREATE INDEX {ordinary} ON review.items(email varchar_pattern_ops)')
+                refused(cli('plan-adoption', 'pg', check=False), 'UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED')
+                postgres(f'DROP INDEX review.{ordinary}; CREATE INDEX {ordinary} ON review.items(email)')
+                passed('Email adoption refuses PAD SPACE and case-folded source keys, prefix or oversized keys, and drifted target collation or operator class')
             physical_index = f"SELECT pg_relation_filenode('review.{ordinary}'::regclass)"
             original_index = postgres(physical_index)
-            mysql('SET PERSIST read_only=ON; SET PERSIST super_read_only=ON')
             plan = json.loads(cli('plan-adoption', 'pg').stdout)
             proposal = plan['plan']['restoreUnique']
-            assert proposal['ordinaryIndex'] == ordinary and proposal['sourceIndex'] == 'uq_business_key'
-            assert proposal['columns'] == ['business_key'] and plan['plan']['matchedRows'] == 3
+            assert proposal['ordinaryIndex'] == ordinary and proposal['sourceIndex'] == source_index
+            assert proposal['columns'] == [key] and plan['plan']['matchedRows'] == row_count
             constraint = proposal['constraint']
             assert re.fullmatch(r'rm_u_[a-f0-9]+_[a-f0-9]+', constraint)
             adoption = ('pg', 'items', plan['planSha256'], str(uuid.uuid4()), actor)
@@ -671,13 +711,13 @@ def main():
             captured_sql = 'SELECT captured FROM chain_journal.rm3_job'
             original_cut = postgres(captured_sql)
             assert adopted['receipt']['sourceSha256'] == plan['plan']['sourcePositionSha256']
-            passed('Existing nonempty difference preview and signed BIGINT ordinary-index plan lead to the same frozen adopted cut')
+            passed('Existing nonempty difference preview and ordinary-index plan lead to the same frozen adopted cut')
 
             postgres('CREATE ROLE chain_writer LOGIN NOINHERIT; GRANT USAGE ON SCHEMA review TO chain_writer; '
                      'GRANT SELECT ON review.items TO chain_writer')
             readiness = (*adoption, 'chain_writer', str(uuid.uuid4()), actor, acknowledgement)
             refused(cli('prepare-target-writer', *readiness, check=False), 'ADOPTED_UNIQUE_RESTORE_REQUIRED')
-            postgres(f'ALTER TABLE review.items ADD CONSTRAINT {constraint} UNIQUE (business_key)')
+            postgres(f'ALTER TABLE review.items ADD CONSTRAINT {constraint} UNIQUE ({key})')
             refused(cli('prepare-target-writer', *readiness, check=False), 'ADOPTION_TARGET_CONSTRAINTS_REQUIRE_PLAN')
             postgres(f'ALTER TABLE review.items DROP CONSTRAINT {constraint}')
             restore = (*adoption, str(uuid.uuid4()), actor, acknowledgement)
@@ -686,13 +726,18 @@ def main():
             assert restored['receipt']['proposal'] == proposal and postgres(physical_index) == original_index
             replay = json.loads(cli('restore-adopted-unique', *restore).stdout)
             assert replay['replayed'] and replay['receipt'] == restored['receipt']
-            postgres("""DO $$ BEGIN
-                      BEGIN INSERT INTO review.items(id,business_key) VALUES (99,100);
+            postgres(f"""DO $$ BEGIN
+                      BEGIN INSERT INTO review.items(id,{key}) VALUES (99,{first_key});
                             RAISE EXCEPTION 'restored UNIQUE was not enforced';
                       EXCEPTION WHEN unique_violation THEN NULL; END;
                       END $$""")
-            assert postgres('SELECT count(*) FROM review.items') == '3' and postgres(captured_sql) == original_cut
+            assert postgres('SELECT count(*) FROM review.items') == str(row_count) and postgres(captured_sql) == original_cut
             passed('Unattested native UNIQUE refuses readiness; the exact reviewed restoration is enforced and retains its original ordinary index')
+            if email:
+                expected = f'{len(variants) + 1}|2|320'
+                assert postgres('SELECT count(DISTINCT email),count(*) FILTER (WHERE email IS NULL),max(char_length(email)) FROM review.items') == expected
+                assert mysql('SELECT COUNT(DISTINCT email),SUM(email IS NULL),MAX(CHAR_LENGTH(email)) FROM sales.items').replace('\t', '|') == expected
+                passed('Native UNIQUE(email) distinguishes case, trailing spaces and Unicode normalization forms, accepts 320 UTF-8 characters and multiple NULLs')
 
             postgres(f'ALTER INDEX review.{ordinary} RENAME TO renamed_ordinary_index')
             refused(cli('prepare-target-writer', *readiness, check=False), 'UNIQUE_RESTORE_ORDINARY_INDEX_CHANGED')
@@ -705,7 +750,7 @@ def main():
             assert first['status'] == 'TARGET_WRITER_AUTHORIZED' and first['acknowledged']
             refused(cli('resume-pipeline', '1', check=False), 'TARGET_WRITER_AUTHORITY_ACTIVE')
             with sql_session('target', 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'chain_writer', '-d', 'preview') as app:
-                assert exchange_sql(app, "BEGIN; UPDATE review.items SET business_key=150 WHERE id=1; ROLLBACK; SELECT 'ROLLED_BACK';") == 'ROLLED_BACK'
+                assert exchange_sql(app, f"BEGIN; UPDATE review.items SET {key}={rolled_back_key} WHERE id=1; ROLLBACK; SELECT 'ROLLED_BACK';") == 'ROLLED_BACK'
             return_args = (*adoption, prepared['receiptSha256'], str(uuid.uuid4()), actor, acknowledgement)
             returned = json.loads(cli('failback-target-writer', *return_args).stdout)
             assert returned['status'] == 'TARGET_WRITER_REVOKED' and returned['acknowledged'] and returned['resumeErrorGeneration'] == 2
@@ -714,12 +759,13 @@ def main():
             assert postgres(f"SELECT count(*) FROM pg_constraint WHERE conrelid='review.items'::regclass AND conname='{constraint}'") == '1'
             passed('Native index drift is rejected; restored constraint receipt binds the same original cut through writer activation and pre-write failback')
 
-            mysql('SET PERSIST super_read_only=OFF; SET PERSIST read_only=OFF; UPDATE sales.items SET business_key=105 WHERE id=1')
+            mysql(f'SET NAMES utf8mb4; SET PERSIST super_read_only=OFF; SET PERSIST read_only=OFF; '
+                  f'UPDATE sales.items SET {key}={updated_key} WHERE id=1')
             cli('resume-pipeline', str(returned['resumeErrorGeneration']))
             worker = project + '-same-cut-worker'
             compose('run', '--rm', '-d', '-T', '--name', worker, 'runner', 'run', '/fixture/same-cut.yml')
             try:
-                wait_for(lambda: postgres('SELECT business_key FROM review.items WHERE id=1') == '105',
+                wait_for(lambda: postgres(f'SELECT {key}={updated_key} FROM review.items WHERE id=1') == 't',
                          'waiting for normal CDC with attested restored UNIQUE', seconds=115)
                 assert postgres('SELECT snapshot_id FROM chain_sink.rm3_sink_table') == adopted['receipt']['snapshot']
                 assert postgres(physical_index) == original_index
@@ -1091,8 +1137,8 @@ def main():
             report['mysqlVersion'] = mysql("SELECT VERSION()")
             report['postgresqlVersion'] = postgres("SHOW server_version")
             assert report['mysqlVersion'].startswith('8.4.') and report['postgresqlVersion'].startswith('17.')
-            if args.only_adopted_unique_chain:
-                same_cut_unique_chain()
+            if args.only_adopted_unique_chain or args.only_adopted_email_chain:
+                same_cut_unique_chain(email=args.only_adopted_email_chain)
                 report['status'] = 'PASS'
                 return
             if args.only_adoption_plan or args.only_adoption_execution or args.only_writer_readiness or args.only_writer_transition:

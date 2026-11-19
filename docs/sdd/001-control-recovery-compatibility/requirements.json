@@ -1474,8 +1474,8 @@
         "en": "Nonempty adoption,constraints,cutover/failback"
       },
       "gap": {
-        "zh-CN": "限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。更广产品及写后逆向迁移分别跟踪。",
-        "en": "Bounded single-table PostgreSQL profile accepted. At one frozen MySQL cut the fixture reviewed differences, adopted, restored an approved BIGINT UNIQUE, transferred business writes, performed pre-write failback and reused the original snapshot. Broader products and post-write reverse migration are separate."
+        "zh-CN": "限定档案已验收。冻结 MySQL 的同一非空 PostgreSQL 单表完成差异审阅、原切点接管、恢复已审批的 BIGINT UNIQUE、业务切换及首次提交写入前回切，并复用原快照继续 CDC。另一个同切点档案验证了二进制排序、NO PAD 的 VARCHAR UNIQUE(email)，保留原普通索引并继续 CDC。更广产品及写后逆向迁移分别跟踪。",
+        "en": "Bounded single-table PostgreSQL profile accepted. At one frozen MySQL cut the fixture reviewed differences, adopted, restored an approved BIGINT UNIQUE, transferred business writes, performed pre-write failback and reused the original snapshot. A second profile at the same cut verifies binary, NO PAD VARCHAR UNIQUE(email), retains the ordinary index and continues CDC. Broader products and post-write reverse migration are separate."
       },
       "acceptance": {
         "zh-CN": "实现非空目标差异计划/校验、UNIQUE等约束重建、最终源屏障、业务写入交接及回切条件；双写/双向复制单独定义，不隐含承诺无冲突。",

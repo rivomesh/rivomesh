@@ -191,8 +191,37 @@ final class MysqlUniqueFreeze implements AutoCloseable {
                 if (!row.next() || row.getBoolean(1)) throw new IllegalStateException("ADOPTION_PLAN_SOURCE_DDL_UNSUPPORTED");
             }
         }
+        verifyTextUniqueKey(table);
         verify();
         return table;
+    }
+
+    private void verifyTextUniqueKey(TableSchema table) throws SQLException {
+        for (TableSchema.Index index : table.indexes) {
+            if (index.primary || !index.unique || index.columns.size() != 1) continue;
+            TableSchema.Column key = table.columns.get(table.column(index.columns.getFirst()));
+            if (key.type != TableSchema.Type.STRING || key.sourceType == null || !key.sourceType.startsWith("varchar(")) continue;
+            try (PreparedStatement query = connection.prepareStatement("""
+                    SELECT PAD_ATTRIBUTE='NO PAD'
+                           AND _utf8mb4'A' COLLATE utf8mb4_0900_bin <> _utf8mb4'a' COLLATE utf8mb4_0900_bin
+                           AND _utf8mb4'a ' COLLATE utf8mb4_0900_bin <> _utf8mb4'a' COLLATE utf8mb4_0900_bin
+                           AND CONVERT(X'c3a9' USING utf8mb4) COLLATE utf8mb4_0900_bin
+                               <> CONVERT(X'65cc81' USING utf8mb4) COLLATE utf8mb4_0900_bin
+                      FROM information_schema.COLLATIONS
+                     WHERE BINARY COLLATION_NAME=? AND BINARY COLLATION_NAME='utf8mb4_0900_bin'
+                       AND BINARY CHARACTER_SET_NAME=? AND BINARY CHARACTER_SET_NAME='utf8mb4'
+                    """)) {
+                query.setQueryTimeout(3);
+                query.setString(1, key.collation);
+                query.setString(2, key.charset);
+                try (ResultSet row = query.executeQuery()) {
+                    if (!row.next() || !row.getBoolean(1)) {
+                        throw new IllegalStateException("ADOPTED_UNIQUE_SOURCE_TEXT_SEMANTICS_UNSUPPORTED");
+                    }
+                }
+            }
+            return;
+        }
     }
 
     @FunctionalInterface

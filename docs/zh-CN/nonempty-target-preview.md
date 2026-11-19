@@ -22,7 +22,9 @@ java -jar rivomesh.jar preview-adoption config/task.yml postgres
 
 MySQL 运维人员需启用并持久化 `read_only` 和 `super_read_only`，同时保持 `persisted_globals_load` 开启。MySQL 账号需要看见全部表和相关元数据，并有全局读锁及复制状态查询权限。有入站复制或组复制成员时会拒绝计划。命令在原物理会话取得有截止时间的全局读锁，比对前后核验源实例身份及精确 binlog 位点。[MySQL FLUSH 语句](https://dev.mysql.com/doc/refman/8.4/en/flush.html)
 
-源表以单个有符号 `BIGINT` 列为主键，可以另有一个业务 UNIQUE，其键为另一个有符号 `BIGINT` 列。此 UNIQUE 需使用 `DOWNGRADE_BUSINESS`，并在规划前建立对应的普通 PostgreSQL B-tree 索引。`preview-adoption` 的 `indexPlan` 列出预期名称。源表只支持普通列及默认值 `NULL`，类型可为有符号整数、JSON 或最多 4,000 字符的 `utf8mb4_0900_bin` VARCHAR。目标匹配列顺序和可空性，类型对应 `bigint`、`jsonb` 或等宽且显式使用 `pg_catalog."C"` 排序规则的 `varchar`。目标账号需有表归属权限、创建 schema 及 schema 内对象的权限，以及调用 `pg_control_system()` 的权限。外键、触发器、额外索引或约束、已有 Rivomesh 元数据以及目标表已加入订阅时会拒绝计划。
+源表以单个有符号 `BIGINT` 列为主键，可以另有一个单列业务 UNIQUE，其键为另一个有符号 `BIGINT` 或符合下述条件的 `VARCHAR` 列。此 UNIQUE 需使用 `DOWNGRADE_BUSINESS`，并在规划前建立对应的普通 PostgreSQL B-tree 索引。`preview-adoption` 的 `indexPlan` 列出预期名称。源表只支持普通列及默认值 `NULL`，类型可为有符号整数、JSON 或最多 4,000 字符的 `utf8mb4_0900_bin` VARCHAR。目标匹配列顺序和可空性，类型对应 `bigint`、`jsonb` 或等宽且显式使用 `pg_catalog."C"` 排序规则的 `varchar`。目标账号需有表归属权限、创建 schema 及 schema 内对象的权限，以及调用 `pg_control_system()` 的权限。外键、触发器、额外索引或约束、已有 Rivomesh 元数据以及目标表已加入订阅时会拒绝计划。
+
+`UNIQUE(email)` 支持完整的单列 `VARCHAR(1..320)`。MySQL 使用 `utf8mb4_0900_bin` 和 `NO PAD`。PostgreSQL 使用 UTF-8、等宽且显式使用内置确定性 `pg_catalog."C"` 排序规则的 `varchar`、内置 B-tree `text_ops`，页大小至少为 8 KiB。命令核对填充属性、原生比较结果及实际索引的操作符类和排序规则。大小写变体、尾随空格和不同 Unicode 规范化形式各自保留，允许多个 NULL。忽略大小写或重音的规则、`PAD SPACE`、补空格的类型、前缀索引及表达式键都会拒绝。数据值需能由两端数据库表示，PostgreSQL 文本类型不支持 U+0000。[MySQL 二进制排序规则](https://dev.mysql.com/doc/refman/8.4/en/charset-binary-collations.html) · [PostgreSQL 排序规则](https://www.postgresql.org/docs/17/collation.html) · [PostgreSQL 字符类型](https://www.postgresql.org/docs/17/datatype-character.html) · [PostgreSQL B-tree 索引项上限](https://www.postgresql.org/docs/17/btree.html)
 
 ```sh
 java -jar rivomesh.jar plan-adoption config/task.yml postgres

@@ -80,8 +80,7 @@ final class PostgresAdoptionCatalog {
         }
         checkColumns(connection, tableOid, table);
         if (candidate != null) {
-            evidence.add(PostgresUniqueRestoreEvidence.observe(connection, schema, table, candidate,
-                    JdbcSink.constraintName(candidate), restored));
+            evidence.add(PostgresAdoptedUnique.ordinaryHash(connection, schema, table, candidate, restored));
         }
         return Codec.sha256(Codec.encode(evidence));
     }

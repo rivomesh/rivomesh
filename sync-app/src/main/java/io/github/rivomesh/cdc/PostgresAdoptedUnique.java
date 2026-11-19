@@ -13,6 +13,7 @@ import java.util.List;
 /** Restores exactly the one business UNIQUE described by an existing-target adoption plan. */
 public final class PostgresAdoptedUnique {
     private static final String NAME = "rm3_sink_adopted_unique";
+    private static final int MAXIMUM_TEXT_KEY_CHARACTERS = 320;
 
     private PostgresAdoptedUnique() {}
 
@@ -47,8 +48,12 @@ public final class PostgresAdoptedUnique {
                 || table.primaryKey.contains(index.columns.getFirst())) {
             throw failure("ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED");
         }
-        TableSchema.Column key = table.columns.get(table.column(index.columns.getFirst()));
-        if (key.type != TableSchema.Type.INT64 || !"bigint".equals(key.sourceType) || key.generationKind != null) {
+        TableSchema.Column key = keyColumn(table, index);
+        boolean integer = key.type == TableSchema.Type.INT64 && "bigint".equals(key.sourceType);
+        boolean text = key.type == TableSchema.Type.STRING && key.sourceType != null && key.sourceType.startsWith("varchar(")
+                && key.length > 0 && key.length <= MAXIMUM_TEXT_KEY_CHARACTERS
+                && "utf8mb4".equals(key.charset) && "utf8mb4_0900_bin".equals(key.collation);
+        if ((!integer && !text) || key.generationKind != null) {
             throw failure("ADOPTION_PLAN_SOURCE_INDEX_UNSUPPORTED");
         }
         return index;
@@ -67,10 +72,8 @@ public final class PostgresAdoptedUnique {
         if (adoption == null || !receipt.adoptionSha256.equals(Codec.sha256(Codec.encode(adoption)))
                 || !receipt.generation.equals(adoption.generation())
                 || !receipt.proposal.equals(proposal(index))
-                || !receipt.ordinarySha256.equals(PostgresUniqueRestoreEvidence.observe(c, schema, table, index,
-                        receipt.proposal.constraint, true))
-                || !receipt.nativeSha256.equals(PostgresUniqueRestoreEvidence.restoredConstraint(c, schema, table.name,
-                        receipt.proposal.constraint, receipt.proposal.columns))) {
+                || !receipt.ordinarySha256.equals(ordinaryHash(c, schema, table, index, true))
+                || !receipt.nativeSha256.equals(restoredHash(c, schema, table, index))) {
             throw failure("ADOPTED_UNIQUE_RECEIPT_CHANGED");
         }
         return receipt;
@@ -100,7 +103,7 @@ public final class PostgresAdoptedUnique {
             return new Outcome(before, true);
         }
         PostgresUniqueRestoreEvidence.requireSafeDdlSession(c, "ADOPTED_UNIQUE");
-        String ordinaryHash = PostgresUniqueRestoreEvidence.observe(c, schema, table, index, proposal.constraint, false);
+        String ordinaryHash = ordinaryHash(c, schema, table, index, false);
         String relation = relation(settings);
         try (Statement sql = c.createStatement()) {
             sql.execute("CREATE TABLE " + relation + " (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,"
@@ -108,7 +111,7 @@ public final class PostgresAdoptedUnique {
             sql.execute("ALTER TABLE ONLY " + Sql.pg(schema) + "." + Sql.pg(table.name) + " ADD CONSTRAINT "
                     + Sql.pg(proposal.constraint) + " UNIQUE NULLS DISTINCT (" + Sql.pg(proposal.columns.getFirst()) + ") NOT DEFERRABLE");
         }
-        String nativeHash = PostgresUniqueRestoreEvidence.restoredConstraint(c, schema, table.name, proposal.constraint, proposal.columns);
+        String nativeHash = restoredHash(c, schema, table, index);
         Receipt receipt = new Receipt(approval, Codec.sha256(Codec.encode(baseline.receipt())), baseline.receipt().generation(),
                 table.id, proposal, ordinaryHash, nativeHash);
         String body = Codec.encode(receipt);
@@ -123,6 +126,55 @@ public final class PostgresAdoptedUnique {
             throw failure("ADOPTED_UNIQUE_COMMIT_UNKNOWN");
         }
         return new Outcome(receipt, false);
+    }
+
+    static String ordinaryHash(Connection c, String schema, TableSchema table, IndexPolicy.Decision index,
+                               boolean restored) throws Exception {
+        String hash = PostgresUniqueRestoreEvidence.observe(c, schema, table, index, JdbcSink.constraintName(index), restored);
+        verifyTextIndex(c, schema, table, index, index.targetName);
+        return hash;
+    }
+
+    private static String restoredHash(Connection c, String schema, TableSchema table, IndexPolicy.Decision index) throws Exception {
+        String constraint = JdbcSink.constraintName(index);
+        verifyTextIndex(c, schema, table, index, constraint);
+        return PostgresUniqueRestoreEvidence.restoredConstraint(c, schema, table.name, constraint, index.columns);
+    }
+
+    private static TableSchema.Column keyColumn(TableSchema table, IndexPolicy.Decision index) {
+        return table.columns.get(table.column(index.columns.getFirst()));
+    }
+
+    private static void verifyTextIndex(Connection c, String schema, TableSchema table, IndexPolicy.Decision index,
+                                        String indexName) throws SQLException {
+        TableSchema.Column key = keyColumn(table, index);
+        if (key.type != TableSchema.Type.STRING) return;
+        // PostgreSQL 17 bootstrap object IDs 950 and 3126 identify the stock C collation and B-tree text_ops.
+        try (PreparedStatement query = c.prepareStatement("""
+                SELECT current_setting('block_size')::int>=8192
+                       AND a.atttypid='pg_catalog.varchar'::regtype AND a.atttypmod=?
+                       AND coll.oid=950 AND coll.collprovider='c' AND coll.collencoding=-1 AND coll.collisdeterministic
+                       AND coll.collcollate='C' AND coll.collctype='C'
+                       AND i.indcollation[0]=coll.oid AND i.indclass[0]=3126
+                       AND 'A'::varchar COLLATE pg_catalog."C" <> 'a'::varchar COLLATE pg_catalog."C"
+                       AND 'a '::varchar COLLATE pg_catalog."C" <> 'a'::varchar COLLATE pg_catalog."C"
+                       AND convert_from(decode('c3a9','hex'),'UTF8') COLLATE pg_catalog."C"
+                           <> convert_from(decode('65cc81','hex'),'UTF8') COLLATE pg_catalog."C"
+                  FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
+                  JOIN pg_index i ON i.indrelid=t.oid JOIN pg_class idx ON idx.oid=i.indexrelid
+                  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=i.indkey[0] AND NOT a.attisdropped
+                  JOIN pg_collation coll ON coll.oid=a.attcollation
+                 WHERE n.nspname=? AND t.relname=? AND idx.relnamespace=n.oid AND idx.relname=? AND a.attname=?
+                """)) {
+            query.setInt(1, Math.toIntExact(key.length) + 4);
+            query.setString(2, schema);
+            query.setString(3, table.name);
+            query.setString(4, indexName);
+            query.setString(5, key.name);
+            try (ResultSet row = query.executeQuery()) {
+                if (!row.next() || !row.getBoolean(1)) throw failure("ADOPTED_UNIQUE_TARGET_TEXT_SEMANTICS_UNSUPPORTED");
+            }
+        }
     }
 
     private static Receipt find(Connection c, JdbcSink.Settings settings) throws Exception {

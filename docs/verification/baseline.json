@@ -9095,5 +9095,29 @@
     "manifestSha256": "ec98ec641da5143396a96e6171064ed984e8c510a37d32e57536d47963f0909b",
     "scope": "One real KingbaseES V009R001C001B0025 ARM64 PG/UTF8 target, vendor-supplied Kingbase JDBC Maven artifact kingbase8-9.0.1 and the external vendor JDBC Temurin 21 package. Synthetic transaction inputs drive packaged JDBC target paths. Real SCRAM-role authentication, native types, duplicate-key rollback, restart, persisted checkpoint and deterministic replay passed.",
     "reproduce": "Follow the external JDBC fixture command in docs/en/kingbase-v3.md."
+  },
+  "adoptedEmailSameCutNative": {
+    "native": {
+      "artifactSha256": "0c11572ca63fb42f45218cb4cc94d473f8dc243310f92e34b2798b7d7d6d6e59",
+      "checks": [
+        "Email adoption refuses PAD SPACE and case-folded source keys, prefix or oversized keys, and drifted target collation or operator class",
+        "Existing nonempty difference preview and ordinary-index plan lead to the same frozen adopted cut",
+        "Unattested native UNIQUE refuses readiness; the exact reviewed restoration is enforced and retains its original ordinary index",
+        "Native UNIQUE(email) distinguishes case, trailing spaces and Unicode normalization forms, accepts 320 UTF-8 characters and multiple NULLs",
+        "Native index drift is rejected; restored constraint receipt binds the same original cut through writer activation and pre-write failback",
+        "After write-free failback normal CDC continues the original snapshot and keeps the attested UNIQUE in force"
+      ],
+      "status": "PASS",
+      "profile": "ADOPTED_EMAIL_CHAIN",
+      "mysqlVersion": "8.4.13",
+      "postgresqlVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "33f79df6accc2b96e0b3190dba5421bf14dc8561b03ad7f5e02d412da6076e5b",
+    "fixtureSha256": "3b1d1e02598c27f6843d79318f846964e7afce2787d273086ece8b3e60b4dc57",
+    "appTree": "6ff22daf7af580238c35edc6fe912da30cf0e16a",
+    "javaTestsPassed": 68,
+    "scope": "One existing table, MySQL 8.4.13 utf8mb4_0900_bin NO PAD and PostgreSQL 17.12 built-in C, one single-column VARCHAR UNIQUE, matched declared widths up to 320 characters, exact native ordinary index, constraint restoration, role switch, pre-write failback and original-snapshot CDC.",
+    "reproduce": "python3 tests/nonempty-target-preview.py --only-adopted-email-chain --artifact /path/to/rivomesh.jar --output target/adopted-email-native"
   }
 }
