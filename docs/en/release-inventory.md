@@ -114,6 +114,23 @@ unzip -Z1 target/hive-jdbc-review.jar
 
 The outer `NOTICE` matches Kafka Clients 3.9.2 byte for byte. Its `META-INF/NOTICE` matches ActiveMQ Classic Client 5.16.8. Kafka's version marker and a consumer class also match its upstream JAR. The scanner uses the version marker to include Kafka in `requiredComponentReviews`. The normal build also contains the Connector/J licensing manual at `LICENSE` and a copy of the GBase8c upstream license at `META-INF/LICENSE`. The report's `outerPackageDocumentDependencyMatches` records each recognized match with the exact package path, SHA-256, upstream component and upstream path. A match identifies the reference bytes. Standard license templates can appear in multiple artifacts and are outside this matching rule. [ASF licensing documentation](https://www.apache.org/legal/release-policy.html#licensing)
 
+### Prepare package documents from separately reviewed files
+
+After the rights holders provide the reviewed LICENSE and NOTICE files, use the opt-in Python 3 step on Linux or macOS to prepare a separate JAR from the exact shaded build. Obtain the three SHA-256 values from the build and review records. Use a new output filename in an existing directory without symbolic links on a filesystem that supports hard links. The ordinary Maven profiles remain available without these materials.
+
+```sh
+mkdir -p target/review
+python3 tests/prepare-release-documents.py \
+  --artifact "$candidate" --artifact-sha256 "$RIVOMESH_INPUT_JAR_SHA256" \
+  --license /reviewed/LICENSE --license-sha256 "$RIVOMESH_REVIEWED_LICENSE_SHA256" \
+  --notice /reviewed/NOTICE --notice-sha256 "$RIVOMESH_REVIEWED_NOTICE_SHA256" \
+  --output target/review/rivomesh-prepared.jar
+```
+
+The step copies the reviewed bytes to both root paths and both `META-INF` paths. It refuses missing or mismatched inputs, known dependency documents supplied as project documents, signed outer JARs, duplicate outer entries and existing outputs. The JAR manifest and the content and compression methods of the other entries are preserved. Any original files in the four paths are preserved under `META-INF/rivomesh-licenses/`. `META-INF/rivomesh-release-documents.json` records their old and new paths and hashes, along with verified upstream references when available.
+
+Use the prepared JAR and its new SHA-256 for the package inventory and candidate tests. Document preparation assembles the supplied files. Review the rights, dependency terms and actual distribution independently with the gate below.
+
 ### Distribution review record
 
 Run the inventory with `--asf-review target/candidate/distribution-review.json` to check an exact JAR against a completed manual review. Use the following fields in that record.

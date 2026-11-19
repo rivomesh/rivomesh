@@ -13852,5 +13852,37 @@
     "firstFixtureFailure": "A real ACL changed asynchronously after setup. This was a fixture readiness error before product approval. The retained diagnostic redacts its ephemeral keystore password. The same application passed after only adding bounded fixture readiness checks.",
     "scope": "two separate Controller/Agent roles in one acceptance JVM, shared H2, synthetic source and real Kafka; no sender or live source capture",
     "reproduce": "python3 tests/kafka-notice-writer-run.py --managed-notice-preflight --java-home \"$JAVA_HOME\" --artifact-sha256 \"$RIVOMESH_ARTIFACT_SHA256\" \"$RIVOMESH_ARTIFACT\""
+  },
+  "releasePackageDocumentsPreparation": {
+    "status": "PASS",
+    "evidenceSha256": "fbc8f6225beb700529212524752568b5c42f034c2d74a4a98dfc902d7a42587c",
+    "sourceCommit": "7d04628405f2dbf55968a965312165a7845f35f9",
+    "jdk": "Temurin 21.0.13+9 Darwin ARM64",
+    "preparationTestsPassed": 5,
+    "inventoryTestsPassed": 5,
+    "artifacts": {
+      "7d04628-normal": {
+        "sourceArtifactSha256": "320f0a6d36594b64f383464ea058e7af995e49bf1a760c4d88a49e5376913913",
+        "temporarySyntheticArtifactSha256": "bb59cb81911773be6d77acb51e1f2f7f57d5e962b6878aaaa065a2c70794bdb2",
+        "temporaryArtifactRemoved": true,
+        "unchangedMemberPayloadsAndCompressionMetadata": 71989,
+        "attributedOriginalDependencyDocuments": 4,
+        "javaJarLoopbackHealth": 200,
+        "outerKnownCopiedDocumentMatchesAfterPreparation": 0,
+        "currentInventoryRefusedMissingRightsReview": true
+      },
+      "prior-external-vendor": {
+        "sourceArtifactSha256": "02906330f9cc73efa8e4516ef3838f3ee3607a12f943e0352664a8db5711b5f3",
+        "temporarySyntheticArtifactSha256": "09647fa328b316bc9680a17b737c78e6d49e509319c439b4155c9797b7c4b567",
+        "temporaryArtifactRemoved": true,
+        "unchangedMemberPayloadsAndCompressionMetadata": 68641,
+        "attributedOriginalDependencyDocuments": 2,
+        "javaJarLoopbackHealth": 200,
+        "outerKnownCopiedDocumentMatchesAfterPreparation": 0,
+        "currentInventoryRefusedMissingRightsReview": true
+      }
+    },
+    "scope": "Synthetic document assembly on a separate output. Both exact original Temurin 21 input JARs preserve their bytes. The temporary candidates start and preserve recognized dependency attributions. Release rights and bundled-driver review are independent.",
+    "reproduce": "python3 tests/prepare-release-documents-test.py"
   }
 }

@@ -114,6 +114,23 @@ unzip -Z1 target/hive-jdbc-review.jar
 
 外层 `NOTICE` 与 Kafka Clients 3.9.2 原包逐字节相同，`META-INF/NOTICE` 与 ActiveMQ Classic Client 5.16.8 原包相同。Kafka 版本标记和一个消费者类也与上游包一致，清单用这一版本标记将 Kafka 纳入 `requiredComponentReviews`。普通构建的 `LICENSE` 还包含 Connector/J 许可手册，`META-INF/LICENSE` 与 GBase8c 上游许可文件相同。清单的 `outerPackageDocumentDependencyMatches` 记录每项已识别匹配的包内路径、SHA-256、上游组件及上游路径。匹配表示文件字节相同。通用许可证模板可能在多种制品中出现，不计入此项匹配。[ASF 许可文档要求](https://www.apache.org/legal/release-policy.html#licensing)
 
+### 使用独立审阅的文件准备包级文档
+
+权利人提供已审阅的 LICENSE 和 NOTICE 后，可在 Linux 或 macOS 上用 Python 3 显式运行准备步骤，从指定 shaded JAR 生成独立制品。从构建和审阅记录取得这三个 SHA-256 值。输出需要支持硬链接的文件系统、无符号链接的已存在目录和新文件名。日常 Maven 构建可照常进行。
+
+```sh
+mkdir -p target/review
+python3 tests/prepare-release-documents.py \
+  --artifact "$candidate" --artifact-sha256 "$RIVOMESH_INPUT_JAR_SHA256" \
+  --license /reviewed/LICENSE --license-sha256 "$RIVOMESH_REVIEWED_LICENSE_SHA256" \
+  --notice /reviewed/NOTICE --notice-sha256 "$RIVOMESH_REVIEWED_NOTICE_SHA256" \
+  --output target/review/rivomesh-prepared.jar
+```
+
+工具将审阅后的原始字节写入 JAR 根目录与 `META-INF` 下的四个标准路径。缺少输入、摘要不符、将已识别的依赖文档用作项目文档、外层 JAR 已签名、外层条目重复或输出已存在，都会拒绝生成。JAR 的运行清单及其他条目的内容、压缩方法保持一致。四个位置原有的文件另存于 `META-INF/rivomesh-licenses/`。`META-INF/rivomesh-release-documents.json` 记录原路径、新路径和摘要，并附上可核验的上游来源。
+
+使用准备后的 JAR 和新摘要运行包清单及候选制品验收。准备步骤仅装配传入文件。源码权利、依赖条款和实际分发范围随后按下面的门禁独立审阅。
+
 ### 分发审核记录
 
 人工审核完成后，运行清单命令并附加 `--asf-review target/candidate/distribution-review.json`。审核记录包含以下字段。
