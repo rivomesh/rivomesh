@@ -2,19 +2,21 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T11:58:16+08:00",
-  "nextReportAt": "2026-11-19T12:58:16+08:00",
+  "lastReportAt": "2026-11-19T13:58:00+08:00",
+  "nextReportAt": "2026-11-19T14:58:16+08:00",
   "completedSincePrevious": [
-    "RC-10: Independent Kafka notice writer identity and broker-native permissions preview merged and pushed. Kafka 3.9.2, TLS and SCRAM passed six native cases. Neither topic advanced. The exact application tree passed 12 focused Java tests, 156 DOM tests and the package gate.",
-    "LG-10: Signed audit checkpoint retention tool and bilingual instructions merged and pushed. Five transport cases, 13 export regressions and seven real loopback MinIO Object Lock checks passed. The exact version and SHA-256 survive retry and COMPLIANCE blocks early deletion and shorter retention."
+    "LG-05 original native MySQL capture ZIP survives candidate restart as private read-only history. 29 native checks including three Chrome checks, 61 integrated Java and 156 DOM; pushed c6bfd93.",
+    "LG-08 explicitly global primary and exact-column identity GSI require a reviewed distribution plan before JDBC business DDL, with reordered key columns protected. 31 integrated Java checks; pushed 044b77e.",
+    "SO-07 bounded virtual integer sums and differences survived Oracle Free archive recovery to PostgreSQL with original snapshot IDs. 18 native and 45 integrated Java checks; pushed 29e790d.",
+    "CP-04 the candidate completes one preapproved and drained handoff after its accepting Controller exits. Both native cuts are rechecked before parking the assignment. 18 native, 70 integrated Java and 156 DOM; pushed b8ca754.",
+    "Temurin 25.0.5 on ARM64 passed external MySQL asynchronous GTID promotion and Controller and Agent rolling replacement on the integrated package."
   ],
   "inProgress": [
-    "CP-04 unexpected Agent loss, network partitions and full drain capacity across storage modes.",
-    "LG-05 historical failure evidence adoption and broader storage profiles.",
-    "SO-07 Oracle binary JSON, LOB, RAC and additional expression profiles.",
-    "RC-10 approved Kafka notice dispatch and lost-commit recovery with complete independent topology evidence.",
-    "LG-08 managed Gauss index preflight and commercial distributed GaussDB multi-CN/DN acceptance.",
-    "LG-10 live AWS permissions, full audit event retention, external identities and distribution rights."
+    "CP-04 native original Agent loss and observed control-state fencing.",
+    "LG-05 signed historical failure evidence staging and read-only ownership integration.",
+    "RC-10 Kafka physical identity checks across active and recoverable configurations.",
+    "LG-08 bounded Gauss index review within the managed CHECK operation.",
+    "LG-04 two-broker Pulsar and three-BookKeeper quorum recovery."
   ],
   "reportContents": [
     "Current totals",
@@ -29,7 +31,11 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "106b11f47e0b050eb1175c9a112c1eb658c8e542"
+    "c6bfd93",
+    "044b77e",
+    "29e790d",
+    "b8ca754",
+    "a72ff69af63b5623426c7152a5d2869b990526f2"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -37,20 +43,14 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Test unexpected Agent loss and link historical failure evidence to its exact approved cut.",
-    "Continue the destination cluster recovery and runtime driver compatibility matrices."
+    "Complete focused and native acceptance in isolated environments.",
+    "Integrate compatible verified slices while retaining the SDD parent acceptance limits."
   ],
   "currentCandidateArtifact": "c69e00d9d33d0a5f95bc1b828565c106bda7a471324c6243b156379a62467880",
   "currentCandidateScope": "Integrated approved handoff continuation, original capture history, Kafka writer permissions, Oracle virtual arithmetic and JDBC identity protection. Java 25 async source promotion and Agent rolling replacement now pass on this same application package.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [
-    "LG-05 original native MySQL capture ZIP survives candidate restart as private read-only history. 29 native checks including three Chrome checks, 61 integrated Java and 156 DOM; pushed c6bfd93.",
-    "LG-08 explicitly global primary and exact-column identity GSI require a reviewed distribution plan before JDBC business DDL, with reordered key columns protected. 31 integrated Java checks; pushed 044b77e.",
-    "SO-07 bounded virtual integer sums and differences survived Oracle Free archive recovery to PostgreSQL with original snapshot IDs. 18 native and 45 integrated Java checks; pushed 29e790d.",
-    "CP-04 the candidate completes one preapproved and drained handoff after its accepting Controller exits. Both native cuts are rechecked before parking the assignment. 18 native, 70 integrated Java and 156 DOM; pushed b8ca754.",
-    "Temurin 25.0.5 on ARM64 passed external MySQL asynchronous GTID promotion and Controller and Agent rolling replacement on the integrated package."
-  ],
-  "lastScheduledReportAt": "2026-11-19T11:58:16+08:00",
+  "newSinceLastReport": [],
+  "lastScheduledReportAt": "2026-11-19T13:58:16+08:00",
   "lastVerifiedReactor": {
     "commit": "bbe4fc8",
     "artifactSha256": "d07dcc9868c2f571b7e4ff39322fb3f3df116c73a2ab1a419b8d135f83a39d79",
@@ -79,5 +79,8 @@
       "2026-11-19T08:03:44+08:00"
     ],
     "scope": "The active development host advanced across scheduled times instead of remaining continuously available. These records describe delayed in-conversation reports."
-  }
+  },
+  "inactiveConversationMissedReportAt": [
+    "2026-11-19T12:58:16+08:00"
+  ]
 }
