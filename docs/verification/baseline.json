@@ -13225,5 +13225,52 @@
     },
     "scope": "Both cases use the original Agent and shared PostgreSQL control/journal. Each run selects one of two SQL destinations as the committed-but-unacknowledged target. Reconnect, STOP and explicit START advance only the missing ACK. The launch without the target option exercises PostgreSQL.",
     "reproduce": "docs/en/global-control.md#asymmetric-control-network-partition"
+  },
+  "oracleFreeNativeBinaryJsonImages": {
+    "artifactSha256": "0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "sourceVersion": "23.26.4.0.0",
+    "status": "PASS",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Closed LogMiner reads preserve every marker XID and give the same archived record stream on replay",
+      "A known VARCHAR2 marker independently validates COLUMN_PRESENT and MINE_VALUE",
+      "Current product preflight refuses native JSON tables and preserves the documented capture boundary",
+      "Restricted JDBC Flashback repeats exact serialized JSON bytes and preserves nulls, extended types and keyless values"
+    ],
+    "cleanupExitCode": 0,
+    "observations": {
+      "nativeArchiveRepeated": true,
+      "archiveSha256": "d138c28f2b61417786512cd3dadba2221a716f8b4447674adc231e442823aca9",
+      "nativeRows": 24,
+      "reportedUnsupported": 24,
+      "scalarInsertRows": 4,
+      "expectedRowChanges": 14,
+      "qualifiedScalarControl": [
+        "pdb",
+        ""
+      ],
+      "nonNullJdbcGetBytesMatchedUtf8": 39,
+      "archiveAndMinePayloadMatches": 0,
+      "cleanupExitCode": 0
+    },
+    "manifestSha256": "227b17570b58da9647cac62b25460bb26a9012987f1a06d5b0fbfe9cd8aa3489",
+    "exactFindingsSha256": "e624abee6cbddf84e52501c509b8634b7d7831d45436eb138b06874ceaabb88e",
+    "fixtureSha256": "2ecab61318e70080312a610f1c2471120b0c4836bc362fc25d4117683080b7d3",
+    "jdbcFixtureSha256": "13c145fabd5ad2bb528991adbdf38d11617c287ce0e30e5836425aa6a1b1669f",
+    "retainedInitialFailureSha256": "2a3164559d5ef3f775da75f188e92256362878165224f220cda476091afaafc1",
+    "retainedInitialFailure": "Initial PDB-qualified control marker raised ORA-00904. The final diagnostic uses the PDB dictionary and unqualified owner.table.column name, and verifies all four positive control values.",
+    "scope": "A single Oracle Free PDB with ALL supplemental logging. CDC has no reliable native binary JSON images in the accepted profile. Product refuses these tables during preflight. The JDBC and Flashback findings are separate.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --native-json-evidence --output target/oracle-native-json-proof"
   }
 }

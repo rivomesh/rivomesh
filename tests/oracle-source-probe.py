@@ -2,10 +2,13 @@
 """Verify Oracle 26ai source identity and SCN flashback with a disposable Free database."""
 
 import argparse
+import base64
+from decimal import Decimal
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import signal
 import socket
@@ -442,6 +445,341 @@ def savepoint_evidence(sql, output, observed, review):
     assert preview['tail']['decoded']['committedTransactions']==1,preview
     assert preview['tail']['decoded']['operations']=={'INSERT':1},preview
     observed('The exact product probe decodes only four surviving changes and one independently selected clean commit')
+
+
+def seed_native_json(sql):
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        CREATE TABLE rivo_app.rivo_native_jr (id NUMBER(12) PRIMARY KEY, payload JSON, note VARCHAR2(50));
+        CREATE TABLE rivo_app.rivo_native_jk (tag VARCHAR2(20), payload JSON);
+        CREATE TABLE rivo_app.rivo_json_control (token VARCHAR2(30) PRIMARY KEY);
+        GRANT SELECT, FLASHBACK ON rivo_app.rivo_native_jr TO C##RIVO_PROBE;
+        GRANT SELECT, FLASHBACK ON rivo_app.rivo_native_jk TO C##RIVO_PROBE;
+        GRANT SELECT, FLASHBACK ON rivo_app.rivo_json_control TO C##RIVO_PROBE;""")
+    supplemental={}
+    for table in ('RIVO_NATIVE_JR','RIVO_NATIVE_JK','RIVO_JSON_CONTROL'):
+        result=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            ALTER TABLE rivo_app.{table} ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""",checked=False)
+        supplemental[table]={'exitCode':result.returncode,'errors':oracle_errors(result)}
+    assert supplemental['RIVO_JSON_CONTROL']['exitCode']==0,supplemental
+    sql(r"""ALTER SESSION SET CONTAINER=FREEPDB1;
+        INSERT INTO rivo_app.rivo_native_jr VALUES
+            (1,JSON('{"z":"caf\u00e9 \ud83d\ude00","n":9007199254740993,"a":[true,null,0.125]}'),'base');
+        INSERT INTO rivo_app.rivo_native_jr VALUES(2,NULL,'sql-null');
+        INSERT INTO rivo_app.rivo_native_jr VALUES(3,JSON('null'),'json-null');
+        INSERT INTO rivo_app.rivo_native_jr VALUES(4,JSON_SCALAR(DATE '2024-02-29'),'typed-date');
+        INSERT INTO rivo_app.rivo_native_jr VALUES(5,JSON_SCALAR(HEXTORAW('00FF')),'typed-binary');
+        INSERT INTO rivo_app.rivo_native_jk VALUES('duplicate',JSON('{"counter":5,"nil":null}'));
+        INSERT INTO rivo_app.rivo_native_jk VALUES('duplicate',JSON('{"counter":5,"nil":null}'));
+        COMMIT;""")
+    return supplemental
+
+
+def oracle_errors(result):
+    return [line.strip() for line in (result.stdout+'\n'+result.stderr).splitlines()
+            if line.lstrip().startswith(('ORA-','SP2-'))]
+
+
+def native_json_evidence(options, sql, pdb_service, environment, observed, review, supplemental):
+    keyed='RIVO_NATIVE_JR'
+    keyless='RIVO_NATIVE_JK'
+    control='RIVO_JSON_CONTROL'
+
+    def evidence(name, content):
+        (options.output/f'native-json-{name}.json').write_text(json.dumps(content,indent=2)+'\n')
+
+    evidence('supplemental',supplemental)
+    data_types=sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT table_name||'|'||column_name||'|'||data_type FROM all_tab_cols
+        WHERE owner='RIVO_APP' AND table_name IN ('RIVO_NATIVE_JR','RIVO_NATIVE_JK')
+          AND column_name='PAYLOAD' ORDER BY table_name;""").stdout.splitlines()
+    assert [line.strip() for line in data_types if '|' in line]==[
+        'RIVO_NATIVE_JK|PAYLOAD|JSON','RIVO_NATIVE_JR|PAYLOAD|JSON']
+
+    def current_scn():
+        scn=sql('SELECT current_scn FROM v$database;').stdout.strip()
+        assert scn.isdecimal()
+        return scn
+
+    def flashback_ready():
+        scn=current_scn()
+        check=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            SELECT 'KEYED|'||COUNT(*) FROM rivo_app.{keyed} AS OF SCN {scn};
+            SELECT 'KEYLESS|'||COUNT(*) FROM rivo_app.{keyless} AS OF SCN {scn};""",checked=False)
+        if check.returncode and 'ORA-01466' in check.stdout:
+            return None
+        assert check.returncode==0,oracle_errors(check)
+        assert [line.strip() for line in check.stdout.splitlines() if '|' in line]==['KEYED|5','KEYLESS|2']
+        return scn
+
+    build=sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        EXEC SYS.DBMS_LOGMNR_D.BUILD(OPTIONS=>SYS.DBMS_LOGMNR_D.STORE_IN_REDO_LOGS)
+        SELECT 'DICT|'||MAX(start_scn) FROM SYS.DBA_LOGMNR_DICTIONARY_BUILDLOG;""",checked=False)
+    dictionary_scn=next((line.strip().split('|')[1] for line in build.stdout.splitlines()
+                         if line.lstrip().startswith('DICT|')),None)
+    dictionary={'exitCode':build.returncode,'errors':oracle_errors(build),'startScn':dictionary_scn}
+    evidence('pdb-dictionary',dictionary)
+    positions={'baseline':required(flashback_ready,'Native JSON Flashback anchor after DDL',30)}
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    changes={
+        'insert':"""
+            INSERT INTO rivo_app.rivo_native_jr VALUES(6,JSON('{"inserted":[1,true,null]}'),'inserted');
+            INSERT INTO rivo_app.rivo_native_jr VALUES(7,
+                JSON(TO_CLOB('{"pad":"')||RPAD('x',3500,'x')||RPAD('x',3500,'x')||'","tail":"native-end"}'),
+                'large');
+            INSERT INTO rivo_app.rivo_native_jk VALUES('inserted',JSON('false'));""",
+        'replace':"""
+            UPDATE rivo_app.rivo_native_jr SET payload=JSON('{"replaced":2.125,"old":null}') WHERE id=1;
+            UPDATE rivo_app.rivo_native_jr SET payload=JSON('null') WHERE id=2;
+            UPDATE rivo_app.rivo_native_jr SET payload=NULL WHERE id=3;
+            UPDATE rivo_app.rivo_native_jr SET note='scalar-only' WHERE id=5;
+            UPDATE rivo_app.rivo_native_jk SET payload=JSON('true') WHERE tag='inserted';""",
+        'path-update':"""
+            UPDATE rivo_app.rivo_native_jr
+                SET payload=JSON_TRANSFORM(payload, SET '$.inserted[0]'=19) WHERE id=6;
+            UPDATE rivo_app.rivo_native_jr
+                SET payload=JSON_TRANSFORM(payload, SET '$.tail'='path-edited') WHERE id=7;
+            UPDATE rivo_app.rivo_native_jk
+                SET payload=JSON_TRANSFORM(payload, SET '$.counter'=8) WHERE tag='duplicate' AND ROWNUM=1;""",
+        'delete':"""
+            DELETE FROM rivo_app.rivo_native_jr WHERE id IN (6,7);
+            DELETE FROM rivo_app.rivo_native_jk WHERE tag='duplicate'
+                AND JSON_VALUE(payload,'$.counter' RETURNING NUMBER)=5;""",
+    }
+    for step,statements in changes.items():
+        sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+            {statements}
+            INSERT INTO rivo_app.{control} VALUES('{step}');
+            COMMIT;""")
+        positions[step]=current_scn()
+    end=current_scn()
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    evidence('positions',positions)
+    assert all(int(a)<int(b) for a,b in zip(positions.values(),list(positions.values())[1:]))
+
+    def raw_rows(condition, *, committed_only=True):
+        query=f"""
+            SET LONG 32767 LONGCHUNKSIZE 32767
+            SELECT JSON_OBJECT('owner' VALUE seg_owner, 'segment' VALUE seg_name, 'table' VALUE table_name,
+                'object' VALUE data_obj#, 'pdb' VALUE src_con_name, 'operation' VALUE operation,
+                'scn' VALUE TO_CHAR(scn), 'commitScn' VALUE TO_CHAR(commit_scn), 'xid' VALUE RAWTOHEX(xid),
+                'rowId' VALUE row_id, 'rsId' VALUE rs_id, 'ssn' VALUE ssn, 'status' VALUE status,
+                'continues' VALUE csf, 'rollback' VALUE rollback, 'info' VALUE info,
+                'redo' VALUE sql_redo, 'undo' VALUE sql_undo NULL ON NULL RETURNING CLOB)
+            FROM v$logmnr_contents WHERE {condition}
+            ORDER BY commit_scn,RAWTOHEX(xid),scn,rs_id,ssn;
+        """
+        result=mine_archive(sql,positions['baseline'],end,query,committed_only=committed_only)
+        return [json.loads(line) for line in result.stdout.splitlines() if line.lstrip().startswith('{')]
+
+    xids={}
+    markers=raw_rows(f"src_con_name='FREEPDB1' AND seg_owner='RIVO_APP' AND table_name='{control}'")
+    for step in changes:
+        selected=[row for row in markers if row['operation']=='INSERT' and f"'{step}'" in (row['redo'] or '')]
+        assert len(selected)==1 and re.fullmatch('[0-9A-F]{16}',selected[0]['xid']),selected
+        xids[step]=selected[0]['xid']
+    assert len(set(xids.values()))==len(changes)
+    evidence('markers',{'xids':xids,'rows':markers})
+    scope='RAWTOHEX(xid) IN ('+','.join(f"'{xid}'" for xid in xids.values())+')'
+    rows=raw_rows(scope)
+    reproduced=raw_rows(scope)
+    evidence('archive',rows)
+    evidence('archive-replay',reproduced)
+    assert rows and rows==reproduced
+    evidence('archive-unfiltered',raw_rows(scope,committed_only=False))
+    observed('Closed LogMiner reads preserve every marker XID and give the same archived record stream on replay')
+
+    archived_json=[row for row in rows if row['table'] in (keyed,keyless)]
+    assert {row['xid'] for row in archived_json}==set(xids.values())
+    assert {row['table'] for row in archived_json}=={keyed,keyless}
+    evidence('traditional-archive-shape',{
+        'nativeRows':len(archived_json),
+        'reportedUnsupported':sum(row['operation']=='UNSUPPORTED' and row['status']==2 and
+                                  row['redo']==row['undo']=='Unsupported' for row in archived_json),
+        'scalarInsertRows':sum(row['operation']=='INSERT' and row['status']==0 for row in markers),
+    })
+
+    def read_candidate(mode, prefix, table, column, function):
+        qualified=f'{prefix}RIVO_APP.{table}.{column}'
+        query=f"""
+            SET LONG 32767 LONGCHUNKSIZE 32767
+            SELECT JSON_OBJECT('operation' VALUE operation, 'xid' VALUE RAWTOHEX(xid),
+                'rowId' VALUE row_id, 'rsId' VALUE rs_id, 'ssn' VALUE ssn,
+                'redo' VALUE DBMS_LOGMNR.{function}(redo_value,'{qualified}'),
+                'undo' VALUE DBMS_LOGMNR.{function}(undo_value,'{qualified}') NULL ON NULL RETURNING CLOB)
+            FROM v$logmnr_contents
+            WHERE {scope} AND seg_owner='RIVO_APP' AND table_name='{table}'
+            ORDER BY commit_scn,scn,rs_id,ssn;
+        """
+        if mode=='root':
+            result=mine_archive(sql,positions['baseline'],end,query,checked=False)
+        else:
+            result=sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+                BEGIN
+                    SYS.DBMS_LOGMNR.START_LOGMNR(STARTSCN=>{dictionary_scn}, ENDSCN=>{end},
+                        OPTIONS=>SYS.DBMS_LOGMNR.DDL_DICT_TRACKING+SYS.DBMS_LOGMNR.DICT_FROM_REDO_LOGS);
+                END;
+                /
+                {query}
+                EXEC SYS.DBMS_LOGMNR.END_LOGMNR
+                """,checked=False)
+        return {
+            'exitCode':result.returncode,'errors':oracle_errors(result),
+            'rows':[json.loads(line) for line in result.stdout.splitlines() if line.lstrip().startswith('{')],
+        }
+
+    def mine_pair(mode,prefix,table,column):
+        return {entry:read_candidate(mode,prefix,table,column,function)
+                for entry,function in (('presence','COLUMN_PRESENT'),('values','MINE_VALUE'))}
+
+    def scalar_proven(pair):
+        return pair['values']['exitCode']==pair['presence']['exitCode']==0 and (
+            len(pair['values']['rows'])==len(pair['presence']['rows'])==len(changes) and
+            {row['redo'] for row in pair['values']['rows']}==set(changes) and
+            all(row['redo']==1 for row in pair['presence']['rows']))
+
+    controls=[]
+    selected=None
+    for mode in ('pdb','root'):
+        if mode=='pdb' and (build.returncode or not dictionary_scn or not dictionary_scn.isdecimal()):
+            continue
+        for prefix in ('FREEPDB1:',''):
+            pair=mine_pair(mode,prefix,control,'TOKEN')
+            supported=scalar_proven(pair)
+            controls.append({'mode':mode,'prefix':prefix,'scalarConfirmed':supported,'result':pair})
+            if supported and selected is None:
+                selected=(mode,prefix)
+    evidence('mine-controls',controls)
+    candidates={}
+    if selected is not None:
+        candidates={table:mine_pair(*selected,table,'PAYLOAD') for table in (keyed,keyless)}
+        observed('A known VARCHAR2 marker independently validates COLUMN_PRESENT and MINE_VALUE')
+    evidence('mine-value',{'validatedControl':selected,'tables':candidates})
+    refusals={}
+    for table in (keyed,keyless):
+        result=review([f'RIVO_APP.{table}'],positions['baseline'],end)
+        code='ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED'
+        assert result.returncode and code in result.stderr,(table,result.stderr)
+        refusals[table]=code
+    evidence('refusals',refusals)
+    observed('Current product preflight refuses native JSON tables and preserves the documented capture boundary')
+
+    def sql_snapshot():
+        helper=Path(__file__).resolve().parent/'oracle'/'NativeJsonFlashback.java'
+        command=(options.java,'-cp',str(options.jdbc_driver.resolve()),str(helper),pdb_service,*positions.values())
+        result=execute(*command,env=environment,checked=False)
+        if result.returncode:
+            (options.output/'native-json-jdbc-failure.log').write_text(result.stderr)
+            result.check_returncode()
+        output={}
+        for line in result.stdout.splitlines():
+            scn,table,row_id,key,kind,typed,serialized,raw_kind,raw=line.split('\t')
+            def decode(value):
+                return None if value=='-' else base64.b64decode(value,validate=True)
+            text=decode(serialized)
+            driver_text=decode(typed)
+            raw_bytes=decode(raw)
+            output.setdefault(scn,[]).append({
+                'table':table,'rowId':row_id,'key':key,'kind':kind,
+                'serialized':None if text is None else text.decode('utf-8'),
+                'serializedSha256':None if text is None else hashlib.sha256(text).hexdigest(),
+                'typedText':None if driver_text is None else driver_text.decode('utf-8'),
+                'rawKind':raw_kind,'rawBase64':None if raw_bytes is None else raw,
+            })
+        return output
+
+    snapshots=sql_snapshot()
+    assert snapshots==sql_snapshot() and snapshots.keys()==set(positions.values())
+    evidence('jdbc-flashback',snapshots)
+
+    def value(record):
+        text=record['serialized']
+        return json.loads(text,parse_int=Decimal,parse_float=Decimal) if text is not None else None
+
+    def typed_value(text):
+        def number(token):
+            return ('number',Decimal(token))
+        return json.loads(text,parse_int=number,parse_float=number)
+
+    for snapshot in snapshots.values():
+        assert all((row['serialized'] is None)==(row['kind']=='SQL_NULL') for row in snapshot)
+        for row in snapshot:
+            if row['kind'] not in ('SQL_NULL','DATE','BINARY'):
+                assert typed_value(row['typedText'])==typed_value(row['serialized']),row
+    states={step:{record['key']:record for record in snapshots[scn] if record['table']==keyed}
+            for step,scn in positions.items()}
+    base=states['baseline']
+    assert value(base['1'])=={'z':'café 😀','n':Decimal('9007199254740993'),'a':[True,None,Decimal('0.125')]}
+    assert base['2']['kind']=='SQL_NULL' and base['2']['serialized'] is None
+    assert base['3']['kind']=='NULL' and base['3']['serialized']=='null'
+    assert base['4']['kind']=='DATE' and base['5']['kind']=='BINARY'
+    assert value(states['insert']['6'])=={'inserted':[1,True,None]}
+    assert value(states['insert']['7'])=={'pad':'x'*7000,'tail':'native-end'}
+    assert value(states['replace']['1'])=={'replaced':Decimal('2.125'),'old':None}
+    assert states['replace']['2']['kind']=='NULL' and states['replace']['3']['kind']=='SQL_NULL'
+    assert value(states['path-update']['6'])=={'inserted':[19,True,None]}
+    assert value(states['path-update']['7'])=={'pad':'x'*7000,'tail':'path-edited'}
+    assert set(states['delete'])==set(base)
+    for step,counters in [('baseline',[5,5]),('path-update',[5,8]),('delete',[8])]:
+        duplicates=[value(record)['counter'] for record in snapshots[positions[step]]
+                    if record['table']==keyless and record['key']=='duplicate']
+        assert sorted(duplicates)==counters,duplicates
+    observed('Restricted JDBC Flashback repeats exact serialized JSON bytes and preserves nulls, extended types and keyless values')
+
+    comparisons=[]
+    previous=positions['baseline']
+    for step in changes:
+        after=positions[step]
+        before_rows={(row['table'],row['rowId']):row for row in snapshots[previous]}
+        after_rows={(row['table'],row['rowId']):row for row in snapshots[after]}
+        for identity in sorted(before_rows.keys()|after_rows.keys()):
+            before_row=before_rows.get(identity)
+            after_row=after_rows.get(identity)
+            scalar_only=step=='replace' and identity[0]==keyed and after_row is not None and after_row['key']=='5'
+            if before_row==after_row and not scalar_only:
+                continue
+            table,row_id=identity
+            operation='INSERT' if before_row is None else 'DELETE' if after_row is None else 'UPDATE'
+            records=[row for row in rows if (row['table'],row['rowId'],row['xid'],row['operation'])
+                     ==(table,row_id,xids[step],operation)]
+
+            def image_matches(side, expected):
+                if expected is None or table not in candidates:
+                    return None
+                if len(records)!=1:
+                    return False
+                item=records[0]
+                matched={}
+                for entry in ('presence','values'):
+                    for row in candidates[table][entry]['rows']:
+                        if (row['xid'],row['rsId'],row['ssn'])==(item['xid'],item['rsId'],item['ssn']):
+                            matched[entry]=row[side]
+                if matched.get('presence')!=1 or 'values' not in matched:
+                    return False
+                logged=matched['values']
+                if expected['kind']=='SQL_NULL':
+                    return logged is None
+                if not isinstance(logged,str) or expected['kind'] in ('DATE','BINARY'):
+                    return False
+                try:
+                    return typed_value(logged)==typed_value(expected['serialized'])
+                except json.JSONDecodeError:
+                    return False
+
+            comparisons.append({
+                'step':step,'table':table,'rowId':row_id,'key':(after_row or before_row)['key'],
+                'xid':xids[step],'operation':operation,'scalarOnlyUpdate':scalar_only,
+                'beforeKind':None if before_row is None else before_row['kind'],
+                'afterKind':None if after_row is None else after_row['kind'],
+                'beforeTextSha256':None if before_row is None else before_row['serializedSha256'],
+                'afterTextSha256':None if after_row is None else after_row['serializedSha256'],
+                'sqlRecords':[{'rsId':row['rsId'],'ssn':row['ssn'],'status':row['status'],
+                               'continues':row['continues'],'rollback':row['rollback']} for row in records],
+                'mineValueMatchesBefore':image_matches('undo',before_row),
+                'mineValueMatchesAfter':image_matches('redo',after_row),
+            })
+        previous=after
+    evidence('image-comparison',comparisons)
+    assert len(comparisons)==14,comparisons
 
 
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
@@ -1017,6 +1355,8 @@ def main():
                         help='Inspect native BasicFiles and SecureFiles BLOB/CLOB Flashback and archived DML')
     parser.add_argument('--lob-preflight', action='store_true',
                         help='Verify the specific LOB refusal codes from the Java probe')
+    parser.add_argument('--native-json-evidence', action='store_true',
+                        help='Compare Oracle native JSON Flashback values and archived before/after records')
     parser.add_argument('--savepoint-evidence', action='store_true',
                         help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
     parser.add_argument('--savepoint-pipeline', action='store_true',
@@ -1039,6 +1379,8 @@ def main():
         parser.error('--lob-evidence requires --logminer')
     if options.lob_preflight and not options.lob_evidence:
         parser.error('--lob-preflight requires --lob-evidence')
+    if options.native_json_evidence and not options.logminer:
+        parser.error('--native-json-evidence requires --logminer')
     if options.savepoint_evidence and not options.logminer:
         parser.error('--savepoint-evidence requires --logminer')
     if options.savepoint_pipeline and not options.pipeline:
@@ -1054,6 +1396,7 @@ def main():
               'textJson': options.text_json, 'dateValues': options.date_values,
               'virtualEvidence': options.virtual_evidence, 'virtualColumns':options.virtual_columns,
               'lobEvidence':options.lob_evidence, 'lobPreflight':options.lob_preflight,
+              'nativeJsonEvidence':options.native_json_evidence,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
@@ -1117,6 +1460,8 @@ def main():
             sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
         if options.savepoint_evidence:
             seed_savepoint_tables(sql)
+        if options.native_json_evidence:
+            native_json_supplemental=seed_native_json(sql)
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'
         pdb_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREEPDB1'
         document = {
@@ -1246,6 +1591,9 @@ def main():
                 lob_evidence(sql,options.output,observed,verify_preflight=lob_preflight if options.lob_preflight else None)
             if options.savepoint_evidence:
                 savepoint_evidence(sql,options.output,observed,archive_preview)
+            if options.native_json_evidence:
+                native_json_evidence(options,sql,pdb_service,environment,observed,
+                                     archive_preview,native_json_supplemental)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
         if options.virtual_evidence:

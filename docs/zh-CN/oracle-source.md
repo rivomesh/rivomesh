@@ -55,6 +55,12 @@ Oracle Free 26ai 23.26.4.0.0 的实测覆盖 BasicFiles 和 SecureFiles 的 BLOB
 
 遇到预检拒绝时，与数据库管理员核对所选 OWNER、表和 LOB 存储。排查既有任务时保留持久化 SCN 及其归档。如果必须迁移该表，安排能处理 LOB 的独立迁移流程，切换前核对内容。LOB 定位器和片段不能单独代表完整值，空 LOB 和 SQL NULL 含义不同。
 
+### 原生二进制 JSON
+
+Oracle SQL `JSON` 类型存储 OSON。所选表含该类型时，Rivomesh 预检返回 `ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED`。临时 Oracle Free 26ai 23.26.4.0.0 PDB 成功启用全列补充日志后，传统 LogMiner 的归档扫描返回 24 条原生 JSON 表记录，状态为 2，重做和撤销 SQL 均为 `Unsupported`。四笔事务覆盖有主键与无主键行插入、文档整体更新、路径更新和删除。每笔事务的普通 `VARCHAR2` 标记都正常解码，两遍已关闭归档的扫描结果一致。[Oracle JSON 数据类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/adjsn/json-data-type.html) · [Oracle LogMiner 支持类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
+
+PDB 本地 LogMiner 会话读到了四个普通列对照值。对于这 24 条原生 JSON 记录，前后镜像的 `COLUMN_PRESENT` 均为 0，`MINE_VALUE` 均返回 SQL NULL，表示镜像未提供。JDBC Flashback 仍可读取完整文档，通过 `OracleJsonValue` 区分 SQL NULL、JSON null，并保留日期及二进制扩展标量的类型。受测 JDBC 驱动对原生 JSON 列的 `getBytes()` 返回 UTF-8 JSON 文本。使用 Temurin 21 和 Oracle JDBC 驱动执行 `tests/oracle-source-probe.py --logminer --native-json-evidence` 可复现实验。[Oracle LogMiner 列提取](https://docs.oracle.com/en/database/oracle/oracle-database/26/arpls/DBMS_LOGMNR.html) · [Oracle JDBC JSON 值类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/jajdb/oracle/sql/json/OracleJsonValue.html)
+
 ### 文本 JSON 列
 
 Oracle `VARCHAR2` 列的声明长度上限为 4000 字节时，可通过一条启用、已验证且不可延迟的列级或表级 `CHECK` 将该列映射到 PostgreSQL `jsonb`。约束直接检查单列并要求严格语法及对象键唯一。其他 `VARCHAR2` 列沿用字符串映射。[Oracle SQL/JSON 约束](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/is-json-condition.html)
