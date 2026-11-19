@@ -238,7 +238,8 @@ final class OracleCdcSource implements SourceAdapter {
                         List<Cell> row=new ArrayList<>();
                         for(int i=0;i<table.columns.size();i++){
                             TableSchema.Column column=table.columns.get(i);
-                            if(column.type==TableSchema.Type.STRING)row.add(Cell.value(rows.getString(i+1)));
+                            if(column.type==TableSchema.Type.STRING)
+                                row.add(Cell.value(OracleCharacters.national(column)?rows.getNString(i+1):rows.getString(i+1)));
                             else if(column.type==TableSchema.Type.JSON)row.add(Cell.value(OracleTextJson.value(rows.getString(i+1))));
                             else if(OracleDate.isColumn(column))row.add(Cell.value(OracleDate.snapshotValue(rows.getString(i+1))));
                             else{

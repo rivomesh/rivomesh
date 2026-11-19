@@ -64,6 +64,48 @@ def seed(sql):
     sql('\n'.join(dml+['COMMIT;']))
 
 
+def flashback(sql,at, *, after_ddl=False):
+    queries=['ALTER SESSION SET CONTAINER=FREEPDB1;']
+    for table,(_,keyed) in TABLES.items():
+        identity='TO_CHAR(ID)' if keyed else 'TAG'
+        queries.append(f"""
+            SELECT JSON_OBJECT('table' VALUE '{table}','key' VALUE {identity},'rowId' VALUE ROWIDTOCHAR(ROWID),
+                'textBytes' VALUE RAWTOHEX(UTL_I18N.STRING_TO_RAW(PAYLOAD,'AL32UTF8')),
+                'utf16' VALUE RAWTOHEX(UTL_I18N.STRING_TO_RAW(PAYLOAD,'AL16UTF16')),
+                'codePoints' VALUE LENGTH4(PAYLOAD),'codeUnits' VALUE LENGTH2(PAYLOAD),
+                'sourceBytes' VALUE LENGTHB(PAYLOAD),'physicalDump' VALUE DUMP(PAYLOAD,1016) NULL ON NULL)
+            FROM RIVO_APP.{table} AS OF SCN {at} ORDER BY {identity},ROWID;""")
+    result=sql('\n'.join(queries),checked=False)
+    if after_ddl and result.returncode and 'ORA-01466' in result.stdout:
+        return None
+    assert result.returncode==0,(at,_errors(result))
+    return _rows(result.stdout)
+
+
+ACTIONS=('insert','update','nullify','delete')
+
+
+def change(sql,phase):
+    def statement(table,keyed):
+        if phase=='insert':
+            key='4' if keyed else "'new'"
+            return f'INSERT INTO {table} VALUES ({key},{_oracle_literal(INSERTED)});'
+        if phase=='update':
+            predicate="ID=1" if keyed else "TAG='duplicate' AND ROWNUM=1"
+            return f'UPDATE {table} SET PAYLOAD={_oracle_literal(UPDATED)} WHERE {predicate};'
+        if phase=='nullify':
+            value,predicate=('NULL','ID=4') if keyed else ("''","TAG='new'")
+            return f'UPDATE {table} SET PAYLOAD={value} WHERE {predicate};'
+        predicate='ID=1' if keyed else f"TAG='duplicate' AND PAYLOAD LIKE {_oracle_literal('é%')} AND ROWNUM=1"
+        return f'DELETE FROM {table} WHERE {predicate};'
+
+    assert phase in ACTIONS
+    statements=['ALTER SESSION SET CONTAINER=FREEPDB1;']
+    statements.extend(statement(f'RIVO_APP.{table}',keyed) for table,(_,keyed) in TABLES.items())
+    statements.extend([f"INSERT INTO RIVO_APP.{MARKERS} VALUES ('{phase}');",'COMMIT;'])
+    sql('\n'.join(statements))
+
+
 def observe(sql, mine_archive, required, output, observed, review):
     encodings=sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
         SELECT parameter||'|'||value FROM nls_database_parameters
@@ -85,26 +127,10 @@ def observe(sql, mine_archive, required, output, observed, review):
         assert position.isdecimal()
         return position
 
-    def flashback(at, *, after_ddl=False):
-        queries=['ALTER SESSION SET CONTAINER=FREEPDB1;']
-        for table,(_,keyed) in TABLES.items():
-            identity='TO_CHAR(ID)' if keyed else 'TAG'
-            queries.append(f"""
-                SELECT JSON_OBJECT('table' VALUE '{table}','key' VALUE {identity},'rowId' VALUE ROWIDTOCHAR(ROWID),
-                    'textBytes' VALUE RAWTOHEX(UTL_I18N.STRING_TO_RAW(PAYLOAD,'AL32UTF8')),
-                    'utf16' VALUE RAWTOHEX(UTL_I18N.STRING_TO_RAW(PAYLOAD,'AL16UTF16')),
-                    'codePoints' VALUE LENGTH4(PAYLOAD),'codeUnits' VALUE LENGTH2(PAYLOAD),
-                    'sourceBytes' VALUE LENGTHB(PAYLOAD),'physicalDump' VALUE DUMP(PAYLOAD,1016) NULL ON NULL)
-                FROM RIVO_APP.{table} AS OF SCN {at} ORDER BY {identity},ROWID;""")
-        result=sql('\n'.join(queries),checked=False)
-        if after_ddl and result.returncode and 'ORA-01466' in result.stdout:
-            return None
-        assert result.returncode==0,(at,_errors(result))
-        return _rows(result.stdout)
 
     def anchor():
         position=scn()
-        rows=flashback(position,after_ddl=True)
+        rows=flashback(sql,position,after_ddl=True)
         return (position,rows) if rows else None
 
     start,baseline=required(anchor,'Oracle character Flashback anchor after fixture DDL',30)
@@ -112,25 +138,8 @@ def observe(sql, mine_archive, required, output, observed, review):
     _store(output,'flashback-baseline',baseline)
     sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
     positions={'baseline':start}
-    def statement(phase,table,keyed):
-        if phase=='insert':
-            key='4' if keyed else "'new'"
-            return f'INSERT INTO {table} VALUES ({key},{_oracle_literal(INSERTED)});'
-        if phase=='update':
-            predicate="ID=1" if keyed else "TAG='duplicate' AND ROWNUM=1"
-            return f'UPDATE {table} SET PAYLOAD={_oracle_literal(UPDATED)} WHERE {predicate};'
-        if phase=='nullify':
-            value,predicate=('NULL','ID=4') if keyed else ("''","TAG='new'")
-            return f'UPDATE {table} SET PAYLOAD={value} WHERE {predicate};'
-        predicate='ID=1' if keyed else f"TAG='duplicate' AND PAYLOAD LIKE {_oracle_literal('é%')} AND ROWNUM=1"
-        return f'DELETE FROM {table} WHERE {predicate};'
-
-    actions=('insert','update','nullify','delete')
-    for phase in actions:
-        statements=['ALTER SESSION SET CONTAINER=FREEPDB1;']
-        statements.extend(statement(phase,f'RIVO_APP.{table}',keyed) for table,(_,keyed) in TABLES.items())
-        statements.extend([f"INSERT INTO RIVO_APP.{MARKERS} VALUES ('{phase}');",'COMMIT;'])
-        sql('\n'.join(statements))
+    for phase in ACTIONS:
+        change(sql,phase)
         positions[phase]=scn()
     def closed_upper_bound():
         position=scn()
@@ -169,11 +178,11 @@ def observe(sql, mine_archive, required, output, observed, review):
 
     markers=raw_rows(f"src_con_name='FREEPDB1' AND seg_owner='RIVO_APP' AND table_name='{MARKERS}'",'markers')
     xids={}
-    for phase in actions:
+    for phase in ACTIONS:
         selected=[row for row in markers if row['operation']=='INSERT' and f"'{phase}'" in (row['redo'] or '')]
         assert len(selected)==1 and re.fullmatch('[0-9A-F]{16}',selected[0]['xid']),selected
         xids[phase]=selected[0]['xid']
-    assert len(set(xids.values()))==len(actions)
+    assert len(set(xids.values()))==len(ACTIONS)
     _store(output,'markers',{'xids':xids,'rows':markers})
     xid_scope='RAWTOHEX(xid) IN ('+','.join(f"'{xid}'" for xid in xids.values())+')'
     archive=raw_rows(xid_scope,'archive')
@@ -212,12 +221,12 @@ def observe(sql, mine_archive, required, output, observed, review):
         extracted[kind]=extract([table for table,(data_type,_) in TABLES.items() if data_type==kind],'PAYLOAD')
     _store(output,'column-extraction',extracted)
     control=extracted['marker']
-    assert control['exitCode']==0 and len(control['rows'])==len(actions),control
+    assert control['exitCode']==0 and len(control['rows'])==len(ACTIONS),control
     assert all(row['redoPresent']==1 for row in control['rows'])
-    assert {bytes.fromhex(row['redoBytes']).decode('utf-8') for row in control['rows']}==set(actions)
+    assert {bytes.fromhex(row['redoBytes']).decode('utf-8') for row in control['rows']}==set(ACTIONS)
     observed('Ordinary VARCHAR2 transaction markers validate the LogMiner value and presence functions')
 
-    snapshots={phase:flashback(position) for phase,position in positions.items()}
+    snapshots={phase:flashback(sql,position) for phase,position in positions.items()}
     _store(output,'flashback',snapshots)
     assert snapshots['baseline']==baseline
     for snapshot in snapshots.values():
@@ -263,7 +272,7 @@ def observe(sql, mine_archive, required, output, observed, review):
 
     comparisons=[]
     previous=snapshots['baseline']
-    for phase in actions:
+    for phase in ACTIONS:
         after=snapshots[phase]
         before_rows={(row['table'],row['rowId']):row for row in previous}
         after_rows={(row['table'],row['rowId']):row for row in after}
@@ -299,9 +308,77 @@ def observe(sql, mine_archive, required, output, observed, review):
         else:
             probes[kind]={'exitCode':0,'decoded':json.loads(result.stdout)['archiveWindow']['decoded']}
     _store(output,'product-preflight',probes)
-    for kind in ('VB','VC'):
+    for kind in TYPES:
         decoded=probes[kind]['decoded']
         assert decoded['committedTransactions']==4 and decoded['operations']=={'INSERT':2,'UPDATE':4,'DELETE':2},decoded
-    for kind in ('FC','VN','FN'):
-        assert probes[kind]['error']=='ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED',probes[kind]
-    observed('Product archive preview accepts both VARCHAR2 length forms and refuses the three unadmitted types')
+    observed('Product archive preview decodes complete UTF-8 and national character changes across all five declarations')
+
+
+def verify_pipeline(sql, target_sql, progress, rotate, stop, restart, required, output, observed):
+    def target(schema,metadata):
+        tables=[]
+        for name,(_,keyed) in TABLES.items():
+            key='"ID"' if keyed else '"TAG"'
+            tables.append(f"""SELECT json_build_array('{name}',{key}::text,
+                encode(convert_to("PAYLOAD"::text,'UTF8'),'hex')) AS payload FROM {schema}."{name}" """)
+        union=' UNION ALL '.join(tables)
+        frame=target_sql(f"""
+            SELECT json_build_object(
+                'data',(SELECT json_agg(payload) FROM ({union}) AS character_rows),
+                'snapshots',(SELECT json_agg(json_build_array(table_id,snapshot_id,snapshot_state,next_part,row_count)
+                                            ORDER BY table_id) FROM {metadata}.rm3_sink_table),
+                'checkpoint',(SELECT json_build_array(stream_seq,transaction_id,transaction_hash)
+                              FROM {metadata}.rm3_sink_job))
+            """,checked=False)
+        return json.loads(frame) if frame else None
+
+    def subscriptions():
+        return {'pg':target('copy_app','copy_meta'),'pg_peer':target('copy_peer_app','copy_peer_meta')}
+
+    def canonical(rows):
+        return sorted((table,key,value is not None,value.upper() if value is not None else '')
+                      for table,key,value in rows)
+
+    def durable_cut(after=None):
+        status=progress()
+        assert not status.get('error_code'), status
+        sequence=status.get('captured_sequence')
+        scn=status.get('capture_scn')
+        if not sequence or not scn or after is not None and int(scn)<=int(after['sourcePosition']['payload']['scn']):
+            return None
+        views=subscriptions()
+        if any(not view or not view['snapshots'] or not view['checkpoint'] or
+               view['checkpoint'][0]!=int(sequence) or
+               len(view['snapshots'])<len(TABLES) or any(row[2]!='COMPLETE' for row in view['snapshots'])
+               for view in views.values()):
+            return None
+        source=flashback(sql,scn)
+        expected=canonical((row['table'],row['key'],row['textBytes']) for row in source)
+        if any(canonical(view['data'])!=expected for view in views.values()):
+            return None
+        assert views['pg']['checkpoint']==views['pg_peer']['checkpoint']
+        if after is not None:
+            for name,view in views.items():
+                assert view['snapshots']==after['targets'][name]['snapshots']
+                assert view['checkpoint'][0]>after['targets'][name]['checkpoint'][0]
+        return {'sourcePosition':status['sourcePosition'],'targets':views}
+
+    baseline=required(durable_cut,'Both PostgreSQL subscriptions match the Oracle character snapshot',75)
+    observed('Both PostgreSQL snapshots match Oracle Flashback byte for byte across the five character declarations')
+    change(sql,'insert')
+    rotate()
+    inserted=required(lambda:durable_cut(baseline),'Character CDC insert reaches both subscriptions',75)
+    change(sql,'update')
+    rotate()
+    updated=required(lambda:durable_cut(inserted),'Unicode character CDC update reaches both subscriptions',75)
+    observed('Both native PostgreSQL subscriptions preserve Unicode and padding on archived inserts and updates')
+
+    stop()
+    change(sql,'nullify')
+    change(sql,'delete')
+    rotate()
+    assert subscriptions()==updated['targets']
+    restart()
+    resumed=required(lambda:durable_cut(updated),'Character CDC catches up from the original snapshots',75)
+    _store(output,'target-receipts',{'baseline':baseline,'inserted':inserted,'updated':updated,'resumed':resumed})
+    observed('Both original PostgreSQL subscriptions resume NULL updates and keyed or keyless deletes after SIGKILL')

@@ -218,6 +218,15 @@ final class OracleSourceProbe {
                                 throw new IllegalStateException("ORACLE_TEXT_JSON_STORAGE_UNSUPPORTED");
                             column.length=rows.getLong(5);
                             break;
+                        case "CHAR":
+                        case "NCHAR":
+                        case "NVARCHAR2":
+                            column.type=TableSchema.Type.STRING;
+                            column.length=rows.getLong(5);
+                            int characterBytes=rows.getInt(8);
+                            if(column.length<1||characterBytes<1||characterBytes>4000)
+                                throw new IllegalStateException("ORACLE_CHARACTER_STORAGE_UNSUPPORTED");
+                            break;
                         case "DATE":
                             column.type=TableSchema.Type.DATETIME;
                             break;
@@ -241,6 +250,7 @@ final class OracleSourceProbe {
             }
         }
         schema.validate();
+        OracleCharacters.requireProfile(pdb,schema,QUERY_SECONDS);
         if(allowVirtualNumeric)OracleVirtualNumbers.plan(schema);
         for(String key:schema.primaryKey)
             if(schema.columns.get(schema.column(key)).type==TableSchema.Type.JSON)

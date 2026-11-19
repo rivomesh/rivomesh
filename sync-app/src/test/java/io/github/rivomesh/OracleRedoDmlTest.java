@@ -68,6 +68,48 @@ class OracleRedoDmlTest {
         assertNull(OracleTextJson.constraintColumn("trim(payload) IS JSON (STRICT WITH UNIQUE KEYS)"));
     }
 
+    @Test void decodesNationalSurrogatePairsAndKeepsTheirOriginalPadding()throws Exception{
+        TableSchema table=table();
+        table.columns.get(1).sourceType="NCHAR";
+        String before="UNISTR('e\\0301\\D83D\\DE00\\005C'' ')";
+        String after="UNISTR('\\53F0\\\\\\D834\\DD1E  ')";
+        String redo="update "+ORDERS+" set \"NOTE\" = "+after+" where \"ID\" = '1' and \"NOTE\" = "+before+";";
+        String undo="update "+ORDERS+" set \"NOTE\" = "+before+" where \"ID\" = '1' and \"NOTE\" = "+after+";";
+        Change event=OracleRedoDml.decode(table,"UPDATE",redo,undo);
+        assertEquals("e\u0301😀\\' ",event.before.get(1).value);
+        assertEquals("台\\𝄞  ",event.after.get(1).value);
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table(),"UPDATE",redo.replace("'1'",before),undo.replace("'1'",before))).getMessage());
+        table.columns.get(1).sourceType="VARCHAR2";
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table(),"UPDATE",redo,undo)).getMessage());
+    }
+
+    @Test void refusesMalformedNationalEscapesAndExpressions(){
+        TableSchema table=table();
+        table.columns.get(1).sourceType="NVARCHAR2";
+        String inserted="insert into "+ORDERS+"(\"ID\",\"NOTE\") values ('2',%s);";
+        String deleted="delete from "+ORDERS+" where \"ID\" = '2' and \"NOTE\" = %s;";
+        for(String malformed:new String[]{"", "\\012", "\\00FG", "\\D83D", "\\DE00", "\\0000", "\\D83D\\0020"}){
+            String literal="UNISTR('"+malformed+"')";
+            assertEquals("ORACLE_REDO_UNISTR_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                    ()->OracleRedoDml.decode(table,"INSERT",inserted.formatted(literal),deleted.formatted(literal))).getMessage());
+        }
+        for(String expression:new String[]{"TO_NCHAR('A')", "UNISTR('A' || 'B')", "N'A'"}){
+            assertThrows(IllegalStateException.class,
+                    ()->OracleRedoDml.decode(table,"INSERT",inserted.formatted(expression),deleted.formatted(expression)));
+        }
+    }
+
+    @Test void admitsOnlyTheObservedCharacterSetsForSelectedTypes(){
+        assertDoesNotThrow(()->OracleCharacters.requireCharsets("AL32UTF8","AL16UTF16",true));
+        assertDoesNotThrow(()->OracleCharacters.requireCharsets("AL32UTF8",null,false));
+        assertEquals("ORACLE_CHARACTER_CHARSET_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                ()->OracleCharacters.requireCharsets("WE8ISO8859P1","AL16UTF16",true)).getMessage());
+        assertEquals("ORACLE_CHARACTER_CHARSET_UNSUPPORTED",assertThrows(IllegalStateException.class,
+                ()->OracleCharacters.requireCharsets("AL32UTF8","UTF8",true)).getMessage());
+    }
+
     @Test void readsStrictJsonRedoWithoutCollapsingNumbersStringsOrNulls()throws Exception{
         TableSchema table=table();
         table.columns.get(1).type=TableSchema.Type.JSON;

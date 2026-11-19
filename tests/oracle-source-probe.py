@@ -853,6 +853,9 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
 
     source_tables = ['RIVO_APP.RIVO_ORDERS', 'RIVO_APP.RIVO_KEYLESS']
+    if options.character_pipeline:
+        import oracle_character_evidence
+        source_tables += [f'RIVO_APP.{table}' for table in oracle_character_evidence.TABLES]
     if options.text_json:
         sql(r"""ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE TABLE rivo_app.rivo_json_rows (
@@ -964,7 +967,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                             'metadataSchema':'copy_meta'}],
                 'chunkSize':2,'heartbeatMillis':500,'leaseMillis':5000,'pollIntervalMillis':150,
             }
-            if options.savepoint_pipeline:
+            if options.savepoint_pipeline or options.character_pipeline:
                 pipeline['targets'].append(dict(
                     pipeline['targets'][0],id='pg_peer',metadataSchema='copy_peer_meta',
                     mappings={'RIVO_APP':'copy_peer_app'},
@@ -1178,6 +1181,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                     observed('PostgreSQL resumes virtual NUMBER after the Oracle archived gap with its original snapshot IDs')
 
+                if options.character_pipeline:
+                    oracle_character_evidence.verify_pipeline(
+                        sql,target_sql,progress,rotate,lambda:stop_platform(force=True),
+                        lambda:start_platform(config,'worker-character-restart.log'),required,output,observed)
+                    return
+
                 if options.savepoint_pipeline:
                     required(lambda:target_sql('SELECT "NOTE" FROM copy_peer_app."RIVO_ORDERS" WHERE "ID"=4',
                                                checked=False)=='offline',
@@ -1359,6 +1368,8 @@ def main():
                         help='Compare Oracle native JSON Flashback values and archived before/after records')
     parser.add_argument('--character-evidence', action='store_true',
                         help='Compare Oracle Unicode, fixed padding and national character archive images')
+    parser.add_argument('--character-pipeline', action='store_true',
+                        help='Verify Oracle character snapshots and recovery through two PostgreSQL subscriptions')
     parser.add_argument('--savepoint-evidence', action='store_true',
                         help='Compare archived partial rollback, its Flashback outcome and the exact Java probe')
     parser.add_argument('--savepoint-pipeline', action='store_true',
@@ -1385,6 +1396,10 @@ def main():
         parser.error('--native-json-evidence requires --logminer')
     if options.character_evidence and not options.logminer:
         parser.error('--character-evidence requires --logminer')
+    if options.character_pipeline and not options.pipeline:
+        parser.error('--character-pipeline requires --pipeline')
+    if options.character_pipeline and (options.character_evidence or options.savepoint_pipeline):
+        parser.error('--character-pipeline uses its own archive transactions and target restart')
     if options.savepoint_evidence and not options.logminer:
         parser.error('--savepoint-evidence requires --logminer')
     if options.savepoint_pipeline and not options.pipeline:
@@ -1402,6 +1417,7 @@ def main():
               'lobEvidence':options.lob_evidence, 'lobPreflight':options.lob_preflight,
               'nativeJsonEvidence':options.native_json_evidence,
               'characterEvidence':options.character_evidence,
+              'characterPipeline':options.character_pipeline,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'checks': [], 'status': 'FAIL'}
@@ -1467,7 +1483,7 @@ def main():
             seed_savepoint_tables(sql)
         if options.native_json_evidence:
             native_json_supplemental=seed_native_json(sql)
-        if options.character_evidence:
+        if options.character_evidence or options.character_pipeline:
             import oracle_character_evidence
             oracle_character_evidence.seed(sql)
         root_service = f'jdbc:oracle:thin:@//127.0.0.1:{port}/FREE'

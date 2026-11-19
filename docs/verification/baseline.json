@@ -13505,7 +13505,48 @@
     "firstFixtureFailure": "Archive SQL JSON serialization exposed raw control characters. The same fixture checks preserve the native bytes using Oracle RAW hexadecimal encoding in the successful run.",
     "nativeRows": 40,
     "matchingRequiredImages": 60,
-    "scope": "Oracle 26ai Free one PDB, AL32UTF8 and AL16UTF16, keyed and keyless cases for VARCHAR2 BYTE, VARCHAR2 CHAR, CHAR, NVARCHAR2 and NCHAR. Product currently admits the VARCHAR2 types. Native CHAR simple literal values decode; national character output uses UNISTR and is currently refused.",
+    "scope": "Oracle 26ai Free one PDB, AL32UTF8 and AL16UTF16, keyed and keyless cases for VARCHAR2 BYTE, VARCHAR2 CHAR, CHAR, NVARCHAR2 and NCHAR. The diagnostic used the pre-change package, which admitted both VARCHAR2 length forms. Native CHAR literals decoded and national character output used UNISTR.",
     "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --character-evidence --output target/oracle-character-proof"
+  },
+  "oracleNationalCharacterPipelineRestart": {
+    "artifactSha256": "2eef87b0012f1934f13b43d587bd0e201b24c66b56b21450cefe761167c676e3",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Both PostgreSQL snapshots match Oracle Flashback byte for byte across the five character declarations",
+      "Both native PostgreSQL subscriptions preserve Unicode and padding on archived inserts and updates",
+      "Both original PostgreSQL subscriptions resume NULL updates and keyed or keyless deletes after SIGKILL"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0,
+    "nativeChecksPassed": 15,
+    "focusedJavaTestsPassed": 17,
+    "nativeRedoDecodesMatched": 40,
+    "manifestSha256": "ec1d329c1d0615c366daf551f26390dc1fea1becef70322301f6a94e5623d4b0",
+    "nativeReceiptSequence": [
+      5,
+      7,
+      9,
+      12
+    ],
+    "unchangedSnapshotsPerSubscription": 12,
+    "targetSubscriptions": 2,
+    "targetVersion": "PostgreSQL 17.12",
+    "scope": "One Oracle Free 26ai PDB on AL32UTF8 and AL16UTF16. CHAR, NCHAR and NVARCHAR2 declarations are bounded to 4000 dictionary bytes. Two independent subscriptions on one PostgreSQL instance retain the original twelve snapshots and byte-identical Flashback values after Controller and Worker SIGKILL.",
+    "reproduce": "python3 tests/oracle-source-probe.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --jdbc-driver \"$ORACLE_JDBC\" --java \"$JAVA_HOME/bin/java\" --startup-timeout 900 --logminer --pipeline --character-pipeline"
   }
 }

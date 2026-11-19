@@ -57,9 +57,11 @@ Oracle Free 26ai 23.26.4.0.0 的实测覆盖 BasicFiles 和 SecureFiles 的 BLOB
 
 ### 字符类型与填充
 
-当前 Oracle 源档案允许按字节或字符声明长度的 `VARCHAR2`。Oracle Free 26ai 23.26.4.0.0 使用 `AL32UTF8` 和国家字符集 `AL16UTF16` 时，受测 Flashback 和归档事务保留了补充平面字符、组合码点、引号及尾随空格。空字符输入变为 SQL NULL。Oracle 的 `CHAR(8 CHAR)` 按字符填充，`NCHAR(8)` 按 UTF-16 代码单元填充。夹具独立核对字节长度、码点和无主键重复行。[Oracle 字符类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html) · [Oracle 空值](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Nulls.html)
+Oracle 源档案允许按字节或字符声明长度的 `VARCHAR2`。PDB 数据库字符集为 `AL32UTF8` 时可使用 `CHAR`。同时使用 `AL16UTF16` 作为国家字符集时可使用 `NVARCHAR2` 和 `NCHAR`。这三种新支持类型在 Oracle 字典中声明的长度须在 4000 字节以内。预检遇到不符条件的字符集或声明长度，分别返回 `ORACLE_CHARACTER_CHARSET_UNSUPPORTED` 或 `ORACLE_CHARACTER_STORAGE_UNSUPPORTED`。PostgreSQL 目标以变长文本存储源值，保留 Oracle 实际填充的空格。[Oracle 字符类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Data-Types.html)
 
-受测 `CHAR` 归档字面值与 Flashback 一致，LogMiner 列提取也与五种列定义的全部 60 个必需前后镜像吻合。原生国家字符行在归档中使用带转义的 `UNISTR` 表达式。现有归档解析器拒绝这种字面值，产品预检对 `CHAR`、`NVARCHAR2` 和 `NCHAR` 返回 `ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED`。使用 Temurin 21 和 Oracle JDBC 驱动执行 `tests/oracle-source-probe.py --logminer --character-evidence` 可复现实验。[Oracle LogMiner 支持类型](https://docs.oracle.com/en/database/oracle/oracle-database/26/sutil/oracle-logminer-utility.html)
+Oracle Free 26ai 23.26.4.0.0 的受测 Flashback 和归档事务保留了补充平面字符、组合码点、引号及尾随空格。空字符输入变为 SQL NULL。Oracle 的 `CHAR(8 CHAR)` 按字符填充，`NCHAR(8)` 按 UTF-16 代码单元填充。LogMiner 对国家字符行生成带转义的 `UNISTR` 字面值，列提取与 Flashback 的 60 个必要镜像一致。采集解析 Unicode 转义及配对代理项，无需执行生成的 SQL。[Oracle 空值](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/Nulls.html) · [Oracle UNISTR](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/UNISTR.html)
+
+重启验收使用两个 PostgreSQL 17.12 订阅。归档插入、更新、置 SQL NULL 及有主键与无主键删除之后，两个订阅均保留原快照，并与 Oracle Flashback 逐字节一致。最后两笔事务在 Controller 和 Worker 强制终止后提交。使用 Temurin 21 和 Oracle JDBC 驱动执行 `tests/oracle-source-probe.py --logminer --character-evidence` 可复现归档与 Flashback 核对。独立的双订阅重启夹具使用 `--logminer --pipeline --character-pipeline`。
 
 ### 原生二进制 JSON
 

@@ -96,7 +96,9 @@ final class OracleRedoDml {
             String value=literal==null?null:literal.value;
             if(value==null&&!column.nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
             if(literal!=null){
-                if(literal.date!=OracleDate.isColumn(column))throw invalid("ORACLE_REDO_LITERAL_TYPE_MISMATCH");
+                if((literal.kind==LiteralKind.DATE)!=OracleDate.isColumn(column)
+                        ||(literal.kind==LiteralKind.NATIONAL&&!OracleCharacters.national(column)))
+                    throw invalid("ORACLE_REDO_LITERAL_TYPE_MISMATCH");
                 switch(column.type){
                     case STRING:case DATETIME:break;
                     case JSON:value=OracleTextJson.value(value);break;
@@ -121,7 +123,9 @@ final class OracleRedoDml {
 
     private static IllegalStateException invalid(String code){return new IllegalStateException(code);}
 
-    private record Literal(String value,boolean date){}
+    private enum LiteralKind { PLAIN, DATE, NATIONAL }
+
+    private record Literal(String value,LiteralKind kind){}
 
     private static final class Statement {
         Change.Operation operation;
@@ -185,14 +189,21 @@ final class OracleRedoDml {
                 require(",");
                 String mask=quotedLiteral();
                 require(")");
-                return new Literal(OracleDate.redoValue(date,mask),true);
+                return new Literal(OracleDate.redoValue(date,mask),LiteralKind.DATE);
+            }
+            if(take("UNISTR")){
+                require("(");
+                String value=OracleCharacters.unistr(quotedLiteral());
+                require(")");
+                if(value.isEmpty())throw invalid("ORACLE_REDO_UNISTR_UNSUPPORTED");
+                return new Literal(value,LiteralKind.NATIONAL);
             }
             if(kind!=2&&kind!=4)throw invalid("ORACLE_REDO_LITERAL_UNSUPPORTED");
             if(kind==2){
                 String value=quotedLiteral();
-                return value.isEmpty()?null:new Literal(value,false);
+                return value.isEmpty()?null:new Literal(value,LiteralKind.PLAIN);
             }
-            Literal value=new Literal(token,false);
+            Literal value=new Literal(token,LiteralKind.PLAIN);
             advance();
             return value;
         }
@@ -234,7 +245,7 @@ final class OracleRedoDml {
                     if(take("ROWID")){
                         require("=");
                         Literal rowId=literal();
-                        if(rowIdFound||rowId==null||rowId.date)throw invalid("ORACLE_REDO_ROWID_INVALID");
+                        if(rowIdFound||rowId==null||rowId.kind!=LiteralKind.PLAIN)throw invalid("ORACLE_REDO_ROWID_INVALID");
                         rowIdFound=true;
                     }else{
                         String column=identifier();
