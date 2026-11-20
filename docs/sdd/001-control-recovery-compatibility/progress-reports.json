@@ -2,16 +2,16 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-20T11:58:16+08:00",
-  "nextReportAt": "2026-11-20T12:58:16+08:00",
+  "lastReportAt": "2026-11-20T13:58:18+08:00",
+  "nextReportAt": "2026-11-20T14:58:16+08:00",
   "completedSincePrevious": [
-    "PostgreSQL 17.12 qualified native PostgreSQL, ClickHouse and Redis Streams fan-out and openGauss secondary-index downgrade and restart.",
-    "Oracle Free 23.26.4.0.0 qualified RAW snapshot, archived changes and original-SCN restart to PostgreSQL and Redis Streams.",
-    "The PostgreSQL blocked Relation, type modifiers and original LSN remained available through later catalog edits and Controller restart."
+    "Published native PostgreSQL and Oracle to Kingbase PG mode and PostgreSQL to Dameng.",
+    "Oracle Free 23.26.4.0.0 to Dameng 8.1.4.80 passed exact values, text and RAW key changes and original-SCN restart.",
+    "PostgreSQL 17.12 original pgoutput Relation comparison passed later catalog edits, replacement, discovery refusal and restart on the original cut."
   ],
   "inProgress": [
     "SO-06 and SO-07: remaining native destination parity for PostgreSQL and Oracle.",
-    "LG-03: Oracle-to-Doris and Oracle-to-Hive verification.",
+    "LG-03: Oracle-to-Hive qualification and analytical production topologies.",
     "LG-08: historical DDL execution and transactional schema-state migration.",
     "LG-01: native OceanBase, GBase and commercial GaussDB source-to-target profiles remain."
   ],
@@ -28,7 +28,8 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "ee86f0c"
+    "ba05011",
+    "5849e06"
   ],
   "currentSdd": {
     "DONE": 41,
@@ -43,16 +44,9 @@
   "currentCandidateScope": "PostgreSQL and Oracle confirmed-event routing, PostgreSQL ClickHouse, and opt-in PostgreSQL secondary indexes to openGauss. Oracle RAW snapshot and archive CDC through PostgreSQL and Redis Streams after process restart. Oracle RAW to real ClickHouse passed. PostgreSQL 17.12 to Doris 4.1.3 passed WAL, type and restart verification. Native PostgreSQL to Hive 4.0.1 passed. Native Oracle to MySQL and PostgreSQL to Hive. Native PostgreSQL and Oracle to Kingbase PG mode. Verified PostgreSQL and Oracle to Dameng native mode 0. PostgreSQL original Relation comparison verified across current publication edits and restart.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Oracle Free 26ai to ClickHouse passed native RAW and original-SCN restart.",
-    "Native PostgreSQL to Doris completed snapshot, keyless CDC and original-slot restart.",
-    "Hive 4.0.1 passed PostgreSQL snapshot, WAL CDC and original-slot restart in native fan-out.",
-    "Oracle Free to MySQL passed civil DATE, wide NUMBER, precise text and RAW keys, and original-SCN restart.",
-    "PostgreSQL and Oracle passed native Kingbase PG mode, exact values and original-position restart.",
-    "PostgreSQL to Dameng passed snapshot, CDC and original-slot restart.",
-    "Native PostgreSQL 17.12 verified the blocked Relation comparison against the current publication, including identity changes and restart on the original cut.",
-    "Native Oracle to Dameng 8.1.4.80 passed exact values, text and RAW key changes and original-SCN restart."
+    "Oracle Free to Doris 4.1.3 passed exact values, keyless CDC, key moves and original-SCN restart."
   ],
-  "lastScheduledReportAt": "2026-11-20T11:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-20T13:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "1fc8100",
     "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",

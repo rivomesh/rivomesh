@@ -139,6 +139,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
+  - [x] Oracle 到 Doris 4.1.3 精确类型、主键变更、无主键重数和原 SCN 恢复。
   - [x] Oracle 到达梦原生模式 0 的 DATE、精确 NUMBER、文本与 RAW 主键变更及原 SCN 续传。
   - [x] Oracle 到金仓 PG 模式的原生 DATE、RAW 主键及原 SCN 续传。
   - [x] Oracle 到 MySQL 的原生 DATE、RAW、文本主键和原 SCN 恢复。

@@ -55,7 +55,7 @@ final class OracleCdcSource implements SourceAdapter {
             TargetProduct product=target.product;
             if(product!=TargetProduct.POSTGRESQL&&product!=TargetProduct.MYSQL
                     &&product!=TargetProduct.CLICKHOUSE&&product!=TargetProduct.KINGBASE
-                    &&product!=TargetProduct.DM&&!product.messaging())
+                    &&product!=TargetProduct.DM&&product!=TargetProduct.DORIS&&!product.messaging())
                 throw new IllegalArgumentException("ORACLE_SOURCE_TARGET_PROFILE_UNAVAILABLE");
         }
     }

@@ -63,6 +63,10 @@ Oracle Free 23.26.4.0.0 to Dameng 8.1.4.80 passed Flashback, archived CDC and or
 
 In the V3 task wizard select **Oracle** and **DM**, map each selected owner to a Dameng schema, and run **Check**. Supply the Oracle and Dameng JDBC drivers on the Worker host. To rerun the fixture, add `--logminer --pipeline --dm-target --raw-values` to the Oracle probe command above. [Native fixture](../../tests/oracle-source-probe.py) · [Evidence](../verification/README.md#oracle-to-native-dameng)
 
+### Doris destination
+
+Oracle Free 23.26.4.0.0 passed Flashback, archived CDC and original-SCN Worker restart with the Doris 4.1.3 all-in-one target and a PostgreSQL subscription. Doris preserves the Oracle civil DATE as text and RAW as Base64. The fixture checks exact `NUMBER(38,12)`, SQL NULL, trailing spaces in text keys, changes to text and RAW keys, and duplicate keyless rows. Use `--logminer --pipeline --doris-target --raw-values` with the native Oracle fixture. [Doris target profile](doris-v3.md) · [Evidence](../verification/README.md#oracle-to-native-doris)
+
 ### Archived DDL review
 
 

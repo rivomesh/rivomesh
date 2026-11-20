@@ -847,7 +847,7 @@ function messageSettings(root,product){const value=name=>root.querySelector('[da
 
 function targetMode(card){
  const f=$('create-form').elements,select=card?card.querySelector('[data-field=product]'):f.targetType;
- const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS','KINGBASE','DM']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE','KINGBASE','DM']:null;
+ const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS','KINGBASE','DM']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','KINGBASE','DM']:null;
  for(const option of select.options){
   const sharedMessaging=v3()&&messagingProduct(option.value);
   option.disabled=Boolean(allowed&&!allowed.includes(option.value)&&!sharedMessaging);

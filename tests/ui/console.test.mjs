@@ -924,6 +924,7 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
+    assert.equal(f.targetType.querySelector('[value=DORIS]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=KINGBASE]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=DM]').disabled,false);
     assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);

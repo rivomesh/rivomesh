@@ -14,7 +14,7 @@ Choose a profile by source version and topology, target product and mode, then J
 | `MYSQL` 8.4.13 | Temurin 21 standalone, async GTID promotion and three-member single-primary Group Replication to both SQL targets. Binlog admission and the former group primary returning read-only have separate native proofs. | [8.4 binlog profile](pipeline-v3.md#mysql-84-binlog-profile) |
 | `POSTGRESQL` 17.12 | Experimental Temurin 21 profile. Synchronized-slot promotion resumes automatically and an earlier timeline is refused. The bounded PostgreSQL and MySQL profile compares both targets at one WAL cut and resumes the original slot. | [Source guide](postgresql-source.md), [task example](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Experimental Temurin 21 profile. PostgreSQL 17.12 materializes published stored generated columns as ordinary columns. | [Source guide and publication](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21 with a separately supplied Oracle JDBC driver. Native single-PDB Flashback and archived CDC to PostgreSQL, MySQL, Kingbase, Dameng, ClickHouse and Redis Streams. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21 with a separately supplied Oracle JDBC driver. Native single-PDB Flashback and archived CDC to PostgreSQL, MySQL, Kingbase, Dameng, ClickHouse, Doris and Redis Streams. RAC and source promotion remain pending. | [Probe privileges and recovery](oracle-source.md), [V3 example](../../config/oracle-source-v3.yml) |
 
 MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses the logical source ID plus system ID, timeline, slot and LSN. The Oracle probe uses DBID, resetlogs SCN, PDB GUID and SCN. `SourcePosition.formatVersion` is currently 1 and is interpreted by `sourceType`. Compare coordinates within the original authority and protocol. The [multi-database sample](../../config/pipeline-v3.yml) uses `formatVersion: 3`, `source.clusterId`, `databases` and an explicit `mappings` object per target. Use independent configurations for separate MySQL clusters.
 
@@ -31,6 +31,12 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 | `KAFKA`, `PULSAR`, `RABBITMQ`, `ROCKETMQ`, `ACTIVEMQ_CLASSIC`, `ACTIVEMQ_ARTEMIS`, `REDIS_STREAMS`, `NATS_JETSTREAM` | Bounded broker profiles with confirmed at-least-once publishing. Deduplicate stable event IDs and track consumer completion separately. | [Messaging](messaging-v3.md), [ActiveMQ Classic](classic-v3.md) |
 
 The V3 wizard reads `GET /api/capabilities` for source availability and limits destinations to the selected engine’s supported products. PostgreSQL and Oracle source forms preserve their separate version, source identity, namespaces and credentials. For each planned or experimental deployment, check the product manual's topology, authorization, retention and backup scope.
+
+### Adapter verification and native combinations
+
+MySQL, PostgreSQL and Oracle deliver the same typed table, snapshot and committed-transaction model to the journal. The journal preserves the source coordinate and assigns stable identities to keyless row occurrences before dispatch. SQL, analytical and messaging targets consume the shared model and maintain their own commit or delivery receipts.
+
+When extending an adapter, use shared event and projection tests for common behavior. A new source needs real-engine evidence for native snapshot, change decoding, restart and failover, plus end-to-end delivery to representative targets. A new target needs real-engine evidence for storage, type and key semantics, commit receipts and retry, using common events and a representative source. Add a native source-to-target case when a projection, physical constraint or recovery rule depends on both ends. Examples include source decimal precision that exceeds the target limit and a target collation that can merge distinct source keys. The verification ledger records the exact combinations that ran. [Verification ledger](../verification/README.md)
 
 ## Release runtime
 

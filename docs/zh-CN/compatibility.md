@@ -14,7 +14,7 @@
 | `MYSQL` 8.4.13 | Temurin 21 单机、异步 GTID 升主及三节点单主组复制到两个 SQL 目标。binlog 准入及组复制旧主只读返回另有实库验证。 | [8.4 binlog 档案](pipeline-v3.md) |
 | `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝。PostgreSQL 和 MySQL 两个目标通过同一 WAL 切点对账，并从原逻辑槽续传。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Temurin 21 实验档案。发布存储型生成列，PostgreSQL 17.12 目标物化为普通列。 | [源指南与发布](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 和归档增量已实测 PostgreSQL、MySQL、金仓、达梦、ClickHouse 和 Redis Streams。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 和归档增量已实测 PostgreSQL、MySQL、金仓、达梦、ClickHouse、Doris 和 Redis Streams。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
 
 MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐标使用逻辑源 ID、system ID、timeline、slot 和 LSN。Oracle 预检使用 DBID、resetlogs SCN、PDB GUID 和 SCN。`SourcePosition.formatVersion` 当前为 1，由 `sourceType` 对应的适配器解释。在同一来源身份和协议内比较坐标。[多库样例](../../config/pipeline-v3.yml)使用 `formatVersion: 3`、`source.clusterId`、`databases` 以及每个目标的显式 `mappings`。独立 MySQL 集群分别使用独立配置。
 
@@ -31,6 +31,12 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 | `KAFKA`、`PULSAR`、`RABBITMQ`、`ROCKETMQ`、`ACTIVEMQ_CLASSIC`、`ACTIVEMQ_ARTEMIS`、`REDIS_STREAMS`、`NATS_JETSTREAM` | 限定 broker 档案，确认式至少一次投递。消费端按稳定事件 ID 去重，独立记录业务消费进度。 | [消息目标](messaging-v3.md)、[ActiveMQ Classic](classic-v3.md) |
 
 V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引擎限制目标产品。PostgreSQL 和 Oracle 使用各自的版本、源身份、命名空间和凭据表单。部署前按目标手册核对拓扑、权限、保留与备份边界。
+
+### 适配器验收与实库组合
+
+MySQL、PostgreSQL 和 Oracle 将同一套带类型的表结构、快照和已提交事务写入日志库。日志库保留原生位点，并在分发前为无主键重复行分配稳定身份。关系库、分析库和消息目标读取共享模型，各自维护提交或投递回执。
+
+扩展适配器时，通用行为复用事件和类型映射测试。新源用实库验收快照、日志解码、恢复和切主，再选代表性目标做端到端验证。新目标用统一事件和代表性源，实测存储、类型、行身份、提交回执和重试。转换规则、物理约束或恢复规则同时依赖源和目标时，再补对应组合，例如源小数精度超过目标上限，或目标排序规则可能合并原本不同的主键。实库清单记录已运行的具体版本和组合。 [实库验收记录](../verification/README.md)
 
 ## 首版 Java 运行时
 
