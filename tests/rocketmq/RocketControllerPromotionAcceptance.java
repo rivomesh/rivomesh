@@ -1,10 +1,15 @@
 package io.github.rivomesh.acceptance;
 
+import io.github.rivomesh.JdbcConnections;
 import io.github.rivomesh.Model;
 import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.ConfirmedPublisher;
+import io.github.rivomesh.cdc.JdbcJournal;
+import io.github.rivomesh.cdc.JdbcPublicationStore;
+import io.github.rivomesh.cdc.MessageEvent;
+import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.RocketMessagePublisher;
 import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.transport.rocketmq.RocketTransport;
@@ -27,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.net.URI;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +40,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /** Broker-native offset proof and the current Rivomesh adapter's explicit refusal of Controller mode. */
@@ -58,8 +65,211 @@ public final class RocketControllerPromotionAcceptance {
         require(Runtime.version().feature() == 21 && "Eclipse Adoptium".equals(System.getProperty("java.vendor")),
                 "Expected the Temurin 21 fixture runtime");
         RocketControllerPromotionAcceptance fixture = new RocketControllerPromotionAcceptance();
-        if (args.length == 2 && "--product".equals(args[1])) fixture.acceptProduct(Path.of(args[0]));
+        if (args.length == 2 && "--worker".equals(args[1])) fixture.acceptWorker(Path.of(args[0]));
+        else if (args.length == 2 && "--product".equals(args[1])) fixture.acceptProduct(Path.of(args[0]));
         else fixture.accept(Path.of(args[0]));
+    }
+
+    private String activeController = CONTROLLER;
+
+    private record WorkerCut(String topic, Cut retained, String generation, String snapshotId,
+                             long sequence, String transactionId, long epoch, long capturedSequence) {}
+
+    private static void sourceSql(String sql) throws Exception {
+        try (var c = JdbcConnections.open("com.mysql.cj.jdbc.Driver",
+                "jdbc:mysql://mysql-source:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true",
+                "root", System.getenv("RM_ROCKET_MYSQL_PASSWORD")); var statement = c.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    private static Process startWorker(Path configuration) throws Exception {
+        return new ProcessBuilder(System.getProperty("java.home") + "/bin/java",
+                "-Xmx192m", "-XX:ActiveProcessorCount=2", "-jar", "/app.jar", "run", configuration.toString())
+                .inheritIO().start();
+    }
+
+    private static void stopWorker(Process worker) throws Exception {
+        if (worker == null || !worker.isAlive()) return;
+        worker.destroyForcibly();
+        require(worker.waitFor(15, TimeUnit.SECONDS), "The test Worker did not terminate");
+    }
+
+    private static WorkerCut workerCut(PipelineConfig config) throws Exception {
+        try (var journal = new JdbcJournal(config.existingJournalSettings())) {
+            var status = journal.status();
+            var store = new JdbcPublicationStore(journal, "rocket", null);
+            var checkpoint = store.checkpoint();
+            var snapshot = store.snapshot(TableSchema.identity("sales", "", "items"));
+            String token = store.progress();
+            var subscription = journal.subscriptions().getFirst();
+            if (snapshot == null || !"COMPLETE".equals(snapshot.state) || token == null
+                    || checkpoint.sequence != subscription.acknowledged) return null;
+            String[] fields = token.split(":", -1);
+            require(fields.length == 5 && "ROCKETMQ_OFFSET_V1".equals(fields[0]), "Invalid Worker progress token");
+            Cut receipt = new Cut(Long.parseLong(fields[2]), Long.parseLong(fields[3]), fields[4]);
+            return new WorkerCut(fields[1], receipt, (String)status.get("generation"), snapshot.snapshotId,
+                    checkpoint.sequence, checkpoint.transactionId, checkpoint.epoch, ((Number)status.get("lastSequence")).longValue());
+        }
+    }
+
+    private static WorkerCut confirmedWorkerCut(PipelineConfig config, long sequence) throws Exception {
+        return until(() -> {
+            WorkerCut current = workerCut(config);
+            return current != null && current.sequence() == sequence && current.capturedSequence() == sequence
+                    ? current : null;
+        }, "a durable Worker and broker receipt for source sequence " + sequence);
+    }
+
+    private static MessageQueue verifyWorkerReceipt(MQClientAPIImpl api, Election owner, WorkerCut cut) throws Exception {
+        MessageQueue queue = new MessageQueue(cut.topic(), BROKER, 0);
+        for (String address : owner.liveInSync()) {
+            until(() -> {
+                var topicConfig = api.getTopicConfig(address, cut.topic(), TIMEOUT);
+                if (topicConfig == null || api.getMaxOffset(address, queue, TIMEOUT) != cut.retained().queueOffset() + 1)
+                    return null;
+                MessageExt event = api.viewMessage(address, cut.topic(), cut.retained().commitLogOffset(), TIMEOUT);
+                if (event == null) return null;
+                var payload = Model.JSON.readValue(event.getBody(), MessageEvent.class);
+                require(payload.id.equals(event.getUserProperty("rivomesh_event_id"))
+                        && "COMMIT".equals(payload.kind) && cut.sequence() == payload.sequence
+                        && cut.generation().equals(payload.generation) && cut.transactionId().equals(payload.transactionId)
+                        && payload.totalChanges == 1 && cut.retained().queueOffset() == event.getQueueOffset()
+                        && cut.retained().commitLogOffset() == event.getCommitLogOffset()
+                        && cut.retained().contentSha256().equals(hash(event)), "The actual Worker COMMIT receipt diverged on " + address);
+                return Boolean.TRUE;
+            }, "the confirmed Worker commit on " + address);
+        }
+        return queue;
+    }
+
+    private void acceptWorker(Path markers) throws Exception {
+        System.setProperty("h2.bindAddress", "127.0.0.1");
+        DefaultMQProducer inspector = producer();
+        Process worker = null;
+        try {
+            MQClientAPIImpl api = api(inspector);
+            Path configuration = markers.resolve("worker.json");
+            PipelineConfig config = PipelineConfig.load(configuration);
+            List<String> controllerEndpoints = config.targets.getFirst().messaging.rocketmqControllerEndpoints.stream()
+                    .map(URI::create).map(URI::getAuthority).toList();
+            activeController = until(() -> controllerLeader(api, controllerEndpoints), "the initial Controller leader");
+            Election initial = until(() -> election(api, 1, null), "the distinguished Worker-test primary");
+            write(markers, "leader-ready.json", Map.of("master", initial.address()));
+            Election original = until(() -> election(api, 3, null), "all three synchronized Worker-test brokers");
+            require(initial.address().equals(original.address()), "Initial Worker route moved before start");
+            checkPolicies(api, original);
+            until(() -> { sourceSql("SELECT 1"); return Boolean.TRUE; }, "the real MySQL source");
+            sourceSql("CREATE DATABASE sales");
+            sourceSql("CREATE TABLE sales.items(id BIGINT PRIMARY KEY, note VARCHAR(40))");
+            sourceSql("INSERT INTO sales.items VALUES(1,'original snapshot')");
+            worker = startWorker(configuration);
+            WorkerCut snapshot = confirmedWorkerCut(config, 0);
+            sourceSql("UPDATE sales.items SET note='before promotion' WHERE id=1");
+            WorkerCut before = confirmedWorkerCut(config, 1);
+            require(snapshot.snapshotId().equals(before.snapshotId()), "The initial CDC rebuilt the snapshot");
+            verifyWorkerReceipt(api, original, before);
+            write(markers, "original-cut.json", Map.of("master", original.address(), "masterId", original.id(),
+                    "epoch", original.epoch(), "syncStateEpoch", original.syncEpoch(), "liveInSync", original.liveInSync(),
+                    "topicConfigurationReplicas", original.liveInSync(), "retained", before.retained(), "worker", before));
+            until(() -> Files.isRegularFile(markers.resolve("original-killed")) ? Boolean.TRUE : null,
+                    "the original broker to be killed");
+            Election promoted = until(() -> election(api, 2, original), "two surviving synchronized brokers");
+            checkPolicies(api, promoted);
+            verifyWorkerReceipt(api, promoted, before);
+            stopWorker(worker);
+            sourceSql("INSERT INTO sales.items VALUES(2,'retained after Worker restart')");
+            worker = startWorker(configuration);
+            WorkerCut after = confirmedWorkerCut(config, 2);
+            checkContinuation(before, after);
+            require(after.epoch() > before.epoch(), "The restarted Worker did not acquire a new writer epoch");
+            MessageQueue queue = verifyWorkerReceipt(api, promoted, after);
+            write(markers, "promoted-cut.json", Map.of("master", promoted.address(), "masterId", promoted.id(),
+                    "epoch", promoted.epoch(), "syncStateEpoch", promoted.syncEpoch(), "liveInSync", promoted.liveInSync(),
+                    "topicConfigurationReplicas", promoted.liveInSync(), "retained", before.retained(), "appended", after.retained(),
+                    "adapterOutcome", "CONTROLLER_PROFILE_WORKER_CONTINUED", "worker", after));
+            until(() -> Files.isRegularFile(markers.resolve("remaining-follower-killed")) ? Boolean.TRUE : null,
+                    "the remaining follower cutoff");
+            until(() -> election(api, 1, original), "one live synchronized replica");
+            sourceSql("INSERT INTO sales.items VALUES(3,'waits for replicas')");
+            until(() -> {
+                WorkerCut held = workerCut(config);
+                if (held == null || held.capturedSequence() != 3) return null;
+                try (var journal = new JdbcJournal(config.existingJournalSettings())) {
+                    if (!"ROCKETMQ_CONTROLLER_ROUTE_RETRY".equals(journal.subscriptions().getFirst().errorCode)) return null;
+                }
+                require(held.sequence() == after.sequence() && held.retained().equals(after.retained())
+                        && api.getMaxOffset(promoted.address(), queue, TIMEOUT) == after.retained().queueOffset() + 1,
+                        "The declined replica state changed the broker or Worker receipt");
+                return Boolean.TRUE;
+            }, "an actual queued transaction held below the replica minimum");
+            write(markers, "minimum-refused.json", Map.of("status", "PASS", "confirmed", after.retained()));
+            until(() -> Files.isRegularFile(markers.resolve("remaining-follower-restarted")) ? Boolean.TRUE : null,
+                    "the original follower volume to return");
+            Election recovered = until(() -> election(api, 2, original), "the same healthy broker route after recovery");
+            require(promoted.address().equals(recovered.address()), "The promoted master changed during follower recovery");
+            WorkerCut resumed = confirmedWorkerCut(config, 3);
+            checkContinuation(after, resumed);
+            require(resumed.epoch() == after.epoch(), "Restoring the follower changed the running Worker epoch");
+            verifyWorkerReceipt(api, recovered, resumed);
+            write(markers, "worker-recovered.json", Map.of("status", "PASS",
+                    "sameRunningWorker", worker.isAlive(), "worker", resumed, "liveInSync", recovered.liveInSync()));
+            if (controllerEndpoints.size() > 1) {
+                verifyControllerElection(api, markers, config, controllerEndpoints, recovered, resumed);
+                require(worker.isAlive(), "The Worker stopped during the Controller election");
+            }
+        } finally {
+            try { stopWorker(worker); }
+            finally { inspector.shutdown(); }
+        }
+    }
+
+    private static String controllerLeader(MQClientAPIImpl api, List<String> endpoints) throws Exception {
+        String leader = null;
+        for (String endpoint : endpoints) {
+            try {
+                var metadata = api.getControllerMetaData(endpoint);
+                if (metadata != null && metadata.isLeader() && endpoint.equals(metadata.getControllerLeaderAddress())) {
+                    if (leader != null) return null;
+                    leader = endpoint;
+                }
+            } catch (InterruptedException interrupted) {
+                throw interrupted;
+            } catch (Exception unavailable) {
+                // A stopped Controller does not prevent the remaining members electing a leader.
+            }
+        }
+        return leader;
+    }
+
+    private void verifyControllerElection(MQClientAPIImpl api, Path markers, PipelineConfig config,
+                                          List<String> endpoints, Election broker, WorkerCut before) throws Exception {
+        String originalLeader = activeController;
+        write(markers, "controller-ready.json", Map.of("leader", originalLeader, "worker", before));
+        until(() -> Files.isRegularFile(markers.resolve("controller-leader-killed")) ? Boolean.TRUE : null,
+                "SIGKILL of the Controller leader");
+        activeController = until(() -> {
+            String leader = controllerLeader(api, endpoints);
+            return Objects.equals(originalLeader, leader) ? null : leader;
+        }, "the surviving Controller majority to elect a new leader");
+        Election afterElection = until(() -> election(api, 2, null), "the original route under the elected Controller");
+        require(broker.equals(afterElection), "The Controller election changed the active broker or replica membership");
+        verifyWorkerReceipt(api, afterElection, before);
+        sourceSql("INSERT INTO sales.items VALUES(4,'after Controller election')");
+        WorkerCut after = confirmedWorkerCut(config, 4);
+        checkContinuation(before, after);
+        require(before.epoch() == after.epoch(), "The Controller election changed the Worker epoch");
+        verifyWorkerReceipt(api, afterElection, after);
+        write(markers, "controller-succeeded.json", Map.of("leader", activeController, "worker", after));
+    }
+
+    private static void checkContinuation(WorkerCut before, WorkerCut after) {
+        require(before.generation().equals(after.generation()) && before.snapshotId().equals(after.snapshotId())
+                && before.topic().equals(after.topic()) && after.sequence() == before.sequence() + 1
+                && !before.transactionId().equals(after.transactionId())
+                && after.retained().queueOffset() == before.retained().queueOffset() + 3
+                && after.retained().commitLogOffset() > before.retained().commitLogOffset(),
+                "The Worker did not preserve the original journal and publish exactly one BEGIN, ROW and COMMIT");
     }
 
     private void acceptProduct(Path markers) throws Exception {
@@ -246,8 +456,8 @@ public final class RocketControllerPromotionAcceptance {
         return producer.getDefaultMQProducerImpl().getMqClientFactory().getMQClientAPIImpl();
     }
 
-    private static Election election(MQClientAPIImpl api, int expected, Election previous) throws Exception {
-        ReplicasInfo replicas = api.getInSyncStateData(CONTROLLER, List.of(BROKER)).getReplicasInfoTable().get(BROKER);
+    private Election election(MQClientAPIImpl api, int expected, Election previous) throws Exception {
+        ReplicasInfo replicas = api.getInSyncStateData(activeController, List.of(BROKER)).getReplicasInfoTable().get(BROKER);
         if (replicas == null || replicas.getMasterAddress() == null || replicas.getMasterBrokerId() == null) return null;
         BrokerData route = api.getBrokerClusterInfo(TIMEOUT).getBrokerAddrTable().get(BROKER);
         if (route == null || !CLUSTER.equals(route.getCluster()) || !replicas.getMasterAddress().equals(route.getBrokerAddrs().get(0L))) return null;
@@ -262,8 +472,8 @@ public final class RocketControllerPromotionAcceptance {
         return current;
     }
 
-    private static void checkPolicies(MQClientAPIImpl api, Election election) throws Exception {
-        Properties controller = api.getControllerConfig(List.of(CONTROLLER), TIMEOUT).get(CONTROLLER);
+    private void checkPolicies(MQClientAPIImpl api, Election election) throws Exception {
+        Properties controller = api.getControllerConfig(List.of(activeController), TIMEOUT).get(activeController);
         require(controller != null && "false".equals(controller.getProperty("enableElectUncleanMaster")),
                 "The Controller does not attest clean election");
         for (String address : election.liveInSync()) {

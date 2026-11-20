@@ -192,7 +192,9 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Native Artemis shared-store backup activated after primary SIGKILL. The stable endpoint reused the receipt and broker/queue identity.
   - [x] ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive.
   - [x] RocketMQ 5.5.0 opt-in publisher passed native receipt reuse, actual promotion and unchanged progress below two synchronized replicas.
-  - [ ] Cross-host failure domains, internal network cryptography, capacity and remaining messaging profiles.
+  - [x] The packaged MySQL CDC Worker resumes after SIGKILL, retains backlog below the RocketMQ replica minimum and delivers it when the original follower returns.
+  - [x] Three Controllers elect a new leader after SIGKILL. The original Worker publishes on the same broker route with the same writer epoch.
+  - [ ] Controller majority loss, cross-host failure domains, internal network cryptography, capacity and remaining messaging profiles.
 - [x] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05

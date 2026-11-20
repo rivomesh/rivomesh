@@ -318,7 +318,7 @@ messaging:
 
 已确认的主节点或任期变化时，Rivomesh 关闭旧 SDK 连接，直接向已核验的活动地址发送。读取原生消息，并再次核对同一任期、主节点和同步集合后才接受回执。原主题代次和 `ROCKETMQ_OFFSET_V1` 坐标继续使用。确认丢失或不确定时仍可能以相同事件 ID 重放。已确认内容出现冲突时，恢复前须核实历史。Controller 档案有独立的配置指纹，切换持久性档案需明确迁移计划。
 
-已使用 RocketMQ 5.5.0、在线的内嵌 Controller 和三个独立 Broker 数据卷完成产品发布者实测。主节点任期从 1 增至 2 后，保留事件的队列偏移 1、物理偏移 451 和内容摘要一致。新事件在 2 / 906 得到确认，新建发布者能以原生回执重开。停止剩余备用节点后，已确认回执及 Broker 队列末尾保持不变。Controller 停机、Broker 存储丢失、DLedger CommitLog、TLS、ACL 和完整 CDC Worker 切换分别验收。NameServer、Controller 与 Broker 保持在可信网络。[原生夹具与复现命令](../../tests/rocketmq/controller-promotion.md)
+已使用 RocketMQ 5.5.0、在线的内嵌 Controller 和三个独立 Broker 数据卷完成产品发布者实测。主节点任期从 1 增至 2 后，保留事件的队列偏移 1、物理偏移 451 和内容摘要一致。新事件在 2 / 906 得到确认，新建发布者能以原生回执重开。停止剩余备用节点后，已确认回执及 Broker 队列末尾保持不变。Controller 多数派丢失、Broker 存储丢失、DLedger CommitLog、TLS、ACL 和跨主机 Worker 迁移分别验收。NameServer、Controller 与 Broker 保持在可信网络。[原生夹具与复现命令](../../tests/rocketmq/controller-promotion.md)
 
 ### 主题和保留设置
 
@@ -334,7 +334,7 @@ messaging:
 
 仅归属清单匹配不能证明已确认历史仍保留。RocketMQ 已加入下述原生确认回执与回退检测；其他消息产品仍需各自的检测和故障验收，不能把这项保证外推到全部 Broker。
 
-RocketMQ 原生 Broker 选主已验证。原默认档案拒绝 Controller 模式。可选档案执行上文的验证，完整 Worker 续传另行验收。 [原生证据](../verification/README.md#rocketmq-broker-controller-promotion-and-topic-metadata)
+MySQL 8.4 实库演练验证了 Broker 主节点切换和 Rivomesh Worker 强杀后沿用原日志与快照。只剩一个在线同步副本时，源事务继续进入日志，投递回执和 Broker 队列保持原切点。原备用节点恢复后，同一 Worker 自动补发积压的 GTID，两个在线副本确认相同的 COMMIT。三 Controller 集群的主节点强杀后，原 Worker 也沿用了原 Broker 路由和写入任期，并确认下一笔事务。Controller 多数派丢失、主机或磁盘丢失、DLedger CommitLog、TLS 和 ACL 单独验收。 [原生证据](../verification/README.md#packaged-mysql-cdc-worker-with-rocketmq-controller-broker-recovery)
 
 ### RocketMQ 原生确认回执
 

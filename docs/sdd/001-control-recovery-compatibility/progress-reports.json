@@ -10,7 +10,7 @@
     "JV-03: Accepted five external JDBC providers with native MySQL and PostgreSQL TLS and Kingbase restart recovery. Published 9cac6d7."
   ],
   "inProgress": [
-    "LG-08: Reviewed historical DDL execution and commercial distributed GaussDB acceptance."
+    "LG-04: RocketMQ Worker and single Controller leader fault accepted. Continue remaining production recovery profiles."
   ],
   "reportContents": [
     "Current totals",
@@ -35,14 +35,16 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue LG-08 on reviewed historical schema migration and current-state recovery."
+    "Continue LG-04 with loss and restoration of the RocketMQ Controller majority and remaining recovery profiles.",
+    "LG-08 still requires reviewed historical DDL execution and commercial distributed GaussDB acceptance."
   ],
   "currentCandidateArtifact": "10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a",
-  "currentCandidateScope": "PostgreSQL whole-transaction TRUNCATE refusal, native schema review, coordinated LOCAL/PostgreSQL restore and openGauss keyless JSON and index replay.",
+  "currentCandidateScope": "MySQL CDC Worker, native RocketMQ broker promotion and restart, replica backlog recovery and Controller election.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "Accepted SO-06 with PostgreSQL 17.12 two-target common-cut validation and PostgreSQL 18.7 native generated columns and restart.",
-    "Verified LG-08 PostgreSQL TRUNCATE fencing, original-cut restore, and openGauss keyless replay; historical execution and the commercial cluster remain."
+    "Verified LG-08 PostgreSQL TRUNCATE fencing, original-cut restore, and openGauss keyless replay; historical execution and the commercial cluster remain.",
+    "Verified LG-04 RocketMQ on the packaged MySQL Worker, including original-cut restart, retained backlog and Controller leadership recovery."
   ],
   "lastScheduledReportAt": "2026-11-20T09:58:16+08:00",
   "lastVerifiedReactor": {
