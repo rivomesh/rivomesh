@@ -227,6 +227,12 @@ final class OracleSourceProbe {
                             if(column.length<1||characterBytes<1||characterBytes>4000)
                                 throw new IllegalStateException("ORACLE_CHARACTER_STORAGE_UNSUPPORTED");
                             break;
+                        case "RAW":
+                            column.length=rows.getInt(8);
+                            if(column.length<1||column.length>2000)
+                                throw new IllegalStateException("ORACLE_RAW_STORAGE_UNSUPPORTED");
+                            column.type=TableSchema.Type.BYTES;
+                            break;
                         case "DATE":
                             column.type=TableSchema.Type.DATETIME;
                             break;

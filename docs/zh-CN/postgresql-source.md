@@ -9,7 +9,7 @@
 1. 在源实例启用 `wal_level=logical`，为任务的持久槽和导出快照的临时槽预留容量。源账号需要 `LOGIN`、`REPLICATION` 和已发布表的 `SELECT` 权限。
 2. 创建明确列出同步表的发布，包含 INSERT、UPDATE、DELETE 和 TRUNCATE。对这些表设置 `REPLICA IDENTITY FULL`，以获取包括无主键行在内的完整前镜像。保持发布的表、列和行范围稳定，结构变更先暂停并审阅。
 3. 按[示例配置](../../config/postgresql-source-v3.yml)设置源库、发布和目标。使用 PostgreSQL 目标时，连接角色需要读取 `pg_control_system()` 以核对物理连接身份。源库与目标库采用独立数据库。
-4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL 和 MySQL 目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
+4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL、MySQL、Gauss JDBC 系列、ClickHouse、Doris 及消息目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
 
 数据库会在创建逻辑复制槽时提供一致位置。Rivomesh 导入导出的 MVCC 快照读取表数据，按原 LSN 捕获快照期间及之后的事务。提交已写入 Rivomesh 日志后才确认源槽。每个任务使用与日志世代绑定的槽名。[PostgreSQL 复制协议](https://www.postgresql.org/docs/17/protocol-replication.html) · [pgJDBC 复制 API](https://jdbc.postgresql.org/documentation/server-prepare/)
 
@@ -27,6 +27,16 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
 - PostgreSQL 与 MySQL 目标支持下文的同一切点对账。其他目标需要单独验收源与目标组合。历史 DDL 执行由 LG-08 跟踪。
+
+### 其他目标及二级索引
+
+PostgreSQL 17.12 同时写入 PostgreSQL、ClickHouse 25.8.33.6 和 Redis Streams 7.4.2 已通过实库验收。全量和增量保留 JSON 大整数、原字节及定点数精度。主键变更、无主键重复行只删除一次、强杀后原 WAL 槽和快照续传均通过。Redis 保留原事件、消息位点及有类型的 PostgreSQL 源坐标。使用夹具的 `--redis-clickhouse` 参数复现。其他消息产品的运行条件分别验收。
+
+`--doris` 实库夹具验证 PostgreSQL 17.12 同时写入单节点 Doris 4.1.3 和 PostgreSQL。Doris 保留 DECIMAL 与 JSON 数值精度，字节以 Base64 存储。实测主键变更、只删除一条重复行，并在强制重启后核对目标回执、原 WAL 槽和 PostgreSQL 快照。 [Doris 目标配置](../../config/doris-v3.yml)
+
+创建任务时可启用 `source.postgresql.captureSecondaryIndexes: true`，将 PostgreSQL 二级索引纳入冻结结构，并在导出的快照下复核目录。该选项属于任务身份。已有任务若需开启，要先按计划建立新的基线。
+
+`--gauss-indexes` 实库夹具核对 openGauss 7.0.0-RC3 的普通索引、业务 UNIQUE 降为普通索引以及主键保留。部分索引、表达式、非默认排序规则或操作符类、INCLUDE、非 B-tree 和非默认排序需单独审核。复杂定义作为源元数据保存。历史 DDL 执行和商业分布式 GaussDB 由 LG-08、LG-01 继续验收。 [PostgreSQL 索引目录](https://www.postgresql.org/docs/17/catalog-pg-index.html) · [Gauss 索引策略](gaussdb-index-policy.md)
 
 ### 精确小数
 
@@ -99,5 +109,7 @@ PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复
 ## 审阅导致采集暂停的结构变化
 
 当 pgoutput 为行事务报告已变化的关系时，同步停在前一持久 LSN，提示 `POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN`。打开采集故障审阅，可对照当前发布与日志结构，查看表、原结构和当前结构摘要、变化的列名。如将 `TIMESTAMP` 改为 `TIMESTAMP(6)`，审阅会列出原生类型声明变化的列，也会提示已有列的相对顺序变化。当前发布可能包含故障发生后的 DDL。pgoutput 传输关系元数据和行变更，DDL 语句不在流中。当前发布超出支持范围时，审阅显示原生发现诊断并保留前一 LSN。审阅期间不执行 DDL，也不更新断点。 [PostgreSQL 逻辑复制限制](https://www.postgresql.org/docs/17/logical-replication-restrictions.html) · [Relation 消息](https://www.postgresql.org/docs/17/protocol-logical-replication.html)
+
+如果触发暂停的事务为已知表发送了完整 Relation 消息，评审还会显示 **PostgreSQL 原始发布结构**。`blockedRelationEvent` 记录 BEGIN 消息中的事务最终 LSN、表 OID、复制标识、发布列的顺序和每列的类型 OID 与修饰符，以及日志库冻结结构的摘要。日志库将原始描述绑定到故障代次和持久断点摘要。后续 DDL 或当前目录不可读时仍可查看原始消息。缺少完整观测时，API 返回 `POSTGRESQL_RELATION_EVIDENCE_UNRECORDED`。pgoutput 消息提供当时发布列结构。还原历史 SQL、约束及索引须有额外源证据。先保留原逻辑槽和 WAL，并按采集断点评审替代基线。 [PostgreSQL 消息格式](https://www.postgresql.org/docs/17/protocol-logicalrep-message-formats.html)
 
 执行 `python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact <release jar> --output target/pg-ddl-review` 可复现。

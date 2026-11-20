@@ -20,11 +20,11 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main probe-oracle config/o
 
 设置 `archiveWindow.startScn` 和 `archiveWindow.endScnExclusive` 两个十进制字符串可检查指定归档区间。CDB 根账号需要读取 `V_$THREAD` 和 `V_$ARCHIVED_LOG`。检查绑定当前 resetlogs 世代和一个 redo 线程。`CATALOG_CONTIGUOUS` 表示目录里的归档段覆盖完整区间，`ORACLE_ARCHIVE_LOG_GAP` 表示至少一段缺失。恢复前保留原始区间，并用 LogMiner 验证物理日志。
 
-设置 `archiveWindow.decodeCommitted: true` 后，预检用 LogMiner 读取已登记的归档文件。CDB 根账号额外需要 `LOGMINING`、`SYS.DBMS_LOGMNR` 执行权限和 `SYS.V_$LOGMNR_CONTENTS` 读取权限。结果包含已提交事务数、操作计数和有类型变更的 SHA-256。预检将 redo 和 undo 语句作为数据解析。目前接受支持范围内 `NUMBER(p,s)`、`VARCHAR2` 和 `DATE` 列的完整前后镜像，遇到跨区间事务、拆分语句、镜像缺失或未支持的操作及类型会拒绝。采集该区间之前，先为所选表配置相应的补充日志。
+设置 `archiveWindow.decodeCommitted: true` 后，预检用 LogMiner 读取已登记的归档文件。CDB 根账号额外需要 `LOGMINING`、`SYS.DBMS_LOGMNR` 执行权限和 `SYS.V_$LOGMNR_CONTENTS` 读取权限。结果包含已提交事务数、操作计数和有类型变更的 SHA-256。预检将 redo 和 undo 语句作为数据解析。目前接受支持范围内 `NUMBER(p,s)`、`VARCHAR2`、`DATE` 和 `RAW` 列的完整前后镜像，遇到跨区间事务、拆分语句、镜像缺失或未支持的操作及类型会拒绝。采集该区间之前，先为所选表配置相应的补充日志。
 
 解码输出包含最后一笔事务的有类型提交坐标，包括提交 SCN 和 XID。解析器按完整事务分组，并在事务内编号事件。不同 XID 共用提交 SCN、顺序无法证明时会拒绝。实库还验证归档轮换后第二笔事务有独立提交坐标。
 
-## V3 Oracle 到 PostgreSQL
+## Oracle V3 同步任务
 
 按 [V3 样例](../../config/oracle-source-v3.yml) 设置 `source.type: ORACLE`。首批实验档案为 ARM64 Oracle 26ai Free 23.26.4.0.0 到 PostgreSQL 17.12。显式列出大写源 OWNER 和表、目标 schema 映射及单一可写 PDB。CDB 根账号除上文归档和 LogMiner 权限外，还需读取 `V_$TRANSACTION`、`V_$PDB_INCARNATION`。每张源表启用全列补充日志。PDB 账号读取表、元数据和共同 Flashback SCN。
 
@@ -33,11 +33,19 @@ java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main check config/oracle-s
 java -cp 'rivomesh.jar:ojdbc8.jar' io.github.rivomesh.Main run config/oracle-source-v3.yml
 ```
 
-使用相同类路径启动拥有 Worker 的进程（组合模式使用 `serve`，分离模式使用 `agent`）。可在界面导入 V3 配置，或在新建任务选择 **V3 → Oracle**，分别填 CDB 根和 PDB 连接、PDB 名称及大写 `OWNER.TABLE` 表名。每个源 owner 显式映射到 PostgreSQL Schema，启动前在选定 Agent 上执行 **检查**。受监督的 Worker 继承所属进程类路径中的外置 Oracle 驱动。此档案支持有明确精度的 `NUMBER(p,s)`、`VARCHAR2` 和 `DATE`，覆盖有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
+使用相同类路径启动拥有 Worker 的进程（组合模式使用 `serve`，分离模式使用 `agent`）。可在界面导入 V3 配置，或在新建任务选择 **V3 → Oracle**，分别填 CDB 根和 PDB 连接、PDB 名称及大写 `OWNER.TABLE` 表名。每个源 owner 显式映射到目标 Schema 或消息命名空间，启动前在选定 Agent 上执行 **检查**。受监督的 Worker 继承所属进程类路径中的外置 Oracle 驱动。此档案支持有明确精度的 `NUMBER(p,s)`、`VARCHAR2`、`DATE` 和 `RAW`，覆盖有主键及无主键表。每次开始采集使用共同快照 SCN。未完成的快照可以重取 Flashback 视图，完成的快照可复用。
 
 采集轮询已关闭的归档段。断点绑定 CDB DBID 与 resetlogs、PDB GUID、UID 和世代、已采集 SCN 及最早所需归档 SCN。快照时仍打开的事务可使最早归档位置保留在较早处，直到归档包含该事务提交后才会投递整笔。只有归档覆盖后续活跃事务采样的 SCN，才会释放更老的保留范围。按任务显示的最早 SCN 保留源归档，并按实际负载验证轮换与保留策略。
 
 归档缺失、事件格式或顺序无法证明、未审核 DDL 会停止推进并保留原断点，可从界面查看采集恢复情况。Oracle 切主、RAC、在线 redo、原生二进制 JSON、LOB、其他生成表达式及更多目标档案另行验收。[Oracle 活跃事务](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-TRANSACTION.html) · [PDB 世代](https://docs.oracle.com/en/database/oracle/oracle-database/26/refrn/V-PDB_INCARNATION.html)
+
+### RAW 和 Redis Streams
+
+Oracle Free 23.26.4.0.0 可在同一个 V3 任务投递到 PostgreSQL 和 Redis Streams。添加 `REDIS_STREAMS` 目标，配置源 owner 到命名空间的映射和专用持久化 stream。PostgreSQL 把支持的 `RAW(1..2000)` 存为 `bytea`。Redis 的结构事件记录类型 `BYTES` 和声明的长度上限，行事件以 Base64 传递字节，SQL `NULL` 单独表示。快照通过 JDBC 读取 Flashback 字节，增量解析归档前后镜像中的 `HEXTORAW`。如果 LogMiner 将镜像拆成续行记录，任务会在原 SCN 暂停。 [Oracle HEXTORAW](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/HEXTORAW.html)
+
+用 JDK 21 发布包、外置 Oracle JDBC 驱动和临时实库夹具执行 `--logminer --pipeline --redis --raw-values`。夹具检查空值、无主键重复行、实际字节及消息，并验证强制停止 Worker 和 Controller 后按原 SCN 续传。Redis 保留原消息 ID 和快照，并携带源事务的 SCN 与 XID。其他消息产品部署和 Oracle 目标组合继续按实库验收。 [实库夹具](../../tests/oracle-source-probe.py) · [验收证据](../verification/README.md#oracle-raw-and-redis-streams)
+
+夹具追加 `--clickhouse` 可同时验证 Oracle Free 到 ClickHouse 25.8.33.6、PostgreSQL 和 Redis Streams。ClickHouse 的全量、归档增量和重启续传保留 RAW 字节、SQL NULL 和无主键行重数。
 
 ### 归档 DDL 评审
 

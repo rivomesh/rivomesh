@@ -50,9 +50,12 @@ final class OracleCdcSource implements SourceAdapter {
         Set<String> owners=new TreeSet<>();
         for(String table:OracleSourceProbe.selectedTables(options.tables))owners.add(table.substring(0,table.indexOf('.')));
         if(!owners.equals(new TreeSet<>(pipeline.databases)))throw new IllegalArgumentException("ORACLE_SOURCE_SCOPE_MISMATCH");
-        for(PipelineConfig.Target target:pipeline.targets)
-            if(target!=null&&target.product!=TargetProduct.POSTGRESQL)
+        for(PipelineConfig.Target target:pipeline.targets){
+            if(target==null||target.product==null)continue;
+            TargetProduct product=target.product;
+            if(product!=TargetProduct.POSTGRESQL&&product!=TargetProduct.CLICKHOUSE&&!product.messaging())
                 throw new IllegalArgumentException("ORACLE_SOURCE_TARGET_PROFILE_UNAVAILABLE");
+        }
     }
 
     private static boolean endpoint(Config.OracleEndpoint value){
@@ -241,6 +244,10 @@ final class OracleCdcSource implements SourceAdapter {
                             if(column.type==TableSchema.Type.STRING)
                                 row.add(Cell.value(OracleCharacters.national(column)?rows.getNString(i+1):rows.getString(i+1)));
                             else if(column.type==TableSchema.Type.JSON)row.add(Cell.value(OracleTextJson.value(rows.getString(i+1))));
+                            else if(column.type==TableSchema.Type.BYTES){
+                                byte[] bytes=rows.getBytes(i+1);
+                                row.add(Cell.value(bytes==null?null:java.util.Base64.getEncoder().encodeToString(bytes)));
+                            }
                             else if(OracleDate.isColumn(column))row.add(Cell.value(OracleDate.snapshotValue(rows.getString(i+1))));
                             else{
                                 BigDecimal number=rows.getBigDecimal(i+1);

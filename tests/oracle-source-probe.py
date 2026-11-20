@@ -782,9 +782,47 @@ def native_json_evidence(options, sql, pdb_service, environment, observed, revie
     assert len(comparisons)==14,comparisons
 
 
+def raw_evidence(sql, output, observed):
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        CREATE TABLE rivo_app.rivo_raw_probe (id NUMBER(12) PRIMARY KEY, octets RAW(32));
+        ALTER TABLE rivo_app.rivo_raw_probe ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
+    start = sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        INSERT INTO rivo_app.rivo_raw_probe VALUES(1,HEXTORAW('000AFF80'));
+        INSERT INTO rivo_app.rivo_raw_probe VALUES(2,NULL);
+        COMMIT;""")
+    snapshot = sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+        UPDATE rivo_app.rivo_raw_probe SET octets=HEXTORAW('00FF10') WHERE id=1;
+        DELETE FROM rivo_app.rivo_raw_probe WHERE id=2;
+        COMMIT;""")
+    end = sql('SELECT current_scn FROM v$database;').stdout.strip()
+    sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
+    flashback = sql(f"""ALTER SESSION SET CONTAINER=FREEPDB1;
+        SELECT id||'|'||COALESCE(RAWTOHEX(octets),'NULL') FROM rivo_app.rivo_raw_probe AS OF SCN {snapshot} ORDER BY id;""").stdout.strip()
+    assert flashback.splitlines() == ['1|000AFF80','2|NULL']
+    archived = mine_archive(sql,start,end,"""
+        SELECT operation||'|'||status||'|'||csf||'|'||sql_redo||'|'||sql_undo
+        FROM v$logmnr_contents
+        WHERE seg_owner='RIVO_APP' AND table_name='RIVO_RAW_PROBE' AND src_con_name='FREEPDB1'
+          AND operation IN ('INSERT','UPDATE','DELETE','UNSUPPORTED')
+        ORDER BY scn,rs_id,ssn;
+    """).stdout
+    rows=[line.strip().split('|',4) for line in archived.splitlines() if '|' in line]
+    assert len(rows)==4 and all(row[1:3]==['0','0'] and len(row)==5 for row in rows), rows
+    assert sorted(row[0] for row in rows)==['DELETE','INSERT','INSERT','UPDATE']
+    assert any('00FF10' in row[3].upper() and '000AFF80' in row[4].upper() for row in rows if row[0]=='UPDATE')
+    (output/'native-raw-redo.json').write_text(json.dumps({'flashback': flashback.splitlines(), 'archives': rows},indent=2)+'\n')
+    observed('Native Oracle RAW redo and undo retain binary values, NULL, and the original Flashback image')
+
+
 def pipeline_profile(options, oracle, sql, root_service, pdb_service, environment, observed):
     target = oracle + '-pg'
+    redis = oracle + '-redis'
+    clickhouse = oracle + '-ch'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
+    if options.clickhouse:
+        env['CLICKHOUSE_PASSWORD']=secrets.token_hex(24)
     if options.date_values:
         env['TZ'] = 'America/New_York'
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -797,6 +835,17 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def target_sql(statement, checked=True):
         return execute('docker','exec',target,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-At','-c',statement,checked=checked).stdout.strip()
+
+    def ch_sql(statement, checked=True):
+        return execute('docker','exec',clickhouse,'sh','-c',
+                       'clickhouse-client --user sync_test --password "$CLICKHOUSE_PASSWORD" --query "$1"',
+                       'sh',statement,checked=checked).stdout.strip()
+
+    def ch_raw_rows(table, keyed=False):
+        value = "if(isNull(OCTETS),'<NULL>',lower(hex(assumeNotNull(OCTETS))))"
+        selected = f"concat(toString(ID),'|',{value})" if keyed else value
+        order = 'ID' if keyed else value
+        return ch_sql(f'SELECT {selected} FROM ch_app.`{table}` ORDER BY {order}',checked=False).splitlines()
 
     def stop_platform(force=False):
         nonlocal platform
@@ -832,6 +881,21 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def progress():
         return api('/api/tasks/oracle_native').get('status',{})
 
+    def redis_events():
+        raw = execute('docker','exec',redis,'redis-cli','--json','-2','-n','2','XRANGE','RM_ORACLE_PARITY','-','+').stdout
+        records = []
+        for position, fields in json.loads(raw):
+            properties = dict(zip(fields[::2], fields[1::2]))
+            event = json.loads(properties['body'])
+            assert properties['rivomesh_event_id'] == event['id']
+            records.append((position,event))
+        return records
+
+    def redis_cut(kind,count):
+        events=redis_events()
+        return events if sum(event['kind']==kind and (kind!='COMMIT' or event['totalChanges']>0)
+                             for _,event in events)==count else None
+
     def row_note():
         return target_sql('SELECT "NOTE" FROM copy_app."RIVO_ORDERS" WHERE "ID"=1',checked=False)
 
@@ -848,6 +912,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         selected=f'''"ID"||'|'||{values}''' if keyed else values
         order='"ID"' if keyed else '"AMOUNT" NULLS LAST'
         return target_sql(f'SELECT {selected} FROM copy_app."{table}" ORDER BY {order}',checked=False).splitlines()
+
+    def raw_rows(table, keyed=False):
+        value = """COALESCE(encode("OCTETS",'hex'),'<NULL>')"""
+        selected = f""" "ID"||'|'||{value} """ if keyed else value
+        order = '"ID"' if keyed else value
+        return target_sql(f'SELECT {selected} FROM copy_app."{table}" ORDER BY {order}',
+                          checked=False).splitlines()
 
     def rotate():
         sql('ALTER SYSTEM ARCHIVE LOG CURRENT;')
@@ -936,8 +1007,46 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         rotate()
         source_tables += ['RIVO_APP.RIVO_SYNC_VIRTUAL_ROWS','RIVO_APP.RIVO_SYNC_VIRTUAL_KEYLESS']
 
+    if options.raw_values:
+        sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
+            CREATE TABLE rivo_app.rivo_sync_raw_rows (id NUMBER(12) PRIMARY KEY, octets RAW(32));
+            CREATE TABLE rivo_app.rivo_sync_raw_keyless (octets RAW(16));
+            INSERT INTO rivo_app.rivo_sync_raw_rows VALUES (1,HEXTORAW('000aff80'));
+            INSERT INTO rivo_app.rivo_sync_raw_rows VALUES (2,NULL);
+            INSERT INTO rivo_app.rivo_sync_raw_keyless VALUES (HEXTORAW('0100ff'));
+            INSERT INTO rivo_app.rivo_sync_raw_keyless VALUES (HEXTORAW('0100ff'));
+            INSERT INTO rivo_app.rivo_sync_raw_keyless VALUES (NULL);
+            COMMIT;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_raw_rows TO C##RIVO_PROBE;
+            GRANT SELECT, FLASHBACK ON rivo_app.rivo_sync_raw_keyless TO C##RIVO_PROBE;
+            ALTER TABLE rivo_app.rivo_sync_raw_rows ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+            ALTER TABLE rivo_app.rivo_sync_raw_keyless ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;""")
+        rotate()
+        source_tables += ['RIVO_APP.RIVO_SYNC_RAW_ROWS','RIVO_APP.RIVO_SYNC_RAW_KEYLESS']
+
     started=False
+    started_redis=False
+    started_clickhouse=False
     try:
+        if options.clickhouse:
+            started_clickhouse=True
+            execute('docker','run','--rm','-d','--name',clickhouse,
+                    '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::8123',
+                    '--tmpfs','/var/lib/clickhouse:rw,size=768m,mode=1777',
+                    '-e','CLICKHOUSE_USER=sync_test','-e','CLICKHOUSE_PASSWORD',
+                    '-e','CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1','clickhouse/clickhouse-server:25.8.33.6',env=env)
+            required(lambda:ch_sql('SELECT 1',checked=False)=='1','ClickHouse target ready',60)
+            ch_port=execute('docker','port',clickhouse,'8123/tcp').stdout.strip().rsplit(':',1)[1]
+            observed_version=ch_sql('SELECT version()')
+            (output/'clickhouse-version.txt').write_text(observed_version+'\n')
+        if options.redis:
+            execute('docker','run','--rm','-d','--name',redis,
+                    '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::6379',
+                    'redis:7.4.2-alpine','redis-server','--appendonly','yes','--appendfsync','always')
+            started_redis=True
+            required(lambda:execute('docker','exec',redis,'redis-cli','PING',checked=False).stdout.strip()=='PONG',
+                     'Redis target ready',30)
+            redis_port=execute('docker','port',redis,'6379/tcp').stdout.strip().rsplit(':',1)[1]
         execute('docker','run','--rm','-d','--name',target,
                 '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::5432',
                 '-e','POSTGRES_PASSWORD','-e','POSTGRES_DB=sync_test','postgres:17.12',env=env)
@@ -967,6 +1076,16 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                             'metadataSchema':'copy_meta'}],
                 'chunkSize':2,'heartbeatMillis':500,'leaseMillis':5000,'pollIntervalMillis':150,
             }
+            if options.redis:
+                pipeline['targets'].append(dict(id='redis',product='REDIS_STREAMS',
+                                                url=f'redis://127.0.0.1:{redis_port}/2',
+                                                mappings={'RIVO_APP':'oracle_events'},
+                                                messaging=dict(stream='RM_ORACLE_PARITY')))
+            if options.clickhouse:
+                pipeline['targets'].append(dict(id='ch',product='CLICKHOUSE',
+                                                url=f'http://127.0.0.1:{ch_port}',username='sync_test',
+                                                password='${CLICKHOUSE_PASSWORD}',metadataSchema='ch_meta',
+                                                mappings={'RIVO_APP':'ch_app'}))
             if options.savepoint_pipeline or options.character_pipeline:
                 pipeline['targets'].append(dict(
                     pipeline['targets'][0],id='pg_peer',metadataSchema='copy_peer_meta',
@@ -1012,12 +1131,17 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                               stderr=subprocess.STDOUT,text=True)
             long_transaction.stdin.write("WHENEVER SQLERROR EXIT FAILURE ROLLBACK\n"
                                          "ALTER SESSION SET CONTAINER=FREEPDB1;\n"
+                                         "EXEC DBMS_APPLICATION_INFO.SET_MODULE('RIVOMESH_FIXTURE_LONG',NULL);\n"
                                          "UPDATE rivo_app.rivo_orders SET note='long transaction' WHERE id=1;\n")
             long_transaction.stdin.flush()
-            active_query=("SELECT MIN(start_scn) FROM v$transaction "
-                          "WHERE con_id=(SELECT con_id FROM v$pdbs WHERE name='FREEPDB1');")
-            before=required(lambda:sql(active_query).stdout.strip() or None,'Oracle transaction active',30)
+            active_query=("SELECT t.start_scn FROM v$transaction t JOIN v$session s "
+                          "ON s.taddr=RAWTOHEX(t.addr) AND s.con_id=t.con_id "
+                          "WHERE s.module='RIVOMESH_FIXTURE_LONG' AND "
+                          "s.con_id=(SELECT con_id FROM v$pdbs WHERE name='FREEPDB1');")
+            before=required(lambda:sql(active_query).stdout.strip() or None,'the marked Oracle transaction is active',45)
             assert before.isdecimal()
+            required(lambda:int(sql('SELECT current_scn FROM v$database;').stdout.strip())>int(before),
+                     'the source SCN advances while the marked transaction is open',45)
 
             with socket.create_server(('127.0.0.1',0)) as reservation:
                 bind_port=reservation.getsockname()[1]
@@ -1057,19 +1181,49 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              and virtual_rows()==['3|2|6|5|1','3|2|6|5|1','4|1|8|5|3'],
                              'Oracle virtual NUMBER snapshot',90)
                     observed('Flashback independently verifies keyed derived values and preserves keyless duplicate multiplicity')
+                if options.raw_values:
+                    required(lambda:raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|000aff80','2|<NULL>']
+                             and sorted(raw_rows('RIVO_SYNC_RAW_KEYLESS'))==['0100ff','0100ff','<NULL>'],
+                             'Oracle RAW Flashback snapshot',90)
+                    assert target_sql('SELECT pg_typeof("OCTETS")::text FROM copy_app."RIVO_SYNC_RAW_ROWS" '
+                                      'WHERE "ID"=1')=='bytea'
+                    if options.clickhouse:
+                        required(lambda:ch_raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|000aff80','2|<NULL>']
+                                 and sorted(ch_raw_rows('RIVO_SYNC_RAW_KEYLESS'))==['0100ff','0100ff','<NULL>'],
+                                 'ClickHouse Oracle RAW materialized snapshot',120)
+                        observed('ClickHouse materializes the original Oracle RAW snapshot with exact NULL and duplicate counts')
+                    observed('Flashback preserves Oracle RAW bytes, SQL NULL and keyless duplicate multiplicity')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
                 checkpoint=progress()['sourcePosition']['payload']
-                assert int(checkpoint['archiveStartScn'])<=int(before)<int(checkpoint['scn'])
+                assert int(checkpoint['archiveStartScn'])<=int(before)<int(checkpoint['scn']), (before,checkpoint)
                 assert len(checkpoint['pdbIncarnation'].split(':'))==2
                 observed('Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor')
+                if options.redis:
+                    baseline=required(lambda:redis_cut('SNAPSHOT_END',len(source_tables)), 'Oracle Redis snapshot completion',60)
+                    snapshot_events={event['snapshotId'] for _,event in baseline if event['kind']=='SNAPSHOT_END'}
+                    assert len(snapshot_events)==len(source_tables)
+                    assert {event['schema']['sourceEngine'] for _,event in baseline if event['kind']=='SCHEMA'}=={'ORACLE'}
+                    observed('Redis receives the Oracle SCN-anchored Flashback snapshots and normalized table schemas')
+                    if options.raw_values:
+                        raw_columns={event['schema']['name']:next(column for column in event['schema']['columns']
+                                     if column['name']=='OCTETS') for _,event in baseline
+                                     if event['kind']=='SCHEMA' and event['schema']['name'].startswith('RIVO_SYNC_RAW_')}
+                        assert {name:(column['type'],column['length']) for name,column in raw_columns.items()} == {
+                            'RIVO_SYNC_RAW_ROWS':('BYTES',32), 'RIVO_SYNC_RAW_KEYLESS':('BYTES',16),
+                        }, raw_columns
 
                 rotate()
                 required(lambda:int(progress().get('capture_scn','0'))>int(checkpoint['scn']),
                          'archive-only progress while the Oracle transaction remains open',45)
                 assert row_note()=='after'
-                out,_=long_transaction.communicate("COMMIT;\nEXIT\n",timeout=30)
+                online_raw=("""
+                    UPDATE rivo_app.rivo_sync_raw_rows SET octets=HEXTORAW('00ff10') WHERE id=1;
+                    DELETE FROM rivo_app.rivo_sync_raw_keyless WHERE octets=HEXTORAW('0100ff') AND ROWNUM=1;
+                    DELETE FROM rivo_app.rivo_sync_raw_keyless WHERE octets IS NULL;
+                """ if options.raw_values else '')
+                out,_=long_transaction.communicate(online_raw+"COMMIT;\nEXIT\n",timeout=30)
                 assert long_transaction.returncode==0,out
                 long_transaction=None
                 if options.text_json:
@@ -1097,6 +1251,24 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 rotate()
                 required(lambda:row_note()=='long transaction','long Oracle transaction delivered after commit',60)
                 observed('Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit')
+                if options.redis:
+                    online = required(lambda:redis_cut('COMMIT',1),'Oracle archived commit in native Redis',60)
+                    assert online[:len(baseline)] == baseline
+                    commits = [event for _,event in online if event['kind']=='COMMIT' and event['totalChanges']>0]
+                    assert len(commits)==1 and commits[0]['position']['sourceType']=='ORACLE'
+                    assert int(commits[0]['position']['payload']['scn'])>=int(checkpoint['scn'])
+                    assert commits[0]['position']['payload']['xid']
+                    observed('The native Redis event carries the full original Oracle XID and archived commit SCN')
+                if options.raw_values:
+                    required(lambda:raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|00ff10','2|<NULL>']
+                             and raw_rows('RIVO_SYNC_RAW_KEYLESS')==['0100ff'],
+                             'Oracle archived RAW update and delete',60)
+                    if options.clickhouse:
+                        required(lambda:ch_raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|00ff10','2|<NULL>']
+                                 and ch_raw_rows('RIVO_SYNC_RAW_KEYLESS')==['0100ff'],
+                                 'ClickHouse Oracle RAW keyless archived delete',90)
+                        observed('ClickHouse applies the Oracle archived RAW update and removes exactly one duplicate')
+                    observed('Archived Oracle RAW redo and undo update exact bytes and remove one matching keyless row')
                 if options.text_json:
                     required(lambda:json.loads(target_sql(before_json))==[True,{'version':2}]
                              and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
@@ -1131,10 +1303,15 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     observed('Native redo and undo contain both physical operands and omit all three generated values')
 
                 stop_platform(force=True)
+                offline_raw=("""
+                    INSERT INTO rivo_app.rivo_sync_raw_rows VALUES(3,HEXTORAW('aa0080'));
+                    UPDATE rivo_app.rivo_sync_raw_keyless SET octets=HEXTORAW('ffff00')
+                        WHERE octets=HEXTORAW('0100ff');
+                """ if options.raw_values else '')
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
                     DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
-                    COMMIT;""")
+                """+offline_raw+"COMMIT;")
                 if options.text_json:
                     sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                         INSERT INTO rivo_app.rivo_json_rows VALUES (4,'{"after":"restart"}',NULL);
@@ -1159,6 +1336,28 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                          'Oracle archive catch-up after SIGKILL',75)
                 assert snapshots==target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 observed('Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots')
+                if options.redis:
+                    recovered=required(lambda:redis_cut('COMMIT',2),
+                                       'Redis catches up with the original Oracle SCN after restart',60)
+                    assert recovered[:len(online)]==online
+                    assert {event['snapshotId'] for _,event in recovered if event['kind']=='SNAPSHOT_END'}==snapshot_events
+                    observed('Oracle restart appends the offline transaction without replacing prior Redis IDs or snapshot generations')
+                if options.raw_values:
+                    required(lambda:raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|00ff10','2|<NULL>','3|aa0080']
+                             and raw_rows('RIVO_SYNC_RAW_KEYLESS')==['ffff00'],
+                             'Oracle archived RAW restart',60)
+                    if options.redis:
+                        raw_events=[event for _,event in recovered[len(online):]
+                                    if event['kind']=='ROW']
+                        images=json.dumps(raw_events)
+                        for value in ('qgCA','AQD/','//8A'):
+                            assert value in images,(value,images)
+                    if options.clickhouse:
+                        required(lambda:ch_raw_rows('RIVO_SYNC_RAW_ROWS',True)==['1|00ff10','2|<NULL>','3|aa0080']
+                                 and ch_raw_rows('RIVO_SYNC_RAW_KEYLESS')==['ffff00'],
+                                 'ClickHouse resumes Oracle archived RAW after restart',90)
+                        observed('ClickHouse resumes the Oracle archived SCN with the original keyless identity')
+                    observed('Oracle RAW bytes resume from the original SCN and retain binary row images')
                 if options.text_json:
                     required(lambda:target_sql('SELECT "PAYLOAD"->>\'after\' FROM copy_app."RIVO_JSON_ROWS" '
                                                'WHERE "ID"=4')=='restart'
@@ -1443,12 +1642,18 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 stop_platform()
                 for path in (folder/'state'/'logs').glob('*.log'):
                     log=path.read_text(errors='replace')
-                    for name in ('RIVOMESH_ORACLE_PROBE_PASSWORD','POSTGRES_PASSWORD','RM_ORACLE_TEST_TOKEN'):
-                        log=log.replace(env[name],'[REDACTED]')
+                    for name in ('RIVOMESH_ORACLE_PROBE_PASSWORD','POSTGRES_PASSWORD',
+                                 'RM_ORACLE_TEST_TOKEN','CLICKHOUSE_PASSWORD'):
+                        if env.get(name):
+                            log=log.replace(env[name],'[REDACTED]')
                     (output/(path.stem+'-redacted.log')).write_text(log)
     finally:
         if long_transaction is not None and long_transaction.poll() is None:
             long_transaction.communicate('ROLLBACK;\nEXIT\n',timeout=30)
+        if started_redis:
+            execute('docker','stop','--time','10',redis)
+        if started_clickhouse:
+            execute('docker','stop','--time','10',clickhouse,checked=False)
         if started:
             execute('docker','stop','--time','30',target)
 
@@ -1458,11 +1663,18 @@ def main():
     parser.add_argument('--artifact', required=True, type=Path)
     parser.add_argument('--jdbc-driver', required=True, type=Path)
     parser.add_argument('--java', default='java')
+    parser.add_argument('--oradata-root', type=Path,
+                        help='Create a disposable Oracle data directory on this Docker-shared filesystem')
     parser.add_argument('--startup-timeout', type=int, default=240,
                         help='Seconds to wait for the disposable Oracle image to become healthy')
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
+    parser.add_argument('--clickhouse', action='store_true', help='Materialize the Oracle RAW profile into ClickHouse')
+    parser.add_argument('--raw-values', action='store_true',
+                        help='Verify Flashback and archived RAW byte values through restart')
+    parser.add_argument('--redis', action='store_true' '' .rstrip(), help='Add Redis Streams to the Oracle CDC restart profile')
+    parser.add_argument('--raw-evidence', action='store_true', help='Inspect Flashback and archived redo for Oracle RAW')
     parser.add_argument('--pipeline', action='store_true', help='Also verify archive CDC to PostgreSQL after Worker restart')
     parser.add_argument('--text-json', action='store_true', help='Also verify constrained VARCHAR2 to PostgreSQL JSONB')
     parser.add_argument('--date-values', action='store_true', help='Also verify Oracle DATE to PostgreSQL TIMESTAMP')
@@ -1492,6 +1704,15 @@ def main():
     options = parser.parse_args()
     if options.startup_timeout<1:
         parser.error('--startup-timeout must be positive')
+    if options.clickhouse and not options.raw_values:
+        parser.error('--clickhouse requires --raw-values')
+    if options.raw_values and (not options.pipeline or options.text_json or options.date_values
+                               or options.virtual_columns or options.savepoint_pipeline or options.character_pipeline):
+        parser.error('--raw-values uses the baseline Oracle --pipeline profile')
+    if options.redis and (not options.pipeline or options.text_json or options.date_values or options.virtual_columns or options.savepoint_pipeline or options.character_pipeline):
+        parser.error('--redis uses the baseline Oracle --pipeline profile')
+    if options.raw_evidence and not options.logminer:
+        parser.error('--raw-evidence requires --logminer')
     if options.pipeline and not options.logminer:
         parser.error('--pipeline requires --logminer')
     if options.text_json and not options.pipeline:
@@ -1540,6 +1761,10 @@ def main():
               'ddlFingerprint':options.ddl_fingerprint,
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
+              'redis': options.redis, 'rawEvidence': options.raw_evidence, 'rawValues': options.raw_values,
+              'clickhouse': options.clickhouse, 'project': name,
+              'hostMountedOracleData': options.oradata_root is not None,
+              'harnessSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'checks': [], 'status': 'FAIL'}
 
     def sql(statement, checked=True):
@@ -1553,15 +1778,32 @@ def main():
         print('PASS ' + message, flush=True)
 
     started = False
+    oracle_data = None
     try:
-        execute('docker', 'run', '-d', '--rm', '--name', name,
+        mount = []
+        if options.oradata_root is not None:
+            oracle_data = tempfile.TemporaryDirectory(prefix='oracle-data-', dir=options.oradata_root.resolve())
+            # The parent directory stays private while the container's Oracle UID writes the disposable directory.
+            os.chmod(oracle_data.name, 0o777)
+            mount = ['-v', oracle_data.name + ':/opt/oracle/oradata',
+                     '--tmpfs','/opt/oracle/admin:rw,size=64m,mode=0777',
+                     '--tmpfs','/opt/oracle/diag:rw,size=128m,mode=0777',
+                     '--tmpfs','/opt/oracle/audit:rw,size=64m,mode=0777',
+                     '--tmpfs','/tmp:rw,size=256m,mode=1777']
+        execute('docker', 'run', '-d', '--name', name, *mount,
                 '--label', 'io.github.rivomesh.test=oracle-source', '--cpus=2', '--memory=3g',
                 '--shm-size=1g', '-p', '127.0.0.1::1521', '-e', 'ORACLE_PWD',
                 '-e', 'ENABLE_ARCHIVELOG=true', '-e', 'ENABLE_FORCE_LOGGING=true',
                 options.image, env=environment, timeout=240)
         started = True
-        required(lambda: execute('docker', 'inspect', '-f', '{{.State.Health.Status}}', name)
-                 .stdout.strip() == 'healthy', 'Oracle database health', options.startup_timeout)
+        def oracle_ready():
+            state, health = execute('docker','inspect','-f',
+                                    '{{.State.Status}} {{.State.Health.Status}}',name).stdout.split()
+            if state in ('exited','dead'):
+                raise RuntimeError('The isolated Oracle fixture stopped before becoming healthy')
+            return health == 'healthy'
+
+        required(oracle_ready, 'Oracle database health', options.startup_timeout)
         port = execute('docker', 'port', name, '1521/tcp').stdout.strip().rsplit(':', 1)[1]
         report['sourceVersion'] = sql('SELECT version_full FROM v$instance;').stdout.strip()
         if sql("SELECT log_mode FROM v$database;").stdout.strip() != 'ARCHIVELOG':
@@ -1740,8 +1982,12 @@ def main():
                                      archive_preview,native_json_supplemental)
             if options.character_evidence:
                 oracle_character_evidence.observe(sql,mine_archive,required,options.output,observed,archive_preview)
+        if options.raw_evidence:
+            raw_evidence(sql,options.output,observed)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
+        if options.clickhouse:
+            report['clickhouseVersion']=(options.output/'clickhouse-version.txt').read_text().strip()
         if options.virtual_evidence:
             virtual_evidence(sql,options.output,observed)
         report['status'] = 'PASS'
@@ -1751,12 +1997,23 @@ def main():
             detail += '\n' + (failure.stdout or '') + '\n' + (failure.stderr or '')
         for secret in (password, environment['ORACLE_PWD']):
             detail = detail.replace(secret, '[REDACTED]')
-        (options.output / 'failure.log').write_text(detail + '\n')
+        traces = execute('docker','logs','--tail','70',name,checked=False)
+        log = detail + '\n' + traces.stdout + traces.stderr
+        for secret in (password, environment['ORACLE_PWD']):
+            log = log.replace(secret,'[REDACTED]')
+        (options.output / 'failure.log').write_text(log + '\n')
         raise
     finally:
         if started:
-            cleanup = execute('docker', 'stop', '--time', '45', name, checked=False)
+            execute('docker', 'stop', '--time', '45', name, checked=False)
+            cleanup = execute('docker', 'rm', '-f', '-v', name, checked=False)
             report['cleanupExitCode'] = cleanup.returncode
+            report['remainingContainers'] = len(execute('docker','ps','-aq','--filter','name='+name).stdout.splitlines())
+            if cleanup.returncode or report['remainingContainers']:
+                report['status'] = 'FAIL'
+        if oracle_data is not None:
+            oracle_data.cleanup()
+            report['remainingOracleDataDirectories'] = int(Path(oracle_data.name).exists())
         (options.output / 'manifest.json').write_text(json.dumps(report, indent=2) + '\n')
 
 

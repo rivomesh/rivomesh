@@ -15,7 +15,7 @@ public final class JdbcJournal implements NormalizedJournal {
         public String writerAssignment,writerNode;
         public boolean managedWriter;
         public boolean deliveryTiming;
-        public boolean oracleDdlEvidence;
+        public boolean oracleDdlEvidence,postgresRelationEvidence;
         public Set<String> kafkaPublicationTargets=Set.of();
         public Map<String,KafkaPhysicalReceipt.Topic> kafkaFixedTopics=Map.of();
         @com.fasterxml.jackson.annotation.JsonIgnore
@@ -180,7 +180,8 @@ public final class JdbcJournal implements NormalizedJournal {
         if(historyOrigin()!=null)JdbcKafkaHistoryOrigin.prepare(this,c);
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("job")+" (pipeline_id VARCHAR(128) PRIMARY KEY,format_version INTEGER NOT NULL,fingerprint VARCHAR(64) NOT NULL,generation VARCHAR(128) NOT NULL,epoch BIGINT NOT NULL,owner VARCHAR(128),lease_until BIGINT NOT NULL,next_seq BIGINT NOT NULL,captured "+text()+",pending_bytes BIGINT NOT NULL,snapshot_bytes BIGINT NOT NULL,normalized_seq BIGINT NOT NULL,identity_bytes BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128))");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("pipeline_failure")+" (pipeline_id VARCHAR(128) PRIMARY KEY,error_generation BIGINT NOT NULL,phase VARCHAR(32) NOT NULL)");
-        if(settings.oracleDdlEvidence)JdbcOracleDdlEvidence.initialize(this,c);
+        if(settings.oracleDdlEvidence)JdbcDdlEvidence.ORACLE.initialize(this,c);
+        if(settings.postgresRelationEvidence)JdbcDdlEvidence.POSTGRESQL.initialize(this,c);
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("subscription")+" (pipeline_id VARCHAR(128) NOT NULL,subscription_id VARCHAR(128) NOT NULL,acknowledged BIGINT NOT NULL,run_state VARCHAR(16) NOT NULL,error_generation BIGINT NOT NULL,error_code VARCHAR(128),PRIMARY KEY(pipeline_id,subscription_id))");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("log")+" (pipeline_id VARCHAR(128) NOT NULL,stream_seq BIGINT NOT NULL,transaction_id VARCHAR(512) NOT NULL,payload "+text()+" NOT NULL,payload_hash VARCHAR(64) NOT NULL,payload_bytes BIGINT NOT NULL,PRIMARY KEY(pipeline_id,stream_seq))");
         ddl(c,"CREATE TABLE IF NOT EXISTS "+table("receipt")+" (pipeline_id VARCHAR(128) NOT NULL,transaction_id VARCHAR(512) NOT NULL,stream_seq BIGINT NOT NULL,payload_hash VARCHAR(64) NOT NULL,PRIMARY KEY(pipeline_id,transaction_id))");
@@ -288,6 +289,10 @@ public final class JdbcJournal implements NormalizedJournal {
         failPipeline(lease,code,phase,null);
     }
     public void failPipeline(Lease lease,String code,PipelineFailure.Phase phase,OracleDdlEvidence oracleDdl)throws Exception{
+        failPipeline(lease,code,phase,oracleDdl,null);
+    }
+    public void failPipeline(Lease lease,String code,PipelineFailure.Phase phase,OracleDdlEvidence oracleDdl,
+                             PostgresRelationEvidence postgresRelation)throws Exception{
         if(code==null||!code.matches("[A-Z][A-Z0-9_]{1,127}"))throw new IllegalArgumentException("ERROR_CODE_INVALID");
         try(Connection c=connect()){
             c.setAutoCommit(false);
@@ -301,12 +306,18 @@ public final class JdbcJournal implements NormalizedJournal {
             }
             if(settings.oracleDdlEvidence&&phase==PipelineFailure.Phase.DDL
                     &&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(code)&&oracleDdl!=null)
-                JdbcOracleDdlEvidence.record(this,c,generation,(String)job.get("captured"),oracleDdl);
+                JdbcDdlEvidence.ORACLE.record(this,c,generation,(String)job.get("captured"),oracleDdl);
+            if(settings.postgresRelationEvidence&&phase==PipelineFailure.Phase.DDL
+                    &&PostgresRelationEvidence.FAILURE_CODE.equals(code)&&postgresRelation!=null)
+                JdbcDdlEvidence.POSTGRESQL.record(this,c,generation,(String)job.get("captured"),postgresRelation);
             c.commit();
         }
     }
     public Map<String,Object> oracleDdlEvidence(long errorGeneration,SourcePosition checkpoint)throws SQLException{
-        return JdbcOracleDdlEvidence.review(this,errorGeneration,checkpoint);
+        return JdbcDdlEvidence.ORACLE.review(this,errorGeneration,checkpoint);
+    }
+    public Map<String,Object> postgresRelationEvidence(long errorGeneration,SourcePosition checkpoint)throws SQLException{
+        return JdbcDdlEvidence.POSTGRESQL.review(this,errorGeneration,checkpoint);
     }
     private String pipelineFailurePhase(Connection c,long generation)throws SQLException{
         try(PreparedStatement p=c.prepareStatement("SELECT phase FROM "+table("pipeline_failure")+" WHERE pipeline_id=? AND error_generation=?")){

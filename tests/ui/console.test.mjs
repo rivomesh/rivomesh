@@ -617,7 +617,13 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
    event:{eventScn:'110',archiveStartScn:'80',archiveEndScnExclusive:'120',recordSetId:'0x000005.00000010.0010',
     statementSequence:'0',kind:'USER_DDL',decodedSqlSha256:'b'.repeat(64)}
   }:undefined;
-  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],blockedArchiveEvent,
+  const blockedRelationEvent=product==='PostgreSQL'?{
+   state:'OBSERVED',fingerprint:'d'.repeat(64),
+   event:{namespace:'sales',relation:'orders',transactionFinalLsn:'0/120',
+    columns:[{name:'original_field',typeOid:1114,typeModifier:6},
+     {name:'<img src=x onerror=alert(1)>',typeOid:25,typeModifier:-1}]}
+  }:undefined;
+  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],blockedArchiveEvent,blockedRelationEvent,
    actions:['REPAIR_CAPTURE_CAUSE'],schemaDrift:{scope,state:'CHANGES_VISIBLE',
     changedTables:1,detailsLimited:false,tables:[{database:'sales',table:'orders',change:'TABLE_CHANGED',identityChanged:true,
      columnOrderChanged:true,indexesChanged:true,columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
@@ -635,6 +641,11 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
   assert.match(dialog.textContent,/行身份键已变化/);
   assert.match(dialog.textContent,/已有列的相对顺序已变化/);
   assert.match(dialog.textContent,/源目录索引定义已变化/);
+  if(product==='PostgreSQL'){
+   assert.match(dialog.textContent,/PostgreSQL 原始发布结构/);
+   assert.match(dialog.textContent,/LSN 0\/120/);
+   assert.match(dialog.textContent,/original_field · OID 1114 · typmod 6/);
+  }
   if(product==='Oracle PDB'){
    assert.match(dialog.textContent,/Oracle 归档故障指纹/);
    assert.match(dialog.textContent,/SCN 110/);
@@ -870,24 +881,31 @@ test('PostgreSQL source wizard scopes destinations and submits a masked failover
     assert.equal(f.sourceType.querySelector('[value=POSTGRESQL]').disabled,false);
     f.sourceType.value='POSTGRESQL';f.sourceType.dispatchEvent(new ui.w.Event('change'));
     assert.equal(f.sourceHost.disabled,true);assert.equal(f.oracleRootUrl.disabled,true);
-    assert.equal(f.targetType.querySelector('[value=GAUSS]').disabled,true);
+    assert.equal(f.targetType.querySelector('[value=GAUSS]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,false);
-    assert.equal(f.targetType.value,'POSTGRESQL');
+    assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
+    assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
+    f.targetType.value='POSTGRESQL';f.targetType.dispatchEvent(new ui.w.Event('change'));
     for(const [name,value] of Object.entries({jobId:'web-pg',clusterId:'shared-pg',pgUrl:'jdbc:postgresql://writer:5432/accounts',pgDatabase:'accounts',pgSchemas:'sales, billing',pgVersion:'17.12',pgUsername:'reader',pgPassword:'PRIVATE_PG',pgPublication:'sales_pub'}))f[name].value=value;
     f.pgFailoverSlot.checked=true;
+    f.pgSecondaryIndexes.checked=true;
     ui.d.getElementById('next-step').click();f.targetSchema.value='sales_copy';f.targetUsername.value='writer';
     ui.d.querySelector('#first-extra-mappings input').value='billing_copy';
     ui.d.getElementById('add-target').click();
     const card=ui.d.querySelector('#extra-targets .target-settings');
     assert.equal(card.querySelector('option[value=HIVE]').disabled,true);
-    card.querySelector('[data-field=username]').value='warehouse';
+    assert.equal(card.querySelector('option[value=DORIS]').disabled,false);
+    const product=card.querySelector('[data-field=product]');
+    assert.equal(card.querySelector('option[value=KAFKA]').disabled,false);
+    product.value='KAFKA';product.dispatchEvent(new ui.w.Event('change'));
     card.querySelectorAll('.mapping-fields input').forEach(input=>input.value=input.dataset.database+'_extra');
     ui.d.getElementById('next-step').click();
     assert.doesNotMatch(ui.d.getElementById('plan-preview').textContent,/PRIVATE_PG/);
     form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
     const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
-    assert.deepEqual(config.source,{type:'POSTGRESQL',clusterId:'shared-pg',database:'accounts',topology:'SINGLE',username:'reader',password:'PRIVATE_PG',expectedVersion:'17.12',postgresql:{url:'jdbc:postgresql://writer:5432/accounts',publication:'sales_pub',slotPrefix:'rivomesh',failoverSlot:true}});
+    assert.deepEqual(config.source,{type:'POSTGRESQL',clusterId:'shared-pg',database:'accounts',topology:'SINGLE',username:'reader',password:'PRIVATE_PG',expectedVersion:'17.12',postgresql:{url:'jdbc:postgresql://writer:5432/accounts',publication:'sales_pub',slotPrefix:'rivomesh',failoverSlot:true,captureSecondaryIndexes:true}});
     assert.deepEqual(config.databases,['sales','billing']);
+    assert.equal(config.targets[1].product,'KAFKA');
     assert.deepEqual(config.targets.map(target=>target.mappings),[{sales:'sales_copy',billing:'billing_copy'},{sales:'sales_extra',billing:'billing_extra'}]);
     assert.equal(ui.calls.filter(call=>call.path.endsWith('/actions')).length,0);
   }finally{ui.dom.window.close();}
@@ -900,6 +918,8 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     const form=ui.d.getElementById('create-form'),f=form.elements;
     f.sourceType.value='ORACLE';f.sourceType.dispatchEvent(new ui.w.Event('change'));
     assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,true);
+    assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
+    assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
     assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);
     assert.equal(f.oracleVirtualNumeric.disabled,false);assert.equal(f.oracleVirtualNumeric.checked,false);
     f.oracleVirtualNumeric.checked=true;

@@ -20,7 +20,9 @@ final class GaussIndexReview {
     static Map<String, Object> inspect(String sourceType, List<PipelineConfig.Target> targets, List<TableSchema> tables) {
         var gaussTargets = targets.stream().filter(target -> target.product == TargetProduct.GAUSS).toList();
         if (gaussTargets.isEmpty()) return Map.of();
-        if (!"MYSQL".equals(sourceType)) {
+        boolean postgresCatalog = "POSTGRESQL".equals(sourceType) && !tables.isEmpty()
+                && tables.stream().allMatch(table -> "true".equals(table.properties.get(PostgresIndexCatalog.CAPTURED)));
+        if (!"MYSQL".equals(sourceType) && !postgresCatalog) {
             return Map.of("state", "SOURCE_INDEX_METADATA_UNAVAILABLE", "sourceType", sourceType);
         }
 

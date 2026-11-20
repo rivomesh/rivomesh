@@ -58,6 +58,34 @@ class OracleRedoDmlTest {
                 assertThrows(IllegalStateException.class,()->OracleRedoDml.decode(table(),"UPDATE",redo+"DELETE FROM OTHER",undo)).getMessage());
     }
 
+    @Test void decodesRawBytesAndNullFromNativeRedoAndUndo()throws Exception{
+        TableSchema table=table();
+        TableSchema.Column binary=table.columns.get(1);
+        binary.type=TableSchema.Type.BYTES;
+        binary.sourceType="RAW";
+        binary.length=4;
+        String redo="update "+ORDERS+" set \"NOTE\" = HEXTORAW('00ff10') where \"ID\" = '1' and \"NOTE\" = HEXTORAW('000aff80');";
+        String undo="update "+ORDERS+" set \"NOTE\" = HEXTORAW('000AFF80') where \"ID\" = '1' and \"NOTE\" = HEXTORAW('00FF10');";
+        Change updated=OracleRedoDml.decode(table,"UPDATE",redo,undo);
+        assertEquals("AAr/gA==",updated.before.get(1).value);
+        assertEquals("AP8Q",updated.after.get(1).value);
+        String insert="insert into "+ORDERS+"(\"ID\",\"NOTE\") values ('2',NULL);";
+        String delete="delete from "+ORDERS+" where \"ID\" = '2' and \"NOTE\" IS NULL;";
+        assertNull(OracleRedoDml.decode(table,"INSERT",insert,delete).after.get(1).value);
+        assertNull(OracleRedoDml.decode(table,"DELETE",delete,insert).before.get(1).value);
+        for(String invalid:new String[]{"","abc","00g0","0000000000"}){
+            String literal="HEXTORAW('"+invalid+"')";
+            assertEquals("ORACLE_REDO_RAW_INVALID",assertThrows(IllegalStateException.class,
+                    ()->OracleRedoDml.decode(table,"UPDATE",redo.replace("HEXTORAW('00ff10')",literal),
+                            undo.replace("HEXTORAW('00FF10')",literal))).getMessage());
+        }
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table,"UPDATE",redo.replace("HEXTORAW('00ff10')","'00ff10'"),
+                        undo.replace("HEXTORAW('00FF10')","'00ff10'"))).getMessage());
+        assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
+                ()->OracleRedoDml.decode(table(),"UPDATE",redo,undo)).getMessage());
+    }
+
     @Test void recognizesOnlySingleStrictUniqueConstraint(){
         assertEquals("PAYLOAD",OracleTextJson.constraintColumn("payload IS JSON ( STRICT WITH UNIQUE KEYS )"));
         assertEquals("payload",OracleTextJson.constraintColumn("\"payload\" is json strict with unique keys"));

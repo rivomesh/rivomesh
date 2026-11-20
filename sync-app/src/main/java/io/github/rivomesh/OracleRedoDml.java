@@ -6,6 +6,8 @@ import io.github.rivomesh.cdc.TableSchema;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,11 +99,13 @@ final class OracleRedoDml {
             if(value==null&&!column.nullable)throw invalid("ORACLE_REDO_UNEXPECTED_NULL");
             if(literal!=null){
                 if((literal.kind==LiteralKind.DATE)!=OracleDate.isColumn(column)
-                        ||(literal.kind==LiteralKind.NATIONAL&&!OracleCharacters.national(column)))
+                        ||(literal.kind==LiteralKind.NATIONAL&&!OracleCharacters.national(column))
+                        ||(literal.kind==LiteralKind.RAW)!=(column.type==TableSchema.Type.BYTES))
                     throw invalid("ORACLE_REDO_LITERAL_TYPE_MISMATCH");
                 switch(column.type){
                     case STRING:case DATETIME:break;
                     case JSON:value=OracleTextJson.value(value);break;
+                    case BYTES:value=raw(column,value);break;
                     case INT64:case DECIMAL:value=number(column,value);break;
                     default:throw invalid("ORACLE_REDO_COLUMN_TYPE_UNSUPPORTED");
                 }
@@ -110,6 +114,11 @@ final class OracleRedoDml {
         }
         generated.populate(values);
         return values;
+    }
+
+    private static String raw(TableSchema.Column column,String hex){
+        if(hex.length()>2*column.length)throw invalid("ORACLE_REDO_RAW_INVALID");
+        return Base64.getEncoder().encodeToString(HexFormat.of().parseHex(hex));
     }
 
     private static String number(TableSchema.Column column,String value){
@@ -123,7 +132,7 @@ final class OracleRedoDml {
 
     private static IllegalStateException invalid(String code){return new IllegalStateException(code);}
 
-    private enum LiteralKind { PLAIN, DATE, NATIONAL }
+    private enum LiteralKind { PLAIN, DATE, NATIONAL, RAW }
 
     private record Literal(String value,LiteralKind kind){}
 
@@ -197,6 +206,14 @@ final class OracleRedoDml {
                 require(")");
                 if(value.isEmpty())throw invalid("ORACLE_REDO_UNISTR_UNSUPPORTED");
                 return new Literal(value,LiteralKind.NATIONAL);
+            }
+            if(take("HEXTORAW")){
+                require("(");
+                String hex = quotedLiteral();
+                require(")");
+                if(hex.isEmpty()||hex.length()>4000||(hex.length()&1)!=0||!hex.matches("[0-9a-fA-F]+"))
+                    throw invalid("ORACLE_REDO_RAW_INVALID");
+                return new Literal(hex.toLowerCase(java.util.Locale.ROOT),LiteralKind.RAW);
             }
             if(kind!=2&&kind!=4)throw invalid("ORACLE_REDO_LITERAL_UNSUPPORTED");
             if(kind==2){

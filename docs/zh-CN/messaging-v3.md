@@ -334,7 +334,7 @@ messaging:
 
 仅归属清单匹配不能证明已确认历史仍保留。RocketMQ 已加入下述原生确认回执与回退检测；其他消息产品仍需各自的检测和故障验收，不能把这项保证外推到全部 Broker。
 
-MySQL 8.4 实库演练验证了 Broker 主节点切换和 Rivomesh Worker 强杀后沿用原日志与快照。只剩一个在线同步副本时，源事务继续进入日志，投递回执和 Broker 队列保持原切点。原备用节点恢复后，同一 Worker 自动补发积压的 GTID，两个在线副本确认相同的 COMMIT。三 Controller 集群的主节点强杀后，原 Worker 也沿用了原 Broker 路由和写入任期，并确认下一笔事务。只剩原 Controller 主节点可达时，新 MySQL 事务留在日志中，两个 Broker 的队列末尾和原生回执均保持不变。使用原卷恢复一个 Controller 后，同一 Worker 从原断点补发。原生拉取客户端在本地业务提交后保留旧消费位点，新客户端重读三条相同事件，通过事件 ID 和摘要去重，处理后续 GTID 后再推进消费位点。长时间等待时，核对是否填齐通告地址，并恢复原 Controller 存储。源采集仍受采集日志配额限制。主机或磁盘丢失、DLedger CommitLog、TLS 和 ACL 单独验收。 [原生证据](../verification/README.md#packaged-mysql-cdc-worker-with-rocketmq-controller-broker-recovery)
+MySQL 8.4 实库演练验证了 Broker 主节点切换和 Rivomesh Worker 强杀后沿用原日志与快照。只剩一个在线同步副本时，源事务继续进入日志，投递回执和 Broker 队列保持原切点。原备用节点恢复后，同一 Worker 自动补发积压的 GTID，两个在线副本确认相同的 COMMIT。三 Controller 集群的主节点强杀后，原 Worker 也沿用了原 Broker 路由和写入任期，并确认下一笔事务。只剩原 Controller 主节点可达时，新 MySQL 事务留在日志中，两个 Broker 的队列末尾和原生回执均保持不变。使用原卷恢复一个 Controller 后，同一 Worker 从原断点补发。原生拉取客户端在本地业务提交后保留旧消费位点，新客户端重读三条相同事件，通过事件 ID 和摘要去重，处理后续 GTID 后再推进消费位点。长时间等待时，核对是否填齐通告地址，并恢复原 Controller 存储。源采集仍受采集日志配额限制。若多数派已恢复仍出现 `ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING`，对比在线副本上当前代次的 Topic 配置。原 Topic 均缺失时，应恢复原存储并核对原回执。需要更换 Topic 时，按重建方案重新核对消费切点。实测在两个在线 Broker 删除原 Topic 后，Worker 重启仍沿用原回执，源事务继续入日志。主机或磁盘丢失、DLedger CommitLog、TLS 和 ACL 单独验收。 [原生证据](../verification/README.md#packaged-mysql-cdc-worker-with-rocketmq-controller-broker-recovery)
 
 ### RocketMQ 原生确认回执
 

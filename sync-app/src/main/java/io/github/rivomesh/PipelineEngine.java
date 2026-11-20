@@ -155,7 +155,7 @@ public final class PipelineEngine implements AutoCloseable {
                 Phase failedPhase=capacity?Phase.JOURNAL_STORAGE:PipelineFailure.phase(failure,phase);
                 if(!stopped&&!Sql.retryable(failure)){
                     try{journal.failPipeline(lease,capacity?"JOURNAL_WORKSPACE_REQUIRES_QUOTA_PLAN":sourceErrorCode(failure),
-                            failedPhase,OracleArchiveRead.failedDdl(failure));}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
+                            failedPhase,OracleArchiveRead.failedDdl(failure),PostgresRelationEvidence.failedRelation(failure));}catch(JdbcJournal.Fenced ignored){/* a newer owner/control already decided */}catch(Exception save){failure.addSuppressed(save);}
                 }
                 throw new PipelineFailure(failedPhase,failure);
             }finally{scheduler.shutdown();scheduler.awaitTermination(5,TimeUnit.SECONDS);journal.release(lease);}
@@ -242,6 +242,13 @@ public final class PipelineEngine implements AutoCloseable {
                 String destination=(target.mappings.get(table.database)+"."+table.name).toLowerCase(Locale.ROOT);if(!hiveNames.computeIfAbsent(target.id,key->new HashSet<>()).add(destination))throw new IllegalArgumentException("HIVE_IDENTIFIER_COLLISION");Map<String,String> storage=HiveRows.storage(table);
                 Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",HiveIndexPlan.plan(table,target.hive.acknowledgeIndexOmission));entry.put("columnStorage",storage);hivePlans.add(entry);
             }if(!hivePlans.isEmpty())result.put("hiveIndexPlans",hivePlans);
+            if ("POSTGRESQL".equals(source.type())) {
+                for (PipelineConfig.Target target : config.targets) {
+                    if (target.product == TargetProduct.GAUSS) {
+                        source.requireSeparateDatabase(PipelineConfig.driver(target.product), target.url, target.username, target.password);
+                    }
+                }
+            }
             Map<String,Object> gaussReview=GaussIndexReview.inspect(config.effectiveSourceType(),config.targets,tables);
             if(!gaussReview.isEmpty())result.put("gaussIndexReview",gaussReview);
         }

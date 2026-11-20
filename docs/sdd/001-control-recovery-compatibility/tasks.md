@@ -123,15 +123,21 @@ RM-SDD-001 · 2026-11-17
 - [x] T-SO-05 · MySQL 8.4 扩展兼容与回归 · P1 · 依赖：SO-01
   交付：在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。
   验收：AC-SO-05
-- [x] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
+- [ ] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
   交付：完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。
   验收：AC-SO-06
+  - [x] PostgreSQL 到 Doris 的全量、增量和原槽恢复。
+  - [x] PostgreSQL 到 ClickHouse、Redis Streams 与 PostgreSQL 并发全量、增量与原槽重启。
+  - [x] PostgreSQL 二级索引到 openGauss 的普通索引、业务 UNIQUE 降级和初始状态恢复。
+  - [ ] 对齐 MySQL 所有已实现目标的实库验收。
   - [x] PostgreSQL 17.12 扩展 NUMERIC 标度双目标同步，保留 65 位精度和无主键重数，NaN 使整笔停在原断点。
   - [x] REAL 和 DOUBLE PRECISION 双目标复制、无主键重复、原快照恢复和非有限值整笔拒绝通过。
   - [x] PostgreSQL 17.12 同一 WAL 切点对账 PostgreSQL 和 MySQL。保留双目标回执、已完成报告、原槽和快照，强杀重启后继续。
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
+  - [x] Oracle RAW 和无主键数据到 ClickHouse 的实库续传。
+  - [x] Oracle RAW 到 PostgreSQL 和 Redis Streams 的全量、归档增量及原 SCN 重启。
   - [x] 有界整数虚拟列的乘法与双物理列加减法，实库验证 Flashback、归档重放和原快照重启。
   - [x] BasicFiles 与 SecureFiles 的 BLOB/CLOB 实库证据、受限账号分型预检和独立迁移说明。
   - [x] 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。
@@ -196,6 +202,7 @@ RM-SDD-001 · 2026-11-17
   - [x] 三个 Controller 的主节点强杀后重新选主，同一 Worker 在原 Broker 路由和写入任期下继续投递。
   - [x] RocketMQ Controller 仅剩主节点时保留源事务和两个 Broker 原回执，使用原卷恢复多数派后同一 Worker 自动补发。
   - [x] RocketMQ 原生消费断点重开，去重三条相同事件，避免重复业务提交。
+  - [x] RocketMQ Topic 在两个在线副本丢失后原回执保持不变，Worker 重启仍可采集源事务。
   - [ ] 跨主机存储故障域、内部链路加密、容量及其他消息产品的消费去重与显式缺口档案。
 - [x] T-LG-05 · 可选存储和跨节点数据可达性 · P0 · 依赖：CP-02
   交付：无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。
@@ -217,6 +224,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-LG-08 · 历史DDL、类型、索引与状态迁移 · P1 · 依赖：SO-01
   交付：对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。
   验收：AC-LG-08
+  - [x] PostgreSQL 原始 Relation、类型修饰符、持久断点与当前目录复核。
   - [x] 显式全局主键和身份 GSI 在业务建表前要求分布方案，包含定位列换序。
   - [x] MySQL 到 Gauss 的控制台和 CLI 预检返回同一写入策略、完整统计与有界详情。
   - [x] PostgreSQL 17.12 实测只读审阅 TIMESTAMP 原生声明变化，源 LSN、快照及目标行均保留原值。

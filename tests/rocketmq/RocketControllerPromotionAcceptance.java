@@ -13,6 +13,7 @@ import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.cdc.RocketMessagePublisher;
 import io.github.rivomesh.cdc.TargetProduct;
 import io.github.rivomesh.transport.rocketmq.RocketTransport;
+import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.impl.MQClientAPIImpl;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -22,6 +23,7 @@ import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.common.message.MessageDecoder;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.message.MessageQueue;
+import org.apache.rocketmq.remoting.protocol.ResponseCode;
 import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicaIdentity;
 import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicasInfo;
 import org.apache.rocketmq.remoting.protocol.route.BrokerData;
@@ -207,8 +209,24 @@ public final class RocketControllerPromotionAcceptance {
             write(markers, "worker-recovered.json", Map.of("status", "PASS",
                     "sameRunningWorker", worker.isAlive(), "worker", resumed, "liveInSync", recovered.liveInSync()));
             if (controllerEndpoints.size() > 1) {
-                verifyControllerElection(api, markers, config, controllerEndpoints, recovered, resumed);
+                WorkerCut retained = verifyControllerElection(api, markers, config, controllerEndpoints, recovered, resumed);
                 require(worker.isAlive(), "The Worker stopped during the Controller election");
+                for (String broker : recovered.liveInSync()) api.deleteTopicInBroker(broker, retained.topic(), TIMEOUT);
+                awaitMissingTopic(api, recovered.liveInSync(), retained.topic());
+                sourceSql("INSERT INTO sales.items VALUES(6,'waits for the original topic')");
+                String reason = "ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING";
+                WorkerCut disconnected = heldWorkerCut(config, retained, 6, reason);
+
+                stopWorker(worker);
+                worker = startWorker(configuration);
+                sourceSql("INSERT INTO sales.items VALUES(7,'captured after a topic-loss restart')");
+                WorkerCut reopened = heldWorkerCut(config, retained, 7, reason);
+                require(reopened.epoch() > disconnected.epoch(), "Restart did not activate a new writer epoch");
+                awaitMissingTopic(api, recovered.liveInSync(), retained.topic());
+                require(worker.isAlive(), "The restarted Worker stopped after topic loss");
+                write(markers, "worker-topic-loss.json", Map.of(
+                        "diagnostic", reason, "absentOn", recovered.liveInSync(),
+                        "beforeRestart", disconnected, "afterRestart", reopened));
             }
         } finally {
             try { stopWorker(worker); }
@@ -234,7 +252,7 @@ public final class RocketControllerPromotionAcceptance {
         return leader;
     }
 
-    private void verifyControllerElection(MQClientAPIImpl api, Path markers, PipelineConfig config,
+    private WorkerCut verifyControllerElection(MQClientAPIImpl api, Path markers, PipelineConfig config,
                                           List<String> endpoints, Election broker, WorkerCut before) throws Exception {
         String originalLeader = activeController;
         write(markers, "controller-ready.json", Map.of("leader", originalLeader, "worker", before));
@@ -280,17 +298,36 @@ public final class RocketControllerPromotionAcceptance {
                 queue, after.retained().queueOffset() - 2, after.retained().queueOffset() + 1,
                 resumed.retained().queueOffset() + 1, after.transactionId(), resumed.transactionId());
         write(markers, "consumer-replay.json", replay);
+        return resumed;
+    }
+
+    private static void awaitMissingTopic(MQClientAPIImpl api, Set<String> brokers, String topic) throws Exception {
+        for (String broker : brokers) {
+            until(() -> {
+                try {
+                    return api.getTopicConfig(broker, topic, TIMEOUT) == null ? Boolean.TRUE : null;
+                } catch (MQBrokerException rejected) {
+                    if (rejected.getResponseCode() == ResponseCode.TOPIC_NOT_EXIST) return Boolean.TRUE;
+                    throw rejected;
+                }
+            }, "the original topic to be absent from " + broker);
+        }
     }
 
     private static WorkerCut heldWorkerCut(PipelineConfig config, WorkerCut before, long capturedSequence) throws Exception {
+        return heldWorkerCut(config, before, capturedSequence, "ROCKETMQ_CONTROLLER_ROUTE_RETRY");
+    }
+
+    private static WorkerCut heldWorkerCut(PipelineConfig config, WorkerCut before, long capturedSequence,
+                                          String diagnostic) throws Exception {
         return until(() -> {
             WorkerCut held = workerCut(config);
             if (held == null || held.capturedSequence() != capturedSequence) return null;
             try (var journal = new JdbcJournal(config.existingJournalSettings())) {
-                if (!"ROCKETMQ_CONTROLLER_ROUTE_RETRY".equals(journal.subscriptions().getFirst().errorCode)) return null;
+                if (!diagnostic.equals(journal.subscriptions().getFirst().errorCode)) return null;
             }
             require(held.sequence() == before.sequence() && held.retained().equals(before.retained())
-                    && held.epoch() == before.epoch() && held.generation().equals(before.generation())
+                    && held.generation().equals(before.generation())
                     && held.snapshotId().equals(before.snapshotId()) && held.topic().equals(before.topic())
                     && held.transactionId().equals(before.transactionId()),
                     "The blocked route changed the Worker publication cut");

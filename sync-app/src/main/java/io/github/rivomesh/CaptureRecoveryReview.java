@@ -4,6 +4,7 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.JdbcJournal;
 import io.github.rivomesh.cdc.Journal;
+import io.github.rivomesh.cdc.PostgresRelationEvidence;
 import io.github.rivomesh.cdc.SourceAdapter;
 import io.github.rivomesh.cdc.TableSchema;
 import io.github.rivomesh.recovery.CaptureExclusionPlan;
@@ -142,6 +143,10 @@ public final class CaptureRecoveryReview {
             if("ORACLE".equals(config.effectiveSourceType())&&"DDL".equals(phase)
                     &&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(before.get("errorCode")))
                 nativeEvidence.put("blockedArchiveEvent",journal.oracleDdlEvidence(
+                        ((Number)before.get("errorGeneration")).longValue(),checkpoint));
+            if("POSTGRESQL".equals(config.effectiveSourceType())&&"DDL".equals(phase)
+                    &&PostgresRelationEvidence.FAILURE_CODE.equals(before.get("errorCode")))
+                nativeEvidence.put("blockedRelationEvent",journal.postgresRelationEvidence(
                         ((Number)before.get("errorGeneration")).longValue(),checkpoint));
             ByteArrayOutputStream retained=archiveDirectory==null?null:new ByteArrayOutputStream();
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":

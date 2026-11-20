@@ -186,6 +186,16 @@ def acceptance(args, home, report):
         assert consumer["deduplicatedEvents"] == 3 and consumer["committedBusinessTransactions"] == 2
         report["consumerReplay"] = consumer
         print("A fresh native consumer reopens its previous offset and deduplicates the three redelivered records", flush=True)
+        lost = read_cut(marks / "worker-topic-loss.json", runner, 170)
+        assert set(lost["absentOn"]) == set(resumed["liveInSync"])
+        assert lost["diagnostic"] == "ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING"
+        assert lost["beforeRestart"] == {**resumed["worker"], "capturedSequence": resumed["worker"]["sequence"] + 1}
+        restarted_epoch = lost["afterRestart"]["epoch"]
+        assert restarted_epoch > lost["beforeRestart"]["epoch"]
+        assert lost["afterRestart"] == {**resumed["worker"], "epoch": restarted_epoch,
+                                        "capturedSequence": resumed["worker"]["sequence"] + 2}
+        report["topicLoss"] = lost
+        print("Deleting the initialized topic leaves its durable receipt fixed across Worker restart and does not recreate it", flush=True)
 
     def pid(service):
         container = run(*compose, "ps", "-q", service).stdout.strip()

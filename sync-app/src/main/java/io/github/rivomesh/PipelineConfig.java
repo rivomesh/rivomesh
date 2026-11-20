@@ -279,6 +279,7 @@ public final class PipelineConfig {
         s.kafkaPhysicalGrant=kafkaPhysicalGrant;
         String type=effectiveSourceType();
         s.oracleDdlEvidence="ORACLE".equals(type);
+        s.postgresRelationEvidence="POSTGRESQL".equals(type);
         s.deliveryTiming="POSTGRESQL".equals(type)||"MYSQL".equals(type)&&journal.writerAssignment==null
                 &&MysqlCdcSource.originalTimingProfile(source);
         if("LOCAL".equals(journal.mode)){s.driver="org.h2.Driver";s.url="jdbc:h2:file:"+localPath().resolve("rivomesh")+";AUTO_SERVER=TRUE;CACHE_SIZE=4096;WRITE_DELAY=0;LOCK_TIMEOUT=10000";}
@@ -301,6 +302,7 @@ public final class PipelineConfig {
             identity.put("publication",source.postgresql.publication);
             identity.put("slotPrefix",source.postgresql.slotPrefix);
             if(source.postgresql.failoverSlot)identity.put("failoverSlot",true);
+            if(source.postgresql.captureSecondaryIndexes)identity.put("capturePostgresSecondaryIndexes",true);
         }else if("ORACLE".equals(effectiveSourceType())){
             identity.put("sourceType","ORACLE");
             identity.put("sourceDatabase",source.database);

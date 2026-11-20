@@ -307,7 +307,9 @@ Object.assign(messages.zh,{
  schemaDriftIdentity:'行身份键已变化',schemaDriftOrder:'已有列的相对顺序已变化',schemaDriftIndexes:'源目录索引定义已变化',schemaDriftSame:'当前目录未见结构差异。',
  schemaDriftNoHistory:'日志中没有可用于对比的结构记录。',schemaDriftUnavailable:'当前无法核对结构差异。',
  oracleArchiveEvent:'Oracle 归档故障指纹',oracleArchiveEventUnavailable:'当前无可核对的原始故障指纹。',
- oracleArchiveWindow:'归档区间',oracleDecodedSqlDigest:'SQL 文本摘要'
+ oracleArchiveWindow:'归档区间',oracleDecodedSqlDigest:'SQL 文本摘要',
+ postgresRelationEvent:'PostgreSQL 原始发布结构',postgresRelationUnavailable:'当前无可核对的原始 Relation 消息。',
+ postgresRelationColumns:'发布列',postgresRelationMore:'界面显示前 32 列。完整结构可从恢复 API 查看。'
 });
 Object.assign(messages.en,{
  schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',oracleSchemaDriftTitle:'Oracle PDB schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
@@ -317,7 +319,9 @@ Object.assign(messages.en,{
  schemaDriftIdentity:'Row identity changed',schemaDriftOrder:'Existing column order changed',schemaDriftIndexes:'Source index definitions changed',schemaDriftSame:'The current catalog has no visible structural differences.',
  schemaDriftNoHistory:'The journal has no recorded schema to compare.',schemaDriftUnavailable:'Schema differences are currently unavailable.',
  oracleArchiveEvent:'Blocked Oracle archive event',oracleArchiveEventUnavailable:'The original fault fingerprint is unavailable.',
- oracleArchiveWindow:'Archive interval',oracleDecodedSqlDigest:'SQL text digest'
+ oracleArchiveWindow:'Archive interval',oracleDecodedSqlDigest:'SQL text digest',
+ postgresRelationEvent:'Original PostgreSQL relation',postgresRelationUnavailable:'The original Relation message is unavailable.',
+ postgresRelationColumns:'Published columns',postgresRelationMore:'Showing the first 32 columns. The recovery API includes the complete descriptor.'
 });
 function showSourceSchemaDrift(content,review){
  const titles={CURRENT_MYSQL_CATALOG_VS_JOURNAL:'schemaDriftTitle',
@@ -366,6 +370,22 @@ function showOracleArchiveEvent(content,review){
  }
  content.append(section);
 }
+function showPostgresRelationEvent(content,review){
+ if(!review)return;
+ const section=text('section','','callout');
+ section.append(text('h3',t('postgresRelationEvent')));
+ if(review.state==='OBSERVED'&&review.event){
+  const event=review.event,columns=text('ul');
+  section.append(text('p',event.namespace+'.'+event.relation+' · LSN '+event.transactionFinalLsn),
+   text('code',review.fingerprint),text('p',t('postgresRelationColumns')+' · '+event.columns.length),columns);
+  for(const column of event.columns.slice(0,32))
+   columns.append(text('li',column.name+' · OID '+column.typeOid+' · typmod '+column.typeModifier));
+  if(event.columns.length>32)section.append(text('p',t('postgresRelationMore')));
+ }else{
+  section.append(text('p',t('postgresRelationUnavailable')),text('code',review.code||''));
+ }
+ content.append(section);
+}
 async function openCaptureRecovery(task){
  closeCaptureRecovery();
  const dialog=text('dialog','','failure-review-dialog'),content=text('section'),close=text('button',t('closeFailureEvidence'));
@@ -383,6 +403,7 @@ async function openCaptureRecovery(task){
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
   showSourceSchemaDrift(content,report.schemaDrift);
   showOracleArchiveEvent(content,report.blockedArchiveEvent);
+  showPostgresRelationEvent(content,report.blockedRelationEvent);
   const boundary=report.nextTransactionHeaders;
   if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
    const evidence=text('section','','callout');
@@ -657,6 +678,7 @@ function sourceConfiguration(f){
  if(type==='POSTGRESQL'){
   Object.assign(source,{type,database:f.pgDatabase.value.trim(),topology:'SINGLE',username:f.pgUsername.value.trim(),password:f.pgPassword.value,
    postgresql:{url:f.pgUrl.value.trim(),publication:f.pgPublication.value.trim(),slotPrefix:f.pgSlotPrefix.value.trim(),failoverSlot:f.pgFailoverSlot.checked}});
+  if(f.pgSecondaryIndexes.checked)source.postgresql.captureSecondaryIndexes=true;
   version=f.pgVersion.value.trim();
  }else if(type==='ORACLE'){
   Object.assign(source,{type,database:f.oraclePdb.value.trim(),topology:'SINGLE',oracle:{
@@ -715,17 +737,17 @@ Object.assign(messages.en,{runtime:'Runtime',targetId:'Target ID',addTarget:'+ A
 let extraTargetCounter=1;
 function v3(){return $('create-form').elements.formatVersion.value==='3';}
 Object.assign(messages.zh,{
- sourceEngine:'源数据库类型',sourceJdbc:'源 JDBC URL',pgDatabase:'PostgreSQL 数据库',pgSchemas:'源 Schema（逗号分隔）',pgPublication:'逻辑发布名称',pgSlotPrefix:'逻辑槽前缀',pgFailoverSlot:'使用可切换逻辑槽',
- pgSourceRequirements:'实验性档案。填写可写主库的地址、数据库及发布名称。切主续传需使用稳定写入入口和已同步逻辑槽。支持 PostgreSQL 和 MySQL 目标。创建后先执行检查。',
+ sourceEngine:'源数据库类型',sourceJdbc:'源 JDBC URL',pgDatabase:'PostgreSQL 数据库',pgSchemas:'源 Schema（逗号分隔）',pgPublication:'逻辑发布名称',pgSlotPrefix:'逻辑槽前缀',pgFailoverSlot:'使用可切换逻辑槽',pgSecondaryIndexes:'采集 PostgreSQL 二级索引供目标审核',
+ pgSourceRequirements:'实验性档案。填写可写主库的地址、数据库及发布名称。切主续传需使用稳定写入入口和已同步逻辑槽。支持 PostgreSQL、MySQL、openGauss、ClickHouse、Doris 和消息目标。创建后先执行检查。',
  oraclePdb:'可写 PDB 名称',oracleRootService:'CDB 根服务（归档读取）',oraclePdbService:'PDB 服务（读取快照）',oracleTables:'源表（大写 OWNER.TABLE，每行一张）',
- oracleSourceRequirements:'实验性档案。Agent 需安装 Oracle JDBC 驱动。填写 CDB 根和可写 PDB 两个服务，归档模式与全列补充日志须已配置。支持 PostgreSQL 目标。创建后先执行检查。',
+ oracleSourceRequirements:'实验性档案。Agent 需安装 Oracle JDBC 驱动。填写 CDB 根和可写 PDB 两个服务，归档模式与全列补充日志须已配置。支持 PostgreSQL、ClickHouse 和消息目标。创建后先执行检查。',
  oracleVirtualNumeric:'同步受支持的整数虚拟列',oracleTableListInvalid:'填写 1–200 张不重复的表，每张表使用大写 OWNER.TABLE。',sourceJdbcInvalid:'请填写该源数据库的 JDBC URL。'
 });
 Object.assign(messages.en,{
- sourceEngine:'Source database engine',sourceJdbc:'Source JDBC URL',pgDatabase:'PostgreSQL database',pgSchemas:'Source schemas (comma-separated)',pgPublication:'Logical publication',pgSlotPrefix:'Logical slot prefix',pgFailoverSlot:'Use a failover logical slot',
- pgSourceRequirements:'Experimental. Provide the writable primary address, database and publication. Failover needs a stable writer endpoint and a synchronized logical slot. PostgreSQL and MySQL targets are supported. Run Check after creating the task.',
+ sourceEngine:'Source database engine',sourceJdbc:'Source JDBC URL',pgDatabase:'PostgreSQL database',pgSchemas:'Source schemas (comma-separated)',pgPublication:'Logical publication',pgSlotPrefix:'Logical slot prefix',pgFailoverSlot:'Use a failover logical slot',pgSecondaryIndexes:'Capture PostgreSQL secondary indexes for target review',
+ pgSourceRequirements:'Experimental. Provide the writable primary address, database and publication. Failover needs a stable writer endpoint and a synchronized logical slot. Available targets include PostgreSQL, MySQL, openGauss, ClickHouse, Doris and message brokers. Run Check after creating the task.',
  oraclePdb:'Writable PDB name',oracleRootService:'CDB root service (archive capture)',oraclePdbService:'PDB service (snapshot reads)',oracleTables:'Source tables (uppercase OWNER.TABLE, one per line)',
- oracleSourceRequirements:'Experimental. Install Oracle JDBC on the Agent. Supply the CDB root and writable PDB services with archive mode and all-column supplemental logging. PostgreSQL targets are supported. Run Check after creating the task.',
+ oracleSourceRequirements:'Experimental. Install Oracle JDBC on the Agent. Supply the CDB root and writable PDB services with archive mode and all-column supplemental logging. Available targets include PostgreSQL, ClickHouse and message brokers. Run Check after creating the task.',
  oracleVirtualNumeric:'Sync supported integer virtual columns',oracleTableListInvalid:'Enter 1–200 distinct tables using uppercase OWNER.TABLE.',sourceJdbcInvalid:'Enter a JDBC URL for this source engine.'
 });
 function wizardSource(){return v3()?$('create-form').elements.sourceType.value:'MYSQL';}
@@ -802,8 +824,11 @@ function messageSettings(root,product){const value=name=>root.querySelector('[da
 
 function targetMode(card){
  const f=$('create-form').elements,select=card?card.querySelector('[data-field=product]'):f.targetType;
- const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL']:type==='ORACLE'?['POSTGRESQL']:null;
- for(const option of select.options)option.disabled=Boolean(allowed&&!allowed.includes(option.value));
+ const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','GAUSS']:type==='ORACLE'?['POSTGRESQL','CLICKHOUSE']:null;
+ for(const option of select.options){
+  const sharedMessaging=v3()&&messagingProduct(option.value);
+  option.disabled=Boolean(allowed&&!allowed.includes(option.value)&&!sharedMessaging);
+ }
  if(!select.value||select.selectedOptions[0]?.disabled){
   select.value='POSTGRESQL';
   const url=card?card.querySelector('[data-field=url]'):f.targetUrl;

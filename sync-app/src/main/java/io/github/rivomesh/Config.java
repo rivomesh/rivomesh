@@ -53,6 +53,8 @@ public final class Config {
         public String slotPrefix="rivomesh";
         public boolean failoverSlot;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+        public boolean captureSecondaryIndexes;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
         public boolean commonCutValidation;
     }
 

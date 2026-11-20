@@ -2,20 +2,6 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
-      "id": "SO-06",
-      "title": {
-        "zh-CN": "PostgreSQL 源适配器",
-        "en": "PostgreSQL source adapter"
-      },
-      "status": "DONE",
-      "verification": {
-        "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
-        "criteriaSha256": "2747f263cc3c77f20ab91cee11c8b90572a619237327d17e03661ed7032630b0",
-        "archive": "docs/verification/README.md",
-        "profile": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review."
-      }
-    },
-    {
       "id": "JV-03",
       "title": {
         "zh-CN": "驱动隔离、依赖与安全协议兼容",
@@ -15150,10 +15136,10 @@
   "rocketmqWorkerControllerAndReplicaRecovery": {
     "status": "PASS",
     "scope": "Packaged MySQL CDC Worker, original journal and RocketMQ replica recovery",
-    "project": "rivomesh-rocketmq-controller-66ae1d81d2",
+    "project": "rivomesh-rocketmq-controller-617a042e4a",
     "artifactSha256": "2c87464463fc299ae42d4c8d23c77fbb2f36f4ba71c4d01f0e9cb853d41d905e",
-    "harnessSha256": "969c4bcb111ef9b0d42a7c46af05bbce7e2b7b7be210f1bcaad93186347741b2",
-    "testSourceSha256": "eb8d6c44f246387e1715bbe38637a0acf98b7ac2d33823c1a2cccb1020be9fb0",
+    "harnessSha256": "d7a9a6c24d2c64af38a9ba27a8e05ee1aeff00e7e03974f60dd22e8acae20abe",
+    "testSourceSha256": "72a98e07088b61f922cc094d69b3477c821020de80406b1352f707a13c29b5be",
     "brokerTemplateSha256": "5d6ee38300002a2b041badb5ce27f461f634a5b5cd57c9bbb88557423f4e9203",
     "hostJava": [
       "openjdk version \"21.0.13\" 2026-10-20 LTS",
@@ -15167,61 +15153,44 @@
       "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64",
       "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64"
     },
-    "testClassSha256": "3edea1cfefa4ff210ef286ab83b4b5cccd058419a10882a701fe428eb91ddd0c",
+    "testClassSha256": "73b700e894f2f82368099b84788a42cb0c649cd29af856f2f853470371fb06b6",
     "consumerSourceSha256": "7a0df0d4eabb72857f9c06e846b69bdb3a43ea8ea690454f5cbdb9356039451a",
     "original": {
+      "retained": {
+        "queueOffset": 7,
+        "commitLogOffset": 11895,
+        "contentSha256": "499851435bdf81ca40d2391db7c55eb3530d4608ce9133d5329d4548cb94f24f"
+      },
+      "epoch": 1,
       "liveInSync": [
-        "rocket-primary:10911",
         "rocket-replica-a:10911",
-        "rocket-replica-b:10911"
+        "rocket-replica-b:10911",
+        "rocket-primary:10911"
       ],
       "masterId": 1,
       "worker": {
-        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+        "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
         "retained": {
           "queueOffset": 7,
           "commitLogOffset": 11895,
-          "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
+          "contentSha256": "499851435bdf81ca40d2391db7c55eb3530d4608ce9133d5329d4548cb94f24f"
         },
-        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+        "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+        "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
         "sequence": 1,
-        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:9",
+        "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:9",
         "epoch": 1,
         "capturedSequence": 1
       },
       "master": "rocket-primary:10911",
-      "syncStateEpoch": 3,
+      "syncStateEpoch": 4,
       "topicConfigurationReplicas": [
-        "rocket-primary:10911",
         "rocket-replica-a:10911",
-        "rocket-replica-b:10911"
-      ],
-      "retained": {
-        "queueOffset": 7,
-        "commitLogOffset": 11895,
-        "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
-      },
-      "epoch": 1
+        "rocket-replica-b:10911",
+        "rocket-primary:10911"
+      ]
     },
     "promoted": {
-      "syncStateEpoch": 5,
-      "worker": {
-        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
-        "retained": {
-          "queueOffset": 10,
-          "commitLogOffset": 17180,
-          "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
-        },
-        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
-        "sequence": 2,
-        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:10",
-        "epoch": 2,
-        "capturedSequence": 2
-      },
-      "epoch": 2,
-      "masterId": 2,
       "master": "rocket-replica-a:10911",
       "topicConfigurationReplicas": [
         "rocket-replica-b:10911",
@@ -15235,133 +15204,185 @@
       "retained": {
         "queueOffset": 7,
         "commitLogOffset": 11895,
-        "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
+        "contentSha256": "499851435bdf81ca40d2391db7c55eb3530d4608ce9133d5329d4548cb94f24f"
       },
       "appended": {
         "queueOffset": 10,
         "commitLogOffset": 17180,
-        "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
-      }
+        "contentSha256": "fa4704846e01d24a3c59ab29a62951d6646ad96c2c73ffd53a7e717a835b0524"
+      },
+      "syncStateEpoch": 6,
+      "worker": {
+        "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
+        "retained": {
+          "queueOffset": 10,
+          "commitLogOffset": 17180,
+          "contentSha256": "fa4704846e01d24a3c59ab29a62951d6646ad96c2c73ffd53a7e717a835b0524"
+        },
+        "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+        "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
+        "sequence": 2,
+        "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:10",
+        "epoch": 2,
+        "capturedSequence": 2
+      },
+      "epoch": 2,
+      "masterId": 2
     },
     "minimumRefusal": {
+      "status": "PASS",
       "confirmed": {
         "queueOffset": 10,
         "commitLogOffset": 17180,
-        "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
-      },
-      "status": "PASS"
+        "contentSha256": "fa4704846e01d24a3c59ab29a62951d6646ad96c2c73ffd53a7e717a835b0524"
+      }
     },
     "workerRecovered": {
+      "liveInSync": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
       "worker": {
-        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+        "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
         "retained": {
           "queueOffset": 13,
           "commitLogOffset": 22457,
-          "contentSha256": "4c762234a3e977ec7c489b83a043c5b2a09adc50ffb95e427293596a92ff82de"
+          "contentSha256": "9a8dd95647d3e9b68c399df9e04a8a8390b016520b768217e11224aef636e538"
         },
-        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+        "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+        "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
         "sequence": 3,
-        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:11",
+        "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:11",
         "epoch": 2,
         "capturedSequence": 3
       },
       "sameRunningWorker": true,
-      "status": "PASS",
-      "liveInSync": [
-        "rocket-replica-b:10911",
-        "rocket-replica-a:10911"
-      ]
+      "status": "PASS"
     },
     "controllerElection": {
       "original": {
-        "leader": "rocket-controller-c:9877",
         "worker": {
-          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
           "retained": {
             "queueOffset": 13,
             "commitLogOffset": 22457,
-            "contentSha256": "4c762234a3e977ec7c489b83a043c5b2a09adc50ffb95e427293596a92ff82de"
+            "contentSha256": "9a8dd95647d3e9b68c399df9e04a8a8390b016520b768217e11224aef636e538"
           },
-          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+          "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
           "sequence": 3,
-          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:11",
+          "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:11",
           "epoch": 2,
           "capturedSequence": 3
-        }
+        },
+        "leader": "rocket-controller-b:9877"
       },
       "successor": {
-        "leader": "rocket-controller-b:9877",
         "worker": {
-          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
           "retained": {
             "queueOffset": 16,
             "commitLogOffset": 27741,
-            "contentSha256": "367c220881b201e41c69015a534118e2c28b8bd4411786ba4af874c76597a5e3"
+            "contentSha256": "dae6787d406f048c725e7bd0adaebb56c5770a00fed62c36fc68c5b0595bfe10"
           },
-          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+          "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
           "sequence": 4,
-          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:12",
+          "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:12",
           "epoch": 2,
           "capturedSequence": 4
-        }
+        },
+        "leader": "rocket-controller-a:9877"
       }
     },
     "controllerMajorityRecovery": {
       "stopped": [
-        "rocket-controller-c",
-        "rocket-controller-a"
+        "rocket-controller-b",
+        "rocket-controller-c"
       ],
       "held": {
-        "reachableMinority": "rocket-controller-b:9877",
+        "reachableMinority": "rocket-controller-a:9877",
         "diagnostic": "ROCKETMQ_CONTROLLER_ROUTE_RETRY",
         "claimedLeadership": true,
         "worker": {
-          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
           "retained": {
             "queueOffset": 16,
             "commitLogOffset": 27741,
-            "contentSha256": "367c220881b201e41c69015a534118e2c28b8bd4411786ba4af874c76597a5e3"
+            "contentSha256": "dae6787d406f048c725e7bd0adaebb56c5770a00fed62c36fc68c5b0595bfe10"
           },
-          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+          "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
           "sequence": 4,
-          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:12",
+          "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:12",
           "epoch": 2,
           "capturedSequence": 5
         }
       },
       "resumed": {
+        "leader": "rocket-controller-a:9877",
         "brokerEpoch": 2,
         "brokerMaster": "rocket-replica-a:10911",
         "worker": {
-          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
           "retained": {
             "queueOffset": 19,
             "commitLogOffset": 33029,
-            "contentSha256": "33cb3325ae07ff7c77cc10cf15d8090f4b0ff37020d4007df98447b1b31a24de"
+            "contentSha256": "076441dd4955b8d0906b8c7e6c78b5a925556045ed635329671a2719c3baaa86"
           },
-          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
-          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+          "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
           "sequence": 5,
-          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:13",
+          "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:13",
           "epoch": 2,
           "capturedSequence": 5
         },
         "liveInSync": [
           "rocket-replica-b:10911",
           "rocket-replica-a:10911"
-        ],
-        "leader": "rocket-controller-b:9877"
+        ]
       }
     },
     "consumerReplay": {
+      "deduplicatedEvents": 3,
       "reopenedOffset": 14,
       "committedOffset": 20,
-      "committedBusinessTransactions": 2,
-      "deduplicatedEvents": 3
+      "committedBusinessTransactions": 2
+    },
+    "topicLoss": {
+      "afterRestart": {
+        "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
+        "retained": {
+          "queueOffset": 19,
+          "commitLogOffset": 33029,
+          "contentSha256": "076441dd4955b8d0906b8c7e6c78b5a925556045ed635329671a2719c3baaa86"
+        },
+        "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+        "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
+        "sequence": 5,
+        "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:13",
+        "epoch": 3,
+        "capturedSequence": 7
+      },
+      "diagnostic": "ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING",
+      "absentOn": [
+        "rocket-replica-b:10911",
+        "rocket-replica-a:10911"
+      ],
+      "beforeRestart": {
+        "topic": "worker_events_974aab9dddf4027595c37a7a7cd7c35614c5b1fdd7fc7b576e1c88689af9ba7b",
+        "retained": {
+          "queueOffset": 19,
+          "commitLogOffset": 33029,
+          "contentSha256": "076441dd4955b8d0906b8c7e6c78b5a925556045ed635329671a2719c3baaa86"
+        },
+        "generation": "b39a9bb9-0bbd-40e8-820f-6ec59e97d82f",
+        "snapshotId": "48bf956e-442b-40d5-8814-c5957ff0333d",
+        "sequence": 5,
+        "transactionId": "2c48fc60-e48f-11f1-9a8c-b2270cae7ba5:13",
+        "epoch": 2,
+        "capturedSequence": 6
+      }
     },
     "cleanupExitCode": 0,
     "remaining": {
@@ -15370,7 +15391,6 @@
       "networks": 0
     },
     "reproduce": "tests/rocketmq/controller-promotion.md",
-    "boundary": "MySQL 8.4.13 and RocketMQ 5.5.0 on one host. The Worker reopens its LOCAL journal. Individual Broker processes restart with independent retained tmpfs stores. Three separate Controllers use named volumes. The fixture loses the elected Controller, isolates the successor with just one reachable Controller and restores the majority on the original named volume. Cross-host failure, destroyed storage, and mutual TLS remain separate profiles. The consumer fixture verifies a local transactional inbox and independent native group offsets after reconnect.",
     "focusedJavaChecksPassed": 5,
     "focusedConsoleChecksPassed": 2,
     "isolatedControllerProof": {
@@ -15420,6 +15440,359 @@
         "brokerEpoch": 2,
         "leader": "rocket-controller-b:9877"
       }
+    },
+    "boundary": "MySQL 8.4.13 and RocketMQ 5.5.0 on one host. The Worker reopens its LOCAL journal. Individual Broker processes restart with independent retained tmpfs stores. Three separate Controllers use named volumes. The fixture loses the elected Controller, isolates the successor with just one reachable Controller and restores the majority on the original named volume. Cross-host failure, destroyed storage, and mutual TLS remain separate profiles. The consumer fixture verifies a local transactional inbox and independent native group offsets after reconnect. The final phase deletes the initialized topic on both live brokers and verifies continued source capture with the old native receipt through Worker restart."
+  },
+  "postgresqlNativeFanoutClickHouseRedis": {
+    "artifactSha256": "9ed3f9ed283d8e1dade3168cb0ec85f1053dd98863d82c7fa73fa9b24374915b",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "PostgreSQL snapshot preserves JSON, bytes, decimal, and duplicate multiplicity through three target families",
+      "Redis retains a typed WAL transaction while ClickHouse applies a changed key and one keyless deletion",
+      "Original WAL slot, Redis stream offsets and SQL snapshots survive an abrupt Worker restart"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17.12",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "redisClickHouse": true,
+    "project": "rivomesh-pg-source-969990fde9",
+    "harnessSha256": "7a1019057213e28ab12a431888e7e71b7be162559dbe79b4a90bcd6413047bf5",
+    "clickHouseVersion": "25.8.33.6",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    }
+  },
+  "postgresqlNativeOpenGaussIndexPolicy": {
+    "artifactSha256": "b87592681d97cf561b0dcb6091bea441c0fbbab33299bfea21f08470e362ea0d",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL reports a partial index for review without mutating the published schema",
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "openGauss creates the reviewed normal indexes and retains both primary keys",
+      "PostgreSQL and openGauss retain the original index definitions and snapshots through Worker restart"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17.12",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "gaussIndexes": true,
+    "project": "rivomesh-pg-source-a22df33190",
+    "harnessSha256": "36fd07603371c26c7f180e7ba7c99a8cd4dd52322550a1b698105331fe72af75",
+    "gaussVersion": "(openGauss 7.0.0-RC3 build f08516a2) compiled at 2026-03-26 10:29:14 commit 0 last mr 9119  on aarch64-unknown-linux-gnu, compiled by g++ (GCC) 10.3.1, 64-bit",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "sourceIndexReview": {
+      "entries": [
+        {
+          "targetId": "gauss",
+          "targetSchema": "ga_billing",
+          "sourceDatabase": "billing",
+          "sourceSchema": "",
+          "sourceTable": "ledger",
+          "sourceIndex": "idx_unique_label",
+          "targetIndex": "rm_4eddaecc9305_db927ef7e29b4568",
+          "action": "DOWNGRADE_UNIQUE",
+          "reason": "EXCLUSIVE_SYNC_WRITER_RESTORE_CONSTRAINTS_BEFORE_TAKEOVER",
+          "targetUnique": false,
+          "columns": [
+            "label"
+          ]
+        },
+        {
+          "targetId": "gauss",
+          "targetSchema": "ga_sales",
+          "sourceDatabase": "sales",
+          "sourceSchema": "",
+          "sourceTable": "items",
+          "sourceIndex": "idx_amount",
+          "targetIndex": "rm_3a3e65bfeedc_7f1b67bf46f5877f",
+          "action": "CREATE",
+          "reason": "SOURCE_SECONDARY_INDEX",
+          "targetUnique": false,
+          "columns": [
+            "amount"
+          ]
+        }
+      ],
+      "indexCounts": {
+        "distributionPlanRequired": 0,
+        "downgradedUnique": 1,
+        "replacedGsi": 0,
+        "requiresPlan": 0,
+        "supported": 1
+      },
+      "omittedEntries": 0,
+      "sourceType": "POSTGRESQL",
+      "state": "REVIEWED",
+      "tableMappings": 3
+    },
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    }
+  },
+  "postgresqlPreviouslyAcceptedSqlProfile": {
+    "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
+    "criteriaSha256": "2747f263cc3c77f20ab91cee11c8b90572a619237327d17e03661ed7032630b0",
+    "archive": "docs/verification/README.md",
+    "profile": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review."
+  },
+  "oracleNativeRawRedis": {
+    "artifactSha256": "f7b237fb0fb860250227e10e5e1e81cf014955ac30b9d92afa99edb1e4d52763",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "textJson": false,
+    "dateValues": false,
+    "virtualEvidence": false,
+    "virtualColumns": false,
+    "lobEvidence": false,
+    "lobPreflight": false,
+    "nativeJsonEvidence": false,
+    "characterEvidence": false,
+    "characterPipeline": false,
+    "ddlReview": false,
+    "ddlFingerprint": false,
+    "savepointEvidence": false,
+    "savepointPipeline": false,
+    "startupTimeoutSeconds": 240,
+    "redis": true,
+    "rawEvidence": false,
+    "rawValues": true,
+    "project": "rivomesh-oracle-source-ccc329e8fb",
+    "hostMountedOracleData": true,
+    "harnessSha256": "f84d3f73451dfb25a5497c4c51673baf18d5c2215907b7a471ef62fb2e906416",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Flashback preserves Oracle RAW bytes, SQL NULL and keyless duplicate multiplicity",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Redis receives the Oracle SCN-anchored Flashback snapshots and normalized table schemas",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "The native Redis event carries the full original Oracle XID and archived commit SCN",
+      "Archived Oracle RAW redo and undo update exact bytes and remove one matching keyless row",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Oracle restart appends the offline transaction without replacing prior Redis IDs or snapshot generations",
+      "Oracle RAW bytes resume from the original SCN and retain binary images in both targets",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "cleanupExitCode": 0,
+    "remainingContainers": 0,
+    "remainingOracleDataDirectories": 0
+  },
+  "postgresqlBlockedRelationEvidence": {
+    "artifactSha256": "7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+      "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+      "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+      "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+      "The stopped transaction keeps the original native Relation and exact TIMESTAMP type modifier",
+      "A later DDL changes the advisory live digest while preserving the recorded schema and failure cut",
+      "An unsupported publication shape has an explicit unavailable diagnostic without changing either cut",
+      "The Controller restart reads the same stored Relation record and leaves the target cut unchanged"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "ddlReview": true,
+    "project": "rivomesh-pg-source-25b4debb9f",
+    "harnessSha256": "9a511c872114a08e6a9f3722a72059cd24884d785222096d835ee7b61bb14fb7",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "blockedRelationEvent": {
+      "protocol": "PGOUTPUT_V1_RELATION",
+      "state": "OBSERVED",
+      "event": {
+        "checkpointSha256": "ead8fc9059904e5b9e711dbc1104e2c139d1ad1c2e77d882d41737ea192354f8",
+        "transactionFinalLsn": "0/19cfd38",
+        "relationOid": 16399,
+        "namespace": "billing",
+        "relation": "ledger",
+        "replicaIdentity": "f",
+        "columns": [
+          {
+            "name": "id",
+            "typeOid": 20,
+            "typeModifier": -1,
+            "key": true
+          },
+          {
+            "name": "label",
+            "typeOid": 1043,
+            "typeModifier": 64,
+            "key": true
+          },
+          {
+            "name": "observed",
+            "typeOid": 1114,
+            "typeModifier": 6,
+            "key": true
+          },
+          {
+            "name": "first_note",
+            "typeOid": 25,
+            "typeModifier": -1,
+            "key": true
+          }
+        ],
+        "recordedTableId": "4eddaecc9305f28a33aae890eafe80930df503d0884142071a2bad7a539bd647",
+        "recordedSchemaVersion": 1,
+        "recordedSchemaSha256": "3dbce39036ad5169b99e67802b895aa732627288d85670536dcf5cc118bbcc2f"
+      },
+      "fingerprint": "7bcf95dd734c42d852cf557a6f1da786d16dfd4ed719bc783c2c5ee8c7cc8480"
+    },
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    }
+  },
+  "oracleNativeClickHouseRawRedis": {
+    "artifactSha256": "7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "textJson": false,
+    "dateValues": false,
+    "virtualEvidence": false,
+    "virtualColumns": false,
+    "lobEvidence": false,
+    "lobPreflight": false,
+    "nativeJsonEvidence": false,
+    "characterEvidence": false,
+    "characterPipeline": false,
+    "ddlReview": false,
+    "ddlFingerprint": false,
+    "savepointEvidence": false,
+    "savepointPipeline": false,
+    "startupTimeoutSeconds": 720,
+    "redis": true,
+    "rawEvidence": false,
+    "rawValues": true,
+    "clickhouse": true,
+    "project": "rivomesh-oracle-source-61e0b4f6de",
+    "hostMountedOracleData": true,
+    "harnessSha256": "7515f4f3b49618aee231440a846d712116b18f4ee53cb5eabc770e763be40fc9",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "ClickHouse materializes the original Oracle RAW snapshot with exact NULL and duplicate counts",
+      "Flashback preserves Oracle RAW bytes, SQL NULL and keyless duplicate multiplicity",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Redis receives the Oracle SCN-anchored Flashback snapshots and normalized table schemas",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "The native Redis event carries the full original Oracle XID and archived commit SCN",
+      "ClickHouse applies the Oracle archived RAW update and removes exactly one duplicate",
+      "Archived Oracle RAW redo and undo update exact bytes and remove one matching keyless row",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Oracle restart appends the offline transaction without replacing prior Redis IDs or snapshot generations",
+      "ClickHouse resumes the Oracle archived SCN with the original keyless identity",
+      "Oracle RAW bytes resume from the original SCN and retain binary row images",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "clickhouseVersion": "25.8.33.6",
+    "cleanupExitCode": 0,
+    "remainingContainers": 0,
+    "remainingOracleDataDirectories": 0
+  },
+  "postgresqlNativeDoris": {
+    "artifactSha256": "7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "Doris preserves snapshot JSON precision, binary Base64 and exact DECIMAL",
+      "Doris applies the same logical transaction with a key change and a single duplicate deletion",
+      "PostgreSQL to Doris resumes the original slot and snapshots after forced restart"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "doris": true,
+    "dorisHive": false,
+    "project": "rivomesh-pg-source-a0165758d9",
+    "harnessSha256": "45954caf8e57761a61bc2296972694dfe0503b1f375514ee5f0cd0466d886aa2",
+    "dorisWireVersion": "5.7.99",
+    "dorisImage": "apache/doris:all-in-one-4.1.3",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
     }
   }
 }

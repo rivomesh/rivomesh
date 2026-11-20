@@ -761,7 +761,7 @@ The `60dc0e19ba2402e776e8739e56348a27753d3427c0fa0bfa503297e244bf3470` Temurin 2
 
 ### Packaged MySQL CDC Worker with RocketMQ Controller broker recovery
 
-Temurin 21 artifact `2c87464463fc299ae42d4c8d23c77fbb2f36f4ba71c4d01f0e9cb853d41d905e` passed 5 focused Java checks and 2 console checks. MySQL 8.4.13 to RocketMQ 5.5.0 passed an elected Broker master loss, Worker SIGKILL, insufficient live replicas, a follower restart and Controller leader loss. With the elected Controller as the only reachable member, the Worker retained the new GTID while both broker queues and the durable receipt stayed fixed. The reachable Controller still reported itself as leader when the fixture read its metadata. Restoring a second Controller on its existing store let the same Worker publish one BEGIN / ROW / COMMIT group at the original cut. Both broker replicas confirmed the new native receipt with unchanged topic generation, snapshot and writer epoch. An independent pull consumer reopened the original group offset after committing the business transaction, deduplicated its three redelivered events byte for byte and verified the next native group offset with another client. Broker stores used retained tmpfs on a single host. Controllers kept three independent named volumes. All fixture containers, volumes and networks were removed. [Reproduce](../../tests/rocketmq/controller-promotion.md) · [Manifest](baseline.json)
+Temurin 21 artifact `2c87464463fc299ae42d4c8d23c77fbb2f36f4ba71c4d01f0e9cb853d41d905e` passed 5 focused Java checks and 2 console checks. MySQL 8.4.13 to RocketMQ 5.5.0 passed an elected Broker master loss, Worker SIGKILL, insufficient live replicas, a follower restart and Controller leader loss. With the elected Controller as the only reachable member, the Worker retained the new GTID while both broker queues and the durable receipt stayed fixed. The reachable Controller still reported itself as leader when the fixture read its metadata. Restoring a second Controller on its existing store let the same Worker publish one BEGIN / ROW / COMMIT group at the original cut. Both broker replicas confirmed the new native receipt with unchanged topic generation, snapshot and writer epoch. An independent pull consumer reopened the original group offset after committing the business transaction, deduplicated its three redelivered events byte for byte and verified the next native group offset with another client. Deleting the initialized topic from both live brokers left the publication receipt unchanged and did not create a fresh topic after Worker restart. MySQL capture advanced across both source transactions. Broker stores used retained tmpfs on a single host. Controllers kept three independent named volumes. All fixture containers, volumes and networks were removed. [Reproduce](../../tests/rocketmq/controller-promotion.md) · [Manifest](baseline.json)
 
 ### Original Agent offline handoff preflight
 
@@ -814,3 +814,27 @@ The PostgreSQL 18.7 profile verified stored generated values, two-schema snapsho
 Temurin 21 artifact `10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a` passed 19 focused Java checks and 27 native checks. PostgreSQL 17.12 refuses a publication that omits TRUNCATE. A published multi-table truncate with surrounding INSERTs stops before the entire transaction. MySQL and PostgreSQL retain their preceding receipts, original snapshot generations and the source LSN through restart. The capture review guides the operator to the new baseline workflow.
 
 The same artifact passed native PostgreSQL relation drift, a coordinated MySQL source and PostgreSQL target restore, and openGauss 7.0.0-RC3 A-mode keyless and index checks. openGauss preserved two identical JSON rows, updated one occurrence and applied the pending single delete after Worker restart. The LG-08 commercial and historical DDL cases remain in the requirement. [PostgreSQL operations](../en/postgresql-source.md#retain-the-original-cut-after-truncate) · [Gauss index policy](../en/gaussdb-index-policy.md) · [Evidence ledger](baseline.json)
+
+## PostgreSQL destination compatibility expansion
+
+The Temurin 21 package `9ed3f9ed283d8e1dade3168cb0ec85f1053dd98863d82c7fa73fa9b24374915b` passed PostgreSQL 17.12 to PostgreSQL, ClickHouse 25.8.33.6 and Redis Streams 7.4.2 using the server's own WAL. Key changes, one duplicate deletion, raw bytes, exact numeric values and the original-slot restart passed through the packaged Worker. The package `b87592681d97cf561b0dcb6091bea441c0fbbab33299bfea21f08470e362ea0d` also checked source PostgreSQL secondary-index metadata against the native openGauss catalog. The existing primary keys, snapshots and slot remained valid after restart. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
+
+## Oracle RAW and Redis Streams
+
+The Temurin 21 package `f7b237fb0fb860250227e10e5e1e81cf014955ac30b9d92afa99edb1e4d52763` passed Oracle Free 23.26.4.0.0 to PostgreSQL 17.12 and Redis Streams 7.4.2 at the same Flashback and archived redo cut. The pre-snapshot transaction waits for a closed archive commit, and a forced Controller and Worker stop preserves the original SCN, snapshots, native Redis IDs and binary rows. The run also verifies keyless multiplicity, NULL and an Oracle DDL stop at the previous SCN. [Reproduce](../../tests/oracle-source-probe.py) · [Manifest](baseline.json)
+
+## PostgreSQL original Relation at a DDL failure
+
+The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8` blocked a native PostgreSQL 17.12 transaction that announced a changed column layout. The journal retained the original observed Relation, transaction final LSN and exact type modifier together with the frozen schema digest. Two later DDL changes update the current advisory catalog or make it unavailable. The stored observation and target SQL contents remain stable. The same record remained available after a forced Controller restart. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
+
+## Oracle Flashback and archive CDC to ClickHouse
+
+The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8` delivered Oracle Free 23.26.4.0.0 to ClickHouse 25.8.33.6, PostgreSQL and Redis Streams in one task. ClickHouse materialized exact RAW bytes and SQL NULL, applied keyless changes at the original SCN and resumed after a forced Controller and Worker restart. [Reproduce](../../tests/oracle-source-probe.py) · [Manifest](baseline.json)
+
+## PostgreSQL to native Doris
+
+The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8` passed PostgreSQL 17.12 to a native Doris 4.1.3 and PostgreSQL fan-out. DECIMAL precision, JSON numbers, Base64 byte encoding, primary-key changes and duplicate row occurrences were checked on the materialized target. The original WAL slot, SQL snapshots and both acknowledgements remained valid after a forced restart. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
+
+### Grouped source adapter package
+
+The combined Temurin 21 package `4ea61a286de8a1df5a491df3fe4dea31eaf2328fb0e1942342b04b57b2e6eedc` passed 56 focused Java tests and five source-wizard and DDL review DOM tests. The native fixtures above retain their individual artifact fingerprints and database profiles.

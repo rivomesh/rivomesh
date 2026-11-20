@@ -123,15 +123,21 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-SO-05 · MySQL8.4 expanded compatibility · P1 · Depends on: SO-01
   Deliver: Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance.
   Acceptance: AC-SO-05
-- [x] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
+- [ ] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
   Deliver: Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs.
   Acceptance: AC-SO-06
+  - [x] Native PostgreSQL to Doris, including original-slot restart.
+  - [x] Native PostgreSQL, ClickHouse and Redis Streams snapshot, CDC and original-slot restart.
+  - [x] PostgreSQL secondary indexes, openGauss business UNIQUE downgrade and snapshot restart.
+  - [ ] Qualify the rest of the implemented MySQL-source destination matrix.
   - [x] PostgreSQL 17.12 extended NUMERIC scale and exact 65-digit and keyless delivery to two targets. A NaN transaction holds the original cut.
   - [x] REAL and DOUBLE PRECISION passed dual-target snapshots, keyless changes, original-slot restart and complete non-finite transaction refusal.
   - [x] PostgreSQL 17.12 compares PostgreSQL and MySQL at the same WAL cut. Both target receipts, report, original slot and snapshots survive an abrupt restart.
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Native Oracle RAW and keyless recovery through ClickHouse.
+  - [x] Native Oracle RAW snapshot, archive CDC and original-SCN restart to PostgreSQL and Redis Streams.
   - [x] Native Flashback, archive replay and original-snapshot restart for bounded virtual integer multiplication and two-column sums and differences.
   - [x] Native BasicFiles and SecureFiles BLOB/CLOB archive evidence, storage-specific restricted-role preflight and independent migration instructions.
   - [x] Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN.
@@ -196,6 +202,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Three Controllers elect a new leader after SIGKILL. The original Worker publishes on the same broker route with the same writer epoch.
   - [x] With only the elected RocketMQ Controller reachable, capture retains the transaction and both broker queues and receipts stay unchanged. Restoring the original majority resumes the same Worker.
   - [x] RocketMQ native consumer offset reopens and deduplicates three original records after the durable business commit.
+  - [x] Deleting the RocketMQ topic on both live brokers preserves the original publication receipt while capture resumes after Worker restart.
   - [ ] Cross-host storage failure domains, internal network cryptography, capacity, consumer deduplication and explicit gap profiles for remaining products.
 - [x] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
@@ -217,6 +224,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-LG-08 · Historical DDL,types,indexes and state migration · P1 · Depends on: SO-01
   Deliver: Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits.
   Acceptance: AC-LG-08
+  - [x] Persist the PostgreSQL Relation, type modifiers and durable checkpoint for review.
   - [x] Explicit global primary and identity GSI require a distribution plan before business DDL, including reordered identity columns.
   - [x] Console and CLI preflight share the MySQL-to-Gauss writer policy and report complete counts with bounded details.
   - [x] Native PostgreSQL 17.12 review shows the TIMESTAMP type modifier change and retains the source LSN, snapshot and target rows.

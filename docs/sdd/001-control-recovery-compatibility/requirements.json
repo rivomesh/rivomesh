@@ -1098,18 +1098,18 @@
       "id": "SO-06",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "DONE",
+      "status": "PARTIAL",
       "title": {
         "zh-CN": "PostgreSQL 源适配器",
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 限定源档案已验收。PostgreSQL 17.12 通过逻辑槽切主、槽或 WAL 缺失拒绝、双目标有键和无主键 CDC、精确类型及同一 WAL 切点对账。实库验证受限账号拒绝、两目标原生回执、校验结果及进程重启后按原槽续传。PostgreSQL 18.7 的原生存储型生成列、NULL、JSONB 和原快照恢复通过当前包。已验收结构漂移暂停及界面审阅。历史 DDL 执行按 LG-08 验收，各新增目标需独立核对类型和回执。",
-        "en": "Accepted the bounded Temurin 21 source profile. PostgreSQL 17.12 covers synchronized-slot promotion, refusal after lost WAL or slot, keyed and keyless CDC, precise types and common-cut comparison of PostgreSQL and MySQL. The native run proves scoped lock refusal, both target receipts, durable validation and restart on the original slot. The current package also verifies PostgreSQL 18.7 stored generated columns, NULL, JSONB and snapshot retention. Schema drift pauses and can be reviewed. Historical DDL execution follows LG-08 and any added sink needs its own projection and recovery qualification."
+        "zh-CN": "Temurin 21 限定源档案已验收。PostgreSQL 17.12 通过逻辑槽切主、槽或 WAL 缺失拒绝、双目标有键和无主键 CDC、精确类型及同一 WAL 切点对账。实库验证受限账号拒绝、两目标原生回执、校验结果及进程重启后按原槽续传。PostgreSQL 18.7 的原生存储型生成列、NULL、JSONB 和原快照恢复通过当前包。已验收结构漂移暂停及界面审阅。历史 DDL 执行按 LG-08 验收，各新增目标需独立核对类型和回执。 追加 PostgreSQL、ClickHouse、Redis Streams 同任务实测和 PostgreSQL 二级索引到 openGauss 检查。PostgreSQL 到 Doris 实库已验证类型、主键变更、重复行及原槽重启。Hive、其余国产库及消息组合仍待验收。",
+        "en": "Accepted the bounded Temurin 21 source profile. PostgreSQL 17.12 covers synchronized-slot promotion, refusal after lost WAL or slot, keyed and keyless CDC, precise types and common-cut comparison of PostgreSQL and MySQL. The native run proves scoped lock refusal, both target receipts, durable validation and restart on the original slot. The current package also verifies PostgreSQL 18.7 stored generated columns, NULL, JSONB and snapshot retention. Schema drift pauses and can be reviewed. Historical DDL execution follows LG-08 and any added sink needs its own projection and recovery qualification. Added native PostgreSQL, ClickHouse and Redis Streams fan-out and PostgreSQL secondary-index capture to openGauss. Native Doris passed type mapping, a primary-key update, duplicate-row handling and original-slot restart. Hive, other domestic databases and additional broker combinations remain open."
       },
       "acceptance": {
-        "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
-        "en": "Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs."
+        "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。 按 MySQL 源已实现的目标类别，逐个验收 PostgreSQL 源的类型映射、全量、增量及续传。",
+        "en": "Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. Qualify type mapping, snapshot, CDC and restart for each implemented MySQL-source destination."
       },
       "dependsOn": [
         "SO-01"
@@ -1124,14 +1124,9 @@
         "sync-app/src/main/java/io/github/rivomesh/PostgresTimestamp.java",
         "sync-app/src/main/java/io/github/rivomesh/PostgresClock.java",
         "sync-app/src/main/java/io/github/rivomesh/PostgresConsistentRead.java",
-        "sync-app/src/test/java/io/github/rivomesh/PgOutputTest.java"
-      ],
-      "verification": {
-        "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
-        "criteriaSha256": "2747f263cc3c77f20ab91cee11c8b90572a619237327d17e03661ed7032630b0",
-        "archive": "docs/verification/README.md",
-        "profile": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review."
-      }
+        "sync-app/src/test/java/io/github/rivomesh/PgOutputTest.java",
+        "sync-app/src/main/java/io/github/rivomesh/PostgresIndexCatalog.java"
+      ]
     },
     {
       "id": "SO-07",
@@ -1143,12 +1138,12 @@
         "en": "Oracle source adapter"
       },
       "gap": {
-        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。 Oracle Free 26ai 原生 JSON 档案已实测缺少前后镜像。受限 JDBC Flashback 能读取，当前源预检拒绝该类型，尚无可靠增量档案。 AL32UTF8 和 AL16UTF16 实库诊断已核对 40 个变更及 60 个镜像。声明不超过 4000 字节的 CHAR、NCHAR 和 NVARCHAR2 已通过两路 PostgreSQL 重启验收，保留原 SCN 和填充空格。",
-        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in bounded virtual integer multiplication, addition and subtraction. Keyless duplicates, SQL NULL and original-snapshot archive replay passed. Other expressions, native binary JSON, LOB and RAC failover remain. Native Oracle Free evidence shows incomplete LOB before-images for BasicFiles and SecureFiles changes. Restricted-role preflight exposes the matching refusal. Full LOB capture remains open. Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN. Native binary JSON in Oracle Free 26ai lacks before/after images in the measured LogMiner archive. Restricted JDBC Flashback can read it. Preflight refuses it until a reliable CDC profile is available. Native AL32UTF8 and AL16UTF16 diagnostics match 40 character changes and 60 images. CHAR, NCHAR and NVARCHAR2 up to 4000 dictionary bytes passed restart on two PostgreSQL subscriptions with original SCNs and exact padding."
+        "zh-CN": "Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。 Oracle Free 26ai 原生 JSON 档案已实测缺少前后镜像。受限 JDBC Flashback 能读取，当前源预检拒绝该类型，尚无可靠增量档案。 AL32UTF8 和 AL16UTF16 实库诊断已核对 40 个变更及 60 个镜像。声明不超过 4000 字节的 CHAR、NCHAR 和 NVARCHAR2 已通过两路 PostgreSQL 重启验收，保留原 SCN 和填充空格。 已验证同任务投递 PostgreSQL 17.12 和 Redis Streams 7.4.2，RAW 有键及无主键数据按原 SCN 恢复，Redis 保留原事件和事务坐标。ClickHouse 已实测按原 SCN 续传 RAW 和无主键数据。其余 SQL、国产库、分析和消息目标组合继续验收。",
+        "en": "Oracle 26ai single-PDB archive CDC to PostgreSQL covers long transactions, SCN restart, strict text JSON, civil DATE and opt-in bounded virtual integer multiplication, addition and subtraction. Keyless duplicates, SQL NULL and original-snapshot archive replay passed. Other expressions, native binary JSON, LOB and RAC failover remain. Native Oracle Free evidence shows incomplete LOB before-images for BasicFiles and SecureFiles changes. Restricted-role preflight exposes the matching refusal. Full LOB capture remains open. Native archived CDC covers nested savepoints and partial rollback. Both PostgreSQL subscriptions reuse their original snapshots and SCN after process kills, and committed rows match Oracle Flashback at the same SCN. Native binary JSON in Oracle Free 26ai lacks before/after images in the measured LogMiner archive. Restricted JDBC Flashback can read it. Preflight refuses it until a reliable CDC profile is available. Native AL32UTF8 and AL16UTF16 diagnostics match 40 character changes and 60 images. CHAR, NCHAR and NVARCHAR2 up to 4000 dictionary bytes passed restart on two PostgreSQL subscriptions with original SCNs and exact padding. Native fan-out to PostgreSQL 17.12 and Redis Streams 7.4.2 verifies RAW keyed and keyless images, original SCN, stable Redis events and transaction coordinates after a process kill. Oracle RAW and keyless recovery at the original SCN also passed in ClickHouse. Other SQL, domestic database, analytics and broker combinations require qualification."
       },
       "acceptance": {
-        "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。",
-        "en": "Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly."
+        "zh-CN": "确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 对齐 MySQL 可用的各类目标，逐项验证原生类型、事务和原 SCN 续传。",
+        "en": "Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. Qualify native types, transactions and original-SCN restart for each implemented MySQL-source destination."
       },
       "dependsOn": [
         "SO-01"
@@ -1167,7 +1162,8 @@
         "sync-app/src/main/java/io/github/rivomesh/OracleDate.java",
         "sync-app/src/main/java/io/github/rivomesh/OracleVirtualNumbers.java",
         "tests/oracle/NativeJsonFlashback.java",
-        "tests/oracle_character_evidence.py"
+        "tests/oracle_character_evidence.py",
+        "sync-app/src/main/java/io/github/rivomesh/OracleRedoDml.java"
       ]
     },
     {
@@ -1622,8 +1618,8 @@
         "en": "Queue cluster and recovery profiles"
       },
       "gap": {
-        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升及消费恢复已有原生档案。Pulsar 4.0.14 已验证单 Broker 私有 CA/Token，以及双 Broker、三 BookKeeper 下的原 Topic 恢复、确认不足时暂停确认和同事件重试。双 Broker 私有 CA/Token 与三节点 ZooKeeper 主节点故障后的元数据写入也已通过。跨主机存储故障域、内部链路加密、负载容量和其他消息目标档案待验。 Artemis 2.57.0 主进程强杀后由共享卷备进程接管。相同入口复用原生回执及队列身份并确认同一重试。 ActiveMQ Classic 5.19.12 已实测同一 KahaDB 卷的主备切换。固定 OpenWire 和 Jolokia 入口切换后，发行包发布器核验原归属和回执，确认同一重试事件。旧主重启保持备用。 RocketMQ 5.5.0 Broker 原生验收已验证三副本提升、旧物理位点和内容保留。首次演练发现 Topic 配置可能落后于 CommitLog，复验分别核对两个条件。可选 Rivomesh 发布器档案已通过三副本主备切换、原回执续传和两副本下限保护。真实 MySQL 8.4 CDC Worker 在 Broker 提升、进程强杀和同步副本不足后保留原快照和回执，原备用节点返回后自动投递积压事务。由三个 Controller 组成的集群在主节点强杀后选出新主，Worker 保持 Broker 和日志任期并继续写入。仅原 Controller 主节点可达时，源日志继续捕获，两个 Broker 原生回执与队列保持原断点。使用原卷恢复多数派后自动补发。原生消费者从旧位点重读相同事件并完成业务去重。跨主机安全档案待验。",
-        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion and consumer recovery passed. Pulsar 4.0.14 covers single-broker TLS and Token and a two-broker, three-bookie profile with original topic recovery, withheld confirmations below quorum and stable-event retry. Two-broker private TLS and Token, and new metadata after loss of a leader in the three-node ZooKeeper quorum, also passed. Cross-host storage failure domains, internal network cryptography, capacity and other queue profiles remain. The Artemis 2.57.0 shared-store backup activated after primary SIGKILL. The same ingress reused the native receipt and queue identity and confirmed the same retry. ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive. RocketMQ 5.5.0 broker promotion preserves the native offset and bytes after verifying topic metadata separately on synchronized members. The opt-in Rivomesh publisher resumes the original receipt after a three-replica promotion and refuses publication below two live synchronized replicas. The packaged MySQL 8.4 CDC Worker preserves the snapshot and receipt through broker promotion, process loss and insufficient replicas. It delivers the retained transaction after the original follower returns. Three Controllers elect a successor after leader SIGKILL, then the Worker verifies the existing broker route and publishes with the same writer epoch. With the elected Controller alone, capture retains the next transaction while both broker queues and native receipts remain unchanged. Restoring the majority on the original volume resumes publication. A new native consumer reopens the original group offset and deduplicates redelivery after business commit. Cross-host security remains."
+        "zh-CN": "NATS TLS、RabbitMQ 多数派、Kafka KRaft 和 Redis Streams 外部提升及消费恢复已有原生档案。Pulsar 4.0.14 已验证单 Broker 私有 CA/Token，以及双 Broker、三 BookKeeper 下的原 Topic 恢复、确认不足时暂停确认和同事件重试。双 Broker 私有 CA/Token 与三节点 ZooKeeper 主节点故障后的元数据写入也已通过。跨主机存储故障域、内部链路加密、负载容量和其他消息目标档案待验。 Artemis 2.57.0 主进程强杀后由共享卷备进程接管。相同入口复用原生回执及队列身份并确认同一重试。 ActiveMQ Classic 5.19.12 已实测同一 KahaDB 卷的主备切换。固定 OpenWire 和 Jolokia 入口切换后，发行包发布器核验原归属和回执，确认同一重试事件。旧主重启保持备用。 RocketMQ 5.5.0 Broker 原生验收已验证三副本提升、旧物理位点和内容保留。首次演练发现 Topic 配置可能落后于 CommitLog，复验分别核对两个条件。可选 Rivomesh 发布器档案已通过三副本主备切换、原回执续传和两副本下限保护。真实 MySQL 8.4 CDC Worker 在 Broker 提升、进程强杀和同步副本不足后保留原快照和回执，原备用节点返回后自动投递积压事务。由三个 Controller 组成的集群在主节点强杀后选出新主，Worker 保持 Broker 和日志任期并继续写入。仅原 Controller 主节点可达时，源日志继续捕获，两个 Broker 原生回执与队列保持原断点。使用原卷恢复多数派后自动补发。原生消费者从旧位点重读相同事件并完成业务去重。两个在线 Broker 的 Topic 丢失后，重启 Worker 保留原回执并继续采集。跨主机安全档案待验。",
+        "en": "Native NATS TLS, RabbitMQ quorum, Kafka KRaft and Redis Streams external promotion and consumer recovery passed. Pulsar 4.0.14 covers single-broker TLS and Token and a two-broker, three-bookie profile with original topic recovery, withheld confirmations below quorum and stable-event retry. Two-broker private TLS and Token, and new metadata after loss of a leader in the three-node ZooKeeper quorum, also passed. Cross-host storage failure domains, internal network cryptography, capacity and other queue profiles remain. The Artemis 2.57.0 shared-store backup activated after primary SIGKILL. The same ingress reused the native receipt and queue identity and confirmed the same retry. ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive. RocketMQ 5.5.0 broker promotion preserves the native offset and bytes after verifying topic metadata separately on synchronized members. The opt-in Rivomesh publisher resumes the original receipt after a three-replica promotion and refuses publication below two live synchronized replicas. The packaged MySQL 8.4 CDC Worker preserves the snapshot and receipt through broker promotion, process loss and insufficient replicas. It delivers the retained transaction after the original follower returns. Three Controllers elect a successor after leader SIGKILL, then the Worker verifies the existing broker route and publishes with the same writer epoch. With the elected Controller alone, capture retains the next transaction while both broker queues and native receipts remain unchanged. Restoring the majority on the original volume resumes publication. A new native consumer reopens the original group offset and deduplicates redelivery after business commit. Topic loss on both live brokers preserves the old receipt while capture restarts. Cross-host security remains."
       },
       "acceptance": {
         "zh-CN": "每个目标验证确认丢失、Broker选主、持久回执、资源丢失、消费者去重/积压以及新跳过缺口协议，明确至少一次及消费完成边界。",
@@ -1771,8 +1767,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "MySQL 与 PostgreSQL 已有历史结构审阅。当前包在 PostgreSQL 17.12 源预检拒绝无 TRUNCATE 覆盖的发布。多表清表包含插入时，原 LSN、MySQL 与 PostgreSQL 双目标回执和快照在重启后完整。另复验原切点关系结构审阅、当前 LOCAL 加原 PostgreSQL 目标协调恢复，以及 openGauss 7.0.0-RC3 A 档案的无主键 JSON 重数、原断点续传和普通索引/行身份约束。商业分布式 GaussDB 多 CN/DN 和已审阅历史 DDL 执行仍待验。",
-        "en": "Native MySQL and PostgreSQL schema review is available. The current PostgreSQL 17.12 preflight requires TRUNCATE publication coverage. A multi-table truncate mixed with inserts preserves the original LSN, both SQL target receipts and snapshots after restart. The same package rechecks Pg relation drift review, coordinated LOCAL/PostgreSQL restore and openGauss 7.0.0-RC3 A-mode keyless JSON multiplicity, original checkpoint replay and safe index conversion. Commercial distributed GaussDB with multiple CNs and DNs and approved historical DDL execution remain."
+        "zh-CN": "MySQL 与 PostgreSQL 已有历史结构审阅。当前包在 PostgreSQL 17.12 源预检拒绝无 TRUNCATE 覆盖的发布。多表清表包含插入时，原 LSN、MySQL 与 PostgreSQL 双目标回执和快照在重启后完整。另复验原切点关系结构审阅、当前 LOCAL 加原 PostgreSQL 目标协调恢复，以及 openGauss 7.0.0-RC3 A 档案的无主键 JSON 重数、原断点续传和普通索引/行身份约束。商业分布式 GaussDB 多 CN/DN 和已审阅历史 DDL 执行仍待验。 PostgreSQL 实库已将触发暂停的原始 Relation、事务 LSN、类型 OID 和修饰符存入日志库，能够查看原消息和当前目录。目标执行、事务化结构状态迁移及多产品审批仍待完成。",
+        "en": "Native MySQL and PostgreSQL schema review is available. The current PostgreSQL 17.12 preflight requires TRUNCATE publication coverage. A multi-table truncate mixed with inserts preserves the original LSN, both SQL target receipts and snapshots after restart. The same package rechecks Pg relation drift review, coordinated LOCAL/PostgreSQL restore and openGauss 7.0.0-RC3 A-mode keyless JSON multiplicity, original checkpoint replay and safe index conversion. Commercial distributed GaussDB with multiple CNs and DNs and approved historical DDL execution remain. Native PostgreSQL capture now retains the original blocked Relation with transaction LSN, type OIDs and modifiers in the journal. Reviews expose both that observation and the current catalog. Approved target execution and transactional schema-state migration across products remain open."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1796,7 +1792,8 @@
         "tests/opengauss-index-native.py",
         "tests/postgres-source-run.py",
         "docs/zh-CN/postgresql-source.md",
-        "docs/en/postgresql-source.md"
+        "docs/en/postgresql-source.md",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/PostgresRelationEvidence.java"
       ]
     },
     {

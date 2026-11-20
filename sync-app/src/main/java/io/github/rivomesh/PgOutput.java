@@ -1,8 +1,11 @@
 package io.github.rivomesh;
 
+import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Cell;
+import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.Change;
 import io.github.rivomesh.cdc.PipelineFailure;
+import io.github.rivomesh.cdc.PostgresRelationEvidence;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
 import java.io.ByteArrayOutputStream;
@@ -32,6 +35,7 @@ final class PgOutput {
     private final List<Change> changes=new ArrayList<>();
     static final String VALIDATION_MESSAGE="common-cut-v1";
     private boolean open,transactionalMessage;
+    private SourcePosition durablePosition;
     private long finalLsn,lastCommit,transactionBytes,beginCommitMicros;
 
     PgOutput(PostgresSourcePosition positions,String generation,int maxRows,
@@ -41,6 +45,11 @@ final class PgOutput {
         this.maxRows=maxRows;
         this.schemas=schemas;
         this.lastCommit=initialLsn;
+        this.durablePosition=positions.at(initialLsn);
+    }
+
+    void durableAt(SourcePosition checkpoint){
+        durablePosition=checkpoint;
     }
 
     SourceTransaction accept(ByteBuffer frame)throws Exception{
@@ -127,8 +136,10 @@ final class PgOutput {
         String namespace=cstring(frame),name=cstring(frame);
         int identity=Byte.toUnsignedInt(frame.get()),columns=Short.toUnsignedInt(frame.getShort());
         TableSchema table=schemas.get(oid);
+        int columnStart=frame.position();
         if(table==null||!table.database.equals(namespace)||!table.name.equals(name)||identity!='f'
-                ||columns!=table.columns.size())throw schemaFailure("POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN");
+                ||columns!=table.columns.size())
+            throw changedRelation(frame,oid,namespace,name,identity,columns,table);
         for(TableSchema.Column column:table.columns){
             frame.get();
             String columnName=cstring(frame);
@@ -136,9 +147,35 @@ final class PgOutput {
             String modifier=Integer.toString(frame.getInt());
             if(!column.name.equals(columnName)||!type.equals(table.properties.get("pg.oid."+column.name))
                     ||!modifier.equals(table.properties.get("pg.modifier."+column.name)))
-                throw schemaFailure("POSTGRESQL_RELATION_CHANGED_REQUIRES_PLAN");
+                throw changedRelation(frame.position(columnStart),oid,namespace,name,identity,columns,table);
         }
         announced.add(oid);
+    }
+
+    private PipelineFailure changedRelation(ByteBuffer frame,int oid,String namespace,String name,int identity,
+                                            int columnCount,TableSchema table){
+        if(table==null||!open||columnCount>PostgresRelationEvidence.MAX_COLUMNS
+                ||Long.compareUnsigned(finalLsn,positions.lsn(durablePosition))<=0)
+            return schemaFailure(PostgresRelationEvidence.FAILURE_CODE);
+        try{
+            List<PostgresRelationEvidence.Column> columns=new ArrayList<>(columnCount);
+            for(int column=0;column<columnCount;column++){
+                int flags=Byte.toUnsignedInt(frame.get());
+                if(flags>1)return schemaFailure(PostgresRelationEvidence.FAILURE_CODE);
+                columns.add(new PostgresRelationEvidence.Column(cstring(frame),Integer.toUnsignedLong(frame.getInt()),
+                        frame.getInt(),flags==1));
+            }
+            if(!frame.hasRemaining()){
+                PostgresRelationEvidence evidence=new PostgresRelationEvidence(Codec.sha256(Codec.encode(durablePosition)),
+                        PostgresSourcePosition.format(finalLsn),Integer.toUnsignedLong(oid),namespace,name,
+                        Character.toString(identity),columns,table.id,table.version,Codec.sha256(Codec.encode(table)));
+                return new PostgresRelationEvidence.Blocked(evidence);
+            }
+        }catch(java.nio.BufferUnderflowException|java.nio.charset.CharacterCodingException
+               |IllegalArgumentException|IllegalStateException incomplete){
+            // A partial descriptor must not replace the durable failure with an invented observation.
+        }
+        return schemaFailure(PostgresRelationEvidence.FAILURE_CODE);
     }
 
     private void row(ByteBuffer frame,int message)throws Exception{
@@ -233,7 +270,7 @@ final class PgOutput {
         if(Byte.toUnsignedInt(frame.get())!=expected)throw invalid("POSTGRESQL_FULL_REPLICA_IDENTITY_REQUIRED");
     }
 
-    private static String cstring(ByteBuffer frame)throws Exception{
+    private static String cstring(ByteBuffer frame)throws java.nio.charset.CharacterCodingException{
         ByteArrayOutputStream text=new ByteArrayOutputStream();
         for(int i=0;i<256;i++){
             int value=Byte.toUnsignedInt(frame.get());

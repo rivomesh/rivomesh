@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import struct
 import subprocess
 import tempfile
@@ -33,6 +34,9 @@ type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
+type_profile.add_argument('--gauss-indexes', action='store_true', help='Verify PostgreSQL secondary indexes on openGauss')
+type_profile.add_argument('--doris', action='store_true', help='Verify WAL materialization to Doris')
+type_profile.add_argument('--redis-clickhouse', action='store_true', help='Verify PostgreSQL WAL fan-out to Redis Streams and ClickHouse')
 type_profile.add_argument('--common-cut', action='store_true', help='Verify one PostgreSQL validation cut in both native SQL targets')
 type_profile.add_argument('--truncate-review', action='store_true', help='Verify retained DDL boundary for a PostgreSQL TRUNCATE transaction')
 parser.add_argument('--bytea-escape-output', action='store_true', help='Use escape as the source server BYTEA output default')
@@ -62,6 +66,8 @@ if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
 if (args.common_cut or args.truncate_review) and (args.failover or args.generated or args.uuid):
     parser.error('--common-cut and --truncate-review use the direct three-table publication profile')
+if (args.redis_clickhouse or args.gauss_indexes or args.doris) and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
+    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes or --doris')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -69,7 +75,7 @@ output = args.output.resolve()
 output.relative_to(ROOT)
 output.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
-environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32))
+environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32), RM_PG_GAUSS_PASSWORD='Ri8!'+secrets.token_hex(12))
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
@@ -84,7 +90,13 @@ if args.floating_values:
 if args.bytea_values:
     report.update(byteaValues=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.ddl_review:
-    report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+    report.update(ddlReview=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.gauss_indexes:
+    report.update(gaussIndexes=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.doris:
+    report.update(doris=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.redis_clickhouse:
+    report.update(redisClickHouse=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.truncate_review:
     report.update(truncateReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -163,6 +175,26 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             url='jdbc:mysql://mysql:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true',
             username='root',password='${RM_PG_PASSWORD}',mappings=dict(sales='copy_sales',billing='copy_billing'),
             metadataSchema='copy_meta'))
+    if args.doris:
+        pipeline['targets'].append(dict(
+            id='doris', product='DORIS',
+            url='jdbc:mysql://doris:9030/?useSSL=false&connectTimeout=3000&socketTimeout=10000',
+            username='root', password='', mappings=dict(sales='doris_sales',billing='doris_billing'),
+            metadataSchema='doris_meta', doris=dict(loadUrl='http://doris:8040',replicas=1,buckets=1)))
+    if args.redis_clickhouse:
+        pipeline['targets'].extend([
+            dict(id='redis', product='REDIS_STREAMS', url='redis://redis:6379/2',
+                 mappings=dict(sales='sales_events', billing='billing_events'), messaging=dict(stream='RM_PG_PARITY')),
+            dict(id='clickhouse', product='CLICKHOUSE', url='http://clickhouse:8123',
+                 username='sync_test', password='${RM_PG_PASSWORD}', metadataSchema='ch_meta',
+                 mappings=dict(sales='ch_sales', billing='ch_billing')),
+        ])
+    if args.gauss_indexes:
+        pipeline['source']['postgresql']['captureSecondaryIndexes']=True
+        pipeline['targets'].append(dict(id='gauss',product='GAUSS',
+            url='jdbc:postgresql://gauss:5432/sync_test?prepareThreshold=0&connectTimeout=5&socketTimeout=15',
+            username='sync_test',password='${RM_PG_GAUSS_PASSWORD}',metadataSchema='ga_meta',
+            uniquePolicy='DOWNGRADE_BUSINESS',mappings=dict(sales='ga_sales',billing='ga_billing')))
     live_source='source'
     platform=dict(bind='0.0.0.0',port=8080,authToken='${RM_PG_TOKEN}',tasksDirectory='/fixture/tasks',
                   dataDirectory='/fixture/platform',autoStart=True,pollMillis=200,workerHeapMiB=256)
@@ -172,7 +204,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                                                 '-c','wal_sender_timeout=4000']),target=database,
                   runner=dict(image=image,entrypoint=['java','-Xmx384m','-jar','/app/rivomesh.jar'],
                               command=['serve','/fixture/platform.json'],
-                              environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}'),
+                              environment=dict(RM_PG_PASSWORD='${RM_PG_PASSWORD}',RM_PG_TOKEN='${RM_PG_TOKEN}', RM_PG_GAUSS_PASSWORD='${RM_PG_GAUSS_PASSWORD}'),
                               volumes=[str(artifact)+':/app/rivomesh.jar:ro',str(home)+':/fixture'],
                               ports=['127.0.0.1::8080'],stop_grace_period='30s'))
     previous_numeric_jar=None
@@ -181,6 +213,29 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         report['previousNumericArtifactSha256']=hashlib.sha256(previous_numeric_jar.read_bytes()).hexdigest()
         services['runner']['volumes'].append(str(previous_numeric_jar)+':/app/previous-numeric.jar:ro')
     document=dict(services=services)
+    if args.gauss_indexes:
+        for service in ('source','target'):
+            services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
+        services['gauss']=dict(image='opengauss/opengauss-server:latest',mem_limit='2600m',shm_size='512m',
+                               tmpfs=['/var/lib/opengauss:rw,size=1536m'],
+                               environment=dict(GS_PASSWORD='${RM_PG_GAUSS_PASSWORD}',GS_DB='sync_test',
+                                                GS_USERNAME='sync_test',GS_HOST_AUTH_METHOD='sha256',
+                                                OTHER_PG_CONF='password_encryption_type = 2'))
+    if args.doris:
+        for service in ('source','target'):
+            services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
+        services['doris']=dict(image='apache/doris:all-in-one-4.1.3',mem_limit='6g',cpus=3,
+                              environment=dict(FE_HEAP='768m',BE_HEAP='256m',
+                                               BE_CONFIG_EXTRA='mem_limit = 2g'),
+                              volumes=['doris_meta:/opt/apache-doris/fe/doris-meta',
+                                       'doris_storage:/opt/apache-doris/be/storage'])
+        document['volumes']={'doris_meta':{},'doris_storage':{}}
+    if args.redis_clickhouse:
+        services['redis'] = dict(image='redis:7.4.2-alpine',
+                                 command=['redis-server','--appendonly','yes','--appendfsync','always'])
+        services['clickhouse'] = dict(image='clickhouse/clickhouse-server:25.8.33.6',
+                                      environment=dict(CLICKHOUSE_USER='sync_test', CLICKHOUSE_PASSWORD='${RM_PG_PASSWORD}',
+                                                       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT='1'))
     if temporal_targets:
         services['source']['command']+=['-c','datestyle=SQL, DMY']
         services['runner']['environment']['TZ']='Pacific/Apia' if args.date_values else 'America/Los_Angeles'
@@ -243,7 +298,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     composition.write_text(json.dumps(document))
 
     def compose(*arguments,check=True):
-        env_file=['--env-file',os.devnull] if args.bytea_values else []
+        env_file=['--env-file',os.devnull] if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review else []
         return subprocess.run(['docker','compose',*env_file,'-p',project,'-f',str(composition),*arguments],
                               cwd=ROOT,env=environment,capture_output=True,text=True,check=check,timeout=180)
 
@@ -257,6 +312,39 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         return compose('exec','-T','mysql','sh','-c',
                        'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP --host=127.0.0.1 -uroot -NB -e "$1"',
                        'rivomesh-date',statement).stdout.strip()
+
+    def redis_events():
+        raw = compose('exec','-T','redis','redis-cli','--json','-2','-n','2','XRANGE','RM_PG_PARITY','-','+').stdout
+        records = []
+        for position, fields in json.loads(raw):
+            properties = dict(zip(fields[::2], fields[1::2]))
+            payload = json.loads(properties['body'])
+            assert properties['rivomesh_event_id'] == payload['id']
+            records.append((position, payload))
+        return records
+
+    def clickhouse(statement):
+        return compose('exec','-T','clickhouse','sh','-ec',
+                       'clickhouse-client --user sync_test --password "$CLICKHOUSE_PASSWORD" --query "$1"',
+                       'clickhouse-client',statement).stdout.strip()
+
+    def doris(statement):
+        return compose('exec','-T','doris','mysql','--protocol=TCP','-h127.0.0.1','-P9030','-uroot',
+                       '-NB','-e',statement).stdout.strip()
+
+    def latest_fanout_cut(expected=None):
+        status = task()['status']
+        sequence = int(status.get('lastSequence', 0))
+        subscriptions = {item['id']: item for item in status.get('subscriptions', [])}
+        if set(subscriptions) != (expected or {'pg','redis','clickhouse'}):
+            return None
+        if any(item['state'] != 'RUNNING' or int(item['acknowledged']) != sequence for item in subscriptions.values()):
+            return None
+        return status
+
+    def gauss(statement):
+        return compose('exec','-T','gauss','su','-','omm','-c',
+                       'gsql -X -v ON_ERROR_STOP=1 -d sync_test -At -F "|" -c ' + shlex.quote(statement)).stdout.strip()
 
     def date_rows():
         key=("SELECT TO_CHAR(event_date,'YYYY-MM-DD'),COALESCE(TO_CHAR(follow_up,'YYYY-MM-DD'),'<NULL>') "
@@ -475,7 +563,23 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
 
     try:
         endpoints=['source','target']+(['mysql'] if dual_targets else [])
+        if args.doris:
+            endpoints.append('doris')
+        if args.redis_clickhouse:
+            endpoints.extend(('redis','clickhouse'))
+        if args.gauss_indexes:
+            endpoints.append('gauss')
         compose('up','-d',*endpoints)
+        if args.doris:
+            require(lambda:doris('SELECT 1')=='1','Doris SQL available',180)
+            report['dorisWireVersion']=doris('SELECT VERSION()')
+            report['dorisImage']='apache/doris:all-in-one-4.1.3'
+            require(lambda:doris('SHOW BACKENDS') and '\ttrue\t' in doris('SHOW BACKENDS'),
+                    'Doris data backend available',180)
+        if args.redis_clickhouse:
+            require(lambda: compose('exec','-T','redis','redis-cli','PING').stdout.strip() == 'PONG',
+                    'Redis target ready')
+            report['clickHouseVersion'] = require(lambda: clickhouse('SELECT version()'), 'ClickHouse target ready')
         if args.bytea_values:
             for service in ('source','target'):
                 require(lambda s=service:compose('exec','-T',s,'pg_isready','-h','127.0.0.1',
@@ -483,6 +587,9 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                         service+' accepts TCP after initialization')
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
+        if args.gauss_indexes:
+            report['gaussVersion']=require(lambda:gauss('SELECT version()'),'openGauss target ready')
+            assert '7.0.0-RC3' in report['gaussVersion']
         report['sourceVersion']=sql('source',"SHOW server_version")
         if dual_targets:
             report['mysqlVersion']=require(lambda:mysql('SELECT VERSION()'),'MySQL target ready')
@@ -685,6 +792,16 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput'")=='0'
             sql('source',"ALTER PUBLICATION rivomesh_test SET (publish='insert,update,delete,truncate')")
             passed('Preflight refuses to start a publication that silently omits TRUNCATE')
+        if args.gauss_indexes:
+            sql('source',"CREATE INDEX idx_amount ON sales.items(amount); "
+                         "CREATE UNIQUE INDEX idx_unique_label ON billing.ledger(label); "
+                         "CREATE INDEX idx_partial ON sales.items(id) WHERE active")
+            partial=json.loads(compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml').stdout)['gaussIndexReview']
+            assert partial['state']=='REQUIRES_PLAN'
+            assert any(entry['sourceIndex']=='idx_partial' and entry['action']=='REQUIRES_PLAN' for entry in partial['entries'])
+            assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput'")=='0'
+            sql('source','DROP INDEX sales.idx_partial')
+            passed('PostgreSQL reports a partial index for review without mutating the published schema')
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
         table_count=3+int(args.uuid)+2*int(dual_targets and not (args.common_cut or args.truncate_review))
         assert json.loads(preflight.stdout)['sourceTables']==table_count
@@ -699,7 +816,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.bytea_escape_output:
             assert sql('source','SHOW bytea_output')=='escape'
             report['sourceByteaOutput']='escape'
-        require(stream_ready,'native consistent snapshot')
+        require(stream_ready,'native consistent snapshot',240 if args.doris else 120)
         if args.tls:
             require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
                     and int(active_tls('target','rivomesh-tls-target'))>0,
@@ -717,6 +834,121 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         else:
             raise AssertionError('Capture recovery review accepted a running pipeline')
         passed('PostgreSQL '+version_major+' consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates')
+        if args.gauss_indexes:
+            review=json.loads(preflight.stdout)['gaussIndexReview']
+            assert review['state']=='REVIEWED' and review['indexCounts']['supported']==1 and review['indexCounts']['downgradedUnique']==1
+            report['sourceIndexReview']=review
+            require(lambda:gauss('SELECT count(*) FROM ga_sales.duplicates')=='2','openGauss keyless snapshot')
+            catalog_sql="""SELECT n.nspname, c.relname, x.relname, i.indisprimary, i.indisunique
+                FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+                JOIN pg_class x ON x.oid=i.indexrelid
+                WHERE (n.nspname='ga_sales' AND c.relname='items') OR
+                      (n.nspname='ga_billing' AND c.relname='ledger') ORDER BY 1,2,3"""
+            catalog=gauss(catalog_sql)
+            for entry in review['entries']:
+                assert any(line.split('|')[2:]==[entry['targetIndex'],'f','f'] for line in catalog.splitlines()), catalog
+            assert len([line for line in catalog.splitlines() if line.endswith('|t|t')])==2, catalog
+            passed('openGauss creates the reviewed normal indexes and retains both primary keys')
+            sql('source',"UPDATE sales.items SET id=42 WHERE id=1; "
+                         "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1)")
+            require(lambda:gauss('SELECT id FROM ga_sales.items')=='42' and gauss('SELECT count(*) FROM ga_sales.duplicates')=='1',
+                    'openGauss receives the key update and one duplicate deletion')
+            snapshots=gauss('SELECT snapshot_id FROM ga_meta.rm3_sink_table ORDER BY table_id')
+            slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"UPDATE billing.ledger SET label='after restart'")
+            compose('up','-d','runner')
+            require(lambda:gauss('SELECT label FROM ga_billing.ledger')=='after restart' and equal(),
+                    'openGauss receives offline WAL work')
+            assert gauss(catalog_sql)==catalog and gauss('SELECT snapshot_id FROM ga_meta.rm3_sink_table ORDER BY table_id')==snapshots
+            assert sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")==slot
+            passed('PostgreSQL and openGauss retain the original index definitions and snapshots through Worker restart')
+            report['status']='PASS'
+            raise SystemExit(0)
+        if args.doris:
+            expected={'pg','doris'}
+
+            def warehouse_rows(rows, duplicate_count, note):
+                items=doris('SELECT id,data FROM doris_sales.items ORDER BY id')
+                return (items==rows
+                        and int(doris('SELECT count(*) FROM doris_sales.duplicates'))==duplicate_count
+                        and doris('SELECT label FROM doris_billing.ledger ORDER BY id')==note)
+
+            require(lambda:warehouse_rows('1\tABr/',2,'before'),'Doris materialized snapshot values',120)
+            amount,payload=doris('SELECT CAST(amount AS STRING),payload FROM doris_sales.items').split('\t',1)
+            assert amount=='123456789012.1234' and json.loads(payload)=={'n':18446744073709551615}
+            passed('Doris preserves snapshot JSON precision, binary Base64 and exact DECIMAL')
+
+            sql('source',"BEGIN; UPDATE sales.items SET id=9, data=decode('baff','hex') WHERE id=1; "
+                         "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
+                         "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
+            require(lambda:warehouse_rows('9\tuv8=',1,'online') and equal(),
+                    'Doris applies the changed key and exactly one keyless delete',120)
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=1,
+                    'all target ACKs',120)
+            passed('Doris applies the same logical transaction with a key change and a single duplicate deletion')
+
+            slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"UPDATE billing.ledger SET label='offline' WHERE id=1")
+            compose('up','-d','runner')
+            require(lambda:warehouse_rows('9\tuv8=',1,'offline') and equal(),
+                    'Doris catches up the offline WAL after Worker SIGKILL',120)
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=2,
+                    'the original fan-out resumes all ACKs',120)
+            assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            passed('PostgreSQL to Doris resumes the original slot and snapshots after forced restart')
+            report['status']='PASS'
+            raise SystemExit(0)
+
+        if args.redis_clickhouse:
+            require(latest_fanout_cut, 'PostgreSQL, Redis and ClickHouse snapshots drain')
+            require(lambda: clickhouse('SELECT count() FROM ch_sales.duplicates') == '2',
+                    'ClickHouse keeps both identical keyless occurrences')
+            assert clickhouse('SELECT id,toString(amount),hex(data) FROM ch_sales.items') == '1\t123456789012.1234\t001AFF'
+            assert json.loads(clickhouse('SELECT payload FROM ch_sales.items')) == {'n': 18446744073709551615}
+            before = redis_events()
+            baseline_ids = {event['snapshotId'] for _, event in before if event['kind'] == 'SNAPSHOT_END'}
+            assert len(baseline_ids) == 3
+            schemas = [event['schema'] for _,event in before if event['kind'] == 'SCHEMA']
+            assert len(schemas) == 3 and all(schema['sourceEngine'] == 'POSTGRESQL' for schema in schemas)
+            passed('PostgreSQL snapshot preserves JSON, bytes, decimal, and duplicate multiplicity through three target families')
+
+            sql('source', "BEGIN; UPDATE sales.items SET id=9, data=decode('baff','hex') WHERE id=1; "
+                          "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
+                          "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
+            require(lambda: clickhouse("SELECT id,hex(data) FROM ch_sales.items") == '9\tBAFF'
+                    and clickhouse('SELECT count() FROM ch_sales.duplicates') == '1'
+                    and clickhouse('SELECT label FROM ch_billing.ledger') == 'online'
+                    and equal(), 'native online primary-key update and single keyless delete in both databases')
+            require(lambda: (status := latest_fanout_cut()) and int(status['lastSequence']) >= 1, 'three online receipts')
+            online = redis_events()
+            assert online[:len(before)] == before
+            commits = [event for _,event in online if event['kind'] == 'COMMIT']
+            assert {event['namespace'] for event in commits} == {'sales_events','billing_events'}
+            assert len(commits) == 2 and len({event['transactionId'] for event in commits}) == 1
+            assert all(event['totalChanges'] == 3 and event['position']['sourceType'] == 'POSTGRESQL'
+                       and event['position']['payload']['lsn'] for event in commits)
+            passed('Redis retains a typed WAL transaction while ClickHouse applies a changed key and one keyless deletion')
+
+            slot = sql('source', "SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source', "UPDATE billing.ledger SET label='offline' WHERE id=1")
+            compose('up','-d','runner')
+            require(lambda: clickhouse("SELECT label FROM ch_billing.ledger") == 'offline' and equal(),
+                    'restarted Worker delivers the offline PostgreSQL transaction')
+            require(lambda: (status := latest_fanout_cut()) and int(status['lastSequence']) >= 2, 'three recovered receipts')
+            recovered = redis_events()
+            assert recovered[:len(online)] == online
+            assert {event['snapshotId'] for _,event in recovered if event['kind'] == 'SNAPSHOT_END'} == baseline_ids
+            assert len([event for _,event in recovered if event['kind']=='COMMIT']) == 4
+            assert sql('source', "SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'") == slot
+            assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id') == snapshot_ids
+            assert hashlib.sha256(artifact.read_bytes()).hexdigest() == digest
+            passed('Original WAL slot, Redis stream offsets and SQL snapshots survive an abrupt Worker restart')
+            report['status'] = 'PASS'
+            raise SystemExit(0)
         if dual_targets:
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
@@ -1230,7 +1462,18 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert (table['database'],table['table'],table['change'])==('billing','ledger','TABLE_CHANGED')
             assert table['columns']['added']==['first_note']
             assert table['columns']['modified']==['observed'] and not table['columnOrderChanged']
-            passed('Changed native Relation retains the cut and review identifies the new column and exact TIMESTAMP type modifier')
+            blocked=first['blockedRelationEvent']
+            assert blocked['state']=='OBSERVED' and blocked['protocol']=='PGOUTPUT_V1_RELATION',blocked
+            event=blocked['event']
+            lsn=lambda value:int(value.split('/')[0],16)<<32|int(value.split('/')[1],16)
+            assert event['checkpointSha256']==first['checkpointHash']
+            assert (event['namespace'],event['relation'],event['replicaIdentity'])==('billing','ledger','f')
+            assert lsn(event['transactionFinalLsn'])>lsn(durable)
+            assert [column['name'] for column in event['columns']]==['id','label','observed','first_note']
+            assert [(column['typeOid'],column['typeModifier']) for column in event['columns'][2:]]==[(1114,6),(25,-1)]
+            assert event['recordedSchemaVersion']==1 and len(event['recordedSchemaSha256'])==64
+            report['blockedRelationEvent']=blocked
+            passed('The stopped transaction keeps the original native Relation and exact TIMESTAMP type modifier')
 
             sql('source','ALTER TABLE billing.ledger ADD COLUMN second_note VARCHAR(30)')
             later=http(route+'/capture-recovery')
@@ -1238,6 +1481,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert current['columns']['added']==['first_note','second_note']
             assert current['recordedSha256']==table['recordedSha256'] and current['liveSha256']!=table['liveSha256']
             assert later['checkpointHash']==first['checkpointHash'] and later['errorGeneration']==first['errorGeneration']
+            assert later['blockedRelationEvent']==blocked
             passed('A later DDL changes the advisory live digest while preserving the recorded schema and failure cut')
 
             sql('source','ALTER TABLE billing.ledger ADD COLUMN out_of_profile TIMETZ')
@@ -1245,8 +1489,15 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert unavailable['schemaDrift']=={'scope':'CURRENT_POSTGRESQL_PUBLICATION_VS_JOURNAL',
                                                'state':'UNAVAILABLE','code':'POSTGRESQL_TYPE_UNSUPPORTED'}
             assert unavailable['checkpointHash']==first['checkpointHash'] and task()['status']['capture_lsn']==durable
+            assert unavailable['blockedRelationEvent']==blocked
             assert target_cut()==original
             passed('An unsupported publication shape has an explicit unavailable diagnostic without changing either cut')
+            compose('kill','-s','SIGKILL','runner')
+            compose('up','-d','runner')
+            restored=require(lambda:http(route+'/capture-recovery'),'the original Relation after controller restart')
+            assert restored['blockedRelationEvent']==blocked and restored['checkpointHash']==first['checkpointHash']
+            assert target_cut()==original
+            passed('The Controller restart reads the same stored Relation record and leaves the target cut unchanged')
         elif args.date_values:
             before_date_fault=task()['status']
             finished_dates=date_rows()
@@ -1367,14 +1618,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             log+='\n'+'\n'.join(worker_log.read_text(errors='replace').splitlines()[-80:])
         if isinstance(error,subprocess.CalledProcessError):
             log+='\n'+(error.stdout or '')+'\n'+(error.stderr or '')
-        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN'):
+        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN','RM_PG_GAUSS_PASSWORD'):
             log=log.replace(environment[key],'[REDACTED]')
         (output/'runner-redacted.log').write_text(log)
         raise
     finally:
         cleanup=compose('down','-v','--remove-orphans',check=False)
         report['cleanupExitCode']=cleanup.returncode
-        if args.bytea_values:
+        if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review:
             label='label=com.docker.compose.project='+project
             resources={'containers':['ps','-aq'],'volumes':['volume','ls','-q'],'networks':['network','ls','-q']}
             report['remaining']={kind:len(subprocess.check_output(
@@ -1383,5 +1634,5 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             if any(report['remaining'].values()):
                 report['status']='FAIL'
         (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-        if cleanup.returncode or (args.bytea_values and any(report['remaining'].values())):
+        if cleanup.returncode or ((args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review) and any(report['remaining'].values())):
             raise RuntimeError('Test fixture cleanup failed')

@@ -7,6 +7,7 @@ import io.github.rivomesh.cdc.PipelineFailure;
 import io.github.rivomesh.cdc.SourceAdapter;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
+import io.github.rivomesh.cdc.TargetProduct;
 import org.postgresql.PGConnection;
 import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationStream;
@@ -64,10 +65,14 @@ final class PostgresqlCdcSource implements SourceAdapter {
             throw invalid("POSTGRESQL_SOURCE_SINGLE_PRIMARY_REQUIRED");
         if(source.expectedVersion!=null&&!source.expectedVersion.matches("(17|18)(\\.[0-9]{1,3})?"))
             throw invalid("SOURCE_VERSION_PROFILE_INVALID");
-        for(PipelineConfig.Target target:pipeline.targets){
-            if(target!=null&&target.product!=io.github.rivomesh.cdc.TargetProduct.POSTGRESQL
-                    &&target.product!=io.github.rivomesh.cdc.TargetProduct.MYSQL)
+        for (PipelineConfig.Target target : pipeline.targets) {
+            if (target == null || target.product == null) continue;
+            TargetProduct product = target.product;
+            if (product != TargetProduct.POSTGRESQL && product != TargetProduct.MYSQL
+                    && product != TargetProduct.CLICKHOUSE && product != TargetProduct.DORIS
+                    && product != TargetProduct.GAUSS && !product.messaging()) {
                 throw invalid("POSTGRESQL_SOURCE_TARGET_PROFILE_UNAVAILABLE");
+            }
         }
     }
 
@@ -150,11 +155,20 @@ final class PostgresqlCdcSource implements SourceAdapter {
     @Override public String type(){return PostgresSourcePosition.TYPE;}
 
     @Override public void requireSeparateDatabase(String driver,String url,String username,String password)throws Exception{
-        if(!DRIVER.equals(driver))return;
-        try(Connection c=JdbcConnections.open(driver,url,username,password);Statement st=c.createStatement();
-            ResultSet r=st.executeQuery("SELECT current_database(),system_identifier::text FROM pg_control_system()")){
-            if(r.next()&&config.database.equals(r.getString(1))&&systemId.equals(r.getString(2)))
-                throw invalid("SOURCE_JOURNAL_OR_TARGET_FEEDBACK_LOOP");
+        boolean gaussDriver = PipelineConfig.driver(TargetProduct.GAUSS).equals(driver);
+        if (!DRIVER.equals(driver) && !gaussDriver) return;
+        try (Connection c = JdbcConnections.open(driver, url, username, password); Statement st = c.createStatement()) {
+            if (gaussDriver) {
+                try (ResultSet identity = st.executeQuery("SELECT pg_catalog.version()")) {
+                    if (!identity.next()) throw invalid("GAUSS_SERVER_IDENTITY_UNAVAILABLE");
+                    String version = identity.getString(1).toLowerCase(java.util.Locale.ROOT);
+                    if (version.contains("opengauss") || version.contains("gaussdb")) return;
+                }
+            }
+            try (ResultSet r = st.executeQuery("SELECT current_database(),system_identifier::text FROM pg_catalog.pg_control_system()")) {
+                if (r.next() && config.database.equals(r.getString(1)) && systemId.equals(r.getString(2)))
+                    throw invalid("SOURCE_JOURNAL_OR_TARGET_FEEDBACK_LOOP");
+            }
         }
     }
 
@@ -320,6 +334,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
             p.setString(1,oid);
             try(ResultSet r=p.executeQuery()){while(r.next())table.primaryKey.add(r.getString(1));}
         }
+        if (options.captureSecondaryIndexes) PostgresIndexCatalog.read(c, oid, table);
         table.validate();
         return table;
     }
@@ -390,6 +405,11 @@ final class PostgresqlCdcSource implements SourceAdapter {
                 st.execute("SET TRANSACTION SNAPSHOT '"+snapshot+"'");
                 configureSnapshot(st);
             }
+            if (options.captureSecondaryIndexes) {
+                String oid = PostgresIndexCatalog.tableOid(read, table.database, table.name);
+                if (!Codec.encode(table).equals(Codec.encode(describe(read, table.database, table.name, oid))))
+                    throw invalid("SOURCE_SCHEMA_CHANGED_REQUIRES_PLAN");
+            }
             return snapshotRows(read,table,baseline,true);
         }catch(Exception failure){
             try{read.close();}catch(Exception close){failure.addSuppressed(close);}
@@ -439,7 +459,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
     }
 
     @Override public Stream stream(SourcePosition captured,Receiver receiver)throws Exception{
-        return new Capture(positions.lsn(captured),receiver);
+        return new Capture(captured,receiver);
     }
 
     private final class Capture implements Stream {
@@ -451,9 +471,11 @@ final class PostgresqlCdcSource implements SourceAdapter {
         private final AtomicReference<Throwable> failure=new AtomicReference<>();
         private volatile boolean closing;
 
-        Capture(long start,Receiver receiver)throws Exception{
+        Capture(SourcePosition captured,Receiver receiver)throws Exception{
+            long start=positions.lsn(captured);
             this.receiver=receiver;
             this.decoder=new PgOutput(positions,generation,maxRows,new LinkedHashMap<>(tables),start);
+            decoder.durableAt(captured);
             connection=replication();
             try{
                 requireIdentity(connection);
@@ -498,6 +520,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
                     catch(Exception error){throw new PipelineFailure(PipelineFailure.Phase.SOURCE_DECODE,error);}
                     if(transaction!=null){
                         receiver.committed(transaction);
+                        decoder.durableAt(transaction.position);
                         LogSequenceNumber durable=LogSequenceNumber.valueOf(positions.lsn(transaction.position));
                         stream.setAppliedLSN(durable);
                         stream.setFlushedLSN(durable);
