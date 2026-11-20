@@ -61,7 +61,7 @@ The first-release runbooks describe the current artifact and state formats. Use 
 | Scope | Completion condition |
 |---|---|
 | CP-04, LG-05 | Verify fencing and recovery after losing the original Agent before a freeze. Takeover after permanent disk loss requires independently retained directory identity, closed receipts, failure evidence and audit history. Separate control and journal databases require native durable fencing and replay verification. |
-| RC-10, LG-04 | Verify message intent with a real source and broker, and complete per-target gap notice and fault tests. Record the native receipt and consumer deduplication boundary for each broker. |
+| LG-04 | Extend message recovery to broader broker-cluster failure domains. RC-10 native receipt, Kafka notice and journal protection profiles are accepted. |
 | SO-06, SO-07, LG-08 | Complete reviewed schema changes and common-cut verification. Extend Oracle LOB/RAC, complex types and coordinated restore profiles. |
 | JV-02, JV-03, LG-01, LG-03 | Verify drivers, TLS, clusters and recovery by target on Temurin 21. Commercial distributed GaussDB requires a real multi-CN/DN installation. Analytical products require their production cluster profiles. |
 | LG-10 | Verify production external identity, revocation and audit retention. Confirm distribution rights, LICENSE and NOTICE. |

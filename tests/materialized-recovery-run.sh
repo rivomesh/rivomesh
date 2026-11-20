@@ -13,6 +13,7 @@ run_profile() (
         doris|hive) manifest="$engine-compose.yml" ;;
         artemis|classic|rocketmq|pulsar) manifest="$engine-transport-compose.yml" ;;
         redis|nats) manifest=stream-receipt-compose.yml ;;
+        rabbit) manifest=rabbit-receipt-compose.yml ;;
         *) return 2 ;;
     esac
     local project="rivomesh-preceding-receipt-$engine-$$" local_override=
@@ -56,6 +57,7 @@ YAML
         artemis) product=ACTIVEMQ_ARTEMIS ;;
         classic) product=ACTIVEMQ_CLASSIC ;;
         redis) product=REDIS_STREAMS ;;
+        rabbit) product=RABBITMQ ;;
         nats) product=NATS_JETSTREAM ;;
         *) product="$(printf '%s' "$engine" | tr '[:lower:]' '[:upper:]')" ;;
     esac

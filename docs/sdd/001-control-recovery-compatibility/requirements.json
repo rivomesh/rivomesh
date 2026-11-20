@@ -858,14 +858,14 @@
       "id": "RC-10",
       "epic": "RECOVERY",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "多目标恢复语义和回收保护",
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "新建 LOCAL 托管任务绑定 Kafka 物理 UUID。双入口已通过真实三 Broker 的审批、发送及确切回执。已验证丢响应只读回原记录，提交前中断等待原生中止并仅重试一次。ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 均通过精确前序 COMMIT 原生回执和旧批次拒绝，源事务和两路 ACK 保持原值。Redis Streams、NATS JetStream 和 Pulsar 的原生前序回执已通过。RabbitMQ 的故障回执，以及更广的保留和协调恢复组合仍待验收。",
-        "en": "New managed LOCAL tasks bind Kafka physical UUIDs. Both entries pass scoped approval, dispatch and exact readback on three native brokers. Lost commit replies recover the earlier receipt. Interruption before commit waits for terminal native abort and retries once. ClickHouse, Doris, Hive, ActiveMQ Classic, ActiveMQ Artemis and RocketMQ verify exact preceding native COMMIT receipts and refuse older batches with both ACKs and the source transaction preserved. Redis Streams, NATS JetStream and Pulsar also pass native preceding-receipt verification. RabbitMQ failure receipts and broader retention and coordinated recovery profiles remain."
+        "zh-CN": "已验收适配器能力与前序回执。Kafka 物理 UUID 通知通过双管理入口、三 Broker 发送和提交中断恢复。ClickHouse、Doris、Hive 和七款非 Kafka 消息目标通过精确原生前序回执及旧批次拒绝。RabbitMQ 使用新任务可选的回执流，业务 ACK 后可核对。H2、PostgreSQL 和 MySQL 日志通过重启后证据保留与回收检查，真实 MySQL 源与外部 PostgreSQL 日志通过配额背压。更广的产品与集群组合由 LG-03、LG-04、LG-05 跟踪。",
+        "en": "Accepted adapter recovery capabilities and preceding receipts. Physical UUID Kafka notices pass both management entries, three native brokers and interrupted commit recovery. ClickHouse, Doris, Hive and seven non-Kafka messaging adapters pass exact preceding native receipts and older-batch refusal. New RabbitMQ tasks can opt into retained receipts after business ACK. H2, PostgreSQL and MySQL pass journal evidence protection across restart. The real MySQL source and external PostgreSQL journal passed quota backpressure. LG-03, LG-04 and LG-05 retain broader product and cluster profiles."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",
@@ -898,8 +898,19 @@
         "tests/kafka/KafkaManagedPhysicalReceiptAcceptance.java",
         "tests/kafka/KafkaTopicIdLedgerAcceptance.java",
         "sync-app/src/main/java/io/github/rivomesh/cdc/DestinationReceiptReview.java",
-        "tests/materialized-recovery-run.sh"
-      ]
+        "tests/materialized-recovery-run.sh",
+        "sync-app/src/main/java/io/github/rivomesh/cdc/RabbitReceiptStream.java",
+        "tests/rabbit-receipt-compose.yml",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/SkipJournalTest.java",
+        "sync-app/src/test/java/io/github/rivomesh/cdc/GapVerificationLedgerTest.java",
+        "tests/catalog-benchmark.py"
+      ],
+      "verification": {
+        "artifactSha256": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, name/identity-scoped destination capability profiles, native receipt checks, Kafka 4.1.2 RF3 dispatch and interrupted commit recovery, RabbitMQ 4.1.4 optional receipt stream and quorum business queue after consumer ACK. H2 and both PostgreSQL/MySQL external journal retention. Broader cluster and storage combinations remain under LG-03/LG-04/LG-05.",
+        "criteriaSha256": "5975e8ab4732e30f4231ee1b62e3f7c37e7dadb36db3a90a9f29401d2d95ea6b"
+      }
     },
     {
       "id": "SO-01",

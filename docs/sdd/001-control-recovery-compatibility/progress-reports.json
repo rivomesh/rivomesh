@@ -9,9 +9,7 @@
     "Verified exact preceding native COMMIT and older-batch refusal on real Redis Streams, NATS JetStream and Pulsar. Both journal ACKs and the original failed transaction are preserved.",
     "Passed 44 focused Java and 5 focused console checks for the verified final package. The full earlier verification stays recorded separately."
   ],
-  "inProgress": [
-    "RC-10 only. RabbitMQ receipt evidence after business consumer ACK and coordinated retention across additional profiles remain."
-  ],
+  "inProgress": [],
   "reportContents": [
     "Current totals",
     "New completions since previous report",
@@ -29,18 +27,20 @@
     "139f04a"
   ],
   "currentSdd": {
-    "DONE": 36,
-    "PARTIAL": 12,
+    "DONE": 37,
+    "PARTIAL": 11,
     "NEW": 0
   },
   "nextTasks": [
-    "Complete RabbitMQ retained receipt capability and the remaining RC-10 retention acceptance before switching to a different requirement."
+    "Proceed one requirement at a time from the 11 outstanding items."
   ],
-  "currentCandidateArtifact": "7a6de901339700669ad352aca45350831e4ad4e5d5f79cb5d1b0e3da8c3474c8",
-  "currentCandidateScope": "Temurin 21 package with exact preceding COMMIT lookup for Redis Streams, NATS JetStream and Pulsar.",
+  "currentCandidateArtifact": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
+  "currentCandidateScope": "Complete RC-10 accepted profiles, including optional RabbitMQ native receipt stream and verified external journal retention.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "The Redis Streams, NATS JetStream and Pulsar checks passed on all three native brokers."
+    "Published Redis Streams, NATS JetStream and Pulsar exact native preceding receipts.",
+    "RabbitMQ 4.1.4 verified native retained receipt readback after business ACK and older-batch refusal.",
+    "PostgreSQL and MySQL external journals each passed 22 retention contracts."
   ],
   "lastScheduledReportAt": "2026-11-20T07:58:16+08:00",
   "lastVerifiedReactor": {
@@ -82,7 +82,6 @@
   },
   "remainingRequirements": [
     "CP-04",
-    "RC-10",
     "SO-06",
     "SO-07",
     "JV-02",
@@ -136,7 +135,8 @@
   ],
   "currentFocusedVerification": {
     "javaTestsPassed": 44,
-    "domTestsPassed": 5,
-    "nativeBrokerChecksPassed": 6
+    "domTestsPassed": 7,
+    "nativeBrokerChecksPassed": 3,
+    "nativeExternalRetentionChecksPassed": 44
   }
 }

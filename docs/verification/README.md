@@ -766,3 +766,9 @@ The `84c4f438174bf9ddafaa274f91b58cde2dbeab851e4e521ecb794e2c42103e16` package p
 ### Oracle character sets and archived national string images
 
 The `0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb` Temurin 21 package passed 13 Oracle Free 26ai diagnostics on `AL32UTF8` and `AL16UTF16`. The four keyed and keyless transactions produced 40 expected row changes and all 60 applicable LogMiner before/after images matched Flashback. Repeated archive reads retained the same native bytes. The tested `CHAR` literals decoded, and `NCHAR` and `NVARCHAR2` emitted `UNISTR` expressions that the archived package refused. Current product preflight admits both `VARCHAR2` length forms. The first fixture failure was corrected by retaining native SQL as hex bytes. [Operations](../en/oracle-source.md) · [Manifest](baseline.json)
+
+## RC-10 destination recovery and journal retention
+
+Temurin 21 package `78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b` completes the bounded RC-10 capability profiles. RabbitMQ 4.1.4 independently retains a publisher receipt that can be reviewed after the quorum business queue is ACKed. A different native batch is refused, and the source transaction and both subscription ACKs remain at their original positions.
+
+PostgreSQL and MySQL external journals each passed 22 retention contracts for reopened journal state, prepared skip plans, verified gaps, and quota refusal. The H2 regressions and recorded Temurin 21 real MySQL to PostgreSQL slow-target profile cover backpressure and recovery. Analytical and messaging profiles use the archived native checks in the same evidence ledger. Broader cluster and storage combinations are tracked by LG-03, LG-04, and LG-05. [Evidence ledger](baseline.json) · [Runbook](../en/failed-transactions.md)

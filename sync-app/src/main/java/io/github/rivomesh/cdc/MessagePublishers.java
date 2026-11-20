@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class MessagePublishers {
     private MessagePublishers(){}
     public static ConfirmedPublisher open(PipelineConfig.Target target,String binding)throws Exception{
-        try{if(target.product==TargetProduct.RABBITMQ)return new Rabbit(target);if(target.product==TargetProduct.NATS_JETSTREAM)return new JetStream(target,binding);if(target.product==TargetProduct.KAFKA)return new KafkaMessagePublisher(target);if(target.product==TargetProduct.REDIS_STREAMS)return new RedisMessagePublisher(target,binding);if(target.product==TargetProduct.PULSAR)return new PulsarMessagePublisher(target,binding);if(target.product==TargetProduct.ROCKETMQ)return new RocketMessagePublisher(target,binding);if(target.product==TargetProduct.ACTIVEMQ_ARTEMIS)return new ArtemisMessagePublisher(target,binding);if(target.product==TargetProduct.ACTIVEMQ_CLASSIC)return new ClassicMessagePublisher(target,binding);throw new IllegalArgumentException("MESSAGE_PRODUCT_NOT_ENABLED");}
+        try{if(target.product==TargetProduct.RABBITMQ)return new Rabbit(target,binding);if(target.product==TargetProduct.NATS_JETSTREAM)return new JetStream(target,binding);if(target.product==TargetProduct.KAFKA)return new KafkaMessagePublisher(target);if(target.product==TargetProduct.REDIS_STREAMS)return new RedisMessagePublisher(target,binding);if(target.product==TargetProduct.PULSAR)return new PulsarMessagePublisher(target,binding);if(target.product==TargetProduct.ROCKETMQ)return new RocketMessagePublisher(target,binding);if(target.product==TargetProduct.ACTIVEMQ_ARTEMIS)return new ArtemisMessagePublisher(target,binding);if(target.product==TargetProduct.ACTIVEMQ_CLASSIC)return new ClassicMessagePublisher(target,binding);throw new IllegalArgumentException("MESSAGE_PRODUCT_NOT_ENABLED");}
         catch(Exception e){throw classify(e);}
     }
     private static Exception classify(Exception error){
@@ -33,27 +33,34 @@ public final class MessagePublishers {
         if(target.product==TargetProduct.ACTIVEMQ_CLASSIC){ClassicMessagePublisher.check(target);return;}
         if(target.product==TargetProduct.KAFKA){KafkaMessagePublisher.check(target);return;}
         if(target.product==TargetProduct.REDIS_STREAMS){RedisMessagePublisher.check(target);return;}
-        if(target.product==TargetProduct.RABBITMQ)try(Rabbit ignored=new Rabbit(target)){return;}
+        if(target.product==TargetProduct.RABBITMQ)try(Rabbit publisher=new Rabbit(target,null)){if(publisher.receipts!=null)publisher.receipts.checkBroker(publisher.connection);return;}
         if(target.product==TargetProduct.NATS_JETSTREAM)try(JetStream ignored=new JetStream(target,null)){ignored.management.getAccountStatistics();return;}
         throw new IllegalArgumentException("MESSAGE_PRODUCT_NOT_ENABLED");
     }
-    private static final class Rabbit implements ConfirmedPublisher {
+    static final class Rabbit implements ConfirmedPublisher {
         final com.rabbitmq.client.Connection connection;final Channel channel;final PipelineConfig.Messaging settings;final AtomicBoolean returned=new AtomicBoolean();final Set<String> prepared=new HashSet<>();
-        Rabbit(PipelineConfig.Target target)throws Exception{
+        final RabbitReceiptStream receipts;
+        String confirmed;
+        Rabbit(PipelineConfig.Target target,String binding)throws Exception{
             settings=target.messaging;ConnectionFactory factory=new ConnectionFactory();factory.setUri(target.url);factory.setUsername(target.username);factory.setPassword(target.password==null?"":target.password);factory.setAutomaticRecoveryEnabled(false);factory.setTopologyRecoveryEnabled(false);factory.setConnectionTimeout(settings.connectTimeoutMillis);factory.setHandshakeTimeout(settings.connectTimeoutMillis);factory.setChannelRpcTimeout(settings.requestTimeoutMillis);factory.setRequestedHeartbeat(20);
             if("amqps".equals(new URI(target.url).getScheme()))factory.enableHostnameVerification();
             List<Address> addresses=new ArrayList<>();List<String> endpoints=new ArrayList<>();endpoints.add(target.url);endpoints.addAll(settings.endpoints);URI first=new URI(target.url);
             for(String endpoint:endpoints){URI uri=new URI(endpoint);if(!Objects.equals(first.getScheme(),uri.getScheme())||!Objects.equals(first.getRawPath(),uri.getRawPath()))throw new IllegalArgumentException("RABBIT_ENDPOINT_VHOST_OR_TLS_MISMATCH");addresses.add(new Address(uri.getHost(),uri.getPort()<0?("amqps".equals(uri.getScheme())?5671:5672):uri.getPort()));}
-            connection=factory.newConnection(addresses,"rivomesh-"+target.id);Channel opened=null;
+            receipts=settings.rabbitReceiptStream?new RabbitReceiptStream(target,binding,factory.getVirtualHost()):null;
+            try{connection=factory.newConnection(addresses,"rivomesh-"+target.id);}
+            catch(Exception failed){if(receipts!=null)receipts.close();throw failed;}
+            Channel opened=null;
             try{opened=connection.createChannel();opened.confirmSelect();opened.addReturnListener((ReturnCallback)message->returned.set(true));channel=opened;}
-            catch(Exception e){connection.abort();throw e;}
+            catch(Exception e){connection.abort();if(receipts!=null)receipts.close();throw e;}
         }
         public void prepare(Set<String> destinations)throws Exception{
-            try{for(String destination:destinations)if(!prepared.contains(destination)){if(settings.autoCreate){Map<String,Object> args=new HashMap<>();args.put("x-queue-type",settings.queueType);args.put("x-overflow","reject-publish");if("quorum".equals(settings.queueType))args.put("x-quorum-initial-group-size",settings.replicas);channel.queueDeclare(destination,true,false,false,args);}else channel.queueDeclarePassive(destination);prepared.add(destination);}}
+            try{if(receipts!=null)receipts.prepare(connection,channel,settings.autoCreate,settings.replicas);
+                for(String destination:destinations)if(!prepared.contains(destination)){if(settings.autoCreate){Map<String,Object> args=new HashMap<>();args.put("x-queue-type",settings.queueType);args.put("x-overflow","reject-publish");if("quorum".equals(settings.queueType))args.put("x-quorum-initial-group-size",settings.replicas);channel.queueDeclare(destination,true,false,false,args);}else channel.queueDeclarePassive(destination);prepared.add(destination);}}
             catch(Exception e){throw classify(e);}
         }
         public void require(Set<String> destinations)throws Exception{
-            try{for(String destination:destinations)if(!prepared.contains(destination)){channel.queueDeclarePassive(destination);prepared.add(destination);}}
+            try{if(receipts!=null)receipts.prepare(connection,channel,false,settings.replicas);
+                for(String destination:destinations)if(!prepared.contains(destination)){channel.queueDeclarePassive(destination);prepared.add(destination);}}
             catch(Exception e){Exception classified=classify(e);if(classified instanceof SyncFailure&&!((SyncFailure)classified).retryable)throw new SyncFailure("MESSAGE_DESTINATION_MISSING_REBUILD_REQUIRED","MESSAGE_PUBLICATION",false,"An initialized queue is missing or inaccessible; a recovery plan is required",e,null,0,null);throw classified;}
         }
         public void publish(List<Message> messages)throws Exception{
@@ -62,9 +69,27 @@ public final class MessagePublishers {
             for(Message message:messages){Map<String,Object> headers=new HashMap<>(message.headers);if(message.key!=null)headers.put("rivomesh_key",message.key);AMQP.BasicProperties properties=new AMQP.BasicProperties.Builder().contentType("application/json").contentEncoding("utf-8").deliveryMode(2).messageId(message.id).headers(headers).build();channel.basicPublish("",message.destination,true,properties,message.body);}
             channel.waitForConfirmsOrDie(settings.requestTimeoutMillis);
             if(returned.get())throw new SyncFailure("RABBIT_UNROUTABLE","MESSAGE_PUBLICATION",false,"Mandatory publication was returned; validate consumer history and a recovery plan before resuming");
+            if(receipts!=null&&!messages.isEmpty()&&RabbitReceiptStream.terminal(messages.getLast())){
+                String next=receipts.retain(connection,channel,messages.getLast(),settings.requestTimeoutMillis);
+                if(returned.get())throw new IllegalStateException("RABBIT_RECOVERY_PUBLICATION_UNCERTAIN");
+                confirmed=next;
+            }
             }catch(Exception e){throw classify(e);}
         }
-        public void close(){connection.abort();}
+        @Override public String identity(){return receipts==null?null:receipts.identity();}
+        @Override public String confirmedProgress(){return confirmed;}
+        @Override public void resumeProgress(String progress){
+            if(progress!=null){
+                if(receipts==null)throw new IllegalStateException("RABBIT_RECEIPT_STREAM_CONFIGURATION_REQUIRED");
+                RabbitReceiptStream.parseProgress(progress);
+            }
+            confirmed=progress;
+        }
+        void verifyPrecedingCommit(String progress,String identityHash,String event)throws Exception{
+            if(receipts==null)throw new IllegalStateException("RABBIT_RECEIPT_STREAM_CONFIGURATION_REQUIRED");
+            receipts.verify(connection,progress,identityHash,event);
+        }
+        public void close(){try{connection.abort();}finally{if(receipts!=null)receipts.close();}}
     }
     static final class JetStream implements ConfirmedPublisher {
         final io.nats.client.Connection connection;final io.nats.client.JetStream stream;final JetStreamManagement management;final PipelineConfig.Target target;final String binding;

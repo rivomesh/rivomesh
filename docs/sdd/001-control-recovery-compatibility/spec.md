@@ -41,7 +41,7 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | RC-07 | P0 / DONE | 界面手工补数据与修正 | 首批 SQL 档案通过。逐行录入和 JSON 导入支持管理员审阅前后值、精确行定位、原子批次和原事务恢复。PostgreSQL 通过真实 CDC，MySQL 通过原生检查。其他目标由 RC-10 跟踪。 |
 | RC-08 | P0 / DONE | 一致性缺口台账与真实水位 | 首批SQL档案已验收：持久缺口、审阅计划、跨入口审批/取消、全表重扫、原子凭据及安全覆盖/连续应用水位。核验不改写SKIP、不推进原应用前缀、不自动恢复；其他目标协议由RC-10/LG-03/LG-04继续追踪。 |
 | RC-09 | P0 / DONE | 补偿作业的跨节点持久化和恢复 | 首批 SQL 档案通过跨节点计划、审批、取消与原请求恢复。真实提交边界测试以 PostgreSQL 17 为恢复目标。 |
-| RC-10 | P1 / PARTIAL | 多目标恢复语义和回收保护 | 新建 LOCAL 托管任务绑定 Kafka 物理 UUID。双入口已通过真实三 Broker 的审批、发送及确切回执。已验证丢响应只读回原记录，提交前中断等待原生中止并仅重试一次。ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 均通过精确前序 COMMIT 原生回执和旧批次拒绝，源事务和两路 ACK 保持原值。Redis Streams、NATS JetStream 和 Pulsar 的原生前序回执已通过。RabbitMQ 的故障回执，以及更广的保留和协调恢复组合仍待验收。 |
+| RC-10 | P1 / DONE | 多目标恢复语义和回收保护 | 已验收适配器能力与前序回执。Kafka 物理 UUID 通知通过双管理入口、三 Broker 发送和提交中断恢复。ClickHouse、Doris、Hive 和七款非 Kafka 消息目标通过精确原生前序回执及旧批次拒绝。RabbitMQ 使用新任务可选的回执流，业务 ACK 后可核对。H2、PostgreSQL 和 MySQL 日志通过重启后证据保留与回收检查，真实 MySQL 源与外部 PostgreSQL 日志通过配额背压。更广的产品与集群组合由 LG-03、LG-04、LG-05 跟踪。 |
 
 ## 源数据库兼容
 

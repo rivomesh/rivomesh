@@ -1683,7 +1683,7 @@ public final class TaskService implements AutoCloseable {
             throw refused;
         }catch(IllegalStateException|IllegalArgumentException invalid){
             String code=invalid.getMessage();
-            if(code!=null&&code.matches("(?:CLICKHOUSE|DORIS|HIVE|ARTEMIS|CLASSIC|ROCKETMQ|REDIS_STREAMS|NATS_JETSTREAM|PULSAR|DESTINATION_RECEIPT)_[A-Z_]{3,100}"))
+            if(code!=null&&code.matches("(?:CLICKHOUSE|DORIS|HIVE|ARTEMIS|CLASSIC|ROCKETMQ|REDIS_STREAMS|NATS_JETSTREAM|PULSAR|RABBIT|DESTINATION_RECEIPT)_[A-Z_]{3,100}"))
                 throw new Conflict(code);
             throw invalid;
         }
@@ -1707,7 +1707,7 @@ public final class TaskService implements AutoCloseable {
         if(!request.revision.equals(control.revision))throw new Conflict("REVISION_CHANGED");
         if(!"PAUSED".equals(control.desired))throw new Conflict("DESTINATION_RECEIPT_REQUIRES_PIPELINE_PAUSED");
         if(entry.config.pipeline==null||entry.config.pipeline.targets.stream().noneMatch(
-                target->request.subscriptionId.equals(target.id)&&io.github.rivomesh.cdc.DestinationReceiptReview.supports(target.product)))
+                target->request.subscriptionId.equals(target.id)&&io.github.rivomesh.cdc.DestinationReceiptReview.supports(target)))
             throw new Conflict("DESTINATION_RECEIPT_TARGET_UNSUPPORTED");
         return entry;
     }

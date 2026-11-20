@@ -171,6 +171,18 @@ python3 tests/rabbit-quorum-run.py --artifact sync-app/target/rivomesh-app-0.1.0
   --java-home "$JAVA_HOME" --output target/rabbit-quorum-proof
 ```
 
+#### RabbitMQ receipt stream
+
+Enable **RabbitMQ receipt stream** and set the **RabbitMQ management API URL** when creating a V3 task. The YAML equivalent is `messaging.rabbitReceiptStream: true` with `messaging.adminUrl` set to the HTTP(S) origin of the RabbitMQ management plugin. The AMQP and HTTP connections must report the same RabbitMQ cluster name. Use HTTPS for a task using AMQPS.
+
+The task account needs view access to the selected virtual host through the management API and permission to configure, publish to and read its reserved `rivomesh.receipts.*` stream in the same virtual host. With auto-create disabled, preprovision the exact reserved stream using the publication generation. Its name is `rivomesh.receipts.` plus the SHA-256 of `rivomesh:` followed by the SHA-256 of `pipelineId:subscriptionId:generation`. Configure the stream with `x-max-length-bytes=16777216` and `x-stream-max-segment-size-bytes=1048576`, and use the task's replica count as the initial membership. Keep these settings and the original stream data throughout recovery. [RabbitMQ Stream retention](https://www.rabbitmq.com/docs/4.1/streams#data-retention)
+
+After confirmed business publication, Rivomesh retains the terminal event digest and receipt marker in the separate stream. It reads the assigned offset before acknowledging the transaction in its journal. A paused review reads the exact offset on an independent cursor without a business consumer ACK. This proves the previous publisher confirmation. Consumer business processing has its own checkpoint. If the saved offset has been removed, the review refuses and keeps the journal position.
+
+The receipt stream is part of a new task's publication identity. Existing ordinary tasks can continue to use consumer evidence or move to a separately reviewed baseline. The native acceptance uses a single RabbitMQ 4.1.4 broker and a quorum business queue. Broker cluster failover for the receipt stream uses a separate acceptance scope.
+
+### NATS JetStream
+
 NATS uses JetStream publish ACKs and `Nats-Msg-Id`, never volatile Core NATS. Streams require File storage, Limits retention, Discard New, no age expiry, exact `namespace.*` subjects and configured replicas. The description binds pipeline/subscription/generation; incompatible existing streams are rejected rather than altered. Finite capacity rejects new publication. The publisher does not automatically delete consumer history: plan capacity, archival and consumer checkpoints. Broker fsync, replication and disk determine power-loss durability.
 
 The three-member NATS 2.11.8 profile uses `tls://` for the primary and each explicit failover endpoint, `messaging.replicas: 3`, and a JVM trust store with the broker CA. The client verifies the endpoint name against the certificate and uses the configured entrances. The native profile verifies leader loss, refusal to confirm without a majority, and original-event-ID retry after recovery. The broker-to-broker routes and mutual TLS require separate validation. [JetStream clustering](https://docs.nats.io/learn/topologies/jetstream-in-a-cluster) · [Evidence](../verification/README.md#nats-jetstream-tls-and-quorum)

@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "RC-10",
+      "title": {
+        "zh-CN": "多目标恢复语义和回收保护",
+        "en": "Destination-specific recovery and retention"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, name/identity-scoped destination capability profiles, native receipt checks, Kafka 4.1.2 RF3 dispatch and interrupted commit recovery, RabbitMQ 4.1.4 optional receipt stream and quorum business queue after consumer ACK. H2 and both PostgreSQL/MySQL external journal retention. Broader cluster and storage combinations remain under LG-03/LG-04/LG-05.",
+        "criteriaSha256": "5975e8ab4732e30f4231ee1b62e3f7c37e7dadb36db3a90a9f29401d2d95ea6b"
+      }
+    },
+    {
       "id": "CP-01",
       "title": {
         "zh-CN": "统一节点注册与状态",
@@ -14595,5 +14609,91 @@
     },
     "reproduce": "bash tests/materialized-recovery-run.sh redis nats pulsar",
     "boundary": "Pulsar uses the current persistent topic's admin ledger-entry lookup. Redis checks present logical ownership and exact retained data. JetStream checks the native stream creation time. Tests verify producer receipts and independent journal ACKs. Broker-cluster failover and complete mixed-target retention use separate profiles."
+  },
+  "rc10RabbitReceiptAndExternalRetention": {
+    "status": "PASS",
+    "artifactSha256": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
+    "nativeArtifactSha256": "b229dbeeb41bb280b945053ab71cddb974496237934bc70498abefa13d14012b",
+    "nativeLogSha256": "e7361b6f31022cf34a7254185ec161130a140f41dd4180e77340021469199738",
+    "nativeChecks": [
+      "RABBITMQ business COMMIT was consumed and ACKed before the receipt review.",
+      "RABBITMQ verifies the exact native receipt on its original resource.",
+      "RABBITMQ refuses a different native batch and preserves source and peer ACKs."
+    ],
+    "nativeBytecodeClassesCompared": 8,
+    "nativeBytecodeLogSha256": "398ab1b7348330ad8bee2e6c6ec9aeee43501afdceeac9a42da18ed65fcfeec8",
+    "nativeProbeLogSha256": "49e40fa4d9467e4cc5115a230ad3a07bbefd123b8723aedecff5bf8b4351700b",
+    "focusedJavaPassed": 44,
+    "javaLogSha256": "e770f9a82fc0ef138db621119d465bce8596642bf828408deb54a025ad832808",
+    "focusedDomPassed": 7,
+    "domLogSha256": "10456684c4ee0627bd5bd0d410c0b492d76bfc3427dd568339f955341f7974a4",
+    "nativeExternalRetention": {
+      "postgresql": {
+        "report": {
+          "status": "PASS",
+          "product": "POSTGRESQL",
+          "artifactSha256": "7a6de901339700669ad352aca45350831e4ad4e5d5f79cb5d1b0e3da8c3474c8",
+          "testClassesSha256": "1f9ae010aed3804b0ff9f960a9103bf9824fd053dbc494ca09e02bac8a1aa3fb",
+          "harnessSourceSha256": "37929f1ec760f37c13c36cba0d77fec662e9e0c75cf7f4051910747f6580aa74",
+          "scope": "22 retention contracts against native POSTGRESQL",
+          "images": {
+            "postgres:17": {
+              "id": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+              "architecture": "arm64"
+            },
+            "eclipse-temurin:21-jre-jammy": {
+              "id": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+              "architecture": "arm64"
+            }
+          },
+          "results": {
+            "tests": 22,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "cleanupExitCode": 0
+        },
+        "manifestSha256": "a86cf60c3e59c992b2a4bfc12a8e99110a3f46b1579d82ea6773f78395a113ff",
+        "logSha256": "641f3d699f123d371eba0d7e6a3db7b3a227379104f84c427bc2d133c5f2fc42"
+      },
+      "mysql": {
+        "report": {
+          "status": "PASS",
+          "product": "MYSQL",
+          "artifactSha256": "7a6de901339700669ad352aca45350831e4ad4e5d5f79cb5d1b0e3da8c3474c8",
+          "testClassesSha256": "1f9ae010aed3804b0ff9f960a9103bf9824fd053dbc494ca09e02bac8a1aa3fb",
+          "harnessSourceSha256": "37929f1ec760f37c13c36cba0d77fec662e9e0c75cf7f4051910747f6580aa74",
+          "scope": "22 retention contracts against native MYSQL",
+          "images": {
+            "mysql:8.4": {
+              "id": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+              "architecture": "arm64"
+            },
+            "eclipse-temurin:21-jre-jammy": {
+              "id": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+              "architecture": "arm64"
+            }
+          },
+          "results": {
+            "tests": 22,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "cleanupExitCode": 0
+        },
+        "manifestSha256": "5fdc29ae0d0286e2eab2556bdcf1cc2f8a67c6e2d2c81c48d6a024917e34547e",
+        "logSha256": "a69b45bc0f8469e538d7bc3d862f2589cbd5d57ad568fc7b48296766f007259c"
+      }
+    },
+    "completedProfileReferences": [
+      "temurin21SlowTarget",
+      "temurin21GroupedKafkaAndMaterializedRecovery",
+      "queueDestinationPrecedingReceiptsTemurin21",
+      "nativeStreamDestinationReceiptsTemurin21"
+    ],
+    "reproduce": "bash tests/materialized-recovery-run.sh rabbit",
+    "boundary": "One RabbitMQ 4.1.4 broker with business quorum queue and independent durable stream. The fixture consumes and ACKs the business COMMIT before reviewing its retained receipt. Deterministic journal source and maintained peer ACK. The native SQL retention suites use the immediately preceding unchanged journal code and separate real PostgreSQL and MySQL containers. Wider combined broker, storage and production profiles remain under LG-03/LG-04/LG-05."
   }
 }

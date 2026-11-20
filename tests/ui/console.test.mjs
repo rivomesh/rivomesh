@@ -384,13 +384,13 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  }finally{ui.dom.window.close();}
 });
 
-for(const product of ['DORIS','REDIS_STREAMS','NATS_JETSTREAM','PULSAR']){
+for(const product of ['DORIS','REDIS_STREAMS','NATS_JETSTREAM','PULSAR','RABBITMQ']){
 test(product+' destination receipt is scoped to a paused target and displays its exact digest',async()=>{
  const task={id:'analytics-receipt',revision:'current-revision',formatVersion:3,desired:'PAUSED',workerState:'PAUSED',
   statusAvailable:true,status:{run_state:'PAUSED',subscriptions:[
    {id:'dw',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:7},
    {id:'pg',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:8}]},
-  destinations:[{id:'dw',product},{id:'pg',product:'RABBITMQ'}],operations:[]};
+  destinations:[{id:'dw',product,rabbitReceiptReviewAvailable:product==='RABBITMQ'},{id:'pg',product:'RABBITMQ'}],operations:[]};
  const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
  const requests=[];
  ui.w.fetch=async(path,options)=>{
@@ -986,6 +986,37 @@ test('retryable destination failures remain automatic and visible without a manu
 test('destination cards show consumer resources and delivery guarantees as escaped text',async()=>{
   const task={id:'consumer-setup',revision:'revision',formatVersion:3,desired:'RUNNING',workerState:'RUNNING',destinations:[{id:'pulsar',product:'PULSAR',consistency:'AT_LEAST_ONCE_EVENTS',resource:'persistent://public/default/sales',mappings:{'<img src=x onerror=alert(1)>':'sales_events'}}],status:{run_state:'RUNNING',lastSequence:3,subscriptions:[{id:'pulsar',state:'RUNNING',acknowledged:3,errorGeneration:0,errorCode:null}]},statusAvailable:true,operations:[]};
   const ui=setup([task]);try{await login(ui);const card=ui.d.querySelector('.subscription-card');assert.match(card.textContent,/persistent:\/\/public\/default\/sales/);assert.match(card.textContent,/下游需去重并确认业务完成/);assert.match(card.textContent,/sales_events/);assert.equal(card.querySelectorAll('img,script').length,0);ui.d.getElementById('language').click();assert.match(ui.d.querySelector('.subscription-card').textContent,/Physical topic \/ stream/);}finally{ui.dom.window.close();}
+});
+
+test('RabbitMQ wizard opts in to a retained receipt stream with the management address',async()=>{
+ const ui=setup();
+ try{
+  await login(ui);ui.d.getElementById('new-task').click();
+  const form=ui.d.getElementById('create-form');
+  for(const [name,value] of Object.entries({jobId:'rabbit-receipt',clusterId:'source',sourceDatabase:'sales',sourceUsername:'reader'}))
+   form.elements[name].value=value;
+  ui.d.getElementById('next-step').click();
+  form.elements.targetType.value='RABBITMQ';
+  form.elements.targetType.dispatchEvent(new ui.w.Event('change'));
+  form.elements.targetSchema.value='sales_events';
+  const root=ui.d.getElementById('primary-messaging');
+  const option=root.querySelector('[data-field=rabbitReceiptStream]');
+  const admin=root.querySelector('[data-field=adminUrl]');
+  assert.equal(option.checked,false);
+  assert.equal(option.required,false);
+  assert.equal(admin.disabled,true);
+  option.checked=true;option.dispatchEvent(new ui.w.Event('change'));
+  assert.equal(admin.disabled,false);
+  assert.equal(admin.required,true);
+  assert.equal(form.elements.targetPassword.required,true);
+  admin.value='https://rabbit.example:15671';
+  form.elements.targetUsername.value='publisher';form.elements.targetPassword.value='fixture-password';
+  ui.d.getElementById('next-step').click();
+  form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
+  const target=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config.targets[0];
+  assert.equal(target.messaging.rabbitReceiptStream,true);
+  assert.equal(target.messaging.adminUrl,'https://rabbit.example:15671');
+ }finally{ui.dom.window.close();}
 });
 
 test('RocketMQ wizard collects its broker and retention profile and excludes unsupported credentials',async()=>{

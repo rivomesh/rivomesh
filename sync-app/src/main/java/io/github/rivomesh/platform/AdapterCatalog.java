@@ -41,6 +41,7 @@ public final class AdapterCatalog {
             row.put("rebuildMode","PLANNED".equals(status)?"UNAVAILABLE":"MANUAL_NEW_BASELINE");
             row.put("failureReceiptReview",switch(id){
                 case "KAFKA"->"NATIVE_KAFKA_PRECEDING_COMMIT";
+                case "RABBITMQ"->"OPTIONAL_RABBIT_RECEIPT_STREAM";
                 case "CLICKHOUSE","DORIS","HIVE"->"NATIVE_MATERIALIZED_PRECEDING_COMMIT";
                 case "ACTIVEMQ_ARTEMIS","ACTIVEMQ_CLASSIC","ROCKETMQ","REDIS_STREAMS","NATS_JETSTREAM","PULSAR"->"NATIVE_BROKER_PRECEDING_COMMIT";
                 default->"UNAVAILABLE";

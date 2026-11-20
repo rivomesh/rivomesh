@@ -37,7 +37,7 @@
 
 Classic 独立保留的回执同时绑定最后一条事件摘要和整批摘要。旧回执可继续普通业务同步，下一笔 COMMIT 确认后即可进行精确故障核对。Artemis 浏览原非破坏性队列，RocketMQ 按原提交日志位点读取，两者都不会提交消费位点。接口只返回核对范围与摘要。
 
-Redis Streams 用 `XRANGE` 查询保存的条目 ID。JetStream 读取原序列并校验流创建时间。Pulsar 则通过管理 API 按 Ledger ID 和 Entry ID 读取。核对要求原记录、归属绑定和事件摘要都匹配。使用历史检查点的订阅，需先确认一笔新的 COMMIT 才能取得回执。若该消息已被清理，核对会拒绝。RabbitMQ 的 quorum 或 classic 队列在业务消息 ACK 后，需要用保留的消费者凭据手工对账。
+Redis Streams 用 `XRANGE` 查询保存的条目 ID。JetStream 读取原序列并校验流创建时间。Pulsar 则通过管理 API 按 Ledger ID 和 Entry ID 读取。核对要求原记录、归属绑定和事件摘要都匹配。使用历史检查点的订阅，需先确认一笔新的 COMMIT 才能取得回执。若该消息已被清理，核对会拒绝。新建任务时启用 RabbitMQ 回执流，也可以在业务消息被消费者 ACK 后选择 **核对目标回执**，按独立流的原位点取证。未启用的 RabbitMQ 订阅使用保留的消费者凭据手工对账。 [RabbitMQ 回执流配置](messaging-v3.md#rabbitmq-回执流)
 
 未修复缺口、待办跳过审阅和滞后目标都可能使日志在重启后继续保留。回收按各目标最小的已确认序列推进，保留未修复缺口的原始和规范化事务。增量采集达到配额时报告 `JOURNAL_BACKPRESSURE`，证据仍会保留。Kafka 通知记录故障，原同步位点保持不变。[Kafka 审批与恢复](messaging-v3.md#审批并发送缺口通知)
 

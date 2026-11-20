@@ -18,7 +18,9 @@ public final class DestinationReceiptReview {
 
     private DestinationReceiptReview(){}
 
-    public static boolean supports(TargetProduct product){
+    public static boolean supports(PipelineConfig.Target target){
+        TargetProduct product=target.product;
+        if(product==TargetProduct.RABBITMQ)return target.messaging.rabbitReceiptStream;
         return product!=null&&(product.materialized()||product==TargetProduct.ACTIVEMQ_ARTEMIS
                 ||product==TargetProduct.ACTIVEMQ_CLASSIC||product==TargetProduct.ROCKETMQ
                 ||product==TargetProduct.REDIS_STREAMS||product==TargetProduct.NATS_JETSTREAM||product==TargetProduct.PULSAR);
@@ -28,7 +30,7 @@ public final class DestinationReceiptReview {
         if(config==null)throw new IllegalArgumentException("DESTINATION_RECEIPT_V3_REQUIRED");
         PipelineConfig.Target target=config.targets.stream().filter(item->item.id.equals(targetId)).findFirst()
                 .orElseThrow(()->new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNKNOWN"));
-        if(!supports(target.product))throw new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNSUPPORTED");
+        if(!supports(target))throw new IllegalArgumentException("DESTINATION_RECEIPT_TARGET_UNSUPPORTED");
         String code=switch(target.product){
             case ACTIVEMQ_ARTEMIS->"ARTEMIS_RECOVERY_";
             case ACTIVEMQ_CLASSIC->"CLASSIC_RECOVERY_";
@@ -108,6 +110,12 @@ public final class DestinationReceiptReview {
             case PULSAR -> {
                 String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
                 try(var publisher=new PulsarMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case RABBITMQ -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new MessagePublishers.Rabbit(target,binding)){
                     publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
                 }
             }

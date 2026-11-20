@@ -1,0 +1,34 @@
+services:
+  rabbit:
+    image: rabbitmq:4.1.4-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: receipt_fixture
+      RABBITMQ_DEFAULT_PASS: Fixture-Only-Receipt
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2"
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        cookie=/var/lib/rabbitmq/.erlang.cookie
+        if [ ! -s "$$cookie" ]; then
+          umask 077
+          head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$$cookie"
+          chown rabbitmq:rabbitmq "$$cookie"
+          chmod 400 "$$cookie"
+        fi
+        exec docker-entrypoint.sh rabbitmq-server
+    volumes:
+      - broker-data:/var/lib/rabbitmq
+      - ./rabbit-receipt-enabled-plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_port_connectivity"]
+      interval: 2s
+      timeout: 5s
+      retries: 40
+  tests:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /project
+    volumes:
+      - ..:/project
+volumes:
+  broker-data:

@@ -55,6 +55,8 @@ public final class TaskDefinition {
         List<Map<String,Object>> result=new ArrayList<>();if(pipeline==null)return result;
         for(PipelineConfig.Target destination:pipeline.targets){
             Map<String,Object> row=new LinkedHashMap<>();row.put("id",destination.id);row.put("product",destination.product.name());row.put("mappings",new TreeMap<>(destination.mappings));row.put("consistency",destination.product.messaging()?"AT_LEAST_ONCE_EVENTS":destination.product.materialized()?"VERSIONED_MATERIALIZATION":"TRANSACTIONAL");
+            if(destination.product==TargetProduct.RABBITMQ&&destination.messaging.rabbitReceiptStream)
+                row.put("rabbitReceiptReviewAvailable",true);
             if(destination.product==TargetProduct.KAFKA||destination.product==TargetProduct.PULSAR)row.put("resource",destination.messaging.topic);
             if(destination.product==TargetProduct.KAFKA&&destination.messaging.recoveryNotice!=null)
                 row.put("kafkaNoticePlanningAvailable",true);

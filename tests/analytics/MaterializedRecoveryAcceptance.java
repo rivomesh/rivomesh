@@ -57,6 +57,7 @@ public final class MaterializedRecoveryAcceptance {
                 journal.pauseFailure(lease, DESTINATION, "MESSAGE_TOO_LARGE", evidence);
                 journal.acknowledge(lease, PEER, 2);
             }
+            if(product==TargetProduct.RABBITMQ) drainRabbitBusiness(target);
             long reviewEpoch = journal.pausePipeline().epoch;
 
             var paused = new JdbcPublicationStore(journal, DESTINATION, null);
@@ -82,6 +83,7 @@ public final class MaterializedRecoveryAcceptance {
                 String name=switch(product){
                     case ACTIVEMQ_ARTEMIS->"ARTEMIS";
                     case ACTIVEMQ_CLASSIC->"CLASSIC";
+                    case RABBITMQ->"RABBIT";
                     default->product.name();
                 };
                 require((name+"_RECOVERY_PUBLICATION_UNCERTAIN").equals(code),"Wrong refusal");
@@ -91,6 +93,24 @@ public final class MaterializedRecoveryAcceptance {
             assertUnchanged(journal, before, paused, confirmed);
             System.out.println("PASS " + product + " refuses a different native batch and preserves source and peer ACKs.");
         }
+    }
+
+    private static void drainRabbitBusiness(PipelineConfig.Target target) throws Exception {
+        var factory=new com.rabbitmq.client.ConnectionFactory();
+        factory.setUri(target.url);
+        factory.setUsername(target.username);
+        factory.setPassword(target.password);
+        String queue=target.mappings.get(DATABASE)+".__transactions";
+        try(var connection=factory.newConnection();var reader=connection.createChannel()){
+            boolean commit=false;
+            com.rabbitmq.client.GetResponse message;
+            while((message=reader.basicGet(queue,false))!=null){
+                if("COMMIT".equals(message.getProps().getHeaders().get("rivomesh_kind").toString()))commit=true;
+                reader.basicAck(message.getEnvelope().getDeliveryTag(),false);
+            }
+            require(commit&&reader.messageCount(queue)==0,"RabbitMQ business COMMIT was not consumed");
+        }
+        System.out.println("PASS RABBITMQ business COMMIT was consumed and ACKed before the receipt review.");
     }
 
     private static void waitForDoris(PipelineConfig config) throws Exception {
@@ -177,6 +197,15 @@ public final class MaterializedRecoveryAcceptance {
                 target.url="nats://nats:4222";
                 target.messaging=new PipelineConfig.Messaging();
                 target.messaging.stream="receipt_"+suffix;
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            case RABBITMQ -> {
+                target.url="amqp://rabbit:5672";
+                target.username="receipt_fixture";
+                target.password="Fixture-Only-Receipt";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.adminUrl="http://rabbit:15672";
+                target.messaging.rabbitReceiptStream=true;
                 target.messaging.maxMessageBytes=MESSAGE_BYTES;
             }
             case PULSAR -> {

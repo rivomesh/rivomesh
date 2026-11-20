@@ -171,6 +171,18 @@ python3 tests/rabbit-quorum-run.py --artifact sync-app/target/rivomesh-app-0.1.0
   --java-home "$JAVA_HOME" --output target/rabbit-quorum-proof
 ```
 
+#### RabbitMQ 回执流
+
+新建 V3 任务时，可勾选 **启用 RabbitMQ 回执流** 并填写 **RabbitMQ 管理 API 地址**。YAML 对应 `messaging.rabbitReceiptStream: true`，`messaging.adminUrl` 填 RabbitMQ 管理插件的 HTTP(S) 源地址。AMQP 与管理 API 必须报告同一个 RabbitMQ 集群名称。任务使用 AMQPS 时，管理 API 也使用 HTTPS。
+
+任务账号需要能通过管理 API 查看对应虚拟主机，并能在同一虚拟主机配置、写入和读取保留的 `rivomesh.receipts.*` 流。关闭自动建资源时，按任务发布代次预建对应流。流名是 `rivomesh.receipts.` 加归属串的 SHA-256。归属串是 `rivomesh:` 加 `pipelineId:subscriptionId:generation` 的 SHA-256。流参数使用 `x-max-length-bytes=16777216` 和 `x-stream-max-segment-size-bytes=1048576`，初始成员数使用任务副本数。恢复期间保留原流及这些参数。 [RabbitMQ Stream 保留](https://www.rabbitmq.com/docs/4.1/streams#data-retention)
+
+业务发布收到确认后，Rivomesh 把末尾事件摘要与回执标记保存在独立流，读到原生位点后才确认日志事务。任务暂停核对时，系统通过独立游标读取确切位点，业务消费 ACK 保持原值。该回执用于核对生产者发布确认。消费端业务处理仍以自己的断点为准。原位点已经清理时，核对拒绝并保留日志位置。
+
+回执流属于新任务的发布身份。已有普通任务可以继续使用消费者凭据，也可以通过审批建立新的基线。原生验收覆盖单节点 RabbitMQ 4.1.4 和 quorum 业务队列，回执流的集群切换有独立验收范围。
+
+### NATS JetStream
+
 NATS 使用 JetStream 发布确认和 `Nats-Msg-Id`。不使用易失 Core NATS。Stream 要求 File 存储、Limits 保留、Discard New、无消息年龄过期、精确的 `namespace.*` subjects，以及配置的副本数。Stream description 绑定 pipeline/subscription/generation，发现不符不会改写既有资源。有限容量满时拒绝新发布；需要恢复容量后重试，不静默覆盖未消费历史。服务不会自动清理消费者历史，请制定容量、归档和消费进度策略。Broker fsync、复制和底层磁盘决定掉电保证。
 
 NATS 2.11.8 三节点档案要求主地址和各备用地址均使用 `tls://`，配置 `messaging.replicas: 3`，在 JVM 信任库中加入 Broker CA。客户端根据证书核验地址名，并按显式配置连接。实测覆盖 Leader 停止、失去多数派时拒绝确认、恢复后使用原事件 ID 重试。Broker 节点间路由加密和双向 TLS 另行验收。[JetStream 集群](https://docs.nats.io/learn/topologies/jetstream-in-a-cluster) · [验收记录](../verification/README.md#nats-jetstream-tls-and-quorum)
