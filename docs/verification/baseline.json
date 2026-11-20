@@ -15150,10 +15150,10 @@
   "rocketmqWorkerControllerAndReplicaRecovery": {
     "status": "PASS",
     "scope": "Packaged MySQL CDC Worker, original journal and RocketMQ replica recovery",
-    "project": "rivomesh-rocketmq-controller-cdf0b18560",
-    "artifactSha256": "10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a",
-    "harnessSha256": "561ff9c56c6bc60cffafa929117c91b79ac9a1292ebee369a0a24264a037299b",
-    "testSourceSha256": "c2256408922618dc4133d24a23c60ba5df1d0e42881c848192c81e677e5902aa",
+    "project": "rivomesh-rocketmq-controller-66ae1d81d2",
+    "artifactSha256": "2c87464463fc299ae42d4c8d23c77fbb2f36f4ba71c4d01f0e9cb853d41d905e",
+    "harnessSha256": "969c4bcb111ef9b0d42a7c46af05bbce7e2b7b7be210f1bcaad93186347741b2",
+    "testSourceSha256": "eb8d6c44f246387e1715bbe38637a0acf98b7ac2d33823c1a2cccb1020be9fb0",
     "brokerTemplateSha256": "5d6ee38300002a2b041badb5ce27f461f634a5b5cd57c9bbb88557423f4e9203",
     "hostJava": [
       "openjdk version \"21.0.13\" 2026-10-20 LTS",
@@ -15167,43 +15167,60 @@
       "maven:3.9-eclipse-temurin-21": "sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64",
       "mysql:8.4": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64"
     },
-    "testClassSha256": "384924c427968ba892d79d00ebb38fa01ce1196ec9d2630f6d13e3a57f100a1f",
+    "testClassSha256": "3edea1cfefa4ff210ef286ab83b4b5cccd058419a10882a701fe428eb91ddd0c",
+    "consumerSourceSha256": "7a0df0d4eabb72857f9c06e846b69bdb3a43ea8ea690454f5cbdb9356039451a",
     "original": {
+      "liveInSync": [
+        "rocket-primary:10911",
+        "rocket-replica-a:10911",
+        "rocket-replica-b:10911"
+      ],
+      "masterId": 1,
       "worker": {
-        "topic": "worker_events_570b46ac80acb3363426c13716a65b6ececafd6785e11c7c2b5a41780f1a0a0f",
+        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
         "retained": {
           "queueOffset": 7,
           "commitLogOffset": 11895,
-          "contentSha256": "a2c8c9aa8fc6d2ffe58e5dcf9a182ddc5a6b1b3a8497945372828bbead01eb92"
+          "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
         },
-        "generation": "549129c6-1f82-4534-a0a6-c73ece4661df",
-        "snapshotId": "90e29a25-94e1-4fa5-bc87-5dbf4a6df752",
+        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
         "sequence": 1,
-        "transactionId": "074f3c4d-e48b-11f1-866d-d6990ce8e87c:9",
+        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:9",
         "epoch": 1,
         "capturedSequence": 1
       },
       "master": "rocket-primary:10911",
       "syncStateEpoch": 3,
       "topicConfigurationReplicas": [
+        "rocket-primary:10911",
         "rocket-replica-a:10911",
-        "rocket-replica-b:10911",
-        "rocket-primary:10911"
+        "rocket-replica-b:10911"
       ],
       "retained": {
         "queueOffset": 7,
         "commitLogOffset": 11895,
-        "contentSha256": "a2c8c9aa8fc6d2ffe58e5dcf9a182ddc5a6b1b3a8497945372828bbead01eb92"
+        "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
       },
-      "epoch": 1,
-      "liveInSync": [
-        "rocket-replica-a:10911",
-        "rocket-replica-b:10911",
-        "rocket-primary:10911"
-      ],
-      "masterId": 1
+      "epoch": 1
     },
     "promoted": {
+      "syncStateEpoch": 5,
+      "worker": {
+        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+        "retained": {
+          "queueOffset": 10,
+          "commitLogOffset": 17180,
+          "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
+        },
+        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+        "sequence": 2,
+        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:10",
+        "epoch": 2,
+        "capturedSequence": 2
+      },
+      "epoch": 2,
       "masterId": 2,
       "master": "rocket-replica-a:10911",
       "topicConfigurationReplicas": [
@@ -15218,74 +15235,58 @@
       "retained": {
         "queueOffset": 7,
         "commitLogOffset": 11895,
-        "contentSha256": "a2c8c9aa8fc6d2ffe58e5dcf9a182ddc5a6b1b3a8497945372828bbead01eb92"
+        "contentSha256": "63e23a5f378fdf1d8e475e43c23637250421589f42a17b99eba4feb244e63a18"
       },
       "appended": {
         "queueOffset": 10,
         "commitLogOffset": 17180,
-        "contentSha256": "9880a9532db8babbbd1c2147a9390866b95c67883c41358ea5d11dd93c342c15"
-      },
-      "syncStateEpoch": 5,
-      "worker": {
-        "topic": "worker_events_570b46ac80acb3363426c13716a65b6ececafd6785e11c7c2b5a41780f1a0a0f",
-        "retained": {
-          "queueOffset": 10,
-          "commitLogOffset": 17180,
-          "contentSha256": "9880a9532db8babbbd1c2147a9390866b95c67883c41358ea5d11dd93c342c15"
-        },
-        "generation": "549129c6-1f82-4534-a0a6-c73ece4661df",
-        "snapshotId": "90e29a25-94e1-4fa5-bc87-5dbf4a6df752",
-        "sequence": 2,
-        "transactionId": "074f3c4d-e48b-11f1-866d-d6990ce8e87c:10",
-        "epoch": 2,
-        "capturedSequence": 2
-      },
-      "epoch": 2
+        "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
+      }
     },
     "minimumRefusal": {
-      "status": "PASS",
       "confirmed": {
         "queueOffset": 10,
         "commitLogOffset": 17180,
-        "contentSha256": "9880a9532db8babbbd1c2147a9390866b95c67883c41358ea5d11dd93c342c15"
-      }
+        "contentSha256": "deba65674a34fa7d3774e8990af49ceda5317e5d02a80243cbde734cfd69f5df"
+      },
+      "status": "PASS"
     },
     "workerRecovered": {
+      "worker": {
+        "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+        "retained": {
+          "queueOffset": 13,
+          "commitLogOffset": 22457,
+          "contentSha256": "4c762234a3e977ec7c489b83a043c5b2a09adc50ffb95e427293596a92ff82de"
+        },
+        "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+        "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+        "sequence": 3,
+        "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:11",
+        "epoch": 2,
+        "capturedSequence": 3
+      },
       "sameRunningWorker": true,
       "status": "PASS",
       "liveInSync": [
         "rocket-replica-b:10911",
         "rocket-replica-a:10911"
-      ],
-      "worker": {
-        "topic": "worker_events_570b46ac80acb3363426c13716a65b6ececafd6785e11c7c2b5a41780f1a0a0f",
-        "retained": {
-          "queueOffset": 13,
-          "commitLogOffset": 22457,
-          "contentSha256": "5b08f6fbc8567611bfccf98885be23e3c90dc5f60747bce4fb2d16bb183b052d"
-        },
-        "generation": "549129c6-1f82-4534-a0a6-c73ece4661df",
-        "snapshotId": "90e29a25-94e1-4fa5-bc87-5dbf4a6df752",
-        "sequence": 3,
-        "transactionId": "074f3c4d-e48b-11f1-866d-d6990ce8e87c:11",
-        "epoch": 2,
-        "capturedSequence": 3
-      }
+      ]
     },
     "controllerElection": {
       "original": {
-        "leader": "rocket-controller-a:9877",
+        "leader": "rocket-controller-c:9877",
         "worker": {
-          "topic": "worker_events_570b46ac80acb3363426c13716a65b6ececafd6785e11c7c2b5a41780f1a0a0f",
+          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
           "retained": {
             "queueOffset": 13,
             "commitLogOffset": 22457,
-            "contentSha256": "5b08f6fbc8567611bfccf98885be23e3c90dc5f60747bce4fb2d16bb183b052d"
+            "contentSha256": "4c762234a3e977ec7c489b83a043c5b2a09adc50ffb95e427293596a92ff82de"
           },
-          "generation": "549129c6-1f82-4534-a0a6-c73ece4661df",
-          "snapshotId": "90e29a25-94e1-4fa5-bc87-5dbf4a6df752",
+          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
           "sequence": 3,
-          "transactionId": "074f3c4d-e48b-11f1-866d-d6990ce8e87c:11",
+          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:11",
           "epoch": 2,
           "capturedSequence": 3
         }
@@ -15293,20 +15294,74 @@
       "successor": {
         "leader": "rocket-controller-b:9877",
         "worker": {
-          "topic": "worker_events_570b46ac80acb3363426c13716a65b6ececafd6785e11c7c2b5a41780f1a0a0f",
+          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
           "retained": {
             "queueOffset": 16,
             "commitLogOffset": 27741,
-            "contentSha256": "51ae59c103d47f6c452ee9d8d7b83512e20d5f751cb2b68638dcbb9b264649c1"
+            "contentSha256": "367c220881b201e41c69015a534118e2c28b8bd4411786ba4af874c76597a5e3"
           },
-          "generation": "549129c6-1f82-4534-a0a6-c73ece4661df",
-          "snapshotId": "90e29a25-94e1-4fa5-bc87-5dbf4a6df752",
+          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
           "sequence": 4,
-          "transactionId": "074f3c4d-e48b-11f1-866d-d6990ce8e87c:12",
+          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:12",
           "epoch": 2,
           "capturedSequence": 4
         }
       }
+    },
+    "controllerMajorityRecovery": {
+      "stopped": [
+        "rocket-controller-c",
+        "rocket-controller-a"
+      ],
+      "held": {
+        "reachableMinority": "rocket-controller-b:9877",
+        "diagnostic": "ROCKETMQ_CONTROLLER_ROUTE_RETRY",
+        "claimedLeadership": true,
+        "worker": {
+          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "retained": {
+            "queueOffset": 16,
+            "commitLogOffset": 27741,
+            "contentSha256": "367c220881b201e41c69015a534118e2c28b8bd4411786ba4af874c76597a5e3"
+          },
+          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "sequence": 4,
+          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:12",
+          "epoch": 2,
+          "capturedSequence": 5
+        }
+      },
+      "resumed": {
+        "brokerEpoch": 2,
+        "brokerMaster": "rocket-replica-a:10911",
+        "worker": {
+          "topic": "worker_events_50995463730a19a36eab50078567bd207913922f76c798e287577607186d8a41",
+          "retained": {
+            "queueOffset": 19,
+            "commitLogOffset": 33029,
+            "contentSha256": "33cb3325ae07ff7c77cc10cf15d8090f4b0ff37020d4007df98447b1b31a24de"
+          },
+          "generation": "b4f206ff-ad31-40f3-a178-8ce2b11d718c",
+          "snapshotId": "a7b880a2-9311-46e8-ac42-d4f89b6e43b5",
+          "sequence": 5,
+          "transactionId": "e6e160cf-e48d-11f1-a89a-a6c521a2c3b5:13",
+          "epoch": 2,
+          "capturedSequence": 5
+        },
+        "liveInSync": [
+          "rocket-replica-b:10911",
+          "rocket-replica-a:10911"
+        ],
+        "leader": "rocket-controller-b:9877"
+      }
+    },
+    "consumerReplay": {
+      "reopenedOffset": 14,
+      "committedOffset": 20,
+      "committedBusinessTransactions": 2,
+      "deduplicatedEvents": 3
     },
     "cleanupExitCode": 0,
     "remaining": {
@@ -15315,6 +15370,56 @@
       "networks": 0
     },
     "reproduce": "tests/rocketmq/controller-promotion.md",
-    "boundary": "MySQL 8.4.13 and RocketMQ 5.5.0 on one host. The Worker reopens its LOCAL journal. Individual Broker processes restart with independent retained tmpfs stores. The three separate Controller processes use named volumes. The fixture loses one elected Controller after Broker recovery and preserves the same active Broker. Whole-quorum, host and storage loss, internal cryptography, consumer deduplication and capacity are separate acceptance profiles."
+    "boundary": "MySQL 8.4.13 and RocketMQ 5.5.0 on one host. The Worker reopens its LOCAL journal. Individual Broker processes restart with independent retained tmpfs stores. Three separate Controllers use named volumes. The fixture loses the elected Controller, isolates the successor with just one reachable Controller and restores the majority on the original named volume. Cross-host failure, destroyed storage, and mutual TLS remain separate profiles. The consumer fixture verifies a local transactional inbox and independent native group offsets after reconnect.",
+    "focusedJavaChecksPassed": 5,
+    "focusedConsoleChecksPassed": 2,
+    "isolatedControllerProof": {
+      "stopped": [
+        "rocket-controller-c",
+        "rocket-controller-a"
+      ],
+      "held": {
+        "worker": {
+          "topic": "worker_events_c720fbcdf4f8f5f9a91c109c29a238940da6c8fdbe896865795b18fd60da75da",
+          "retained": {
+            "queueOffset": 16,
+            "commitLogOffset": 27741,
+            "contentSha256": "fe2b1c33eb31a114c5dba277ed1fc889a6b70c1974a803d674c470651d4e9771"
+          },
+          "generation": "bad35ac1-c259-49fa-bf11-406a4423defb",
+          "snapshotId": "13402776-5b03-4298-ad2f-0dcc06f98115",
+          "sequence": 4,
+          "transactionId": "ab3f2ee1-e48c-11f1-88ab-3ed861f2f03f:12",
+          "epoch": 2,
+          "capturedSequence": 5
+        },
+        "claimedLeadership": true,
+        "diagnostic": "ROCKETMQ_CONTROLLER_ROUTE_RETRY",
+        "reachableMinority": "rocket-controller-b:9877"
+      },
+      "resumed": {
+        "liveInSync": [
+          "rocket-replica-a:10911",
+          "rocket-replica-b:10911"
+        ],
+        "worker": {
+          "topic": "worker_events_c720fbcdf4f8f5f9a91c109c29a238940da6c8fdbe896865795b18fd60da75da",
+          "retained": {
+            "queueOffset": 19,
+            "commitLogOffset": 33029,
+            "contentSha256": "6c286a7ce5e46b45bae767908986816a8b180f56ccd3e64340a00491e57ff4d8"
+          },
+          "generation": "bad35ac1-c259-49fa-bf11-406a4423defb",
+          "snapshotId": "13402776-5b03-4298-ad2f-0dcc06f98115",
+          "sequence": 5,
+          "transactionId": "ab3f2ee1-e48c-11f1-88ab-3ed861f2f03f:13",
+          "epoch": 2,
+          "capturedSequence": 5
+        },
+        "brokerMaster": "rocket-replica-b:10911",
+        "brokerEpoch": 2,
+        "leader": "rocket-controller-b:9877"
+      }
+    }
   }
 }

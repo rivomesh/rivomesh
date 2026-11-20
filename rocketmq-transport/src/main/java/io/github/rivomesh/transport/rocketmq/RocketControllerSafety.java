@@ -26,14 +26,19 @@ final class RocketControllerSafety {
     }
 
     record Replica(String address, long id) {}
-    private record Leader(String address, String group) {}
+    record Leader(String address, String group, String id) {}
 
-    private final List<String> controllers;
+    @FunctionalInterface
+    interface MetadataReader {
+        GetMetaDataResponseHeader read(String endpoint) throws Exception;
+    }
+
+    private final Set<String> controllers;
     private final String cluster, broker;
     private final int timeout, retention;
 
     RocketControllerSafety(RocketTransport.Settings settings) {
-        controllers = List.copyOf(settings.controllerEndpoints);
+        controllers = Set.copyOf(settings.controllerEndpoints);
         cluster = settings.cluster;
         broker = settings.broker;
         timeout = settings.requestTimeoutMillis;
@@ -41,7 +46,7 @@ final class RocketControllerSafety {
     }
 
     Route inspect(MQClientAPIImpl api, String nameserverMaster) throws Exception {
-        Leader leader = leader(api);
+        Leader leader = leader(api::getControllerMetaData);
         Properties policy;
         ReplicasInfo evidence;
         try {
@@ -60,29 +65,49 @@ final class RocketControllerSafety {
         return route;
     }
 
-    private Leader leader(MQClientAPIImpl api) throws Exception {
-        Leader leader = null;
-        Set<Leader> claims = new HashSet<>();
+    Leader leader(MetadataReader metadata) throws Exception {
+        Leader observed = null;
+        int agreeing = 0;
+        boolean leaderConfirmed = false;
         for (String endpoint : controllers) {
             GetMetaDataResponseHeader info;
             try {
-                info = api.getControllerMetaData(endpoint);
+                info = metadata.read(endpoint);
             } catch (InterruptedException interrupted) {
                 throw interrupted;
             } catch (Exception unavailable) {
                 continue;
             }
             if (info == null || info.getControllerLeaderAddress() == null || info.getGroup() == null) continue;
-            Leader claim = new Leader(info.getControllerLeaderAddress(), info.getGroup());
-            if (claim.group.isBlank() || !controllers.contains(claim.address)) throw routeRetry();
-            claims.add(claim);
+            Leader claim = new Leader(info.getControllerLeaderAddress(), info.getGroup(), info.getControllerLeaderId());
+            if (claim.group.isBlank() || claim.id == null || claim.id.isBlank() || !controllers.contains(claim.address)
+                    || !controllers.equals(controllerMembers(info.getPeers()))) throw routeRetry();
+            if (observed != null && !observed.equals(claim)) throw routeRetry();
+            observed = claim;
+            agreeing++;
             if (info.isLeader()) {
                 if (!endpoint.equals(claim.address)) throw routeRetry();
-                leader = claim;
+                leaderConfirmed = true;
             }
         }
-        if (leader == null || claims.size() != 1) throw routeRetry();
-        return leader;
+        if (!leaderConfirmed || agreeing <= controllers.size() / 2) throw routeRetry();
+        return observed;
+    }
+
+    private static Set<String> controllerMembers(String peers) throws RocketTransport.Failure {
+        if (peers == null) throw routeRetry();
+        Set<String> members = new HashSet<>();
+        for (String peer : peers.split(";")) {
+            // DLedger advertises id:host:port, while JRaft advertises host:port.
+            String address = peer;
+            if (!nativeAddress(address)) {
+                int separator = peer.indexOf(':');
+                if (separator < 1) throw routeRetry();
+                address = peer.substring(separator + 1);
+            }
+            if (!nativeAddress(address) || !members.add(address)) throw routeRetry();
+        }
+        return members;
     }
 
     static Route route(String controller, String group, String broker, String nameserver, ReplicasInfo evidence)

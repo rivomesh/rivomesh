@@ -2,15 +2,13 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-20T09:58:25+08:00",
-  "nextReportAt": "2026-11-20T10:58:16+08:00",
+  "lastReportAt": "2026-11-20T10:58:16+08:00",
+  "nextReportAt": "2026-11-20T11:58:16+08:00",
   "completedSincePrevious": [
-    "CP-04: Verified external journal placement and original Agent outage recovery. Published 57adbe7.",
-    "LG-05: Accepted managed handoff across separate PostgreSQL stores and automatic recovery after two control commit interruptions. Published 6258be3.",
-    "JV-03: Accepted five external JDBC providers with native MySQL and PostgreSQL TLS and Kingbase restart recovery. Published 9cac6d7."
+    "SO-06: PostgreSQL source, two-target common-cut validation, generated columns and restart accepted. Published 18aabc7."
   ],
   "inProgress": [
-    "LG-04: RocketMQ Worker and single Controller leader fault accepted. Continue remaining production recovery profiles."
+    "LG-04: RocketMQ majority hold, original-store recovery and native consumer replay accepted. Continue with remaining explicit gap and wider deployment profiles."
   ],
   "reportContents": [
     "Current totals",
@@ -20,14 +18,14 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 41,
-    "PARTIAL": 7,
+    "DONE": 42,
+    "PARTIAL": 6,
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "57adbe7",
-    "6258be3",
-    "9cac6d7"
+    "18aabc7",
+    "8068a51",
+    "1c2ddf6"
   ],
   "currentSdd": {
     "DONE": 42,
@@ -35,18 +33,16 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Continue LG-04 with loss and restoration of the RocketMQ Controller majority and remaining recovery profiles.",
+    "Continue LG-04 with consumer deduplication and explicit gap acceptance per remaining messaging product.",
     "LG-08 still requires reviewed historical DDL execution and commercial distributed GaussDB acceptance."
   ],
-  "currentCandidateArtifact": "10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a",
-  "currentCandidateScope": "MySQL CDC Worker, native RocketMQ broker promotion and restart, replica backlog recovery and Controller election.",
+  "currentCandidateArtifact": "2c87464463fc299ae42d4c8d23c77fbb2f36f4ba71c4d01f0e9cb853d41d905e",
+  "currentCandidateScope": "RocketMQ Controller membership and majority guard, MySQL CDC Worker backlog hold and original-volume restoration.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Accepted SO-06 with PostgreSQL 17.12 two-target common-cut validation and PostgreSQL 18.7 native generated columns and restart.",
-    "Verified LG-08 PostgreSQL TRUNCATE fencing, original-cut restore, and openGauss keyless replay; historical execution and the commercial cluster remain.",
-    "Verified LG-04 RocketMQ on the packaged MySQL Worker, including original-cut restart, retained backlog and Controller leadership recovery."
+    "Verified native RocketMQ consumer redelivery and durable deduplication with the same package."
   ],
-  "lastScheduledReportAt": "2026-11-20T09:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-20T10:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "1fc8100",
     "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",

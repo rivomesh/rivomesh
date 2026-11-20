@@ -1023,17 +1023,17 @@ Object.assign(messages.zh,{physicalResource:'物理 Topic / Stream',TRANSACTIONA
 Object.assign(messages.en,{physicalResource:'Physical topic / stream',TRANSACTIONAL:'Data and checkpoint commit in this destination transaction',AT_LEAST_ONCE_EVENTS:'Confirmed at-least-once; downstream deduplication and business completion required'});
 
 Object.assign(messages.zh,{
- rocketControllerEndpoints:'受信 RocketMQ Controller 地址（可选，逗号分隔）',
+ rocketControllerEndpoints:'全部 RocketMQ Controller 地址（可选，逗号分隔）',
  ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID:'填写带端口的 rocketmq://地址，最多五个且不能重复。',
- ROCKETMQ_CONTROLLER_ROUTE_RETRY:'正在等待可信 Controller、NameServer 主节点及至少两个同步副本达成一致。',
+ ROCKETMQ_CONTROLLER_ROUTE_RETRY:'正在等待 Controller 多数派、NameServer 主节点和至少两个同步副本。请核对是否填齐了 Controller 通告的地址。',
  ROCKETMQ_CONTROLLER_POLICY_REQUIRES_PLAN:'RocketMQ Controller 复制或选主策略不符合当前档案，请核对三个副本。',
  ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING:'正在等待当前代次主题的单队列配置同步到所有活跃同步副本。',
  ROCKETMQ_CONTROLLER_RECEIPT_RETRY:'尚未核实原生回执，保持原投递进度并重试。',
  rocketBroker:'RocketMQ Broker 名称',rocketCluster:'RocketMQ 集群名称',rocketTopicPrefix:'专用 Topic 前缀（自动追加任务代次标识）',rocketRetention:'要求的最短历史保留小时数',ROCKETMQ_SYNCHRONOUS_DISK_REQUIRED:'Broker 必须同步刷盘并关闭暂存池。',ROCKETMQ_RETENTION_REQUIRES_PLAN:'历史保留或强制清理配置不符合要求，请检查恢复计划。'});
 Object.assign(messages.en,{
- rocketControllerEndpoints:'Trusted RocketMQ Controller URLs (optional, comma-separated)',
+ rocketControllerEndpoints:'All RocketMQ Controller URLs (optional, comma-separated)',
  ROCKETMQ_CONTROLLER_ENDPOINTS_INVALID:'Enter up to five distinct rocketmq:// addresses with explicit ports.',
- ROCKETMQ_CONTROLLER_ROUTE_RETRY:'Waiting for the trusted Controller, NameServer master route and two synchronized replicas to agree.',
+ ROCKETMQ_CONTROLLER_ROUTE_RETRY:'Waiting for a Controller majority, the NameServer master route and two synchronized replicas. Check that every advertised Controller address is configured.',
  ROCKETMQ_CONTROLLER_POLICY_REQUIRES_PLAN:'The RocketMQ Controller election or replica policy differs from the supported three-member profile.',
  ROCKETMQ_CONTROLLER_TOPIC_METADATA_PENDING:'Waiting for this generation’s one-queue topic metadata on all live in-sync replicas.',
  ROCKETMQ_CONTROLLER_RECEIPT_RETRY:'The native receipt is unverified. Publication will retry from the previous confirmation.',

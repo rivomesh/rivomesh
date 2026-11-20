@@ -26,13 +26,13 @@ import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicaIden
 import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicasInfo;
 import org.apache.rocketmq.remoting.protocol.route.BrokerData;
 
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
-import java.net.URI;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +43,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-/** Broker-native offset proof and the current Rivomesh adapter's explicit refusal of Controller mode. */
+/** Broker-native receipt, Worker restart and Controller recovery checks. */
 public final class RocketControllerPromotionAcceptance {
     private static final String NAMESERVER = "rocketnamesrv:9876";
     private static final String CONTROLLER = "rocketnamesrv:9877";
@@ -192,17 +192,9 @@ public final class RocketControllerPromotionAcceptance {
                     "the remaining follower cutoff");
             until(() -> election(api, 1, original), "one live synchronized replica");
             sourceSql("INSERT INTO sales.items VALUES(3,'waits for replicas')");
-            until(() -> {
-                WorkerCut held = workerCut(config);
-                if (held == null || held.capturedSequence() != 3) return null;
-                try (var journal = new JdbcJournal(config.existingJournalSettings())) {
-                    if (!"ROCKETMQ_CONTROLLER_ROUTE_RETRY".equals(journal.subscriptions().getFirst().errorCode)) return null;
-                }
-                require(held.sequence() == after.sequence() && held.retained().equals(after.retained())
-                        && api.getMaxOffset(promoted.address(), queue, TIMEOUT) == after.retained().queueOffset() + 1,
-                        "The declined replica state changed the broker or Worker receipt");
-                return Boolean.TRUE;
-            }, "an actual queued transaction held below the replica minimum");
+            heldWorkerCut(config, after, 3);
+            require(api.getMaxOffset(promoted.address(), queue, TIMEOUT) == after.retained().queueOffset() + 1,
+                    "The declined replica state changed the broker queue");
             write(markers, "minimum-refused.json", Map.of("status", "PASS", "confirmed", after.retained()));
             until(() -> Files.isRegularFile(markers.resolve("remaining-follower-restarted")) ? Boolean.TRUE : null,
                     "the original follower volume to return");
@@ -261,6 +253,49 @@ public final class RocketControllerPromotionAcceptance {
         require(before.epoch() == after.epoch(), "The Controller election changed the Worker epoch");
         verifyWorkerReceipt(api, afterElection, after);
         write(markers, "controller-succeeded.json", Map.of("leader", activeController, "worker", after));
+        String isolatedLeader = activeController;
+        until(() -> Files.isRegularFile(markers.resolve("controller-majority-lost")) ? Boolean.TRUE : null,
+                "the final Controller follower to be killed");
+        var minority = until(() -> api.getControllerMetaData(isolatedLeader), "the reachable Controller minority");
+        sourceSql("INSERT INTO sales.items VALUES(5,'waits for Controller majority')");
+        WorkerCut held = heldWorkerCut(config, after, 5);
+        verifyWorkerReceipt(api, afterElection, held);
+        write(markers, "controller-majority-held.json", Map.of("reachableMinority", isolatedLeader,
+                "claimedLeadership", minority.isLeader(), "diagnostic", "ROCKETMQ_CONTROLLER_ROUTE_RETRY", "worker", held));
+
+        until(() -> Files.isRegularFile(markers.resolve("controller-majority-restored")) ? Boolean.TRUE : null,
+                "the original Controller to restart on its retained store");
+        activeController = until(() -> controllerLeader(api, endpoints), "a Controller leader after majority recovery");
+        Election restored = until(() -> election(api, 2, null), "the original broker route after majority recovery");
+        require(afterElection.equals(restored), "Restoring the Controller majority changed the broker ownership");
+        WorkerCut resumed = confirmedWorkerCut(config, 5);
+        checkContinuation(after, resumed);
+        require(resumed.epoch() == after.epoch(), "Restoring Controller majority restarted the Worker");
+        verifyWorkerReceipt(api, restored, resumed);
+        write(markers, "controller-majority-resumed.json", Map.of("leader", activeController,
+                "brokerMaster", restored.address(), "brokerEpoch", restored.epoch(),
+                "liveInSync", restored.liveInSync(), "worker", resumed));
+        MessageQueue queue = new MessageQueue(resumed.topic(), BROKER, 0);
+        var replay = RocketConsumerReplayAcceptance.verify(api, restored.address(), markers.resolve("consumer-inbox"), NAMESERVER,
+                queue, after.retained().queueOffset() - 2, after.retained().queueOffset() + 1,
+                resumed.retained().queueOffset() + 1, after.transactionId(), resumed.transactionId());
+        write(markers, "consumer-replay.json", replay);
+    }
+
+    private static WorkerCut heldWorkerCut(PipelineConfig config, WorkerCut before, long capturedSequence) throws Exception {
+        return until(() -> {
+            WorkerCut held = workerCut(config);
+            if (held == null || held.capturedSequence() != capturedSequence) return null;
+            try (var journal = new JdbcJournal(config.existingJournalSettings())) {
+                if (!"ROCKETMQ_CONTROLLER_ROUTE_RETRY".equals(journal.subscriptions().getFirst().errorCode)) return null;
+            }
+            require(held.sequence() == before.sequence() && held.retained().equals(before.retained())
+                    && held.epoch() == before.epoch() && held.generation().equals(before.generation())
+                    && held.snapshotId().equals(before.snapshotId()) && held.topic().equals(before.topic())
+                    && held.transactionId().equals(before.transactionId()),
+                    "The blocked route changed the Worker publication cut");
+            return held;
+        }, "a captured transaction held at source sequence " + capturedSequence);
     }
 
     private static void checkContinuation(WorkerCut before, WorkerCut after) {

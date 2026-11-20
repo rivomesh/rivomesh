@@ -2,9 +2,11 @@ package io.github.rivomesh.transport.rocketmq;
 
 import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicaIdentity;
 import org.apache.rocketmq.remoting.protocol.body.BrokerReplicasInfo.ReplicasInfo;
+import org.apache.rocketmq.remoting.protocol.header.controller.GetMetaDataResponseHeader;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,6 +25,46 @@ class RocketControllerSafetyTest {
     }
     private static RocketControllerSafety.Route original()throws Exception{
         return view(A,1L,A,1,2,List.of(FIRST,SECOND,THIRD),List.of());
+    }
+
+    @Test void requiresTheElectedControllerAndAMajorityOfTheAdvertisedMembers() throws Exception {
+        String first = CONTROLLER, second = "controller-b:9877", third = "controller-c:9877";
+        String members = "n0:" + first + ";n1:" + second + ";n2:" + third + ";";
+        var safety = controllerSafety(List.of(first, second, third));
+        var leader = new GetMetaDataResponseHeader(GROUP, "n0", first, true, members);
+        var follower = new GetMetaDataResponseHeader(GROUP, "n0", first, false, members);
+        var rival = new GetMetaDataResponseHeader(GROUP, "n2", third, true, members);
+        assertEquals(first, safety.leader(Map.of(first, leader, second, follower)::get).address());
+
+        assertRetry(() -> safety.leader(Map.of(first, leader)::get));
+        assertRetry(() -> safety.leader(Map.of(second, follower, third, follower)::get));
+        assertRetry(() -> safety.leader(Map.of(first, leader, second, follower, third, rival)::get));
+        assertRetry(() -> controllerSafety(List.of(first)).leader(Map.of(first, leader)::get));
+    }
+
+    @Test void readsStandaloneAndAddressOnlyMembershipWithTheSameRules() throws Exception {
+        var single = controllerSafety(List.of(CONTROLLER));
+        var embedded = new GetMetaDataResponseHeader(GROUP, "n0", CONTROLLER, true, "n0:" + CONTROLLER + ";");
+        assertEquals(CONTROLLER, single.leader(endpoint -> embedded).address());
+
+        String second = "[2001:db8::1]:9877";
+        var voters = controllerSafety(List.of(CONTROLLER, second, "controller-c:9877"));
+        String remoteMembers = CONTROLLER + ";" + second + ";controller-c:9877;";
+        var leader = new GetMetaDataResponseHeader(GROUP, "leader-peer", CONTROLLER, true, remoteMembers);
+        var follower = new GetMetaDataResponseHeader(GROUP, "leader-peer", CONTROLLER, false, remoteMembers);
+        assertEquals(CONTROLLER, voters.leader(Map.of(CONTROLLER, leader, second, follower)::get).address());
+
+        var mismatched = new GetMetaDataResponseHeader(GROUP, "other-peer", CONTROLLER, false, remoteMembers);
+        assertRetry(() -> voters.leader(Map.of(CONTROLLER, leader, second, mismatched)::get));
+        var duplicates = new GetMetaDataResponseHeader(GROUP, "leader-peer", CONTROLLER, false,
+                CONTROLLER + ";" + second + ";" + second + ";");
+        assertRetry(() -> voters.leader(Map.of(CONTROLLER, leader, second, duplicates)::get));
+    }
+
+    private static RocketControllerSafety controllerSafety(List<String> endpoints) {
+        var settings = new RocketTransport.Settings();
+        settings.controllerEndpoints = endpoints;
+        return new RocketControllerSafety(settings);
     }
 
     @Test void routeBindsLiveSyncSetToTheSameMasterAndPersistentReplicaIdentity()throws Exception{

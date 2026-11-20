@@ -20,6 +20,7 @@ BROKERS = ("rocket-primary", "rocket-replica-a", "rocket-replica-b")
 CONTROLLERS = ("rocket-controller-a", "rocket-controller-b", "rocket-controller-c")
 TEMPLATE = ROOT / "tests/rocketmq-broker.properties"
 SOURCE = ROOT / "tests/rocketmq/RocketControllerPromotionAcceptance.java"
+CONSUMER_SOURCE = ROOT / "tests/rocketmq/RocketConsumerReplayAcceptance.java"
 CLASS = "io.github.rivomesh.acceptance.RocketControllerPromotionAcceptance"
 
 
@@ -145,12 +146,46 @@ def acceptance(args, home, report):
     classes, marks = home / "classes", home / "markers"
     classes.mkdir()
     marks.mkdir()
-    run(args.java_home / "bin/javac", "--release", "21", "-cp", args.artifact, "-d", classes, SOURCE)
+    run(args.java_home / "bin/javac", "--release", "21", "-cp", args.artifact, "-d", classes, SOURCE, CONSUMER_SOURCE)
     report["testClassSha256"] = sha(classes / (CLASS.replace(".", "/") + ".class"))
+    report["consumerSourceSha256"] = sha(CONSUMER_SOURCE)
     compose = ("docker", "compose", "--env-file", "/dev/null", "-p", report["project"], "-f",
                str(render(home, args)))
     runner = None
     log = args.output / "sdk.log"
+
+    def controller_majority_restore(leader, successor, before, controller_pids):
+        follower = next(member for member in CONTROLLERS if member not in (leader, successor))
+        run(*compose, "kill", "-s", "SIGKILL", follower)
+        assert not run(*compose, "ps", "-q", follower).stdout.strip()
+        assert run(*compose, "ps", "--services", "--status", "running", *CONTROLLERS).stdout.split() == [successor]
+        assert pid(successor) == controller_pids[successor]
+        (marks / "controller-majority-lost").touch()
+        held = read_cut(marks / "controller-majority-held.json", runner, 155)
+        assert held["reachableMinority"] == successor + ":9877" and held["diagnostic"] == "ROCKETMQ_CONTROLLER_ROUTE_RETRY"
+        assert held["worker"] == {**before["worker"], "capturedSequence": before["worker"]["sequence"] + 1}
+        print("With the Controller majority offline, MySQL capture advances while both broker receipts hold", flush=True)
+
+        original_container = run(*compose, "ps", "-aq", leader).stdout.strip()
+        assert original_container
+        run(*compose, "start", leader)
+        assert run(*compose, "ps", "-q", leader).stdout.strip() == original_container
+        assert pid(successor) == controller_pids[successor]
+        (marks / "controller-majority-restored").touch()
+        resumed = read_cut(marks / "controller-majority-resumed.json", runner, 155)
+        assert resumed["leader"] in (leader + ":9877", successor + ":9877")
+        assert resumed["worker"]["sequence"] == held["worker"]["capturedSequence"]
+        assert resumed["worker"]["epoch"] == before["worker"]["epoch"]
+        assert resumed["brokerMaster"] == report["promoted"]["master"]
+        assert resumed["brokerEpoch"] == report["promoted"]["epoch"]
+        report["controllerMajorityRecovery"] = {"stopped": [leader, follower], "held": held, "resumed": resumed}
+        print("Restoring the original Controller store lets the same Worker deliver the queued GTID once", flush=True)
+        consumer = read_cut(marks / "consumer-replay.json", runner, 125)
+        assert consumer["reopenedOffset"] == before["worker"]["retained"]["queueOffset"] - 2
+        assert consumer["committedOffset"] == resumed["worker"]["retained"]["queueOffset"] + 1
+        assert consumer["deduplicatedEvents"] == 3 and consumer["committedBusinessTransactions"] == 2
+        report["consumerReplay"] = consumer
+        print("A fresh native consumer reopens its previous offset and deduplicates the three redelivered records", flush=True)
 
     def pid(service):
         container = run(*compose, "ps", "-q", service).stdout.strip()
@@ -230,6 +265,7 @@ def acceptance(args, home, report):
                         assert changed["worker"]["sequence"] == recovered["worker"]["sequence"] + 1
                         report["controllerElection"] = {"original": before, "successor": changed}
                         print("The original Worker continues on the same broker after the Controller leader is killed", flush=True)
+                        controller_majority_restore(leader, successor, changed, original_controller_pids)
             else:
                 print("The current Rivomesh adapter without opt-in refuses Controller mode before and after promotion", flush=True)
             assert runner.wait(timeout=25) == 0
@@ -262,7 +298,7 @@ def main():
     mode.add_argument("--product", action="store_true", help="Exercise the opt-in Rivomesh publisher through promotion")
     mode.add_argument("--worker", action="store_true", help="Exercise the actual MySQL CDC Worker and durable journal through promotion")
     parser.add_argument("--memory-stores", action="store_true", help="Use retained Linux tmpfs stores for this fixture only")
-    parser.add_argument("--controller-quorum", action="store_true", help="Run three Controllers and kill the elected leader in Worker mode")
+    parser.add_argument("--controller-quorum", action="store_true", help="Exercise Controller leader and majority loss and restoration in Worker mode")
     args = parser.parse_args()
     if args.controller_quorum and not args.worker:
         parser.error("--controller-quorum requires --worker")

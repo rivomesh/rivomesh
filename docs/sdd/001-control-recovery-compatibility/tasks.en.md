@@ -194,7 +194,9 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] RocketMQ 5.5.0 opt-in publisher passed native receipt reuse, actual promotion and unchanged progress below two synchronized replicas.
   - [x] The packaged MySQL CDC Worker resumes after SIGKILL, retains backlog below the RocketMQ replica minimum and delivers it when the original follower returns.
   - [x] Three Controllers elect a new leader after SIGKILL. The original Worker publishes on the same broker route with the same writer epoch.
-  - [ ] Controller majority loss, cross-host failure domains, internal network cryptography, capacity and remaining messaging profiles.
+  - [x] With only the elected RocketMQ Controller reachable, capture retains the transaction and both broker queues and receipts stay unchanged. Restoring the original majority resumes the same Worker.
+  - [x] RocketMQ native consumer offset reopens and deduplicates three original records after the durable business commit.
+  - [ ] Cross-host storage failure domains, internal network cryptography, capacity, consumer deduplication and explicit gap profiles for remaining products.
 - [x] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05

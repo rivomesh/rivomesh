@@ -299,7 +299,7 @@ Redis 依据：[WAITAOF 同连接语义和返回计数](https://redis.io/docs/la
 
 ### 启用 Controller 主备切换
 
-在 `messaging.rocketmqControllerEndpoints` 填写受信的原生 Controller 地址，并将 `messaging.replicas` 设为 `2`。目标 URL 和 `messaging.endpoints` 继续填写 NameServer 地址。在控制台的 RocketMQ 目标设置中，可填写带端口的 Controller 地址，以逗号分隔。向导自动选择最少两份副本。留空时沿用原单 ASYNC_MASTER 档案。
+在 `messaging.rocketmqControllerEndpoints` 填齐集群通告的所有受信原生 Controller 地址，并将 `messaging.replicas` 设为 `2`。目标 URL 和 `messaging.endpoints` 继续填写 NameServer 地址。在控制台的 RocketMQ 目标设置中，可填写带端口的 Controller 地址，以逗号分隔。向导自动选择最少两份副本。留空时沿用原单 ASYNC_MASTER 档案。
 
 ```yaml
 url: rocketmq://rocketnamesrv:9876
@@ -312,13 +312,13 @@ messaging:
     - rocketmq://rocketnamesrv:9877
 ```
 
-同一 Broker 组须配置三个使用独立存储的数据副本，受信 Controller 采用干净选主。投递前，Controller 的主节点地址、永久副本编号须与 NameServer 的活动路由及 Broker 实际角色一致。SyncStateSet 内成员须在线，且至少有两个。活动 Broker 角色为 `SYNC_MASTER`，配置 `SYNC_FLUSH`、`allAckInSyncStateSet=true`、`minInSyncReplicas=2`、`syncFromLastFile=false`、`asyncLearner=false`。所有副本应符合下文的保留策略、强制清理及自动建主题规则。数据路径使用 AutoSwitch CommitLog，停用 DLedger CommitLog。[RocketMQ Controller 部署说明](https://rocketmq.apache.org/zh/docs/deploymentOperations/03autofailover/)
+同一 Broker 组须配置三个使用独立存储的数据副本，受信 Controller 采用干净选主。Controller 主节点和过半成员须对 leader 达成一致。填写 Controller 通告的主机名和端口。投递前，Broker 主节点地址、永久副本编号须与 NameServer 的活动路由及 Broker 实际角色一致。SyncStateSet 内成员须在线，且至少有两个。活动 Broker 角色为 `SYNC_MASTER`，配置 `SYNC_FLUSH`、`allAckInSyncStateSet=true`、`minInSyncReplicas=2`、`syncFromLastFile=false`、`asyncLearner=false`。所有副本应符合下文的保留策略、强制清理及自动建主题规则。数据路径使用 AutoSwitch CommitLog，停用 DLedger CommitLog。[RocketMQ Controller 部署说明](https://rocketmq.apache.org/zh/docs/deploymentOperations/03autofailover/)
 
 物理主题包含日志代次。首次初始化可在已确认的活动 Broker 创建主题，等活跃同步副本都能读取确切的单队列配置后才写入归属记录或事件。已经初始化的主题须保有元数据与原生历史。提升后，主题元数据或主节点路由未就绪时保持已有确认并重试。少于两个在线同步副本时停止继续投递。
 
 已确认的主节点或任期变化时，Rivomesh 关闭旧 SDK 连接，直接向已核验的活动地址发送。读取原生消息，并再次核对同一任期、主节点和同步集合后才接受回执。原主题代次和 `ROCKETMQ_OFFSET_V1` 坐标继续使用。确认丢失或不确定时仍可能以相同事件 ID 重放。已确认内容出现冲突时，恢复前须核实历史。Controller 档案有独立的配置指纹，切换持久性档案需明确迁移计划。
 
-已使用 RocketMQ 5.5.0、在线的内嵌 Controller 和三个独立 Broker 数据卷完成产品发布者实测。主节点任期从 1 增至 2 后，保留事件的队列偏移 1、物理偏移 451 和内容摘要一致。新事件在 2 / 906 得到确认，新建发布者能以原生回执重开。停止剩余备用节点后，已确认回执及 Broker 队列末尾保持不变。Controller 多数派丢失、Broker 存储丢失、DLedger CommitLog、TLS、ACL 和跨主机 Worker 迁移分别验收。NameServer、Controller 与 Broker 保持在可信网络。[原生夹具与复现命令](../../tests/rocketmq/controller-promotion.md)
+已使用 RocketMQ 5.5.0、在线的内嵌 Controller 和三个独立 Broker 数据卷完成产品发布者实测。主节点任期从 1 增至 2 后，保留事件的队列偏移 1、物理偏移 451 和内容摘要一致。新事件在 2 / 906 得到确认，新建发布者能以原生回执重开。停止剩余备用节点后，已确认回执及 Broker 队列末尾保持不变。Broker 存储丢失、DLedger CommitLog、TLS、ACL 和跨主机 Worker 迁移分别验收。NameServer、Controller 与 Broker 保持在可信网络。[原生夹具与复现命令](../../tests/rocketmq/controller-promotion.md)
 
 ### 主题和保留设置
 
@@ -334,7 +334,7 @@ messaging:
 
 仅归属清单匹配不能证明已确认历史仍保留。RocketMQ 已加入下述原生确认回执与回退检测；其他消息产品仍需各自的检测和故障验收，不能把这项保证外推到全部 Broker。
 
-MySQL 8.4 实库演练验证了 Broker 主节点切换和 Rivomesh Worker 强杀后沿用原日志与快照。只剩一个在线同步副本时，源事务继续进入日志，投递回执和 Broker 队列保持原切点。原备用节点恢复后，同一 Worker 自动补发积压的 GTID，两个在线副本确认相同的 COMMIT。三 Controller 集群的主节点强杀后，原 Worker 也沿用了原 Broker 路由和写入任期，并确认下一笔事务。Controller 多数派丢失、主机或磁盘丢失、DLedger CommitLog、TLS 和 ACL 单独验收。 [原生证据](../verification/README.md#packaged-mysql-cdc-worker-with-rocketmq-controller-broker-recovery)
+MySQL 8.4 实库演练验证了 Broker 主节点切换和 Rivomesh Worker 强杀后沿用原日志与快照。只剩一个在线同步副本时，源事务继续进入日志，投递回执和 Broker 队列保持原切点。原备用节点恢复后，同一 Worker 自动补发积压的 GTID，两个在线副本确认相同的 COMMIT。三 Controller 集群的主节点强杀后，原 Worker 也沿用了原 Broker 路由和写入任期，并确认下一笔事务。只剩原 Controller 主节点可达时，新 MySQL 事务留在日志中，两个 Broker 的队列末尾和原生回执均保持不变。使用原卷恢复一个 Controller 后，同一 Worker 从原断点补发。原生拉取客户端在本地业务提交后保留旧消费位点，新客户端重读三条相同事件，通过事件 ID 和摘要去重，处理后续 GTID 后再推进消费位点。长时间等待时，核对是否填齐通告地址，并恢复原 Controller 存储。源采集仍受采集日志配额限制。主机或磁盘丢失、DLedger CommitLog、TLS 和 ACL 单独验收。 [原生证据](../verification/README.md#packaged-mysql-cdc-worker-with-rocketmq-controller-broker-recovery)
 
 ### RocketMQ 原生确认回执
 
