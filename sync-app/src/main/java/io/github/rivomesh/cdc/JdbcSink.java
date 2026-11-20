@@ -553,6 +553,16 @@ public final class JdbcSink implements SinkAdapter {
         return values;
     }
     private List<String> keys(TableSchema table){return table.keyless()?Collections.singletonList(ROW_ID):table.primaryKey.isEmpty()?table.identityKey:table.primaryKey;}
+    public static void validateOracleMysqlProjection(TableSchema table){
+        if(!"ORACLE".equals(table.sourceEngine))return;
+        for(TableSchema.Column column:table.columns){
+            if(column.type==TableSchema.Type.DECIMAL&&column.scale>30)
+                throw new IllegalArgumentException("ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED");
+        }
+    }
+    private boolean oracleMysql(TableSchema table){
+        return settings.product==TargetProduct.MYSQL&&"ORACLE".equals(table.sourceEngine);
+    }
     private String type(TableSchema.Column col){
         if(dm())return DmStorage.type(col);
         switch(col.type){
@@ -562,7 +572,10 @@ public final class JdbcSink implements SinkAdapter {
             case DECIMAL:if(col.precision<1||col.precision>1000||col.scale<0||col.scale>col.precision)throw new IllegalArgumentException("DECIMAL_RANGE_INVALID");return "DECIMAL("+col.precision+","+col.scale+")";
             case FLOAT32:return mysql()?"FLOAT":"REAL";
             case FLOAT64:return mysql()?"DOUBLE":"DOUBLE PRECISION";
-            case BYTES:case GEOMETRY:return mysql()?"LONGBLOB":settings.product==TargetProduct.H2?"BLOB":"BYTEA";
+            case BYTES:case GEOMETRY:
+                if(settings.product==TargetProduct.MYSQL&&"RAW".equals(col.sourceType))
+                    return "VARBINARY("+col.length+")";
+                return mysql()?"LONGBLOB":settings.product==TargetProduct.H2?"BLOB":"BYTEA";
             case STRING:if(col.length>0&&col.length<=4000)return "VARCHAR("+(settings.product==TargetProduct.GAUSS?Math.multiplyExact(col.length,4):col.length)+")";return mysql()?"LONGTEXT":"TEXT";
             case DATE:return "DATE";
             case DATETIME:case TIMESTAMP:return mysql()?"DATETIME(6)":"TIMESTAMP(6)";
@@ -614,7 +627,7 @@ public final class JdbcSink implements SinkAdapter {
                     case DATE:matches=jdbc==Types.DATE||(settings.product==TargetProduct.GAUSS||dm())&&jdbc==Types.TIMESTAMP;break;
                     case DATETIME:case TIMESTAMP:
                         matches=jdbc==Types.TIMESTAMP&&temporalPrecision(c,table,col,m.getScale(i+1))>=6
-                                &&(!OracleDate.isColumn(col)||actual.equals("timestamp"));
+                                &&(!OracleDate.isColumn(col)||actual.equals(mysql()?"datetime":"timestamp"));
                         break;
                     case TIME:
                         if(nativePostgresClock(col)||mysql()&&PostgresClock.isColumn(col))
@@ -626,6 +639,8 @@ public final class JdbcSink implements SinkAdapter {
                 }
                 if(dm()&&col.type==TableSchema.Type.STRING)matches=jdbc==Types.CLOB||jdbc==Types.VARCHAR&&col.length>0&&DmProfile.characterCapacity(c,destination(table),table.name,col.name)>=col.length;
                 if(dm()&&(col.type==TableSchema.Type.BYTES||col.type==TableSchema.Type.GEOMETRY)&&jdbc!=Types.BLOB)matches=matches&&col.length>0&&m.getPrecision(i+1)>=col.length;
+                if(oracleMysql(table)&&"RAW".equals(col.sourceType))
+                    matches=jdbc==Types.VARBINARY&&m.getPrecision(i+1)>=col.length;
                 if(!matches)throw new IllegalStateException("TARGET_COLUMN_TYPE_MISMATCH",new IllegalStateException("column="+col.name+", expected="+col.type+", actual="+actual+", jdbc="+jdbc+", precision="+m.getPrecision(i+1)+", scale="+m.getScale(i+1)));
                 if(m.isAutoIncrement(i+1))throw new IllegalStateException("TARGET_IDENTITY_COLUMN_REQUIRES_PLAN");
             }
@@ -633,6 +648,7 @@ public final class JdbcSink implements SinkAdapter {
         }
         Map<Short,String> primary=new TreeMap<>();try(ResultSet rs=c.getMetaData().getPrimaryKeys(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name)){while(rs.next())primary.put(rs.getShort("KEY_SEQ"),rs.getString("COLUMN_NAME"));}
         if(!new ArrayList<>(primary.values()).equals(keys(table)))throw new IllegalStateException("TARGET_PRIMARY_KEY_MISMATCH");
+        if(oracleMysql(table))validateOracleMysqlTextKeys(c,table);
         try(ResultSet rs=c.getMetaData().getImportedKeys(mysql()?destination(table):c.getCatalog(),mysql()?null:destination(table),table.name)){if(rs.next())throw new IllegalStateException("TARGET_FOREIGN_KEYS_REQUIRE_PLAN");}
         if(settings.product!=TargetProduct.H2)try(PreparedStatement p=c.prepareStatement(dm()?"SELECT 1 FROM ALL_TRIGGERS WHERE TABLE_OWNER=? AND TABLE_NAME=?":"SELECT 1 FROM information_schema.triggers WHERE event_object_schema=? AND event_object_table=?"+(verifiedWriterTrigger==null?"":" AND trigger_name<>?")+" LIMIT 1")){
             p.setString(1,destination(table));p.setString(2,table.name);if(verifiedWriterTrigger!=null)p.setString(3,verifiedWriterTrigger);
@@ -640,6 +656,24 @@ public final class JdbcSink implements SinkAdapter {
         }
         if(mysql())try(PreparedStatement p=c.prepareStatement("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME=?")){
             p.setString(1,destination(table));p.setString(2,table.name);try(ResultSet rs=p.executeQuery()){if(!rs.next()||!"InnoDB".equalsIgnoreCase(rs.getString(1)))throw new IllegalStateException("TARGET_ENGINE_NOT_TRANSACTIONAL");}
+        }
+    }
+    private void validateOracleMysqlTextKeys(Connection c,TableSchema table)throws SQLException{
+        String query="SELECT DATA_TYPE,COLLATION_NAME FROM information_schema.COLUMNS "
+                +"WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?";
+        try(PreparedStatement column=c.prepareStatement(query)){
+            column.setString(1,destination(table));
+            column.setString(2,table.name);
+            for(String key:table.primaryKey){
+                TableSchema.Column definition=table.columns.get(table.column(key));
+                if(definition.type!=TableSchema.Type.STRING)continue;
+                column.setString(3,key);
+                try(ResultSet rows=column.executeQuery()){
+                    if(!rows.next()||!"varchar".equalsIgnoreCase(rows.getString(1))
+                            ||!"utf8mb4_0900_bin".equalsIgnoreCase(rows.getString(2)))
+                        throw new IllegalStateException("ORACLE_MYSQL_TEXT_KEY_COLLATION_REQUIRES_PLAN");
+                }
+            }
         }
     }
     private boolean nativePostgresClock(TableSchema.Column column){
@@ -653,13 +687,21 @@ public final class JdbcSink implements SinkAdapter {
         }
     }
     @Override public synchronized void prepare(long epoch,TableSchema table)throws Exception{
-        table.validate();if(dm())DmStorage.plan(table,settings.acknowledgeTextConversions);String definition=columnDefinitions(table);
+        table.validate();
+        if(dm())DmStorage.plan(table,settings.acknowledgeTextConversions);
+        if(oracleMysql(table))validateOracleMysqlProjection(table);
+        String definition=columnDefinitions(table);
         List<IndexPolicy.Decision> indexes=IndexPolicy.plan(table,settings.product,settings.uniquePolicy);
         for(IndexPolicy.Decision index:indexes)if("REQUIRES_PLAN".equals(index.action))throw new IllegalStateException("INDEX_CONVERSION_REQUIRES_PLAN");
         try(Connection c=connect()){
             c.setAutoCommit(false);locked(c,epoch);createNamespace(c,destination(table));TargetOwnership.initialize(c,destination(table),settings.product==TargetProduct.OCEANBASE);locked(c,epoch);TargetOwnership.claim(c,destination(table),table.name,settings.pipelineId,settings.id,settings.generation);
             boolean known=registered(c,table),existing=exists(c,table);if(known&&!existing)throw new IllegalStateException("TARGET_TABLE_MISSING_REBUILD_REQUIRED");
-            if(!existing){createNamespace(c,destination(table));ddl(c,"CREATE TABLE IF NOT EXISTS "+table(table)+" ("+definition+")"+(mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin":""));}
+            if(!existing){
+                createNamespace(c,destination(table));
+                String storage=mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE="
+                        +(oracleMysql(table)?"utf8mb4_0900_bin":"utf8mb4_bin"):"";
+                ddl(c,"CREATE TABLE IF NOT EXISTS "+table(table)+" ("+definition+")"+storage);
+            }
             // MySQL/DM DDL can commit; reacquire the local fence before registering any result.
             locked(c,epoch);validateShape(c,table);
             TargetOwnership.verify(c,destination(table),table.name,settings.pipelineId,settings.id,settings.generation);
@@ -709,7 +751,8 @@ public final class JdbcSink implements SinkAdapter {
                 break;
             case DATETIME:case TIMESTAMP:
                 if(PostgresTimestamp.isColumn(col))p.setObject(n,PostgresTimestamp.localTime(v));
-                else if(settings.product==TargetProduct.POSTGRESQL&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
+                else if((settings.product==TargetProduct.POSTGRESQL||settings.product==TargetProduct.MYSQL)
+                        &&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
                 else p.setTimestamp(n,Timestamp.valueOf(v));
                 break;
             case JSON:if(mysql()||dm()||settings.product==TargetProduct.H2)p.setString(n,JsonValues.text(v));else p.setObject(n,JsonValues.text(v),Types.OTHER);break;

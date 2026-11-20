@@ -53,7 +53,8 @@ final class OracleCdcSource implements SourceAdapter {
         for(PipelineConfig.Target target:pipeline.targets){
             if(target==null||target.product==null)continue;
             TargetProduct product=target.product;
-            if(product!=TargetProduct.POSTGRESQL&&product!=TargetProduct.CLICKHOUSE&&!product.messaging())
+            if(product!=TargetProduct.POSTGRESQL&&product!=TargetProduct.MYSQL
+                    &&product!=TargetProduct.CLICKHOUSE&&!product.messaging())
                 throw new IllegalArgumentException("ORACLE_SOURCE_TARGET_PROFILE_UNAVAILABLE");
         }
     }
@@ -373,7 +374,7 @@ final class OracleCdcSource implements SourceAdapter {
     }
 
     @Override public void requireSeparateDatabase(String driver,String url,String username,String password){
-        // The admitted PostgreSQL target and both permitted journal engines use other source protocols.
+        // The SQL targets and both journal engines use different database protocols from the Oracle source.
     }
 
     @Override public void close(){}

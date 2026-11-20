@@ -9,7 +9,7 @@
 1. 在源实例启用 `wal_level=logical`，为任务的持久槽和导出快照的临时槽预留容量。源账号需要 `LOGIN`、`REPLICATION` 和已发布表的 `SELECT` 权限。
 2. 创建明确列出同步表的发布，包含 INSERT、UPDATE、DELETE 和 TRUNCATE。对这些表设置 `REPLICA IDENTITY FULL`，以获取包括无主键行在内的完整前镜像。保持发布的表、列和行范围稳定，结构变更先暂停并审阅。
 3. 按[示例配置](../../config/postgresql-source-v3.yml)设置源库、发布和目标。使用 PostgreSQL 目标时，连接角色需要读取 `pg_control_system()` 以核对物理连接身份。源库与目标库采用独立数据库。
-4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL、MySQL、Gauss JDBC 系列、ClickHouse、Doris 及消息目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
+4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL、MySQL、Gauss JDBC 系列、ClickHouse、Doris、Hive 及消息目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
 
 数据库会在创建逻辑复制槽时提供一致位置。Rivomesh 导入导出的 MVCC 快照读取表数据，按原 LSN 捕获快照期间及之后的事务。提交已写入 Rivomesh 日志后才确认源槽。每个任务使用与日志世代绑定的槽名。[PostgreSQL 复制协议](https://www.postgresql.org/docs/17/protocol-replication.html) · [pgJDBC 复制 API](https://jdbc.postgresql.org/documentation/server-prepare/)
 
@@ -33,6 +33,8 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 PostgreSQL 17.12 同时写入 PostgreSQL、ClickHouse 25.8.33.6 和 Redis Streams 7.4.2 已通过实库验收。全量和增量保留 JSON 大整数、原字节及定点数精度。主键变更、无主键重复行只删除一次、强杀后原 WAL 槽和快照续传均通过。Redis 保留原事件、消息位点及有类型的 PostgreSQL 源坐标。使用夹具的 `--redis-clickhouse` 参数复现。其他消息产品的运行条件分别验收。
 
 `--doris` 实库夹具验证 PostgreSQL 17.12 同时写入单节点 Doris 4.1.3 和 PostgreSQL。Doris 保留 DECIMAL 与 JSON 数值精度，字节以 Base64 存储。实测主键变更、只删除一条重复行，并在强制重启后核对目标回执、原 WAL 槽和 PostgreSQL 快照。 [Doris 目标配置](../../config/doris-v3.yml)
+
+`--doris-hive` 夹具增加 Hive 4.0.1 ACID ORC 目标，使用本地 Derby Metastore 并关闭查询结果缓存。Hive 保留 DECIMAL、JSON 数值和 Base64 字节，正确处理主键变更及无主键单条删除。按原 WAL 槽重启后，与 PostgreSQL、Doris 一起确认停机期间的写入。启动前需评审 Hive 的索引省略策略，并配置正确的事务管理器。 [Hive 档案](hive-v3.md)
 
 创建任务时可启用 `source.postgresql.captureSecondaryIndexes: true`，将 PostgreSQL 二级索引纳入冻结结构，并在导出的快照下复核目录。该选项属于任务身份。已有任务若需开启，要先按计划建立新的基线。
 

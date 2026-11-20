@@ -838,3 +838,13 @@ The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc2
 ### Grouped source adapter package
 
 The combined Temurin 21 package `4ea61a286de8a1df5a491df3fe4dea31eaf2328fb0e1942342b04b57b2e6eedc` passed 56 focused Java tests and five source-wizard and DDL review DOM tests. The native fixtures above retain their individual artifact fingerprints and database profiles.
+
+## PostgreSQL to native Hive
+
+The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc26b98b2f8` passed PostgreSQL 17.12 snapshot and WAL fan-out to Hive 4.0.1, PostgreSQL and Doris. The Hive ACID views retain binary Base64 and exact numeric values, move a primary key, and remove one duplicate. All subscriptions acknowledge the offline WAL after a forced Worker restart on the original slot. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
+
+## Oracle to native MySQL
+
+The Temurin 21 source/target candidate `8ad783f713ef4544b419f519c501f022b033bd13000c11daad9b4f0a2fb426db` passed Oracle Free 23.26.4.0.0 to MySQL 8.4.13 and PostgreSQL. MySQL preserves wide DECIMAL, civil DATE and distinct NO PAD VARCHAR and RAW keys. Both SQL targets reuse their original snapshot IDs and catch up from the retained Oracle SCN after a forced restart. [Reproduce](../../tests/oracle-source-probe.py) · [Manifest](baseline.json)
+
+The grouped Maven package `c0404e33d165bfb258d0aa5dbf6916ce5a2fef7708fda2f16e934d8e9191eeee` passed 57 focused Java tests and five source-wizard and DDL review DOM tests.

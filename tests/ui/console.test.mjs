@@ -893,7 +893,7 @@ test('PostgreSQL source wizard scopes destinations and submits a masked failover
     ui.d.querySelector('#first-extra-mappings input').value='billing_copy';
     ui.d.getElementById('add-target').click();
     const card=ui.d.querySelector('#extra-targets .target-settings');
-    assert.equal(card.querySelector('option[value=HIVE]').disabled,true);
+    assert.equal(card.querySelector('option[value=HIVE]').disabled,false);
     assert.equal(card.querySelector('option[value=DORIS]').disabled,false);
     const product=card.querySelector('[data-field=product]');
     assert.equal(card.querySelector('option[value=KAFKA]').disabled,false);
@@ -917,7 +917,7 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     await login(ui);ui.d.getElementById('new-task').click();
     const form=ui.d.getElementById('create-form'),f=form.elements;
     f.sourceType.value='ORACLE';f.sourceType.dispatchEvent(new ui.w.Event('change'));
-    assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,true);
+    assert.equal(f.targetType.querySelector('[value=MYSQL]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
     assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);

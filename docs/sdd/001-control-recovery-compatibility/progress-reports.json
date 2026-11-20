@@ -10,8 +10,8 @@
     "The PostgreSQL blocked Relation, type modifiers and original LSN remained available through later catalog edits and Controller restart."
   ],
   "inProgress": [
-    "SO-06 and SO-07: native destination parity for PostgreSQL and Oracle.",
-    "LG-03: Hive and additional Oracle analytics qualification.",
+    "SO-06 and SO-07: remaining native destination parity for PostgreSQL and Oracle.",
+    "LG-03: Oracle-to-Doris and Oracle-to-Hive verification.",
     "LG-08: historical DDL execution and transactional schema-state migration."
   ],
   "reportContents": [
@@ -35,15 +35,17 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Qualify Hive and remaining domestic SQL and message paths from PostgreSQL and Oracle.",
+    "Qualify the remaining domestic SQL and broker paths, and Oracle to Doris and Hive.",
     "Continue LG-08 on historical DDL execution and durable schema-state migration."
   ],
-  "currentCandidateArtifact": "4ea61a286de8a1df5a491df3fe4dea31eaf2328fb0e1942342b04b57b2e6eedc",
-  "currentCandidateScope": "PostgreSQL and Oracle confirmed-event routing, PostgreSQL ClickHouse, and opt-in PostgreSQL secondary indexes to openGauss. Oracle RAW snapshot and archive CDC through PostgreSQL and Redis Streams after process restart. Oracle RAW to real ClickHouse passed. PostgreSQL 17.12 to Doris 4.1.3 passed WAL, type and restart verification.",
+  "currentCandidateArtifact": "c0404e33d165bfb258d0aa5dbf6916ce5a2fef7708fda2f16e934d8e9191eeee",
+  "currentCandidateScope": "PostgreSQL and Oracle confirmed-event routing, PostgreSQL ClickHouse, and opt-in PostgreSQL secondary indexes to openGauss. Oracle RAW snapshot and archive CDC through PostgreSQL and Redis Streams after process restart. Oracle RAW to real ClickHouse passed. PostgreSQL 17.12 to Doris 4.1.3 passed WAL, type and restart verification. Native PostgreSQL to Hive 4.0.1 passed. Native Oracle to MySQL and PostgreSQL to Hive.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "Oracle Free 26ai to ClickHouse passed native RAW and original-SCN restart.",
-    "Native PostgreSQL to Doris completed snapshot, keyless CDC and original-slot restart."
+    "Native PostgreSQL to Doris completed snapshot, keyless CDC and original-slot restart.",
+    "Hive 4.0.1 passed PostgreSQL snapshot, WAL CDC and original-slot restart in native fan-out.",
+    "Oracle Free to MySQL passed civil DATE, wide NUMBER, precise text and RAW keys, and original-SCN restart."
   ],
   "lastScheduledReportAt": "2026-11-20T11:58:16+08:00",
   "lastVerifiedReactor": {
@@ -129,8 +131,8 @@
     "nativeDdlAndStateChecksPassed": 27
   },
   "focusedSourceBuild": {
-    "artifactSha256": "4ea61a286de8a1df5a491df3fe4dea31eaf2328fb0e1942342b04b57b2e6eedc",
-    "javaTestsPassed": 56,
+    "artifactSha256": "c0404e33d165bfb258d0aa5dbf6916ce5a2fef7708fda2f16e934d8e9191eeee",
+    "javaTestsPassed": 57,
     "domTestsPassed": 5,
     "jdk": "Temurin 21"
   }

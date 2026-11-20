@@ -1,6 +1,7 @@
 package io.github.rivomesh;
 
 import io.github.rivomesh.cdc.Change;
+import io.github.rivomesh.cdc.JdbcSink;
 import io.github.rivomesh.cdc.RowValues;
 import io.github.rivomesh.cdc.TableSchema;
 import org.junit.jupiter.api.Test;
@@ -84,6 +85,20 @@ class OracleRedoDmlTest {
                         undo.replace("HEXTORAW('00FF10')","'00ff10'"))).getMessage());
         assertEquals("ORACLE_REDO_LITERAL_TYPE_MISMATCH",assertThrows(IllegalStateException.class,
                 ()->OracleRedoDml.decode(table(),"UPDATE",redo,undo)).getMessage());
+    }
+
+    @Test void refusesOracleNumberScaleThatMySqlCannotStoreExactly(){
+        TableSchema table=table();
+        table.sourceEngine="ORACLE";
+        TableSchema.Column number=table.columns.get(1);
+        number.type=TableSchema.Type.DECIMAL;
+        number.sourceType="NUMBER";
+        number.precision=38;
+        number.scale=31;
+        assertEquals("ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED",assertThrows(IllegalArgumentException.class,
+                ()->JdbcSink.validateOracleMysqlProjection(table)).getMessage());
+        number.scale=30;
+        assertDoesNotThrow(()->JdbcSink.validateOracleMysqlProjection(table));
     }
 
     @Test void recognizesOnlySingleStrictUniqueConstraint(){

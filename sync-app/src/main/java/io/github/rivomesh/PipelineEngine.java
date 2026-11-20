@@ -242,6 +242,14 @@ public final class PipelineEngine implements AutoCloseable {
                 String destination=(target.mappings.get(table.database)+"."+table.name).toLowerCase(Locale.ROOT);if(!hiveNames.computeIfAbsent(target.id,key->new HashSet<>()).add(destination))throw new IllegalArgumentException("HIVE_IDENTIFIER_COLLISION");Map<String,String> storage=HiveRows.storage(table);
                 Map<String,Object> entry=new LinkedHashMap<>();entry.put("target",target.id);entry.put("table",table.qualifiedName());entry.put("plan",HiveIndexPlan.plan(table,target.hive.acknowledgeIndexOmission));entry.put("columnStorage",storage);hivePlans.add(entry);
             }if(!hivePlans.isEmpty())result.put("hiveIndexPlans",hivePlans);
+            if ("ORACLE".equals(source.type())) {
+                for (PipelineConfig.Target target : config.targets) {
+                    if (target.product != TargetProduct.MYSQL) continue;
+                    for (TableSchema table : tables) {
+                        if (target.mappings.containsKey(table.database)) JdbcSink.validateOracleMysqlProjection(table);
+                    }
+                }
+            }
             if ("POSTGRESQL".equals(source.type())) {
                 for (PipelineConfig.Target target : config.targets) {
                     if (target.product == TargetProduct.GAUSS) {

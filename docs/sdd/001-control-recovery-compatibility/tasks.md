@@ -126,6 +126,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
   交付：完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。
   验收：AC-SO-06
+  - [x] PostgreSQL 到 Hive 4.0.1 的实库全量、增量及原槽恢复。
   - [x] PostgreSQL 到 Doris 的全量、增量和原槽恢复。
   - [x] PostgreSQL 到 ClickHouse、Redis Streams 与 PostgreSQL 并发全量、增量与原槽重启。
   - [x] PostgreSQL 二级索引到 openGauss 的普通索引、业务 UNIQUE 降级和初始状态恢复。
@@ -136,6 +137,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
+  - [x] Oracle 到 MySQL 的原生 DATE、RAW、文本主键和原 SCN 恢复。
   - [x] Oracle RAW 和无主键数据到 ClickHouse 的实库续传。
   - [x] Oracle RAW 到 PostgreSQL 和 Redis Streams 的全量、归档增量及原 SCN 重启。
   - [x] 有界整数虚拟列的乘法与双物理列加减法，实库验证 Flashback、归档重放和原快照重启。

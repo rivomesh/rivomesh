@@ -36,6 +36,7 @@ type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
 type_profile.add_argument('--gauss-indexes', action='store_true', help='Verify PostgreSQL secondary indexes on openGauss')
 type_profile.add_argument('--doris', action='store_true', help='Verify WAL materialization to Doris')
+type_profile.add_argument('--doris-hive', action='store_true', help='Verify WAL fan-out to Doris and Hive')
 type_profile.add_argument('--redis-clickhouse', action='store_true', help='Verify PostgreSQL WAL fan-out to Redis Streams and ClickHouse')
 type_profile.add_argument('--common-cut', action='store_true', help='Verify one PostgreSQL validation cut in both native SQL targets')
 type_profile.add_argument('--truncate-review', action='store_true', help='Verify retained DDL boundary for a PostgreSQL TRUNCATE transaction')
@@ -66,8 +67,8 @@ if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
 if (args.common_cut or args.truncate_review) and (args.failover or args.generated or args.uuid):
     parser.error('--common-cut and --truncate-review use the direct three-table publication profile')
-if (args.redis_clickhouse or args.gauss_indexes or args.doris) and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
-    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes or --doris')
+if (args.redis_clickhouse or args.gauss_indexes or (args.doris or args.doris_hive)) and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
+    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes or --doris-hive')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -93,8 +94,8 @@ if args.ddl_review:
     report.update(ddlReview=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.gauss_indexes:
     report.update(gaussIndexes=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
-if args.doris:
-    report.update(doris=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.doris or args.doris_hive:
+    report.update(doris=True,dorisHive=args.doris_hive, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.redis_clickhouse:
     report.update(redisClickHouse=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.truncate_review:
@@ -175,12 +176,19 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             url='jdbc:mysql://mysql:3306/?connectTimeout=3000&sslMode=DISABLED&allowPublicKeyRetrieval=true',
             username='root',password='${RM_PG_PASSWORD}',mappings=dict(sales='copy_sales',billing='copy_billing'),
             metadataSchema='copy_meta'))
-    if args.doris:
-        pipeline['targets'].append(dict(
-            id='doris', product='DORIS',
-            url='jdbc:mysql://doris:9030/?useSSL=false&connectTimeout=3000&socketTimeout=10000',
-            username='root', password='', mappings=dict(sales='doris_sales',billing='doris_billing'),
-            metadataSchema='doris_meta', doris=dict(loadUrl='http://doris:8040',replicas=1,buckets=1)))
+    if args.doris or args.doris_hive:
+        pipeline['targets'].extend([
+            dict(id='doris', product='DORIS', url='jdbc:mysql://doris:9030/?useSSL=false&connectTimeout=3000&socketTimeout=10000',
+                 username='root', password='', mappings=dict(sales='doris_sales',billing='doris_billing'),
+                 metadataSchema='doris_meta', doris=dict(loadUrl='http://doris:8040',replicas=1,buckets=1)),
+            dict(id='hive', product='HIVE', url='jdbc:hive2://hive:10000/default;auth=noSasl',
+                 username='hive', password='', mappings=dict(sales='hive_sales',billing='hive_billing'),
+                 metadataSchema='hive_meta', hive=dict(acknowledgeIndexOmission=True,queryTimeoutSeconds=300)),
+        ])
+        if not args.doris_hive:
+            pipeline['targets'].pop()
+        else:
+            pipeline['chunkSize']=1000
     if args.redis_clickhouse:
         pipeline['targets'].extend([
             dict(id='redis', product='REDIS_STREAMS', url='redis://redis:6379/2',
@@ -221,7 +229,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                                environment=dict(GS_PASSWORD='${RM_PG_GAUSS_PASSWORD}',GS_DB='sync_test',
                                                 GS_USERNAME='sync_test',GS_HOST_AUTH_METHOD='sha256',
                                                 OTHER_PG_CONF='password_encryption_type = 2'))
-    if args.doris:
+    if args.doris or args.doris_hive:
         for service in ('source','target'):
             services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
         services['doris']=dict(image='apache/doris:all-in-one-4.1.3',mem_limit='6g',cpus=3,
@@ -229,7 +237,21 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                                                BE_CONFIG_EXTRA='mem_limit = 2g'),
                               volumes=['doris_meta:/opt/apache-doris/fe/doris-meta',
                                        'doris_storage:/opt/apache-doris/be/storage'])
-        document['volumes']={'doris_meta':{},'doris_storage':{}}
+        hive_paths=['hive_meta:/opt/hive/rivomesh-meta','hive_data:/opt/hive/data/warehouse',
+                    str(Path(__file__).resolve().parent/'hive/hive-site.xml')+':/opt/hive/conf/hive-site.xml:ro']
+        services['hive_init']=dict(image='apache/hive:4.0.1',user='root',volumes=hive_paths,
+                                  entrypoint=['bash','-euc'], command=[
+                                      'chown -R hive:hive /opt/hive/rivomesh-meta /opt/hive/data/warehouse; '
+                                      "su hive -s /bin/bash -c 'schematool -dbType derby -info || schematool -dbType derby -initSchema'"])
+        services['hive']=dict(image='apache/hive:4.0.1',mem_limit='5g',cpus=3,volumes=hive_paths,
+                             depends_on=dict(hive_init=dict(condition='service_completed_successfully')),
+                             tmpfs=['/run/rivomesh-hive:rw,nosuid,nodev,noexec,size=64k,mode=1777'],
+                             environment=dict(SERVICE_NAME='hiveserver2',IS_RESUME='true',HADOOP_HEAPSIZE='1536',
+                                              HADOOP_CLIENT_OPTS='-Xmx1536m',HIVESERVER2_PID_DIR='/run/rivomesh-hive'))
+        document['volumes']={name:{} for name in ('doris_meta','doris_storage','hive_meta','hive_data')}
+        if not args.doris_hive:
+            services.pop('hive')
+            services.pop('hive_init')
     if args.redis_clickhouse:
         services['redis'] = dict(image='redis:7.4.2-alpine',
                                  command=['redis-server','--appendonly','yes','--appendfsync','always'])
@@ -298,7 +320,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     composition.write_text(json.dumps(document))
 
     def compose(*arguments,check=True):
-        env_file=['--env-file',os.devnull] if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review else []
+        env_file=['--env-file',os.devnull] if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review else []
         return subprocess.run(['docker','compose',*env_file,'-p',project,'-f',str(composition),*arguments],
                               cwd=ROOT,env=environment,capture_output=True,text=True,check=check,timeout=180)
 
@@ -331,6 +353,11 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     def doris(statement):
         return compose('exec','-T','doris','mysql','--protocol=TCP','-h127.0.0.1','-P9030','-uroot',
                        '-NB','-e',statement).stdout.strip()
+
+    def hive(statement):
+        return compose('exec','-T','hive','beeline','--silent=true','--showHeader=false','--outputformat=tsv2',
+                       '-u','jdbc:hive2://127.0.0.1:10000/default;auth=noSasl',
+                       '-e',statement).stdout.strip()
 
     def latest_fanout_cut(expected=None):
         status = task()['status']
@@ -563,19 +590,22 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
 
     try:
         endpoints=['source','target']+(['mysql'] if dual_targets else [])
-        if args.doris:
-            endpoints.append('doris')
+        if args.doris or args.doris_hive:
+            endpoints.extend(('hive','doris') if args.doris_hive else ('doris',))
         if args.redis_clickhouse:
             endpoints.extend(('redis','clickhouse'))
         if args.gauss_indexes:
             endpoints.append('gauss')
         compose('up','-d',*endpoints)
-        if args.doris:
+        if args.doris or args.doris_hive:
             require(lambda:doris('SELECT 1')=='1','Doris SQL available',180)
             report['dorisWireVersion']=doris('SELECT VERSION()')
             report['dorisImage']='apache/doris:all-in-one-4.1.3'
             require(lambda:doris('SHOW BACKENDS') and '\ttrue\t' in doris('SHOW BACKENDS'),
                     'Doris data backend available',180)
+            if args.doris_hive:
+                require(lambda:hive('SELECT 1')=='1','HiveServer2 available',240)
+                report['hiveVersion']='4.0.1'
         if args.redis_clickhouse:
             require(lambda: compose('exec','-T','redis','redis-cli','PING').stdout.strip() == 'PONG',
                     'Redis target ready')
@@ -816,7 +846,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if args.bytea_escape_output:
             assert sql('source','SHOW bytea_output')=='escape'
             report['sourceByteaOutput']='escape'
-        require(stream_ready,'native consistent snapshot',240 if args.doris else 120)
+        require(stream_ready,'native consistent snapshot',240 if args.doris or args.doris_hive else 120)
         if args.tls:
             require(lambda: int(active_tls('source','rivomesh-tls-source'))>0
                     and int(active_tls('target','rivomesh-tls-target'))>0,
@@ -865,40 +895,58 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             passed('PostgreSQL and openGauss retain the original index definitions and snapshots through Worker restart')
             report['status']='PASS'
             raise SystemExit(0)
-        if args.doris:
-            expected={'pg','doris'}
+        if args.doris or args.doris_hive:
+            expected={'pg','doris','hive'} if args.doris_hive else {'pg','doris'}
+            targets=[(doris,'doris'),(hive,'hive')] if args.doris_hive else [(doris,'doris')]
+            profile='Doris and Hive' if args.doris_hive else 'Doris'
+            timeout=600 if args.doris_hive else 120
 
             def warehouse_rows(rows, duplicate_count, note):
-                items=doris('SELECT id,data FROM doris_sales.items ORDER BY id')
-                return (items==rows
-                        and int(doris('SELECT count(*) FROM doris_sales.duplicates'))==duplicate_count
-                        and doris('SELECT label FROM doris_billing.ledger ORDER BY id')==note)
+                for query, prefix in targets:
+                    items=prefix+'_sales.items'
+                    if int(query('SELECT count(*) FROM '+prefix+'_sales.duplicates')) != duplicate_count:
+                        return False
+                    if query('SELECT label FROM '+prefix+'_billing.ledger ORDER BY id')!=note:
+                        return False
+                    if [line.split('\t') for line in query(f'SELECT id,data FROM {items} ORDER BY id').splitlines()]!=rows:
+                        return False
+                return True
 
-            require(lambda:warehouse_rows('1\tABr/',2,'before'),'Doris materialized snapshot values',120)
-            amount,payload=doris('SELECT CAST(amount AS STRING),payload FROM doris_sales.items').split('\t',1)
-            assert amount=='123456789012.1234' and json.loads(payload)=={'n':18446744073709551615}
-            passed('Doris preserves snapshot JSON precision, binary Base64 and exact DECIMAL')
+            def warehouse_snapshot_ready():
+                status=task()['status']
+                for item in status.get('subscriptions',[]):
+                    if item['state']=='PAUSED':
+                        raise AssertionError(('initial target pause',item['id'],item.get('errorCode')))
+                return status.get('phase')=='STREAMING'
+
+            require(warehouse_snapshot_ready,'durable snapshot acknowledgment for every warehouse',timeout)
+            require(lambda:warehouse_rows([['1','ABr/']],2,'before') or None,
+                    profile+' materialized snapshot values',timeout)
+            for query,prefix in targets:
+                projected=query('SELECT CAST(amount AS STRING),payload FROM '+prefix+'_sales.items').split('\t',1)
+                assert projected[0]=='123456789012.1234' and json.loads(projected[1])=={'n':18446744073709551615}
+            passed(profile+' targets preserve snapshot JSON precision, binary Base64 and exact DECIMAL')
 
             sql('source',"BEGIN; UPDATE sales.items SET id=9, data=decode('baff','hex') WHERE id=1; "
                          "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
                          "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
-            require(lambda:warehouse_rows('9\tuv8=',1,'online') and equal(),
-                    'Doris applies the changed key and exactly one keyless delete',120)
+            require(lambda:warehouse_rows([['9','uv8=']],1,'online') and equal(),
+                    profile+' applies the changed key and exactly one keyless delete',timeout)
             require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=1,
-                    'all target ACKs',120)
-            passed('Doris applies the same logical transaction with a key change and a single duplicate deletion')
+                    'all target ACKs',timeout)
+            passed(profile+' targets apply the same logical transaction with a key change and a single duplicate deletion')
 
             slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
             compose('kill','-s','SIGKILL','runner')
             sql('source',"UPDATE billing.ledger SET label='offline' WHERE id=1")
             compose('up','-d','runner')
-            require(lambda:warehouse_rows('9\tuv8=',1,'offline') and equal(),
-                    'Doris catches up the offline WAL after Worker SIGKILL',120)
+            require(lambda:warehouse_rows([['9','uv8=']],1,'offline') and equal(),
+                    profile+' catches up the offline WAL after Worker SIGKILL',timeout)
             require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=2,
-                    'the original fan-out resumes all ACKs',120)
+                    'the original fan-out resumes all ACKs',timeout)
             assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
-            passed('PostgreSQL to Doris resumes the original slot and snapshots after forced restart')
+            passed('PostgreSQL to '+profile+' resumes the original slot and snapshots after forced restart')
             report['status']='PASS'
             raise SystemExit(0)
 
@@ -1611,6 +1659,17 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         report['status']='PASS'
     except Exception as error:
         report['status']='FAIL'
+        if args.doris_hive:
+            try:
+                cut=task()['status']
+                report['targetStateAtFailure']={
+                    'phase':cut.get('phase'),
+                    'sequence':cut.get('lastSequence'),
+                    'subscriptions':[{key:item.get(key) for key in ('id','state','errorCode','errorGeneration')}
+                                     for item in cut.get('subscriptions',[])]
+                }
+            except (OSError,KeyError,NameError):
+                pass
         log_services=('runner','standby','source') if args.failover else ('runner',)
         log=compose('logs','--no-color','--tail','80',*log_services,check=False).stdout
         worker_log=home/'platform'/'logs'/'postgres_source.log'
@@ -1625,7 +1684,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     finally:
         cleanup=compose('down','-v','--remove-orphans',check=False)
         report['cleanupExitCode']=cleanup.returncode
-        if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review:
+        if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review:
             label='label=com.docker.compose.project='+project
             resources={'containers':['ps','-aq'],'volumes':['volume','ls','-q'],'networks':['network','ls','-q']}
             report['remaining']={kind:len(subprocess.check_output(
@@ -1634,5 +1693,5 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             if any(report['remaining'].values()):
                 report['status']='FAIL'
         (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-        if cleanup.returncode or ((args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.ddl_review) and any(report['remaining'].values())):
+        if cleanup.returncode or ((args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review) and any(report['remaining'].values())):
             raise RuntimeError('Test fixture cleanup failed')

@@ -47,6 +47,12 @@ Run the disposable native fixture with `--logminer --pipeline --redis --raw-valu
 
 Add `--clickhouse` to verify Oracle Free to ClickHouse 25.8.33.6 alongside PostgreSQL and Redis Streams. ClickHouse retains exact RAW bytes, SQL NULL and keyless row counts through snapshots, archive replay and restart.
 
+### MySQL destination
+
+Oracle Free 23.26.4.0.0 to MySQL 8.4.13 passed Flashback, archive CDC and original-SCN restart with the `--mysql-target --raw-values` fixture. MySQL stores Oracle civil `DATE` as `DATETIME(6)` and `RAW(n)` as `VARBINARY(n)`. New destination tables use `utf8mb4_0900_bin`. Existing VARCHAR primary keys need the same binary NO PAD collation to preserve keys with distinct trailing spaces. Existing RAW columns must be sufficiently wide VARBINARY. [MySQL Unicode collations](https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-sets.html)
+
+Use **Check** before starting. A source NUMBER scale above 30 returns `ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED` so the task can review that projection before creating a target table. Native InnoDB column, row and key size limits apply. The fixture preserves a 38-digit NUMBER, a DATE in a civil-clock gap, SQL NULL and distinct text and RAW keys. Committed key changes and the offline transaction retain the original target snapshot IDs after restart. [MySQL DECIMAL limits](https://dev.mysql.com/doc/refman/8.4/en/precision-math-decimal-characteristics.html) · [InnoDB limits](https://dev.mysql.com/doc/refman/8.4/en/innodb-limits.html)
+
 ### Archived DDL review
 
 When a selected PDB's archived DDL stops capture with `ORACLE_REDO_DDL_REQUIRES_PLAN`, open **Capture recovery** on the failed task or call its read-only `GET /api/tasks/{id}/capture-recovery` endpoint. The report binds the error generation and the last durable checkpoint hash. The `CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` comparison uses the last recorded schema version and digest for each selected table, plus a separate digest of the definition visible now. It reports changes in supported column names, types, sizes, nullability, column order and the recorded primary key. Checkpoint admission checks that the retained Oracle source is eligible to revisit the cut.

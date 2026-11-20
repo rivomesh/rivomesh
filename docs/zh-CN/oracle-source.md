@@ -47,6 +47,12 @@ Oracle Free 23.26.4.0.0 可在同一个 V3 任务投递到 PostgreSQL 和 Redis 
 
 夹具追加 `--clickhouse` 可同时验证 Oracle Free 到 ClickHouse 25.8.33.6、PostgreSQL 和 Redis Streams。ClickHouse 的全量、归档增量和重启续传保留 RAW 字节、SQL NULL 和无主键行重数。
 
+### MySQL 目标
+
+`--mysql-target --raw-values` 夹具验证 Oracle Free 23.26.4.0.0 到 MySQL 8.4.13 的 Flashback、归档增量和原 SCN 续传。Oracle `DATE` 写入 MySQL `DATETIME(6)`，`RAW(n)` 写入 `VARBINARY(n)`。新建表使用 `utf8mb4_0900_bin`。已有 VARCHAR 主键也需要相同的二进制 NO PAD 排序规则，才能区分仅尾部空格不同的值。已有 RAW 目标列需使用足够宽的 VARBINARY。 [MySQL Unicode 排序规则](https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-sets.html)
+
+先执行 **检查**。源 NUMBER 的小数位超过 30 时返回 `ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED`，需先评审类型映射，再启动建表。列、行及索引键宽仍受 InnoDB 限制。夹具核对 38 位 NUMBER、处于夏令时跳变区间的 DATE、SQL NULL、文本主键和 RAW 主键，重启后按原 SCN 应用停机期间的事务并核对全部快照 ID。 [MySQL DECIMAL 范围](https://dev.mysql.com/doc/refman/8.4/en/precision-math-decimal-characteristics.html) · [InnoDB 限制](https://dev.mysql.com/doc/refman/8.4/en/innodb-limits.html)
+
 ### 归档 DDL 评审
 
 所选 PDB 的归档 DDL 触发 `ORACLE_REDO_DDL_REQUIRES_PLAN` 后，在失败任务打开 **采集恢复**，也可以通过只读的 `GET /api/tasks/{id}/capture-recovery` 查询。报告绑定故障代次和末次持久化断点的哈希。`CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` 对比会列出所选表的日志库结构版本、原定义摘要和当前可见定义的独立摘要，报告所支持的列名、类型、长度、可空性、列顺序和已记录主键的变化。断点准入用于核查保留的 Oracle 源能否重新读取该位置。
