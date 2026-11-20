@@ -14,7 +14,7 @@
 | `MYSQL` 8.4.13 | Temurin 21 单机、异步 GTID 升主及三节点单主组复制到两个 SQL 目标。binlog 准入及组复制旧主只读返回另有实库验证。 | [8.4 binlog 档案](pipeline-v3.md) |
 | `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝。PostgreSQL 和 MySQL 两个目标通过同一 WAL 切点对账，并从原逻辑槽续传。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Temurin 21 实验档案。发布存储型生成列，PostgreSQL 17.12 目标物化为普通列。 | [源指南与发布](postgresql-source.md) |
-| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 和归档增量已实测 PostgreSQL、MySQL、金仓、达梦、ClickHouse、Doris 和 Redis Streams。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
+| `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 和归档增量已实测 PostgreSQL、MySQL、金仓、达梦、ClickHouse、Doris、Hive 和 Redis Streams。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
 
 MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐标使用逻辑源 ID、system ID、timeline、slot 和 LSN。Oracle 预检使用 DBID、resetlogs SCN、PDB GUID 和 SCN。`SourcePosition.formatVersion` 当前为 1，由 `sourceType` 对应的适配器解释。在同一来源身份和协议内比较坐标。[多库样例](../../config/pipeline-v3.yml)使用 `formatVersion: 3`、`source.clusterId`、`databases` 以及每个目标的显式 `mappings`。独立 MySQL 集群分别使用独立配置。
 

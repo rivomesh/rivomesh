@@ -824,6 +824,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     kingbase = oracle + '-kb'
     dameng = oracle + '-dm'
     doris = oracle + '-doris'
+    hive = oracle + '-hive'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
     if options.clickhouse:
         env['CLICKHOUSE_PASSWORD']=secrets.token_hex(24)
@@ -833,7 +834,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         env['KINGBASE_FIXTURE_PASSWORD']='Kb!'+secrets.token_hex(12)
     if options.dm_target:
         env['RM_PG_DM_PASSWORD']='Dm8!'+secrets.token_hex(10)
-    if options.date_values or options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target:
+    if options.date_values or options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target or options.hive_target:
         env['TZ'] = 'America/New_York'
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     platform = None
@@ -854,7 +855,17 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         return execute('docker','exec',doris,'mysql','--protocol=TCP','-h127.0.0.1','-P9030','-uroot',
                        '--skip-column-names','--batch','--raw','-e',statement,checked=checked).stdout.strip('\n')
 
-    def doris_values(stage):
+    def hive_compose(*args, checked=True, timeout=120):
+        return execute('docker','compose','-p',hive,'-f',str(hive_document),*args,
+                       checked=checked,timeout=timeout)
+
+    def hive_sql(statement, checked=True):
+        return hive_compose('exec','-T','hive','beeline','--silent=true','--showHeader=false',
+                            '--outputformat=tsv2','--nullemptystring=false','-u',
+                            'jdbc:hive2://127.0.0.1:10000/default;auth=noSasl','-e',statement,
+                            checked=checked).stdout.strip('\n')
+
+    def analytics_values(query, namespace, stage):
         def raw(value):
             return base64.b64encode(bytes.fromhex(value)).decode()
 
@@ -870,13 +881,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             binary.append((raw('00ff10'),3))
 
         def rows(table, columns):
-            result=doris_sql(f'SELECT {columns} FROM doris_app.{table}',checked=False)
+            result=query(f'SELECT {columns} FROM {namespace}.{table}',checked=False)
             return [line.split('\t') for line in result.splitlines()]
 
-        return (sorted((int(row),value) for row,value in rows('RIVO_SYNC_RAW_ROWS','ID,OCTETS'))==keys and
-                sorted(row[0] for row in rows('RIVO_SYNC_RAW_KEYLESS','OCTETS'))==sorted(keyless) and
+        return (sorted((int(row),value) for row,value in rows('RIVO_SYNC_RAW_ROWS',"ID,COALESCE(OCTETS,'NULL')"))==keys and
+                sorted(row[0] for row in rows('RIVO_SYNC_RAW_KEYLESS',"COALESCE(OCTETS,'NULL')"))==sorted(keyless) and
                 sorted((key,Decimal(value),date.replace('T',' ')) for key,value,date in
-                       rows('RIVO_SYNC_MYSQL_TYPES','CODE,AMOUNT,OCURRED'))==sorted(types) and
+                       rows('RIVO_SYNC_MYSQL_TYPES',"CODE,AMOUNT,COALESCE(OCURRED,'NULL')"))==sorted(types) and
                 sorted((key,int(value)) for key,value in rows('RIVO_SYNC_RAW_KEYS','OCTETS,ID'))==sorted(binary))
 
     def dm_types():
@@ -969,6 +980,20 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
 
     def progress():
         return api('/api/tasks/oracle_native').get('status',{})
+
+    def hive_cut(snapshot_count):
+        status=progress()
+        sub=next((item for item in status.get('subscriptions',[]) if item['id']=='hive'),None)
+        if (not status.get('capture_scn') or status.get('phase')!='STREAMING'
+                or status.get('completed_tables')!=snapshot_count or sub is None or sub['state']!='RUNNING'
+                or sub['safeCoveredSequence']!=status['captured_sequence']):
+            return None
+        suffix=hashlib.sha256(b'oracle_native:hive').hexdigest()[:48]
+        observed=hive_sql("SELECT id,hash FROM hive_meta.rm3_hive_"+suffix+
+                          " WHERE kind='RECEIPT' ORDER BY id").splitlines()
+        receipts=set(observed)
+        assert len(receipts)==len(observed),'Hive receipt was duplicated'
+        return (status['sourcePosition'],receipts) if receipts else None
 
     def redis_events():
         raw = execute('docker','exec',redis,'redis-cli','--json','-2','-n','2','XRANGE','RM_ORACLE_PARITY','-','+').stdout
@@ -1113,7 +1138,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         rotate()
         source_tables += ['RIVO_APP.RIVO_SYNC_RAW_ROWS','RIVO_APP.RIVO_SYNC_RAW_KEYLESS']
 
-    if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target:
+    if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target or options.hive_target:
         sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE TABLE rivo_app.rivo_sync_mysql_types
                 (code VARCHAR2(20 CHAR) PRIMARY KEY, amount NUMBER(38,12) NOT NULL, ocurred DATE);
@@ -1139,7 +1164,32 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     started_kingbase=False
     started_dameng=False
     started_doris=False
+    hive_document=None
     try:
+        if options.hive_target:
+            profile = Path(__file__).resolve().parent/'hive/hive-site.xml'
+            data = ['metadata:/opt/hive/rivomesh-meta','warehouse:/opt/hive/data/warehouse',
+                    str(profile)+':/opt/hive/conf/hive-site.xml:ro']
+            image='apache/hive:4.0.1'
+            hive_document=output/'hive-compose.json'
+            hive_document.write_text(json.dumps(dict(
+                services={
+                    'hive_init':dict(image=image,user='root',volumes=data,entrypoint=['bash','-euc'],
+                                     command=['chown -R hive:hive /opt/hive/rivomesh-meta /opt/hive/data/warehouse; '
+                                              "su hive -s /bin/bash -c 'schematool -dbType derby -initSchema'"]),
+                    'hive':dict(image=image,mem_limit='4g',cpus=3,volumes=data,ports=['127.0.0.1::10000'],
+                                depends_on=dict(hive_init=dict(condition='service_completed_successfully')),
+                                tmpfs=['/run/rivomesh-hive:rw,nosuid,nodev,noexec,size=64k,mode=1777'],
+                                environment=dict(SERVICE_NAME='hiveserver2',IS_RESUME='true',HADOOP_HEAPSIZE='1536',
+                                                 HADOOP_CLIENT_OPTS='-Xmx1536m',
+                                                 HIVESERVER2_PID_DIR='/run/rivomesh-hive')),
+                },
+                volumes=dict(metadata={},warehouse={}),
+            )))
+            hive_compose('up','-d','hive',timeout=240)
+            required(lambda:hive_sql('SELECT 1',checked=False)=='1','HiveServer2 available',240)
+            hive_port=hive_compose('port','hive','10000').stdout.strip().rsplit(':',1)[1]
+            (output/'hive-version.txt').write_text(hive_sql('SELECT version()')+'\n')
         if options.doris_target:
             execute('docker','run','--rm','-d','--name',doris,
                     '--label','io.github.rivomesh.test=oracle-source-target',
@@ -1254,6 +1304,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                                 username='SYSDBA',password='${RM_PG_DM_PASSWORD}',
                                                 metadataSchema='dm_meta',mappings={'RIVO_APP':'dm_copy'},
                                                 dm=dict(acknowledgeTextConversions=True)))
+            if options.hive_target:
+                pipeline['chunkSize']=1000
+                pipeline['targets'].append(dict(id='hive',product='HIVE',
+                                                url=f'jdbc:hive2://127.0.0.1:{hive_port}/default;auth=noSasl',
+                                                username='hive',password='',metadataSchema='hive_meta',
+                                                mappings={'RIVO_APP':'hive_app'},
+                                                hive=dict(acknowledgeIndexOmission=True,queryTimeoutSeconds=300)))
             if options.doris_target:
                 pipeline['targets'].append(dict(id='doris',product='DORIS',
                                                 url=f'jdbc:mysql://127.0.0.1:{doris_port}/?useSSL=false&connectTimeout=3000',
@@ -1427,8 +1484,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         ==len(source_tables) else None,'all Dameng target snapshots complete',120)
                     observed('Dameng preserves civil DATE, exact Oracle NUMBER, text keys and RAW primary keys')
                 if options.doris_target:
-                    required(lambda:doris_values(0),'Oracle exact Doris snapshot with duplicates',180)
+                    required(lambda:analytics_values(doris_sql,'doris_app',0),'Oracle exact Doris snapshot with duplicates',180)
                     observed('Doris retains exact Oracle NUMBER, civil DATE, RAW, SQL NULL and keyless duplicates')
+                if options.hive_target:
+                    required(lambda:analytics_values(hive_sql,'hive_app',0),'Oracle rows in the Hive ACID view',240)
+                    observed('Hive retains exact Oracle NUMBER, civil DATE, RAW, SQL NULL and keyless duplicates')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
@@ -1462,7 +1522,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 online_mysql=("""
                     UPDATE rivo_app.rivo_sync_mysql_types SET code='Z',ocurred=NULL WHERE code='A';
                     UPDATE rivo_app.rivo_sync_raw_keys SET octets=HEXTORAW('81ff00') WHERE id=1;
-                """ if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target else '')
+                """ if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target or options.hive_target else '')
                 out,_=long_transaction.communicate(online_raw+online_mysql+"COMMIT;\nEXIT\n",timeout=30)
                 assert long_transaction.returncode==0,out
                 long_transaction=None
@@ -1528,8 +1588,13 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              'Dameng applies archived primary-key changes',120)
                     observed('Dameng applies both original Oracle text and RAW key changes')
                 if options.doris_target:
-                    required(lambda:doris_values(1),'Doris Oracle archive key changes',180)
+                    required(lambda:analytics_values(doris_sql,'doris_app',1),'Doris Oracle archive key changes',180)
                     observed('Doris applies both Oracle key changes and removes exactly one duplicate occurrence')
+                if options.hive_target:
+                    required(lambda:analytics_values(hive_sql,'hive_app',1),'Oracle rows in the Hive ACID view',240)
+                    hive_prior,hive_receipts=required(lambda:hive_cut(len(source_tables)),
+                                                      'Hive acknowledges the original snapshot and online SCN',240)
+                    observed('Hive applies both Oracle key changes and removes exactly one duplicate occurrence')
                 if options.text_json:
                     required(lambda:json.loads(target_sql(before_json))==[True,{'version':2}]
                              and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
@@ -1572,7 +1637,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 offline_mysql=("""
                     DELETE FROM rivo_app.rivo_sync_mysql_types WHERE code='A ';
                     INSERT INTO rivo_app.rivo_sync_raw_keys VALUES(HEXTORAW('00ff10'),3);
-                """ if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target else '')
+                """ if options.mysql_target or options.kingbase_target or options.dm_target or options.doris_target or options.hive_target else '')
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
                     DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
@@ -1642,8 +1707,15 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                     assert original_dm_snapshots==dm_sql(dm_snapshot_query)
                     observed('Dameng resumes Oracle at the original SCN and keeps each original snapshot')
                 if options.doris_target:
-                    required(lambda:doris_values(2),'Oracle archived Doris restart',180)
+                    required(lambda:analytics_values(doris_sql,'doris_app',2),'Oracle archived Doris restart',180)
                     observed('Doris resumes offline Oracle work on the original SCN')
+                if options.hive_target:
+                    required(lambda:analytics_values(hive_sql,'hive_app',2),'Oracle rows in the Hive ACID view',240)
+                    hive_next,new_receipts=required(lambda:hive_cut(len(source_tables)),
+                                                    'Hive acknowledges the recovered Oracle archive',240)
+                    assert int(hive_next['payload']['scn'])>int(hive_prior['payload']['scn'])
+                    assert hive_receipts<new_receipts,'Hive did not retain and advance its prior native receipts'
+                    observed('Hive resumes offline Oracle work on the original SCN')
                 if options.text_json:
                     required(lambda:target_sql('SELECT "PAYLOAD"->>\'after\' FROM copy_app."RIVO_JSON_ROWS" '
                                                'WHERE "ID"=4')=='restart'
@@ -1948,6 +2020,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             execute('docker','stop','--time','20',dameng)
         if started_doris:
             execute('docker','stop','--time','30',doris)
+        if hive_document is not None:
+            hive_compose('down','-v','--remove-orphans',timeout=180)
         if started:
             execute('docker','stop','--time','30',target)
 
@@ -1964,6 +2038,7 @@ def main():
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
+    parser.add_argument('--hive-target', action='store_true', help='Verify the Oracle source through native Hive')
     parser.add_argument('--doris-target', action='store_true', help='Verify the Oracle source through native Doris')
     parser.add_argument('--dm-target', action='store_true', help='Verify the Oracle source through native Dameng')
     parser.add_argument('--kingbase-target', action='store_true', help='Verify the Oracle source through native Kingbase PG mode')
@@ -2002,6 +2077,8 @@ def main():
     options = parser.parse_args()
     if options.startup_timeout<1:
         parser.error('--startup-timeout must be positive')
+    if options.hive_target and not options.raw_values:
+        parser.error('--hive-target requires --raw-values')
     if options.doris_target and not options.raw_values:
         parser.error('--doris-target requires --raw-values')
     if options.dm_target and not options.raw_values:
@@ -2070,7 +2147,7 @@ def main():
               'redis': options.redis, 'rawEvidence': options.raw_evidence, 'rawValues': options.raw_values,
               'clickhouse': options.clickhouse, 'mysqlTarget':options.mysql_target,
               'kingbaseTarget':options.kingbase_target, 'dmTarget':options.dm_target,
-              'dorisTarget':options.doris_target, 'project': name,
+              'dorisTarget':options.doris_target, 'hiveTarget':options.hive_target, 'project': name,
               'hostMountedOracleData': options.oradata_root is not None,
               'harnessSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'checks': [], 'status': 'FAIL'}

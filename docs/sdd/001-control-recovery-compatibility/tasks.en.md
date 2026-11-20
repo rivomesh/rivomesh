@@ -139,6 +139,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Native Oracle to Hive 4.0.1 with an embedded metastore, archive CDC, original-SCN recovery and retained native receipts.
   - [x] Native Oracle to Doris 4.1.3 with exact types, key moves, keyless multiplicity and original-SCN recovery.
   - [x] Native Oracle to Dameng mode 0 with civil DATE, exact NUMBER, text and RAW key changes, and original-SCN restart.
   - [x] Native Oracle to Kingbase PG mode with civil DATE, RAW keys and original-SCN restart.

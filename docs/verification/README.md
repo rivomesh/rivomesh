@@ -874,3 +874,7 @@ The grouped Temurin 21 package `3a49003af2ca7768089d32f6580dd6a1ce9ad948cd07eeda
 ## Oracle to native Doris
 
 Temurin 21 package `d911726b88136a823e47e33d96720cc6ba315f9adcc8b63c05797e1eb8b67ccb` passed 19 native checks with Oracle Free 23.26.4.0.0, the Doris 4.1.3 all-in-one target and a PostgreSQL subscription. The Doris view retains civil DATE text, exact `NUMBER(38,12)`, SQL NULL, Base64 RAW and distinct keys through archives and a forced restart at the original SCN. The fixture also removes one of two duplicate keyless rows and checks the offline commit after restart. The first run hit Doris's 2 GiB backend memory cap. The recorded run passed with a 4 GiB backend limit and a 7 GiB container cap. These settings describe the correctness fixture. [Reproduce](../../tests/oracle-source-probe.py) · [Evidence ledger](baseline.json)
+
+## Oracle to native Hive
+
+Temurin 21 package `ba16e988ab5b584f889063e31f4ee78cc86747f6198e6c7daf3197d1b828d583` passed 86 Java tests and 19 native checks with Oracle Free 23.26.4.0.0, Hive 4.0.1 with its embedded Derby metastore, and a PostgreSQL subscription. The Hive ACID view preserves exact Oracle NUMBER, civil DATE text, Base64 RAW, SQL NULL and duplicate occurrences. The fixture checks changed text and RAW keys, reads the offline archive at the original SCN after forced restart, and verifies that the prior Hive receipts remain while new receipts are added. The fixture removed its containers and volumes. [Reproduce](../../tests/oracle-source-probe.py) · [Evidence ledger](baseline.json)

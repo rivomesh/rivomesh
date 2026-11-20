@@ -67,6 +67,10 @@ Oracle Free 23.26.4.0.0 到达梦 8.1.4.80 通过了 Flashback 全量、归档�
 
 Oracle Free 23.26.4.0.0 到 Doris 4.1.3 单机目标与 PostgreSQL 的分发通过了 Flashback 全量、归档增量和 Worker 重启后的原 SCN 续传。Doris 将 Oracle DATE 保留为本地日期时间文本，RAW 保存为 Base64。实库核对了精确 `NUMBER(38,12)`、SQL NULL、文本主键尾空格、文本与 RAW 主键变更及无主键重复行。在 Oracle 实库夹具中加入 `--logminer --pipeline --doris-target --raw-values` 可复验。 [Doris 目标档案](doris-v3.md) · [验收记录](../verification/README.md#oracle-to-native-doris)
 
+### Hive 目标
+
+Oracle Free 23.26.4.0.0 到 Hive 4.0.1 内置 Derby Metastore 档案通过了 Flashback 全量、归档增量和 Worker 重启后的原 SCN 续传。ACID 视图保留精确 `NUMBER(38,12)`、Oracle DATE 本地日期时间文本、Base64 RAW 和 SQL NULL。文本与 RAW 主键变更已核对，无主键重复行删除一次后保留一行。夹具检查了重启前后的 Hive 原生回执与停机期间提交的事务。在 Oracle 实库夹具中加入 `--logminer --pipeline --hive-target --raw-values` 可复验。 [Hive 目标档案](hive-v3.md) · [验收记录](../verification/README.md#oracle-to-native-hive)
+
 ### 归档 DDL 评审
 
 所选 PDB 的归档 DDL 触发 `ORACLE_REDO_DDL_REQUIRES_PLAN` 后，在失败任务打开 **采集恢复**，也可以通过只读的 `GET /api/tasks/{id}/capture-recovery` 查询。报告绑定故障代次和末次持久化断点的哈希。`CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` 对比会列出所选表的日志库结构版本、原定义摘要和当前可见定义的独立摘要，报告所支持的列名、类型、长度、可空性、列顺序和已记录主键的变化。断点准入用于核查保留的 Oracle 源能否重新读取该位置。

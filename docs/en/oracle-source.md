@@ -67,6 +67,10 @@ In the V3 task wizard select **Oracle** and **DM**, map each selected owner to a
 
 Oracle Free 23.26.4.0.0 passed Flashback, archived CDC and original-SCN Worker restart with the Doris 4.1.3 all-in-one target and a PostgreSQL subscription. Doris preserves the Oracle civil DATE as text and RAW as Base64. The fixture checks exact `NUMBER(38,12)`, SQL NULL, trailing spaces in text keys, changes to text and RAW keys, and duplicate keyless rows. Use `--logminer --pipeline --doris-target --raw-values` with the native Oracle fixture. [Doris target profile](doris-v3.md) · [Evidence](../verification/README.md#oracle-to-native-doris)
 
+### Hive destination
+
+Oracle Free 23.26.4.0.0 to Hive 4.0.1 with the embedded Derby metastore passed Flashback, archived CDC and Worker restart at the original SCN. The ACID view retains exact `NUMBER(38,12)`, Oracle civil DATE as text, Base64 RAW and SQL NULL. Both text and RAW key changes are visible, and deleting one duplicate leaves one original keyless occurrence. The fixture compares Hive’s native receipts across restart and verifies the offline commit. Use `--logminer --pipeline --hive-target --raw-values` with the native Oracle fixture. [Hive target profile](hive-v3.md) · [Evidence](../verification/README.md#oracle-to-native-hive)
+
 ### Archived DDL review
 
 
