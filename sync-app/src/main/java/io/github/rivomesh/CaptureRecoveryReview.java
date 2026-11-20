@@ -152,6 +152,9 @@ public final class CaptureRecoveryReview {
             String admission=checkpoint==null?"SOURCE_POSITION_UNAVAILABLE":
                     probe(config,(String)before.get("generation"),checkpoint,journal,phase,nativeEvidence,verifyContents,retained,request==null?null:request.boundaryHash);
 
+            if(observedRelation(nativeEvidence)!=null&&!nativeEvidence.containsKey("blockedRelationCatalog"))
+                nativeEvidence.put("blockedRelationCatalog",Map.of("state","UNAVAILABLE","code",admission));
+
             if(verifyContents&&!nativeEvidence.containsKey("nextTransactionContents"))
                 throw new IllegalStateException(request==null?"MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE: "+admission:
                         "SOURCE_REVIEW_STALE".equals(admission)?admission:"MYSQL_BINLOG_CONTENT_REVIEW_UNAVAILABLE");
@@ -246,15 +249,21 @@ public final class CaptureRecoveryReview {
         List<SourcePosition> dependencies=journal.dependencies();
         SourceSchemaReview.Scope schemaScope=schemaScope(config.effectiveSourceType(),phase);
         List<TableSchema> history=schemaScope==null?List.of():journal.schemas();
+        PostgresRelationEvidence relation=observedRelation(nativeEvidence);
         try(SourceAdapter source=PipelineSources.open(config,generation)){
             source.validateFailover(checkpoint,dependencies);
             if(schemaScope!=null){
                 try{
-                    nativeEvidence.put("schemaDrift",SourceSchemaReview.compare(schemaScope,history,source.discover()));
+                    List<TableSchema> catalog=source.discover();
+                    nativeEvidence.put("schemaDrift",SourceSchemaReview.compare(schemaScope,history,catalog));
+                    if(relation!=null&&source instanceof PostgresqlCdcSource postgres)
+                        nativeEvidence.put("blockedRelationCatalog",postgres.reviewBlockedRelation(relation));
                 }catch(InterruptedException interrupted){
                     throw interrupted;
                 }catch(Exception unavailable){
-                    nativeEvidence.put("schemaDrift",SourceSchemaReview.unavailable(schemaScope,PipelineEngine.sourceErrorCode(unavailable)));
+                    String code=PipelineEngine.sourceErrorCode(unavailable);
+                    nativeEvidence.put("schemaDrift",SourceSchemaReview.unavailable(schemaScope,code));
+                    if(relation!=null)nativeEvidence.put("blockedRelationCatalog",Map.of("state","UNAVAILABLE","code",code));
                 }
             }
             if(source instanceof MysqlCdcSource&&"SOURCE_DECODE".equals(phase)){
@@ -277,6 +286,12 @@ public final class CaptureRecoveryReview {
         }catch(Exception failure){
             return PipelineEngine.sourceErrorCode(failure);
         }
+    }
+
+    private static PostgresRelationEvidence observedRelation(Map<String,Object> nativeEvidence){
+        if(nativeEvidence.get("blockedRelationEvent") instanceof Map<?,?> evidence
+                &&evidence.get("event") instanceof PostgresRelationEvidence relation)return relation;
+        return null;
     }
 
     static SourceSchemaReview.Scope schemaScope(String sourceType,String phase){

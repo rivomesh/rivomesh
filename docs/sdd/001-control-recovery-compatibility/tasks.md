@@ -139,6 +139,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07
+  - [x] Oracle 到达梦原生模式 0 的 DATE、精确 NUMBER、文本与 RAW 主键变更及原 SCN 续传。
   - [x] Oracle 到金仓 PG 模式的原生 DATE、RAW 主键及原 SCN 续传。
   - [x] Oracle 到 MySQL 的原生 DATE、RAW、文本主键和原 SCN 恢复。
   - [x] Oracle RAW 和无主键数据到 ClickHouse 的实库续传。
@@ -230,6 +231,7 @@ RM-SDD-001 · 2026-11-17
   交付：对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。
   验收：AC-LG-08
   - [x] PostgreSQL 原始 Relation、类型修饰符、持久断点与当前目录复核。
+  - [x] 实库区分原始发布结构一致、后续列变化、原表改名、移出发布和同名替换。目录不可用或进程重启时仍能查看同一条原始消息。
   - [x] 显式全局主键和身份 GSI 在业务建表前要求分布方案，包含定位列换序。
   - [x] MySQL 到 Gauss 的控制台和 CLI 预检返回同一写入策略、完整统计与有界详情。
   - [x] PostgreSQL 17.12 实测只读审阅 TIMESTAMP 原生声明变化，源 LSN、快照及目标行均保留原值。

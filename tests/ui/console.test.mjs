@@ -623,7 +623,8 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
     columns:[{name:'original_field',typeOid:1114,typeModifier:6},
      {name:'<img src=x onerror=alert(1)>',typeOid:25,typeModifier:-1}]}
   }:undefined;
-  return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],blockedArchiveEvent,blockedRelationEvent,
+  const blockedRelationCatalog=product==='PostgreSQL'?{state:'RELATION_REPLACED',currentRelationOid:71}:undefined;
+ return {ok:true,status:200,json:async()=>({sourceAdmission:'SOURCE_CHECKPOINT_AVAILABLE',affectedSubscriptions:['warehouse'],blockedArchiveEvent,blockedRelationEvent,blockedRelationCatalog,
    actions:['REPAIR_CAPTURE_CAUSE'],schemaDrift:{scope,state:'CHANGES_VISIBLE',
     changedTables:1,detailsLimited:false,tables:[{database:'sales',table:'orders',change:'TABLE_CHANGED',identityChanged:true,
      columnOrderChanged:true,indexesChanged:true,columns:{added:['planned_field','<img src=x onerror=alert(1)>'],removed:['old_field'],modified:[],
@@ -645,6 +646,7 @@ test(`the ${product} DDL review shows advisory recorded and current schema diffe
    assert.match(dialog.textContent,/PostgreSQL 原始发布结构/);
    assert.match(dialog.textContent,/LSN 0\/120/);
    assert.match(dialog.textContent,/original_field · OID 1114 · typmod 6/);
+   assert.match(dialog.textContent,/当前发布目录中存在同名对象，OID 已变化。 · OID 71/);
   }
   if(product==='Oracle PDB'){
    assert.match(dialog.textContent,/Oracle 归档故障指纹/);
@@ -923,19 +925,24 @@ test('Oracle source wizard derives owner mappings and keeps root and PDB credent
     assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=KINGBASE]').disabled,false);
-    assert.equal(f.targetType.querySelector('[value=DM]').disabled,true);
+    assert.equal(f.targetType.querySelector('[value=DM]').disabled,false);
     assert.equal(f.sourceUsername.disabled,true);assert.equal(f.oraclePdbUser.disabled,false);
     assert.equal(f.oracleVirtualNumeric.disabled,false);assert.equal(f.oracleVirtualNumeric.checked,false);
     f.oracleVirtualNumeric.checked=true;
     for(const [name,value] of Object.entries({jobId:'web-oracle',clusterId:'ora',oraclePdb:'FREEPDB1',oracleVersion:'23.26.4.0.0',oracleRootUrl:'jdbc:oracle:thin:@//ora:1521/FREE',oraclePdbUrl:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',oracleRootUser:'C##READER',oraclePdbUser:'PDB_READER',oracleRootPassword:'PRIVATE_ROOT',oraclePdbPassword:'PRIVATE_PDB',oracleTables:'owner.TABLE'}))f[name].value=value;
     ui.d.getElementById('next-step').click();assert.equal(f.oracleTables.validity.customError,true);
     f.oracleTables.value='SALES.ORDERS\nSALES.ITEMS\nBILLING.INVOICE';
-    ui.d.getElementById('next-step').click();f.targetSchema.value='sales_copy';f.targetUsername.value='writer';
+    ui.d.getElementById('next-step').click();
+    f.targetType.value='DM';f.targetType.dispatchEvent(new ui.w.Event('change'));
+    f.targetSchema.value='sales_copy';f.targetUsername.value='writer';
+    ui.d.querySelector('#primary-messaging [data-field=dmAcknowledgement]').checked=true;
     const mapping=ui.d.querySelector('#first-extra-mappings input');assert.equal(mapping.dataset.database,'BILLING');mapping.value='billing_copy';
     ui.d.getElementById('next-step').click();assert.doesNotMatch(ui.d.getElementById('plan-preview').textContent,/PRIVATE_ROOT|PRIVATE_PDB/);
     form.dispatchEvent(new ui.w.Event('submit',{bubbles:true,cancelable:true}));await flush();
     const config=JSON.parse(ui.calls.find(call=>call.path==='/api/tasks'&&call.method==='POST').body).config;
     assert.deepEqual(config.source,{type:'ORACLE',clusterId:'ora',database:'FREEPDB1',topology:'SINGLE',expectedVersion:'23.26.4.0.0',oracle:{allowVirtualNumericColumns:true,tables:['SALES.ORDERS','SALES.ITEMS','BILLING.INVOICE'],root:{url:'jdbc:oracle:thin:@//ora:1521/FREE',username:'C##READER',password:'PRIVATE_ROOT'},pdb:{url:'jdbc:oracle:thin:@//ora:1521/FREEPDB1',username:'PDB_READER',password:'PRIVATE_PDB'}}});
+    assert.equal(config.targets[0].product,'DM');
+    assert.equal(config.targets[0].dm.acknowledgeTextConversions,true);
     assert.deepEqual(config.targets[0].mappings,{SALES:'sales_copy',BILLING:'billing_copy'});
   }finally{ui.dom.window.close();}
 });

@@ -309,7 +309,14 @@ Object.assign(messages.zh,{
  oracleArchiveEvent:'Oracle 归档故障指纹',oracleArchiveEventUnavailable:'当前无可核对的原始故障指纹。',
  oracleArchiveWindow:'归档区间',oracleDecodedSqlDigest:'SQL 文本摘要',
  postgresRelationEvent:'PostgreSQL 原始发布结构',postgresRelationUnavailable:'当前无可核对的原始 Relation 消息。',
- postgresRelationColumns:'发布列',postgresRelationMore:'界面显示前 32 列。完整结构可从恢复 API 查看。'
+ postgresRelationColumns:'发布列',postgresRelationMore:'界面显示前 32 列。完整结构可从恢复 API 查看。',
+ postgresRelationCatalogMatch:'当前发布对象的列布局与原始消息一致。',
+ postgresRelationCatalogColumnsChanged:'当前发布对象的列布局已变化。',
+ postgresRelationCatalogIdentityChanged:'当前发布对象的复制标识已变化。',
+ postgresRelationCatalogReplaced:'当前发布目录中存在同名对象，OID 已变化。',
+ postgresRelationCatalogRenamed:'原 OID 的对象在当前发布目录中已改名或移动。',
+ postgresRelationCatalogMissing:'当前发布目录中找不到原对象。',
+ postgresRelationCatalogUnavailable:'当前发布目录无法核对。'
 });
 Object.assign(messages.en,{
  schemaDriftTitle:'MySQL schema differences',postgresSchemaDriftTitle:'PostgreSQL schema differences',oracleSchemaDriftTitle:'Oracle PDB schema differences',schemaDriftScope:'The current source catalog is compared with recorded journal schemas. It can include later DDL.',
@@ -321,7 +328,14 @@ Object.assign(messages.en,{
  oracleArchiveEvent:'Blocked Oracle archive event',oracleArchiveEventUnavailable:'The original fault fingerprint is unavailable.',
  oracleArchiveWindow:'Archive interval',oracleDecodedSqlDigest:'SQL text digest',
  postgresRelationEvent:'Original PostgreSQL relation',postgresRelationUnavailable:'The original Relation message is unavailable.',
- postgresRelationColumns:'Published columns',postgresRelationMore:'Showing the first 32 columns. The recovery API includes the complete descriptor.'
+ postgresRelationColumns:'Published columns',postgresRelationMore:'Showing the first 32 columns. The recovery API includes the complete descriptor.',
+ postgresRelationCatalogMatch:'The current published column layout matches the original message.',
+ postgresRelationCatalogColumnsChanged:'The current published column layout has changed.',
+ postgresRelationCatalogIdentityChanged:'The current replica identity has changed.',
+ postgresRelationCatalogReplaced:'The current publication contains an object with the same name and a different OID.',
+ postgresRelationCatalogRenamed:'The original OID now belongs to a renamed or moved object in the publication.',
+ postgresRelationCatalogMissing:'The original object is absent from the current publication.',
+ postgresRelationCatalogUnavailable:'The current publication could not be checked.'
 });
 function showSourceSchemaDrift(content,review){
  const titles={CURRENT_MYSQL_CATALOG_VS_JOURNAL:'schemaDriftTitle',
@@ -370,7 +384,7 @@ function showOracleArchiveEvent(content,review){
  }
  content.append(section);
 }
-function showPostgresRelationEvent(content,review){
+function showPostgresRelationEvent(content,review,catalog){
  if(!review)return;
  const section=text('section','','callout');
  section.append(text('h3',t('postgresRelationEvent')));
@@ -381,6 +395,15 @@ function showPostgresRelationEvent(content,review){
   for(const column of event.columns.slice(0,32))
    columns.append(text('li',column.name+' · OID '+column.typeOid+' · typmod '+column.typeModifier));
   if(event.columns.length>32)section.append(text('p',t('postgresRelationMore')));
+  const catalogLabels={MATCH:'postgresRelationCatalogMatch',COLUMN_LAYOUT_CHANGED:'postgresRelationCatalogColumnsChanged',
+   REPLICA_IDENTITY_CHANGED:'postgresRelationCatalogIdentityChanged',RELATION_REPLACED:'postgresRelationCatalogReplaced',
+   RELATION_RENAMED:'postgresRelationCatalogRenamed',RELATION_NOT_PUBLISHED:'postgresRelationCatalogMissing',
+   UNAVAILABLE:'postgresRelationCatalogUnavailable'};
+  if(Object.hasOwn(catalogLabels,catalog?.state)){
+   const detail=catalog.currentRelationOid==null?'':' · OID '+catalog.currentRelationOid;
+   section.append(text('p',t(catalogLabels[catalog.state])+detail));
+   if(catalog.state==='UNAVAILABLE'&&catalog.code)section.append(text('code',catalog.code));
+  }
  }else{
   section.append(text('p',t('postgresRelationUnavailable')),text('code',review.code||''));
  }
@@ -403,7 +426,7 @@ async function openCaptureRecovery(task){
    text('p',t('affectedSubscriptions')+' · '+report.affectedSubscriptions.join(', ')));
   showSourceSchemaDrift(content,report.schemaDrift);
   showOracleArchiveEvent(content,report.blockedArchiveEvent);
-  showPostgresRelationEvent(content,report.blockedRelationEvent);
+  showPostgresRelationEvent(content,report.blockedRelationEvent,report.blockedRelationCatalog);
   const boundary=report.nextTransactionHeaders;
   if(boundary?.scope==='BINLOG_HEADERS_ONLY'){
    const evidence=text('section','','callout');
@@ -824,7 +847,7 @@ function messageSettings(root,product){const value=name=>root.querySelector('[da
 
 function targetMode(card){
  const f=$('create-form').elements,select=card?card.querySelector('[data-field=product]'):f.targetType;
- const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS','KINGBASE','DM']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE','KINGBASE']:null;
+ const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS','KINGBASE','DM']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE','KINGBASE','DM']:null;
  for(const option of select.options){
   const sharedMessaging=v3()&&messagingProduct(option.value);
   option.disabled=Boolean(allowed&&!allowed.includes(option.value)&&!sharedMessaging);

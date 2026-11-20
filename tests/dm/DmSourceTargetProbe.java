@@ -9,7 +9,8 @@ import java.util.StringJoiner;
 
 public class DmSourceTargetProbe {
     public static void main(String[] args) throws Exception {
-        try (Connection connection = JdbcConnections.open("dm.jdbc.driver.DmDriver", "jdbc:dm://dm:5236",
+        String url = System.getenv().getOrDefault("RIVOMESH_DM_PROBE_URL", "jdbc:dm://dm:5236");
+        try (Connection connection = JdbcConnections.open("dm.jdbc.driver.DmDriver", url,
                 "SYSDBA", System.getenv("RM_PG_DM_PASSWORD"));
              Statement query = connection.createStatement()) {
             if ("--version".equals(args[0])) {

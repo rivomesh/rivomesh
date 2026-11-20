@@ -4,6 +4,7 @@ import io.github.rivomesh.api.SourcePosition;
 import io.github.rivomesh.cdc.Cell;
 import io.github.rivomesh.cdc.Codec;
 import io.github.rivomesh.cdc.PipelineFailure;
+import io.github.rivomesh.cdc.PostgresRelationEvidence;
 import io.github.rivomesh.cdc.SourceAdapter;
 import io.github.rivomesh.cdc.SourceTransaction;
 import io.github.rivomesh.cdc.TableSchema;
@@ -243,6 +244,10 @@ final class PostgresqlCdcSource implements SourceAdapter {
             tables.putAll(found);
             return new ArrayList<>(found.values());
         }
+    }
+
+    Map<String,Object> reviewBlockedRelation(PostgresRelationEvidence relation){
+        return SourceSchemaReview.compareBlockedPostgresRelation(relation,tables);
     }
 
     Map<Integer,TableSchema> inspectTables(Connection c)throws Exception{

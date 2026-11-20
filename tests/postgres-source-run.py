@@ -720,7 +720,10 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                          "GRANT USAGE ON SCHEMA sales,billing TO capture_fixture; "
                          "GRANT SELECT ON ALL TABLES IN SCHEMA sales,billing TO capture_fixture")
         if args.ddl_review:
-            sql('source', 'ALTER TABLE billing.ledger ADD COLUMN observed TIMESTAMP')
+            sql('source','ALTER TABLE billing.ledger ADD COLUMN observed TIMESTAMP; '
+                         'CREATE TABLE billing.retained(id BIGINT PRIMARY KEY); '
+                         'ALTER TABLE billing.retained REPLICA IDENTITY FULL; '
+                         'ALTER PUBLICATION rivomesh_test ADD TABLE billing.retained')
         if args.uuid:
             sql('source',"""
                 CREATE TABLE billing.identities(id UUID PRIMARY KEY,ref UUID);
@@ -900,7 +903,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             sql('source','DROP INDEX sales.idx_partial')
             passed('PostgreSQL reports a partial index for review without mutating the published schema')
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=3+int(args.uuid)+2*int(dual_targets and not (args.common_cut or args.truncate_review))
+        table_count=3+int(args.uuid)+int(args.ddl_review)+2*int(dual_targets and not (args.common_cut or args.truncate_review))
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -1645,6 +1648,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert table['columns']['modified']==['observed'] and not table['columnOrderChanged']
             blocked=first['blockedRelationEvent']
             assert blocked['state']=='OBSERVED' and blocked['protocol']=='PGOUTPUT_V1_RELATION',blocked
+            assert first['blockedRelationCatalog']=={'state':'MATCH'}
             event=blocked['event']
             lsn=lambda value:int(value.split('/')[0],16)<<32|int(value.split('/')[1],16)
             assert event['checkpointSha256']==first['checkpointHash']
@@ -1663,6 +1667,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert current['recordedSha256']==table['recordedSha256'] and current['liveSha256']!=table['liveSha256']
             assert later['checkpointHash']==first['checkpointHash'] and later['errorGeneration']==first['errorGeneration']
             assert later['blockedRelationEvent']==blocked
+            assert later['blockedRelationCatalog']=={'state':'COLUMN_LAYOUT_CHANGED'}
             passed('A later DDL changes the advisory live digest while preserving the recorded schema and failure cut')
 
             sql('source','ALTER TABLE billing.ledger ADD COLUMN out_of_profile TIMETZ')
@@ -1671,12 +1676,37 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                                                'state':'UNAVAILABLE','code':'POSTGRESQL_TYPE_UNSUPPORTED'}
             assert unavailable['checkpointHash']==first['checkpointHash'] and task()['status']['capture_lsn']==durable
             assert unavailable['blockedRelationEvent']==blocked
+            assert unavailable['blockedRelationCatalog']=={'state':'UNAVAILABLE','code':'POSTGRESQL_TYPE_UNSUPPORTED'}
             assert target_cut()==original
             passed('An unsupported publication shape has an explicit unavailable diagnostic without changing either cut')
+
+            sql('source','ALTER TABLE billing.ledger DROP COLUMN out_of_profile; '
+                         'ALTER TABLE billing.ledger RENAME TO ledger_archive')
+            renamed=http(route+'/capture-recovery')
+            assert renamed['blockedRelationCatalog']=={'state':'RELATION_RENAMED'}
+            sql('source','ALTER PUBLICATION rivomesh_test DROP TABLE billing.ledger_archive')
+            removed=http(route+'/capture-recovery')
+            assert removed['blockedRelationCatalog']=={'state':'RELATION_NOT_PUBLISHED'}
+            sql('source','CREATE TABLE billing.ledger(id BIGINT PRIMARY KEY,label VARCHAR(60),'
+                         'observed TIMESTAMP(6),first_note TEXT); '
+                         'ALTER TABLE billing.ledger REPLICA IDENTITY FULL; '
+                         'ALTER PUBLICATION rivomesh_test ADD TABLE billing.ledger')
+            current_oid=int(sql('source',"SELECT 'billing.ledger'::regclass::oid"))
+            assert current_oid!=event['relationOid']
+            replacement={'state':'RELATION_REPLACED','currentRelationOid':current_oid}
+            replaced=http(route+'/capture-recovery')
+            assert replaced['blockedRelationCatalog']==replacement
+            for review in (renamed,removed,replaced):
+                assert review['blockedRelationEvent']==blocked and review['checkpointHash']==first['checkpointHash']
+                assert review['errorGeneration']==first['errorGeneration']
+            assert target_cut()==original
+            passed('The catalog distinguishes a renamed relation, removal from publication and a same-name replacement')
+
             compose('kill','-s','SIGKILL','runner')
             compose('up','-d','runner')
             restored=require(lambda:http(route+'/capture-recovery'),'the original Relation after controller restart')
             assert restored['blockedRelationEvent']==blocked and restored['checkpointHash']==first['checkpointHash']
+            assert restored['blockedRelationCatalog']==replacement and restored['errorGeneration']==first['errorGeneration']
             assert target_cut()==original
             passed('The Controller restart reads the same stored Relation record and leaves the target cut unchanged')
         elif args.date_values:

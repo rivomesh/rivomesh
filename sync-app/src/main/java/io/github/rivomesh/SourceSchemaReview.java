@@ -1,6 +1,7 @@
 package io.github.rivomesh;
 
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.PostgresRelationEvidence;
 import io.github.rivomesh.cdc.TableSchema;
 
 import java.util.ArrayList;
@@ -70,6 +71,38 @@ final class SourceSchemaReview {
 
     static Map<String, Object> unavailable(Scope scope, String code) {
         return Map.of("scope", scope.name(), "state", "UNAVAILABLE", "code", code);
+    }
+
+    static Map<String, Object> compareBlockedPostgresRelation(PostgresRelationEvidence event,
+                                                              Map<Integer, TableSchema> publication) {
+        TableSchema table = publication.get((int) event.relationOid());
+        if (table == null) {
+            for (var entry : publication.entrySet()) {
+                if (sameRelationName(event, entry.getValue())) {
+                    return Map.of("state", "RELATION_REPLACED", "currentRelationOid",
+                            Integer.toUnsignedLong(entry.getKey()));
+                }
+            }
+            return Map.of("state", "RELATION_NOT_PUBLISHED");
+        }
+        if (!sameRelationName(event, table)) return Map.of("state", "RELATION_RENAMED");
+        // Publication discovery validates REPLICA IDENTITY FULL for all returned tables.
+        if (!"f".equals(event.replicaIdentity())) return Map.of("state", "REPLICA_IDENTITY_CHANGED");
+        if (event.columns().size() != table.columns.size()) return Map.of("state", "COLUMN_LAYOUT_CHANGED");
+        for (int index = 0; index < table.columns.size(); index++) {
+            var original = event.columns().get(index);
+            String current = table.columns.get(index).name;
+            if (!original.name().equals(current)
+                    || !Long.toString(original.typeOid()).equals(table.properties.get("pg.oid." + current))
+                    || !Integer.toString(original.typeModifier()).equals(table.properties.get("pg.modifier." + current))) {
+                return Map.of("state", "COLUMN_LAYOUT_CHANGED");
+            }
+        }
+        return Map.of("state", "MATCH");
+    }
+
+    private static boolean sameRelationName(PostgresRelationEvidence event, TableSchema table) {
+        return event.namespace().equals(table.database) && event.relation().equals(table.name);
     }
 
     private static ColumnChanges columns(TableSchema before, TableSchema now) {

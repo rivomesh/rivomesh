@@ -57,7 +57,14 @@ Use **Check** before starting. A source NUMBER scale above 30 returns `ORACLE_MY
 
 Oracle Free 23.26.4.0.0 to KingbaseES V009R001C001B0025 in PG/UTF8 mode passed the `--kingbase-target --raw-values` fixture. The target stores Oracle civil DATE as a timestamp without time zone and RAW as bytea. Text and RAW key changes, exact NUMBER and SQL NULL survive the original-SCN restart alongside the PostgreSQL subscription. [Kingbase target profile](kingbase-v3.md)
 
+### Dameng destination
+
+Oracle Free 23.26.4.0.0 to Dameng 8.1.4.80 passed Flashback, archived CDC and original-SCN restart in native mode 0 with UTF-8, case sensitivity and `BLANK_PAD_MODE=1`. The fixture checks civil DATE including the time of day, exact `NUMBER(38,12)`, SQL NULL and distinct text and RAW keys. Oracle `RAW(n)` in the source profile fits the Dameng VARBINARY projection. A key change captured in the archives and a later offline commit reach Dameng and PostgreSQL with their original snapshots. [Dameng target profile](dm-v3.md)
+
+In the V3 task wizard select **Oracle** and **DM**, map each selected owner to a Dameng schema, and run **Check**. Supply the Oracle and Dameng JDBC drivers on the Worker host. To rerun the fixture, add `--logminer --pipeline --dm-target --raw-values` to the Oracle probe command above. [Native fixture](../../tests/oracle-source-probe.py) · [Evidence](../verification/README.md#oracle-to-native-dameng)
+
 ### Archived DDL review
+
 
 When a selected PDB's archived DDL stops capture with `ORACLE_REDO_DDL_REQUIRES_PLAN`, open **Capture recovery** on the failed task or call its read-only `GET /api/tasks/{id}/capture-recovery` endpoint. The report binds the error generation and the last durable checkpoint hash. The `CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` comparison uses the last recorded schema version and digest for each selected table, plus a separate digest of the definition visible now. It reports changes in supported column names, types, sizes, nullability, column order and the recorded primary key. Checkpoint admission checks that the retained Oracle source is eligible to revisit the cut.
 

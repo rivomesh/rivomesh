@@ -822,6 +822,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     clickhouse = oracle + '-ch'
     mysql = oracle + '-my'
     kingbase = oracle + '-kb'
+    dameng = oracle + '-dm'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
     if options.clickhouse:
         env['CLICKHOUSE_PASSWORD']=secrets.token_hex(24)
@@ -829,7 +830,9 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         env['MYSQL_ROOT_PASSWORD']=secrets.token_hex(24)
     if options.kingbase_target:
         env['KINGBASE_FIXTURE_PASSWORD']='Kb!'+secrets.token_hex(12)
-    if options.date_values or options.mysql_target or options.kingbase_target:
+    if options.dm_target:
+        env['RM_PG_DM_PASSWORD']='Dm8!'+secrets.token_hex(10)
+    if options.date_values or options.mysql_target or options.kingbase_target or options.dm_target:
         env['TZ'] = 'America/New_York'
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     platform = None
@@ -841,6 +844,25 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def target_sql(statement, checked=True):
         return execute('docker','exec',target,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-At','-c',statement,checked=checked).stdout.strip()
+
+    def dm_sql(statement, checked=True):
+        return execute(options.java,'-cp',str(options.artifact.resolve())+os.pathsep+str(dm_probe_classes),
+                       'DmSourceTargetProbe',statement,env=env,checked=checked).stdout.strip()
+
+    def dm_types():
+        rows=dm_sql("""
+            SELECT "CODE","AMOUNT",TO_CHAR("OCURRED",'YYYY-MM-DD HH24:MI:SS')
+            FROM "dm_copy"."RIVO_SYNC_MYSQL_TYPES" ORDER BY "CODE" """,checked=False).splitlines()
+        normalized=[]
+        for row in rows:
+            code,amount,ocurred=row.split('|')
+            normalized.append(code.encode().hex().upper()+'|'+amount+'|'+ocurred)
+        return normalized
+
+    def dm_binary_keys():
+        rows=dm_sql("""
+            SELECT "OCTETS","ID" FROM "dm_copy"."RIVO_SYNC_RAW_KEYS" """,checked=False).splitlines()
+        return sorted((row.upper() for row in rows),key=lambda row:row.split('|',1)[0])
 
     def kb_sql(statement, checked=True):
         return execute('docker','exec',kingbase,'/home/kingbase/install/kingbase/bin/ksql',
@@ -1061,7 +1083,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         rotate()
         source_tables += ['RIVO_APP.RIVO_SYNC_RAW_ROWS','RIVO_APP.RIVO_SYNC_RAW_KEYLESS']
 
-    if options.mysql_target or options.kingbase_target:
+    if options.mysql_target or options.kingbase_target or options.dm_target:
         sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE TABLE rivo_app.rivo_sync_mysql_types
                 (code VARCHAR2(20 CHAR) PRIMARY KEY, amount NUMBER(38,12) NOT NULL, ocurred DATE);
@@ -1085,7 +1107,31 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     started_clickhouse=False
     started_mysql=False
     started_kingbase=False
+    started_dameng=False
     try:
+        if options.dm_target:
+            fixtures=Path(__file__).resolve().parent/'dm'
+            dm_probe_classes=output/'dm-probe'
+            dm_probe_classes.mkdir(exist_ok=True)
+            execute(str(Path(options.java).with_name('javac')),'-cp',str(options.artifact.resolve()),
+                    '-d',str(dm_probe_classes),str(fixtures/'DmSourceTargetProbe.java'))
+            dm_env=dict(env,SYSDBA_PWD=env['RM_PG_DM_PASSWORD'],SYSAUDITOR_PWD=env['RM_PG_DM_PASSWORD'],
+                        SYSSSO_PWD=env['RM_PG_DM_PASSWORD'])
+            execute('docker','run','--rm','-d','--name',dameng,
+                    '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::5236',
+                    '--memory','2g','--cpus','2','-e','SYSDBA_PWD','-e','SYSAUDITOR_PWD','-e','SYSSSO_PWD',
+                    '-e','UNICODE_FLAG=1','-e','CASE_SENSITIVE=1','-e','BLANK_PAD_MODE=1','-e','PAGE_SIZE=32',
+                    '-e','BUFFER=128','-e','TIME_ZONE=+00:00',
+                    '-v',str(fixtures/'start.sh')+':/fixture/start.sh:ro',
+                    '-v',str(fixtures/'health.sh')+':/fixture/health.sh:ro',
+                    '--entrypoint','/bin/bash','dm8:dm8_20250924_rev288894_HWarm_kylin10_64','/fixture/start.sh',
+                    env=dm_env)
+            started_dameng=True
+            required(lambda:execute('docker','exec',dameng,'/bin/bash','/fixture/health.sh',checked=False).returncode==0,
+                     'Dameng target ready',150)
+            dm_port=execute('docker','port',dameng,'5236/tcp').stdout.strip().rsplit(':',1)[1]
+            env['RIVOMESH_DM_PROBE_URL']=f'jdbc:dm://127.0.0.1:{dm_port}'
+            (output/'dm-version.txt').write_text(dm_sql('--version')+'\n')
         if options.kingbase_target:
             fixture=Path(__file__).resolve().parent/'kingbase/start.sh'
             execute('docker','run','--rm','-d','--name',kingbase,
@@ -1160,6 +1206,11 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                                 url=f'redis://127.0.0.1:{redis_port}/2',
                                                 mappings={'RIVO_APP':'oracle_events'},
                                                 messaging=dict(stream='RM_ORACLE_PARITY')))
+            if options.dm_target:
+                pipeline['targets'].append(dict(id='dm',product='DM',url=env['RIVOMESH_DM_PROBE_URL'],
+                                                username='SYSDBA',password='${RM_PG_DM_PASSWORD}',
+                                                metadataSchema='dm_meta',mappings={'RIVO_APP':'dm_copy'},
+                                                dm=dict(acknowledgeTextConversions=True)))
             if options.kingbase_target:
                 pipeline['targets'].append(dict(id='kb',product='KINGBASE',
                                                 url=f'jdbc:kingbase8://127.0.0.1:{kb_port}/test'
@@ -1314,6 +1365,18 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         lambda: observed_ids if len((observed_ids:=kb_sql(kb_snapshot_query)).splitlines())
                         ==len(source_tables) else None,'all Kingbase target snapshots complete',120)
                     observed('Kingbase preserves civil DATE, exact Oracle NUMBER, text keys and RAW primary keys')
+                if options.dm_target:
+                    expected_before=['41|12345678901234567890123456.123456789012|2024-03-10 02:17:19',
+                                     '4120|2.000000000000|<NULL>']
+                    required(lambda:dm_types()==expected_before
+                             and dm_binary_keys()==['000AFF80|1','000AFF8020|2'],
+                             'Dameng copies Oracle DATE, exact DECIMAL and both kinds of keys',120)
+                    dm_snapshot_query=("SELECT snapshot_id FROM \"dm_meta\".\"rm3_sink_table\" "
+                                       "WHERE snapshot_state='COMPLETE' ORDER BY table_id")
+                    original_dm_snapshots=required(
+                        lambda: observed_ids if len((observed_ids:=dm_sql(dm_snapshot_query)).splitlines())
+                        ==len(source_tables) else None,'all Dameng target snapshots complete',120)
+                    observed('Dameng preserves civil DATE, exact Oracle NUMBER, text keys and RAW primary keys')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
@@ -1347,7 +1410,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 online_mysql=("""
                     UPDATE rivo_app.rivo_sync_mysql_types SET code='Z',ocurred=NULL WHERE code='A';
                     UPDATE rivo_app.rivo_sync_raw_keys SET octets=HEXTORAW('81ff00') WHERE id=1;
-                """ if options.mysql_target or options.kingbase_target else '')
+                """ if options.mysql_target or options.kingbase_target or options.dm_target else '')
                 out,_=long_transaction.communicate(online_raw+online_mysql+"COMMIT;\nEXIT\n",timeout=30)
                 assert long_transaction.returncode==0,out
                 long_transaction=None
@@ -1406,6 +1469,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              and kb_binary_keys()==['000AFF8020|2','81FF00|1'],
                              'Kingbase applies archived primary-key changes',90)
                     observed('Kingbase applies both original Oracle text and RAW key changes')
+                if options.dm_target:
+                    expected_online=['4120|2.000000000000|<NULL>','5A|12345678901234567890123456.123456789012|<NULL>']
+                    required(lambda:dm_types()==expected_online
+                             and dm_binary_keys()==['000AFF8020|2','81FF00|1'],
+                             'Dameng applies archived primary-key changes',120)
+                    observed('Dameng applies both original Oracle text and RAW key changes')
                 if options.text_json:
                     required(lambda:json.loads(target_sql(before_json))==[True,{'version':2}]
                              and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
@@ -1448,7 +1517,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 offline_mysql=("""
                     DELETE FROM rivo_app.rivo_sync_mysql_types WHERE code='A ';
                     INSERT INTO rivo_app.rivo_sync_raw_keys VALUES(HEXTORAW('00ff10'),3);
-                """ if options.mysql_target or options.kingbase_target else '')
+                """ if options.mysql_target or options.kingbase_target or options.dm_target else '')
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
                     DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
@@ -1511,6 +1580,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              'Kingbase consumes archived Oracle work after forced restart',90)
                     assert original_kb_snapshots==kb_sql(kb_snapshot_query)
                     observed('Kingbase resumes Oracle at the original SCN and keeps each original snapshot')
+                if options.dm_target:
+                    required(lambda:dm_types()==['5A|12345678901234567890123456.123456789012|<NULL>']
+                             and dm_binary_keys()==['000AFF8020|2','00FF10|3','81FF00|1'],
+                             'Dameng consumes archived Oracle work after forced restart',120)
+                    assert original_dm_snapshots==dm_sql(dm_snapshot_query)
+                    observed('Dameng resumes Oracle at the original SCN and keeps each original snapshot')
                 if options.text_json:
                     required(lambda:target_sql('SELECT "PAYLOAD"->>\'after\' FROM copy_app."RIVO_JSON_ROWS" '
                                                'WHERE "ID"=4')=='restart'
@@ -1796,7 +1871,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 for path in (folder/'state'/'logs').glob('*.log'):
                     log=path.read_text(errors='replace')
                     for name in ('RIVOMESH_ORACLE_PROBE_PASSWORD','POSTGRES_PASSWORD',
-                                 'RM_ORACLE_TEST_TOKEN','CLICKHOUSE_PASSWORD','MYSQL_ROOT_PASSWORD','KINGBASE_FIXTURE_PASSWORD'):
+                                 'RM_ORACLE_TEST_TOKEN','CLICKHOUSE_PASSWORD','MYSQL_ROOT_PASSWORD','KINGBASE_FIXTURE_PASSWORD','RM_PG_DM_PASSWORD'):
                         if env.get(name):
                             log=log.replace(env[name],'[REDACTED]')
                     (output/(path.stem+'-redacted.log')).write_text(log)
@@ -1811,6 +1886,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             execute('docker','stop','--time','10',mysql)
         if started_kingbase:
             execute('docker','stop','--time','15',kingbase)
+        if started_dameng:
+            execute('docker','stop','--time','20',dameng)
         if started:
             execute('docker','stop','--time','30',target)
 
@@ -1827,6 +1904,7 @@ def main():
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
+    parser.add_argument('--dm-target', action='store_true', help='Verify the Oracle source through native Dameng')
     parser.add_argument('--kingbase-target', action='store_true', help='Verify the Oracle source through native Kingbase PG mode')
     parser.add_argument('--mysql-target', action='store_true', help='Verify the Oracle source through native MySQL 8.4')
     parser.add_argument('--clickhouse', action='store_true', help='Materialize the Oracle RAW profile into ClickHouse')
@@ -1863,6 +1941,8 @@ def main():
     options = parser.parse_args()
     if options.startup_timeout<1:
         parser.error('--startup-timeout must be positive')
+    if options.dm_target and not options.raw_values:
+        parser.error('--dm-target requires --raw-values')
     if options.kingbase_target and not options.raw_values:
         parser.error('--kingbase-target requires --raw-values')
     if options.mysql_target and not options.raw_values:
@@ -1926,7 +2006,7 @@ def main():
               'startupTimeoutSeconds':options.startup_timeout,
               'redis': options.redis, 'rawEvidence': options.raw_evidence, 'rawValues': options.raw_values,
               'clickhouse': options.clickhouse, 'mysqlTarget':options.mysql_target,
-              'kingbaseTarget':options.kingbase_target, 'project': name,
+              'kingbaseTarget':options.kingbase_target, 'dmTarget':options.dm_target, 'project': name,
               'hostMountedOracleData': options.oradata_root is not None,
               'harnessSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'checks': [], 'status': 'FAIL'}
@@ -2150,6 +2230,8 @@ def main():
             raw_evidence(sql,options.output,observed)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
+        if options.dm_target:
+            report['dmVersion']=(options.output/'dm-version.txt').read_text().strip()
         if options.kingbase_target:
             report['kingbaseVersion']=(options.output/'kingbase-version.txt').read_text().strip()
         if options.mysql_target:

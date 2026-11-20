@@ -858,3 +858,15 @@ KingbaseES V009R001C001B0025 in PG/UTF8 mode passed two independent Temurin 21 c
 The Temurin 21 candidate `cd47ea81b73e8103114b2159a0adf6925938625f2fc9c9b8ff198abaf7f91719` verifies Dameng 8.1.4.80 native mode 0, explicit JSON-to-CLOB review, bytea written as BLOB, exact numeric values and one keyless deletion. PostgreSQL and Dameng retain their original snapshots and resume the original WAL slot after a forced restart. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
 
 The grouped Temurin 21 package `137fc4d6c7f115ce57d66901ca8b990ed8b60ad13573ec55da95096a3ac94a5f` passed 57 focused Java tests and five source wizard and DDL review DOM tests. Individual native destination artifacts are identified above.
+
+## LG-08 PostgreSQL Relation comparison against the live publication
+
+Temurin 21 package `73b3396cb0fd08f3b43bb21b28a386dc359d2e3a1236e467ed4cf58e5f286973` passed 59 focused Java tests, three DDL review DOM tests and five native PostgreSQL 17.12 checks against two loopback databases on arm64 macOS. The catalog review distinguishes an exact match, a later column change, an unavailable catalog, a renamed table, removal from the publication and a different table with the same name. Killing and restarting the Controller preserves the stored pgoutput message, WAL checkpoint and destination snapshots. Both disposable databases were stopped. [Reproduce](../../tests/postgres-source-run.py) · [Evidence ledger](baseline.json)
+
+The repository's Docker fixture passed 10 native checks with the same artifact and PostgreSQL 17.12, including SQL retry, original-slot restart and the catalog comparison. Fixture containers, volumes and networks were removed. [Evidence ledger](baseline.json)
+
+## Oracle to native Dameng
+
+Temurin 21 package `61b9527a417654dd1fff6b65a4596fc1779f912b0cd7362b9c4497986b05f6dc` passed 19 native checks with Oracle Free 23.26.4.0.0, Dameng 8.1.4.80 in native mode 0 and a PostgreSQL subscription. Dameng preserves civil DATE, exact `NUMBER(38,12)`, SQL NULL and distinct text and RAW keys. Changes of both primary keys and offline archived commits reach the original snapshots after a forced Controller and Worker restart on the same SCN. The fixture removed its containers and Oracle data directory. [Reproduce](../../tests/oracle-source-probe.py) · [Evidence ledger](baseline.json)
+
+The grouped Temurin 21 package `3a49003af2ca7768089d32f6580dd6a1ce9ad948cd07eeda0070480fab6af73b` passed 59 focused Java tests and five source wizard and DDL review DOM tests. The native tests above used the individually identified artifacts.

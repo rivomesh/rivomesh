@@ -16016,5 +16016,165 @@
       "volumes": 0,
       "networks": 0
     }
+  },
+  "postgresqlBlockedRelationCatalog": {
+    "status": "PASS",
+    "artifactSha256": "73b3396cb0fd08f3b43bb21b28a386dc359d2e3a1236e467ed4cf58e5f286973",
+    "harnessSha256": "07cbfb74e8b21b05a991ab3e443ce5848befb3ef2f13d0e5483df46aef091888",
+    "runtime": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "database": "postgres (PostgreSQL) 17.12",
+    "jdk": 21,
+    "postgresSourceArchiveSha256": "9cf136a703d8ee2f83465c43be4e9e8e7930c82b0bfba13be7e2537be769ac55",
+    "checks": [
+      "Native pgoutput relation matches current published OID, ordered columns and type modifiers",
+      "Later ALTER TABLE changes the catalog review without changing the recorded event or target data",
+      "Unsupported catalog is reported without erasing the original relation",
+      "Renamed, unpublished and same-name replacement relations have distinct outcomes",
+      "Controller restart keeps the same failed transaction, durable cut and original destination snapshots"
+    ],
+    "remainingInstances": [],
+    "focusedJavaChecks": 59,
+    "ddlReviewDomChecks": 3,
+    "scope": "Source and destination on independently initialized loopback PostgreSQL databases. The repository fixture covers the same publication identity cases."
+  },
+  "postgresqlBlockedRelationCatalogDocker": {
+    "artifactSha256": "73b3396cb0fd08f3b43bb21b28a386dc359d2e3a1236e467ed4cf58e5f286973",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+      "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+      "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+      "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+      "The stopped transaction keeps the original native Relation and exact TIMESTAMP type modifier",
+      "A later DDL changes the advisory live digest while preserving the recorded schema and failure cut",
+      "An unsupported publication shape has an explicit unavailable diagnostic without changing either cut",
+      "The catalog distinguishes a renamed relation, removal from publication and a same-name replacement",
+      "The Controller restart reads the same stored Relation record and leaves the target cut unchanged"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17.12",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "ddlReview": true,
+    "project": "rivomesh-pg-source-6465699bfc",
+    "harnessSha256": "cce9d6aceb6c52f2a09c6a1e90d374876e54810da197539fff2c5d01f6dc2cc6",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "blockedRelationEvent": {
+      "state": "OBSERVED",
+      "protocol": "PGOUTPUT_V1_RELATION",
+      "fingerprint": "ec72ef5057c12871986d2635dd483b507d048efea4a106192b0d8a851bfec999",
+      "event": {
+        "checkpointSha256": "a3ff4b1a358509f0db19e14481ebbd37e923c6a86f114a644f5523b4b17dae83",
+        "transactionFinalLsn": "0/198cb10",
+        "relationOid": 16399,
+        "namespace": "billing",
+        "relation": "ledger",
+        "replicaIdentity": "f",
+        "columns": [
+          {
+            "name": "id",
+            "typeOid": 20,
+            "typeModifier": -1,
+            "key": true
+          },
+          {
+            "name": "label",
+            "typeOid": 1043,
+            "typeModifier": 64,
+            "key": true
+          },
+          {
+            "name": "observed",
+            "typeOid": 1114,
+            "typeModifier": 6,
+            "key": true
+          },
+          {
+            "name": "first_note",
+            "typeOid": 25,
+            "typeModifier": -1,
+            "key": true
+          }
+        ],
+        "recordedTableId": "4eddaecc9305f28a33aae890eafe80930df503d0884142071a2bad7a539bd647",
+        "recordedSchemaVersion": 1,
+        "recordedSchemaSha256": "3dbce39036ad5169b99e67802b895aa732627288d85670536dcf5cc118bbcc2f"
+      }
+    },
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    }
+  },
+  "oracleNativeDameng": {
+    "artifactSha256": "61b9527a417654dd1fff6b65a4596fc1779f912b0cd7362b9c4497986b05f6dc",
+    "driverSha256": "1ffff4c9e2ae7cd277341e81427c8aa843135d7134ce715809ac67325b77d5fe",
+    "image": "container-registry.oracle.com/database/free@sha256:f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e",
+    "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+    "textJson": false,
+    "dateValues": false,
+    "virtualEvidence": false,
+    "virtualColumns": false,
+    "lobEvidence": false,
+    "lobPreflight": false,
+    "nativeJsonEvidence": false,
+    "characterEvidence": false,
+    "characterPipeline": false,
+    "ddlReview": false,
+    "ddlFingerprint": false,
+    "savepointEvidence": false,
+    "savepointPipeline": false,
+    "startupTimeoutSeconds": 720,
+    "redis": false,
+    "rawEvidence": false,
+    "rawValues": true,
+    "clickhouse": false,
+    "mysqlTarget": false,
+    "kingbaseTarget": false,
+    "dmTarget": true,
+    "project": "rivomesh-oracle-source-82495f6d2d",
+    "hostMountedOracleData": true,
+    "harnessSha256": "5eeaaf92ae0a32b9a3dc846aeec830502f36dc31cc35619b9a6530f2dd00fadd",
+    "checks": [
+      "Oracle root and PDB identity produce a typed DBID, incarnation, PDB GUID and SCN anchor",
+      "The restricted read role can flash back keyed and keyless source tables at the same SCN",
+      "Historical SCN keeps the original row and duplicate multiplicity after source changes",
+      "A root connection substituted for the PDB is refused before flashback",
+      "LogMiner reads archived before/after and keyless undo with one XID and excludes the rolled-back insert",
+      "One Oracle redo thread has continuous catalog coverage for the retained SCN window",
+      "The Java probe decodes one committed Oracle transaction and repeats the same typed content hash",
+      "An unarchived part of the requested SCN window is refused",
+      "After archive rotation, a second complete commit has a distinct typed SCN and XID",
+      "Flashback preserves Oracle RAW bytes, SQL NULL and keyless duplicate multiplicity",
+      "Dameng preserves civil DATE, exact Oracle NUMBER, text keys and RAW primary keys",
+      "Oracle Flashback snapshots keyed and keyless tables while retaining the pre-snapshot transaction floor",
+      "Oracle LogMiner delivers an earlier-started transaction only after its archive contains the commit",
+      "Archived Oracle RAW redo and undo update exact bytes and remove one matching keyless row",
+      "Dameng applies both original Oracle text and RAW key changes",
+      "Oracle offline archived work replays after Controller and Worker SIGKILL using the original snapshots",
+      "Oracle RAW bytes resume from the original SCN and retain binary row images",
+      "Dameng resumes Oracle at the original SCN and keeps each original snapshot",
+      "Unreviewed Oracle DDL stops at the preserved SCN and exposes the DDL phase"
+    ],
+    "status": "PASS",
+    "sourceVersion": "23.26.4.0.0",
+    "dmVersion": "8.1.4.80",
+    "cleanupExitCode": 0,
+    "remainingContainers": 0,
+    "remainingOracleDataDirectories": 0
   }
 }

@@ -118,4 +118,6 @@ PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复
 
 如果触发暂停的事务为已知表发送了完整 Relation 消息，评审还会显示 **PostgreSQL 原始发布结构**。`blockedRelationEvent` 记录 BEGIN 消息中的事务最终 LSN、表 OID、复制标识、发布列的顺序和每列的类型 OID 与修饰符，以及日志库冻结结构的摘要。日志库将原始描述绑定到故障代次和持久断点摘要。后续 DDL 或当前目录不可读时仍可查看原始消息。缺少完整观测时，API 返回 `POSTGRESQL_RELATION_EVIDENCE_UNRECORDED`。pgoutput 消息提供当时发布列结构。还原历史 SQL、约束及索引须有额外源证据。先保留原逻辑槽和 WAL，并按采集断点评审替代基线。 [PostgreSQL 消息格式](https://www.postgresql.org/docs/17/protocol-logicalrep-message-formats.html)
 
+**PostgreSQL 原始发布结构**区块显示与当前发布目录的核对结果（API 字段 `blockedRelationCatalog`）。`MATCH` 表示表 OID、带 schema 的表名、复制标识，以及发布列的名称、顺序、类型 OID 和修饰符一致。`COLUMN_LAYOUT_CHANGED` 表示同一张表的列结构发生变化。`REPLICA_IDENTITY_CHANGED` 表示原始复制标识与表当前的 `FULL` 设置不同。`RELATION_RENAMED` 表示原 OID 对应的表已改名或移动到其他 schema。`RELATION_REPLACED` 表示同名表已有不同的 OID，API 在 `currentRelationOid` 返回新值。`RELATION_NOT_PUBLISHED` 表示当前任务发布里找不到原 OID 或同名表。`UNAVAILABLE` 会附上诊断码，仍可查看原始 Relation。历史索引、默认值及执行审批需另行核验。
+
 执行 `python3 tests/postgres-source-run.py --ddl-review --source-image postgres:17.12 --artifact <release jar> --output target/pg-ddl-review` 可复现。

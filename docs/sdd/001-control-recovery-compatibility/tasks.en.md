@@ -139,6 +139,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Native Oracle to Dameng mode 0 with civil DATE, exact NUMBER, text and RAW key changes, and original-SCN restart.
   - [x] Native Oracle to Kingbase PG mode with civil DATE, RAW keys and original-SCN restart.
   - [x] Native Oracle to MySQL with civil DATE, RAW and text keys, and original-SCN restart.
   - [x] Native Oracle RAW and keyless recovery through ClickHouse.
@@ -230,6 +231,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Deliver: Preserve source schema history,reviewed plans and identity keys;create first-release state directly without prerelease-candidate compatibility;verify current-state backup/restore,corruption refusal and product-specific limits.
   Acceptance: AC-LG-08
   - [x] Persist the PostgreSQL Relation, type modifiers and durable checkpoint for review.
+  - [x] A native catalog comparison distinguishes a match, later column changes, renaming, removal from the publication and same-name replacement. The original message remains available when discovery fails and after restart.
   - [x] Explicit global primary and identity GSI require a distribution plan before business DDL, including reordered identity columns.
   - [x] Console and CLI preflight share the MySQL-to-Gauss writer policy and report complete counts with bounded details.
   - [x] Native PostgreSQL 17.12 review shows the TIMESTAMP type modifier change and retains the source LSN, snapshot and target rows.

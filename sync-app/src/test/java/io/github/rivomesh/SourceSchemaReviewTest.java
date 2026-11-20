@@ -2,6 +2,7 @@ package io.github.rivomesh;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rivomesh.cdc.Codec;
+import io.github.rivomesh.cdc.PostgresRelationEvidence;
 import io.github.rivomesh.cdc.TableSchema;
 import org.junit.jupiter.api.Test;
 
@@ -107,6 +108,49 @@ class SourceSchemaReviewTest {
         assertTrue(difference.path("indexesChanged").asBoolean());
         assertFalse(difference.path("identityChanged").asBoolean());
         assertFalse(difference.toString().contains("private index expression"));
+    }
+
+    @Test void comparesCurrentPublishedLayoutToOriginalPgoutputRelation() {
+        var event = blockedRelation("f");
+        var live = table("orders", 1, "id", "created_at");
+        live.properties.putAll(Map.of("pg.oid.id", "20", "pg.modifier.id", "-1",
+                "pg.oid.created_at", "1114", "pg.modifier.created_at", "6"));
+        var publication = Map.of(-2, live);
+        assertEquals(Map.of("state", "MATCH"), SourceSchemaReview.compareBlockedPostgresRelation(event, publication));
+
+        live.properties.put("pg.modifier.created_at", "-1");
+        assertEquals(Map.of("state", "COLUMN_LAYOUT_CHANGED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, publication));
+        live.properties.put("pg.modifier.created_at", "6");
+        live.columns.add(new TableSchema.Column());
+        assertEquals(Map.of("state", "COLUMN_LAYOUT_CHANGED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, publication));
+        live.columns.removeLast();
+        live.columns = List.of(live.columns.get(1), live.columns.get(0));
+        assertEquals(Map.of("state", "COLUMN_LAYOUT_CHANGED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, publication));
+
+        assertEquals(Map.of("state", "REPLICA_IDENTITY_CHANGED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(blockedRelation("i"), publication));
+    }
+
+    @Test void distinguishesReplacedRenamedAndMissingPostgresRelations() {
+        var event = blockedRelation("f");
+        var replacement = table("orders", 1, "id", "created_at");
+        assertEquals(Map.of("state", "RELATION_REPLACED", "currentRelationOid", 200L),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, Map.of(200, replacement)));
+        var renamed = table("orders_archive", 1, "id", "created_at");
+        assertEquals(Map.of("state", "RELATION_RENAMED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, Map.of(-2, renamed, 200, replacement)));
+        assertEquals(Map.of("state", "RELATION_NOT_PUBLISHED"),
+                SourceSchemaReview.compareBlockedPostgresRelation(event, Map.of(200, renamed)));
+    }
+
+    private static PostgresRelationEvidence blockedRelation(String identity) {
+        return new PostgresRelationEvidence("0".repeat(64), "0/120", 4294967294L, "sales", "orders", identity,
+                List.of(new PostgresRelationEvidence.Column("id", 20, -1, true),
+                        new PostgresRelationEvidence.Column("created_at", 1114, 6, true)),
+                TableSchema.identity("sample", "sales", "orders"), 1, "1".repeat(64));
     }
 
     private static JsonNode difference(SourceSchemaReview.Scope scope, TableSchema before, TableSchema live)
