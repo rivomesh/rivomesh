@@ -14,7 +14,15 @@ final class HandoffPreparations {
                     JournalCut cut,String proof,String custody){}
     record JournalCut(String epoch,String sequence,String checkpointSha256){}
     record WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
-                            String nativeEvidenceSha256,boolean checkedInControlTransaction){}
+                            String nativeEvidenceSha256,boolean checkedInControlTransaction,
+                            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+                            boolean externalJournal){
+        WriterActivation(String originalAssignmentSha256,String nextAssignment,String journalGenerationSha256,
+                         String nativeEvidenceSha256,boolean checkedInControlTransaction){
+            this(originalAssignmentSha256,nextAssignment,journalGenerationSha256,nativeEvidenceSha256,checkedInControlTransaction,false);
+        }
+        boolean canPlace(){return checkedInControlTransaction||externalJournal;}
+    }
     record WriterCommit(String actor,String stagingSha256,String configurationSha256,String revision,String configuration,long journalEpoch,
                         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
                         RawCaptureHandoffStaging.Proof rawCapture,
@@ -97,6 +105,9 @@ final class HandoffPreparations {
                     +"release_id VARCHAR(128),envelope "+(db.mysql()?"LONGTEXT":"TEXT")+" NOT NULL,"
                     +"PRIMARY KEY(cluster_id,request_id),UNIQUE(cluster_id,release_id),UNIQUE(cluster_id,task_id,ordinal))"+suffix);
             db.index(c,"task_handoff_plan","rmc_handoff_active_candidate","cluster_id, phase, candidate_id, request_id");
+            JdbcControlStore.execute(c,"CREATE TABLE IF NOT EXISTS "+db.table("split_writer_transfer")
+                    +" (cluster_id VARCHAR(128) NOT NULL,preparation_id VARCHAR(128) NOT NULL,"
+                    +"envelope "+(db.mysql()?"LONGTEXT":"TEXT")+" NOT NULL,PRIMARY KEY(cluster_id,preparation_id))"+suffix);
             if(db.mysql())try(PreparedStatement p=db.prepare(c,"SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES"
                     +" WHERE TABLE_SCHEMA=? AND TABLE_NAME='rmc_task_handoff_plan'",config.namespace);ResultSet r=p.executeQuery()){
                 if(!r.next()||!"InnoDB".equalsIgnoreCase(r.getString(1))||!"utf8mb4_bin".equalsIgnoreCase(r.getString(2)))
@@ -120,7 +131,7 @@ final class HandoffPreparations {
                     case "ORIGINAL_FROZEN"->p.releaseId==null&&p.releasedBy==null;
                     case "FREEZE_CANCELLED"->validExecutionId(p,p.releaseId)&&p.releasedBy!=null;
                     case "COMMITTED","PROJECTED","EVIDENCE_ADOPTED","FENCE_PENDING","TARGETS_FENCED","START_PENDING","WORKER_ADMITTED","WORKER_PROJECTED"->p.releaseId==null&&p.releasedBy==null&&p.closedAt>=p.created
-                            &&(p.writerFreeze!=null||p.closedAt<p.expires)
+                            &&(p.writerFreeze!=null||p.closedAt<p.expires||p.activation!=null&&p.activation.externalJournal())
                             &&p.activation!=null&&p.writerCommit!=null&&Objects.equals(writerActor(p),p.writerCommit.actor)
                             &&HandoffFailureHistory.bounded(p.writerCommit.failureRecords())
                             &&(p.writerCommit.rawCapture()==null||p.writerCommit.rawCapture().matches(p)
@@ -128,6 +139,7 @@ final class HandoffPreparations {
                     default->false;
                 })||p.executionRequest!=null&&!validExecutionId(p,p.executionRequest)
                 ||(evidenceInstalled(p)?!validAdoption(p,p.evidenceAdoption):p.evidenceAdoption!=null)
+                ||p.activation!=null&&p.activation.checkedInControlTransaction()&&p.activation.externalJournal()
                 ||!validTargetFence(p)||!validWorkerStart(p)||!validFreeze(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_INVALID");
         return p;
@@ -188,7 +200,8 @@ final class HandoffPreparations {
         return closed;
     }
     private Plan expire(Connection c,Plan p,long now)throws Exception{
-        return p!=null&&"PREPARED".equals(p.phase)&&p.expires<=now?close(c,p,"EXPIRED",null,null,now):p;
+        return p!=null&&"PREPARED".equals(p.phase)&&p.expires<=now&&splitTransfer(c,p)==null
+                ?close(c,p,"EXPIRED",null,null,now):p;
     }
     Plan byRequest(Connection c,String request,long now)throws Exception{
         return expire(c,select(c,"cluster_id=? AND (request_id=? OR release_id=?)",cluster,request,request),now);
@@ -241,6 +254,7 @@ final class HandoffPreparations {
     }
     Plan release(Connection c,Plan p,String request,AccessControl.Principal actor,long now)throws Exception{
         if(!"PREPARED".equals(p.phase))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        if(splitTransfer(c,p)!=null)throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_PENDING");
         return close(c,p,"RELEASED",request,actor.id,Math.max(p.created,now));
     }
     private static boolean validExecutionId(Plan plan,String request){
@@ -282,6 +296,73 @@ final class HandoffPreparations {
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         return bound;
     }
+    record SplitTransfer(String request,ManagedHandoff.CandidateAdmission admission,JournalWriterAssignment.CutProof cut){}
+
+    private static void verifySplitTransfer(Plan plan,SplitTransfer transfer) {
+        if(transfer==null)throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+        WriterActivation activation=plan.activation();
+        var proof=transfer.cut();
+        var managed=proof==null?null:proof.managedWriter();
+        var candidate=transfer.admission();
+        var evidence=plan.evidence();
+        if(activation==null||!activation.externalJournal()||!Objects.equals(plan.executionRequest(),transfer.request())
+                ||candidate==null||!candidate.valid()||!plan.id().equals(candidate.preparation())
+                ||!evidence.candidate().equals(candidate.binding())||managed==null||!proof.writerPlacementEnrolled()
+                ||!activation.journalGenerationSha256().equals(proof.journalGenerationSha256())
+                ||!activation.nativeEvidenceSha256().equals(proof.nativeEvidenceSha256())
+                ||!activation.originalAssignmentSha256().equals(managed.originalAssignmentSha256())
+                ||!evidence.original().node().equals(managed.originalNode())
+                ||!evidence.cut().epoch().equals(Long.toString(managed.epoch()))
+                ||!evidence.cut().sequence().equals(Long.toString(managed.sequence()))
+                ||!evidence.cut().checkpointSha256().equals(managed.checkpointSha256()))
+            throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+    }
+
+    String nextSplitTransfer(Connection c,String candidate,String after)throws SQLException{
+        try(var statement=db.prepare(c,"SELECT p.request_id FROM "+db.table("task_handoff_plan")+" p JOIN "
+                +db.table("split_writer_transfer")+" t ON t.cluster_id=p.cluster_id AND t.preparation_id=p.request_id"
+                +" WHERE p.cluster_id=? AND p.phase='PREPARED' AND p.candidate_id=? AND p.request_id>?"
+                +" ORDER BY p.request_id LIMIT 1",cluster,candidate,after);var row=statement.executeQuery()){
+            return row.next()?row.getString(1):null;
+        }
+    }
+
+    SplitTransfer splitTransfer(Connection c,Plan plan)throws Exception{
+        if(plan.activation()==null||!plan.activation().externalJournal()||plan.executionRequest()==null)return null;
+        try(PreparedStatement statement=db.prepare(c,"SELECT envelope FROM "+db.table("split_writer_transfer")
+                +" WHERE cluster_id=? AND preparation_id=?",cluster,plan.id());ResultSet row=statement.executeQuery()){
+            if(!row.next())return null;
+            SplitTransfer transfer=Model.JSON.readValue(cipher.open("split-writer-transfer/"+plan.id(),row.getString(1)),SplitTransfer.class);
+            verifySplitTransfer(plan,transfer);
+            return transfer;
+        }
+    }
+
+    void sealSplitTransfer(Connection c,Plan plan,SplitTransfer transfer,long now)throws Exception{
+        if(!"PREPARED".equals(plan.phase())||!validExecutionId(plan,transfer.request()))
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        verifySplitTransfer(plan,transfer);
+        SplitTransfer existing=splitTransfer(c,plan);
+        if(existing!=null){
+            if(!existing.equals(transfer))throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+            return;
+        }
+        if(now>=plan.expires())throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        db.update(c,"INSERT INTO "+db.table("split_writer_transfer")+" (cluster_id,preparation_id,envelope) VALUES (?,?,?)",
+                cluster,plan.id(),cipher.seal("split-writer-transfer/"+plan.id(),Model.JSON.writeValueAsString(transfer)));
+    }
+
+    Plan reapproveSplitTransfer(Connection c,Plan plan,AccessControl.Principal actor)throws Exception{
+        if(!"PREPARED".equals(plan.phase())||splitTransfer(c,plan)==null)
+            throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+        Plan approved=new Plan(plan.id,plan.task,plan.sequence,plan.phase,actor.id,actor.authorizationRevision,plan.evidence,
+                plan.created,plan.expires,null,null,0,plan.activation,null,plan.executionRequest,null);
+        if(db.update(c,"UPDATE "+db.table("task_handoff_plan")+" SET envelope=?"
+                +" WHERE cluster_id=? AND request_id=? AND phase='PREPARED'",seal(approved),cluster,plan.id)!=1)
+            throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+        return approved;
+    }
+
     static void requireExecution(Plan plan,String request){
         if(plan.executionRequest==null||!plan.executionRequest.equals(request))
             throw new TaskService.Conflict("HANDOFF_EXECUTION_REQUEST_CHANGED");
@@ -300,7 +381,7 @@ final class HandoffPreparations {
     }
 
     Plan commitWriter(Connection c,Plan p,WriterCommit receipt,long now)throws Exception{
-        if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires
+        if(!"PREPARED".equals(p.phase)||p.activation==null||now>=p.expires&&splitTransfer(c,p)==null
                 ||!HandoffFailureHistory.bounded(receipt.failureRecords())||receipt.rawCapture()!=null&&!receipt.rawCapture().matches(p))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         Plan complete=new Plan(p.id,p.task,p.sequence,"COMMITTED",p.actor,p.actorRevision,p.evidence,p.created,p.expires,
@@ -508,7 +589,7 @@ final class HandoffPreparations {
         view.put("createdAt",Instant.ofEpochMilli(p.created).toString());view.put("expiresAt",Instant.ofEpochMilli(p.expires).toString());
         view.put("executionAuthorized",workerAdmitted(p));view.put("reservedTaskSlots","PREPARED".equals(p.phase)?1:0);
         view.put("reservedWorkerSlots","PREPARED".equals(p.phase)?1:0);
-        if("PREPARED".equals(p.phase)&&p.activation!=null&&!p.activation.checkedInControlTransaction())
+        if("PREPARED".equals(p.phase)&&p.activation!=null&&!p.activation.canPlace())
             view.put("commitBlocker","HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
         if(p.releaseId!=null)view.put("releaseId",p.releaseId);
         String commitment=commitRequestId(p);
@@ -552,6 +633,7 @@ final class HandoffPreparations {
                 "originalAssignmentSha256",p.activation.originalAssignmentSha256,
                 "journalGenerationSha256",p.activation.journalGenerationSha256,
                 "nativeEvidenceSha256",p.activation.nativeEvidenceSha256));
+        if(p.activation!=null&&p.activation.externalJournal())view.put("externalJournalTransfer",true);
         return view;
     }
 }

@@ -279,6 +279,8 @@ final class ManagedHandoff {
             if(plan==null)throw new NoSuchElementException("HANDOFF_PREPARATION_NOT_FOUND");
             requirePlanGrants(actor,task,plan);
             Map<String,Object> receipt=HandoffPreparations.summary(plan);
+            if("PREPARED".equals(plan.phase())&&tasks.preparations().splitTransfer(c,plan)!=null)
+                receipt.put("splitTransferPending",true);
             if("FENCE_PENDING".equals(plan.phase())&&!plan.targetFence().actorRevision().equals(actor.authorizationRevision))
                 receipt.put("targetFenceAvailable",true);
             if("START_PENDING".equals(plan.phase())&&!plan.workerStart().actorRevision().equals(actor.authorizationRevision))
@@ -536,8 +538,52 @@ final class ManagedHandoff {
     // Commits only after the authenticated candidate has verified its private staged files.
     Map<String,Object> commitAdmittedWriter(String taskId,CandidateAdmission candidate,
                                            String executionRequest,AccessControl.Principal supplied)throws Exception{
-        return tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->
+        var result=tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->
                 commitCandidate(c,task,actor,candidate,executionRequest,null));
+        if(Boolean.TRUE.equals(result.get("splitTransferPending")))
+            return finishSplitTransfer(taskId,candidate.preparation(),executionRequest,supplied);
+        return result;
+    }
+
+    private Map<String,Object> finishSplitTransfer(String taskId,String preparation,String request,
+                                                    AccessControl.Principal supplied)throws Exception{
+        return tasks.transaction(taskId,supplied,Connection.TRANSACTION_READ_COMMITTED,(c,task,actor)->{
+            var plan=tasks.preparations().byRequest(c,preparation,db.now(c));
+            if(plan==null||!plan.id().equals(preparation))throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
+            requirePlanGrants(actor,task,plan);
+            if(plan.writerCommit()!=null){
+                requireExecutionReplay(plan,actor,request);
+                return HandoffPreparations.summary(plan);
+            }
+            return finishSplitTransfer(c,task,actor,plan,request);
+        });
+    }
+
+    Map<String,Object> finishSplitTransfer(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
+                                           HandoffPreparations.Plan plan,String request)throws Exception{
+        requirePlanGrants(actor,task,plan);
+        if(!actor.administers()||!actor.task(task.id))throw new SecurityException("FORBIDDEN");
+        var sealed=tasks.preparations().splitTransfer(c,plan);
+        if(sealed==null||!sealed.request().equals(request))throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+        if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
+            throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        if(commands.hasUnresolved(c,task.id))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        var candidate=sealed.admission();
+        var capacity=agents.handoffCapacity(c,candidate.binding().node());
+        var binding=capacity.binding();
+        if(!"HEALTHY".equals(binding.state)||!candidate.binding().directory().equals(binding.directory)
+                ||binding.epoch<candidate.binding().epoch()
+                ||binding.epoch==candidate.binding().epoch()&&!binding.incarnation.equals(candidate.binding().incarnation()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        long total=capacity.assignedTasks()+capacity.reservedTasks();
+        if(capacity.reservedTasks()<1||total>capacity.taskSlots()||total>capacity.workerSlots())
+            throw new TaskService.Conflict("CANDIDATE_TASK_CAPACITY_UNAVAILABLE");
+        String yaml=ManagedWriterDeclaration.successorYaml(tasks.activeYaml(c,task),task.owner,
+                candidate.binding().node(),plan.activation().nextAssignment());
+        if(!AuditStore.hash(yaml).equals(candidate.configurationSha256()))
+            throw new TaskService.Conflict("HANDOFF_CANDIDATE_ADMISSION_CHANGED");
+        return HandoffPreparations.summary(tasks.commitPreparedWriter(c,task,plan,actor,sealed.cut(),yaml,
+                candidate.stagingSha256(),request,candidate.rawCapture(),candidate.failureRecords()));
     }
 
     void resumePreparedWriter(Connection c,GlobalTaskStore.Record task,AccessControl.Principal actor,
@@ -566,6 +612,11 @@ final class ManagedHandoff {
                 throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_REUSED");
             return HandoffPreparations.summary(plan);
         }
+        var sealed=tasks.preparations().splitTransfer(c,plan);
+        if(sealed!=null){
+            if(!candidate.equals(sealed.admission()))throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
+            return finishSplitTransfer(c,task,actor,plan,executionRequest);
+        }
         Assessment current=read(c,task.id);
         RecoveryCustody required=requireCandidateReadiness(plan,actor,current,db.now(c));
         if(recoveredCut!=null&&(required.raw()!=null||required.failures()>0))
@@ -586,6 +637,11 @@ final class ManagedHandoff {
         JournalWriterAssignment.CutProof cut=Model.JSON.convertValue(current.probe.candidate.get("cut"),JournalWriterAssignment.CutProof.class);
         if(recoveredCut!=null&&!cut.equals(recoveredCut))
             throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
+        if(plan.activation().externalJournal()){
+            tasks.preparations().sealSplitTransfer(c,plan,new HandoffPreparations.SplitTransfer(executionRequest,candidate,cut),db.now(c));
+            auditPreparation(c,plan,actor,executionRequest,"MANAGED_HANDOFF_SPLIT_TRANSFER_SEALED");
+            return Map.of("splitTransferPending",true);
+        }
         var committed=tasks.commitPreparedWriter(c,task,plan,actor,cut,yaml,candidate.stagingSha256(),
                 executionRequest,candidate.rawCapture(),candidate.failureRecords());
         if(recoveredCut!=null)auditPreparation(c,committed,actor,executionRequest,"MANAGED_HANDOFF_EXECUTION_RECOVERED");
@@ -597,7 +653,7 @@ final class ManagedHandoff {
                                            Assessment assessment,long now)throws Exception{
         if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
             throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
-        if(!"PREPARED".equals(plan.phase())||plan.activation()==null||!plan.activation().checkedInControlTransaction())
+        if(!"PREPARED".equals(plan.phase())||plan.activation()==null||!plan.activation().canPlace())
             throw new TaskService.Conflict("HANDOFF_MANAGED_CONTROL_CUT_REQUIRED");
         HandoffPreparations.Evidence active=assessment==null?null:preparationEvidence(assessment,now);
         if(!plan.evidence().equals(active))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
@@ -639,7 +695,11 @@ final class ManagedHandoff {
         if(request.kind!=TaskRequest.Kind.HANDOFF_COMMIT_OWNER||request.yaml!=null)
             throw new TaskService.Conflict("HANDOFF_PREPARATION_REQUEST_INVALID");
         Map<String,Object> replay=bindOrReplayExecution(request,actor);
-        if(replay!=null)return replay;
+        if(replay!=null){
+            if(Boolean.TRUE.equals(replay.get("splitTransferPending")))
+                return finishSplitTransfer(request.taskId,request.reference,request.requestId,actor);
+            return replay;
+        }
         try{
             CandidateAdmission candidate=transport.candidateReadiness(request,actor);
             return commitAdmittedWriter(request.taskId,candidate,request.requestId,actor);
@@ -698,6 +758,15 @@ final class ManagedHandoff {
                 requireExecutionReplay(plan,actor,request.requestId);
                 return HandoffPreparations.summary(plan);
             }
+            if(tasks.preparations().splitTransfer(c,plan)!=null){
+                HandoffPreparations.requireExecution(plan,request.requestId);
+                if(!actor.administers())throw new SecurityException("FORBIDDEN");
+                if(!plan.actorRevision().equals(actor.authorizationRevision)){
+                    var approved=tasks.preparations().reapproveSplitTransfer(c,plan,actor);
+                    auditPreparation(c,approved,actor,request.requestId,"MANAGED_HANDOFF_SPLIT_TRANSFER_REAPPROVED");
+                }else if(!plan.actor().equals(actor.id))throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+                return Map.of("splitTransferPending",true);
+            }
             Assessment assessment=read(c,task.id);
             requireCandidateReadiness(plan,actor,assessment,db.now(c));
             if(stale(c,task,actor,assessment))throw new TaskService.Conflict("HANDOFF_PREPARATION_EVIDENCE_CHANGED");
@@ -752,7 +821,7 @@ final class ManagedHandoff {
             JournalWriterAssignment.verifyManagedControlCut(c,declaration.namespace(),task.id,declaration.assignment(),proof);
         }catch(IllegalStateException invalid){throw new TaskService.Conflict(invalid.getMessage());}
         return new HandoffPreparations.WriterActivation(cut.originalAssignmentSha256(),UUID.randomUUID().toString(),
-                proof.journalGenerationSha256(),proof.nativeEvidenceSha256(),shared);
+                proof.journalGenerationSha256(),proof.nativeEvidenceSha256(),shared,!shared&&!db.mysql()&&declaration.splitStoreHandoff());
     }
 
     private void auditPreparation(Connection c,HandoffPreparations.Plan plan,AccessControl.Principal actor,String request,String kind)throws Exception{

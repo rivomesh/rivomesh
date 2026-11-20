@@ -192,7 +192,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] ActiveMQ Classic 5.19.12 passed shared KahaDB failover. The packaged publisher uses stable OpenWire and Jolokia entries to verify the original ownership and receipt and confirm the exact retry. The restarted former primary stays passive.
   - [x] RocketMQ 5.5.0 opt-in publisher passed native receipt reuse, actual promotion and unchanged progress below two synchronized replicas.
   - [ ] Cross-host failure domains, internal network cryptography, capacity and remaining messaging profiles.
-- [ ] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
+- [x] T-LG-05 · Optional storage and cross-node reachability · P0 · Depends on: CP-02
   Deliver: Local mode documents durable volume/pinning/disk-loss limits;external/shared modes are accepted per capability;move verifies logs,evidence,reports and secrets,not just cursors;independent journal infrastructure is not mandatory for every deployment.
   Acceptance: AC-LG-05
   - [x] Adopted reports and closed receipts, and private MySQL capture ZIP staging with offline verification.
@@ -202,7 +202,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Independent journal loss refuses native cut proof. Recovery restores read-only staging. Both entries block writer transfer and the original Agent resumes.
   - [x] Candidate-private closed-receipt inventory verifies after loss of the transfer archive and rejects an altered private copy.
   - [x] Candidate-private receipts enable approved same-store cutover after loss of the original Agent and transfer archive.
-  - [ ] Durable split-store fencing and further storage and destination profiles.
+  - [x] The separate PostgreSQL profile resumes the same approved writer through candidate restart and two control rollbacks. MySQL and PostgreSQL keep the original cut.
 - [x] T-LG-06 · Live K8s/CSI and node-fault acceptance · P1 · Depends on: CP-04, CP-07, LG-05
   Deliver: Verify upgrade/scale,pod/node failure,RWO/CSI remount,secret rotation and stale-owner fencing on a real cluster with published configuration/evidence.
   Acceptance: AC-LG-06

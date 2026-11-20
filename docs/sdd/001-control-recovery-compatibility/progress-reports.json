@@ -26,19 +26,20 @@
     "71fc293"
   ],
   "currentSdd": {
-    "DONE": 39,
-    "PARTIAL": 9,
+    "DONE": 40,
+    "PARTIAL": 8,
     "NEW": 0
   },
   "nextTasks": [
-    "Continue LG-05 cross-node storage reachability and positive durable split-store fencing."
+    "Complete JV-03 driver loading and security protocol qualification against its acceptance criteria."
   ],
-  "currentCandidateArtifact": "ce3b91b870d89b6aea414de17b9900a487f5ef0346f4cf26efc7f83a54738edd",
-  "currentCandidateScope": "Temurin 21 native qualified Agent placement and outage isolation across independently routed MySQL journals.",
+  "currentCandidateArtifact": "b150fb6d939a94398f54f27e782a1ed33a0d43506cafc98e8d7a7be9e2e84cc2",
+  "currentCandidateScope": "Temurin 21, MySQL 8.4.13 source, two Controllers and two Agents, separate PostgreSQL control and journal, PostgreSQL and MySQL targets. Native control rollback after parked writer and after Worker admission. Both SQL targets keep the original transaction cut and snapshot generation.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "Published JV-02 with OceanBase reconnect and GBase 8c native acceptance.",
-    "Accepted CP-04 with native MySQL and PostgreSQL source profiles, independent MySQL journal route loss and exact original-owner restart."
+    "Accepted CP-04 with native MySQL and PostgreSQL source profiles, independent MySQL journal route loss and exact original-owner restart.",
+    "Accepted LG-05 with two native split-store recovery interruptions, exact fencing and candidate restart."
   ],
   "lastScheduledReportAt": "2026-11-20T08:58:16+08:00",
   "lastVerifiedReactor": {
@@ -85,7 +86,6 @@
     "LG-01",
     "LG-03",
     "LG-04",
-    "LG-05",
     "LG-08",
     "LG-10"
   ],
@@ -111,7 +111,6 @@
     "LG-01",
     "LG-03",
     "LG-04",
-    "LG-05",
     "LG-08",
     "LG-10"
   ],
@@ -128,9 +127,9 @@
     "2026-11-20T07:58:16+08:00"
   ],
   "currentFocusedVerification": {
-    "javaTestsPassed": 44,
-    "domTestsPassed": 7,
-    "nativeBrokerChecksPassed": 3,
-    "nativeExternalRetentionChecksPassed": 44
+    "javaTestsPassed": 38,
+    "postgresTransactionChecksPassed": 3,
+    "handoffDomTestsPassed": 23,
+    "nativeSplitStoreChecksPassed": 19
   }
 }

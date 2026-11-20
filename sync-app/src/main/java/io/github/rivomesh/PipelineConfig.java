@@ -28,6 +28,8 @@ public final class PipelineConfig {
         public String writerAssignment;
         @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
         public boolean managedWriter;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+        public boolean splitStoreHandoff;
         public TargetProduct product=TargetProduct.POSTGRESQL;
         public long maxBytes=1024L*1024*1024;
     }
@@ -87,6 +89,16 @@ public final class PipelineConfig {
         PipelineConfig c=yaml().readValue(value,PipelineConfig.class);if(c==null)throw new IllegalArgumentException("PIPELINE_CONFIG_EMPTY");c.base=directory.toAbsolutePath().normalize();
         if(c.source!=null)c.source.password=Config.env(c.source.password);if(c.journal!=null)c.journal.password=Config.env(c.journal.password);if(c.targets!=null)for(Target t:c.targets)if(t!=null){t.password=Config.env(t.password);if(t.messaging!=null)t.messaging.token=Config.env(t.messaging.token);}c.nodeId=Config.env(c.nodeId);c.validate();return c;
     }
+    public static Storage readExternalHandoffJournal(String activeYaml)throws Exception{
+        ObjectMapper mapper=yaml();
+        Storage storage=mapper.treeToValue(mapper.readTree(activeYaml).path("journal"),Storage.class);
+        if(storage==null||!storage.splitStoreHandoff||!storage.managedWriter||!"EXTERNAL".equals(storage.mode)
+                ||storage.product!=TargetProduct.POSTGRESQL||storage.username==null||storage.username.isBlank())
+            throw new IllegalArgumentException("HANDOFF_SPLIT_PROFILE_INVALID");
+        storage.password=Config.env(storage.password);
+        return storage;
+    }
+
     static String driver(TargetProduct product){if(product!=null&&product.mysqlDialect())return "com.mysql.cj.jdbc.Driver";if(product==TargetProduct.POSTGRESQL)return "org.postgresql.Driver";if(product==TargetProduct.GAUSS)return "io.github.rivomesh.gaussdb.jdbc.Driver";if(product==TargetProduct.GBASE_8C)return "com.gbase8c.Driver";if(product==TargetProduct.KINGBASE)return "com.kingbase8.Driver";if(product==TargetProduct.DM)return "dm.jdbc.driver.DmDriver";throw new IllegalArgumentException("PRODUCT_NOT_ENABLED");}
     private static void id(String value){if(value==null||!value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))throw new IllegalArgumentException("PIPELINE_ID_INVALID");}
     private static void url(TargetProduct product,String url){driver(product);if(url==null||!url.startsWith(product.mysqlDialect()?"jdbc:mysql://":product==TargetProduct.GBASE_8C?"jdbc:gbase8c://":product==TargetProduct.KINGBASE?"jdbc:kingbase8://":product==TargetProduct.DM?"jdbc:dm://":"jdbc:postgresql://"))throw new IllegalArgumentException("TARGET_URL_INVALID");}
@@ -108,9 +120,10 @@ public final class PipelineConfig {
                 generation->PipelineSources.open(this,generation),authorize);
     }
     public void admitParkedHandoff(java.sql.Connection control,String previousAssignment,JournalWriterAssignment.CutProof proof,
-            JournalWriterAssignment.FenceAuthorization authorize,JournalWriterAssignment.TargetFence approved)throws Exception{
+            JournalWriterAssignment.FenceAuthorization authorize,JournalWriterAssignment.TargetFence approved,
+            boolean allowCommittedAdmission)throws Exception{
         JournalWriterAssignment.admitParkedRecipient(control,this,previousAssignment,proof,
-                generation->PipelineSources.open(this,generation),authorize,approved);
+                generation->PipelineSources.open(this,generation),authorize,approved,allowCommittedAdmission);
     }
     public void validate(){
         if(formatVersion!=3||source==null||targets==null||targets.isEmpty()||journal==null||databases==null||databases.isEmpty())throw new IllegalArgumentException("PIPELINE_CONFIG_INVALID");id(pipelineId);id(nodeId);
@@ -164,6 +177,8 @@ public final class PipelineConfig {
         else if("LOCAL".equals(journal.mode)){Path path=localPath();if(path.toString().indexOf(';')>=0||path.toString().chars().anyMatch(ch->ch<32))throw new IllegalArgumentException("LOCAL_JOURNAL_PATH_INVALID");}
         else throw new IllegalArgumentException("JOURNAL_MODE_INVALID");
         if(journal.managedWriter&&journal.writerAssignment==null)throw new IllegalArgumentException("WRITER_ASSIGNMENT_REQUIRED");
+        if(journal.splitStoreHandoff&&!journal.managedWriter)
+            throw new IllegalArgumentException("HANDOFF_SPLIT_PROFILE_INVALID");
         if(journal.writerAssignment!=null&&(!JournalWriterAssignment.validId(journal.writerAssignment)
                 ||!"EXTERNAL".equals(journal.mode)||journal.product!=TargetProduct.POSTGRESQL
                 ||!"MYSQL".equals(effectiveSourceType())||targets.size()>8

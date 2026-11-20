@@ -304,15 +304,23 @@ final class GlobalTaskStore {
             throw new SecurityException("FORBIDDEN");
         if(!plan.actor().equals(actor.id)||!plan.actorRevision().equals(actor.authorizationRevision))
             throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+        var sealed=preparations.splitTransfer(c,plan);
+        boolean external=activation!=null&&activation.externalJournal();
+        if(external&&(sealed==null||!sealed.cut().equals(cut)
+                ||!sealed.admission().stagingSha256().equals(candidateStagingSha256)
+                ||!sealed.admission().configurationSha256().equals(AuditStore.hash(successorYaml))
+                ||!Objects.equals(sealed.admission().rawCapture(),rawCapture)
+                ||sealed.admission().failureRecords()!=failureRecords))
+            throw new TaskService.Conflict("HANDOFF_SPLIT_TRANSFER_CHANGED");
         if(!record.id.equals(plan.task())||!record.owner.equals(evidence.original().node())
                 ||!record.directory.equals(evidence.original().directory())||!record.revision.equals(evidence.revision())
                 ||!evidence.configuration().equals(record.activeConfigurationVersion)
                 ||!evidence.configuration().equals(record.configurationVersion)||!"PREPARED".equals(plan.phase())
-                ||activation==null||!activation.checkedInControlTransaction()||db.now(c)>=plan.expires())
+                ||activation==null||!activation.canPlace()||!external&&db.now(c)>=plan.expires())
             throw new TaskService.Conflict("HANDOFF_PREPARATION_CHANGED");
         String originalYaml=activeYaml(c,record);
         ManagedWriterDeclaration declaration=ManagedWriterDeclaration.read(originalYaml);
-        if(declaration==null||!db.sharesPostgresUrl(declaration.journalUrl())||cut==null||cut.managedWriter()==null
+        if(!journalScope(plan,declaration)||cut==null||cut.managedWriter()==null
                 ||!activation.originalAssignmentSha256().equals(cut.managedWriter().originalAssignmentSha256())
                 ||!activation.journalGenerationSha256().equals(cut.journalGenerationSha256())
                 ||!activation.nativeEvidenceSha256().equals(cut.nativeEvidenceSha256())
@@ -322,7 +330,10 @@ final class GlobalTaskStore {
                 ||!successorYaml.equals(ManagedWriterDeclaration.successorYaml(originalYaml,record.owner,
                     evidence.candidate().node(),activation.nextAssignment())))
             throw new TaskService.Conflict("HANDOFF_MANAGED_PLACEMENT_INVALID");
-        JournalWriterAssignment.Placement placement=JournalWriterAssignment.writeManagedControlPlacement(c,
+        JournalWriterAssignment.Placement placement=external
+                ?declaration.journalTransaction(originalYaml,journal->JournalWriterAssignment.parkExternalRecipient(journal,
+                declaration.namespace(),record.id,declaration.assignment(),cut,activation.nextAssignment(),evidence.candidate().node()))
+                :JournalWriterAssignment.writeManagedControlPlacement(c,
                 declaration.namespace(),record.id,declaration.assignment(),cut,activation.nextAssignment(),evidence.candidate().node());
         var commit=installWriterProjection(c,record,plan,actor,successorYaml,candidateStagingSha256,placement.epoch(),rawCapture,failureRecords);
         HandoffPreparations.Plan committed=preparations.commitWriter(c,plan,commit,db.now(c));
@@ -412,15 +423,30 @@ final class GlobalTaskStore {
         String historical=version(c,task,plan.evidence().configuration()).yaml;
         String successor=activeYaml(c,current);
         ManagedWriterDeclaration previous=ManagedWriterDeclaration.read(historical),newWriter=ManagedWriterDeclaration.read(successor);
-        if(previous==null||newWriter==null||!db.sharesPostgresUrl(previous.journalUrl())||!plan.activation().checkedInControlTransaction()
+        if(!journalScope(plan,previous)||!journalScope(plan,newWriter)
                 ||!AuditStore.hash(previous.assignment()).equals(plan.activation().originalAssignmentSha256())
                 ||!AuditStore.hash(successor).equals(commit.configurationSha256())
                 ||!successor.equals(ManagedWriterDeclaration.successorYaml(historical,former.node(),candidate.node(),plan.activation().nextAssignment())))
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
         JournalWriterAssignment.CutProof proof=recipientCut(plan,newWriter,successor);
-        JournalWriterAssignment.verifyRecipientControlCut(c,newWriter.namespace(),task,previous.assignment(),newWriter.assignment(),proof);
+        recipientJournal(c,plan,newWriter,successor,journal->{
+            JournalWriterAssignment.verifyRecipientControlCut(journal,newWriter.namespace(),task,previous.assignment(),newWriter.assignment(),proof);
+            return null;
+        });
         return new ManagedRecipientImport.Grant(identity,plan,successor);
     }
+    private boolean journalScope(HandoffPreparations.Plan plan,ManagedWriterDeclaration declaration){
+        if(declaration==null||plan.activation()==null)return false;
+        boolean shared=db.sharesPostgresUrl(declaration.journalUrl());
+        return shared?plan.activation().checkedInControlTransaction():
+                !db.mysql()&&plan.activation().externalJournal()&&declaration.splitStoreHandoff();
+    }
+    private <T> T recipientJournal(Connection control,HandoffPreparations.Plan plan,ManagedWriterDeclaration declaration,
+                                   String yaml,ManagedWriterDeclaration.JournalOperation<T> operation)throws Exception{
+        if(!journalScope(plan,declaration))throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
+        return plan.activation().externalJournal()?declaration.journalTransaction(yaml,operation):operation.apply(control);
+    }
+
     private static JournalWriterAssignment.CutProof recipientCut(HandoffPreparations.Plan plan,ManagedWriterDeclaration newWriter,
                                                                  String successor)throws Exception{
         HandoffPreparations.WriterCommit commit=plan.writerCommit();
@@ -442,7 +468,8 @@ final class GlobalTaskStore {
         ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(grant.successorYaml());
         requireRecipientConfiguration(plan,config,previous,successor);
         var proof=recipientCut(plan,successor,grant.successorYaml());
-        var fenced=config.fenceParkedHandoff(c,previous.assignment(),proof,authorize);
+        var fenced=recipientJournal(c,plan,successor,grant.successorYaml(),
+                journal->config.fenceParkedHandoff(journal,previous.assignment(),proof,authorize));
         if(!fenced.destinations().keySet().equals(new TreeSet<>(proof.destinations())))
             throw new TaskService.Conflict("HANDOFF_TARGET_FENCE_REQUEST_CHANGED");
         preparations.recordTargetFence(c,plan,fenced);
@@ -465,7 +492,11 @@ final class GlobalTaskStore {
         ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(grant.successorYaml());
         requireRecipientConfiguration(plan,config,previous,successor);
         var proof=recipientCut(plan,successor,grant.successorYaml());
-        config.admitParkedHandoff(c,previous.assignment(),proof,authorize,plan.targetFence().result());
+        recipientJournal(c,plan,successor,grant.successorYaml(),journal->{
+            config.admitParkedHandoff(journal,previous.assignment(),proof,authorize,plan.targetFence().result(),
+                    plan.activation().externalJournal());
+            return null;
+        });
         preparations.recordWorkerAdmitted(c,plan);
         AuditStore.Event event=new AuditStore.Event();event.kind="HANDOFF_WORKER_ADMITTED";event.taskId=plan.task();
         event.actorId=plan.workerStart().actor();event.actorRole="ADMIN";event.subjectId=plan.evidence().candidate().node();
@@ -485,11 +516,14 @@ final class GlobalTaskStore {
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
         String active=activeYaml(c,current);
         ManagedWriterDeclaration successor=ManagedWriterDeclaration.read(active);
-        if(successor==null||!db.sharesPostgresUrl(successor.journalUrl())||!candidate.node().equals(successor.node())
+        if(!journalScope(plan,successor)||!candidate.node().equals(successor.node())
                 ||!AuditStore.hash(active).equals(plan.writerCommit().configurationSha256()))
             throw new TaskService.Conflict("HANDOFF_RECIPIENT_CONFIGURATION_CHANGED");
         var proof=recipientCut(plan,successor,active);
-        JournalWriterAssignment.verifyAdmittedPlacement(c,successor.namespace(),current.id,successor.assignment(),proof);
+        recipientJournal(c,plan,successor,active,journal->{
+            JournalWriterAssignment.verifyAdmittedPlacement(journal,successor.namespace(),current.id,successor.assignment(),proof);
+            return null;
+        });
         return new ManagedRecipientImport.Grant(identity,plan,active);
     }
     void recordStartedRecipient(Connection c,String task,ControlStore.Lease lease,String directory,String request)throws Exception{

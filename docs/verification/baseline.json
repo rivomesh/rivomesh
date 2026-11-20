@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "LG-05",
+      "title": {
+        "zh-CN": "可选存储和跨节点数据可达性",
+        "en": "Optional storage and cross-node reachability"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "b150fb6d939a94398f54f27e782a1ed33a0d43506cafc98e8d7a7be9e2e84cc2",
+        "criteriaSha256": "1becbfea092c740722297430363e39a9f87cd61349eee318faf1defbc0a86b01",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, MySQL 8.4.13 source, two Controllers and two Agents, separate PostgreSQL control and journal, PostgreSQL and MySQL targets. Native control rollback after parked writer and after Worker admission. Both SQL targets keep the original transaction cut and snapshot generation."
+      }
+    },
+    {
       "id": "CP-04",
       "title": {
         "zh-CN": "故障接管、隔离与资源调度",
@@ -14863,5 +14877,52 @@
     "reproduce": "python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-mysql-journal-placement --source-expected-version 8.4.13 --separate-execution --automatic-placement --verified-placement --verified-placement-mysql-journal",
     "postgresqlSourceVariant": "Add --verified-placement-postgres-source and set --source-expected-version 17.12.",
     "boundary": "The positive qualified placement, fail-closed isolation and exact return are native. Frozen same-store transfer and native target fencing use the archived named profiles. No unsealed owner replacement is attempted. Positive writer relocation across separate control and journal databases remains LG-05."
+  },
+  "lg05IndependentPostgresWriterTransfer": {
+    "status": "PASS",
+    "artifactSha256": "b150fb6d939a94398f54f27e782a1ed33a0d43506cafc98e8d7a7be9e2e84cc2",
+    "manifestSha256": "2c08f8994594f0cfb289169cb90e5901aed42115f4d8cc1f046bd5a6370b130b",
+    "harnessSourceSha256": "adc203985c999f176256e9c68734727dbd343ed1679f4b7a9158d9d4c4723ffb",
+    "logSha256": "a6ac611ffdd8f415023ac1cb198e6151d10979c1613266fa0f4b08c19d407952",
+    "javaFocusedPassed": 38,
+    "postgresTransactionChecksPassed": 3,
+    "handoffDomChecksPassed": 23,
+    "nativeChecks": [
+      "Agent command opens probes only; management roles are visible through controller sessions",
+      "Only the original Agent can admit the explicitly initialized managed writer",
+      "Controllers create Agent-owned task and share revision",
+      "Two source databases to two targets; snapshot keyed/keyless/JSON/generated values",
+      "Cross-database transaction insert/update/delete and keyless multiplicity",
+      "Authenticated Controllers replay one bounded assessment without moving a live Worker",
+      "A stopped caught-up external-journal task is assessed against its original cut and the exact candidate",
+      "Concurrent refreshes against the same receipt allow exactly one replacement",
+      "Controller restart retains the assessed placement, original owner and masked cut proof",
+      "Candidate-specific missing PostgreSQL access refuses proof while original receipt custody stays protected",
+      "Candidate with a disjoint private mount cannot claim custody of the original completed report",
+      "Candidate journal-network loss fails native cut proof while the control, source and destination routes remain reachable",
+      "Managed wire placement rejects a disguised standalone transfer after native source and SQL cut verification",
+      "Corrected candidate verifies the exact original MySQL and both native SQL receipts without moving a writer or changing data",
+      "Both Agents verify the original validation bytes through the shared private mount while all original artifacts remain",
+      "Candidate verifies a bounded archive of authenticated closed operation outcomes without exposing request signatures or records",
+      "A split-store preparation retains exact private reports and receipts through an offline shared mount",
+      "Control rollback preserves the exact parked cut and a restarted candidate completes the same approved transfer",
+      "After a second control rollback, one Worker resumes the exact original snapshot and writes both native targets"
+    ],
+    "nativeResult": {
+      "independentJournalRoute": true,
+      "controlRollbackAfterPark": true,
+      "candidateRestartResumesSealedIntent": true,
+      "replaysAcrossControllers": true,
+      "singleAssignment": true,
+      "nativeTargetFences": 2,
+      "controlRollbackAfterWorkerAdmission": true,
+      "singleWorker": true,
+      "sameSnapshotGeneration": true,
+      "exactlyOnceVerifiedRows": 1
+    },
+    "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+    "sourceVersion": "8.4.13",
+    "cleanupExitCode": 0,
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/split-writer-native --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-split-store --handoff-split-writer-transfer --source-expected-version 8.4.13"
   }
 }

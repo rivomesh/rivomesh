@@ -59,6 +59,17 @@ When an administrator has bound the original execution request for a stopped, dr
 
 The original Agent's control binding must remain current and its journal lease must have expired or been released. Source and destination checks use the existing exclusive-writer profile. Raw capture history requires explicit Controller commit. Changed authorization, leases, custody or native cut leave ownership where it is and the bounded pending receipt can retry until it expires. Interruption before queuing candidate readiness, promotion of an offline original Agent, independent control and journal stores, and automatic write activation require separate flows.
 
+### Independent PostgreSQL journal handoff
+
+The managed task enables `journal.splitStoreHandoff` at initialization. The separate PostgreSQL control and journal profile covers a drained MySQL source task and caught-up MySQL or PostgreSQL targets. The preparation binds the original revision, native cut, candidate directory and private evidence.
+
+1. The control database authenticates and seals `rmc_split_writer_transfer` with the execution request, candidate readiness and reviewed cut. The sealed approval preserves candidate capacity and STOPPED intent through review expiration.
+2. The native journal transaction checks the original assignment and acknowledged cut, retires the old assignment, raises the epoch and parks the candidate. Replay checks the exact recipient assignment, predecessor, epoch and cut.
+3. The control database installs the candidate owner and records the same execution request. The candidate projects STOPPED configuration and adopts the evidence. A candidate that restarts with its original private directory can resume the sealed approval. A currently authorized administrator can explicitly retry the same request after an authorization revision change.
+4. SQL fencing and Worker start require separate approvals. When journal admission has committed, replay rechecks the source position and fenced native target receipts before recording control admission and the local start intent. The normal runtime starts the candidate after control admission and local projection.
+
+The default independent journal profile supports read-only verification and staging. Sites recovering an undrained original, missing journal history or damaged candidate directory restore the matching evidence and node identity using the corresponding recovery profile. [Operations](../../en/global-control.md)
+
 ### Offline continuation from a durably frozen cut
 
 The existing assessment and preparation authenticate a reviewed stop, the bound Agent directory and incarnation, and the matching candidate custody probe. Ordinary observations become unavailable when the original control lease expires. A `PREPARED` reservation can expire without retiring the original journal assignment. The administrative `GET /api/tasks/{task}/handoff` response adds `offlinePreflight` when the recorded original still owns the task and its control state is stale, stopped or unknown. `authorityMatchesReview`, `historicalDrainedCut` and `historicalReportsAndReceipts` describe the retained review. The result is `BLOCKED` and names the missing durable freeze or complete independently retained archive. The handoff dialog displays these checks in the assessment receipt. Missing or invalid historical archive fields are reported as missing.

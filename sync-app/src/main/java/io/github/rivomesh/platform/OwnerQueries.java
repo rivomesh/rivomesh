@@ -443,6 +443,32 @@ final class OwnerQueries {
         }
         return new Execution(request,actor);
     }
+    String nextSplitHandoff(ControlStore.Lease lease,String directory,String after)throws Exception{
+        return tasks.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            return tasks.preparations().nextSplitTransfer(c,lease.nodeId,after);
+        });
+    }
+
+    void resumeSplitHandoff(String id,ControlStore.Lease lease,String directory)throws Exception{
+        tasks.service((c,accounts)->{
+            agents.require(c,lease,directory);
+            var plan=tasks.preparations().byRequest(c,id,db.now(c));
+            if(plan==null||!"PREPARED".equals(plan.phase()))return null;
+            if(!plan.evidence().candidate().node().equals(lease.nodeId)
+                    ||!plan.evidence().candidate().directory().equals(directory))throw new ControlStore.Fenced();
+            var transfer=tasks.preparations().splitTransfer(c,plan);
+            if(transfer==null)return null;
+            var user=accounts.users.get(plan.actor());
+            if(user==null||!user.enabled||user.deleted||!Objects.equals(accounts.revision,plan.actorRevision()))
+                throw new TaskService.Conflict("AUTHORIZATION_CHANGED");
+            var actor=new AccessControl.Principal(user.id,user.role,user.taskIds,accounts.revision,user.nodeIds);
+            handoff.finishSplitTransfer(c,tasks.record(c,plan.task()),actor,plan,transfer.request());
+            agents.require(c,lease,directory);
+            return null;
+        });
+    }
+
     String nextHandoffResume(ControlStore.Lease lease,String directory,String after)throws Exception{
         return tasks.service((c,accounts)->{
             agents.require(c,lease,directory);

@@ -180,7 +180,7 @@ window.RivomeshHandoff=(()=>{
   handoffWorkerProjectedHelp:'候选 Agent 已保存从交接断点续传的启动意图。实际运行状态见任务详情。',
   handoffStartWorker:'启动候选 Worker',handoffStartWorkerHelp:'批准候选 Worker 从交接断点继续同步。',
   handoffStartRetry:'重试同一启动审批',handoffStartReapprove:'重新审批启动',
-  handoffFenceReapprove:'重新审批目标隔离',handoffReapprovalHelp:'授权已变化。请重新审批当前交接。',handoffPendingProblem:'最近一次核验受阻',
+  handoffSplitPending:'写入权交接已审批。日志库和控制库恢复后，候选节点会继续同一请求。',handoffFenceReapprove:'重新审批目标隔离',handoffReapprovalHelp:'授权已变化。请重新审批当前交接。',handoffPendingProblem:'最近一次核验受阻',
   HANDOFF_TARGET_FENCE_CHANGED:'目标检查点和已签名的隔离回执不一致。请核对目标后刷新。',
   HANDOFF_TARGET_CUT_CHANGED:'目标断点已变化，任务继续停驻。',
   HANDOFF_WORKER_JOURNAL_NOT_PARKED:'共享日志的停驻状态已变化，请核对当前交接记录。',
@@ -223,7 +223,7 @@ window.RivomeshHandoff=(()=>{
   handoffWorkerProjectedHelp:'The candidate Agent saved the intent to resume from the handoff cut. See the task view for the actual Worker state.',
   handoffStartWorker:'Start candidate Worker',handoffStartWorkerHelp:'Approve the candidate Worker to resume synchronization from the handoff cut.',
   handoffStartRetry:'Retry the same start approval',handoffStartReapprove:'Approve Worker start again',
-  handoffFenceReapprove:'Approve SQL fencing again',handoffReapprovalHelp:'Authorization changed. Approve this handoff step again.',handoffPendingProblem:'Latest verification blocker',
+  handoffSplitPending:'Writer handoff approved. The candidate resumes the same request when both stores are reachable.',handoffFenceReapprove:'Approve SQL fencing again',handoffReapprovalHelp:'Authorization changed. Approve this handoff step again.',handoffPendingProblem:'Latest verification blocker',
   HANDOFF_TARGET_FENCE_CHANGED:'A target checkpoint differs from the signed fence receipt. Verify the target and refresh.',
   HANDOFF_TARGET_CUT_CHANGED:'The target cut changed. The task remains parked.',
   HANDOFF_WORKER_JOURNAL_NOT_PARKED:'The shared journal parking state changed. Review the current handoff.',
@@ -384,9 +384,10 @@ window.RivomeshHandoff=(()=>{
   if(plan.state==='ORIGINAL_FROZEN'&&validOriginalFreeze(plan)&&plan.writerActivation?.checkedInControlTransaction===true
    &&task?.statusAvailable===false&&task.ownerControlState==='STALE'&&task.revision===plan.taskRevision)
    return 'commit-offline-owner';
-  if(plan.state==='PREPARED'&&!readOnly(v)&&plan.writerActivation?.checkedInControlTransaction===true
-   &&v.stageAttempt?.counts
-   &&sameStagePreparation(plan,v.stageAttempt.plan))return 'commit-owner';
+  if(plan.state==='PREPARED'&&!readOnly(v)&&(plan.writerActivation?.checkedInControlTransaction===true
+   ||plan.externalJournalTransfer===true)
+   &&(plan.splitTransferPending===true||v.stageAttempt?.counts
+    &&sameStagePreparation(plan,v.stageAttempt.plan)))return 'commit-owner';
   if(['EVIDENCE_ADOPTED','FENCE_PENDING'].includes(plan.state)&&plan.targetFenceAvailable===true)return 'fence-targets';
   if(['TARGETS_FENCED','START_PENDING'].includes(plan.state)&&plan.workerStartAvailable===true)return 'start-worker';
   return null;
@@ -437,6 +438,10 @@ window.RivomeshHandoff=(()=>{
     ||!(Object.hasOwn(preparationLabels,state)||transferredState&&validTransfer(response))
     ||response.executionAuthorized!==workerAdmitted(state)
     ||response.commitRequestId!=null&&(!requestPattern.test(response.commitRequestId)||!(active||transferredState))
+    ||response.externalJournalTransfer!=null&&(response.externalJournalTransfer!==true
+     ||response.writerActivation?.checkedInControlTransaction!==false)
+    ||response.splitTransferPending!=null&&(!active||response.splitTransferPending!==true
+     ||response.externalJournalTransfer!==true||!requestPattern.test(response.commitRequestId||''))
     ||response.commitBlocker!=null&&(!active||response.writerActivation?.checkedInControlTransaction!==false
      ||response.commitBlocker!=='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
     ||response.reservedTaskSlots!==Number(active)||response.reservedWorkerSlots!==Number(active)
@@ -568,6 +573,8 @@ window.RivomeshHandoff=(()=>{
     }
    }
    if(active)v.preparationResult.append(node('p',t('handoffActiveHelp'),'subtle'));
+   if(active&&preparation.splitTransferPending===true)
+    v.preparationResult.append(node('p',t('handoffSplitPending'),'callout warning'));
    if(active&&preparation.commitBlocker==='HANDOFF_MANAGED_CONTROL_CUT_REQUIRED')
     v.preparationResult.append(node('p',t(preparation.commitBlocker),'callout warning'));
   }
@@ -661,7 +668,7 @@ window.RivomeshHandoff=(()=>{
   v.probe.hidden=readonly||active||v.receipt?.state!=='EVIDENCE_REQUIRED'||!sha256.test(v.receipt.originalCut?.checkpointHash||'');
   v.probe.disabled=busy||assessmentLocked||Boolean(v.attempt)||!freshAssessment(v);
   const reserveShown=!readonly&&(attempt?!attempt.release:reviewReady(v)&&!active);
-  const releaseShown=!readonly&&(attempt?attempt.release:active);
+  const releaseShown=!readonly&&v.preparation?.splitTransferPending!==true&&(attempt?attempt.release:active);
   const focused=document.activeElement;
   v.reserve.hidden=!reserveShown;v.release.hidden=!releaseShown;
   v.reserve.textContent=t(attempt&&!attempt.release?'handoffRetryReserve':'handoffReserve');

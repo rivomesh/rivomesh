@@ -1631,14 +1631,14 @@
       "id": "LG-05",
       "epic": "CARRYOVER",
       "priority": "P0",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "可选存储和跨节点数据可达性",
         "en": "Optional storage and cross-node reachability"
       },
       "gap": {
-        "zh-CN": "可选日志与 PostgreSQL 同库双证据交接已实测。候选丢失独立日志库链路时控制租约原地续期，原生切点拒绝。复联后可重新核验并暂存，双入口拒绝跨库写入接管。释放后原 Agent 从原断点向两目标续传。结案回执限定档案可在候选私有卷复核完整库存。共享传输归档丢失和候选副本损坏已分别验证。原 Agent 失联且共享传输归档移除时，候选使用私有密封回执完成同库离线归属提交和双目标续传。异库持久围栏、其他存储和目标拓扑待验。",
-        "en": "Optional journals and combined PostgreSQL same-database custody passed. During independent journal loss, the candidate keeps its control lease and cannot prove a native cut. After reconnect it can recheck and stage offline history. Both entries refuse cross-database writer transfer. Release lets the original Agent continue to both targets from its original cut. The bounded closed-receipt inventory remains verifiable on the candidate volume after loss of the transfer archive. Modified candidate bytes are refused. The same-store candidate uses the independently sealed receipts for offline ownership and two SQL destinations after both original Agent and transfer archive become unavailable. Durable split-store fencing and other storage and destination profiles remain."
+        "zh-CN": "可选存储档案已验收。本地日志保留原目录和持久卷。独立 PostgreSQL 控制库和日志库可经审批完成排空交接。实测日志停驻后控制事务回滚，候选重启并沿用同一审批；Worker 准入时再次回滚控制事务，候选按原源位点、快照及 MySQL 和 PostgreSQL 双目标回执续传。默认独立日志支持核验和暂存。同库冻结及离线接管保留原生围栏。其他产品的写入隔离在对应产品档案评估。",
+        "en": "Accepted optional storage profiles. Local journals follow the original durable directory. Approved drained handoff with separate PostgreSQL databases survives a control rollback after journal parking and candidate restart. A second rollback after journal admission preserves the source cut, snapshot generation and native MySQL and PostgreSQL receipts. The default independent journal supports verification and staging. Same-database freeze and offline handoff retain the native fence. Other products follow their own writer fencing qualification."
       },
       "acceptance": {
         "zh-CN": "无独立存储时明确持久卷/节点绑定与磁盘丢失边界；外部/共享存储按能力验收；跨节点迁移前验证日志、原事件、报告和密钥可达，不可只搬游标；不强制所有部署新增独立日志服务。",
@@ -1657,8 +1657,19 @@
         "sync-app/src/main/java/io/github/rivomesh/platform/HandoffEvidenceAdoption.java",
         "sync-app/src/main/java/io/github/rivomesh/platform/RawCaptureHandoffStaging.java",
         "tests/global-control-pipeline.py",
-        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffFailureHistory.java"
-      ]
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffFailureHistory.java",
+        "docs/zh-CN/global-control.md",
+        "docs/en/global-control.md",
+        "sync-app/src/main/java/io/github/rivomesh/platform/HandoffPreparations.java",
+        "sync-app/src/test/java/io/github/rivomesh/platform/ManagedWriterTransactionTest.java",
+        "tests/ui/handoff-cases.mjs"
+      ],
+      "verification": {
+        "artifactSha256": "b150fb6d939a94398f54f27e782a1ed33a0d43506cafc98e8d7a7be9e2e84cc2",
+        "criteriaSha256": "1becbfea092c740722297430363e39a9f87cd61349eee318faf1defbc0a86b01",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21, MySQL 8.4.13 source, two Controllers and two Agents, separate PostgreSQL control and journal, PostgreSQL and MySQL targets. Native control rollback after parked writer and after Worker admission. Both SQL targets keep the original transaction cut and snapshot generation."
+      }
     },
     {
       "id": "LG-06",

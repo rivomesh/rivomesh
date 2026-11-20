@@ -30,7 +30,7 @@ final class OwnerRuntime implements AutoCloseable {
     private final Set<String> queued=ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String,Long> handoffRetries=new ConcurrentHashMap<>();
     private Set<String> retiredTasks=Set.of();
-    private String recipientCursor="",handoffResumeCursor="";
+    private String recipientCursor="",handoffResumeCursor="",splitHandoffCursor="";
     private long nextRecipientPoll;
     private final AtomicBoolean started=new AtomicBoolean(),closed=new AtomicBoolean();
     private volatile String commandProblem,queryProblem;
@@ -290,6 +290,9 @@ final class OwnerRuntime implements AutoCloseable {
                 String request=queries.nextHandoffResume(lease,directory,handoffResumeCursor);
                 handoffResumeCursor=request==null?"":request;
                 if(request!=null)queries.resumeHandoff(request,lease,directory,local::recheckPreparedHandoff);
+                String split=queries.nextSplitHandoff(lease,directory,splitHandoffCursor);
+                splitHandoffCursor=split==null?"":split;
+                if(split!=null)queries.resumeSplitHandoff(split,lease,directory);
             }catch(ControlStore.Unavailable unavailable){queryProblem=code(unavailable);}
             catch(Exception pending){/* Only current signed readiness and the exact native cut can commit ownership. */}
             finally{queued.remove(key);}

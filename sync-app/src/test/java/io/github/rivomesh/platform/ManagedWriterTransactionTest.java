@@ -120,6 +120,99 @@ class ManagedWriterTransactionTest {
         }
     }
 
+    @Test void externalJournalCommitReplaysOnlyTheSameParkedWriterCut()throws Exception{
+        seedJournal();
+        String checkpoint=AuditStore.hash(Model.JSON.writeValueAsString(position));
+        var managed=new JournalWriterAssignment.ManagedCut(OWNER,Codec.sha256(first),9,2,checkpoint);
+        var proof=new JournalWriterAssignment.CutProof(Codec.sha256(generation),"a".repeat(64),List.of("pg"),true,managed);
+        try{
+            JournalWriterAssignment.Placement placed;
+            try(Connection journal=database()){
+                journal.setAutoCommit(false);
+                placed=JournalWriterAssignment.parkExternalRecipient(journal,this.journal,TASK,first,proof,next,CANDIDATE);
+                journal.rollback();
+            }
+            assertEquals(first,value("SELECT assignment_id FROM "+table("writer_assignment")));
+            try(Connection journal=database()){
+                journal.setAutoCommit(false);
+                assertEquals(placed,JournalWriterAssignment.parkExternalRecipient(journal,this.journal,TASK,first,proof,next,CANDIDATE));
+                journal.commit();
+            }
+            try(Connection journal=database()){
+                journal.setAutoCommit(false);
+                assertEquals(placed,JournalWriterAssignment.parkExternalRecipient(journal,this.journal,TASK,first,proof,next,CANDIDATE));
+                journal.commit();
+            }
+            assertEquals("10",value("SELECT epoch FROM "+table("job")));
+            assertEquals("HANDOFF_PARKED",value("SELECT run_state FROM "+table("job")));
+            assertEquals("2",value("SELECT COUNT(*) FROM "+table("writer_assignment_history")));
+            try(Connection journal=database()){
+                journal.setAutoCommit(false);
+                assertThrows(IllegalStateException.class,()->JournalWriterAssignment.parkExternalRecipient(
+                        journal,this.journal,TASK,first,proof,UUID.randomUUID().toString(),CANDIDATE));
+                journal.rollback();
+            }
+            var changed=new JournalWriterAssignment.CutProof(Codec.sha256(generation),"b".repeat(64),List.of("pg"),true,managed);
+            try(Connection journal=database()){
+                journal.setAutoCommit(false);
+                assertEquals("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED",assertThrows(IllegalStateException.class,()->
+                        JournalWriterAssignment.parkExternalRecipient(journal,this.journal,TASK,first,changed,next,CANDIDATE)).getMessage());
+                journal.rollback();
+            }
+            try(JdbcJournal stale=new JdbcJournal(writerSettings(first,OWNER));
+                JdbcJournal parked=new JdbcJournal(writerSettings(next,CANDIDATE))){
+                assertThrows(JdbcJournal.Fenced.class,()->stale.claim("old-worker",30000));
+                assertThrows(JdbcJournal.PipelinePaused.class,()->parked.claim("new-worker",30000));
+            }
+        }finally{
+            sql("DROP SCHEMA IF EXISTS "+Sql.pg(journal)+" CASCADE");
+        }
+    }
+
+    @Test void sealedSplitApprovalRemainsReservedAfterReviewExpiry()throws Exception{
+        PlatformConfig config=configuration();
+        try{
+            var access=new SharedAccessStore(config,AccountDirectory.configured(config),null,Map.of());
+            var actor=AccountDirectory.authenticate(access.accounts(),"Bearer "+config.authToken);
+            var store=new GlobalTaskStore(config.cluster,access,config.cluster.taskKey,null,32);
+            var original=store.create(TASK,OWNER,firstDirectory,"formatVersion: 3\n",
+                    "handoff_transaction_original",actor);
+            String checkpoint=AuditStore.hash(Model.JSON.writeValueAsString(position));
+            var cut=new JournalWriterAssignment.CutProof(Codec.sha256(generation),"a".repeat(64),List.of("pg"),true,
+                    new JournalWriterAssignment.ManagedCut(OWNER,Codec.sha256(first),9,2,checkpoint));
+            var candidate=new HandoffPreparations.Binding(CANDIDATE,nextDirectory,UUID.randomUUID().toString(),4);
+            var evidence=new HandoffPreparations.Evidence("handoff_transaction_assess",original.revision,
+                    original.configurationVersion,new HandoffPreparations.Binding(OWNER,firstDirectory,UUID.randomUUID().toString(),3),
+                    candidate,new HandoffPreparations.JournalCut("9","2",checkpoint),"b".repeat(64),"c".repeat(64));
+            var activation=new HandoffPreparations.WriterActivation(Codec.sha256(first),next,cut.journalGenerationSha256(),
+                    cut.nativeEvidenceSha256(),false,true);
+            var admission=new ManagedHandoff.CandidateAdmission(PREPARATION,candidate,"STOPPED","d".repeat(64),"e".repeat(64));
+            var transfer=new HandoffPreparations.SplitTransfer(EXECUTION,admission,cut);
+            HandoffPreparations plans=store.preparations();
+            long expiry=store.service((c,accounts)->{
+                long now=store.database().now(c);
+                var plan=plans.prepare(c,original,PREPARATION,actor,evidence,activation,now);
+                plan=plans.bindExecution(c,plan,EXECUTION);
+                plans.sealSplitTransfer(c,plan,transfer,now);
+                return plan.expires();
+            });
+            store.service((c,accounts)->{
+                var pending=plans.byRequest(c,PREPARATION,expiry+1);
+                assertEquals("PREPARED",pending.phase());
+                assertEquals(transfer,plans.splitTransfer(c,pending));
+                assertEquals(PREPARATION,plans.nextSplitTransfer(c,CANDIDATE,""));
+                assertNull(plans.nextSplitTransfer(c,OWNER,""));
+                assertEquals("HANDOFF_SPLIT_TRANSFER_PENDING",assertThrows(TaskService.Conflict.class,()->
+                        plans.release(c,pending,"handoff_transaction_release",actor,expiry+1)).getMessage());
+                assertEquals("HANDOFF_EXECUTION_REQUEST_CHANGED",assertThrows(TaskService.Conflict.class,()->
+                        HandoffPreparations.requireExecution(pending,"handoff_transaction_replacement")).getMessage());
+                return null;
+            });
+        }finally{
+            sql("DROP SCHEMA IF EXISTS "+Sql.pg(config.cluster.namespace)+" CASCADE");
+        }
+    }
+
     private HandoffPreparations.Plan commit(GlobalTaskStore store,Connection c,GlobalTaskStore.Record row,
             AccessControl.Principal actor,JournalWriterAssignment.CutProof cut,String successor,String staged)throws Exception{
         HandoffPreparations.Plan plan=store.preparations().byRequest(c,PREPARATION,store.database().now(c));

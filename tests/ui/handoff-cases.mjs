@@ -533,6 +533,27 @@ export function registerHandoffTests({setup,flush,login}){
   }finally{ui.dom.window.close();}
  });
 
+ test('handoff resumes the sealed independent journal transfer after a page reload',async()=>{
+  const plan={...preparation('completed-handoff'),writerActivation:{checkedInControlTransaction:false},
+   externalJournalTransfer:true,splitTransferPending:true,commitRequestId:'sealed-split-transfer'};
+  const ui=fixture({read:()=>reply(reviewed()),readPreparation:()=>reply(plan),
+   commit:()=>error('HANDOFF_SPLIT_JOURNAL_UNAVAILABLE',409)});
+  try{
+   await open(ui);
+   assert.match(reservation(ui).textContent,/写入权交接已审批/);
+   assert.ok(button(ui,'release').hidden);
+   const commit=button(ui,'fence');
+   assert.equal(commit.dataset.handoffAction,'commit-owner');
+   assert.match(commit.textContent,/重试同一归属切换/);
+   commit.click();await flush();
+   assert.equal(ui.commits.length,1);
+   assert.equal(ui.commits[0].headers['X-Request-ID'],'sealed-split-transfer');
+   assert.deepEqual(JSON.parse(ui.commits[0].body),{expectedPreparation:'completed-handoff',
+    expectedRevision:revision,expectedEvidenceSha256:digest});
+   assert.equal(ui.stages.length+ui.starts.length+ui.fences.length,0);
+  }finally{ui.dom.window.close();}
+ });
+
  test('handoff shows ownership commit before the candidate publishes a local task observation',async()=>{
   const ui=fixture({taskState:{...transferredTask,formatVersion:undefined,statusAvailable:false,
    workerState:'UNKNOWN',desired:'UNKNOWN'},read:()=>assert.fail('Read-only dialog does not load an assessment'),

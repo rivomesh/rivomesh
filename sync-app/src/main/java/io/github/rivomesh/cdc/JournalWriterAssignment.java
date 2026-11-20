@@ -194,7 +194,7 @@ public final class JournalWriterAssignment {
     /** Keeps the shared journal parked while pinning its original SQL target cut. */
     public static TargetFence fenceParkedRecipient(Connection control,PipelineConfig candidate,String previousAssignment,
                                                     CutProof proof,SourceConnection sources,FenceAuthorization authorize)throws Exception{
-        return parkedTargets(control,candidate,previousAssignment,proof,sources,authorize,null);
+        return parkedTargets(control,candidate,previousAssignment,proof,sources,authorize,null,false);
     }
 
     /** The caller also records the signed admission in the same PostgreSQL transaction. */
@@ -202,12 +202,19 @@ public final class JournalWriterAssignment {
                                              CutProof proof,SourceConnection sources,FenceAuthorization authorize,
                                              TargetFence approved)throws Exception{
         if(approved==null)throw new IllegalStateException("HANDOFF_TARGET_FENCE_REQUIRED");
-        parkedTargets(control,candidate,previousAssignment,proof,sources,authorize,approved);
+        admitParkedRecipient(control,candidate,previousAssignment,proof,sources,authorize,approved,false);
+    }
+
+    public static void admitParkedRecipient(Connection journal,PipelineConfig candidate,String previousAssignment,
+                                             CutProof proof,SourceConnection sources,FenceAuthorization authorize,
+                                             TargetFence approved,boolean allowCommittedAdmission)throws Exception{
+        if(approved==null)throw new IllegalStateException("HANDOFF_TARGET_FENCE_REQUIRED");
+        parkedTargets(journal,candidate,previousAssignment,proof,sources,authorize,approved,allowCommittedAdmission);
     }
 
     private static TargetFence parkedTargets(Connection control,PipelineConfig candidate,String previousAssignment,
                                               CutProof proof,SourceConnection sources,FenceAuthorization authorize,
-                                              TargetFence approved)throws Exception{
+                                              TargetFence approved,boolean allowCommittedAdmission)throws Exception{
         candidate.validate();
         JdbcJournal.Settings settings=candidate.existingJournalSettings();
         if(!settings.managedWriter||!"EXTERNAL".equals(candidate.journal.mode)||candidate.journal.product!=TargetProduct.POSTGRESQL
@@ -220,7 +227,11 @@ public final class JournalWriterAssignment {
             RepairConnectionGuard deadline=new RepairConnectionGuard(control,20000)){
             verifyRecipientControlCut(control,settings.namespace,candidate.pipelineId,previousAssignment,settings.writerAssignment,proof);
             Map<String,Object> job=journal.assignmentLock(control);
-            if(!MANAGED_PARKED.equals(job.get("state"))||!candidate.fingerprint().equals(job.get("fingerprint")))
+            int format=(int)job.get("format");
+            boolean alreadyAdmitted=allowCommittedAdmission&&approved!=null&&"RUNNING".equals(job.get("state"))
+                    &&JdbcJournal.workerAdmitted(format);
+            if(alreadyAdmitted)verifyAdmittedPlacement(control,settings.namespace,candidate.pipelineId,settings.writerAssignment,proof);
+            if((!alreadyAdmitted&&!MANAGED_PARKED.equals(job.get("state")))||!candidate.fingerprint().equals(job.get("fingerprint")))
                 throw new IllegalStateException("HANDOFF_TARGET_FENCE_REQUIRES_PARKED");
             if(JdbcJournal.hasTargetGaps((int)job.get("format")))JdbcSkipJournal.requireNoPending(journal,control,null);
             long sequence=proof.managedWriter().sequence();
@@ -244,8 +255,7 @@ public final class JournalWriterAssignment {
             if(!proof.nativeEvidenceSha256().equals(cut.digest()))throw new IllegalStateException("HANDOFF_TARGET_CUT_CHANGED");
             if(approved!=null){
                 deadline.verify();authorize.verify();
-                int format=(int)job.get("format");
-                if(JdbcJournal.execute(control,"UPDATE "+journal.table("job")+" SET run_state='RUNNING',format_version=?"
+                if(!alreadyAdmitted&&JdbcJournal.execute(control,"UPDATE "+journal.table("job")+" SET run_state='RUNNING',format_version=?"
                         +" WHERE pipeline_id=? AND run_state=? AND format_version=? AND epoch=? AND owner IS NULL AND lease_until=0",
                         JdbcJournal.withWorkerAdmission(format),candidate.pipelineId,MANAGED_PARKED,format,parked)!=1)
                     throw new IllegalStateException("HANDOFF_WORKER_JOURNAL_NOT_PARKED");
@@ -380,6 +390,42 @@ public final class JournalWriterAssignment {
         return placement;
     }
 
+    /** Retires the original writer or returns the exact already parked successor on journal-commit replay. */
+    public static Placement parkExternalRecipient(Connection journal,String namespace,String task,String previous,
+                                                   CutProof proof,String next,String candidate)throws Exception{
+        if(journal.getAutoCommit()||!"PostgreSQL".equals(journal.getMetaData().getDatabaseProductName())
+                ||proof==null||proof.managedWriter()==null||!validId(previous)||!validId(next)||next.equals(previous)
+                ||candidate==null||!candidate.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+                ||candidate.equals(proof.managedWriter().originalNode())
+                ||!Objects.toString(proof.nativeEvidenceSha256(),"").matches("[a-f0-9]{64}")
+                ||!Codec.sha256(previous).equals(proof.managedWriter().originalAssignmentSha256()))
+            throw new IllegalStateException("HANDOFF_MANAGED_PLACEMENT_INVALID");
+        String schema=Sql.pg(namespace);
+        String current,state;
+        try(PreparedStatement statement=journal.prepareStatement("SELECT a.assignment_id,j.run_state FROM "+schema
+                +".rm3_job j JOIN "+schema+".rm3_writer_assignment a ON j.pipeline_id=a.pipeline_id"
+                +" WHERE j.pipeline_id=? FOR UPDATE OF j")){
+            statement.setQueryTimeout(5);
+            statement.setString(1,task);
+            try(ResultSet row=statement.executeQuery()){
+                if(!row.next())throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
+                current=row.getString(1);
+                state=row.getString(2);
+            }
+        }
+        if(previous.equals(current))
+            return writeManagedControlPlacement(journal,namespace,task,previous,proof,next,candidate);
+        if(!next.equals(current)||!MANAGED_PARKED.equals(state))
+            throw new IllegalStateException("HANDOFF_MANAGED_CONTROL_CUT_CHANGED");
+        ManagedCut old=proof.managedWriter();
+        long epoch=Math.addExact(old.epoch(),1);
+        CutProof parked=new CutProof(proof.journalGenerationSha256(),proof.nativeEvidenceSha256(),proof.destinations(),
+                proof.writerPlacementEnrolled(),new ManagedCut(candidate,Codec.sha256(next),epoch,old.sequence(),old.checkpointSha256()));
+        LockedControlCut locked=verifiedRecipientControlCut(journal,namespace,task,previous,next,parked);
+        return new Placement(next,candidate,previous,locked.generation(),epoch,old.sequence(),
+                Codec.sha256(locked.captured()),proof.nativeEvidenceSha256());
+    }
+
     private static void writeControlAssignment(Connection c,String schema,String task,Placement placement)throws SQLException{
         JdbcJournal.execute(c,"INSERT INTO "+schema+".rm3_writer_assignment_history"
                         +" (pipeline_id,assignment_id,node_id,previous_assignment,generation,activated_epoch,last_sequence,checkpoint_hash,evidence_hash)"
@@ -393,6 +439,10 @@ public final class JournalWriterAssignment {
     /** A stopped recipient must see the exact committed native history before writing its local configuration. */
     public static void verifyRecipientControlCut(Connection c,String namespace,String task,String previousAssignment,
                                                  String assignment,CutProof proof)throws Exception{
+        verifiedRecipientControlCut(c,namespace,task,previousAssignment,assignment,proof);
+    }
+    private static LockedControlCut verifiedRecipientControlCut(Connection c,String namespace,String task,String previousAssignment,
+                                                                String assignment,CutProof proof)throws Exception{
         if(!validId(previousAssignment)||Objects.equals(previousAssignment,assignment))
             throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
         LockedControlCut locked=lockManagedControlCut(c,namespace,task,assignment,proof,CutRole.RECIPIENT);
@@ -407,6 +457,7 @@ public final class JournalWriterAssignment {
                     throw new IllegalStateException("HANDOFF_RECIPIENT_NATIVE_HISTORY_CHANGED");
             }
         }
+        return locked;
     }
 
     public static void verifyAdmittedPlacement(Connection c,String namespace,String task,String assignment,CutProof proof)throws Exception{

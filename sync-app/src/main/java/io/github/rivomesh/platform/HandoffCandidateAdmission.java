@@ -144,7 +144,7 @@ final class HandoffCandidateAdmission {
 
     private static void requireScope(HandoffPreparations.Plan plan,HandoffStaging.Binding staged,String phase){
         HandoffPreparations.Evidence evidence=plan.evidence();
-        if(!phase.equals(plan.phase())||plan.activation()==null||!plan.activation().checkedInControlTransaction()
+        if(!phase.equals(plan.phase())||plan.activation()==null||!plan.activation().canPlace()
                 ||evidence==null||staged==null||!plan.id().equals(staged.preparation())
                 ||!plan.task().equals(staged.scope().task())||!evidence.candidate().equals(staged.candidate())
                 ||!evidence.assessment().equals(staged.scope().assessment())||!evidence.revision().equals(staged.scope().revision())

@@ -4,18 +4,25 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.github.rivomesh.JdbcConnections;
+import io.github.rivomesh.PipelineConfig;
 import io.github.rivomesh.cdc.JournalWriterAssignment;
+import io.github.rivomesh.cdc.TargetProduct;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.*;
 
 /** A managed writer's placement fields are immutable through ordinary configuration operations. */
-record ManagedWriterDeclaration(String assignment,String node,String journalUrl,String namespace) {
+record ManagedWriterDeclaration(String assignment,String node,String journalUrl,String namespace,boolean splitStoreHandoff) {
     private static final ObjectMapper YAML=new ObjectMapper(new YAMLFactory());
 
     static ManagedWriterDeclaration read(String yaml)throws Exception{
         JsonNode document=YAML.readTree(yaml);
         if(document==null||document.path("formatVersion").asInt()!=3)return null;
         JsonNode journal=document.path("journal"),mode=journal.path("managedWriter"),assignment=journal.path("writerAssignment");
-        if(!mode.isMissingNode()&&!mode.isBoolean())throw new TaskService.Conflict("MANAGED_WRITER_DECLARATION_INVALID");
+        JsonNode split=journal.path("splitStoreHandoff");
+        if(!mode.isMissingNode()&&!mode.isBoolean()||!split.isMissingNode()&&!split.isBoolean())
+            throw new TaskService.Conflict("MANAGED_WRITER_DECLARATION_INVALID");
         if(assignment.isMissingNode()||assignment.isNull()){
             if(mode.asBoolean())throw new TaskService.Conflict("MANAGED_WRITER_DECLARATION_INVALID");
             return null;
@@ -28,7 +35,27 @@ record ManagedWriterDeclaration(String assignment,String node,String journalUrl,
                 ||!"EXTERNAL".equals(journal.path("mode").textValue())
                 ||!"POSTGRESQL".equals(journal.path("product").asText("POSTGRESQL")))
             throw new TaskService.Conflict("MANAGED_WRITER_DECLARATION_INVALID");
-        return new ManagedWriterDeclaration(assignment.textValue(),node,url,namespace);
+        return new ManagedWriterDeclaration(assignment.textValue(),node,url,namespace,split.asBoolean());
+    }
+
+    @FunctionalInterface
+    interface JournalOperation<T> { T apply(Connection journal)throws Exception; }
+
+    <T> T journalTransaction(String yaml,JournalOperation<T> operation)throws Exception{
+        if(!splitStoreHandoff||!equals(read(yaml)))throw new TaskService.Conflict("HANDOFF_SPLIT_PROFILE_INVALID");
+        var settings=PipelineConfig.readExternalHandoffJournal(yaml);
+        String bounded=AutomaticPlacement.journalProbeUrl(journalUrl,TargetProduct.POSTGRESQL);
+        try(Connection journal=JdbcConnections.open("org.postgresql.Driver",bounded,settings.username,settings.password)){
+            journal.setAutoCommit(false);
+            T result=operation.apply(journal);
+            journal.commit();
+            return result;
+        }catch(SQLException failure){
+            String state=failure.getSQLState();
+            if(state!=null&&(state.startsWith("08")||Set.of("57P01","57P02","57P03").contains(state)))
+                throw new TaskService.Conflict("HANDOFF_SPLIT_JOURNAL_UNAVAILABLE");
+            throw failure;
+        }
     }
 
     void requireOwner(String owner){
