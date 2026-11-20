@@ -2079,8 +2079,9 @@ public final class TaskService implements AutoCloseable {
                 &&("SOURCE_REVIEW_STALE".equals(message)||message.matches("CAPTURE_EXCLUSION_[A-Z0-9_]+")||message.matches("MYSQL_BINLOG_(?:CONTENT_REVIEW_UNAVAILABLE|EVIDENCE_[A-Z0-9_]+)")))
             return message;
         if(Arrays.asList("CONFIG_VERSION_CORRUPT","CONFIG_VERSION_INVALID","JOURNAL_IDENTITY_MISMATCH","SUBSCRIPTION_MIGRATION_REQUIRED","DESTINATION_ALREADY_OWNED","WORKER_ENVIRONMENT_DENIED").contains(error.getMessage()))return error.getMessage();
-        for(Throwable e=error;e!=null;e=e.getCause())if(e instanceof SQLException) {
-            SQLException sql=(SQLException)e;return "SQL_"+(sql.getSQLState()==null?"UNKNOWN":sql.getSQLState())+"_"+sql.getErrorCode();
+        for(Throwable e=error;e!=null;e=e.getCause())if(e instanceof SQLException sql) {
+            if(sql instanceof JdbcConnections.DriverFailure)return sql.getMessage();
+            return "SQL_"+(sql.getSQLState()==null?"UNKNOWN":sql.getSQLState())+"_"+sql.getErrorCode();
         }
         return error instanceof IllegalArgumentException?"CONFIG_INVALID":error instanceof IOException?"STORAGE_ERROR":"CONTROL_FAILED";
     }

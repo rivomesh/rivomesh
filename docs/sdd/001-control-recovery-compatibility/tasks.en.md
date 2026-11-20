@@ -147,7 +147,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   Acceptance: AC-JV-02
   - [x] Temurin 21 passed standalone, async GTID failover and single-primary Group Replication on all four MySQL versions. Both SQL targets caught up after an election during the snapshot in every group profile.
   - [x] Accepted the Temurin 21 source profiles, exact target client and recovery matrix, and native OceanBase and GBase 8c snapshot, CDC, restart and SQL repair.
-- [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
+- [x] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03
 - [x] T-JV-04 · Java 21 deployment and rolling replacement · P1 · Depends on: CP-04, JV-02, JV-03, LG-08

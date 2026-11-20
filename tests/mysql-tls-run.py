@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from zipfile import ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,8 +99,16 @@ def main():
     parser.add_argument('--artifact', type=Path, required=True)
     parser.add_argument('--java-home', type=Path, required=True, help='Host Temurin 21 for fixture trust store generation')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--external-mysql-driver', type=Path, help='Supply Connector/J separately on the worker classpath')
     args = parser.parse_args()
     artifact = args.artifact.resolve()
+    external = args.external_mysql_driver.resolve(strict=True) if args.external_mysql_driver else None
+    launch = ['-jar', '/app.jar']
+    if external:
+        marker = 'com/mysql/cj/jdbc/Driver.class'
+        with ZipFile(artifact) as app, ZipFile(external) as driver:
+            assert marker not in app.namelist() and marker in driver.namelist()
+        launch = ['-cp', '/app.jar:/operator/mysql-driver.jar', 'io.github.rivomesh.Main']
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     project = 'rivomesh-mysql-tls-' + uuid.uuid4().hex[:10]
@@ -116,13 +125,17 @@ def main():
         source = mysql_service(private_certificates/'source', 311)
         source['networks'] = {'default': {'aliases': ['source-wrong-name']}}
         target = mysql_service(private_certificates/'target', 312)
+        target['networks'] = {'default': {'aliases': ['target-wrong-name']}}
         worker = {
-            'image': JAVA_IMAGE, 'entrypoint': ['java', '-Xmx384m', '-jar', '/app.jar'],
+            'image': JAVA_IMAGE, 'entrypoint': ['java', '-Xmx384m', *launch],
             'command': ['serve', '/fixture/platform.json'], 'ports': ['127.0.0.1::8080'],
             'environment': {'RM_TLS_PASSWORD': '${RM_TLS_PASSWORD}', 'RM_TLS_TOKEN': '${RM_TLS_TOKEN}'},
             'volumes': [str(artifact)+':/app.jar:ro', str(home)+':/fixture',
                         str(trust/'cacerts')+':/opt/java/openjdk/lib/security/cacerts:ro'],
         }
+        if external:
+            worker['volumes'].append(str(external)+':/operator/mysql-driver.jar:ro')
+            manifest['externalMysqlDriverSha256'] = whole_digest(external)
         compose_file = home/'compose.json'
         compose_file.write_text(json.dumps({'services': {'source': source, 'target': target, 'worker': worker}}))
         pipeline = {
@@ -179,6 +192,11 @@ def main():
                 "INSERT INTO sales.items(id,note,doc) VALUES(1,'original',JSON_OBJECT('n',18446744073709551615));")
             preflight = compose('run', '--rm', '--no-deps', 'worker', 'check', '/fixture/tasks/mysql_tls.yml')
             assert json.loads(preflight.stdout)['sourceTables'] == 1
+            if external:
+                missing = compose('run', '--rm', '--no-deps', '--entrypoint', 'java', 'worker',
+                                  '-jar', '/app.jar', 'check', '/fixture/tasks/mysql_tls.yml', check=False)
+                assert missing.returncode and 'JDBC_DRIVER_UNAVAILABLE' in missing.stderr
+                passed('The external package refuses preflight without Connector/J and accepts the scoped driver classpath')
             wrong = dict(pipeline, source=dict(pipeline['source'], host='source-wrong-name'))
             (home/'wrong-name.yml').write_text(json.dumps(wrong))
             denied = compose('run', '--rm', '--no-deps', 'worker', 'check', '/fixture/wrong-name.yml', check=False)
@@ -190,7 +208,13 @@ def main():
             (home/'alias-control.yml').write_text(json.dumps(wrong))
             alias = compose('run', '--rm', '--no-deps', 'worker', 'check', '/fixture/alias-control.yml')
             assert json.loads(alias.stdout)['sourceTables'] == 1
-            passed('The packaged preflight verifies server identities and refuses a wrong source DNS name')
+            wrong_target = dict(pipeline, targets=[dict(pipeline['targets'][0],
+                url=pipeline['targets'][0]['url'].replace('://target:', '://target-wrong-name:'))])
+            (home/'wrong-target-name.yml').write_text(json.dumps(wrong_target))
+            denied = compose('run', '--rm', '--no-deps', 'worker', 'check', '/fixture/wrong-target-name.yml', check=False)
+            assert denied.returncode and not denied.stdout.strip()
+            assert any(message in denied.stderr.lower() for message in ('identity', 'subject alternative', 'hostname'))
+            passed('The packaged preflight verifies and refuses wrong source and target DNS identities')
 
             compose('up', '-d', 'worker')
             reported_jvm = compose('exec', '-T', 'worker', 'java', '-version').stderr

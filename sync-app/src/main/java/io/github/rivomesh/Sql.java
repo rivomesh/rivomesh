@@ -22,6 +22,7 @@ public final class Sql {
         }
     }
     public static String targetErrorCode(SQLException error){
+        if(error instanceof JdbcConnections.DriverFailure)return error.getMessage();
         // Keep DM's missing-table reason even when the driver is supplied at runtime.
         if (error.getErrorCode() == -2106) {
             for (Class<?> type = error.getClass(); type != SQLException.class; type = type.getSuperclass()) {
@@ -35,6 +36,7 @@ public final class Sql {
         if (error instanceof StateStore.JobBusyException || error instanceof StateStore.LeaseLostException || error instanceof java.util.concurrent.TimeoutException) return true;
         if (error instanceof IllegalStateException || error instanceof IllegalArgumentException) return false;
         for (Throwable e = error; e != null; e = e.getCause()) {
+            if(e instanceof JdbcConnections.DriverFailure)return false;
             if(e instanceof SyncFailure)return ((SyncFailure)e).retryable;
             if (e instanceof com.github.shyiko.mysql.binlog.network.ServerException) {
                 com.github.shyiko.mysql.binlog.network.ServerException server = (com.github.shyiko.mysql.binlog.network.ServerException) e;

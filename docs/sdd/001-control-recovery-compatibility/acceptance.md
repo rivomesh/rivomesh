@@ -37,7 +37,7 @@ RM-SDD-001 · 2026-11-17
 | AC-SO-07 | SO-07 | 确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。 | 部分验收。单 PDB 增量、保存点回滚、双 PostgreSQL 续传及 LOB、原生 JSON 的限制已实测。RAC、其他类型和完整镜像采集待验。 |
 | AC-JV-01 | JV-01 | 同一 Temurin 21 候选包的 Controller、Agent 和 Worker 须实际运行并完成全量与增量。记录 JVM 版本、架构、包 SHA、主类版本和依赖检查。 | 通过（Temurin 21 字节码、真实三类进程和 SQL 同步） |
 | AC-JV-02 | JV-02 | 各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。 | 通过 Temurin 21 的批准档案。四个 MySQL 版本、PostgreSQL 17/18 和 Oracle 单 PDB 均有原生源证据。当前制品的 OceanBase 和 GBase 8c 通过全量、增量、重启及独立 SQL 修复。中英文矩阵登记目标、Broker、客户端、TLS、类型和拓扑边界。 |
-| AC-JV-03 | JV-03 | 验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。 | 部分验收（SQL 驱动和重连，含 Pulsar 私有 CA、Token 和重启实库） |
+| AC-JV-03 | JV-03 | 验证服务加载、反射/模块限制、认证/TLS/证书、连接重建、精度和厂商驱动最低JDK；不可兼容组合在预检和矩阵明确拒绝，不能只靠编译通过。 | 通过。外置驱动服务装载和异常拒绝，以及 MySQL、PostgreSQL TLS 和金仓原生认证及重连实测。 |
 | AC-JV-04 | JV-04 | 核验 Java 21 的 Linux、Docker 和 Kubernetes 部署路径。滚动更换应保留管理入口、原有命令和已验证的同步断点，说明备份恢复与回退边界。 | 通过（Linux 手动启动、非 root Docker、两种 Kubernetes 部署和发布证据门禁） |
 | AC-DO-01 | DO-01 | 每项需求有稳定ID、现状、未完成点、依赖、优先级、验收和任务；中英文ID一致；规格变化有记录，旧验收不可冒充新范围通过。 | [PASS](../../verification/README.md#do-01-bilingual-sdd-verifier) |
 | AC-DO-02 | DO-02 | 提供单机及多节点四类可运行示例，说明控制/日志/会话/报告存储、Secret/TLS、节点注册排空、备份恢复升级和无独立存储边界；K8s实机另有证据。 | 已验收（双语四路径、模板校验和 K8s 实机记录） |

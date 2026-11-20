@@ -103,6 +103,16 @@ const can=permission=>Boolean(session?.permissions?.includes(permission));
 function forgetSession(){clearTaskFilters();closeFailureEvidence();closeCaptureRecovery();closeWorkerDiagnostics();window.RivomeshRecovery?.close();window.RivomeshHandoff?.close();window.RivomeshValidation?.close();window.RivomeshAccounts?.close();window.RivomeshEditor?.close();window.RivomeshAudit?.close();sessionGeneration++;session=null;busy=null;clearTaskPages();clearOwners();clearNodes();clearDraft();$('create-dialog').close();capabilities=[];latest={tasks:[],invalidConfigs:[]};render();renderAdapters();}
 const text=(tag,value,cls)=>{const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;};
 function translate(){if(failureDialog){failureDialog.querySelectorAll('[data-failure-label]').forEach(e=>e.textContent=t(e.dataset.failureLabel));const events=failureDialog.querySelector('.failure-event-list');if(events?._failureEvents)renderFailureEvents(events,events._failureEvents);}document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));$('language').textContent=lang==='zh'?'English':'中文';[0,1,2].forEach(i=>$('step-label-'+i).textContent=t('step'+i));render();renderAdapters();renderNodes();$('page-title').textContent=t(activeView);if($('create-dialog').open)wizardMode();window.RivomeshEditor?.translate();window.RivomeshAudit?.translate();window.RivomeshAccounts?.translate();window.RivomeshRecovery?.translate();}
+Object.assign(messages.zh,{
+ JDBC_DRIVER_UNAVAILABLE:'驱动无法加载。检查执行节点的驱动文件和 classpath。',
+ JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED:'驱动要求更新的 Java。请提供与 Temurin 21 兼容的驱动。',
+ JDBC_DRIVER_LINKAGE_INVALID:'驱动依赖不完整或冲突。请检查执行节点上的驱动和依赖版本。'
+});
+Object.assign(messages.en,{
+ JDBC_DRIVER_UNAVAILABLE:'The driver failed to load. Check the execution node driver file and classpath.',
+ JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED:'The driver needs a newer Java version. Supply a Temurin 21-compatible driver.',
+ JDBC_DRIVER_LINKAGE_INVALID:'Driver dependencies are missing or conflicting. Check their versions on the execution node.'
+});
 function explain(code){return messages[lang][code]||(code&&code.startsWith('SQL_')?t('SQL'):t('UNKNOWN'))+(code?' ['+code+']':'');}
 function notify(message){$('notice').textContent=message;$('notice').classList.remove('hidden');}
 function requestId(){return 'ui_'+Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');}

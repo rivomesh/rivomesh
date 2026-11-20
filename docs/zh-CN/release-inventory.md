@@ -89,11 +89,14 @@ classpath="$candidate:$mysql_driver:$gauss_driver:$gbase_driver:$kingbase_driver
 java -cp "$classpath" io.github.rivomesh.Main serve /etc/rivomesh/platform.yml
 ```
 
-执行 Agent 或独立流水线使用相同启动 classpath，Agent 将其传给 Worker。离线验收使用同一个应用 JAR，分别验证缺少厂商驱动及提供五个驱动文件时的类来源、URL 匹配、驱动缺失错误和达梦错误分类。
+执行 Agent 或独立流水线使用相同启动 classpath，Agent 将其传给 Worker。离线验收分别启动同一个应用 JAR 的两套 classpath，核对服务加载、实际类来源、URL 匹配、构造器和依赖错误，以及达梦原生错误分类。
 
 ```sh
-java -cp "$candidate" tests/roles/ExternalVendorJdbcAcceptance.java
-java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
+classes=target/jdbc-qualification
+mkdir -p "$classes"
+javac --release 21 -cp "$candidate" -d "$classes" tests/roles/ExternalVendorJdbcAcceptance.java
+java -cp "$candidate:$classes" io.github.rivomesh.ExternalVendorJdbcAcceptance
+java -cp "$classpath:$classes" io.github.rivomesh.ExternalVendorJdbcAcceptance \
   "$mysql_driver" "$gauss_driver" "$gbase_driver" "$kingbase_driver" "$dameng_driver"
 ```
 

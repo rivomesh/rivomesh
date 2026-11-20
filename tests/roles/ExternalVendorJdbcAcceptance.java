@@ -1,8 +1,11 @@
 package io.github.rivomesh;
 
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Driver;
 import java.sql.SQLException;
+import java.util.ServiceLoader;
 
 public final class ExternalVendorJdbcAcceptance {
     private record Provider(String type, String url) {}
@@ -19,6 +22,36 @@ public final class ExternalVendorJdbcAcceptance {
         if (!condition) throw new IllegalStateException(message);
     }
 
+    public static final class InaccessibleDriver extends org.postgresql.Driver {
+        private InaccessibleDriver() {}
+    }
+
+    public static final class MissingDependencyDriver extends org.postgresql.Driver {
+        public MissingDependencyDriver() {
+            var failure = new NoClassDefFoundError("JdbcFixtureDependency");
+            failure.initCause(new IOException("Failed to read the driver dependency"));
+            throw failure;
+        }
+    }
+
+    public static final class NewerRuntimeDriver extends org.postgresql.Driver {
+        public NewerRuntimeDriver() {
+            throw new UnsupportedClassVersionError("JDBC fixture dependency requires a newer JVM");
+        }
+    }
+
+    private static void refused(String type, String url, String code) throws Exception {
+        try (var ignored = JdbcConnections.open(type, url, "", "")) {
+            throw new IllegalStateException("Incompatible driver accepted a connection");
+        } catch (JdbcConnections.DriverFailure failure) {
+            require("0A000".equals(failure.getSQLState()) && code.equals(failure.getMessage()),
+                    "Unexpected JDBC diagnostic for " + type);
+            require(code.equals(Sql.targetErrorCode(failure))
+                    && code.equals(io.github.rivomesh.platform.TaskService.safeCode(new IllegalStateException(failure)))
+                    && !Sql.retryable(failure), "Driver error lost its platform diagnostic");
+        }
+    }
+
     private static void absent(Provider provider) throws Exception {
         try {
             Class.forName(provider.type());
@@ -26,20 +59,23 @@ public final class ExternalVendorJdbcAcceptance {
         } catch (ClassNotFoundException expected) {
             // Even the regular connection helper must report the missing provider without linking it.
         }
-        try (var ignored = JdbcConnections.open(provider.type(), provider.url(), "", "")) {
-            throw new IllegalStateException("Missing driver accepted a connection");
-        } catch (SQLException missing) {
-            require("0A000".equals(missing.getSQLState()) && "JDBC_DRIVER_UNAVAILABLE".equals(missing.getMessage()),
-                    "Unexpected missing-JDBC diagnostic for " + provider.type());
-        }
+        refused(provider.type(), provider.url(), "JDBC_DRIVER_UNAVAILABLE");
     }
 
     private static void supplied(Provider provider, Path expectedFile) throws Exception {
         Class<?> type = Class.forName(provider.type());
         Path loadedFile = Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI()).toRealPath();
         require(loadedFile.equals(expectedFile.toRealPath()), "Unexpected JDBC class origin for " + provider.type());
-        Driver driver = (Driver) type.getDeclaredConstructor().newInstance();
+        Driver driver = ServiceLoader.load(Driver.class).stream().filter(item -> item.type().equals(type))
+                .findFirst().orElseThrow(() -> new IllegalStateException("Missing JDBC service: " + provider.type())).get();
         require(driver.acceptsURL(provider.url()), "JDBC provider refuses its configured URL: " + provider.type());
+        try (var bytes = new DataInputStream(type.getResourceAsStream('/' + type.getName().replace('.', '/') + ".class"))) {
+            require(bytes.readInt() == 0xcafebabe, "Invalid JDBC class file");
+            bytes.readUnsignedShort();
+            int major = bytes.readUnsignedShort();
+            require(major <= 65, "JDBC provider class exceeds Java 21");
+            System.out.println("JDBC_SERVICE_ACCEPTED " + provider.type() + " classMajor=" + major);
+        }
     }
 
     private static void core() throws Exception {
@@ -56,6 +92,11 @@ public final class ExternalVendorJdbcAcceptance {
 
     public static void main(String[] args) throws Exception {
         core();
+        String url = "jdbc:postgresql://127.0.0.1:1/fixture";
+        refused(InaccessibleDriver.class.getName(), url, "JDBC_DRIVER_UNAVAILABLE");
+        refused(MissingDependencyDriver.class.getName(), url, "JDBC_DRIVER_LINKAGE_INVALID");
+        refused(NewerRuntimeDriver.class.getName(), url, "JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED");
+        System.out.println("JDBC_REFLECTION_AND_LINKAGE_REFUSALS_ACCEPTED");
         require(args.length == 0 || args.length == PROVIDERS.length,
                 "Provide all five external driver paths in MySQL, GaussDB, GBase8c, Kingbase, Dameng order");
         for (int index = 0; index < PROVIDERS.length; index++) {

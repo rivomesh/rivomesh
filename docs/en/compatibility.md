@@ -39,6 +39,18 @@ The V3 wizard reads `GET /api/capabilities` for source availability and limits d
 Each result in the source and destination tables applies to its original candidate and environment. Earlier runtime experiments and profiles such as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` retain their original artifact hashes and reproduction commands in the archive. [Verification manifests](../verification/baseline.json) · [Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 
+### Operator-supplied JDBC on Java 21
+
+The five checked driver artifacts have entry-point class major 52 and a base-class bytecode ceiling of 52. The JVM specification associates major 52 with Java 8. This records their bytecode floor. Rivomesh deploys on Temurin 21 and verifies actual service loading and explicit URL routing there. Run the connection check on the same Controller, Agent or Worker classpath that will use the driver. [JVM class file versions](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.1) · [External driver packaging](release-inventory.md#candidate-with-external-vendor-jdbc-drivers)
+
+| Diagnostic | What to check |
+|---|---|
+| `JDBC_DRIVER_UNAVAILABLE` | The required JAR, read access, matching driver class and constructor accessibility. |
+| `JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED` | Replace the incompatible driver or dependency with a build that runs on Temurin 21. |
+| `JDBC_DRIVER_LINKAGE_INVALID` | Use the matching driver dependency set. Check for a missing transitive class or conflicting copies on the classpath. |
+
+Verified transport profiles include external Connector/J 8.4.0 for MySQL 8.4 TLS 1.3 and pgJDBC 42.7.14 for PostgreSQL 17.12 TLS with hostname and CA validation. Both retain the original CDC checkpoint across restart. Kingbase 9.0.1 has separate authentication, precision and native receipt recovery evidence. Use the product guides for the tested server and client security settings. [MySQL TLS](pipeline-v3.md) · [PostgreSQL TLS](postgresql-source.md) · [Kingbase JDBC](kingbase-v3.md)
+
 ### Target evidence on Temurin 21
 
 The profile records identify the exact database or broker, the bundled client or externally admitted driver and the verified recovery operations. Scope and test artifacts follow the linked product guide and evidence ledger.

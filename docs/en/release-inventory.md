@@ -89,11 +89,14 @@ classpath="$candidate:$mysql_driver:$gauss_driver:$gbase_driver:$kingbase_driver
 java -cp "$classpath" io.github.rivomesh.Main serve /etc/rivomesh/platform.yml
 ```
 
-Use the same launch classpath for the Agent or standalone pipeline. The Agent passes that classpath to its Workers. The offline acceptance checks the exact application JAR with an empty vendor classpath and again with all five operator files. It checks class origins, URL matching, the typed missing-driver error and the Dameng error classification.
+Use the same launch classpath for the Agent or standalone pipeline. The Agent passes that classpath to its Workers. The offline acceptance checks the exact application JAR with an empty vendor classpath and again with all five operator files. It checks service loading, exact class origins, URL routing, incompatible constructor or dependency errors and native Dameng error classification.
 
 ```sh
-java -cp "$candidate" tests/roles/ExternalVendorJdbcAcceptance.java
-java -cp "$classpath" tests/roles/ExternalVendorJdbcAcceptance.java \
+classes=target/jdbc-qualification
+mkdir -p "$classes"
+javac --release 21 -cp "$candidate" -d "$classes" tests/roles/ExternalVendorJdbcAcceptance.java
+java -cp "$candidate:$classes" io.github.rivomesh.ExternalVendorJdbcAcceptance
+java -cp "$classpath:$classes" io.github.rivomesh.ExternalVendorJdbcAcceptance \
   "$mysql_driver" "$gauss_driver" "$gbase_driver" "$kingbase_driver" "$dameng_driver"
 ```
 

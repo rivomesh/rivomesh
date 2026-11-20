@@ -26,20 +26,21 @@
     "71fc293"
   ],
   "currentSdd": {
-    "DONE": 40,
-    "PARTIAL": 8,
+    "DONE": 41,
+    "PARTIAL": 7,
     "NEW": 0
   },
   "nextTasks": [
-    "Complete JV-03 driver loading and security protocol qualification against its acceptance criteria."
+    "Continue SO-06 PostgreSQL source recovery and common-cut reconciliation."
   ],
-  "currentCandidateArtifact": "b150fb6d939a94398f54f27e782a1ed33a0d43506cafc98e8d7a7be9e2e84cc2",
-  "currentCandidateScope": "Temurin 21, MySQL 8.4.13 source, two Controllers and two Agents, separate PostgreSQL control and journal, PostgreSQL and MySQL targets. Native control rollback after parked writer and after Worker admission. Both SQL targets keep the original transaction cut and snapshot generation.",
+  "currentCandidateArtifact": "c768874ef7c83d83c9ec0160efe3ae35c1b9c7fbc83fdda89cc2567e9b9262cd",
+  "currentCandidateScope": "Temurin 21. External-vendor candidate verifies actual five-provider JDBC service loading and linkage errors, MySQL 8.4 and PostgreSQL 17 TLS and checkpoint recovery, and external Kingbase authentication and exact transaction recovery. Archived Dameng and Pulsar evidence is separately scoped.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "Published JV-02 with OceanBase reconnect and GBase 8c native acceptance.",
     "Accepted CP-04 with native MySQL and PostgreSQL source profiles, independent MySQL journal route loss and exact original-owner restart.",
-    "Accepted LG-05 with two native split-store recovery interruptions, exact fencing and candidate restart."
+    "Accepted LG-05 with two native split-store recovery interruptions, exact fencing and candidate restart.",
+    "Accepted JV-03 with five external JDBC providers and twenty native MySQL, PostgreSQL and Kingbase tests."
   ],
   "lastScheduledReportAt": "2026-11-20T08:58:16+08:00",
   "lastVerifiedReactor": {
@@ -82,7 +83,6 @@
   "remainingRequirements": [
     "SO-06",
     "SO-07",
-    "JV-03",
     "LG-01",
     "LG-03",
     "LG-04",
@@ -107,7 +107,6 @@
   "pausedRequirements": [
     "SO-06",
     "SO-07",
-    "JV-03",
     "LG-01",
     "LG-03",
     "LG-04",
@@ -127,9 +126,7 @@
     "2026-11-20T07:58:16+08:00"
   ],
   "currentFocusedVerification": {
-    "javaTestsPassed": 38,
-    "postgresTransactionChecksPassed": 3,
-    "handoffDomTestsPassed": 23,
-    "nativeSplitStoreChecksPassed": 19
+    "externalProvidersLoaded": 5,
+    "nativeSqlChecksPassed": 20
   }
 }

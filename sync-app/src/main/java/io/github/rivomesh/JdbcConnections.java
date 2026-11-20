@@ -1,14 +1,20 @@
 package io.github.rivomesh;
 
+import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
 import java.util.Properties;
 
 /** Select the requested driver explicitly when several PostgreSQL-protocol drivers coexist. */
 public final class JdbcConnections {
     private JdbcConnections(){}
+
+    public static final class DriverFailure extends SQLException {
+        private DriverFailure(String code,Throwable cause){super(code,"0A000",cause);}
+    }
+
     public static Connection open(String driver,String url,String username,String password)throws SQLException{
         try{
-            Driver instance=(Driver)Class.forName(driver).getDeclaredConstructor().newInstance();
+            Driver instance=Class.forName(driver).asSubclass(Driver.class).getDeclaredConstructor().newInstance();
             Properties properties=new Properties();if(username!=null)properties.setProperty("user",username);if(password!=null)properties.setProperty("password",password);
             Connection c;
             long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(8);
@@ -19,7 +25,21 @@ public final class JdbcConnections {
             }
             if(c==null)throw new SQLException("DRIVER_URL_MISMATCH","08001");
             if(driver.equals("org.postgresql.Driver")||driver.equals("io.github.rivomesh.gaussdb.jdbc.Driver"))try{postgresSession(c);}catch(SQLException e){c.close();throw e;}return c;
-        }catch(SQLException e){throw e;}catch(Exception e){throw new SQLException("JDBC_DRIVER_UNAVAILABLE","0A000",e);}
+        }catch(SQLException e){
+            throw e;
+        }catch(LinkageError error){
+            throw incompatibleDriver(error);
+        }catch(InvocationTargetException failure){
+            if(failure.getCause() instanceof LinkageError error)throw incompatibleDriver(error);
+            throw new DriverFailure("JDBC_DRIVER_UNAVAILABLE",failure);
+        }catch(Exception e){
+            throw new DriverFailure("JDBC_DRIVER_UNAVAILABLE",e);
+        }
+    }
+
+    private static DriverFailure incompatibleDriver(LinkageError failure){
+        return new DriverFailure(failure instanceof UnsupportedClassVersionError
+                ?"JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED":"JDBC_DRIVER_LINKAGE_INVALID",failure);
     }
     public static boolean localAutomaticServer(String driver,String url){return "org.h2.Driver".equals(driver)&&url!=null&&url.contains(";AUTO_SERVER=TRUE");}
     public static boolean automaticServerTransition(SQLException error){return error.getErrorCode()==90020||error.getErrorCode()==8000||error.getErrorCode()==90067;}

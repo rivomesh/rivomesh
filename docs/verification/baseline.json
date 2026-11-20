@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "JV-03",
+      "title": {
+        "zh-CN": "驱动隔离、依赖与安全协议兼容",
+        "en": "Driver isolation,dependencies and TLS compatibility"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "c768874ef7c83d83c9ec0160efe3ae35c1b9c7fbc83fdda89cc2567e9b9262cd",
+        "criteriaSha256": "0f5601dd5593ac66b6df0feb9ae4a6384398d754515346b343b2872fcacdc8b4",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21. External-vendor candidate verifies actual five-provider JDBC service loading and linkage errors, MySQL 8.4 and PostgreSQL 17 TLS and checkpoint recovery, and external Kingbase authentication and exact transaction recovery. Archived Dameng and Pulsar evidence is separately scoped."
+      }
+    },
+    {
       "id": "LG-05",
       "title": {
         "zh-CN": "可选存储和跨节点数据可达性",
@@ -14924,5 +14938,72 @@
     "sourceVersion": "8.4.13",
     "cleanupExitCode": 0,
     "reproduce": "python3 tests/global-control-pipeline.py --artifact /path/to/rivomesh.jar --output target/split-writer-native --separate-execution --automatic-placement --handoff-assessment --handoff-probe --handoff-custody --handoff-closed-receipts --handoff-preparation --handoff-managed-writer --handoff-staging --handoff-split-store --handoff-split-writer-transfer --source-expected-version 8.4.13"
+  },
+  "jv03Temurin21DriverQualification": {
+    "status": "PASS",
+    "artifactSha256": "c768874ef7c83d83c9ec0160efe3ae35c1b9c7fbc83fdda89cc2567e9b9262cd",
+    "profile": "external-vendor-jdbc",
+    "externalDriverEntryClassMajors": {
+      "com.mysql.cj.jdbc.Driver": 52,
+      "io.github.rivomesh.gaussdb.jdbc.Driver": 52,
+      "com.gbase8c.Driver": 52,
+      "com.kingbase8.Driver": 52,
+      "dm.jdbc.driver.DmDriver": 52
+    },
+    "maximumExternalDriverBaseClassMajor": 52,
+    "loaderLogSha256": "b8139bb6ac0429844dd37bc02efd970fc6805add615073e179e9e9e2f04ccd04",
+    "syntheticRefusals": [
+      "missing class",
+      "inaccessible constructor",
+      "missing dependency with IO cause",
+      "unsupported class version"
+    ],
+    "nativeProfiles": {
+      "MySQLTLS13": {
+        "manifestSha256": "38a8313e3f86e76fde296d2fc6f2f4f03a718aa9eb9df235136222065e92aa6b",
+        "checks": [
+          "The external package refuses preflight without Connector/J and accepts the scoped driver classpath",
+          "The packaged preflight verifies and refuses wrong source and target DNS identities",
+          "MySQL native session counters identify TLS 1.3 for the actual binlog and JDBC target channels",
+          "Exact generated and JSON data continue over verified TLS without a new snapshot",
+          "After SIGKILL the Worker reconnects securely from the original GTID and snapshot"
+        ],
+        "cleanupExitCode": 0,
+        "runtime": "21.0.13"
+      },
+      "PostgreSQLTLS": {
+        "manifestSha256": "c507bec309c1ddeae79922720e83db2fd4baa5d815a2ab8777061f17a1e0692a",
+        "checks": [
+          "The normal preflight refuses a mismatched source hostname and an untrusted target certificate",
+          "The native views confirm TLS 1.3 for the packaged logical replication and destination sessions",
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "Process restart re-establishes verified TLS and retains the original slot, snapshots and exact rows",
+          "The missing slot is refused and the last durable LSN remains available",
+          "Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint"
+        ],
+        "cleanupExitCode": 0,
+        "runtime": "21.0.13"
+      },
+      "KingbaseExternal": {
+        "manifestSha256": "8e72e23fb35d693a23aa7dafee336da6009d5951d0a877e3ece62d6f9cffbd93",
+        "checks": [
+          "KINGBASE_EXTERNAL_MISSING_DRIVER_ACCEPTED",
+          "KINGBASE_EXTERNAL_ORIGIN_AND_AUTH_ACCEPTED",
+          "KINGBASE_EXTERNAL_TYPES_AND_ATOMICITY_ACCEPTED",
+          "KINGBASE_EXTERNAL_OUTAGE_ACCEPTED",
+          "KINGBASE_EXTERNAL_RECONNECT_REPLAY_ACCEPTED"
+        ],
+        "cleanupExitCode": 0,
+        "runtime": [
+          "openjdk version \"21.0.13\" 2026-10-20 LTS",
+          "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+          "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+        ]
+      }
+    }
   }
 }

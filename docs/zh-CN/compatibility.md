@@ -39,6 +39,18 @@ V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引�
 上述源和目标档案仍对应各自的候选包与实测环境。早期运行时实验和 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix`、`postgresqlStoredGenerated` 等档案保留原制品摘要和复现命令。[验收清单](../verification/baseline.json) · [固定历史快照](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
 
 
+### Java 21 外置 JDBC 驱动
+
+五个已核验驱动包的入口类及基础字节码最高主版本为 52，对应 Java 8 的 class 文件格式。Rivomesh 固定使用 Temurin 21，服务加载和 URL 匹配均在该运行时验证。请在实际使用驱动的 Controller、Agent 或 Worker 上，以同一 classpath 执行连接检查。 [JVM class 文件版本](https://docs.oracle.com/javase/specs/jvms/se21/html/jvms-4.html#jvms-4.1) · [外置驱动打包](release-inventory.md)
+
+| 诊断码 | 排查项 |
+|---|---|
+| `JDBC_DRIVER_UNAVAILABLE` | 检查驱动 JAR、读取权限、驱动类及构造器访问权限。 |
+| `JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED` | 更换为能够在 Temurin 21 加载的驱动或依赖构建。 |
+| `JDBC_DRIVER_LINKAGE_INVALID` | 核对驱动依赖是否齐全，并检查 classpath 上的重复或冲突版本。 |
+
+已验收外置 Connector/J 8.4.0 的 MySQL 8.4 TLS 1.3，以及 pgJDBC 42.7.14 的 PostgreSQL 17.12 域名与 CA 验证。两种档案在重启后均沿用原 CDC 断点。金仓 9.0.1 另有原生认证、精度和回执续传证据。各产品手册列出实际验证的服务端和客户端安全配置。 [MySQL TLS](pipeline-v3.md) · [PostgreSQL TLS](postgresql-source.md) · [金仓 JDBC](kingbase-v3.md)
+
 ### Temurin 21 目标产品实测档案
 
 下表登记数据库或 Broker 版本、内置客户端或外置驱动及已验收的恢复操作。各行的制品和验收范围以产品手册和证据清单为准。
