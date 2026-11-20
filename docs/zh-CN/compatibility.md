@@ -12,7 +12,7 @@
 | `MYSQL` 8.0.46 | Temurin 21 单机及三节点单主组复制到两个 SQL 目标。异步 GTID 升主通过 PostgreSQL 目标验收。 | [同步配置](pipeline-v3.md)、[恢复手册](reconciliation-workflow.md) |
 | `MYSQL` 8.2.0 | Temurin 21 单机及三节点单主组复制到两个 SQL 目标。异步 GTID 升主通过 PostgreSQL 目标验收。 | [版本专项命令](pipeline-v3.md) |
 | `MYSQL` 8.4.13 | Temurin 21 单机、异步 GTID 升主及三节点单主组复制到两个 SQL 目标。binlog 准入及组复制旧主只读返回另有实库验证。 | [8.4 binlog 档案](pipeline-v3.md) |
-| `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝，共同点对账待验收。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
+| `POSTGRESQL` 17.12 | Temurin 21 实验档案。同步槽切主后自动续传，误指回旧时间线时拒绝。PostgreSQL 和 MySQL 两个目标通过同一 WAL 切点对账，并从原逻辑槽续传。 | [源指南](postgresql-source.md)、[任务样例](../../config/postgresql-source-v3.yml) |
 | `POSTGRESQL` 18.7 | Temurin 21 实验档案。发布存储型生成列，PostgreSQL 17.12 目标物化为普通列。 | [源指南与发布](postgresql-source.md) |
 | `ORACLE` 26ai Free 23.26.4.0.0 | Temurin 21，需单独提供 Oracle JDBC 驱动。单 PDB Flashback 与单线程归档增量到 PostgreSQL 已通过。RAC 和源切主待验收。 | [预检权限与恢复](oracle-source.md)、[V3 样例](../../config/oracle-source-v3.yml) |
 

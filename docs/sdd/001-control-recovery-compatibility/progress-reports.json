@@ -2,12 +2,12 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-20T08:58:52+08:00",
-  "nextReportAt": "2026-11-20T09:58:16+08:00",
+  "lastReportAt": "2026-11-20T09:58:25+08:00",
+  "nextReportAt": "2026-11-20T10:58:16+08:00",
   "completedSincePrevious": [
-    "RC-10 accepted and published with native receipts, single-node opt-in RabbitMQ retained stream, and H2 plus external MySQL and PostgreSQL retention.",
-    "JV-02 acceptance passed for Temurin 21.0.12.1 with real MySQL 8.4.13, PostgreSQL 17.12, OceanBase CE 4.3.5.6 MySQL mode and GBase 8c B19 PG mode.",
-    "OceanBase now preserves the network failure through its probe. The native stop and restart resumed the original backlog, and the focused Java build passed 25 checks."
+    "CP-04: Verified external journal placement and original Agent outage recovery. Published 57adbe7.",
+    "LG-05: Accepted managed handoff across separate PostgreSQL stores and automatic recovery after two control commit interruptions. Published 6258be3.",
+    "JV-03: Accepted five external JDBC providers with native MySQL and PostgreSQL TLS and Kingbase restart recovery. Published 9cac6d7."
   ],
   "inProgress": [],
   "reportContents": [
@@ -18,31 +18,30 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 38,
-    "PARTIAL": 10,
-    "NEW": 0
-  },
-  "lastReportedPublishedCommits": [
-    "71fc293"
-  ],
-  "currentSdd": {
     "DONE": 41,
     "PARTIAL": 7,
     "NEW": 0
   },
-  "nextTasks": [
-    "Continue SO-06 PostgreSQL source recovery and common-cut reconciliation."
+  "lastReportedPublishedCommits": [
+    "57adbe7",
+    "6258be3",
+    "9cac6d7"
   ],
-  "currentCandidateArtifact": "c768874ef7c83d83c9ec0160efe3ae35c1b9c7fbc83fdda89cc2567e9b9262cd",
-  "currentCandidateScope": "Temurin 21. External-vendor candidate verifies actual five-provider JDBC service loading and linkage errors, MySQL 8.4 and PostgreSQL 17 TLS and checkpoint recovery, and external Kingbase authentication and exact transaction recovery. Archived Dameng and Pulsar evidence is separately scoped.",
+  "currentSdd": {
+    "DONE": 42,
+    "PARTIAL": 6,
+    "NEW": 0
+  },
+  "nextTasks": [
+    "Continue LG-08 on reviewed historical schema migration and current-state recovery."
+  ],
+  "currentCandidateArtifact": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
+  "currentCandidateScope": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Published JV-02 with OceanBase reconnect and GBase 8c native acceptance.",
-    "Accepted CP-04 with native MySQL and PostgreSQL source profiles, independent MySQL journal route loss and exact original-owner restart.",
-    "Accepted LG-05 with two native split-store recovery interruptions, exact fencing and candidate restart.",
-    "Accepted JV-03 with five external JDBC providers and twenty native MySQL, PostgreSQL and Kingbase tests."
+    "Accepted SO-06 with PostgreSQL 17.12 two-target common-cut validation and PostgreSQL 18.7 native generated columns and restart."
   ],
-  "lastScheduledReportAt": "2026-11-20T08:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-20T09:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "1fc8100",
     "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
@@ -81,7 +80,6 @@
     "priorReportCommit": "3aa4b0d1b410e9c1afd91f271bec978d419f1e6f"
   },
   "remainingRequirements": [
-    "SO-06",
     "SO-07",
     "LG-01",
     "LG-03",
@@ -105,7 +103,6 @@
     "scope": "Full Temurin 21 release reactor and exact browser/configuration checks."
   },
   "pausedRequirements": [
-    "SO-06",
     "SO-07",
     "LG-01",
     "LG-03",
@@ -126,7 +123,7 @@
     "2026-11-20T07:58:16+08:00"
   ],
   "currentFocusedVerification": {
-    "externalProvidersLoaded": 5,
-    "nativeSqlChecksPassed": 20
+    "pgOutputUnitChecksPassed": 12,
+    "nativeSourceChecksPassed": 12
   }
 }

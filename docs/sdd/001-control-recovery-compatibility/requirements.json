@@ -1098,14 +1098,14 @@
       "id": "SO-06",
       "epic": "SOURCE",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "PostgreSQL 源适配器",
         "en": "PostgreSQL source adapter"
       },
       "gap": {
-        "zh-CN": "Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 PostgreSQL 17.12 扩展 NUMERIC 标度已实测 PostgreSQL 和 MySQL 双目标，涉及源端舍入、65 位精度、无主键重数及 NaN 整笔暂停。 PostgreSQL 17.12 的有限 REAL 与 DOUBLE PRECISION 已实测映射到 PostgreSQL 和 MySQL。相邻浮点、次正规数、无主键重复及原位重启保留值。非有限值阻断整笔事务。 PostgreSQL 17.12 BYTEA 双 SQL 目标已验证 NULL、空值、原字节、无主键重数及 16/32 KiB 外置 TOAST，Worker 强杀后保留逻辑槽、快照和回执代次。",
-        "en": "Temurin 21 verified PostgreSQL 17.12 logical slot promotion, UUID and two-target DATE, microsecond timestamp and TIME(6) recovery, plus 18.7 stored generated columns. Further types, dynamic DDL and common-cut verification remain. A native read-only comparison shows the current PostgreSQL publication while capture stays at the pre-change LSN. PostgreSQL 17.12 extended NUMERIC scales passed PostgreSQL and MySQL native delivery, including source rounding, 65 digits, keyless multiplicity and whole-transaction refusal of NaN. Finite PostgreSQL 17.12 REAL and DOUBLE PRECISION passed with PostgreSQL and MySQL targets. Adjacent values, subnormals, keyless duplicates and restart preserve values. Non-finite values block the whole transaction. PostgreSQL 17.12 BYTEA passes both SQL targets for NULL, empty values, exact bytes, keyless multiplicity and 16/32 KiB out-of-line TOAST. Worker SIGKILL retains the slot, snapshots and receipt generation."
+        "zh-CN": "Temurin 21 限定源档案已验收。PostgreSQL 17.12 通过逻辑槽切主、槽或 WAL 缺失拒绝、双目标有键和无主键 CDC、精确类型及同一 WAL 切点对账。实库验证受限账号拒绝、两目标原生回执、校验结果及进程重启后按原槽续传。PostgreSQL 18.7 的原生存储型生成列、NULL、JSONB 和原快照恢复通过当前包。已验收结构漂移暂停及界面审阅。历史 DDL 执行按 LG-08 验收，各新增目标需独立核对类型和回执。",
+        "en": "Accepted the bounded Temurin 21 source profile. PostgreSQL 17.12 covers synchronized-slot promotion, refusal after lost WAL or slot, keyed and keyless CDC, precise types and common-cut comparison of PostgreSQL and MySQL. The native run proves scoped lock refusal, both target receipts, durable validation and restart on the original slot. The current package also verifies PostgreSQL 18.7 stored generated columns, NULL, JSONB and snapshot retention. Schema drift pauses and can be reviewed. Historical DDL execution follows LG-08 and any added sink needs its own projection and recovery qualification."
       },
       "acceptance": {
         "zh-CN": "完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。",
@@ -1122,8 +1122,16 @@
         "tests/postgres-source-run.py",
         "docs/verification/baseline.json",
         "sync-app/src/main/java/io/github/rivomesh/PostgresTimestamp.java",
-        "sync-app/src/main/java/io/github/rivomesh/PostgresClock.java"
-      ]
+        "sync-app/src/main/java/io/github/rivomesh/PostgresClock.java",
+        "sync-app/src/main/java/io/github/rivomesh/PostgresConsistentRead.java",
+        "sync-app/src/test/java/io/github/rivomesh/PgOutputTest.java"
+      ],
+      "verification": {
+        "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
+        "criteriaSha256": "2747f263cc3c77f20ab91cee11c8b90572a619237327d17e03661ed7032630b0",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review."
+      }
     },
     {
       "id": "SO-07",

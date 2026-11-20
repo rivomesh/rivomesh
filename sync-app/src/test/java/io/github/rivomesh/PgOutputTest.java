@@ -208,6 +208,35 @@ class PgOutputTest {
         assertEquals(Codec.encode(inconsistent),Codec.encode(offset));
     }
 
+    @Test void onlyAFlushedMarkerForThisSlotCreatesAValidationBarrier()throws Exception{
+        PgOutput decoder=new PgOutput(positions,"generation",10,Collections.emptyMap(),8);
+        String own=positions.validationMessagePrefix();
+        assertNull(decoder.accept(logicalMessage(false,9,"another.application",PgOutput.VALIDATION_MESSAGE)));
+        assertNull(decoder.accept(logicalMessage(false,10,own,"another-purpose")));
+        assertNull(decoder.accept(frame('B',out->{out.writeLong(16);out.writeLong(0);out.writeInt(7);})));
+        assertNull(decoder.accept(logicalMessage(true,12,own,PgOutput.VALIDATION_MESSAGE)));
+        assertNull(decoder.accept(frame('C',out->{out.writeByte(0);out.writeLong(16);out.writeLong(17);out.writeLong(0);})));
+        SourceTransaction barrier=decoder.accept(logicalMessage(false,18,own,PgOutput.VALIDATION_MESSAGE));
+        assertEquals(SourceTransaction.Kind.DATA,barrier.kind);
+        assertEquals("true",barrier.attributes.get("postgresqlCommonCut"));
+        assertEquals("pg:0/12",barrier.id);
+        assertEquals(18,positions.lsn(barrier.position));
+        assertTrue(barrier.changes.isEmpty());
+        assertNull(decoder.accept(logicalMessage(false,18,own,PgOutput.VALIDATION_MESSAGE)));
+    }
+
+    private static ByteBuffer logicalMessage(boolean transactional,long lsn,String prefix,String content)throws Exception{
+        return frame('M',out->{
+            out.writeByte(transactional?1:0);
+            out.writeLong(lsn);
+            out.write(prefix.getBytes(StandardCharsets.US_ASCII));
+            out.writeByte(0);
+            byte[] bytes=content.getBytes(StandardCharsets.US_ASCII);
+            out.writeInt(bytes.length);
+            out.write(bytes);
+        });
+    }
+
     private SourceTransaction timedCommit(long beginMicros,long commitMicros)throws Exception{
         PgOutput decoder=new PgOutput(positions,"generation",10,Collections.emptyMap(),8);
         decoder.accept(frame('B',out->{out.writeLong(16);out.writeLong(beginMicros);out.writeInt(7);}));

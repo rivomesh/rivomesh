@@ -52,7 +52,7 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | SO-03 | P1 / DONE | MySQL 8.0 当前V3能力补验 | MySQL 8.0.46 的当前 V3 单机、GTID 主从、单主组复制以及跨节点补偿和修正已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-04 | P1 / DONE | MySQL 8.2 新增兼容与验收 | MySQL 8.2.0 的 Java 8 V3 单机、GTID 主从与单主组复制档案已验收。Java 21 其余组合由 JV-02 跟踪。 |
 | SO-05 | P1 / DONE | MySQL 8.4 扩展兼容与回归 | MySQL 8.4.13 的 V3 三种拓扑、GTID/ROW/FULL 及拒绝档案已验收。其他目标组合由对应矩阵跟踪。 |
-| SO-06 | P1 / PARTIAL | PostgreSQL 源适配器 | Temurin 21 已实测 PostgreSQL 17.12 逻辑槽切主、UUID、DATE 、微秒时间戳和 TIME(6) 双目标续传，以及 18.7 存储型生成列。更多类型、动态 DDL 和多目标共同对账点待验。 从逻辑槽停在结构变化前的 LSN 时，已实测当前 PostgreSQL 发布的只读结构差异。 PostgreSQL 17.12 扩展 NUMERIC 标度已实测 PostgreSQL 和 MySQL 双目标，涉及源端舍入、65 位精度、无主键重数及 NaN 整笔暂停。 PostgreSQL 17.12 的有限 REAL 与 DOUBLE PRECISION 已实测映射到 PostgreSQL 和 MySQL。相邻浮点、次正规数、无主键重复及原位重启保留值。非有限值阻断整笔事务。 PostgreSQL 17.12 BYTEA 双 SQL 目标已验证 NULL、空值、原字节、无主键重数及 16/32 KiB 外置 TOAST，Worker 强杀后保留逻辑槽、快照和回执代次。 |
+| SO-06 | P1 / DONE | PostgreSQL 源适配器 | Temurin 21 限定源档案已验收。PostgreSQL 17.12 通过逻辑槽切主、槽或 WAL 缺失拒绝、双目标有键和无主键 CDC、精确类型及同一 WAL 切点对账。实库验证受限账号拒绝、两目标原生回执、校验结果及进程重启后按原槽续传。PostgreSQL 18.7 的原生存储型生成列、NULL、JSONB 和原快照恢复通过当前包。已验收结构漂移暂停及界面审阅。历史 DDL 执行按 LG-08 验收，各新增目标需独立核对类型和回执。 |
 | SO-07 | P1 / PARTIAL | Oracle 源适配器 | Oracle 26ai 单 PDB 到 PostgreSQL 已验证长事务、原 SCN 续传、严格文本 JSON、DATE 和显式启用的有界整数虚拟列乘法、加法及减法。无主键重复行、SQL NULL 和原快照归档重放通过。其他表达式、原生二进制 JSON、LOB 和 RAC 故障切换待验。 Oracle Free 已验证 BasicFiles 和 SecureFiles 更新的 LogMiner 记录缺少可靠 LOB 前镜像，受限账号预检分别返回对应原因。LOB 数据采集仍待完整镜像方案。 嵌套保存点和回滚在实库归档中已核对。两路 PostgreSQL 订阅在进程强杀后沿用原快照和 SCN，提交行与同 SCN 的 Flashback 一致。 Oracle Free 26ai 原生 JSON 档案已实测缺少前后镜像。受限 JDBC Flashback 能读取，当前源预检拒绝该类型，尚无可靠增量档案。 AL32UTF8 和 AL16UTF16 实库诊断已核对 40 个变更及 60 个镜像。声明不超过 4000 字节的 CHAR、NCHAR 和 NVARCHAR2 已通过两路 PostgreSQL 重启验收，保留原 SCN 和填充空格。 |
 
 ## Java运行时兼容

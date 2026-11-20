@@ -26,7 +26,7 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
-- 共同点对账、更多目标与切换档案继续由 SO-06 跟踪。
+- PostgreSQL 与 MySQL 目标支持下文的同一切点对账。其他目标需要单独验收源与目标组合。历史 DDL 执行由 LG-08 跟踪。
 
 ### 精确小数
 
@@ -63,6 +63,16 @@ PostgreSQL `REAL` 和 `DOUBLE PRECISION` 分别映射成 PostgreSQL 目标的同
 当前构建与夹具统一使用 Temurin 21。早期多版本测试记录按原候选包留档。[验收记录](../verification/README.md#postgresql-source-runtime-matrix)
 
 PostgreSQL 18.7 到 PostgreSQL 17.12 在 Temurin 21 下通过八项实库检查，覆盖有主键和无主键更新后的存储型生成列、目标普通列，以及发布遗漏生成列的拒绝行为。复现时追加 `--source-image postgres:18 --generated`。[生成列发布](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+
+## 在同一 WAL 切点对账 PostgreSQL 和 MySQL
+
+设置 `source.postgresql.commonCutValidation: true`，再使用新配置重启 Worker。除原有复制和读权限外，源账号还需对发布表取得 `SHARE` 锁的权限。PostgreSQL 17 和 18 可仅对显式发布的表授予 `MAINTAIN`。该账号也需要执行 `pg_logical_emit_message(boolean,text,text,boolean)`。 [PostgreSQL 表锁](https://www.postgresql.org/docs/17/sql-lock.html) · [WAL 逻辑消息](https://www.postgresql.org/docs/17/functions-admin.html#FUNCTIONS-REPLICATION)
+
+进入任务详情，选择 **校验** 和 PostgreSQL、MySQL 两个订阅。Rivomesh 短时阻止发布表写入，建立同一份可重复读视图，并写入当前复制槽对应的 WAL 标记。两目标追到该 LSN 后，系统持久暂停投递，再释放源写入限制。报告基于已固定的源视图和目标切点生成。查看结果后点击 **恢复**，沿用原逻辑槽投递之后的事务。
+
+缺少表锁权限时报告 `POSTGRESQL_COMMON_CUT_PRIVILEGE_REQUIRED`。授权后先核对任务期望状态和日志运行状态，再按需启动。未能在时限内建立表锁、快照或追平目标时，查看回执后提交新的校验请求。WAL 标记只携带校验用途，数据范围由当前发布定义决定。
+
+使用[实库夹具](../../tests/postgres-source-run.py)和 `--source-image postgres:17.12 --common-cut` 复现 PostgreSQL 和 MySQL 双目标对账。
 
 ## 验证 TLS 连接
 

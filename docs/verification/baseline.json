@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "SO-06",
+      "title": {
+        "zh-CN": "PostgreSQL 源适配器",
+        "en": "PostgreSQL source adapter"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
+        "criteriaSha256": "2747f263cc3c77f20ab91cee11c8b90572a619237327d17e03661ed7032630b0",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review."
+      }
+    },
+    {
       "id": "JV-03",
       "title": {
         "zh-CN": "驱动隔离、依赖与安全协议兼容",
@@ -15005,5 +15019,47 @@
         ]
       }
     }
+  },
+  "postgresqlNativeCommonCutAndGeneratedRecovery": {
+    "status": "PASS",
+    "artifactSha256": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
+    "pgOutputUnitChecks": 12,
+    "harnessSha256": "829c6018db67a1c49010fa9793086130c80d528f7c5435b114adf9512543c7c7",
+    "nativeProfiles": {
+      "PostgreSQL17CommonCut": {
+        "manifestSha256": "54728e6486face27c7680006117b95798b3cd0f5c9eef143142d04d448117140",
+        "checks": [
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "The read-only capture role requires an explicit source table lock grant for shared-cut validation",
+          "The flushed publication marker pins an exact LSN for all source tables and both native target receipts",
+          "Abrupt restart keeps the validation receipt and both targets resume from the same slot and original snapshots"
+        ],
+        "cleanupExitCode": 0,
+        "runtimeVersion": "21.0.13",
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de"
+      },
+      "PostgreSQL18Generated": {
+        "manifestSha256": "8267003d5610d60e134593220a7316726517af8d47266c40387682896d4ce367",
+        "checks": [
+          "PostgreSQL 18 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Native stored generated columns materialize keyed and keyless updates, and missing publication coverage is refused",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "The missing slot is refused and the last durable LSN remains available",
+          "Capture recovery explains the missing slot and affected subscriptions while retaining the checkpoint"
+        ],
+        "cleanupExitCode": 0,
+        "runtimeVersion": "21.0.13",
+        "sourceVersion": "18.7 (Debian 18.7-1.pgdg13+2)",
+        "sourceImageId": "sha256:4ad5d66c7ff7413c0578fa4a54b9629b804d56ed4802b5d6cb9be5862badd461"
+      }
+    },
+    "reproduce": [
+      "python3 tests/postgres-source-run.py --artifact /path/to/rivomesh.jar --source-image postgres:17.12 --common-cut --output target/native-common-cut",
+      "python3 tests/postgres-source-run.py --artifact /path/to/rivomesh.jar --source-image postgres:18 --generated --output target/native-postgres18-generated"
+    ]
   }
 }

@@ -30,7 +30,8 @@ final class PgOutput {
     private final Map<Integer,TableSchema> schemas;
     private final Set<Integer> announced=new HashSet<>();
     private final List<Change> changes=new ArrayList<>();
-    private boolean open;
+    static final String VALIDATION_MESSAGE="common-cut-v1";
+    private boolean open,transactionalMessage;
     private long finalLsn,lastCommit,transactionBytes,beginCommitMicros;
 
     PgOutput(PostgresSourcePosition positions,String generation,int maxRows,
@@ -48,6 +49,7 @@ final class PgOutput {
         switch(message){
             case 'B':begin(frame);break;
             case 'C':committed=commit(frame);break;
+            case 'M':committed=message(frame);break;
             case 'R':relation(frame);break;
             case 'I':case 'U':case 'D':row(frame,message);break;
             case 'T':throw schemaFailure("POSTGRESQL_TRUNCATE_REQUIRES_PLAN");
@@ -63,6 +65,7 @@ final class PgOutput {
         beginCommitMicros=frame.getLong();
         frame.getInt(); // xid can wrap and is not the durable transaction identifier
         transactionBytes=0;
+        transactionalMessage=false;
         open=true;
     }
 
@@ -88,7 +91,35 @@ final class PgOutput {
         lastCommit=end;
         changes.clear();
         open=false;
-        return tx;
+        return transactionalMessage&&tx.changes.isEmpty()?null:tx;
+    }
+
+    private SourceTransaction message(ByteBuffer frame)throws Exception{
+        int transactional=Byte.toUnsignedInt(frame.get());
+        if(transactional>1||transactional==1&&!open)throw invalid("POSTGRESQL_PGOUTPUT_LOGICAL_MESSAGE_INVALID");
+        long lsn=frame.getLong();
+        int prefixStart=frame.position();
+        while(frame.get()!=0){/* skip a prefix without allocating or decoding an unrelated message */}
+        int prefixEnd=frame.position()-1;
+        String expected=positions.validationMessagePrefix();
+        boolean matches=prefixEnd-prefixStart==expected.length();
+        for(int i=0;matches&&i<expected.length();i++)matches=frame.get(prefixStart+i)==expected.charAt(i);
+        int size=frame.getInt();
+        if(size!=frame.remaining())throw invalid("POSTGRESQL_PGOUTPUT_LOGICAL_MESSAGE_INVALID");
+        if(transactional==1)transactionalMessage=true;
+        boolean cut=transactional==0&&matches&&size==VALIDATION_MESSAGE.length();
+        for(int i=0;cut&&i<size;i++)cut=frame.get(frame.position()+i)==VALIDATION_MESSAGE.charAt(i);
+        frame.position(frame.limit());
+        if(!cut||Long.compareUnsigned(lsn,lastCommit)<=0)return null;
+        if(open)throw invalid("POSTGRESQL_PGOUTPUT_LOGICAL_MESSAGE_INVALID");
+        SourceTransaction barrier=new SourceTransaction();
+        barrier.id=PostgresSourcePosition.transaction(lsn);
+        barrier.streamGeneration=generation;
+        barrier.position=positions.at(lsn);
+        // Like an empty source commit, the marker must advance the durable capture position.
+        barrier.attributes.put("postgresqlCommonCut","true");
+        lastCommit=lsn;
+        return barrier;
     }
 
     private void relation(ByteBuffer frame)throws Exception{

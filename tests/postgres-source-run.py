@@ -33,6 +33,7 @@ type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
+type_profile.add_argument('--common-cut', action='store_true', help='Verify one PostgreSQL validation cut in both native SQL targets')
 parser.add_argument('--bytea-escape-output', action='store_true', help='Use escape as the source server BYTEA output default')
 parser.add_argument('--previous-numeric-artifact', type=Path,
                     help='Check a prior release against the same native numeric declarations before the candidate')
@@ -47,7 +48,7 @@ parser.add_argument('--reject-old-primary', action='store_true',
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
-dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values
+dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values or args.common_cut
 if args.bytea_escape_output and not args.bytea_values:
     parser.error('--bytea-escape-output requires --bytea-values')
 if args.bytea_values and (args.generated or args.failover):
@@ -58,6 +59,8 @@ if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
 if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
+if args.common_cut and (args.failover or args.generated or args.uuid):
+    parser.error('--common-cut uses the direct three-table publication profile')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -144,6 +147,10 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                                 username='postgres',password='${RM_PG_PASSWORD}',mappings=dict(sales='copy_sales',billing='copy_billing'),
                                 metadataSchema='copy_meta')],
                   journal=dict(mode='LOCAL'),chunkSize=1,pollIntervalMillis=100,retryDelayMillis=200,leaseMillis=5000,heartbeatMillis=300)
+    if args.common_cut:
+        pipeline['source']['username']='capture_fixture'
+        pipeline['source']['postgresql']['commonCutValidation']=True
+        report.update(commonCut=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     if args.failover:
         pipeline['source']['postgresql'].update(
             failoverSlot=True,url='jdbc:postgresql://source-rw:5432/sync_test?connectTimeout=3&socketTimeout=15')
@@ -501,6 +508,10 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
             WITH (publish='insert,update,delete');
         """)
+        if args.common_cut:
+            sql('source',"CREATE ROLE capture_fixture LOGIN REPLICATION PASSWORD '"+environment['RM_PG_PASSWORD']+"'; "
+                         "GRANT USAGE ON SCHEMA sales,billing TO capture_fixture; "
+                         "GRANT SELECT ON ALL TABLES IN SCHEMA sales,billing TO capture_fixture")
         if args.ddl_review:
             sql('source', 'ALTER TABLE billing.ledger ADD COLUMN observed TIMESTAMP')
         if args.uuid:
@@ -665,7 +676,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
             passed('The prior runtime refuses the valid publication containing both extended numeric scales')
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=3+int(args.uuid)+2*int(dual_targets)
+        table_count=3+int(args.uuid)+2*int(dual_targets and not args.common_cut)
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -700,6 +711,63 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
             dual_target_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+        if args.common_cut:
+            def validate(expected):
+                result=http(route+'/actions',dict(action='VALIDATE',expectedRevision=task()['revision'],
+                    validation={'targets':['pg','mysql'],'gateMillis':10000,'sourceMillis':20000,'targetMillis':20000}))
+                operation_id=result['operations'][-1]['id']
+                def completed():
+                    row=next((row for row in task()['operations'] if row['id']==operation_id),{})
+                    return row if row.get('status') in ('SUCCEEDED','FAILED') else None
+                row=require(completed,'common cut operation finishes')
+                assert row['status']==expected,row
+                return row
+
+            require(lambda: mysql('SELECT COUNT(*) FROM copy_sales.duplicates')=='2','native MySQL snapshot')
+            initial_cut=task()['status']['capture_lsn']
+            refused=validate('FAILED')
+            assert refused['code']=='POSTGRESQL_COMMON_CUT_PRIVILEGE_REQUIRED',refused
+            assert task()['status']['capture_lsn']==initial_cut
+            sql('source','GRANT MAINTAIN ON ALL TABLES IN SCHEMA sales,billing TO capture_fixture')
+            http(route+'/actions',dict(action='START',expectedRevision=task()['revision']))
+            require(lambda:sql('source',"SELECT active FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='t',
+                    'source Worker resumes after the refused validation')
+            passed('The read-only capture role requires an explicit source table lock grant for shared-cut validation')
+            sql('source',"SELECT pg_logical_emit_message(false,'another.application','unpublished',true)")
+            sql('source',"SELECT pg_logical_emit_message(true,'another.application','transactional')")
+            sql('source',"UPDATE billing.ledger SET label='ready for common cut' WHERE id=1")
+            require(lambda:sql('target','SELECT label FROM copy_billing.ledger')==mysql('SELECT label FROM copy_billing.ledger')
+                    =='ready for common cut','published change reaches both targets')
+            previous=task()['status']['capture_lsn']
+            validation=validate('SUCCEEDED')
+            verified=http(route+'/validations/'+validation['validation']['reportId'])
+            assert verified['code']=='VALIDATION_MATCH' and len(verified['results'])==6,verified.get('code')
+            parked=task()
+            assert parked['desired']=='PAUSED' and parked['status']['run_state']=='PAUSED'
+            captured=parked['status']['capture_lsn']
+            assert captured!=previous
+            statement="SELECT transaction_id FROM copy_meta.rm3_sink_job WHERE pipeline_id='postgres_source'"
+            assert sql('target',statement)==mysql(statement)=='pg:'+captured
+            passed('The flushed publication marker pins an exact LSN for all source tables and both native target receipts')
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"INSERT INTO billing.ledger VALUES (2,'after cut')")
+            compose('up','-d','runner')
+            prior_report=verified['id']
+            require(lambda:task().get('status',{}).get('capture_lsn')==captured and task().get('desired')=='PAUSED',
+                    'runner recovers the validated position after abrupt exit')
+            assert http(route+'/validations/'+prior_report)['code']=='VALIDATION_MATCH'
+            parked=task()
+            assert sql('target','SELECT COUNT(*) FROM copy_billing.ledger')==mysql('SELECT COUNT(*) FROM copy_billing.ledger')=='1'
+            http(route+'/actions',dict(action='RESUME',expectedRevision=parked['revision'],errorCount=parked['status']['error_count']))
+            require(lambda:sql('target','SELECT COUNT(*) FROM copy_billing.ledger')==mysql('SELECT COUNT(*) FROM copy_billing.ledger')=='2',
+                    'both SQL targets resume the WAL after the original anchored snapshot')
+            assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
+            assert mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==mysql_snapshots
+            assert sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")==dual_target_slot
+            passed('Abrupt restart keeps the validation receipt and both targets resume from the same slot and original snapshots')
+            assert hashlib.sha256(artifact.read_bytes()).hexdigest()==digest
+            report['status']='PASS'
+            raise SystemExit(0)
         if args.bytea_values:
             types=("SELECT data_type FROM information_schema.columns WHERE table_schema='copy_billing' "
                    "AND table_name='bytea_key' AND column_name='data'")

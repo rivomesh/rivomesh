@@ -26,7 +26,7 @@ The PostgreSQL source uses pgJDBC 42.7.14 with automatic flush advancement disab
 - PostgreSQL 18 stored generated columns can be materialized as ordinary destination columns when the publication includes them. Use `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)` and retain `REPLICA IDENTITY FULL`. PostgreSQL 17 generated columns, PostgreSQL 18 virtual generated columns, publication filters, partition routing, TRUNCATE and automatic DDL migration require separate profiles. Preflight or capture reports unsupported relation changes and types.
 - Restart uses the existing LSN and snapshot when the original primary, timeline, slot and journal remain available. Resume a failed target subscription after addressing its SQL error.
 - With `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE`, retain the old journal and record the last captured LSN. Evaluate whether the original slot and required WAL can be recovered. If needed, rebuild through a new pipeline and a reviewed destination scope.
-- SO-06 continues to track common-cut validation and additional target, promotion and driver profiles.
+- PostgreSQL and MySQL destinations support common-cut validation in the bounded profile below. Additional targets require qualification for the PostgreSQL source. Historical DDL application follows the LG-08 schema migration requirement.
 
 ### Exact numeric values
 
@@ -63,6 +63,16 @@ Add `--source-image postgres:17.12 --clock-values` to verify both SQL destinatio
 Use Temurin 21 for current builds and fixtures. Earlier cross-runtime results are archived with their exact artifact. [Verification record](../verification/README.md#postgresql-source-runtime-matrix)
 
 PostgreSQL 18.7 with PostgreSQL 17.12 as the destination passed eight Temurin 21 checks. The fixture covers stored generated values on keyed and keyless updates, materialization at the destination and omission from the publication. Add `--source-image postgres:18 --generated` to reproduce. [Generated column publication](https://www.postgresql.org/docs/18/logical-replication-gencols.html)
+
+## Compare PostgreSQL and MySQL targets at one WAL cut
+
+Use `source.postgresql.commonCutValidation: true` and restart the Worker with the updated configuration. In addition to the ordinary replication and read grants, the source login needs permission to take a `SHARE` lock on the published tables. On PostgreSQL 17 and 18, grant `MAINTAIN` on the explicitly published tables. The login also needs to execute `pg_logical_emit_message(boolean,text,text,boolean)`. [PostgreSQL table locks](https://www.postgresql.org/docs/17/sql-lock.html) · [WAL logical message](https://www.postgresql.org/docs/17/functions-admin.html#FUNCTIONS-REPLICATION)
+
+In task details, select **Validate** and choose the PostgreSQL and MySQL subscriptions. Rivomesh holds a bounded write gate on the publication tables, opens one repeatable-read source view and flushes a logical message scoped to the slot. It waits for both selected target receipts at the exact message LSN. After the pipeline enters the durable validation pause, source writes can continue while the report scans the saved source view and both targets. Use **Resume** after reviewing the report to apply subsequent source commits from the original slot.
+
+A missing lock grant is reported as `POSTGRESQL_COMMON_CUT_PRIVILEGE_REQUIRED`. Check the retained task intent and journal state before restarting. If the table lock, snapshot or target drain cannot be established within the requested limits, inspect the operation receipt and use a new validation request. The logical marker carries no row data. The configured publication remains the comparison scope.
+
+Use the [native fixture](../../tests/postgres-source-run.py) with `--source-image postgres:17.12 --common-cut` to reproduce the PostgreSQL and MySQL comparison.
 
 ## Verified TLS connections
 

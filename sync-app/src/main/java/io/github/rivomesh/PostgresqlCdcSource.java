@@ -104,7 +104,7 @@ final class PostgresqlCdcSource implements SourceAdapter {
         }
     }
 
-    private Connection sql()throws Exception{
+    Connection sql()throws Exception{
         return JdbcConnections.open(DRIVER,options.url,config.username,config.password);
     }
 
@@ -219,46 +219,58 @@ final class PostgresqlCdcSource implements SourceAdapter {
     @Override public boolean covers(SourcePosition captured,SourcePosition required){return positions.covers(captured,required);}
 
     @Override public List<TableSchema> discover()throws Exception{
-        Map<Integer,TableSchema> found=new LinkedHashMap<>();
-        Set<String> observed=new TreeSet<>();
         try(Connection c=sql()){
             c.setReadOnly(true);
             c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
             c.setAutoCommit(false);
-            try(PreparedStatement p=c.prepareStatement("SELECT puballtables,pubinsert,pubupdate,pubdelete,pubviaroot FROM pg_publication WHERE pubname=?")){
-                p.setString(1,options.publication);
-                try(ResultSet r=p.executeQuery()){
-                    if(!r.next()||r.getBoolean(1)||!r.getBoolean(2)||!r.getBoolean(3)||!r.getBoolean(4)||r.getBoolean(5))
-                        throw invalid("POSTGRESQL_EXPLICIT_PUBLICATION_REQUIRED");
-                }
-            }
-            try(PreparedStatement p=c.prepareStatement("SELECT t.schemaname,t.tablename,t.attnames,t.rowfilter,r.oid::text,r.relkind,r.relreplident "
-                    +"FROM pg_publication_tables t JOIN pg_namespace n ON n.nspname=t.schemaname "
-                    +"JOIN pg_class r ON r.relnamespace=n.oid AND r.relname=t.tablename "
-                    +"WHERE t.pubname=? ORDER BY t.schemaname,t.tablename")){
-                p.setString(1,options.publication);
-                try(ResultSet r=p.executeQuery()){
-                    while(r.next()){
-                        String schema=r.getString(1),name=r.getString(2);
-                        if(!namespaces.contains(schema)||r.getString(4)!=null||!"r".equals(r.getString(6)))
-                            throw invalid("POSTGRESQL_PUBLICATION_SCOPE_UNSUPPORTED");
-                        if(!"f".equals(r.getString(7)))throw invalid("POSTGRESQL_FULL_REPLICA_IDENTITY_REQUIRED");
-                        String oid=r.getString(5);
-                        TableSchema table=describe(c,schema,name,oid);
-                        String[] published=(String[])r.getArray(3).getArray();
-                        if(published.length!=table.columns.size()||!new TreeSet<>(Arrays.asList(published))
-                                .equals(columnNames(table)))throw invalid("POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED");
-                        found.put(Integer.parseUnsignedInt(oid),table);
-                        observed.add(schema);
-                    }
-                }
-            }
+            Map<Integer,TableSchema> found=inspectTables(c);
             c.commit();
+            tables.clear();
+            tables.putAll(found);
+            return new ArrayList<>(found.values());
+        }
+    }
+
+    Map<Integer,TableSchema> inspectTables(Connection c)throws Exception{
+        Map<Integer,TableSchema> found=new LinkedHashMap<>();
+        Set<String> observed=new TreeSet<>();
+        try(PreparedStatement p=c.prepareStatement("SELECT puballtables,pubinsert,pubupdate,pubdelete,pubviaroot FROM pg_publication WHERE pubname=?")){
+            p.setString(1,options.publication);
+            try(ResultSet r=p.executeQuery()){
+                if(!r.next()||r.getBoolean(1)||!r.getBoolean(2)||!r.getBoolean(3)||!r.getBoolean(4)||r.getBoolean(5))
+                    throw invalid("POSTGRESQL_EXPLICIT_PUBLICATION_REQUIRED");
+            }
+        }
+        try(PreparedStatement p=c.prepareStatement("SELECT t.schemaname,t.tablename,t.attnames,t.rowfilter,r.oid::text,r.relkind,r.relreplident "
+                +"FROM pg_publication_tables t JOIN pg_namespace n ON n.nspname=t.schemaname "
+                +"JOIN pg_class r ON r.relnamespace=n.oid AND r.relname=t.tablename "
+                +"WHERE t.pubname=? ORDER BY t.schemaname,t.tablename")){
+            p.setString(1,options.publication);
+            try(ResultSet r=p.executeQuery()){
+                while(r.next()){
+                    String schema=r.getString(1),name=r.getString(2);
+                    if(!namespaces.contains(schema)||r.getString(4)!=null||!"r".equals(r.getString(6)))
+                        throw invalid("POSTGRESQL_PUBLICATION_SCOPE_UNSUPPORTED");
+                    if(!"f".equals(r.getString(7)))throw invalid("POSTGRESQL_FULL_REPLICA_IDENTITY_REQUIRED");
+                    String oid=r.getString(5);
+                    TableSchema table=describe(c,schema,name,oid);
+                    String[] published=(String[])r.getArray(3).getArray();
+                    if(published.length!=table.columns.size()||!new TreeSet<>(Arrays.asList(published))
+                            .equals(columnNames(table)))throw invalid("POSTGRESQL_PUBLICATION_COLUMN_FILTER_UNSUPPORTED");
+                    found.put(Integer.parseUnsignedInt(oid),table);
+                    observed.add(schema);
+                }
+            }
         }
         if(found.isEmpty()||!observed.equals(namespaces))throw invalid("POSTGRESQL_PUBLICATION_SCOPE_UNSUPPORTED");
-        tables.clear();
-        tables.putAll(found);
-        return new ArrayList<>(found.values());
+        return found;
+    }
+
+    @Override public ConsistentRead consistentRead(List<TableSchema> tables,long gateMillis,long readMillis)throws Exception{
+        if(!options.commonCutValidation)
+            throw new SyncFailure("POSTGRESQL_COMMON_CUT_NOT_ENABLED","VALIDATE",false,
+                    "Enable source.postgresql.commonCutValidation and restart the Worker before validating.");
+        return new PostgresConsistentRead(this,positions,tables,gateMillis,readMillis);
     }
 
     private static Set<String> columnNames(TableSchema table){
@@ -375,40 +387,54 @@ final class PostgresqlCdcSource implements SourceAdapter {
             read.setAutoCommit(false);
             try(Statement st=read.createStatement()){
                 st.execute("SET TRANSACTION SNAPSHOT '"+snapshot+"'");
-                st.execute("SET LOCAL bytea_output='hex'");
-                st.execute("SET LOCAL DateStyle TO 'ISO, YMD'");
-                st.execute("SET LOCAL TimeZone TO 'UTC'");
-                st.execute("SET LOCAL extra_float_digits TO 3");
+                configureSnapshot(st);
             }
-            StringBuilder query=new StringBuilder("SELECT ");
-            for(TableSchema.Column column:table.columns){
-                if(query.length()>7)query.append(',');
-                query.append(Sql.pg(column.name)).append("::text");
-            }
-            query.append(" FROM ").append(Sql.pg(table.database)).append('.').append(Sql.pg(table.name));
-            PreparedStatement select=read.prepareStatement(query.toString());
-            select.setFetchSize(1000);
-            ResultSet rows=select.executeQuery();
-            return new Snapshot(){
-                public SourcePosition baseline(){return baseline;}
-                public List<List<Cell>> next(int maximum)throws Exception{
-                    if(maximum<1||maximum>10000)throw invalid("SNAPSHOT_READ_INVALID");
-                    List<List<Cell>> result=new ArrayList<>();
-                    while(result.size()<maximum&&rows.next()){
-                        List<Cell> values=new ArrayList<>();
-                        for(int i=0;i<table.columns.size();i++)values.add(PgOutput.value(table.columns.get(i),rows.getString(i+1)));
-                        result.add(values);
-                    }
-                    return result;
-                }
-                public void close()throws Exception{
-                    try{rows.close();}finally{try{select.close();}finally{read.close();}}
-                }
-            };
+            return snapshotRows(read,table,baseline,true);
         }catch(Exception failure){
             try{read.close();}catch(Exception close){failure.addSuppressed(close);}
             throw failure;
         }
+    }
+
+    static void configureSnapshot(Statement sql)throws SQLException{
+        sql.execute("SET LOCAL bytea_output='hex'");
+        sql.execute("SET LOCAL DateStyle TO 'ISO, YMD'");
+        sql.execute("SET LOCAL TimeZone TO 'UTC'");
+        sql.execute("SET LOCAL extra_float_digits TO 3");
+    }
+
+    static Snapshot snapshotRows(Connection read,TableSchema table,SourcePosition baseline,
+                                 boolean ownsConnection)throws Exception{
+        StringBuilder query=new StringBuilder("SELECT ");
+        for(TableSchema.Column column:table.columns){
+            if(query.length()>7)query.append(',');
+            query.append(Sql.pg(column.name)).append("::text");
+        }
+        query.append(" FROM ").append(Sql.pg(table.database)).append('.').append(Sql.pg(table.name));
+        PreparedStatement select=read.prepareStatement(query.toString());
+        select.setFetchSize(1000);
+        ResultSet rows;
+        try{rows=select.executeQuery();}
+        catch(SQLException failure){
+            try{select.close();}catch(SQLException close){failure.addSuppressed(close);}
+            throw failure;
+        }
+        return new Snapshot(){
+            public SourcePosition baseline(){return baseline;}
+            public List<List<Cell>> next(int maximum)throws Exception{
+                if(maximum<1||maximum>10000)throw invalid("SNAPSHOT_READ_INVALID");
+                List<List<Cell>> result=new ArrayList<>();
+                while(result.size()<maximum&&rows.next()){
+                    List<Cell> values=new ArrayList<>();
+                    for(int i=0;i<table.columns.size();i++)values.add(PgOutput.value(table.columns.get(i),rows.getString(i+1)));
+                    result.add(values);
+                }
+                return result;
+            }
+            public void close()throws Exception{
+                try{rows.close();}finally{try{select.close();}finally{if(ownsConnection)read.close();}}
+            }
+        };
     }
 
     @Override public Stream stream(SourcePosition captured,Receiver receiver)throws Exception{
@@ -437,11 +463,11 @@ final class PostgresqlCdcSource implements SourceAdapter {
                     session.execute("SET TimeZone TO 'UTC'");
                     session.execute("SET extra_float_digits TO 3");
                 }
-                stream=connection.unwrap(PGConnection.class).getReplicationAPI().replicationStream().logical()
+                var builder=connection.unwrap(PGConnection.class).getReplicationAPI().replicationStream().logical()
                         .withSlotName(slot).withStartPosition(LogSequenceNumber.valueOf(start))
-                        .withSlotOption("proto_version",1).withSlotOption("publication_names",options.publication)
-                        .withAutomaticFlush(false)
-                        .withStatusInterval(1,TimeUnit.SECONDS).start();
+                        .withSlotOption("proto_version",1).withSlotOption("publication_names",options.publication);
+                if(options.commonCutValidation)builder.withSlotOption("messages",true);
+                stream=builder.withAutomaticFlush(false).withStatusInterval(1,TimeUnit.SECONDS).start();
             }catch(Exception error){
                 try{connection.close();}catch(Exception close){error.addSuppressed(close);}
                 if(error instanceof SQLException&&"55006".equals(((SQLException)error).getSQLState()))

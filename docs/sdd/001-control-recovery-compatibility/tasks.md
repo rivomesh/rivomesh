@@ -123,11 +123,12 @@ RM-SDD-001 · 2026-11-17
 - [x] T-SO-05 · MySQL 8.4 扩展兼容与回归 · P1 · 依赖：SO-01
   交付：在当前发布包复验已支持档案，列明未标记/带标记GTID、匿名事务、行镜像、压缩/部分JSON等能力支持或拒绝，不把版本名称等同所有特性完成。
   验收：AC-SO-05
-- [ ] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
+- [x] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
   交付：完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。
   验收：AC-SO-06
   - [x] PostgreSQL 17.12 扩展 NUMERIC 标度双目标同步，保留 65 位精度和无主键重数，NaN 使整笔停在原断点。
   - [x] REAL 和 DOUBLE PRECISION 双目标复制、无主键重复、原快照恢复和非有限值整笔拒绝通过。
+  - [x] PostgreSQL 17.12 同一 WAL 切点对账 PostgreSQL 和 MySQL。保留双目标回执、已完成报告、原槽和快照，强杀重启后继续。
 - [ ] T-SO-07 · Oracle 源适配器 · P1 · 依赖：SO-01
   交付：确定并记录LogMiner/XStream等路线、版本/权限/驱动分发条件；实现SCN一致性快照、提交/回滚、redo/归档、DBID/incarnation识别、断点与重复恢复，逐项验证LOB、字符集、PDB/RAC等范围。
   验收：AC-SO-07

@@ -123,11 +123,12 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-SO-05 · MySQL8.4 expanded compatibility · P1 · Depends on: SO-01
   Deliver: Reverify supported current-release profiles and declare tagged/untagged GTID,anonymous events,row images,compression/partial-JSON capabilities or refusal;version labels are not blanket feature acceptance.
   Acceptance: AC-SO-05
-- [ ] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
+- [x] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
   Deliver: Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs.
   Acceptance: AC-SO-06
   - [x] PostgreSQL 17.12 extended NUMERIC scale and exact 65-digit and keyless delivery to two targets. A NaN transaction holds the original cut.
   - [x] REAL and DOUBLE PRECISION passed dual-target snapshots, keyless changes, original-slot restart and complete non-finite transaction refusal.
+  - [x] PostgreSQL 17.12 compares PostgreSQL and MySQL at the same WAL cut. Both target receipts, report, original slot and snapshots survive an abrupt restart.
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07

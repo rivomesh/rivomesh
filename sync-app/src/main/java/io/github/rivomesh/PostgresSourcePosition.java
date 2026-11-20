@@ -48,6 +48,8 @@ final class PostgresSourcePosition {
         return lsn;
     }
 
+    String validationMessagePrefix(){return "rivomesh.validation."+slot;}
+
     boolean covers(SourcePosition captured,SourcePosition required){
         return captured!=null&&required!=null&&Long.compareUnsigned(lsn(captured),lsn(required))>=0;
     }

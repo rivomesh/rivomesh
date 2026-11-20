@@ -52,6 +52,8 @@ public final class Config {
         public String url,publication;
         public String slotPrefix="rivomesh";
         public boolean failoverSlot;
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+        public boolean commonCutValidation;
     }
 
     public static final class OracleSource {
