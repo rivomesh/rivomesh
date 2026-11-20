@@ -34,6 +34,8 @@ type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
+type_profile.add_argument('--dm', action='store_true', help='Verify PostgreSQL CDC to native Dameng')
+type_profile.add_argument('--kingbase', action='store_true', help='Verify native PostgreSQL WAL to Kingbase PG mode')
 type_profile.add_argument('--gauss-indexes', action='store_true', help='Verify PostgreSQL secondary indexes on openGauss')
 type_profile.add_argument('--doris', action='store_true', help='Verify WAL materialization to Doris')
 type_profile.add_argument('--doris-hive', action='store_true', help='Verify WAL fan-out to Doris and Hive')
@@ -67,8 +69,10 @@ if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
 if (args.common_cut or args.truncate_review) and (args.failover or args.generated or args.uuid):
     parser.error('--common-cut and --truncate-review use the direct three-table publication profile')
-if (args.redis_clickhouse or args.gauss_indexes or (args.doris or args.doris_hive)) and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
-    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes or --doris-hive')
+direct_fanout = any((args.redis_clickhouse, args.gauss_indexes, args.kingbase, args.dm, args.doris, args.doris_hive))
+isolated_resources = args.bytea_values or args.ddl_review or direct_fanout
+if direct_fanout and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
+    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes, --kingbase, --dm or --doris-hive')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -76,7 +80,7 @@ output = args.output.resolve()
 output.relative_to(ROOT)
 output.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
-environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32), RM_PG_GAUSS_PASSWORD='Ri8!'+secrets.token_hex(12))
+environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32), RM_PG_GAUSS_PASSWORD='Ri8!'+secrets.token_hex(12), RM_PG_KINGBASE_PASSWORD='Kb!'+secrets.token_hex(12), RM_PG_DM_PASSWORD='Dm8!'+secrets.token_hex(10))
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
@@ -96,6 +100,10 @@ if args.gauss_indexes:
     report.update(gaussIndexes=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.doris or args.doris_hive:
     report.update(doris=True,dorisHive=args.doris_hive, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.dm:
+    report.update(dm=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.kingbase:
+    report.update(kingbase=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.redis_clickhouse:
     report.update(redisClickHouse=True, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.truncate_review:
@@ -197,6 +205,16 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                  username='sync_test', password='${RM_PG_PASSWORD}', metadataSchema='ch_meta',
                  mappings=dict(sales='ch_sales', billing='ch_billing')),
         ])
+    if args.dm:
+        pipeline['targets'].append(dict(
+            id='dm',product='DM',url='jdbc:dm://dm:5236',username='SYSDBA',
+            password='${RM_PG_DM_PASSWORD}',metadataSchema='dm_meta',mappings=dict(sales='dm_sales',billing='dm_billing'),
+            dm=dict(acknowledgeTextConversions=True)))
+    if args.kingbase:
+        pipeline['targets'].append(dict(
+            id='kingbase',product='KINGBASE',url='jdbc:kingbase8://kingbase:54321/test?connectTimeout=4&socketTimeout=20',
+            username='system',password='${RM_PG_KINGBASE_PASSWORD}',metadataSchema='kb_meta',
+            mappings=dict(sales='kb_sales',billing='kb_billing')))
     if args.gauss_indexes:
         pipeline['source']['postgresql']['captureSecondaryIndexes']=True
         pipeline['targets'].append(dict(id='gauss',product='GAUSS',
@@ -221,6 +239,36 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         report['previousNumericArtifactSha256']=hashlib.sha256(previous_numeric_jar.read_bytes()).hexdigest()
         services['runner']['volumes'].append(str(previous_numeric_jar)+':/app/previous-numeric.jar:ro')
     document=dict(services=services)
+    if args.dm:
+        for service in ('source','target'):
+            services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
+        fixtures=Path(__file__).resolve().parent/'dm'
+        services['runner']['environment']['RM_PG_DM_PASSWORD']='${RM_PG_DM_PASSWORD}'
+        services['dm']=dict(image='dm8:dm8_20250924_rev288894_HWarm_kylin10_64',mem_limit='2g',cpus=2,
+                            entrypoint=['/bin/bash','/fixture/start.sh'],
+                            environment=dict(SYSDBA_PWD='${RM_PG_DM_PASSWORD}',SYSAUDITOR_PWD='${RM_PG_DM_PASSWORD}',
+                                             SYSSSO_PWD='${RM_PG_DM_PASSWORD}',UNICODE_FLAG='1',CASE_SENSITIVE='1',
+                                             BLANK_PAD_MODE='1',PAGE_SIZE='32',BUFFER='128',TIME_ZONE='+00:00'),
+                            volumes=[str(fixtures/'start.sh')+':/fixture/start.sh:ro',
+                                     str(fixtures/'health.sh')+':/fixture/health.sh:ro','dm_data:/opt/dmdbms/data'])
+        services['dm_probe']=dict(image='maven:3.9-eclipse-temurin-21',
+                                 environment=dict(RM_PG_DM_PASSWORD='${RM_PG_DM_PASSWORD}'),
+                                 volumes=[str(fixtures/'DmSourceTargetProbe.java')+':/probe/DmSourceTargetProbe.java:ro',
+                                          str(artifact)+':/app/rivomesh.jar:ro'],
+                                 entrypoint=['sh','-ec','javac -cp /app/rivomesh.jar -d /tmp /probe/DmSourceTargetProbe.java '
+                                                         '&& exec sleep infinity'])
+        document['volumes']={'dm_data':{}}
+    if args.kingbase:
+        for service in ('source','target'):
+            services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
+        services['runner']['environment']['RM_PG_KINGBASE_PASSWORD']='${RM_PG_KINGBASE_PASSWORD}'
+        services['kingbase']=dict(image='kingbase_v009r001c001b0025_single_arm:v1',mem_limit='1500m',cpus=2,
+                                  stop_signal='SIGINT',stop_grace_period='30s',
+                                  environment=dict(DB_PASSWORD='${RM_PG_KINGBASE_PASSWORD}'),
+                                  entrypoint=['/bin/bash','/fixture/start.sh'],
+                                  volumes=[str(Path(__file__).resolve().parent/'kingbase/start.sh')+':/fixture/start.sh:ro',
+                                           'kingbase_data:/home/kingbase/userdata'])
+        document['volumes']={'kingbase_data':{}}
     if args.gauss_indexes:
         for service in ('source','target'):
             services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
@@ -320,7 +368,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     composition.write_text(json.dumps(document))
 
     def compose(*arguments,check=True):
-        env_file=['--env-file',os.devnull] if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review else []
+        env_file=['--env-file',os.devnull] if isolated_resources else []
         return subprocess.run(['docker','compose',*env_file,'-p',project,'-f',str(composition),*arguments],
                               cwd=ROOT,env=environment,capture_output=True,text=True,check=check,timeout=180)
 
@@ -368,6 +416,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         if any(item['state'] != 'RUNNING' or int(item['acknowledged']) != sequence for item in subscriptions.values()):
             return None
         return status
+
+    def dm(statement):
+        return compose('exec','-T','dm_probe','java','-cp','/app/rivomesh.jar:/tmp',
+                       'DmSourceTargetProbe',statement).stdout.strip()
+
+    def kingbase(statement):
+        return compose('exec','-T','kingbase','/home/kingbase/install/kingbase/bin/ksql',
+                       '-U','system','-d','test','-p','54321','-At','-F','|','-c',statement).stdout.strip()
 
     def gauss(statement):
         return compose('exec','-T','gauss','su','-','omm','-c',
@@ -594,6 +650,10 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             endpoints.extend(('hive','doris') if args.doris_hive else ('doris',))
         if args.redis_clickhouse:
             endpoints.extend(('redis','clickhouse'))
+        if args.dm:
+            endpoints.extend(('dm','dm_probe'))
+        if args.kingbase:
+            endpoints.append('kingbase')
         if args.gauss_indexes:
             endpoints.append('gauss')
         compose('up','-d',*endpoints)
@@ -617,6 +677,13 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
                         service+' accepts TCP after initialization')
         for service in ('source','target'):
             require(lambda s=service:sql(s,'SELECT 1')=='1',service+' ready')
+        if args.dm:
+            require(lambda:compose('exec','-T','dm','/bin/bash','/fixture/health.sh',check=False).returncode==0,
+                    'Dameng server ready',240)
+            report['dmVersion']=require(lambda:dm('--version'),'Dameng JDBC ready',180)
+        if args.kingbase:
+            report['kingbaseVersion']=require(lambda:kingbase('SELECT version()'),'Kingbase target ready',240)
+            assert 'V009R001C001B0025' in report['kingbaseVersion']
         if args.gauss_indexes:
             report['gaussVersion']=require(lambda:gauss('SELECT version()'),'openGauss target ready')
             assert '7.0.0-RC3' in report['gaussVersion']
@@ -895,6 +962,72 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             passed('PostgreSQL and openGauss retain the original index definitions and snapshots through Worker restart')
             report['status']='PASS'
             raise SystemExit(0)
+        if args.dm:
+            expected={'pg','dm'}
+
+            def native_rows(key, hexadecimal, duplicates, label):
+                row=dm('SELECT "id","amount","payload","data" FROM "dm_sales"."items"').split('|')
+                return (len(row)==4 and row[:2]==[str(key),'123456789012.1234']
+                        and json.loads(row[2])=={'n':18446744073709551615} and row[3]==hexadecimal
+                        and dm('SELECT count(*) FROM "dm_sales"."duplicates"')==str(duplicates)
+                        and dm('SELECT "label" FROM "dm_billing"."ledger"')==label)
+
+            require(lambda:native_rows(1,'001aff',2,'before'),'Dameng exact snapshot',140)
+            snapshot_query='SELECT snapshot_id FROM "dm_meta"."rm3_sink_table" WHERE snapshot_state=\'COMPLETE\' ORDER BY table_id'
+            original=require(lambda:cut if len((cut:=dm(snapshot_query)).splitlines())==3 else None,
+                             'all Dameng snapshots complete')
+            passed('Dameng preserves PostgreSQL JSON text, BLOB bytes, exact decimals and keyless multiplicity')
+            sql('source',"BEGIN; UPDATE sales.items SET id=9,data=decode('baff','hex') WHERE id=1; "
+                         "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
+                         "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
+            require(lambda:native_rows(9,'baff',1,'online') and equal(),'Dameng atomic mixed-schema update')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=1,'both SQL receipts')
+            passed('Dameng applies the changed key and removes exactly one keyless row')
+            slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"UPDATE billing.ledger SET label='offline' WHERE id=1")
+            compose('up','-d','runner')
+            require(lambda:native_rows(9,'baff',1,'offline') and equal(),'Dameng offline WAL restart')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=2,'both restarted SQL receipts')
+            assert original==dm(snapshot_query)
+            assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            passed('Dameng and PostgreSQL keep original snapshots and the WAL slot after SIGKILL')
+            report['status']='PASS'
+            raise SystemExit(0)
+
+        if args.kingbase:
+            expected={'pg','kingbase'}
+
+            def native_rows(key, hexadecimal, duplicates, label):
+                return (kingbase("SELECT id,amount::text,payload->>'n',encode(data,'hex') FROM kb_sales.items")
+                        ==f'{key}|123456789012.1234|18446744073709551615|{hexadecimal}'
+                        and kingbase('SELECT count(*) FROM kb_sales.duplicates')==str(duplicates)
+                        and kingbase('SELECT label FROM kb_billing.ledger')==label)
+
+            require(lambda:native_rows(1,'001aff',2,'before'),'Kingbase exact snapshot',120)
+            original=kingbase("SELECT snapshot_id FROM kb_meta.rm3_sink_table WHERE snapshot_state='COMPLETE' ORDER BY table_id")
+            assert len(original.splitlines())==3
+            passed('Kingbase preserves PostgreSQL JSON numbers, bytea, exact decimals and keyless multiplicity')
+            sql('source',"BEGIN; UPDATE sales.items SET id=9,data=decode('baff','hex') WHERE id=1; "
+                         "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
+                         "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
+            require(lambda:native_rows(9,'baff',1,'online') and equal(),'Kingbase atomic mixed-schema update')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=1,'both SQL receipts')
+            passed('Kingbase applies the changed key and removes exactly one keyless row')
+            slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"UPDATE billing.ledger SET label='offline' WHERE id=1")
+            compose('up','-d','runner')
+            require(lambda:native_rows(9,'baff',1,'offline') and equal(),'Kingbase offline WAL restart')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=2,'both restarted SQL receipts')
+            assert original==kingbase("SELECT snapshot_id FROM kb_meta.rm3_sink_table WHERE snapshot_state='COMPLETE' ORDER BY table_id")
+            assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            passed('Kingbase and PostgreSQL keep both original snapshots and the original WAL slot after SIGKILL')
+            report['status']='PASS'
+            raise SystemExit(0)
+
         if args.doris or args.doris_hive:
             expected={'pg','doris','hive'} if args.doris_hive else {'pg','doris'}
             targets=[(doris,'doris'),(hive,'hive')] if args.doris_hive else [(doris,'doris')]
@@ -1677,14 +1810,14 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             log+='\n'+'\n'.join(worker_log.read_text(errors='replace').splitlines()[-80:])
         if isinstance(error,subprocess.CalledProcessError):
             log+='\n'+(error.stdout or '')+'\n'+(error.stderr or '')
-        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN','RM_PG_GAUSS_PASSWORD'):
+        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN','RM_PG_GAUSS_PASSWORD','RM_PG_KINGBASE_PASSWORD','RM_PG_DM_PASSWORD'):
             log=log.replace(environment[key],'[REDACTED]')
         (output/'runner-redacted.log').write_text(log)
         raise
     finally:
         cleanup=compose('down','-v','--remove-orphans',check=False)
         report['cleanupExitCode']=cleanup.returncode
-        if args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review:
+        if isolated_resources:
             label='label=com.docker.compose.project='+project
             resources={'containers':['ps','-aq'],'volumes':['volume','ls','-q'],'networks':['network','ls','-q']}
             report['remaining']={kind:len(subprocess.check_output(
@@ -1693,5 +1826,5 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             if any(report['remaining'].values()):
                 report['status']='FAIL'
         (output/'manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-        if cleanup.returncode or ((args.bytea_values or args.redis_clickhouse or args.gauss_indexes or args.doris or args.doris_hive or args.ddl_review) and any(report['remaining'].values())):
+        if cleanup.returncode or (isolated_resources and any(report['remaining'].values())):
             raise RuntimeError('Test fixture cleanup failed')

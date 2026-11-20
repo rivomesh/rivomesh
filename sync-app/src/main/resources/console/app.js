@@ -738,16 +738,16 @@ let extraTargetCounter=1;
 function v3(){return $('create-form').elements.formatVersion.value==='3';}
 Object.assign(messages.zh,{
  sourceEngine:'源数据库类型',sourceJdbc:'源 JDBC URL',pgDatabase:'PostgreSQL 数据库',pgSchemas:'源 Schema（逗号分隔）',pgPublication:'逻辑发布名称',pgSlotPrefix:'逻辑槽前缀',pgFailoverSlot:'使用可切换逻辑槽',pgSecondaryIndexes:'采集 PostgreSQL 二级索引供目标审核',
- pgSourceRequirements:'实验性档案。填写可写主库的地址、数据库及发布名称。切主续传需使用稳定写入入口和已同步逻辑槽。支持 PostgreSQL、MySQL、openGauss、ClickHouse、Doris、Hive 和消息目标。创建后先执行检查。',
+ pgSourceRequirements:'实验性档案。填写可写主库的地址、数据库及发布名称。切主续传需使用稳定写入入口和已同步逻辑槽。支持 PostgreSQL、MySQL、openGauss、金仓、达梦、ClickHouse、Doris、Hive 和消息目标。创建后先执行检查。',
  oraclePdb:'可写 PDB 名称',oracleRootService:'CDB 根服务（归档读取）',oraclePdbService:'PDB 服务（读取快照）',oracleTables:'源表（大写 OWNER.TABLE，每行一张）',
- oracleSourceRequirements:'实验性档案。Agent 需安装 Oracle JDBC 驱动。填写 CDB 根和可写 PDB 两个服务，归档模式与全列补充日志须已配置。支持 PostgreSQL、MySQL、ClickHouse 和消息目标。创建后先执行检查。',
+ oracleSourceRequirements:'实验性档案。Agent 需安装 Oracle JDBC 驱动。填写 CDB 根和可写 PDB 两个服务，归档模式与全列补充日志须已配置。支持 PostgreSQL、MySQL、金仓、ClickHouse 和消息目标。创建后先执行检查。',
  oracleVirtualNumeric:'同步受支持的整数虚拟列',oracleTableListInvalid:'填写 1–200 张不重复的表，每张表使用大写 OWNER.TABLE。',sourceJdbcInvalid:'请填写该源数据库的 JDBC URL。'
 });
 Object.assign(messages.en,{
  sourceEngine:'Source database engine',sourceJdbc:'Source JDBC URL',pgDatabase:'PostgreSQL database',pgSchemas:'Source schemas (comma-separated)',pgPublication:'Logical publication',pgSlotPrefix:'Logical slot prefix',pgFailoverSlot:'Use a failover logical slot',pgSecondaryIndexes:'Capture PostgreSQL secondary indexes for target review',
- pgSourceRequirements:'Experimental. Provide the writable primary address, database and publication. Failover needs a stable writer endpoint and a synchronized logical slot. Available targets include PostgreSQL, MySQL, openGauss, ClickHouse, Doris, Hive and message brokers. Run Check after creating the task.',
+ pgSourceRequirements:'Experimental. Provide the writable primary address, database and publication. Failover needs a stable writer endpoint and a synchronized logical slot. Available targets include PostgreSQL, MySQL, openGauss, Kingbase, Dameng, ClickHouse, Doris, Hive and message brokers. Run Check after creating the task.',
  oraclePdb:'Writable PDB name',oracleRootService:'CDB root service (archive capture)',oraclePdbService:'PDB service (snapshot reads)',oracleTables:'Source tables (uppercase OWNER.TABLE, one per line)',
- oracleSourceRequirements:'Experimental. Install Oracle JDBC on the Agent. Supply the CDB root and writable PDB services with archive mode and all-column supplemental logging. Available targets include PostgreSQL, MySQL, ClickHouse and message brokers. Run Check after creating the task.',
+ oracleSourceRequirements:'Experimental. Install Oracle JDBC on the Agent. Supply the CDB root and writable PDB services with archive mode and all-column supplemental logging. Available targets include PostgreSQL, MySQL, Kingbase, ClickHouse and message brokers. Run Check after creating the task.',
  oracleVirtualNumeric:'Sync supported integer virtual columns',oracleTableListInvalid:'Enter 1–200 distinct tables using uppercase OWNER.TABLE.',sourceJdbcInvalid:'Enter a JDBC URL for this source engine.'
 });
 function wizardSource(){return v3()?$('create-form').elements.sourceType.value:'MYSQL';}
@@ -824,7 +824,7 @@ function messageSettings(root,product){const value=name=>root.querySelector('[da
 
 function targetMode(card){
  const f=$('create-form').elements,select=card?card.querySelector('[data-field=product]'):f.targetType;
- const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE']:null;
+ const type=wizardSource(),allowed=!v3()?['POSTGRESQL','GAUSS']:type==='POSTGRESQL'?['POSTGRESQL','MYSQL','CLICKHOUSE','DORIS','HIVE','GAUSS','KINGBASE','DM']:type==='ORACLE'?['POSTGRESQL','MYSQL','CLICKHOUSE','KINGBASE']:null;
  for(const option of select.options){
   const sharedMessaging=v3()&&messagingProduct(option.value);
   option.disabled=Boolean(allowed&&!allowed.includes(option.value)&&!sharedMessaging);

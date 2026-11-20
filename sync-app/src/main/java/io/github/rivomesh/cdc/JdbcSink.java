@@ -751,8 +751,8 @@ public final class JdbcSink implements SinkAdapter {
                 break;
             case DATETIME:case TIMESTAMP:
                 if(PostgresTimestamp.isColumn(col))p.setObject(n,PostgresTimestamp.localTime(v));
-                else if((settings.product==TargetProduct.POSTGRESQL||settings.product==TargetProduct.MYSQL)
-                        &&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
+                else if((settings.product==TargetProduct.POSTGRESQL||settings.product==TargetProduct.MYSQL
+                        ||settings.product==TargetProduct.KINGBASE)&&OracleDate.isColumn(col))p.setObject(n,OracleDate.localTime(v));
                 else p.setTimestamp(n,Timestamp.valueOf(v));
                 break;
             case JSON:if(mysql()||dm()||settings.product==TargetProduct.H2)p.setString(n,JsonValues.text(v));else p.setObject(n,JsonValues.text(v),Types.OTHER);break;

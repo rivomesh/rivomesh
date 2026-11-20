@@ -69,7 +69,8 @@ final class PostgresqlCdcSource implements SourceAdapter {
             if (target == null || target.product == null) continue;
             TargetProduct product = target.product;
             if (product != TargetProduct.POSTGRESQL && product != TargetProduct.MYSQL
-                    && !product.materialized() && product != TargetProduct.GAUSS && !product.messaging()) {
+                    && !product.materialized() && product != TargetProduct.GAUSS
+                    && product != TargetProduct.KINGBASE && product != TargetProduct.DM && !product.messaging()) {
                 throw invalid("POSTGRESQL_SOURCE_TARGET_PROFILE_UNAVAILABLE");
             }
         }

@@ -90,7 +90,8 @@ final class JdbcTargetRead implements TargetRead {
                 if(PostgresTimestamp.isColumn(column)){
                     LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);
                     value=timestamp==null?null:PostgresTimestamp.format(timestamp);
-                }else if((product==TargetProduct.POSTGRESQL||product==TargetProduct.MYSQL)&&OracleDate.isColumn(column)){
+                }else if((product==TargetProduct.POSTGRESQL||product==TargetProduct.MYSQL||product==TargetProduct.KINGBASE)
+                        &&OracleDate.isColumn(column)){
                     LocalDateTime timestamp=result.getObject(index,LocalDateTime.class);
                     value=timestamp==null?null:timestamp.toString().replace('T',' ');
                 }else{

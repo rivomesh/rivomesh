@@ -53,6 +53,10 @@ Oracle Free 23.26.4.0.0 to MySQL 8.4.13 passed Flashback, archive CDC and origin
 
 Use **Check** before starting. A source NUMBER scale above 30 returns `ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED` so the task can review that projection before creating a target table. Native InnoDB column, row and key size limits apply. The fixture preserves a 38-digit NUMBER, a DATE in a civil-clock gap, SQL NULL and distinct text and RAW keys. Committed key changes and the offline transaction retain the original target snapshot IDs after restart. [MySQL DECIMAL limits](https://dev.mysql.com/doc/refman/8.4/en/precision-math-decimal-characteristics.html) · [InnoDB limits](https://dev.mysql.com/doc/refman/8.4/en/innodb-limits.html)
 
+### Kingbase destination
+
+Oracle Free 23.26.4.0.0 to KingbaseES V009R001C001B0025 in PG/UTF8 mode passed the `--kingbase-target --raw-values` fixture. The target stores Oracle civil DATE as a timestamp without time zone and RAW as bytea. Text and RAW key changes, exact NUMBER and SQL NULL survive the original-SCN restart alongside the PostgreSQL subscription. [Kingbase target profile](kingbase-v3.md)
+
 ### Archived DDL review
 
 When a selected PDB's archived DDL stops capture with `ORACLE_REDO_DDL_REQUIRES_PLAN`, open **Capture recovery** on the failed task or call its read-only `GET /api/tasks/{id}/capture-recovery` endpoint. The report binds the error generation and the last durable checkpoint hash. The `CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` comparison uses the last recorded schema version and digest for each selected table, plus a separate digest of the definition visible now. It reports changes in supported column names, types, sizes, nullability, column order and the recorded primary key. Checkpoint admission checks that the retained Oracle source is eligible to revisit the cut.

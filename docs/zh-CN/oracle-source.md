@@ -53,6 +53,10 @@ Oracle Free 23.26.4.0.0 可在同一个 V3 任务投递到 PostgreSQL 和 Redis 
 
 先执行 **检查**。源 NUMBER 的小数位超过 30 时返回 `ORACLE_MYSQL_DECIMAL_SCALE_UNSUPPORTED`，需先评审类型映射，再启动建表。列、行及索引键宽仍受 InnoDB 限制。夹具核对 38 位 NUMBER、处于夏令时跳变区间的 DATE、SQL NULL、文本主键和 RAW 主键，重启后按原 SCN 应用停机期间的事务并核对全部快照 ID。 [MySQL DECIMAL 范围](https://dev.mysql.com/doc/refman/8.4/en/precision-math-decimal-characteristics.html) · [InnoDB 限制](https://dev.mysql.com/doc/refman/8.4/en/innodb-limits.html)
 
+### 金仓目标
+
+Oracle Free 23.26.4.0.0 到金仓 V009R001C001B0025 的 PG/UTF8 模式通过 `--kingbase-target --raw-values` 实库夹具。Oracle DATE 按原时分秒写入无时区时间戳，RAW 写入 bytea。实库核对了文本及 RAW 主键变更、精确 NUMBER、SQL NULL 和原 SCN 续传，PostgreSQL 目标也保留原快照。 [金仓目标档案](kingbase-v3.md)
+
 ### 归档 DDL 评审
 
 所选 PDB 的归档 DDL 触发 `ORACLE_REDO_DDL_REQUIRES_PLAN` 后，在失败任务打开 **采集恢复**，也可以通过只读的 `GET /api/tasks/{id}/capture-recovery` 查询。报告绑定故障代次和末次持久化断点的哈希。`CURRENT_ORACLE_PDB_CATALOG_VS_JOURNAL` 对比会列出所选表的日志库结构版本、原定义摘要和当前可见定义的独立摘要，报告所支持的列名、类型、长度、可空性、列顺序和已记录主键的变化。断点准入用于核查保留的 Oracle 源能否重新读取该位置。

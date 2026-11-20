@@ -821,12 +821,15 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     redis = oracle + '-redis'
     clickhouse = oracle + '-ch'
     mysql = oracle + '-my'
+    kingbase = oracle + '-kb'
     env = dict(environment, POSTGRES_PASSWORD=secrets.token_urlsafe(32), RM_ORACLE_TEST_TOKEN=secrets.token_urlsafe(32))
     if options.clickhouse:
         env['CLICKHOUSE_PASSWORD']=secrets.token_hex(24)
     if options.mysql_target:
         env['MYSQL_ROOT_PASSWORD']=secrets.token_hex(24)
-    if options.date_values or options.mysql_target:
+    if options.kingbase_target:
+        env['KINGBASE_FIXTURE_PASSWORD']='Kb!'+secrets.token_hex(12)
+    if options.date_values or options.mysql_target or options.kingbase_target:
         env['TZ'] = 'America/New_York'
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     platform = None
@@ -838,6 +841,23 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     def target_sql(statement, checked=True):
         return execute('docker','exec',target,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','sync_test',
                        '-At','-c',statement,checked=checked).stdout.strip()
+
+    def kb_sql(statement, checked=True):
+        return execute('docker','exec',kingbase,'/home/kingbase/install/kingbase/bin/ksql',
+                       '-U','system','-d','test','-p','54321','-At','-F','|','-c',statement,
+                       checked=checked).stdout.strip()
+
+    def kb_types():
+        return kb_sql("""
+            SELECT upper(encode(convert_to("CODE",'UTF8'),'hex')),"AMOUNT"::text,
+                   COALESCE(TO_CHAR("OCURRED",'YYYY-MM-DD HH24:MI:SS'),'<NULL>')
+            FROM kb_copy."RIVO_SYNC_MYSQL_TYPES" ORDER BY encode(convert_to("CODE",'UTF8'),'hex')""",
+                      checked=False).splitlines()
+
+    def kb_binary_keys():
+        return kb_sql("""
+            SELECT upper(encode("OCTETS",'hex')),"ID" FROM kb_copy."RIVO_SYNC_RAW_KEYS"
+            ORDER BY encode("OCTETS",'hex')""",checked=False).splitlines()
 
     def mysql_sql(statement, checked=True):
         return execute('docker','exec',mysql,'sh','-c',
@@ -1041,7 +1061,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
         rotate()
         source_tables += ['RIVO_APP.RIVO_SYNC_RAW_ROWS','RIVO_APP.RIVO_SYNC_RAW_KEYLESS']
 
-    if options.mysql_target:
+    if options.mysql_target or options.kingbase_target:
         sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
             CREATE TABLE rivo_app.rivo_sync_mysql_types
                 (code VARCHAR2(20 CHAR) PRIMARY KEY, amount NUMBER(38,12) NOT NULL, ocurred DATE);
@@ -1064,7 +1084,20 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
     started_redis=False
     started_clickhouse=False
     started_mysql=False
+    started_kingbase=False
     try:
+        if options.kingbase_target:
+            fixture=Path(__file__).resolve().parent/'kingbase/start.sh'
+            execute('docker','run','--rm','-d','--name',kingbase,
+                    '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::54321',
+                    '--memory','1500m','--cpus','2','--stop-signal','SIGINT',
+                    '-e','DB_PASSWORD','-v',str(fixture)+':/fixture/start.sh:ro',
+                    '--entrypoint','/bin/bash','kingbase_v009r001c001b0025_single_arm:v1','/fixture/start.sh',
+                    env=dict(env,DB_PASSWORD=env['KINGBASE_FIXTURE_PASSWORD']))
+            started_kingbase=True
+            required(lambda:kb_sql('SELECT 1',checked=False)=='1','Kingbase target ready',120)
+            kb_port=execute('docker','port',kingbase,'54321/tcp').stdout.strip().rsplit(':',1)[1]
+            (output/'kingbase-version.txt').write_text(kb_sql('SELECT version()')+'\n')
         if options.mysql_target:
             execute('docker','run','--rm','-d','--name',mysql,
                     '--label','io.github.rivomesh.test=oracle-source-target','-p','127.0.0.1::3306',
@@ -1127,6 +1160,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                                                 url=f'redis://127.0.0.1:{redis_port}/2',
                                                 mappings={'RIVO_APP':'oracle_events'},
                                                 messaging=dict(stream='RM_ORACLE_PARITY')))
+            if options.kingbase_target:
+                pipeline['targets'].append(dict(id='kb',product='KINGBASE',
+                                                url=f'jdbc:kingbase8://127.0.0.1:{kb_port}/test'
+                                                    '?connectTimeout=4&socketTimeout=20',
+                                                username='system',password='${KINGBASE_FIXTURE_PASSWORD}',
+                                                metadataSchema='kb_meta',mappings={'RIVO_APP':'kb_copy'}))
             if options.mysql_target:
                 pipeline['targets'].append(dict(id='my',product='MYSQL',
                                                 url=f'jdbc:mysql://127.0.0.1:{mysql_port}/?sslMode=DISABLED'
@@ -1263,6 +1302,18 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                         lambda: observed_ids if len((observed_ids:=mysql_sql(mysql_snapshot_query)).splitlines())
                         ==len(source_tables) else None,'all MySQL target snapshots complete',90)
                     observed('MySQL preserves civil DATE, exact NUMBER, trailing-space distinct and RAW binary primary keys')
+                if options.kingbase_target:
+                    expected_before=['41|12345678901234567890123456.123456789012|2024-03-10 02:17:19',
+                                     '4120|2.000000000000|<NULL>']
+                    required(lambda:kb_types()==expected_before
+                             and kb_binary_keys()==['000AFF80|1','000AFF8020|2'],
+                             'Kingbase copies Oracle DATE, exact DECIMAL and both kinds of keys',120)
+                    kb_snapshot_query=("SELECT snapshot_id FROM kb_meta.rm3_sink_table "
+                                       "WHERE snapshot_state='COMPLETE' ORDER BY table_id")
+                    original_kb_snapshots=required(
+                        lambda: observed_ids if len((observed_ids:=kb_sql(kb_snapshot_query)).splitlines())
+                        ==len(source_tables) else None,'all Kingbase target snapshots complete',120)
+                    observed('Kingbase preserves civil DATE, exact Oracle NUMBER, text keys and RAW primary keys')
                 snapshots=target_sql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
                 assert len(snapshots.splitlines())==len(source_tables)
                 assert target_sql('SELECT COUNT(*) FROM copy_app."RIVO_KEYLESS"')=='1'
@@ -1296,7 +1347,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 online_mysql=("""
                     UPDATE rivo_app.rivo_sync_mysql_types SET code='Z',ocurred=NULL WHERE code='A';
                     UPDATE rivo_app.rivo_sync_raw_keys SET octets=HEXTORAW('81ff00') WHERE id=1;
-                """ if options.mysql_target else '')
+                """ if options.mysql_target or options.kingbase_target else '')
                 out,_=long_transaction.communicate(online_raw+online_mysql+"COMMIT;\nEXIT\n",timeout=30)
                 assert long_transaction.returncode==0,out
                 long_transaction=None
@@ -1349,6 +1400,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              and mysql_binary_keys()==['000AFF8020|2','81FF00|1'],
                              'MySQL applies both Oracle primary-key changes without collapsing neighboring keys',90)
                     observed('Oracle archived CDC changes text and binary keys in MySQL while keeping distinct values')
+                if options.kingbase_target:
+                    expected_online=['4120|2.000000000000|<NULL>','5A|12345678901234567890123456.123456789012|<NULL>']
+                    required(lambda:kb_types()==expected_online
+                             and kb_binary_keys()==['000AFF8020|2','81FF00|1'],
+                             'Kingbase applies archived primary-key changes',90)
+                    observed('Kingbase applies both original Oracle text and RAW key changes')
                 if options.text_json:
                     required(lambda:json.loads(target_sql(before_json))==[True,{'version':2}]
                              and target_sql('SELECT COUNT(*) FROM copy_app."RIVO_JSON_KEYLESS"')=='1',
@@ -1391,7 +1448,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 offline_mysql=("""
                     DELETE FROM rivo_app.rivo_sync_mysql_types WHERE code='A ';
                     INSERT INTO rivo_app.rivo_sync_raw_keys VALUES(HEXTORAW('00ff10'),3);
-                """ if options.mysql_target else '')
+                """ if options.mysql_target or options.kingbase_target else '')
                 sql("""ALTER SESSION SET CONTAINER=FREEPDB1;
                     INSERT INTO rivo_app.rivo_orders VALUES(4,'offline');
                     DELETE FROM rivo_app.rivo_keyless WHERE ROWNUM=1;
@@ -1448,6 +1505,12 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                              'MySQL consumes the original archived SCN after forced restart',90)
                     assert original_mysql_snapshots==mysql_sql(mysql_snapshot_query)
                     observed('The MySQL target resumes at the original Oracle SCN and keeps each original snapshot')
+                if options.kingbase_target:
+                    required(lambda:kb_types()==['5A|12345678901234567890123456.123456789012|<NULL>']
+                             and kb_binary_keys()==['000AFF8020|2','00FF10|3','81FF00|1'],
+                             'Kingbase consumes archived Oracle work after forced restart',90)
+                    assert original_kb_snapshots==kb_sql(kb_snapshot_query)
+                    observed('Kingbase resumes Oracle at the original SCN and keeps each original snapshot')
                 if options.text_json:
                     required(lambda:target_sql('SELECT "PAYLOAD"->>\'after\' FROM copy_app."RIVO_JSON_ROWS" '
                                                'WHERE "ID"=4')=='restart'
@@ -1733,7 +1796,7 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
                 for path in (folder/'state'/'logs').glob('*.log'):
                     log=path.read_text(errors='replace')
                     for name in ('RIVOMESH_ORACLE_PROBE_PASSWORD','POSTGRES_PASSWORD',
-                                 'RM_ORACLE_TEST_TOKEN','CLICKHOUSE_PASSWORD','MYSQL_ROOT_PASSWORD'):
+                                 'RM_ORACLE_TEST_TOKEN','CLICKHOUSE_PASSWORD','MYSQL_ROOT_PASSWORD','KINGBASE_FIXTURE_PASSWORD'):
                         if env.get(name):
                             log=log.replace(env[name],'[REDACTED]')
                     (output/(path.stem+'-redacted.log')).write_text(log)
@@ -1746,6 +1809,8 @@ def pipeline_profile(options, oracle, sql, root_service, pdb_service, environmen
             execute('docker','stop','--time','10',clickhouse,checked=False)
         if started_mysql:
             execute('docker','stop','--time','10',mysql)
+        if started_kingbase:
+            execute('docker','stop','--time','15',kingbase)
         if started:
             execute('docker','stop','--time','30',target)
 
@@ -1762,6 +1827,7 @@ def main():
     parser.add_argument('--image', default='container-registry.oracle.com/database/free@sha256:'
                         'f5a1791bf5628fd1a97e07584ff5ac5537da5021c23e70f5083f48c8fcd6476e')
     parser.add_argument('--logminer', action='store_true', help='Also verify archive redo and committed-only row images')
+    parser.add_argument('--kingbase-target', action='store_true', help='Verify the Oracle source through native Kingbase PG mode')
     parser.add_argument('--mysql-target', action='store_true', help='Verify the Oracle source through native MySQL 8.4')
     parser.add_argument('--clickhouse', action='store_true', help='Materialize the Oracle RAW profile into ClickHouse')
     parser.add_argument('--raw-values', action='store_true',
@@ -1797,6 +1863,8 @@ def main():
     options = parser.parse_args()
     if options.startup_timeout<1:
         parser.error('--startup-timeout must be positive')
+    if options.kingbase_target and not options.raw_values:
+        parser.error('--kingbase-target requires --raw-values')
     if options.mysql_target and not options.raw_values:
         parser.error('--mysql-target requires --raw-values')
     if options.clickhouse and not options.raw_values:
@@ -1857,7 +1925,8 @@ def main():
               'savepointEvidence':options.savepoint_evidence, 'savepointPipeline':options.savepoint_pipeline,
               'startupTimeoutSeconds':options.startup_timeout,
               'redis': options.redis, 'rawEvidence': options.raw_evidence, 'rawValues': options.raw_values,
-              'clickhouse': options.clickhouse, 'mysqlTarget':options.mysql_target, 'project': name,
+              'clickhouse': options.clickhouse, 'mysqlTarget':options.mysql_target,
+              'kingbaseTarget':options.kingbase_target, 'project': name,
               'hostMountedOracleData': options.oradata_root is not None,
               'harnessSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'checks': [], 'status': 'FAIL'}
@@ -2081,6 +2150,8 @@ def main():
             raw_evidence(sql,options.output,observed)
         if options.pipeline:
             pipeline_profile(options,name,sql,root_service,pdb_service,environment,observed)
+        if options.kingbase_target:
+            report['kingbaseVersion']=(options.output/'kingbase-version.txt').read_text().strip()
         if options.mysql_target:
             report['mysqlVersion']=(options.output/'mysql-version.txt').read_text().strip()
         if options.clickhouse:

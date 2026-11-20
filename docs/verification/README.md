@@ -848,3 +848,13 @@ The Temurin 21 package `7b6d3a92cc016c1abbccc37c20fc63a3942d2e917b66e616f5e38dc2
 The Temurin 21 source/target candidate `8ad783f713ef4544b419f519c501f022b033bd13000c11daad9b4f0a2fb426db` passed Oracle Free 23.26.4.0.0 to MySQL 8.4.13 and PostgreSQL. MySQL preserves wide DECIMAL, civil DATE and distinct NO PAD VARCHAR and RAW keys. Both SQL targets reuse their original snapshot IDs and catch up from the retained Oracle SCN after a forced restart. [Reproduce](../../tests/oracle-source-probe.py) · [Manifest](baseline.json)
 
 The grouped Maven package `c0404e33d165bfb258d0aa5dbf6916ce5a2fef7708fda2f16e934d8e9191eeee` passed 57 focused Java tests and five source-wizard and DDL review DOM tests.
+
+## PostgreSQL and Oracle to native Kingbase
+
+KingbaseES V009R001C001B0025 in PG/UTF8 mode passed two independent Temurin 21 candidates. The PostgreSQL artifact `2e371df8963d94c2437d14812e2fd74eb9b0a1b7c7d39f407aefc8352d078fd9` verifies exact values, key changes, keyless deletion and original-slot Worker restart. The Oracle artifact `49205b57abd757b8050af8bbb62b09fd27deaacb223328ad12a981988e136d9c` verifies civil DATE, exact NUMBER, SQL NULL and distinct text and RAW primary keys through Flashback and LogMiner. Both SQL subscriptions retain their original snapshots after forced restart. [PostgreSQL fixture](../../tests/postgres-source-run.py) · [Oracle fixture](../../tests/oracle-source-probe.py) · [Manifests](baseline.json)
+
+## PostgreSQL to native Dameng
+
+The Temurin 21 candidate `cd47ea81b73e8103114b2159a0adf6925938625f2fc9c9b8ff198abaf7f91719` verifies Dameng 8.1.4.80 native mode 0, explicit JSON-to-CLOB review, bytea written as BLOB, exact numeric values and one keyless deletion. PostgreSQL and Dameng retain their original snapshots and resume the original WAL slot after a forced restart. [Reproduce](../../tests/postgres-source-run.py) · [Manifest](baseline.json)
+
+The grouped Temurin 21 package `137fc4d6c7f115ce57d66901ca8b990ed8b60ad13573ec55da95096a3ac94a5f` passed 57 focused Java tests and five source wizard and DDL review DOM tests. Individual native destination artifacts are identified above.

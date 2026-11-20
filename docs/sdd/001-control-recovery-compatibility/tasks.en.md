@@ -126,6 +126,8 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
   Deliver: Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs.
   Acceptance: AC-SO-06
+  - [x] Native PostgreSQL to Dameng exact values, CDC and original-slot restart.
+  - [x] Native PostgreSQL to Kingbase PG mode snapshot, CDC and original-slot restart.
   - [x] Native PostgreSQL to Hive 4.0.1 snapshot, CDC and restart.
   - [x] Native PostgreSQL to Doris, including original-slot restart.
   - [x] Native PostgreSQL, ClickHouse and Redis Streams snapshot, CDC and original-slot restart.
@@ -137,6 +139,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-07 · Oracle source adapter · P1 · Depends on: SO-01
   Deliver: Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly.
   Acceptance: AC-SO-07
+  - [x] Native Oracle to Kingbase PG mode with civil DATE, RAW keys and original-SCN restart.
   - [x] Native Oracle to MySQL with civil DATE, RAW and text keys, and original-SCN restart.
   - [x] Native Oracle RAW and keyless recovery through ClickHouse.
   - [x] Native Oracle RAW snapshot, archive CDC and original-SCN restart to PostgreSQL and Redis Streams.
