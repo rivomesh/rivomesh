@@ -145,11 +145,30 @@ class AutomaticPlacementTest {
         var pipeline=PipelineConfig.parse(automatic("POSTGRESQL").yaml,Path.of("."));
         AutomaticPlacement.requireWorker(pipeline,Map.of());
         Properties values=org.postgresql.Driver.parseURL(AutomaticPlacement.journalProbeUrl(
-                "jdbc:postgresql://localhost/test?sslmode=verify-full&socketTimeout=90&loginTimeout=90"),new Properties());
+                 "jdbc:postgresql://localhost/test?sslmode=verify-full&socketTimeout=90&loginTimeout=90",TargetProduct.POSTGRESQL),new Properties());
         assertEquals("verify-full",values.getProperty("sslmode"));
         assertEquals("3",values.getProperty("connectTimeout"));
         assertEquals("4",values.getProperty("loginTimeout"));
         assertEquals("4",values.getProperty("socketTimeout"));
+    }
+
+    @Test void mysqlJournalCandidatesKeepVerificationAndOverrideConnectionTimeouts()throws Exception{
+        String url=AutomaticPlacement.journalProbeUrl(
+                "jdbc:mysql://localhost/log?sslMode=VERIFY_IDENTITY&socketTimeout=90000&autoReconnect=true",TargetProduct.MYSQL);
+        Properties properties=com.mysql.cj.conf.ConnectionUrl.getConnectionUrlInstance(url,new Properties())
+                .getConnectionArgumentsAsProperties();
+        assertEquals("VERIFY_IDENTITY",properties.getProperty("sslMode"));
+        assertEquals("3000",properties.getProperty("connectTimeout"));
+        assertEquals("4000",properties.getProperty("socketTimeout"));
+        assertEquals("false",properties.getProperty("autoReconnect"));
+
+        var yaml=new ObjectMapper(new YAMLFactory());
+        var candidate=(ObjectNode)yaml.readTree(automatic("POSTGRESQL").yaml);
+        var journal=(ObjectNode)candidate.get("journal");
+        journal.put("product","MYSQL").put("url","jdbc:mysql://localhost/log");
+        assertTrue(AutomaticPlacement.applies(candidate));
+        journal.put("managedWriter",true);
+        assertFalse(AutomaticPlacement.applies(candidate));
     }
 
     @Test void workerComponentsFollowSourceProtocolAndActualSqlDestinations()throws Exception{
@@ -168,6 +187,9 @@ class AutomaticPlacementTest {
         assertFalse(postgresOnly.contains(mysqlBinlog));
         AutomaticPlacement.requireWorker(pipeline,Map.of());
 
+        pipeline.journal.product=TargetProduct.MYSQL;
+        assertTrue(AutomaticPlacement.workerComponents(pipeline).contains(mysqlDriver));
+        pipeline.journal.product=TargetProduct.POSTGRESQL;
         pipeline.source.type="MYSQL";
         var mysqlSource=AutomaticPlacement.workerComponents(pipeline);
         assertTrue(mysqlSource.containsAll(List.of("org.postgresql.Driver",mysqlDriver,mysqlBinlog)));

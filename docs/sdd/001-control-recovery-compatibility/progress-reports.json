@@ -23,22 +23,22 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "50fce13"
+    "71fc293"
   ],
   "currentSdd": {
-    "DONE": 38,
-    "PARTIAL": 10,
+    "DONE": 39,
+    "PARTIAL": 9,
     "NEW": 0
   },
   "nextTasks": [
-    "Continue one SDD requirement at a time."
+    "Continue LG-05 cross-node storage reachability and positive durable split-store fencing."
   ],
-  "currentCandidateArtifact": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
-  "currentCandidateScope": "Temurin 21 approved source, driver and recovery matrix with native OceanBase and GBase 8c verification.",
+  "currentCandidateArtifact": "ce3b91b870d89b6aea414de17b9900a487f5ef0346f4cf26efc7f83a54738edd",
+  "currentCandidateScope": "Temurin 21 native qualified Agent placement and outage isolation across independently routed MySQL journals.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Published RC-10 native receipts and journal retention.",
-    "Accepted JV-02 with pinned native OceanBase and GBase 8c pipelines and bilingual evidence matrix."
+    "Published JV-02 with OceanBase reconnect and GBase 8c native acceptance.",
+    "Accepted CP-04 with native MySQL and PostgreSQL source profiles, independent MySQL journal route loss and exact original-owner restart."
   ],
   "lastScheduledReportAt": "2026-11-20T08:58:16+08:00",
   "lastVerifiedReactor": {
@@ -79,7 +79,6 @@
     "priorReportCommit": "3aa4b0d1b410e9c1afd91f271bec978d419f1e6f"
   },
   "remainingRequirements": [
-    "CP-04",
     "SO-06",
     "SO-07",
     "JV-03",
@@ -106,7 +105,6 @@
     "scope": "Full Temurin 21 release reactor and exact browser/configuration checks."
   },
   "pausedRequirements": [
-    "CP-04",
     "SO-06",
     "SO-07",
     "JV-03",

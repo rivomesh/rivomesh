@@ -39,7 +39,7 @@
 | PostgreSQL 源 | 已实测 17.12 逻辑槽切换续传及 18.7 存储型生成列。17.12 的 REAL、DOUBLE PRECISION 和 BYTEA 可续传至 PostgreSQL 和 MySQL。BYTEA 兼容源库 hex 与 escape 设置，核对无主键重数和外置值。 [配置与恢复](postgresql-source.md) |
 | Oracle 源 | Oracle Free 26ai 单 PDB 的 Flashback 和归档 LogMiner 已通过。两路 PostgreSQL 保留原 SCN，支持保存点回滚及强制重启。严格文本 JSON 和限定 AL32UTF8、AL16UTF16 字符类型已验收。预检拦截缺少重做镜像的原生 JSON。 [源库手册](oracle-source.md) |
 | 采集故障恢复 | 检查原断点及受影响目标，核对 MySQL GTID 边界和原始日志，限定档案支持审批后排除一个已核验事务。 [操作说明](capture-recovery.md) |
-| 管理 | 中英文向导、共享修订、独立 Worker 和跨入口控制。MySQL 与 PostgreSQL 源已验证按 JVM、组件和外部 PostgreSQL 日志连通性自动选择 Agent。真实 Chrome 已验证登录保持、报告和回执检索、审批后恢复报告。Keycloak 26.7.4 已通过 HTTPS 授权码、S256 PKCE 和跨入口撤权。 [全局控制](global-control.md) · [OIDC](oidc-login.md) |
+| 管理 | 中英文向导、共享修订、独立 Worker 和跨入口控制。MySQL 与 PostgreSQL 源已验证按 JVM、组件和外部 MySQL 或 PostgreSQL 日志连通性自动选择 Agent。真实 Chrome 已验证登录保持、报告和回执检索、审批后恢复报告。Keycloak 26.7.4 已通过 HTTPS 授权码、S256 PKCE 和跨入口撤权。 [全局控制](global-control.md) · [OIDC](oidc-login.md) |
 | 日志 ACK 中断 | 共享 PostgreSQL 日志下，已实测 MySQL 或 PostgreSQL 目标先提交。原 Agent 重连并显式启动后只补缺失 ACK。已冻结写入并封存完整结案回执的同库档案通过离线接管，候选启动保持两目标原切点。 [操作手册](global-control.md#控制网络非对称分区) |
 | 对账修复 | 共同校验点、行差异、管理员修复计划；限定MySQL/PostgreSQL档案 |
 | 缺口核验 | 审阅计划、管理员确认、重新扫描、原子凭据和跨入口取消；限定PG/MySQL，验收进度见[手册](gap-verification.md) |

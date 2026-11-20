@@ -40,6 +40,8 @@ parser.add_argument('--verified-placement', action='store_true',
                     help='Check native PostgreSQL journal reachability before creating an automatic owner')
 parser.add_argument('--verified-placement-postgres-source', action='store_true',
                     help='Run native verified placement and CDC with a published PostgreSQL source')
+parser.add_argument('--verified-placement-mysql-journal', action='store_true',
+                    help='Verify placement and origin recovery with an independently routed native MySQL journal')
 parser.add_argument('--task-authority', action='store_true',
                     help='Exercise global revisions, unique task IDs, independent sources and standalone control')
 parser.add_argument('--command-routing', action='store_true',
@@ -182,6 +184,8 @@ if args.verified_placement and (not args.automatic_placement or args.control_pro
     parser.error('--verified-placement requires the native PostgreSQL automatic placement baseline')
 if args.verified_placement_postgres_source and not args.verified_placement:
     parser.error('--verified-placement-postgres-source requires --verified-placement')
+if args.verified_placement_mysql_journal and not args.verified_placement:
+    parser.error('--verified-placement-mysql-journal requires --verified-placement')
 if args.handoff_assessment and (not args.automatic_placement or args.runtime_jdk or args.rolling_restart):
     parser.error('--handoff-assessment requires --separate-execution --automatic-placement')
 if args.handoff_probe and not args.handoff_assessment:
@@ -571,6 +575,10 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
     if args.verified_placement:
         services['placement-store']={'image':'postgres:17','networks':['placement-journal'],
             'environment':{'POSTGRES_PASSWORD':'${RM_GC_CONTROL}','POSTGRES_DB':'rivomesh_placement'}}
+        if args.verified_placement_mysql_journal:
+            services['placement-store']={'image':'mysql:8.4','networks':['placement-journal'],
+                'environment':{'MYSQL_ROOT_PASSWORD':'${RM_GC_DATA}','MYSQL_ROOT_HOST':'%',
+                               'MYSQL_DATABASE':'placement_journal'}}
         compose_data['networks']={'default':{},'placement-journal':{}}
     if args.verified_placement_postgres_source:
         services['placement-source']={'image':'postgres:17','command':['-c','wal_level=logical'],
@@ -590,7 +598,8 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                               capture_output=True, text=True, timeout=180)
 
     def sql(service, statement):
-        if service in ('postgres','journal-store','placement-store','placement-source') or service == 'store' and args.control_product == 'POSTGRESQL':
+        postgres_service=service in ('postgres','journal-store','placement-source')
+        if postgres_service or service=='placement-store' and not args.verified_placement_mysql_journal or service=='store' and args.control_product=='POSTGRESQL':
             database={'postgres':'sync_test','store':'rivomesh_control','journal-store':'rivomesh_journal','placement-store':'rivomesh_placement','placement-source':'placement_source'}[service]
             result = compose('exec', '-T', service, 'psql', '-h', '127.0.0.1', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d',
                              database, '-A', '-t', '-F', '|', '-c', statement)
@@ -2943,19 +2952,27 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             passed('Only the original Agent can admit the explicitly initialized managed writer')
         created = 'gc_create_' + uuid.uuid4().hex
         if args.verified_placement:
-            sql('placement-store',"CREATE ROLE placement_writer LOGIN PASSWORD '"+env['RM_GC_DATA']
-                +"'; GRANT CREATE ON DATABASE rivomesh_placement TO placement_writer")
+            mysql_journal=args.verified_placement_mysql_journal
+            journal_port=3306 if mysql_journal else 5432
+            if mysql_journal:
+                sql('placement-store',"CREATE USER 'placement_writer'@'%' IDENTIFIED BY '"+env['RM_GC_DATA']
+                    +"'; GRANT ALL PRIVILEGES ON placement_journal.* TO 'placement_writer'@'%'")
+            else:
+                sql('placement-store',"CREATE ROLE placement_writer LOGIN PASSWORD '"+env['RM_GC_DATA']
+                    +"'; GRANT CREATE ON DATABASE rivomesh_placement TO placement_writer")
             store_id=compose('ps','-q','placement-store').stdout.strip()
             network=project+'_placement-journal'
             address_template='{{(index .NetworkSettings.Networks "'+network+'").IPAddress}}'
             journal_ip=str(IPv4Address(subprocess.check_output(
                 ['docker','inspect','-f',address_template,store_id],text=True,timeout=15).strip()))
             def journal_reachable(node):
-                return compose('exec','-T',node,'timeout','3','bash','-c','exec 3<>/dev/tcp/"$1"/5432',
-                               'test-journal',journal_ip,check=False).returncode==0
+                return compose('exec','-T',node,'timeout','3','bash','-c','exec 3<>/dev/tcp/"$1"/"$2"',
+                               'test-journal',journal_ip,str(journal_port),check=False).returncode==0
             assert not any(journal_reachable(node) for node in execution_agents)
-            document['journal']={'mode':'EXTERNAL','product':'POSTGRESQL','namespace':'placement_journal',
-                                 'url':f'jdbc:postgresql://{journal_ip}:5432/rivomesh_placement?connectTimeout=2&socketTimeout=4',
+            journal_url=(f'jdbc:mysql://{journal_ip}:{journal_port}/placement_journal?allowPublicKeyRetrieval=true&sslMode=DISABLED'
+                         if mysql_journal else f'jdbc:postgresql://{journal_ip}:{journal_port}/rivomesh_placement?connectTimeout=2&socketTimeout=4')
+            document['journal']={'mode':'EXTERNAL','product':'MYSQL' if mysql_journal else 'POSTGRESQL',
+                                 'namespace':'placement_journal','url':journal_url,
                                  'username':'placement_writer','password':env['RM_GC_DATA']}
             postgres_placement=args.verified_placement_postgres_source
             slot_count='SELECT COUNT(*) FROM pg_replication_slots'
@@ -3026,6 +3043,56 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
             assert task('node-b')['ownerNodeId']==chosen
             passed('Separate START initializes the selected journal and the eligible Agent delivers full and incremental data')
             manifest['verifiedPlacement']={'agents':2,'rejectedWithoutJournal':True,'selected':chosen,'beforeStartJournalTables':0}
+            if mysql_journal and not postgres_placement:
+                subprocess.run(['docker','network','disconnect',network,node_container],
+                               check=True,capture_output=True,text=True,timeout=15)
+                try:
+                    assert not journal_reachable(chosen)
+                    sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(146,'independent log loss',JSON_OBJECT('n',146))")
+                    time.sleep(2)
+                    assert all(task(node)['ownerNodeId']==chosen and task(node).get('ownerState')=='HEALTHY'
+                               for node in ('node-a','node-b'))
+                    assert all(sql(product,'SELECT COUNT(*) FROM '+schema+'.items WHERE id=146')=='0'
+                               for product,schema in (('postgres','rm_pg_sales'),('mysql-target','rm_my_sales')))
+                finally:
+                    subprocess.run(['docker','network','connect',network,node_container],
+                                   check=True,capture_output=True,text=True,timeout=15)
+                wait(lambda:journal_reachable(chosen),'original Agent regains the independent MySQL journal route')
+                wait(rows_match,'original Agent automatically applies the row after its journal route returns')
+                passed('Loss of only the native MySQL journal route leaves the control lease reachable and both targets unchanged; restoring it resumes the same owner and exact source data')
+                manifest['verifiedPlacement']['independentJournalPartition']='HEALTHY_CONTROL_THEN_AUTOMATIC_RESUME'
+            if mysql_journal:
+                manifest['verifiedPlacement']['journalProduct']='MYSQL'
+                manifest['verifiedPlacement']['journalVersion']=sql('placement-store','SELECT VERSION()')
+                compose('kill','-s','SIGKILL',chosen)
+                if postgres_placement:
+                    sql('placement-source',"UPDATE sales.items SET note='original agent restart' WHERE id=1")
+                else:
+                    sql('mysql',"INSERT INTO sales.items(id,note,payload) VALUES(145,'original agent restart',JSON_OBJECT('n',145))")
+                def outage_row_held():
+                    if postgres_placement:
+                        return rows_have_note('logical increment')
+                    return all(sql(product,'SELECT COUNT(*) FROM '+schema+'.items WHERE id=145')=='0'
+                               for product,schema in (('postgres','rm_pg_sales'),('mysql-target','rm_my_sales')))
+                for controller in ('node-a','node-b'):
+                    wait(lambda node=controller: task(node)['ownerNodeId']==chosen
+                         and task(node).get('workerState')=='UNKNOWN','unknown original Worker via '+controller)
+                assert outage_row_held()
+                passed('Both Controllers preserve the original owner and mark an abrupt unsealed Agent loss unknown, with neither target applying the new source row')
+                stop_request,_=action('STOP',node='node-b',complete=False)
+                compose('start',chosen)
+                wait(lambda: outcome(stop_request),'returned original Agent processes queued STOP')
+                assert task('node-a')['ownerNodeId']==chosen and task('node-b')['ownerNodeId']==chosen
+                assert outage_row_held()
+                action('START',node='node-a')
+                if postgres_placement:
+                    wait(lambda:rows_have_note('original agent restart'),'original MySQL journal drains the retained pgoutput cut')
+                    assert sql('placement-source','SELECT slot_name FROM pg_replication_slots')==slot
+                else:
+                    wait(rows_match,'original MySQL journal drains the retained source cut after explicit START')
+                passed('The returned original honours queued STOP then explicitly resumes with each native target applying the retained row once')
+                manifest['verifiedPlacement']['abruptOriginalLoss']='UNKNOWN_THEN_RESTART_ORIGINAL'
+                action('STOP',node='node-b')
             if postgres_placement:
                 manifest['verifiedPlacement']['sourceType']='POSTGRESQL'
                 manifest['verifiedPlacement']['slotsBeforeStart']=0

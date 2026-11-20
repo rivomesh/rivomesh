@@ -780,3 +780,9 @@ Package `84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70` passe
 The OceanBase first run exposed a Connector/J exception during statement timer cleanup. The candidate bounds the JDBC network timeout during the target probe, preserves the underlying connection failure and restores the connection setting.
 
 The [Chinese compatibility matrix](../zh-CN/compatibility.md) and [English compatibility matrix](../en/compatibility.md) register the individual client, TLS, type, topology and recovery boundaries for the approved source, relational and analytical targets, and brokers. [Evidence ledger](baseline.json)
+
+## CP-04 native placement and failover
+
+Temurin 21 artifact `ce3b91b870d89b6aea414de17b9900a487f5ef0346f4cf26efc7f83a54738edd` passed 18 scoped Java checks and 13 native management checks across MySQL 8.4.13 and PostgreSQL 17.12 sources. The control store is PostgreSQL and the execution journal is an independently routed MySQL 8.4.13 database. A second Agent can qualify once it gains the journal route. Two Controllers preserve one CREATE authority and explicitly START the selected owner.
+
+Both source profiles preserve the same owner when an unsealed Agent is killed. The returned original processes its queued STOP. Authorized START delivers the retained change once per destination and reuses the PostgreSQL slot in that source profile. A journal-only partition leaves control healthy and both targets at their preceding cuts. Reconnection of the same Agent catches up automatically. The archived same-store frozen-owner and asymmetric target tests cover approved drained transfer and native fencing. Positive writer relocation across separate control and journal databases remains under LG-05. [Evidence ledger](baseline.json)

@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "CP-04",
+      "title": {
+        "zh-CN": "故障接管、隔离与资源调度",
+        "en": "Failover,fencing and placement"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "ce3b91b870d89b6aea414de17b9900a487f5ef0346f4cf26efc7f83a54738edd",
+        "archive": "docs/verification/README.md",
+        "criteriaSha256": "179ffb28b8943d20346ff6111721c5d497ad629ce1487a81cfe74109477aa8e3",
+        "profile": "Temurin 21. Native MySQL 8.4 and PostgreSQL 17 sources, two Controllers, two Agents, independent MySQL 8.4 journal, MySQL and PostgreSQL targets, journal-only partition and abrupt owner loss. Accepted same-store drain and offline writer-fence evidence are separate frozen profiles. Positive cross-database writer transfer remains LG-05."
+      }
+    },
+    {
       "id": "JV-02",
       "title": {
         "zh-CN": "Java 21 源、目标及恢复组合",
@@ -14776,5 +14790,78 @@
       "docs/zh-CN/compatibility.md",
       "docs/en/compatibility.md"
     ]
+  },
+  "cp04MySqlJournalPlacementAndIsolation": {
+    "status": "PASS",
+    "artifactSha256": "ce3b91b870d89b6aea414de17b9900a487f5ef0346f4cf26efc7f83a54738edd",
+    "profiles": {
+      "MYSQL": {
+        "sourceVersion": "8.4.13",
+        "sourceImageId": "sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7",
+        "journalVersion": "8.4.13",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Two live Agents without the external journal route leave no task, configuration or CREATE authority",
+          "Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized",
+          "Separate START initializes the selected journal and the eligible Agent delivers full and incremental data",
+          "Loss of only the native MySQL journal route leaves the control lease reachable and both targets unchanged; restoring it resumes the same owner and exact source data",
+          "Both Controllers preserve the original owner and mark an abrupt unsealed Agent loss unknown, with neither target applying the new source row",
+          "The returned original honours queued STOP then explicitly resumes with each native target applying the retained row once"
+        ],
+        "verifiedPlacement": {
+          "agents": 2,
+          "rejectedWithoutJournal": true,
+          "selected": "node-worker-alt",
+          "beforeStartJournalTables": 0,
+          "independentJournalPartition": "HEALTHY_CONTROL_THEN_AUTOMATIC_RESUME",
+          "journalProduct": "MYSQL",
+          "journalVersion": "8.4.13",
+          "abruptOriginalLoss": "UNKNOWN_THEN_RESTART_ORIGINAL"
+        },
+        "harnessSourceSha256": "e93b66a5dc948e4c47f9cb11c8e6c415c3175a1ff8d36b2c8836dc861ea1e330",
+        "manifestSha256": "b4c9e539853e51568e61a5e2ee880d66095c579d8b5d27a9dcf8b1816569b616",
+        "logSha256": "6bcb9c5f522527a73483148613f0cb0c757e552562ee3e4c3d1f381fce389fd6",
+        "cleanupExitCode": 0
+      },
+      "POSTGRESQL": {
+        "sourceVersion": "17.12",
+        "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+        "journalVersion": "8.4.13",
+        "checks": [
+          "Agent command opens probes only; management roles are visible through controller sessions",
+          "Two live Agents without the external journal route leave no task, configuration or CREATE authority",
+          "Only the second Agent reaches the native journal and both Controllers replay one CREATE while the journal stays uninitialized",
+          "Separate START initializes the selected journal and the eligible Agent delivers full and incremental data",
+          "Both Controllers preserve the original owner and mark an abrupt unsealed Agent loss unknown, with neither target applying the new source row",
+          "The returned original honours queued STOP then explicitly resumes with each native target applying the retained row once"
+        ],
+        "verifiedPlacement": {
+          "agents": 2,
+          "rejectedWithoutJournal": true,
+          "selected": "node-worker-alt",
+          "beforeStartJournalTables": 0,
+          "journalProduct": "MYSQL",
+          "journalVersion": "8.4.13",
+          "abruptOriginalLoss": "UNKNOWN_THEN_RESTART_ORIGINAL",
+          "sourceType": "POSTGRESQL",
+          "slotsBeforeStart": 0,
+          "sameSlotAfterIncrement": true
+        },
+        "harnessSourceSha256": "4b2770940f19a2cfa3da0da563e635eeb4814057818b3021dea45cf4c9aafd47",
+        "manifestSha256": "20fefb7354633a4a01899199cbf4e0fc9f74e3a9bc5dae6c22b6f0c11401eef3",
+        "logSha256": "0999a5672c1220fcf2c1b7a8ab1b243f7165b2ce14d2fe97479138ca26704c3d",
+        "cleanupExitCode": 0
+      }
+    },
+    "focusedJavaPassed": 18,
+    "focusedJavaLogSha256": "46d95c80b60ab3d25f960d3077426f608e34599aba450733794b36109dea4156",
+    "profileReferences": [
+      "nativeFrozenOriginalOfflineOwnerTransfer",
+      "managedWorkerAsymmetricControlPartition",
+      "automaticPlacementPostgresqlSourceTemurin21"
+    ],
+    "reproduce": "python3 tests/global-control-pipeline.py --artifact sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar --output target/native-mysql-journal-placement --source-expected-version 8.4.13 --separate-execution --automatic-placement --verified-placement --verified-placement-mysql-journal",
+    "postgresqlSourceVariant": "Add --verified-placement-postgres-source and set --source-expected-version 17.12.",
+    "boundary": "The positive qualified placement, fail-closed isolation and exact return are native. Frozen same-store transfer and native target fencing use the archived named profiles. No unsealed owner replacement is attempted. Positive writer relocation across separate control and journal databases remains LG-05."
   }
 }

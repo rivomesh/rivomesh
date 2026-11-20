@@ -13,11 +13,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-/** A bounded candidate probe for automatic placement of SQL pipelines with a PostgreSQL journal. */
+/** A bounded candidate probe for automatic placement of SQL pipelines with an external SQL journal. */
 final class AutomaticPlacement {
     private static final Set<String> SQL_PRODUCTS=Set.of("MYSQL","POSTGRESQL");
-    private static final List<String> WORKER_COMPONENTS=List.of("io.github.rivomesh.Main","io.github.rivomesh.PipelineMain",
-            "org.postgresql.Driver");
+    private static final List<String> WORKER_COMPONENTS=List.of("io.github.rivomesh.Main","io.github.rivomesh.PipelineMain");
 
     private AutomaticPlacement(){}
 
@@ -26,7 +25,7 @@ final class AutomaticPlacement {
         JsonNode journal=definition.path("journal"),targets=definition.path("targets");
         String source=definition.path("source").path("type").asText(definition.path("sourceType").asText("MYSQL"));
         if(!SQL_PRODUCTS.contains(source)||!"EXTERNAL".equals(journal.path("mode").asText())
-                ||!"POSTGRESQL".equals(journal.path("product").asText("POSTGRESQL"))
+                ||!SQL_PRODUCTS.contains(journal.path("product").asText("POSTGRESQL"))
                 ||journal.hasNonNull("writerAssignment")||journal.path("managedWriter").asBoolean()
                 ||!targets.isArray()||targets.isEmpty())return false;
         for(JsonNode target:targets)if(!SQL_PRODUCTS.contains(target.path("product").asText()))return false;
@@ -40,10 +39,15 @@ final class AutomaticPlacement {
     static List<String> workerComponents(PipelineConfig pipeline){
         var components=new ArrayList<>(WORKER_COMPONENTS);
         boolean mysqlSource="MYSQL".equals(pipeline.effectiveSourceType());
-        if(mysqlSource||pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.MYSQL))
+        boolean postgresSource="POSTGRESQL".equals(pipeline.effectiveSourceType());
+        if(mysqlSource||pipeline.journal.product==TargetProduct.MYSQL
+                ||pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.MYSQL))
             components.add("com.mysql.cj.jdbc.Driver");
+        if(postgresSource||pipeline.journal.product==TargetProduct.POSTGRESQL
+                ||pipeline.targets.stream().anyMatch(target->target.product==TargetProduct.POSTGRESQL))
+            components.add("org.postgresql.Driver");
         if(mysqlSource)components.add("com.github.shyiko.mysql.binlog.BinaryLogClient");
-        else components.add("org.postgresql.replication.PGReplicationStream");
+        if(postgresSource)components.add("org.postgresql.replication.PGReplicationStream");
         return components;
     }
 
@@ -88,12 +92,14 @@ final class AutomaticPlacement {
         Properties properties=new Properties();
         properties.setProperty("user",journal.username);
         if(journal.password!=null)properties.setProperty("password",journal.password);
-        // These properties come last so the probe remains bounded independently of task options.
-        try(Connection connection=new org.postgresql.Driver().connect(journalProbeUrl(journal.url),properties)){
+        boolean mysql=journal.product==TargetProduct.MYSQL;
+        // These options come last so the probe remains bounded independently of task options.
+        try(Connection connection=(mysql?new com.mysql.cj.jdbc.Driver():new org.postgresql.Driver())
+                .connect(journalProbeUrl(journal.url,journal.product),properties)){
             if(connection==null)throw new TaskService.Conflict("PLACEMENT_JOURNAL_UNAVAILABLE");
             connection.setReadOnly(true);
             try(var statement=connection.createStatement()){
-                statement.setQueryTimeout(3);
+                if(!mysql)statement.setQueryTimeout(3);
                 try(var found=statement.executeQuery("SELECT 1")){
                     if(!found.next()||found.getInt(1)!=1)throw new TaskService.Conflict("PLACEMENT_JOURNAL_UNAVAILABLE");
                 }
@@ -102,7 +108,10 @@ final class AutomaticPlacement {
             throw new TaskService.Conflict("PLACEMENT_JOURNAL_UNAVAILABLE");
         }
     }
-    static String journalProbeUrl(String url){
-        return url+(url.contains("?")?"&":"?")+"connectTimeout=3&loginTimeout=4&socketTimeout=4";
+    static String journalProbeUrl(String url,TargetProduct product){
+        String bounded=product==TargetProduct.MYSQL
+                ?"connectTimeout=3000&socketTimeout=4000&autoReconnect=false"
+                :"connectTimeout=3&loginTimeout=4&socketTimeout=4";
+        return url+(url.contains("?")?"&":"?")+bounded;
     }
 }
