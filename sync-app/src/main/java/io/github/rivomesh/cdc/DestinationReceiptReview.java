@@ -20,7 +20,8 @@ public final class DestinationReceiptReview {
 
     public static boolean supports(TargetProduct product){
         return product!=null&&(product.materialized()||product==TargetProduct.ACTIVEMQ_ARTEMIS
-                ||product==TargetProduct.ACTIVEMQ_CLASSIC||product==TargetProduct.ROCKETMQ);
+                ||product==TargetProduct.ACTIVEMQ_CLASSIC||product==TargetProduct.ROCKETMQ
+                ||product==TargetProduct.REDIS_STREAMS||product==TargetProduct.NATS_JETSTREAM||product==TargetProduct.PULSAR);
     }
 
     public static Map<String,Object> inspect(PipelineConfig config,String targetId,long expectedErrorGeneration)throws Exception{
@@ -89,6 +90,24 @@ public final class DestinationReceiptReview {
             case ROCKETMQ -> {
                 String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
                 try(var publisher=new RocketMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case REDIS_STREAMS -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new RedisMessagePublisher(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case NATS_JETSTREAM -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new MessagePublishers.JetStream(target,binding)){
+                    publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
+                }
+            }
+            case PULSAR -> {
+                String binding=MessagePublishers.binding(config.pipelineId,target.id,cut.generation());
+                try(var publisher=new PulsarMessagePublisher(target,binding)){
                     publisher.verifyPrecedingCommit(cut.progress(),cut.nativeIdentityHash(),event);
                 }
             }

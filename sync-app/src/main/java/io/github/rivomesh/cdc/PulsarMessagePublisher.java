@@ -5,7 +5,7 @@ import io.github.rivomesh.SyncFailure;
 import io.github.rivomesh.transport.pulsar.PulsarTransport;
 import java.util.*;
 
-/** Synchronous persistent-topic confirmations through an isolated Java-8-compatible SDK. */
+/** Synchronous persistent-topic confirmations through the isolated Pulsar SDK. */
 public final class PulsarMessagePublisher implements ConfirmedPublisher {
     private final PipelineConfig.Target target;
     private final PulsarTransport transport;
@@ -21,6 +21,17 @@ public final class PulsarMessagePublisher implements ConfirmedPublisher {
     @Override public void require(Set<String> destinations)throws Exception{try{transport.prepare(false);}catch(Exception failure){throw translated(failure);}}
     @Override public void publish(List<Message> messages)throws Exception{
         List<PulsarTransport.Publication> batch=new ArrayList<>();for(Message message:messages){PulsarTransport.Publication publication=new PulsarTransport.Publication();publication.id=message.id;publication.channel=message.destination;publication.key=message.key;publication.body=message.body;publication.headers.putAll(message.headers);batch.add(publication);}try{transport.publish(batch);}catch(Exception failure){throw translated(failure);}
+    }
+    @Override public String identity(){return transport.identity();}
+    @Override public String confirmedProgress(){return transport.confirmedProgress();}
+    @Override public void resumeProgress(String progress)throws Exception{
+        try{transport.resumeProgress(progress);}catch(Exception failure){throw translated(failure);}
+    }
+    void verifyPrecedingCommit(String progress,String identityHash,String event)throws Exception{
+        try{
+            if(!Codec.sha256(transport.verifyPrecedingCommit(progress,event)).equals(identityHash))
+                throw new IllegalStateException("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+        }catch(Exception failure){throw translated(failure);}
     }
     @Override public void close()throws Exception{try{transport.close();}catch(Exception failure){throw translated(failure);}}
 }

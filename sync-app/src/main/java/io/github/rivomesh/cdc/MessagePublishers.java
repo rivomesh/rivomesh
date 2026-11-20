@@ -66,9 +66,9 @@ public final class MessagePublishers {
         }
         public void close(){connection.abort();}
     }
-    private static final class JetStream implements ConfirmedPublisher {
+    static final class JetStream implements ConfirmedPublisher {
         final io.nats.client.Connection connection;final io.nats.client.JetStream stream;final JetStreamManagement management;final PipelineConfig.Target target;final String binding;
-        private boolean verified;
+        private String identity,confirmed;
         JetStream(PipelineConfig.Target target,String binding)throws Exception{
             this.target=target;
             this.binding=binding;
@@ -99,7 +99,7 @@ public final class MessagePublishers {
         public void prepare(Set<String> destinations)throws Exception{prepare(destinations,target.messaging.autoCreate);}
         public void require(Set<String> destinations)throws Exception{prepare(destinations,false);}
         private void prepare(Set<String> destinations,boolean allowCreate)throws Exception{
-            if(verified)return;
+            if(identity!=null)return;
             StreamInfo info;
             try{info=management.getStreamInfo(target.messaging.stream);}
             catch(JetStreamApiException e){
@@ -108,15 +108,56 @@ public final class MessagePublishers {
                 try{info=management.addStream(StreamConfiguration.builder().name(target.messaging.stream).description(binding).subjects(subjects).storageType(StorageType.File).retentionPolicy(RetentionPolicy.Limits).discardPolicy(DiscardPolicy.New).replicas(target.messaging.replicas).build());}
                 catch(JetStreamApiException race){info=management.getStreamInfo(target.messaging.stream);}
             }
+            identity=streamIdentity(info);
+        }
+
+        private String streamIdentity(StreamInfo info)throws SyncFailure{
             StreamConfiguration config=info.getConfiguration();Set<String> expected=new TreeSet<>();for(String namespace:target.mappings.values())expected.add(namespace+".*");
-            if(config.getStorageType()!=StorageType.File||config.getRetentionPolicy()!=RetentionPolicy.Limits||config.getDiscardPolicy()!=DiscardPolicy.New||!Duration.ZERO.equals(config.getMaxAge())||!new TreeSet<>(config.getSubjects()).equals(expected)||config.getReplicas()!=target.messaging.replicas||!Objects.equals(binding,config.getDescription()))throw new SyncFailure("JETSTREAM_CONFIGURATION_REQUIRES_PLAN","MESSAGE_PUBLICATION",false,"Stream ownership, retention, subjects, file storage, or replica count differs");verified=true;
+            if(config.getStorageType()!=StorageType.File||config.getRetentionPolicy()!=RetentionPolicy.Limits||config.getDiscardPolicy()!=DiscardPolicy.New||!Duration.ZERO.equals(config.getMaxAge())||!new TreeSet<>(config.getSubjects()).equals(expected)||config.getReplicas()!=target.messaging.replicas||!Objects.equals(binding,config.getDescription()))throw new SyncFailure("JETSTREAM_CONFIGURATION_REQUIRES_PLAN","MESSAGE_PUBLICATION",false,"Stream ownership, retention, subjects, file storage, or replica count differs");
+            if(info.getCreateTime()==null)throw uncertain();
+            return "NATS_STREAM_V1:"+target.messaging.stream+":"+info.getCreateTime().toInstant()+":"+binding;
         }
         public void publish(List<Message> messages)throws Exception{
+            String progress=null;
             for(Message message:messages){Headers headers=new Headers();for(Map.Entry<String,String> header:message.headers.entrySet())headers.add(header.getKey(),header.getValue());if(message.key!=null)headers.add("rivomesh_key",message.key);
-                try{stream.publish(NatsMessage.builder().subject(message.destination).headers(headers).data(message.body).build(),PublishOptions.builder().stream(target.messaging.stream).messageId(message.id).build());}
+                try{
+                    PublishAck ack=stream.publish(NatsMessage.builder().subject(message.destination).headers(headers).data(message.body).build(),
+                            PublishOptions.builder().stream(target.messaging.stream).messageId(message.id).build());
+                    if(!target.messaging.stream.equals(ack.getStream())||ack.getSeqno()<1)throw uncertain();
+                    progress="NATS_V1:"+ack.getSeqno()+":"+Codec.sha256(message.body);
+                }
                 catch(JetStreamApiException e){throw new SyncFailure("JETSTREAM_PUBLISH_REJECTED","MESSAGE_PUBLICATION",e.getErrorCode()>=500,"JetStream rejected publication",e,null,0,null);}
                 catch(IllegalStateException e){if(connection.getStatus()!=io.nats.client.Connection.Status.CONNECTED)throw new SyncFailure("BROKER_CONNECTION_LOST","MESSAGE_PUBLICATION",true,"NATS connection closed",e,null,0,null);throw e;}
             }
+            if(progress!=null)confirmed=progress;
+        }
+        @Override public String identity(){return identity;}
+        @Override public String confirmedProgress(){return confirmed;}
+        @Override public void resumeProgress(String progress){
+            if(progress!=null)parseProgress(progress);
+            confirmed=progress;
+        }
+        private static String[] parseProgress(String progress){
+            if(progress==null||!progress.matches("NATS_V1:[1-9][0-9]{0,18}:[a-f0-9]{64}"))throw uncertain();
+            return progress.split(":",3);
+        }
+        private static IllegalStateException uncertain(){
+            return new IllegalStateException("NATS_JETSTREAM_RECOVERY_PUBLICATION_UNCERTAIN");
+        }
+        void verifyPrecedingCommit(String progress,String identityHash,String event)throws Exception{
+            String[] receipt=parseProgress(progress);
+            String name=target.messaging.stream;
+            String before=streamIdentity(management.getStreamInfo(name));
+            if(!Codec.sha256(before).equals(identityHash))throw uncertain();
+            MessageInfo message;
+            long sequence=Long.parseLong(receipt[1]);
+            try{message=management.getMessage(name,sequence);}
+            catch(JetStreamApiException failure){if(failure.getErrorCode()==404)throw uncertain();throw failure;}
+            Headers headers=message.getHeaders();
+            if(message.getSeq()!=sequence||headers==null||!event.equals(headers.getFirst("Nats-Msg-Id"))
+                    ||!"COMMIT".equals(headers.getFirst("rivomesh_kind"))||message.getData()==null
+                    ||!Codec.sha256(message.getData()).equals(receipt[2])
+                    ||!before.equals(streamIdentity(management.getStreamInfo(name))))throw uncertain();
         }
         public void close()throws Exception{connection.close();}
     }

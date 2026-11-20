@@ -105,7 +105,7 @@ RM-SDD-001 · 2026-11-17
   - [x] 应用包内独立 UUID 事务发送组件通过三 Broker Kafka 4.1.2。提交响应丢失时找回原回执，同名重建拒绝重放，并保全源事务和两路 ACK。
   - [x] 新建绑定物理 Topic 的任务经双入口审批后实发一条 RF3 Kafka 缺口通知，精确查询回执并拒绝旧标识、越权和同名重建。
   - [x] 三节点 Kafka 已验收提交响应丢失读回与提交前中断。在 Broker 确认原事务中止后只重试一次，原两路 ACK 保持。
-  - [ ] ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 已验精确原生前序回执和旧批次拒绝。RabbitMQ、Redis Streams、NATS JetStream、Pulsar 的故障回执和更广回收保护待验。
+  - [ ] ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 已验精确原生前序回执和旧批次拒绝。Redis Streams、NATS JetStream 和 Pulsar 的原生前序回执已通过。RabbitMQ 的故障回执和更广回收保护待验。
 ## 源数据库兼容
 
 - [x] T-SO-01 · 多源协议与能力配置 · P0 · 依赖：无

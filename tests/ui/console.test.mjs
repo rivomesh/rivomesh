@@ -384,19 +384,20 @@ test('Kafka notice preview is bound to the verified receipt and displays publica
  }finally{ui.dom.window.close();}
 });
 
-test('analytical receipt check is scoped to a paused target and displays its exact digest',async()=>{
+for(const product of ['DORIS','REDIS_STREAMS','NATS_JETSTREAM','PULSAR']){
+test(product+' destination receipt is scoped to a paused target and displays its exact digest',async()=>{
  const task={id:'analytics-receipt',revision:'current-revision',formatVersion:3,desired:'PAUSED',workerState:'PAUSED',
   statusAvailable:true,status:{run_state:'PAUSED',subscriptions:[
    {id:'dw',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:7},
    {id:'pg',state:'PAUSED',errorGeneration:3,failurePhase:'TARGET_APPLY',acknowledged:8}]},
-  destinations:[{id:'dw',product:'DORIS'},{id:'pg',product:'POSTGRESQL'}],operations:[]};
+  destinations:[{id:'dw',product},{id:'pg',product:'RABBITMQ'}],operations:[]};
  const ui=setup([task],'ADMIN',{authenticated:false,taskControlScope:'GLOBAL',recoveryReview:true}),fallback=ui.w.fetch;
  const requests=[];
  ui.w.fetch=async(path,options)=>{
   if(path!=='/api/tasks/'+task.id+'/destination-receipt')return fallback(path,options);
   assert.equal(options.headers['X-CSRF-Token'],'test-csrf');
   requests.push(JSON.parse(options.body));
-  return {ok:true,status:200,json:async()=>({status:'PRECEDING_RECEIPT_VERIFIED',target:'dw',product:'DORIS',
+  return {ok:true,status:200,json:async()=>({status:'PRECEDING_RECEIPT_VERIFIED',target:'dw',product,
    errorGeneration:'3',acknowledgedSequence:'7',nativeReceiptSha256:'e'.repeat(64)})};
  };
  try{
@@ -410,6 +411,7 @@ test('analytical receipt check is scoped to a paused target and displays its exa
   assert.ok(buttons[0].parentElement.textContent.includes('e'.repeat(64)));
  }finally{ui.dom.window.close();}
 });
+}
 
 test('Kafka physical receipt is read-only and displays only evidence for the current configuration and ACK',async()=>{
  const id='physical_receipt_review',target='kafka',code='PRECEDING_KAFKA_RECEIPTS_VERIFIED';

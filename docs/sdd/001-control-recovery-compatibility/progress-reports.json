@@ -2,15 +2,15 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-19T22:05:28+08:00",
-  "nextReportAt": "2026-11-19T22:58:16+08:00",
+  "lastReportAt": "2026-11-20T08:14:00+08:00",
+  "nextReportAt": "2026-11-20T08:58:16+08:00",
   "completedSincePrevious": [
-    "Published separate Kafka physical-address preflight and standalone Kafka 4.1.2 v13 native refusal of a retired UUID.",
-    "The staged Temurin 21 candidate adds independently retained managed route history from task birth and exact latest ACK evidence. Both Controllers approved and delivered one native notice against three Kafka 4.1.2 TLS/SCRAM brokers. Authorization/stale scope and a same-name replacement were refused; source evidence and both business ACKs stayed fixed.",
-    "Targeted Java regression passed 36 cases. A focused console scenario verified the blocked and ready branches, CSRF and stable delivery request replay. The isolated client version resources pass the package gate."
+    "Published the grouped Kafka and analytical recovery milestone and the ActiveMQ Classic, Artemis and RocketMQ receipt milestone.",
+    "Verified exact preceding native COMMIT and older-batch refusal on real Redis Streams, NATS JetStream and Pulsar. Both journal ACKs and the original failed transaction are preserved.",
+    "Passed 44 focused Java and 5 focused console checks for the verified final package. The full earlier verification stays recorded separately."
   ],
   "inProgress": [
-    "RC-10 only. Native Kafka approval and interruption recovery and all three analytical preceding receipts are verified. Other messaging adapters and broader retention remain."
+    "RC-10 only. RabbitMQ receipt evidence after business consumer ACK and coordinated retention across additional profiles remain."
   ],
   "reportContents": [
     "Current totals",
@@ -25,8 +25,8 @@
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "63ed397",
-    "1fc8100"
+    "0ef3b4f",
+    "139f04a"
   ],
   "currentSdd": {
     "DONE": 36,
@@ -34,13 +34,15 @@
     "NEW": 0
   },
   "nextTasks": [
-    "Finish the remaining RC-10 messaging and retention cases one at a time."
+    "Complete RabbitMQ retained receipt capability and the remaining RC-10 retention acceptance before switching to a different requirement."
   ],
-  "currentCandidateArtifact": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
-  "currentCandidateScope": "Grouped Temurin 21 Kafka approval, interruption recovery, and exact preceding receipts for ClickHouse, Doris and Hive.",
+  "currentCandidateArtifact": "7a6de901339700669ad352aca45350831e4ad4e5d5f79cb5d1b0e3da8c3474c8",
+  "currentCandidateScope": "Temurin 21 package with exact preceding COMMIT lookup for Redis Streams, NATS JetStream and Pulsar.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
-  "newSinceLastReport": [],
-  "lastScheduledReportAt": "2026-11-19T21:58:16+08:00",
+  "newSinceLastReport": [
+    "The Redis Streams, NATS JetStream and Pulsar checks passed on all three native brokers."
+  ],
+  "lastScheduledReportAt": "2026-11-20T07:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "1fc8100",
     "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
@@ -121,7 +123,20 @@
     "LG-10"
   ],
   "lastDelayedIntervals": [
-    "2026-11-19T20:58:16+08:00",
-    "2026-11-19T21:58:16+08:00"
-  ]
+    "2026-11-19T22:58:16+08:00",
+    "2026-11-19T23:58:16+08:00",
+    "2026-11-20T00:58:16+08:00",
+    "2026-11-20T01:58:16+08:00",
+    "2026-11-20T02:58:16+08:00",
+    "2026-11-20T03:58:16+08:00",
+    "2026-11-20T04:58:16+08:00",
+    "2026-11-20T05:58:16+08:00",
+    "2026-11-20T06:58:16+08:00",
+    "2026-11-20T07:58:16+08:00"
+  ],
+  "currentFocusedVerification": {
+    "javaTestsPassed": 44,
+    "domTestsPassed": 5,
+    "nativeBrokerChecksPassed": 6
+  }
 }

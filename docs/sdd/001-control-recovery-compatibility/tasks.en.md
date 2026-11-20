@@ -105,7 +105,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Bundled UUID-addressed transactions pass three Kafka 4.1.2 brokers. Lost commit responses recover the original receipt, same-name replacement refuses replay, and the source transaction and both ACKs are preserved.
   - [x] Two entries verify fixed history for newly enrolled physical Kafka routes, approve one RF3 native notice, return the exact receipt, and refuse an invalid scope or replacement Topic.
   - [x] Three native Kafka brokers verify lost-response readback and interruption before commit. Retry requires Kafka's terminal abort, and both ACKs remain fixed.
-  - [ ] ClickHouse, Doris, Hive, ActiveMQ Classic, ActiveMQ Artemis and RocketMQ pass exact native predecessor and older-batch refusal. RabbitMQ, Redis Streams, NATS JetStream and Pulsar failure receipts and broader retention remain.
+  - [ ] ClickHouse, Doris, Hive, ActiveMQ Classic, ActiveMQ Artemis and RocketMQ pass exact native predecessor and older-batch refusal. Redis Streams, NATS JetStream and Pulsar also pass native preceding-receipt verification. RabbitMQ failure receipts and broader retention remain.
 ## Source compatibility
 
 - [x] T-SO-01 · Source protocol and capability configuration · P0 · Depends on: none

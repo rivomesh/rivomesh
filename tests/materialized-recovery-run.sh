@@ -11,7 +11,8 @@ run_profile() (
     case "$engine" in
         clickhouse) manifest=clickhouse-protocol-compose.yml ;;
         doris|hive) manifest="$engine-compose.yml" ;;
-        artemis|classic|rocketmq) manifest="$engine-transport-compose.yml" ;;
+        artemis|classic|rocketmq|pulsar) manifest="$engine-transport-compose.yml" ;;
+        redis|nats) manifest=stream-receipt-compose.yml ;;
         *) return 2 ;;
     esac
     local project="rivomesh-preceding-receipt-$engine-$$" local_override=
@@ -54,6 +55,8 @@ YAML
     case "$engine" in
         artemis) product=ACTIVEMQ_ARTEMIS ;;
         classic) product=ACTIVEMQ_CLASSIC ;;
+        redis) product=REDIS_STREAMS ;;
+        nats) product=NATS_JETSTREAM ;;
         *) product="$(printf '%s' "$engine" | tr '[:lower:]' '[:upper:]')" ;;
     esac
     "${compose[@]}" run --rm --no-deps -T tests bash -euc '

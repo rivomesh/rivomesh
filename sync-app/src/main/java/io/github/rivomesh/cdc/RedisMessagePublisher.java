@@ -19,6 +19,7 @@ public final class RedisMessagePublisher implements ConfirmedPublisher {
     private final String binding;
     private final Jedis client;
     private boolean prepared;
+    private String confirmed;
     public RedisMessagePublisher(PipelineConfig.Target target,String binding)throws Exception{
         this(target,binding,connect(target));
     }
@@ -75,14 +76,54 @@ public final class RedisMessagePublisher implements ConfirmedPublisher {
     @Override public void publish(List<Message> messages)throws Exception{
         try{
             String connection=connectionToken();String stream=target.messaging.stream;
+            String progress=null;
             for(Message message:messages){
                 Map<String,String> fields=new LinkedHashMap<>(message.headers);fields.put("rivomesh_event_id",message.id);fields.put("rivomesh_channel",message.destination);if(message.key!=null)fields.put("rivomesh_key",message.key);fields.put("body",new String(message.body,StandardCharsets.UTF_8));
-                if(client.xadd(stream,XAddParams.xAddParams().noMkStream().id(StreamEntryID.NEW_ENTRY),fields)==null)throw rejected("MESSAGE_DESTINATION_MISSING_REBUILD_REQUIRED","The initialized stream disappeared; it was not recreated");
+                StreamEntryID entry=client.xadd(stream,XAddParams.xAddParams().noMkStream().id(StreamEntryID.NEW_ENTRY),fields);
+                if(entry==null)throw rejected("MESSAGE_DESTINATION_MISSING_REBUILD_REQUIRED","The initialized stream disappeared; it was not recreated");
+                progress="REDIS_V1:"+entry+":"+Codec.sha256(message.body);
             }
             KeyValue<Long,Long> fsyncs=client.waitAOF(1,target.messaging.replicas-1,target.messaging.requestTimeoutMillis);
             if(!connection.equals(connectionToken()))throw new SyncFailure("REDIS_CONNECTION_CHANGED_DURING_CONFIRM","MESSAGE_PUBLICATION",true,"Publication confirmation used a different physical connection");
             if(fsyncs.getKey()<1||fsyncs.getValue()<target.messaging.replicas-1)throw new SyncFailure("REDIS_DURABILITY_NOT_CONFIRMED","MESSAGE_PUBLICATION",true,"WAITAOF did not confirm the required local and replica fsync counts");
+            if(progress!=null)confirmed=progress;
         }catch(Exception e){throw failure(e);}
+    }
+    @Override public String confirmedProgress(){return confirmed;}
+    @Override public void resumeProgress(String progress){
+        if(progress!=null)parseProgress(progress);
+        confirmed=progress;
+    }
+    @Override public String identity(){
+        if(!prepared)return null;
+        String path=URI.create(target.url).getPath();
+        int database=path==null||path.isEmpty()?0:Integer.parseInt(path.substring(1));
+        return "REDIS_STREAM_V1:"+database+":"+target.messaging.stream+":"+binding;
+    }
+    private static String[] parseProgress(String progress){
+        if(progress==null||!progress.matches("REDIS_V1:[0-9]{1,20}-[0-9]{1,20}:[a-f0-9]{64}"))
+            throw uncertain();
+        return progress.split(":",3);
+    }
+    private static IllegalStateException uncertain(){
+        return new IllegalStateException("REDIS_STREAMS_RECOVERY_PUBLICATION_UNCERTAIN");
+    }
+    void verifyPrecedingCommit(String progress,String identityHash,String event)throws Exception{
+        String[] receipt=parseProgress(progress);
+        prepare(false);
+        if(!Codec.sha256(identity()).equals(identityHash))throw uncertain();
+        try{
+            String connection=connectionToken();
+            String stream=target.messaging.stream;
+            var entries=client.xrange(stream,receipt[1],receipt[1],1);
+            if(entries.size()!=1||!entries.getFirst().getID().toString().equals(receipt[1]))throw uncertain();
+            var fields=entries.getFirst().getFields();
+            String body=fields.get("body");
+            if(!event.equals(fields.get("rivomesh_event_id"))||!"COMMIT".equals(fields.get("rivomesh_kind"))
+                    ||body==null||!Codec.sha256(body).equals(receipt[2])
+                    ||!binding.equals(client.hget(OWNERS,stream))||client.pttl(stream)!=-1
+                    ||client.pttl(OWNERS)!=-1||!connection.equals(connectionToken()))throw uncertain();
+        }catch(Exception error){throw failure(error);}
     }
     private static Exception failure(Exception error){
         if(error instanceof SyncFailure)return error;

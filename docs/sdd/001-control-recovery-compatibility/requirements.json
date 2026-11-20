@@ -864,8 +864,8 @@
         "en": "Destination-specific recovery and retention"
       },
       "gap": {
-        "zh-CN": "新建 LOCAL 托管任务绑定 Kafka 物理 UUID。双入口已通过真实三 Broker 的审批、发送及确切回执。已验证丢响应只读回原记录，提交前中断等待原生中止并仅重试一次。ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 均通过精确前序 COMMIT 原生回执和旧批次拒绝，源事务和两路 ACK 保持原值。RabbitMQ、Redis Streams、NATS JetStream、Pulsar 的故障回执，以及更广的保留和协调恢复组合仍待验收。",
-        "en": "New managed LOCAL tasks bind Kafka physical UUIDs. Both entries pass scoped approval, dispatch and exact readback on three native brokers. Lost commit replies recover the earlier receipt. Interruption before commit waits for terminal native abort and retries once. ClickHouse, Doris, Hive, ActiveMQ Classic, ActiveMQ Artemis and RocketMQ verify exact preceding native COMMIT receipts and refuse older batches with both ACKs and the source transaction preserved. RabbitMQ, Redis Streams, NATS JetStream and Pulsar failure receipts and broader retention and coordinated recovery profiles remain."
+        "zh-CN": "新建 LOCAL 托管任务绑定 Kafka 物理 UUID。双入口已通过真实三 Broker 的审批、发送及确切回执。已验证丢响应只读回原记录，提交前中断等待原生中止并仅重试一次。ClickHouse、Doris、Hive、ActiveMQ Classic、ActiveMQ Artemis 和 RocketMQ 均通过精确前序 COMMIT 原生回执和旧批次拒绝，源事务和两路 ACK 保持原值。Redis Streams、NATS JetStream 和 Pulsar 的原生前序回执已通过。RabbitMQ 的故障回执，以及更广的保留和协调恢复组合仍待验收。",
+        "en": "New managed LOCAL tasks bind Kafka physical UUIDs. Both entries pass scoped approval, dispatch and exact readback on three native brokers. Lost commit replies recover the earlier receipt. Interruption before commit waits for terminal native abort and retries once. ClickHouse, Doris, Hive, ActiveMQ Classic, ActiveMQ Artemis and RocketMQ verify exact preceding native COMMIT receipts and refuse older batches with both ACKs and the source transaction preserved. Redis Streams, NATS JetStream and Pulsar also pass native preceding-receipt verification. RabbitMQ failure receipts and broader retention and coordinated recovery profiles remain."
       },
       "acceptance": {
         "zh-CN": "为每个目标声明跳过/补偿能力；SQL用本地事务，分析/消息目标用可验证回执/缺口通知；其他目标不被隐式跳过；未修复缺口与待审原事件不被静默GC，配额满时背压告警。",

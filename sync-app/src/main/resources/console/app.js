@@ -865,7 +865,7 @@ function renderDeliveryTiming(card,task,sub){
  const label=text('p',caption+' · '+detail,'subtle');label.dataset.deliveryTiming='';card.append(label);
 }
 function appendMaterializedReceipt(card,task,sub,destination,pending){
- if(!['CLICKHOUSE','DORIS','HIVE','ACTIVEMQ_ARTEMIS','ACTIVEMQ_CLASSIC','ROCKETMQ'].includes(destination?.product)||task.formatVersion!==3||task.statusAvailable===false
+ if(!['CLICKHOUSE','DORIS','HIVE','ACTIVEMQ_ARTEMIS','ACTIVEMQ_CLASSIC','ROCKETMQ','REDIS_STREAMS','NATS_JETSTREAM','PULSAR'].includes(destination?.product)||task.formatVersion!==3||task.statusAvailable===false
   ||task.desired!=='PAUSED'||task.status?.run_state!=='PAUSED'||sub.failurePhase!=='TARGET_APPLY'
   ||!session?.recoveryReview||!can('TASK_CONFIG')||!Number.isSafeInteger(sub.errorGeneration)||sub.errorGeneration<1)return;
  const check=text('button',t('reviewMaterializedReceipt'),'quiet'),result=text('div');

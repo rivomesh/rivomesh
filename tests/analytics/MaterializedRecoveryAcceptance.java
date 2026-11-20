@@ -167,6 +167,26 @@ public final class MaterializedRecoveryAcceptance {
                 target.messaging.adminUrl="http://classic:8161/api/jolokia/";
                 target.messaging.maxMessageBytes=MESSAGE_BYTES;
             }
+            case REDIS_STREAMS -> {
+                target.url="redis://redis:6379/0";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.stream="receipt_"+suffix;
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            case NATS_JETSTREAM -> {
+                target.url="nats://nats:4222";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.stream="receipt_"+suffix;
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
+            case PULSAR -> {
+                target.url="pulsar://pulsar:6650";
+                target.messaging=new PipelineConfig.Messaging();
+                target.messaging.topic="persistent://public/default/receipt_"+suffix;
+                target.messaging.cluster="standalone";
+                target.messaging.adminUrl="http://pulsar:8080";
+                target.messaging.maxMessageBytes=MESSAGE_BYTES;
+            }
             case ROCKETMQ -> {
                 target.url="rocketmq://rocketnamesrv:9876";
                 target.messaging=new PipelineConfig.Messaging();

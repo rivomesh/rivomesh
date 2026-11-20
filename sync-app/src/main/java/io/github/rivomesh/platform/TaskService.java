@@ -1679,11 +1679,11 @@ public final class TaskService implements AutoCloseable {
         try{
             result=backend.reviewDestinationReceipt(definition,request.subscriptionId,request.errorCount);
         }catch(io.github.rivomesh.SyncFailure refused){
-            if(refused.code!=null&&refused.code.matches("(?:ARTEMIS|CLASSIC|ROCKETMQ)_[A-Z_]{3,100}"))throw new Conflict(refused.code);
+            if(refused.code!=null&&refused.code.matches("(?:ARTEMIS|CLASSIC|ROCKETMQ|PULSAR)_[A-Z_]{3,100}"))throw new Conflict(refused.code);
             throw refused;
         }catch(IllegalStateException|IllegalArgumentException invalid){
             String code=invalid.getMessage();
-            if(code!=null&&code.matches("(?:CLICKHOUSE|DORIS|HIVE|ARTEMIS|CLASSIC|ROCKETMQ|DESTINATION_RECEIPT)_[A-Z_]{3,100}"))
+            if(code!=null&&code.matches("(?:CLICKHOUSE|DORIS|HIVE|ARTEMIS|CLASSIC|ROCKETMQ|REDIS_STREAMS|NATS_JETSTREAM|PULSAR|DESTINATION_RECEIPT)_[A-Z_]{3,100}"))
                 throw new Conflict(code);
             throw invalid;
         }

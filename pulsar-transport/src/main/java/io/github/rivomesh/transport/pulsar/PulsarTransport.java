@@ -8,6 +8,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -33,6 +35,7 @@ public final class PulsarTransport implements AutoCloseable {
     private final PulsarClient client;
     private Producer<byte[]> producer;
     private boolean verified;
+    private String confirmed;
     public PulsarTransport(Settings settings,String binding)throws Exception{
         this.settings=settings;this.binding=binding;validate(settings);String[] topic=settings.topic.substring("persistent://".length()).split("/");namespace=topic[0]+"/"+topic[1];
         admin=admin(settings.adminUrl,settings);
@@ -121,8 +124,68 @@ public final class PulsarTransport implements AutoCloseable {
     }
     public void publish(List<Publication> messages)throws Exception{
         if(!verified||producer==null)throw new IllegalStateException("PUBLICATION_NOT_PREPARED");
-        try{for(Publication message:messages){Map<String,String> properties=new LinkedHashMap<>(message.headers);properties.put("rivomesh_event_id",message.id);properties.put("rivomesh_channel",message.channel);TypedMessageBuilder<byte[]> builder=producer.newMessage().properties(properties).value(message.body);if(message.key!=null)builder.key(message.key);builder.send();}}
-        catch(Exception failure){throw classify(failure);}
+        try{
+            String progress=null;
+            for(Publication message:messages){
+                Map<String,String> properties=new LinkedHashMap<>(message.headers);
+                properties.put("rivomesh_event_id",message.id);
+                properties.put("rivomesh_channel",message.channel);
+                TypedMessageBuilder<byte[]> builder=producer.newMessage().properties(properties).value(message.body);
+                if(message.key!=null)builder.key(message.key);
+                MessageId id=builder.send();
+                if(!(id instanceof MessageIdAdv nativeId)||!singleEntry(nativeId))
+                    throw reject("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+                progress="PULSAR_V1:"+nativeId.getLedgerId()+":"+nativeId.getEntryId()+":"+hash(message.body);
+            }
+            if(progress!=null)confirmed=progress;
+        }catch(Exception failure){throw classify(failure);}
+    }
+    public String identity(){return verified?topicIdentity():null;}
+    public String confirmedProgress(){return confirmed;}
+    public void resumeProgress(String progress)throws Failure{
+        if(progress!=null)parseProgress(progress);
+        confirmed=progress;
+    }
+    private String topicIdentity(){
+        return "PULSAR_TOPIC_V1:"+settings.cluster+":"+settings.topic+":"+binding;
+    }
+    private static String hash(byte[] bytes){
+        try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}
+        catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
+    }
+    private static boolean singleEntry(MessageIdAdv id){
+        return id.getLedgerId()>=0&&id.getEntryId()>=0&&id.getPartitionIndex()==-1&&id.getBatchIndex()==-1;
+    }
+    private static String[] parseProgress(String progress)throws Failure{
+        if(progress==null||!progress.matches("PULSAR_V1:[0-9]{1,19}:[0-9]{1,19}:[a-f0-9]{64}"))
+            throw reject("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+        return progress.split(":",4);
+    }
+    private void verifyOriginalTopic()throws Exception{
+        Map<String,String> properties=admin.topics().getProperties(settings.topic);
+        if(!binding.equals(properties.get(OWNER))||!"READY_V1".equals(properties.get(PROVISION))
+                ||admin.topics().getPartitionedTopicMetadata(settings.topic).partitions!=0)
+            throw reject("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+    }
+    public String verifyPrecedingCommit(String progress,String event)throws Exception{
+        String[] receipt=parseProgress(progress);
+        try{
+            long ledger=Long.parseLong(receipt[1]),entry=Long.parseLong(receipt[2]);
+            capabilities();
+            verifyOriginalTopic();
+            verifyPolicies(admin.topicPolicies());
+            Message<byte[]> message=admin.topics().getMessageById(settings.topic,ledger,entry);
+            if(message==null||!(message.getMessageId() instanceof MessageIdAdv nativeId)||!singleEntry(nativeId)
+                    ||nativeId.getLedgerId()!=ledger||nativeId.getEntryId()!=entry
+                    ||!event.equals(message.getProperty("rivomesh_event_id"))
+                    ||!"COMMIT".equals(message.getProperty("rivomesh_kind"))
+                    ||message.getData()==null||!hash(message.getData()).equals(receipt[3]))
+                throw reject("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+            verifyOriginalTopic();
+            return topicIdentity();
+        }catch(PulsarAdminException.NotFoundException missing){
+            throw reject("PULSAR_RECOVERY_PUBLICATION_UNCERTAIN");
+        }catch(Exception failure){throw classify(failure);}
     }
     static Exception classify(Exception failure){
         if(failure instanceof Failure)return failure;

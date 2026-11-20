@@ -14542,5 +14542,58 @@
     },
     "reproduce": "RIVOMESH_RECEIPT_TEST_TMPFS=1 bash tests/materialized-recovery-run.sh classic artemis rocketmq",
     "boundary": "The Artemis and RocketMQ read-on-reopen fixtures use isolated Docker tmpfs. Cluster failover and broker storage restart are separate profiles. The focused Java tests use the accepted RocketMQ artifact with the final CLI and HTTP alias classes compiled against it; a full Maven run was deferred."
+  },
+  "nativeStreamDestinationReceiptsTemurin21": {
+    "scope": "Temurin 21 native Redis AOF, JetStream file storage and persistent Pulsar non-partitioned topic in separate single-node profiles. A LOCAL H2 journal uses deterministic source records and a simulated healthy peer ACK.",
+    "profiles": {
+      "Redis Streams 7.4.2": {
+        "artifactSha256": "7c9bfaa5f920ad0b3c43b4070a09367d0b443656ce1e8db6a47f05a8be46d886",
+        "nativeLogSha256": "15ddbc30311c5e2c56ab34c777d8911dd77084ebda47e14bfe34f4aa18e99e0e",
+        "nativeChecks": [
+          "REDIS_STREAMS verifies the exact native receipt on its original resource.",
+          "REDIS_STREAMS refuses a different native batch and preserves source and peer ACKs."
+        ]
+      },
+      "NATS JetStream 2.11.8": {
+        "artifactSha256": "7c9bfaa5f920ad0b3c43b4070a09367d0b443656ce1e8db6a47f05a8be46d886",
+        "nativeLogSha256": "15ddbc30311c5e2c56ab34c777d8911dd77084ebda47e14bfe34f4aa18e99e0e",
+        "nativeChecks": [
+          "NATS_JETSTREAM verifies the exact native receipt on its original resource.",
+          "NATS_JETSTREAM refuses a different native batch and preserves source and peer ACKs."
+        ]
+      },
+      "Pulsar 4.0.14": {
+        "artifactSha256": "b774ce94a75a1982495817453a1b07f0ce4455ac79f6e1440e9d6c0bdd9be90d",
+        "nativeLogSha256": "fb91c24bdaa1869989e916b6c5ffb11232f9b42ff1b32bf360bef837278bef84",
+        "nativeChecks": [
+          "PULSAR verifies the exact native receipt on its original resource.",
+          "PULSAR refuses a different native batch and preserves source and peer ACKs."
+        ]
+      }
+    },
+    "nativeChecksPassed": 6,
+    "artifactSha256": "7a6de901339700669ad352aca45350831e4ad4e5d5f79cb5d1b0e3da8c3474c8",
+    "focusedJavaPassed": 44,
+    "focusedJavaLogSha256": "473571c2cc0cb4cb9331fb2c617c5e2198f327564cf8875712949c102a83f15c",
+    "focusedDomPassed": 5,
+    "focusedDomLogSha256": "432ed3898388e292578d12a3aa487f97265a49f5b1c57afecdca758bd1634db0",
+    "nativeBytecodeClassesCompared": 7,
+    "nativeBytecodeLogSha256": "e8bddfbffe67399d6193265412e6dce18cc379cb346e80fbb8428ff90692e413",
+    "fixtureFilesSha256": {
+      "tests/analytics/MaterializedRecoveryAcceptance.java": "1d807f4e216b109a67462c6a47713a51f634a147817f1fb43d28db20a9d10ffd",
+      "tests/materialized-recovery-run.sh": "07ff0251aba12bac5b4f639ed3918fe865cb6190104cfae5517c9aa462fe807c",
+      "tests/stream-receipt-compose.yml": "fd7f5c0c8de082d6f9716e5311af98b8611a1c5b85f9adaf7f1277a2429237d8"
+    },
+    "fixtureResourcesRemaining": {
+      "containers": 0,
+      "networks": 0,
+      "volumes": 0
+    },
+    "retentionEvidence": {
+      "focusedJava": "SkipJournalTest and GapVerificationLedgerTest exercise raw/normalized retention through restart, unresolved gaps, prepared plans and quota refusal.",
+      "existingNative": "temurin21SlowTarget verifies bounded PostgreSQL external-journal backpressure from a real MySQL 8.4 source in a 32-schema run, including a frozen capture cut and lossless drain."
+    },
+    "reproduce": "bash tests/materialized-recovery-run.sh redis nats pulsar",
+    "boundary": "Pulsar uses the current persistent topic's admin ledger-entry lookup. Redis checks present logical ownership and exact retained data. JetStream checks the native stream creation time. Tests verify producer receipts and independent journal ACKs. Broker-cluster failover and complete mixed-target retention use separate profiles."
   }
 }
