@@ -329,6 +329,47 @@ def main():
                      'Prefix index worker refusal')
             assert not gauss("SELECT nspname FROM pg_namespace WHERE nspname='blocked_replica';").stdout.strip()
             observed('Unsupported MySQL prefix index is reported and the writer refuses business DDL')
+            stop_worker()
+
+            mysql("""
+                CREATE DATABASE keyless_source;
+                CREATE TABLE keyless_source.events (value INT, payload JSON);
+                INSERT INTO keyless_source.events VALUES
+                    (7,JSON_OBJECT('tag','original')),(7,JSON_OBJECT('tag','original')),
+                    (8,JSON_OBJECT('tag','survivor'));
+            """)
+            keyless_config = directory / 'keyless.yml'
+            keyless_config.write_text(json.dumps(pipeline_configuration(
+                source_port, target_port, 'keyless_source', 'keyless_copy')))
+            worker = start_worker(keyless_config, 'worker-keyless.log')
+
+            def keyless_rows():
+                result=gauss("""SELECT value,payload->>'tag',COUNT(*) FROM keyless_copy.events
+                                GROUP BY value,payload->>'tag' ORDER BY value;""",checked=False)
+                return result.stdout.strip().splitlines() if result.returncode == 0 else None
+
+            initial=['7|original|2','8|survivor|1']
+            required(lambda:keyless_rows()==initial,'Initial duplicate JSON rows in openGauss')
+            keyless_snapshot=gauss('SELECT snapshot_id FROM keyless_copy_meta.rm3_sink_table').stdout.strip()
+            assert keyless_snapshot
+            assert gauss("""SELECT COUNT(*) FROM pg_catalog.pg_index
+                            WHERE indrelid='keyless_copy.events'::regclass AND indisprimary AND indisunique""").stdout.strip()=='1'
+            observed('openGauss retains two identical source rows with a separate stable row identity')
+
+            mysql("""UPDATE keyless_source.events SET value=9,payload=JSON_OBJECT('tag','changed')
+                     WHERE value=7 LIMIT 1;""")
+            required(lambda:keyless_rows()==['7|original|1','8|survivor|1','9|changed|1'],
+                     'openGauss updates exactly one keyless occurrence')
+            before_restart=gauss('SELECT stream_seq FROM keyless_copy_meta.rm3_sink_job').stdout.strip()
+            stop_worker(abrupt=True)
+            mysql('DELETE FROM keyless_source.events WHERE value=7 LIMIT 1;')
+            worker=start_worker(keyless_config,'worker-keyless-reopen.log')
+            required(lambda:keyless_rows()==['8|survivor|1','9|changed|1'],
+                     'Original keyless journal resumes the pending delete')
+            assert gauss('SELECT snapshot_id FROM keyless_copy_meta.rm3_sink_table').stdout.strip()==keyless_snapshot
+            after_restart=gauss('SELECT stream_seq FROM keyless_copy_meta.rm3_sink_job').stdout.strip()
+            assert int(after_restart)==int(before_restart)+1
+            observed('openGauss resumes the original keyless JSON snapshot and applies one retained delete')
             report['status'] = 'PASS'
         except Exception as failure:
             detail = str(failure)

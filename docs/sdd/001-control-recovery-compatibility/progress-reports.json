@@ -9,7 +9,9 @@
     "LG-05: Accepted managed handoff across separate PostgreSQL stores and automatic recovery after two control commit interruptions. Published 6258be3.",
     "JV-03: Accepted five external JDBC providers with native MySQL and PostgreSQL TLS and Kingbase restart recovery. Published 9cac6d7."
   ],
-  "inProgress": [],
+  "inProgress": [
+    "LG-08: Reviewed historical DDL execution and commercial distributed GaussDB acceptance."
+  ],
   "reportContents": [
     "Current totals",
     "New completions since previous report",
@@ -35,11 +37,12 @@
   "nextTasks": [
     "Continue LG-08 on reviewed historical schema migration and current-state recovery."
   ],
-  "currentCandidateArtifact": "7e1778fa92bd3d31b598e15ffc1c2b0a63608097ac8b7451a2592146b47a9312",
-  "currentCandidateScope": "Temurin 21 native PostgreSQL 17.12 shared-cut validation with PostgreSQL and MySQL targets, and PostgreSQL 18.7 stored generated columns and recovery. Archived exact source profiles cover synchronized-slot promotion, missing WAL refusal, bounded types and schema drift review.",
+  "currentCandidateArtifact": "10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a",
+  "currentCandidateScope": "PostgreSQL whole-transaction TRUNCATE refusal, native schema review, coordinated LOCAL/PostgreSQL restore and openGauss keyless JSON and index replay.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Accepted SO-06 with PostgreSQL 17.12 two-target common-cut validation and PostgreSQL 18.7 native generated columns and restart."
+    "Accepted SO-06 with PostgreSQL 17.12 two-target common-cut validation and PostgreSQL 18.7 native generated columns and restart.",
+    "Verified LG-08 PostgreSQL TRUNCATE fencing, original-cut restore, and openGauss keyless replay; historical execution and the commercial cluster remain."
   ],
   "lastScheduledReportAt": "2026-11-20T09:58:16+08:00",
   "lastVerifiedReactor": {
@@ -107,7 +110,6 @@
     "LG-01",
     "LG-03",
     "LG-04",
-    "LG-08",
     "LG-10"
   ],
   "lastDelayedIntervals": [
@@ -123,7 +125,7 @@
     "2026-11-20T07:58:16+08:00"
   ],
   "currentFocusedVerification": {
-    "pgOutputUnitChecksPassed": 12,
-    "nativeSourceChecksPassed": 12
+    "javaTestsPassed": 19,
+    "nativeDdlAndStateChecksPassed": 27
   }
 }

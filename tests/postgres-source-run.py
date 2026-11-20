@@ -34,6 +34,7 @@ type_profile.add_argument('--numeric-values', action='store_true',
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
 type_profile.add_argument('--common-cut', action='store_true', help='Verify one PostgreSQL validation cut in both native SQL targets')
+type_profile.add_argument('--truncate-review', action='store_true', help='Verify retained DDL boundary for a PostgreSQL TRUNCATE transaction')
 parser.add_argument('--bytea-escape-output', action='store_true', help='Use escape as the source server BYTEA output default')
 parser.add_argument('--previous-numeric-artifact', type=Path,
                     help='Check a prior release against the same native numeric declarations before the candidate')
@@ -48,7 +49,7 @@ parser.add_argument('--reject-old-primary', action='store_true',
 parser.add_argument('--jdk', type=int, choices=(21,), default=21)
 args = parser.parse_args()
 temporal_targets = args.date_values or args.timestamp_values or args.clock_values
-dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values or args.common_cut
+dual_targets = temporal_targets or args.numeric_values or args.floating_values or args.bytea_values or args.common_cut or args.truncate_review
 if args.bytea_escape_output and not args.bytea_values:
     parser.error('--bytea-escape-output requires --bytea-values')
 if args.bytea_values and (args.generated or args.failover):
@@ -59,8 +60,8 @@ if args.reject_old_primary and not args.failover:
     parser.error('--reject-old-primary requires --failover')
 if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
-if args.common_cut and (args.failover or args.generated or args.uuid):
-    parser.error('--common-cut uses the direct three-table publication profile')
+if (args.common_cut or args.truncate_review) and (args.failover or args.generated or args.uuid):
+    parser.error('--common-cut and --truncate-review use the direct three-table publication profile')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -84,6 +85,8 @@ if args.bytea_values:
     report.update(byteaValues=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.ddl_review:
     report.update(ddlReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.truncate_review:
+    report.update(truncateReview=True,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 local_http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -506,7 +509,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             INSERT INTO sales.duplicates VALUES(7,'{"x":1}'),(7,'{"x":1}');
             INSERT INTO billing.ledger VALUES(1,'before');
             CREATE PUBLICATION rivomesh_test FOR TABLE sales.items,sales.duplicates,billing.ledger
-            WITH (publish='insert,update,delete');
+            WITH (publish='insert,update,delete,truncate');
         """)
         if args.common_cut:
             sql('source',"CREATE ROLE capture_fixture LOGIN REPLICATION PASSWORD '"+environment['RM_PG_PASSWORD']+"'; "
@@ -675,8 +678,15 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert previous.returncode!=0 and 'POSTGRESQL_NUMERIC_PROFILE_UNSUPPORTED' in previous.stderr
             assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")=='0'
             passed('The prior runtime refuses the valid publication containing both extended numeric scales')
+        if args.truncate_review:
+            sql('source',"ALTER PUBLICATION rivomesh_test SET (publish='insert,update,delete')")
+            refused=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml',check=False)
+            assert refused.returncode and 'POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED' in refused.stderr
+            assert sql('source',"SELECT count(*) FROM pg_replication_slots WHERE plugin='pgoutput'")=='0'
+            sql('source',"ALTER PUBLICATION rivomesh_test SET (publish='insert,update,delete,truncate')")
+            passed('Preflight refuses to start a publication that silently omits TRUNCATE')
         preflight=compose('run','--rm','--no-deps','runner','check','/fixture/tasks/postgres_source.yml')
-        table_count=3+int(args.uuid)+2*int(dual_targets and not args.common_cut)
+        table_count=3+int(args.uuid)+2*int(dual_targets and not (args.common_cut or args.truncate_review))
         assert json.loads(preflight.stdout)['sourceTables']==table_count
         compose('up','-d','runner')
         version=compose('exec','-T','runner','java','-version')
@@ -711,6 +721,45 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             mysql_snapshots=mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert len(mysql_snapshots.splitlines())==table_count
             dual_target_slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput' AND NOT temporary")
+        if args.truncate_review:
+            require(lambda:mysql('SELECT COUNT(*) FROM copy_sales.duplicates')=='2','MySQL keyless snapshot')
+            sql('source',"CREATE TABLE sales.outside_publication(id bigint); INSERT INTO sales.outside_publication VALUES(1); "
+                         "TRUNCATE sales.outside_publication; UPDATE billing.ledger SET label='predecessor' WHERE id=1")
+            require(lambda:sql('target','SELECT label FROM copy_billing.ledger')==mysql('SELECT label FROM copy_billing.ledger')
+                    =='predecessor','unpublished truncate leaves the replication stream healthy')
+            predecessor=require(bytea_receipt,'exact preceding source and target receipts')
+            passed('TRUNCATE on an unpublished table leaves both destinations receiving published commits')
+            sql('source',"BEGIN; INSERT INTO billing.ledger VALUES(2,'before truncate'); "
+                         "TRUNCATE sales.items,sales.duplicates; INSERT INTO billing.ledger VALUES(3,'after truncate'); COMMIT")
+
+            def stopped_at_truncate():
+                status=task()['status']
+                return status if status.get('error_stage')=='DDL' and status.get('run_state')=='ERROR' else None
+
+            error=require(stopped_at_truncate,'published TRUNCATE stops the complete native transaction')
+            assert error['error_code']=='POSTGRESQL_TRUNCATE_REQUIRES_PLAN' and error['capture_lsn']==predecessor['lsn']
+            assert sql('source','SELECT COUNT(*) FROM sales.items')=='0'
+            assert sql('source','SELECT COUNT(*) FROM billing.ledger')=='3'
+            for query in ('SELECT COUNT(*) FROM copy_sales.items','SELECT COUNT(*) FROM copy_billing.ledger'):
+                assert sql('target',query)==mysql(query)=='1'
+            assert sql('target','SELECT COUNT(*) FROM copy_sales.duplicates')==mysql('SELECT COUNT(*) FROM copy_sales.duplicates')=='2'
+            assert bytea_receipt()==predecessor
+            review=http(route+'/capture-recovery')
+            assert review['phase']=='DDL' and set(review['affectedSubscriptions'])=={'pg','mysql'}
+            assert review['actions']==['PRESERVE_SOURCE_LOGS','REVIEW_NEW_BASELINE']
+            assert review['schemaDrift']['state']=='NO_VISIBLE_CHANGE'
+            passed('A published multi-table TRUNCATE retains the original LSN and both original receipts with no partial inserts')
+            compose('kill','-s','SIGKILL','runner')
+            compose('up','-d','runner')
+            require(stopped_at_truncate,'restart retains the original error and source position')
+            assert http(route+'/capture-recovery')['checkpointHash']==review['checkpointHash']
+            assert bytea_receipt()==predecessor
+            assert sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==snapshot_ids
+            assert mysql('SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')==mysql_snapshots
+            passed('Worker restart retains the paused DDL evidence and the same snapshot generations')
+            assert hashlib.sha256(artifact.read_bytes()).hexdigest()==digest
+            report['status']='PASS'
+            raise SystemExit(0)
         if args.common_cut:
             def validate(expected):
                 result=http(route+'/actions',dict(action='VALIDATE',expectedRevision=task()['revision'],

@@ -7,7 +7,7 @@
 ## 配置与运行
 
 1. 在源实例启用 `wal_level=logical`，为任务的持久槽和导出快照的临时槽预留容量。源账号需要 `LOGIN`、`REPLICATION` 和已发布表的 `SELECT` 权限。
-2. 创建明确列出同步表的发布，包含 INSERT、UPDATE 和 DELETE。对这些表设置 `REPLICA IDENTITY FULL`，以获取包括无主键行在内的完整前镜像。保持发布的表、列和行范围稳定，结构变更先暂停并审阅。
+2. 创建明确列出同步表的发布，包含 INSERT、UPDATE、DELETE 和 TRUNCATE。对这些表设置 `REPLICA IDENTITY FULL`，以获取包括无主键行在内的完整前镜像。保持发布的表、列和行范围稳定，结构变更先暂停并审阅。
 3. 按[示例配置](../../config/postgresql-source-v3.yml)设置源库、发布和目标。使用 PostgreSQL 目标时，连接角色需要读取 `pg_control_system()` 以核对物理连接身份。源库与目标库采用独立数据库。
 4. 使用发布包执行 `check <配置文件>` 验证连接和发布范围，再以 `run <配置文件>` 启动。在管理界面可导入 V3 配置，也可从新建任务选择 **V3 → PostgreSQL**，填写一个数据库、源 Schema、发布名和逻辑槽前缀。向导提供 PostgreSQL 和 MySQL 目标选项。保存后在选定 Agent 上执行 **检查**，通过后再 **启动**。
 
@@ -23,7 +23,7 @@ PostgreSQL 源使用 pgJDBC 42.7.14，并关闭驱动自动推进确认位置。
 - PostgreSQL `DATE` 在 PostgreSQL 和 MySQL 目标上均映射为 `DATE`。支持 1000-01-01 至 9999-12-31，保留 SQL `NULL`。快照和 pgoutput 共用 ISO 格式，日期不因 Worker 时区或公历切换而改变。[PostgreSQL 日期时间](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL DATE 取值范围](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
 - PostgreSQL 的 `TIME WITHOUT TIME ZONE` 在 PostgreSQL 和 MySQL 目标均使用 `TIME(6)`，区分 `00:00:00` 和一天结束时的 `24:00:00`，并保留微秒及 SQL `NULL`。`TIMETZ` 仍不支持。[PostgreSQL 日期时间类型](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL TIME 精度](https://dev.mysql.com/doc/refman/8.4/en/date-and-time-type-syntax.html)
 - PostgreSQL 的两种时间戳均保留微秒精度。无时区的时间戳保留本地钟面值，包括夏令时跳过的时间。有时区的时间戳转换为对应 UTC 钟面值。PostgreSQL 目标使用 `TIMESTAMP(6) WITHOUT TIME ZONE`，MySQL 目标使用 `DATETIME(6)`。下游需要还原为绝对时间时，应按 UTC 读取相应列。两种目标共用范围 `1000-01-01 00:00:00` 至 `9999-12-31 23:59:59.499999`。[PostgreSQL 时间戳语义](https://www.postgresql.org/docs/17/datatype-datetime.html) · [MySQL DATETIME 取值范围](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
-- PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由、TRUNCATE 和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
+- PostgreSQL 18 的存储型生成列可发布到目标普通列。对发布设置 `ALTER PUBLICATION rivomesh_capture SET (publish_generated_columns=stored)`，表保留 `REPLICA IDENTITY FULL`。PostgreSQL 17 生成列、PostgreSQL 18 虚拟生成列、行或列过滤、分区路由和自动 DDL 迁移需要独立档案。遇到不支持的类型或关系结构，预检或采集会给出明确错误。
 - 原实例、时间线、槽和日志完好时，重启复用持续的 LSN 和已有快照。目标 SQL 错误可在修复目标原因后恢复该订阅。
 - 显示 `POSTGRESQL_REQUIRED_WAL_UNAVAILABLE` 时，记录最后采集 LSN 并保留旧日志。评估原槽和所需 WAL 是否可恢复，必要时用新任务和经审阅的目标范围重建基线。
 - PostgreSQL 与 MySQL 目标支持下文的同一切点对账。其他目标需要单独验收源与目标组合。历史 DDL 执行由 LG-08 跟踪。
@@ -87,6 +87,14 @@ PostgreSQL 18.7 到 PostgreSQL 17.12 在 Temurin 21 下通过八项实库检查�
 数据库高可用服务隔离旧主、提升备库并更新写入口，Rivomesh 通过原入口重新连接。新主需要有相同的 system ID、覆盖原持久 LSN 和快照坐标的时间线历史，以及原 failover 槽。该槽须保有所需 WAL，确认位置不能领先 Rivomesh 日志。检查失败时保留旧 WAL 和日志。下一次切换前准备下一台物理备库。
 
 PostgreSQL 17.12 在 Temurin 21 下实测强杀原主、原生备库提升、复用快照继续投递，以及误指回旧主时保留新时间线断点并拒绝续传。夹具用 `IDENTIFY_SYSTEM` 核对当前活动时间线。测试参数为 `--source-image postgres:17.12 --failover`，追加 `--reject-old-primary` 可复现旧主路由拒绝。负载均衡产品、级联拓扑和其他版本组合单独验收。[流复制协议](https://www.postgresql.org/docs/17/protocol-replication.html)
+
+## 清表后保留原采集断点
+
+发布必须包含 `TRUNCATE`，采集才能在 WAL 中看到清表事件。显式配置发布操作时，使用 `publish='insert,update,delete,truncate'`。遗漏时，**检查** 返回 `POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED`。先暂停任务，再调整发布。原发布曾省略 TRUNCATE 时，先核对现有目标数据，再从保留的切点恢复。 [PostgreSQL 发布配置](https://www.postgresql.org/docs/17/sql-createpublication.html)
+
+发布范围内的事务包含清表时，Rivomesh 记录 `POSTGRESQL_TRUNCATE_REQUIRES_PLAN` 并保留原 LSN。整笔事务保留在源端日志，包括清表前后执行的插入或更新。在 **审阅采集恢复** 中保留 WAL，并审阅新基线方案后再恢复投递。表结构未发生变化时，结构对比可能没有差异。重启后仍可查看两目标的原回执和快照。
+
+使用[实库夹具](../../tests/postgres-source-run.py)和 `--source-image postgres:17.12 --truncate-review`，可复验发布检查、发布外清表、已提交的多表清表，以及 PostgreSQL 和 MySQL 的原断点保留。
 
 ## 审阅导致采集暂停的结构变化
 

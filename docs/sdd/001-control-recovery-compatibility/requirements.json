@@ -1771,8 +1771,8 @@
         "en": "Historical DDL,types,indexes and state migration"
       },
       "gap": {
-        "zh-CN": "对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 17.12 关系变化已实测停留原 LSN。界面审阅包括原生类型声明变化、列顺序和目录已有的索引定义。 JDBC 目标已回归验证身份列换序时仍保护 UNIQUE，显式全局主键和身份 GSI 在建表前要求分布方案。MySQL 源的 Gauss 目标可在管理预检审阅索引动作，覆盖完整统计及有界详情。商用多 CN/DN 和目标目录行为仍需实机验收。 openGauss 7.0.0-RC3 已核对源 UNIQUE(email) 降级与索引 OID 保留，目标主键和同步回执的唯一性保留。",
-        "en": "Allowlisted objects, UNIQUE/GSI policies and coordinated MySQL-to-PostgreSQL restore have native evidence. Two management entries expose read-only MySQL DDL differences between recorded schema and current catalog. Reviewed DDL execution, more types and other products remain. PostgreSQL 17.12 relation drift retains the original LSN. Read-only catalog review includes native type modifiers, existing column order and collected index definitions. JDBC regressions cover reordered identity UNIQUE and pre-DDL refusal of global primary or identity indexes. Managed Gauss preflight for MySQL reports complete plan counts and bounded details. Native commercial multi-CN/DN and target catalog behavior still need deployment validation. openGauss 7.0.0-RC3 verified UNIQUE(email) downgrade and stable index OIDs while retaining business and receipt primary keys."
+        "zh-CN": "MySQL 与 PostgreSQL 已有历史结构审阅。当前包在 PostgreSQL 17.12 源预检拒绝无 TRUNCATE 覆盖的发布。多表清表包含插入时，原 LSN、MySQL 与 PostgreSQL 双目标回执和快照在重启后完整。另复验原切点关系结构审阅、当前 LOCAL 加原 PostgreSQL 目标协调恢复，以及 openGauss 7.0.0-RC3 A 档案的无主键 JSON 重数、原断点续传和普通索引/行身份约束。商业分布式 GaussDB 多 CN/DN 和已审阅历史 DDL 执行仍待验。",
+        "en": "Native MySQL and PostgreSQL schema review is available. The current PostgreSQL 17.12 preflight requires TRUNCATE publication coverage. A multi-table truncate mixed with inserts preserves the original LSN, both SQL target receipts and snapshots after restart. The same package rechecks Pg relation drift review, coordinated LOCAL/PostgreSQL restore and openGauss 7.0.0-RC3 A-mode keyless JSON multiplicity, original checkpoint replay and safe index conversion. Commercial distributed GaussDB with multiple CNs and DNs and approved historical DDL execution remain."
       },
       "acceptance": {
         "zh-CN": "对象变化保留源schema历史和审阅计划，身份键不降级；首版状态结构直接创建，不兼容旧开发候选；验证当前状态的备份恢复、损坏拒绝及各产品限制。",
@@ -1794,7 +1794,9 @@
         "sync-app/src/main/java/io/github/rivomesh/GaussIndexReview.java",
         "sync-app/src/test/java/io/github/rivomesh/GaussIndexReviewTest.java",
         "tests/opengauss-index-native.py",
-        "tests/postgres-source-run.py"
+        "tests/postgres-source-run.py",
+        "docs/zh-CN/postgresql-source.md",
+        "docs/en/postgresql-source.md"
       ]
     },
     {

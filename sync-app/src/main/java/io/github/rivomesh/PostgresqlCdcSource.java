@@ -234,11 +234,12 @@ final class PostgresqlCdcSource implements SourceAdapter {
     Map<Integer,TableSchema> inspectTables(Connection c)throws Exception{
         Map<Integer,TableSchema> found=new LinkedHashMap<>();
         Set<String> observed=new TreeSet<>();
-        try(PreparedStatement p=c.prepareStatement("SELECT puballtables,pubinsert,pubupdate,pubdelete,pubviaroot FROM pg_publication WHERE pubname=?")){
+        try(PreparedStatement p=c.prepareStatement("SELECT puballtables,pubinsert,pubupdate,pubdelete,pubviaroot,pubtruncate FROM pg_publication WHERE pubname=?")){
             p.setString(1,options.publication);
             try(ResultSet r=p.executeQuery()){
                 if(!r.next()||r.getBoolean(1)||!r.getBoolean(2)||!r.getBoolean(3)||!r.getBoolean(4)||r.getBoolean(5))
                     throw invalid("POSTGRESQL_EXPLICIT_PUBLICATION_REQUIRED");
+                if(!r.getBoolean(6))throw invalid("POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED");
             }
         }
         try(PreparedStatement p=c.prepareStatement("SELECT t.schemaname,t.tablename,t.attnames,t.rowfilter,r.oid::text,r.relkind,r.relreplident "

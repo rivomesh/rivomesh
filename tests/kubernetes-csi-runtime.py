@@ -245,7 +245,7 @@ def profile(options, mode, record):
         sql('postgres', 'CREATE DATABASE sync_test')
         sql('postgres', """CREATE SCHEMA sales; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,label TEXT);
             ALTER TABLE sales.items REPLICA IDENTITY FULL; INSERT INTO sales.items VALUES(1,'snapshot');
-            CREATE PUBLICATION rive_test FOR TABLE sales.items WITH (publish='insert,update,delete')""")
+            CREATE PUBLICATION rive_test FOR TABLE sales.items WITH (publish='insert,update,delete,truncate')""")
         deploy(512, options.image)
         first = volume()
         original_pod = pod()
@@ -507,7 +507,7 @@ def external_fence(options, record):
         sql('postgres','CREATE DATABASE journal_store')
         sql('postgres',"""CREATE SCHEMA sales; CREATE TABLE sales.items(id BIGINT PRIMARY KEY,label TEXT);
             ALTER TABLE sales.items REPLICA IDENTITY FULL; INSERT INTO sales.items VALUES(1,'snapshot');
-            CREATE PUBLICATION fence_capture FOR TABLE sales.items WITH (publish='insert,update,delete')""")
+            CREATE PUBLICATION fence_capture FOR TABLE sales.items WITH (publish='insert,update,delete,truncate')""")
         old,digest=launch('worker-a',control)
         record['artifactSha256']=digest
         wait(lambda:contents()=='1:snapshot','first worker snapshot')

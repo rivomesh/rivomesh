@@ -115,6 +115,8 @@ CREATE INDEX ix_customer_email ON app.customer (email);
 
 注意：分区表的 GLOBAL/LOCAL 索引表示索引覆盖分区的范围，不能与分布式 GSI 混为一谈。openGauss 的分区索引语法也不能直接当成 GaussDB GSI 能力证明。[openGauss 索引文档](https://docs.opengauss.org/zh/docs/latest/database_administration_guide/creating_and_managing_indexes.html)。
 
+各版本和兼容模式分别限制 GSI。华为分布式 8.x SQL 参考要求 GTM-lite，并限制修改 GSI 分布键。分布式 10.x M 兼容模式也有专门的 UPDATE 和 MERGE 限制。确认实际版本、兼容模式和 GTM 模式后再选择索引方案。 [分布式 8.x CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/zh-cn/distributed-devg-v8-gaussdb/gaussdb-12-0546.html) · [分布式 10.x M 模式 CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/en-us/distributed-m-comp-devg-v10-gaussdb/gaussdb-21-0062.html)
+
 ## 分布式表和管理表
 
 普通索引策略只放宽业务次级约束，不消除分布式表对主键、分布列、分区列或数据类型的要求。分布方案要确定性、可诊断、可覆盖配置，并检查主键更新或分布键更新时的写入策略。
@@ -148,7 +150,7 @@ CREATE INDEX ix_customer_email ON app.customer (email);
 
 ## FAQ
 
-**去掉 UNIQUE，重试会多插入一行吗？** 本专题的有键方案按主键和事务断点幂等处理；email 普通索引不参与去重。无主键已纳入首版需求，但当前代码仍拒绝：需实现候选键或一致基线/多重集方案，不能直接套用有键保证，详见[平台设计](platform-design.md)。
+**业务 UNIQUE 降级后，重试会多插入一行吗？** 有键表通过主键和事务断点重放。无主键表按相同行的重数处理，每个出现次数都有独立的同步行身份。openGauss 7.0.0-RC3 实库保留了两条相同 JSON 行，更新其中一条，并在 Worker 强杀后重放剩余行的删除。
 
 **多个源行 email 相同是否永远是错误？** 不是。NULL、源/目标比较语义差异以及追平前的混合扫描状态都要区分。用源定义及约定边界判断，不自动删除“重复”行。
 

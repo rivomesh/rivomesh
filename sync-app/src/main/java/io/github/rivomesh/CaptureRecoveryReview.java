@@ -286,8 +286,8 @@ public final class CaptureRecoveryReview {
         if("SOURCE_POSITION_UNAVAILABLE".equals(admission))
             return Arrays.asList("PRESERVE_SOURCE_LOGS","REPAIR_CAPTURE_CAUSE","REVIEW_NEW_BASELINE");
         if("SOURCE_CHECKPOINT_AVAILABLE".equals(admission)){
-            if("ORACLE".equals(sourceType)&&"DDL".equals(phase)
-                    &&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(failureCode))
+            if("DDL".equals(phase)&&("ORACLE".equals(sourceType)&&"ORACLE_REDO_DDL_REQUIRES_PLAN".equals(failureCode)
+                    ||"POSTGRESQL".equals(sourceType)&&"POSTGRESQL_TRUNCATE_REQUIRES_PLAN".equals(failureCode)))
                 return Arrays.asList("PRESERVE_SOURCE_LOGS","REVIEW_NEW_BASELINE");
             if("SOURCE_CONNECT".equals(phase)||"SOURCE_READ".equals(phase))
                 return Arrays.asList("PRESERVE_SOURCE_LOGS","RETRY_ORIGINAL_CHECKPOINT");

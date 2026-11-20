@@ -85,7 +85,7 @@ RM-SDD-001 · v0.59 · 2026-11-19 · IMPLEMENTING
 | LG-05 | P0 / DONE | 可选存储和跨节点数据可达性 | 可选存储档案已验收。本地日志保留原目录和持久卷。独立 PostgreSQL 控制库和日志库可经审批完成排空交接。实测日志停驻后控制事务回滚，候选重启并沿用同一审批；Worker 准入时再次回滚控制事务，候选按原源位点、快照及 MySQL 和 PostgreSQL 双目标回执续传。默认独立日志支持核验和暂存。同库冻结及离线接管保留原生围栏。其他产品的写入隔离在对应产品档案评估。 |
 | LG-06 | P1 / DONE | 真实K8s/CSI与节点故障验收 | 双节点 ARM64 实测通过 Helm 和原生 YAML 的镜像升级、RWO CSI 原卷迁移及自动续传。另实测物理 Worker 故障恢复、Secret 轮换、外部日志接管及旧 Worker 写入隔离。 |
 | LG-07 | P1 / DONE | 海量对象、大事务和硬件性能标准 | Temurin 21 限定资源档案已验收。含 12 轮硬件实测、256 库、超过 8 MiB 的单笔事务、独立日志限额下的慢目标背压和强杀追平。硬件手册记录测量口径及实际资源。 |
-| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | 对象白名单及 UNIQUE/GSI 转换已有。已实测 MySQL 到 PostgreSQL 的协调冷备和原断点恢复；MySQL 原生 DDL 差异可在两入口按日志与当前目录只读核对。经审阅执行动态 DDL、复杂类型和其他产品待验。 PostgreSQL 17.12 关系变化已实测停留原 LSN。界面审阅包括原生类型声明变化、列顺序和目录已有的索引定义。 JDBC 目标已回归验证身份列换序时仍保护 UNIQUE，显式全局主键和身份 GSI 在建表前要求分布方案。MySQL 源的 Gauss 目标可在管理预检审阅索引动作，覆盖完整统计及有界详情。商用多 CN/DN 和目标目录行为仍需实机验收。 openGauss 7.0.0-RC3 已核对源 UNIQUE(email) 降级与索引 OID 保留，目标主键和同步回执的唯一性保留。 |
+| LG-08 | P1 / PARTIAL | 历史DDL、类型、索引与状态迁移 | MySQL 与 PostgreSQL 已有历史结构审阅。当前包在 PostgreSQL 17.12 源预检拒绝无 TRUNCATE 覆盖的发布。多表清表包含插入时，原 LSN、MySQL 与 PostgreSQL 双目标回执和快照在重启后完整。另复验原切点关系结构审阅、当前 LOCAL 加原 PostgreSQL 目标协调恢复，以及 openGauss 7.0.0-RC3 A 档案的无主键 JSON 重数、原断点续传和普通索引/行身份约束。商业分布式 GaussDB 多 CN/DN 和已审阅历史 DDL 执行仍待验。 |
 | LG-09 | P1 / DONE | 报告目录、保留清理与真实浏览器验收 | 双入口历史报告/回执、审批、键盘分页、归档和恢复已实测。限定档案回收经停止、保留期、摘要和报告锁检查后只移除已安全归档的重复行文件。 |
 | LG-10 | P2 / PARTIAL | 外部身份、不可变审计与Apache准备 | 本地 MinIO 已验收签名检查点、完整审计事件、Object Lock COMPLIANCE、精确版本及跨批次恢复。已核对五路外置 JDBC、SBOM 和发行包嵌套依赖。Keycloak 26.7.4、真实 Chrome、共享 PostgreSQL 控制库及双 Controller HTTPS 入口通过登录、本地账号权限和撤销。真实 AWS、生产入口、提供方主动撤销、项目授权和最终 LICENSE/NOTICE 待完成。 |
 

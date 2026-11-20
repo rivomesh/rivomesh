@@ -3087,7 +3087,7 @@ with tempfile.TemporaryDirectory(prefix='global-cdc-', dir=ROOT / 'target') as t
                     "GRANT USAGE ON SCHEMA sales,billing TO capture_placement; "
                     "GRANT SELECT ON ALL TABLES IN SCHEMA sales,billing TO capture_placement; "
                     "CREATE PUBLICATION placement_publication FOR TABLE sales.items,billing.ledger "
-                    "WITH (publish='insert,update,delete')")
+                    "WITH (publish='insert,update,delete,truncate')")
                 document['source']={'type':'POSTGRESQL','clusterId':'placement-postgresql','database':'placement_source',
                     'topology':'SINGLE','expectedVersion':'17.12','username':'capture_placement','password':env['RM_GC_DATA'],
                     'postgresql':{'url':'jdbc:postgresql://placement-source:5432/placement_source',

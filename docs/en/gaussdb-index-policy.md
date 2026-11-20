@@ -116,6 +116,8 @@ Design consequences:
 
 Partition GLOBAL/LOCAL indexes describe partition coverage and must not be confused with distributed GSI. openGauss partition-index syntax is not evidence of GaussDB GSI capability. [openGauss index documentation](https://docs.opengauss.org/zh/docs/latest/database_administration_guide/creating_and_managing_indexes.html).
 
+Huawei documents GSI restrictions separately for each release and compatibility mode. The distributed 8.x SQL reference limits GSI creation to GTM-lite and restricts updates to the GSI distribution key. The distributed 10.x M-mode guide documents its own UPDATE and MERGE restrictions. Record the actual server release, compatibility mode and GTM mode before choosing an index plan. [Distributed 8.x CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/en-us/distributed-devg-v8-gaussdb/gaussdb-12-0546.html) · [Distributed 10.x M-mode CREATE GLOBAL INDEX](https://support.huaweicloud.com/intl/en-us/distributed-m-comp-devg-v10-gaussdb/gaussdb-21-0062.html)
+
 ## Distributed business and metadata tables
 
 Relaxing business secondary constraints does not remove restrictions involving PKs, distribution/partition columns, or types. Distribution planning must be deterministic, explainable, and overridable, with an explicit write strategy for PK/distribution-key changes.
@@ -149,7 +151,7 @@ After application writes begin, the original one-way sync service cannot safely 
 
 ## FAQ
 
-**Will retries insert extra rows without UNIQUE?** The keyed design uses PKs and transaction checkpoints; an ordinary email index does not deduplicate. No-PK support is now a first-release requirement but remains unimplemented. It needs candidate identity or consistent-baseline/multiset handling, not the keyed guarantee; see [platform design](platform-design.md).
+**Will retries insert extra rows after downgrading UNIQUE?** For keyed tables, primary keys and transaction checkpoints govern replay. For a keyless table, Rivomesh tracks counts of equal source rows and assigns a stable internal row identity to each occurrence. The openGauss 7.0.0-RC3 fixture preserves duplicate JSON rows, updates one occurrence and replays a pending delete after Worker restart.
 
 **Are repeated email values always errors?** No. Distinguish NULLs, comparison differences, and pre-catch-up mixed scan states. Judge against source definitions at a declared boundary; do not automatically delete rows.
 

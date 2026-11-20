@@ -15061,5 +15061,90 @@
       "python3 tests/postgres-source-run.py --artifact /path/to/rivomesh.jar --source-image postgres:17.12 --common-cut --output target/native-common-cut",
       "python3 tests/postgres-source-run.py --artifact /path/to/rivomesh.jar --source-image postgres:18 --generated --output target/native-postgres18-generated"
     ]
+  },
+  "lg08PostgresqlTruncateAndCurrentState": {
+    "status": "PASS",
+    "requirementStatus": "PARTIAL",
+    "artifactSha256": "10ff123fb858a9d1e7b7a57144f7ceb3354bb262320205cbcb9c014120e2c79a",
+    "focusedJavaTests": 19,
+    "nativeProfiles": {
+      "PostgreSQLTruncate": {
+        "manifestSha256": "9a9276e7ff7ac1b76899c807513552d528deee82036f046353833fc0529afc73",
+        "checks": [
+          "Preflight refuses to start a publication that silently omits TRUNCATE",
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "TRUNCATE on an unpublished table leaves both destinations receiving published commits",
+          "A published multi-table TRUNCATE retains the original LSN and both original receipts with no partial inserts",
+          "Worker restart retains the paused DDL evidence and the same snapshot generations"
+        ],
+        "cleanupExitCode": 0,
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "runtimeVersion": "21.0.13",
+        "harnessSha256": "9ea8ecc8da5817c731825546c5a39d628a0b6cb5c86991ec526909b2a0525101"
+      },
+      "PostgreSQLRelationDrift": {
+        "manifestSha256": "10a2bb0ab8a9291a5238394bba933486b06243876a9529ed78c591346aa27b60",
+        "checks": [
+          "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+          "Idle keepalives retain the original checkpoint as unpublished WAL advances",
+          "A pgoutput transaction spans mapped schemas and updates exactly one keyless occurrence",
+          "Destination SQL failure retains the typed source transaction and replays after explicit resume",
+          "SIGKILL and restart reuse the original slot and snapshot with continuing LSN",
+          "Changed native Relation retains the cut and review identifies the new column and exact TIMESTAMP type modifier",
+          "A later DDL changes the advisory live digest while preserving the recorded schema and failure cut",
+          "An unsupported publication shape has an explicit unavailable diagnostic without changing either cut"
+        ],
+        "cleanupExitCode": 0,
+        "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+        "runtimeVersion": "21.0.13",
+        "harnessSha256": "9ea8ecc8da5817c731825546c5a39d628a0b6cb5c86991ec526909b2a0525101"
+      },
+      "LocalPostgreSQLRestore": {
+        "manifestSha256": "b86a7e5ad22e2b3bd7a7ef79cb5af9fddb42f2cc74f2735d1bfda067193087f5",
+        "checks": [
+          "Closed the production engine and H2 cleanly, then took the matched LOCAL/pg_dump backup",
+          "Transactional pg_restore and cold journal copy reconstitute rows, receipts and original identity",
+          "A changed target database URL is refused with its restored business rows and target receipts intact",
+          "Exact saved MySQL GTID resumes once with original snapshot, generation and PostgreSQL identity"
+        ],
+        "cleanupExitCode": 0,
+        "versions": {
+          "mysql": "8.4.13",
+          "postgres": "17.12 (Debian 17.12-1.pgdg13+1)"
+        },
+        "runtime": [
+          "openjdk version \"21.0.13\" 2026-10-20 LTS",
+          "OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)",
+          "OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)"
+        ]
+      },
+      "OpenGaussIndexAndKeyless": {
+        "manifestSha256": "2bc43ace66a826bc88e69e5460ed56f953c57b113cd27c9e1c9cba2e5496424a",
+        "checks": [
+          "Exact openGauss version and SQL compatibility mode recorded",
+          "Source MySQL continues enforcing UNIQUE(email) while accepting multiple SQL NULLs",
+          "Read-only v3 check plans a nonunique email index and ordered two-column secondary index",
+          "Catalog matches the reviewed nonunique indexes and preserves business and receipt primary keys",
+          "One source transaction updates and moves only the intended composite keys",
+          "Original openGauss data keeps the native receipt, completed snapshot and physical index OIDs",
+          "Worker reopens the original journal and advances exactly one native transaction without creating indexes",
+          "Unsupported MySQL prefix index is reported and the writer refuses business DDL",
+          "openGauss retains two identical source rows with a separate stable row identity",
+          "openGauss resumes the original keyless JSON snapshot and applies one retained delete"
+        ],
+        "cleanupExitCode": 0,
+        "versions": {
+          "source": "8.4.13",
+          "target": "(openGauss 7.0.0-RC3 build f08516a2) compiled at 2026-03-26 10:29:14 commit 0 last mr 9119  on aarch64-unknown-linux-gnu, compiled by g++ (GCC) 10.3.1, 64-bit",
+          "targetMode": "A"
+        },
+        "runtimeVersion": "openjdk version \"21.0.13\" 2026-10-20 LTS",
+        "scriptSha256": "758791f26da47711d2fd00ee55cb826dccaf18ae5570ccf5fc0c6cc495ca0e88"
+      }
+    },
+    "pending": [
+      "commercial distributed GaussDB with multiple CNs and DNs",
+      "execution of reviewed historical DDL"
+    ]
   }
 }

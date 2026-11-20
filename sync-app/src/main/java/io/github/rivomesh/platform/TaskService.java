@@ -2073,6 +2073,8 @@ public final class TaskService implements AutoCloseable {
         if(error instanceof Conflict)return error.getMessage();
         if(error instanceof SyncFailure)return ((SyncFailure)error).code;
         if((error instanceof IllegalStateException||error instanceof IllegalArgumentException)&&error.getMessage()!=null&&error.getMessage().matches("(?:VALIDATION|REPAIR|FAILURE|SKIP|SINK|GAP|COMPENSATION|CORRECTION|KAFKA_RECOVERY|KAFKA_HISTORY_ORIGIN)_[A-Z0-9_]+"))return error.getMessage();
+        if(error instanceof IllegalStateException&&"POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED".equals(error.getMessage()))
+            return error.getMessage();
         if("ERROR_GENERATION_CHANGED".equals(error.getMessage()))return "ERROR_GENERATION_CHANGED";
         String message=error.getMessage();
         if(message!=null&&(error instanceof IllegalStateException||error instanceof IOException)

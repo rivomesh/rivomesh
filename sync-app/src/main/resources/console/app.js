@@ -106,12 +106,16 @@ function translate(){if(failureDialog){failureDialog.querySelectorAll('[data-fai
 Object.assign(messages.zh,{
  JDBC_DRIVER_UNAVAILABLE:'驱动无法加载。检查执行节点的驱动文件和 classpath。',
  JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED:'驱动要求更新的 Java。请提供与 Temurin 21 兼容的驱动。',
- JDBC_DRIVER_LINKAGE_INVALID:'驱动依赖不完整或冲突。请检查执行节点上的驱动和依赖版本。'
+ JDBC_DRIVER_LINKAGE_INVALID:'驱动依赖不完整或冲突。请检查执行节点上的驱动和依赖版本。',
+ POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED:'源发布需要包含 TRUNCATE。核对发布设置后重新执行检查。',
+ POSTGRESQL_TRUNCATE_REQUIRES_PLAN:'源端包含清表操作。采集保留原断点，请审阅重建基线方案。'
 });
 Object.assign(messages.en,{
  JDBC_DRIVER_UNAVAILABLE:'The driver failed to load. Check the execution node driver file and classpath.',
  JDBC_DRIVER_JAVA_VERSION_UNSUPPORTED:'The driver needs a newer Java version. Supply a Temurin 21-compatible driver.',
- JDBC_DRIVER_LINKAGE_INVALID:'Driver dependencies are missing or conflicting. Check their versions on the execution node.'
+ JDBC_DRIVER_LINKAGE_INVALID:'Driver dependencies are missing or conflicting. Check their versions on the execution node.',
+ POSTGRESQL_PUBLICATION_TRUNCATE_REQUIRED:'The source publication needs TRUNCATE coverage. Review its settings and run Check again.',
+ POSTGRESQL_TRUNCATE_REQUIRES_PLAN:'The source transaction truncates a table. Capture retains the original position while you review a new baseline.'
 });
 function explain(code){return messages[lang][code]||(code&&code.startsWith('SQL_')?t('SQL'):t('UNKNOWN'))+(code?' ['+code+']':'');}
 function notify(message){$('notice').textContent=message;$('notice').classList.remove('hidden');}

@@ -217,6 +217,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
   - [x] Console and CLI preflight share the MySQL-to-Gauss writer policy and report complete counts with bounded details.
   - [x] Native PostgreSQL 17.12 review shows the TIMESTAMP type modifier change and retains the source LSN, snapshot and target rows.
   - [ ] Native commercial GaussDB multi-CN/DN and target catalog acceptance.
+  - [x] The current package verifies whole-transaction TRUNCATE refusal, two native target cuts and snapshots, coordinated restore, and openGauss keyless JSON replay across restart.
 - [x] T-LG-09 · Report retention and real-browser acceptance · P1 · Depends on: CP-06, SE-05, RC-09
   Deliver: Provide authorized report/receipt search,retention and active-file protection;real browsers verify cluster/session/confirmation/recovery/pagination and accessibility.
   Acceptance: AC-LG-09
