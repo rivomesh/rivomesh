@@ -772,3 +772,11 @@ The `0dcb0afcc7c6766b2283a11349fb345d21baf87cba2ce18d0b1b559a53922efb` Temurin 2
 Temurin 21 package `78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b` completes the bounded RC-10 capability profiles. RabbitMQ 4.1.4 independently retains a publisher receipt that can be reviewed after the quorum business queue is ACKed. A different native batch is refused, and the source transaction and both subscription ACKs remain at their original positions.
 
 PostgreSQL and MySQL external journals each passed 22 retention contracts for reopened journal state, prepared skip plans, verified gaps, and quota refusal. The H2 regressions and recorded Temurin 21 real MySQL to PostgreSQL slow-target profile cover backpressure and recovery. Analytical and messaging profiles use the archived native checks in the same evidence ledger. Broader cluster and storage combinations are tracked by LG-03, LG-04, and LG-05. [Evidence ledger](baseline.json) · [Runbook](../en/failed-transactions.md)
+
+## JV-02 Temurin 21 product and recovery matrix
+
+Package `84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70` passed native MySQL 8.4.13 to PostgreSQL 17.12 plus OceanBase CE 4.3.5.6 MySQL mode. The GBase 8c V6_S1.3.0B19 PG-mode artifact differs only in the OceanBase probe. Both profiles checked snapshot, CDC, original receipt, target and Worker restart, retained SQL pause and targeted repair. Docker ran the same Temurin 21 runtime for both profiles.
+
+The OceanBase first run exposed a Connector/J exception during statement timer cleanup. The candidate bounds the JDBC network timeout during the target probe, preserves the underlying connection failure and restores the connection setting.
+
+The [Chinese compatibility matrix](../zh-CN/compatibility.md) and [English compatibility matrix](../en/compatibility.md) register the individual client, TLS, type, topology and recovery boundaries for the approved source, relational and analytical targets, and brokers. [Evidence ledger](baseline.json)

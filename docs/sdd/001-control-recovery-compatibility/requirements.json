@@ -1194,14 +1194,14 @@
       "id": "JV-02",
       "epic": "JAVA",
       "priority": "P1",
-      "status": "PARTIAL",
+      "status": "DONE",
       "title": {
         "zh-CN": "Java 21 源、目标及恢复组合",
         "en": "Java 21 source, sink and recovery profiles"
       },
       "gap": {
-        "zh-CN": "首版仅使用 Temurin 21 LTS。MySQL 5.7.44、8.0.46、8.2.0 和 8.4.13 已实测单机全量与增量、异步 GTID 切主和三节点单主组复制。四个组复制档案均在快照中途停主后自动续传至 MySQL 和 PostgreSQL。8.4.13 另通过异步 GTID 双目标续传与组复制旧主只读返回。PostgreSQL 17/18 及 Oracle 单 PDB 也有实库记录。其他目标、TLS 和恢复场景继续按 Temurin 21 验收。",
-        "en": "Temurin 21 LTS is the sole first-release runtime. Native evidence covers standalone, async GTID failover and three-member single-primary Group Replication on MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13. All four group profiles resume to MySQL and PostgreSQL after the primary stops during a snapshot. MySQL 8.4.13 also passed two-target async continuation and refusal of the read-only former group primary. PostgreSQL 17/18 and single-PDB Oracle have separate native results. Additional destinations, TLS and recovery profiles remain in the Temurin 21 matrix."
+        "zh-CN": "固定 Temurin 21 的批准源档案已验收。MySQL 5.7.44、8.0.46、8.2.0、8.4.13 验证单机、异步 GTID 切主和三节点单主组复制。PostgreSQL 17.12/18.7 和 Oracle 26ai Free 单 PDB 验证全量、增量、原断点重启和内容。最新发布包实测 OceanBase MySQL 租户及 GBase 8c PG 模式的 MySQL 增量、JSON、无主键、目标/Worker 重启与独立 SQL 修复。中英文矩阵登记目标驱动、消息 SDK、TLS、数据类型、拓扑和恢复。其他版本和集群由各产品事项跟踪。",
+        "en": "Accepted Temurin 21 source profiles. MySQL 5.7.44, 8.0.46, 8.2.0 and 8.4.13 pass standalone, async GTID promotion and three-member single-primary Group Replication. PostgreSQL 17.12/18.7 and single-PDB Oracle 26ai Free cover snapshot, CDC, restart from the same position and content. The current package verifies native OceanBase MySQL tenant and GBase 8c PG-mode MySQL CDC, JSON, keyless rows, target and Worker restart and isolated repair. The bilingual product matrix records drivers and SDKs, TLS, data types, topology and recovery. Product requirements retain additional versions and cluster profiles."
       },
       "acceptance": {
         "zh-CN": "各批准源档案在 Java 21 核对全量、增量、重启和数据内容。分产品登记目标驱动、消息 SDK、TLS、JSON、无主键、集群与修复场景。",
@@ -1221,8 +1221,18 @@
         "tests/global-control-pipeline.py",
         "tests/mysql-group-failover-native.py",
         "pom.xml",
-        "tests/verify-artifact.py"
-      ]
+        "tests/verify-artifact.py",
+        "docs/en/compatibility.md",
+        "docs/zh-CN/compatibility.md",
+        "tests/oceanbase-pipeline-run.sh",
+        "tests/gbase8c-pipeline-run.sh"
+      ],
+      "verification": {
+        "artifactSha256": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21.0.12.1 for the two current native runs. Source evidence covers the approved four MySQL versions, PostgreSQL 17/18 and Oracle 26ai Free single PDB. The current package covers real MySQL 8.4 to OceanBase CE MySQL tenant; the companion current-profile GBase 8c PG-mode artifact differs only in the OceanBase connection probe. Both use a healthy PostgreSQL peer. Earlier accepted artifacts cover the other product profiles. Refer to the per-product matrix for the exact artifacts and TLS/cluster restrictions.",
+        "criteriaSha256": "41b63d7c2937c70a8058d5b45464936fb1eaf928e7c555a6b8bcf11bab5af9d0"
+      }
     },
     {
       "id": "JV-03",

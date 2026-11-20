@@ -36,7 +36,7 @@ Each row records its acceptance contract and observed coverage. Verify success, 
 | AC-SO-06 | SO-06 | Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs. | PARTIAL. Native slot promotion, stored generated columns and dual-target TIME(6) and extended NUMERIC passed. Dynamic DDL remains. |
 | AC-SO-07 | SO-07 | Specify capture route,versions,privileges and driver distribution conditions;implement SCN snapshot,commit/rollback,redo/archive,DB identity/incarnation,checkpoint/replay;verify LOB,charset,PDB/RAC scope explicitly. | PARTIAL. Native single-PDB CDC, savepoint rollback, dual PostgreSQL continuation and LOB/native JSON refusal are verified. RAC, other types and complete row image capture remain. |
 | AC-JV-01 | JV-01 | Run the same Temurin 21 candidate on Controller, Agent and Worker with native snapshot and CDC. Record JVM version, architecture, artifact SHA, bytecode and dependency checks. | PASS (Temurin 21 class major, live Controller/Agent/Worker and SQL CDC) |
-| AC-JV-02 | JV-02 | On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product. | PARTIAL. All four MySQL versions pass standalone, async promotion and three-member single-primary recovery. Further Temurin 21 connector and recovery profiles remain. |
+| AC-JV-02 | JV-02 | On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product. | PASS for the approved Temurin 21 profiles. Four MySQL versions, PostgreSQL 17/18 and Oracle single PDB have native source evidence. OceanBase and GBase 8c pass native snapshot, CDC and restart with isolated SQL repair on this package. The bilingual matrix records exact target or broker, client, TLS, data type and topology boundaries. |
 | AC-JV-03 | JV-03 | Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation. | PARTIAL (JDBC and reconnect profiles plus native private CA and JWT over Pulsar TLS) |
 | AC-JV-04 | JV-04 | Verify the Java 21 Linux, Docker and Kubernetes deployment paths. Rolling replacement preserves a management entry, commands and verified checkpoints. Document backup, restore and rollback boundaries. | PASS (manual Linux, nonroot Docker, both Kubernetes formats and exact candidate gate) |
 | AC-DO-01 | DO-01 | Each requirement has stable ID,status,gap,dependencies,priority,acceptance and task;ZH/EN IDs match and changes preserve evidence scope. | [PASS](../../verification/README.md#do-01-bilingual-sdd-verifier) |
@@ -71,9 +71,9 @@ Each row records its acceptance contract and observed coverage. Verify success, 
 
 | Source profile | Temurin 21 evidence | Remaining coverage |
 |---|---|---|
-| MySQL 5.7 | 5.7.44 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
-| MySQL 8.0 | 8.0.46 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
-| MySQL 8.2 | 8.2.0 standalone snapshot and CDC to MySQL and PostgreSQL | More topologies, targets and recovery cases |
+| MySQL 5.7 | 5.7.44 snapshot and CDC, async GTID failover, and three-member single-primary Group Replication | More topologies, targets and recovery cases |
+| MySQL 8.0 | 8.0.46 snapshot and CDC, async GTID failover, and three-member single-primary Group Replication | More topologies, targets and recovery cases |
+| MySQL 8.2 | 8.2.0 snapshot and CDC, async GTID failover, and three-member single-primary Group Replication | More topologies, targets and recovery cases |
 | MySQL 8.4 | 8.4.13 standalone, async GTID promotion and single-primary Group Replication | Further products, connectors and recovery cases |
 | PostgreSQL source | 17.12 synchronized-slot promotion and dual-target types, and 18.7 stored generated columns | Dynamic DDL, further types and targets |
 | Oracle source | Free 23.26.4.0.0 single-PDB archive CDC, virtual columns and LOB preflight | Complete LOB images, RAC and further database versions |

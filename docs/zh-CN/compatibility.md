@@ -26,7 +26,7 @@ MySQL 坐标使用逻辑源集群 ID 与无标签 GTID 集合。PostgreSQL 坐�
 | `GAUSS` | openGauss 7.0.0-RC3 事务档案已实测。商用分布式 GaussDB 的约束、GSI 和部署验收待完成。 | [高斯索引策略与接管](gaussdb-index-policy.md) |
 | `DM`、`KINGBASE`、`GBASE_8C` | 首批历史事务档案使用 Java 8。确切版本、模式、驱动、类型转换和恢复范围见各产品手册。 | [达梦](dm-v3.md)、[金仓](kingbase-v3.md)、[GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`、`GBASE_8S` | 独立产品，规划中。 | [实施状态](implementation-status.md) |
-| `OCEANBASE` | CE 4.3.5.6 MySQL 租户的早期 Java 8 档案涵盖原生事务、全量、增量、重启和 SQL 恢复。Oracle 模式和集群待完成。 | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | CE 4.3.5.6 MySQL 模式通过 Temurin 21 上的原生事务、全量与增量、重启及 SQL 修复。Oracle 模式和集群另行验收。 | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`、`DORIS`、`HIVE` | 首批实库分析档案，采用版本化物化与回执。数据可见性和重放规则按引擎区分。 | [ClickHouse](clickhouse-v3.md)、[Doris](doris-v3.md)、[Hive](hive-v3.md) |
 | `KAFKA`、`PULSAR`、`RABBITMQ`、`ROCKETMQ`、`ACTIVEMQ_CLASSIC`、`ACTIVEMQ_ARTEMIS`、`REDIS_STREAMS`、`NATS_JETSTREAM` | 限定 broker 档案，确认式至少一次投递。消费端按稳定事件 ID 去重，独立记录业务消费进度。 | [消息目标](messaging-v3.md)、[ActiveMQ Classic](classic-v3.md) |
 
@@ -37,6 +37,34 @@ V3 向导读取 `GET /api/capabilities` 判断源类型可用性，并按源引�
 **构建、运行和验收仅支持 Eclipse Temurin 21 LTS。** 发布包使用 Java 21 字节码。Linux、Docker 和 Kubernetes 的 Controller、Agent 和 Worker 都使用 Temurin 21。实库档案记录实际 JVM 版本、架构和包 SHA。新增源、目标、日志和恢复组合按对应的 Temurin 21 用例验收。[复现命令](performance.md)
 
 上述源和目标档案仍对应各自的候选包与实测环境。早期运行时实验和 `fiveJdkProcesses`、`postgresqlSourceRuntimeMatrix`、`postgresqlStoredGenerated` 等档案保留原制品摘要和复现命令。[验收清单](../verification/baseline.json) · [固定历史快照](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
+
+
+### Temurin 21 目标产品实测档案
+
+下表登记数据库或 Broker 版本、内置客户端或外置驱动及已验收的恢复操作。各行的制品和验收范围以产品手册和证据清单为准。
+
+| 目标 | 服务端与客户端 | 原生验收 |
+|---|---|---|
+| `MYSQL` | 8.4.13 · Connector/J 8.4.0 | 原生事务、全量与增量、JSON、无主键、GTID 续传及 SQL 修复 |
+| `POSTGRESQL` | 17.12 · pgJDBC 42.7.14 | 原生事务、JSONB、无主键、逻辑槽切换、证书校验和 SQL 修复 |
+| `GAUSS` | openGauss 7.0.0-RC3 A · gsjdbc4 1.1 | 目标重启、表和索引一致性、唯一索引降级及原快照续传 |
+| `DM` | 8.1.4.80 UTF-8 · 8.1.3.140 | 外置驱动、JSON 文本、宽数值、无主键、目标重启、Worker 重启与隔离修复 |
+| `KINGBASE` | V009R001C001B0025 PG/UTF8 · 9.0.1 | 外置驱动鉴权、原生 JSON、精确数值、原回执和目标重启 |
+| `GBASE_8C` | V6_S1.3.0B19 PG/UTF8 · 3.0.0B02 | 真实 MySQL 全量与增量、JSON、无主键、精确数值、重启续传和独立 SQL 修复 |
+| `OCEANBASE` | CE 4.3.5.6 MySQL · Connector/J 8.4.0 | 真实 MySQL 全量与增量、JSON、无主键、精确数值、重启续传和独立 SQL 修复 |
+| `CLICKHOUSE` | 25.8.33.6 · HTTP / RowBinary | 原生物化回执、重启、旧非空备份和原生前序回执核对 |
+| `DORIS` | 4.1.3 · Connector/J 8.4.0 / Stream Load | 原生写入与回执、断点恢复，故障前确切批次核验 |
+| `HIVE` | 4.0.1 · Hive JDBC 4.0.1 | 外置 PostgreSQL Metastore、ACID ORC、快照和增量、Worker 原断点重启与原生回执 |
+| `KAFKA` | 3.9.2 / 4.1.2 · Kafka clients 3.9.2 / 4.1.2 | TLS/SCRAM、KRaft、原生 ACK、固定 UUID 事务缺口通知和断点恢复 |
+| `PULSAR` | 4.0.14 · Pulsar SDK 4.0.14 | 私有 CA/JWT、多 Broker/BookKeeper、保留原 Ledger 和 Entry |
+| `RABBITMQ` | 4.1.4 · AMQP client 5.36.0 | quorum 主节点切换与消费 ACK，独立回执流支持在消费后核验 |
+| `ROCKETMQ` | 5.5.0 · RocketMQ client 5.5.1 | 本地同步刷盘、原生提交日志回执、独立 Controller 副本升主档案 |
+| `ACTIVEMQ_CLASSIC` | 5.19.12 · OpenWire client 5.16.8 | KahaDB 共享存储主备及原生前序回执 |
+| `ACTIVEMQ_ARTEMIS` | 2.57.0 · Core client 2.19.1 | 主备共享存储、非破坏队列原生前序回执 |
+| `REDIS_STREAMS` | 7.4.2 / 8.0.2 · Jedis 8.0.2 | AOF、WAITAOF、外部升主、TLS、原生条目回执 |
+| `NATS_JETSTREAM` | 2.11.8 · jnats 2.26.4 | TLS、三副本多数派与原生序列回执 |
+
+商业分布式 GaussDB、OceanBase Oracle 租户以及 GBase 8a/8s 需要单独的原生验收。更多存储、安全和生产集群组合由各产品的 SDD 事项跟踪。 [证据清单](../verification/baseline.json) · [验收档案](../sdd/001-control-recovery-compatibility/acceptance.md)
 
 ## 管理端请求
 

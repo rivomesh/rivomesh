@@ -142,11 +142,11 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [x] T-JV-01 · Temurin 21 first-release runtime · P0 · Depends on: none
   Deliver: Run the same Temurin 21 candidate on Controller, Agent and Worker with native snapshot and CDC. Record JVM version, architecture, artifact SHA, bytecode and dependency checks.
   Acceptance: AC-JV-01
-- [ ] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
+- [x] T-JV-02 · Java 21 source, sink and recovery profiles · P1 · Depends on: JV-01, SO-02, SO-03, SO-04, SO-05, SO-06, SO-07
   Deliver: On Java 21 verify snapshot, CDC, restart and content for every approved source profile. Record destination drivers, messaging SDKs, TLS, JSON, keyless data, cluster and recovery cases by product.
   Acceptance: AC-JV-02
   - [x] Temurin 21 passed standalone, async GTID failover and single-primary Group Replication on all four MySQL versions. Both SQL targets caught up after an election during the snapshot in every group profile.
-  - [ ] Extend Temurin 21 acceptance across source topologies, destination drivers and recovery cases.
+  - [x] Accepted the Temurin 21 source profiles, exact target client and recovery matrix, and native OceanBase and GBase 8c snapshot, CDC, restart and SQL repair.
 - [ ] T-JV-03 · Driver isolation,dependencies and TLS compatibility · P1 · Depends on: JV-01
   Deliver: Verify service loading,reflection/modules,auth/TLS/certificates,reconnect,precision and vendor minimum JDK;incompatible combinations are explicitly refused,not inferred from compilation.
   Acceptance: AC-JV-03

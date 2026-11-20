@@ -53,3 +53,7 @@ SYNC_MAVEN_CACHE=/tmp/rivomesh-container-maven-cache bash tests/gbase8c-pipeline
 ```
 
 Installer SHA-256: `6946abaa7666cbfadea3957682020262a102e52c6f7b4632d1f93fee9d3400b7`; extracted B19 kernel SHA-256: `69663acfbb786c3f05cc434fb9f6d42806609b69c818c6e6ce0c4234748ad582`, matching its vendor checksum. The unified installer also contains a B10 kernel; this fixture explicitly selects B19.
+
+## Temurin 21 native pipeline
+
+Temurin 21.0.12.1 package `78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b` verifies actual MySQL 8.4.13 snapshot and CDC to this target and PostgreSQL 17.12. The test checks JSON, keyless multiplicity, original snapshot identity, target outage and restart, Worker SIGKILL and independent SQL repair. [Evidence](../verification/baseline.json)

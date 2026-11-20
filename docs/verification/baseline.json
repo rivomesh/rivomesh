@@ -2,6 +2,20 @@
   "policy": "Single prerelease baseline;development iterations removed from working tree;Git history retains provenance. Current cleanup validation is recorded separately. Historical test results are not claimed as fresh tests of cleaned code.",
   "acceptedRequirements": [
     {
+      "id": "JV-02",
+      "title": {
+        "zh-CN": "Java 21 源、目标及恢复组合",
+        "en": "Java 21 source, sink and recovery profiles"
+      },
+      "status": "DONE",
+      "verification": {
+        "artifactSha256": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
+        "archive": "docs/verification/README.md",
+        "profile": "Temurin 21.0.12.1 for the two current native runs. Source evidence covers the approved four MySQL versions, PostgreSQL 17/18 and Oracle 26ai Free single PDB. The current package covers real MySQL 8.4 to OceanBase CE MySQL tenant; the companion current-profile GBase 8c PG-mode artifact differs only in the OceanBase connection probe. Both use a healthy PostgreSQL peer. Earlier accepted artifacts cover the other product profiles. Refer to the per-product matrix for the exact artifacts and TLS/cluster restrictions.",
+        "criteriaSha256": "41b63d7c2937c70a8058d5b45464936fb1eaf928e7c555a6b8bcf11bab5af9d0"
+      }
+    },
+    {
       "id": "RC-10",
       "title": {
         "zh-CN": "多目标恢复语义和回收保护",
@@ -14695,5 +14709,72 @@
     ],
     "reproduce": "bash tests/materialized-recovery-run.sh rabbit",
     "boundary": "One RabbitMQ 4.1.4 broker with business quorum queue and independent durable stream. The fixture consumes and ACKs the business COMMIT before reviewing its retained receipt. Deterministic journal source and maintained peer ACK. The native SQL retention suites use the immediately preceding unchanged journal code and separate real PostgreSQL and MySQL containers. Wider combined broker, storage and production profiles remain under LG-03/LG-04/LG-05."
+  },
+  "jv02Temurin21BilingualNativeMatrix": {
+    "status": "PASS",
+    "artifactSha256": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
+    "javaRuntime": "openjdk version \"21.0.12.1\" 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode, sharing)",
+    "images": [
+      "maven:3.9-eclipse-temurin-21 sha256:c288880963ade12437c07544ee5e73ca86d5208991e71cee65dcc7cdace620d4 arm64",
+      "oceanbase/oceanbase-ce:4.3.5.6-106000012026040916 sha256:2484b44dc1955c9b5ead18c7aa1ca6e0cd5da900743c7297c6fca91fa0c44ec7 arm64",
+      "opengauss/opengauss-server:latest sha256:e2f3d328094322c94d1f815c0d5b58b9bfa12d75cffadfe96288f5c29097d566 arm64",
+      "mysql:8.4 sha256:ae113cae2661960c4665a586812ae8150b2a133772a9f3ad63d1f1ae4f9e8ce7 arm64",
+      "postgres:17 sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de arm64"
+    ],
+    "profiles": {
+      "oceanbase": {
+        "artifactSha256": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
+        "logSha256": "e5f1952af9ff285a6ee94ffef66606035688142a7d62de314bf353db0e22a546",
+        "checks": [
+          "OCEANBASE_NATIVE_PROFILE: {version=5.7.25-OceanBase_CE-v4.3.5.6, mode=MYSQL, tenantId=1002, readConsistency=STRONG}",
+          "OCEANBASE_NATIVE_CONTRACT_ACCEPTED: strong reads, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen",
+          "OCEANBASE_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+OceanBase4.3.5 MySQL tenant, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, target outage with independent SQL progress/catchup, worker SIGKILL resume, independent SQL error rollback/repair/retry, persistent pause, missing-table isolation and transactional fences"
+        ],
+        "fixtureSha256": "e05b9ddc50461f8e9618ccc95b76c3b5cbceed877f35786b2b668610fe101e75",
+        "cleanupVerified": true,
+        "fixtureStorage": "Host-bound disposable observer data and settings; restart reused the same files. The Docker VM had insufficient free space for the fixture's default datafiles."
+      },
+      "gbase8c": {
+        "artifactSha256": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
+        "logSha256": "51ebd0938eae0389f021d572ed5bdaec8015be3958de3921378e9eebce3ddbfe",
+        "checks": [
+          "GBASE8C_NATIVE_PROFILE: {product=GBase8c, version=(GBase8cV6 S1.3.0B19 build 8a2447f6) compiled at 2026-09-23 14:25:09 commit 0 last mr 22  on aarch64-unknown-linux-gnu, compiled by g++ (GCC) 10.3.0, 64-bit, mode=PG, encoding=UTF8, synchronousCommit=on}",
+          "GBASE8C_NATIVE_CONTRACT_ACCEPTED: PG/UTF8/session profile, alias ownership, atomic business/checkpoint rollback, replay, epoch fence and reopen",
+          "GBASE8C_NATIVE_TYPES_ACCEPTED: exact65digit decimal/uint64/JSON/binary/generated, empty strings, Unicode/quotes, NULL, microseconds, negative duration and ordinary index metadata",
+          "GBASE8C_SNAPSHOT_ACCEPTED",
+          "GBASE8C_CDC_KEYLESS_ACCEPTED: allTIME precisions including negative fractions, keyless duration identity/delete/update",
+          "GBASE8C_OUTAGE_CATCHUP_ACCEPTED",
+          "GBASE8C_WORKER_RESTART_ACCEPTED",
+          "GBASE8C_POSTGRES_REPAIR_ACCEPTED",
+          "GBASE8C_NATIVE_SQL_REPAIR_ACCEPTED",
+          "GBASE8C_PIPELINE_ACCEPTED: actual MySQL8.4 to PostgreSQL17+Gbase8cV6_S1.3.0B19 PG mode, snapshot/CDC/uint64/decimal/JSON/binary/generated/keyless, target outage with independent SQL progress/catchup, worker SIGKILL resume, independent SQL error rollback/repair/retry, persistent pause, missing-table isolation and transactional fences"
+        ],
+        "fixtureSha256": "642f815cfbf1ae6509a91469222b89ab98b0e9efc17e5e99ab9cd255b58d23ff",
+        "cleanupVerified": true,
+        "fixtureStorage": "Original vendor kernel from the digest-verified B19 installer on ARM64. A disposable tmpfs holds the kernel binaries, and a separate persistent volume holds the native database data across restart.",
+        "nativeKernelSourceSha256": "69663acfbb786c3f05cc434fb9f6d42806609b69c818c6e6ce0c4234748ad582"
+      }
+    },
+    "oceanBaseReconnectRegression": {
+      "source": "sync-app/src/main/java/io/github/rivomesh/cdc/OceanBaseProfile.java",
+      "focusedJavaChecksPassed": 25,
+      "javaLogSha256": "d14beb2fd9aac0ec449dd811c5db40d1e195627f18d30725600a10f8cbed20b8",
+      "artifactComparisonSha256": "99674a0b0bb676869dc0a44374aaae82299c0dfae37d8b9317a7bfb91026252a",
+      "firstFailure": "Connector/J 8.4.0 statement timeout cleanup raised NullPointerException during target stop and caused a permanent pause. The clamped temporary JDBC network timeout preserves the original disconnect and restores the connection setting."
+    },
+    "otherEvidence": [
+      "temurin21SourceProfiles",
+      "temurin21MySqlAsyncGtidFailoverMatrix",
+      "temurin21MySqlSinglePrimaryGroupReplicationMatrix",
+      "automaticPlacementPostgresqlSourceTemurin21",
+      "oracleNationalCharacterPipelineRestart",
+      "nativeMysqlTls13",
+      "postgresqlVerifiedTlsRecovery",
+      "rc10RabbitReceiptAndExternalRetention"
+    ],
+    "compatibilityMatrix": [
+      "docs/zh-CN/compatibility.md",
+      "docs/en/compatibility.md"
+    ]
   }
 }

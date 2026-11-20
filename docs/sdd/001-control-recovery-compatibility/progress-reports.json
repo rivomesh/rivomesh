@@ -2,12 +2,12 @@
   "timezone": "Asia/Taipei",
   "intervalHours": 1,
   "delivery": "Active development conversation only;no independent scheduler available",
-  "lastReportAt": "2026-11-20T08:14:00+08:00",
-  "nextReportAt": "2026-11-20T08:58:16+08:00",
+  "lastReportAt": "2026-11-20T08:58:52+08:00",
+  "nextReportAt": "2026-11-20T09:58:16+08:00",
   "completedSincePrevious": [
-    "Published the grouped Kafka and analytical recovery milestone and the ActiveMQ Classic, Artemis and RocketMQ receipt milestone.",
-    "Verified exact preceding native COMMIT and older-batch refusal on real Redis Streams, NATS JetStream and Pulsar. Both journal ACKs and the original failed transaction are preserved.",
-    "Passed 44 focused Java and 5 focused console checks for the verified final package. The full earlier verification stays recorded separately."
+    "RC-10 accepted and published with native receipts, single-node opt-in RabbitMQ retained stream, and H2 plus external MySQL and PostgreSQL retention.",
+    "JV-02 acceptance passed for Temurin 21.0.12.1 with real MySQL 8.4.13, PostgreSQL 17.12, OceanBase CE 4.3.5.6 MySQL mode and GBase 8c B19 PG mode.",
+    "OceanBase now preserves the network failure through its probe. The native stop and restart resumed the original backlog, and the focused Java build passed 25 checks."
   ],
   "inProgress": [],
   "reportContents": [
@@ -18,31 +18,29 @@
     "Published commits and test results"
   ],
   "lastReportedSdd": {
-    "DONE": 36,
-    "PARTIAL": 12,
+    "DONE": 38,
+    "PARTIAL": 10,
     "NEW": 0
   },
   "lastReportedPublishedCommits": [
-    "0ef3b4f",
-    "139f04a"
+    "50fce13"
   ],
   "currentSdd": {
-    "DONE": 37,
-    "PARTIAL": 11,
+    "DONE": 38,
+    "PARTIAL": 10,
     "NEW": 0
   },
   "nextTasks": [
-    "Proceed one requirement at a time from the 11 outstanding items."
+    "Continue one SDD requirement at a time."
   ],
-  "currentCandidateArtifact": "78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b",
-  "currentCandidateScope": "Complete RC-10 accepted profiles, including optional RabbitMQ native receipt stream and verified external journal retention.",
+  "currentCandidateArtifact": "84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70",
+  "currentCandidateScope": "Temurin 21 approved source, driver and recovery matrix with native OceanBase and GBase 8c verification.",
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
-    "Published Redis Streams, NATS JetStream and Pulsar exact native preceding receipts.",
-    "RabbitMQ 4.1.4 verified native retained receipt readback after business ACK and older-batch refusal.",
-    "PostgreSQL and MySQL external journals each passed 22 retention contracts."
+    "Published RC-10 native receipts and journal retention.",
+    "Accepted JV-02 with pinned native OceanBase and GBase 8c pipelines and bilingual evidence matrix."
   ],
-  "lastScheduledReportAt": "2026-11-20T07:58:16+08:00",
+  "lastScheduledReportAt": "2026-11-20T08:58:16+08:00",
   "lastVerifiedReactor": {
     "baseCommit": "1fc8100",
     "artifactSha256": "bca803c48da04c1254348a5f0db30811cef21b068c1136c004ec771496a4227b",
@@ -84,7 +82,6 @@
     "CP-04",
     "SO-06",
     "SO-07",
-    "JV-02",
     "JV-03",
     "LG-01",
     "LG-03",
@@ -95,8 +92,8 @@
   ],
   "cleanupSincePrevious": {
     "checkedNamedFixtureResources": true,
-    "logicalBytesRemoved": 0,
-    "scope": "Named brokers and fixture networks were removed after the runs."
+    "logicalBytesRemoved": 8747741184,
+    "scope": "This rollup counts the second OceanBase fixture data directories. The first failed OceanBase fixture, the GBase vendor duplicate, its named Docker resources and an identical archived broker test JAR were also cleaned after verification."
   },
   "previousVerifiedReactor": {
     "baseCommit": "138f22498dec3f89ce2f8a669aed6d4841f39e40",
@@ -112,7 +109,6 @@
     "CP-04",
     "SO-06",
     "SO-07",
-    "JV-02",
     "JV-03",
     "LG-01",
     "LG-03",

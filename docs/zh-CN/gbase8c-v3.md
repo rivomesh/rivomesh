@@ -53,3 +53,7 @@ SYNC_MAVEN_CACHE=/tmp/rivomesh-container-maven-cache bash tests/gbase8c-pipeline
 ```
 
 Installer SHA-256: `6946abaa7666cbfadea3957682020262a102e52c6f7b4632d1f93fee9d3400b7`; extracted B19 kernel SHA-256: `69663acfbb786c3f05cc434fb9f6d42806609b69c818c6e6ce0c4234748ad582`, matching its vendor checksum. The unified installer also contains a B10 kernel; this fixture explicitly selects B19.
+
+## Temurin 21 原生链路
+
+Temurin 21.0.12.1 制品 `78e0b53d154c53b1d3cb5e1e06e9258f1a502590fc2ce34f4546b7a957dfe36b` 通过真实 MySQL 8.4.13 到该目标及 PostgreSQL 17.12 的全量与增量。验收覆盖 JSON、无主键重复行、原快照、目标中断与重启、Worker 强制终止恢复和独立 SQL 修复。 [验收证据](../verification/baseline.json)

@@ -64,3 +64,7 @@ Unit memory is not exclusively business-tenant memory: an actual 2GiB unit probe
 ## Reproduce native recovery
 
 Build the current release, then run `tests/oceanbase-pipeline-run.sh`. It checks the tenant and transaction fence, then exercises full load, CDC, outage catch-up, SIGKILL resume, independent SQL failures on both targets, repair and missing-table isolation. It cleans up its own database resources. `RIVOMESH_TEST_ARTIFACT` selects a frozen repository-relative JAR. Earlier 6 GiB-container attempts included OBD memory admission, tenant recovery and administrative DDL timeouts. The passing fixture used the resource settings above and the original transaction checkpoints.
+
+## Temurin 21 native pipeline
+
+Temurin 21.0.12.1 package `84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70` verifies actual MySQL 8.4.13 snapshot and CDC to this target and PostgreSQL 17.12. The test checks JSON, keyless multiplicity, original snapshot identity, target outage and restart, Worker SIGKILL and independent SQL repair. [Evidence](../verification/baseline.json)

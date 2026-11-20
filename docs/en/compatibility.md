@@ -26,7 +26,7 @@ MySQL uses the logical source cluster ID and untagged GTID sets. PostgreSQL uses
 | `GAUSS` | openGauss 7.0.0-RC3 native transactional profile. Commercial distributed GaussDB constraints, GSI behavior and deployment acceptance are pending. | [Gauss index policy and takeover](gaussdb-index-policy.md) |
 | `DM`, `KINGBASE`, `GBASE_8C` | The first archived native transactional profiles used Java 8. Consult each guide for the exact server mode, driver, field conversions and recovery checks. | [DM](dm-v3.md), [Kingbase](kingbase-v3.md), [GBase 8c](gbase8c-v3.md) |
 | `GBASE_8A`, `GBASE_8S` | Planned separate products. | [Product status](implementation-status.md) |
-| `OCEANBASE` | The archived CE 4.3.5.6 MySQL-mode profile passed native transactions, snapshot, CDC, restart and SQL recovery on Java 8. Oracle mode and clusters remain pending. | [OceanBase](oceanbase-v3.md) |
+| `OCEANBASE` | CE 4.3.5.6 MySQL mode passes native transactions, snapshot, CDC, restart and SQL recovery on Temurin 21. Oracle mode and clusters remain pending. | [OceanBase](oceanbase-v3.md) |
 | `CLICKHOUSE`, `DORIS`, `HIVE` | First native analytical profiles. Versioned materialization and receipts, with visibility and replay rules defined per engine. | [ClickHouse](clickhouse-v3.md), [Doris](doris-v3.md), [Hive](hive-v3.md) |
 | `KAFKA`, `PULSAR`, `RABBITMQ`, `ROCKETMQ`, `ACTIVEMQ_CLASSIC`, `ACTIVEMQ_ARTEMIS`, `REDIS_STREAMS`, `NATS_JETSTREAM` | Bounded broker profiles with confirmed at-least-once publishing. Deduplicate stable event IDs and track consumer completion separately. | [Messaging](messaging-v3.md), [ActiveMQ Classic](classic-v3.md) |
 
@@ -37,6 +37,34 @@ The V3 wizard reads `GET /api/capabilities` for source availability and limits d
 **Eclipse Temurin 21 LTS is the sole supported build and runtime.** The release uses Java 21 class files. Controller, Agent and Worker processes use Temurin 21 on Linux, Docker and Kubernetes. Record the actual JVM version, architecture and artifact SHA in each native run. Use the matching Temurin 21 fixture to verify a new source, destination, journal or recovery profile. [Reproduction commands](performance.md)
 
 Each result in the source and destination tables applies to its original candidate and environment. Earlier runtime experiments and profiles such as `fiveJdkProcesses`, `postgresqlSourceRuntimeMatrix` and `postgresqlStoredGenerated` retain their original artifact hashes and reproduction commands in the archive. [Verification manifests](../verification/baseline.json) · [Fixed historical snapshot](https://github.com/rivomesh/rivomesh/blob/419945c98f197bd6cc1c6cc3e75e9c6a4bb3188c/docs/verification/baseline.json)
+
+
+### Target evidence on Temurin 21
+
+The profile records identify the exact database or broker, the bundled client or externally admitted driver and the verified recovery operations. Scope and test artifacts follow the linked product guide and evidence ledger.
+
+| Target | Server and client | Native acceptance |
+|---|---|---|
+| `MYSQL` | 8.4.13 · Connector/J 8.4.0 | Native transactions, snapshot and CDC, JSON, keyless tables, GTID continuation and SQL repair |
+| `POSTGRESQL` | 17.12 · pgJDBC 42.7.14 | Native transactions, JSONB, keyless tables, logical-slot promotion, TLS verification and SQL repair |
+| `GAUSS` | openGauss 7.0.0-RC3 A · gsjdbc4 1.1 | Target restart, table/index consistency, business UNIQUE downgrade and original-snapshot continuation |
+| `DM` | 8.1.4.80 UTF-8 · 8.1.3.140 | External JDBC, JSON text, wide numerics, keyless tables, target and Worker restarts and isolated repair |
+| `KINGBASE` | V009R001C001B0025 PG/UTF8 · 9.0.1 | External JDBC authentication, native JSON, exact numerics, original receipts and target restart |
+| `GBASE_8C` | V6_S1.3.0B19 PG/UTF8 · 3.0.0B02 | Native MySQL snapshot/CDC, JSON, keyless rows, exact values, restart and isolated SQL repair |
+| `OCEANBASE` | CE 4.3.5.6 MySQL · Connector/J 8.4.0 | Native MySQL snapshot/CDC, JSON, keyless rows, exact values, restart and isolated SQL repair |
+| `CLICKHOUSE` | 25.8.33.6 · HTTP / RowBinary | Native materialization receipts, restart, older nonempty backup refusal and exact predecessor review |
+| `DORIS` | 4.1.3 · Connector/J 8.4.0 / Stream Load | Native writes and receipts, checkpoint recovery and exact previous-batch verification |
+| `HIVE` | 4.0.1 · Hive JDBC 4.0.1 | External PostgreSQL Metastore, ACID ORC, snapshot and CDC, Worker checkpoint restart and native receipts |
+| `KAFKA` | 3.9.2 / 4.1.2 · Kafka clients 3.9.2 / 4.1.2 | TLS/SCRAM, KRaft, native ACK, fixed-UUID transactional gap notices and checkpoint recovery |
+| `PULSAR` | 4.0.14 · Pulsar SDK 4.0.14 | Private CA/JWT, multi-broker and BookKeeper recovery, original ledger and entry receipts |
+| `RABBITMQ` | 4.1.4 · AMQP client 5.36.0 | Quorum leader recovery and consumer ACK, optional native receipt stream verified after consumer ACK |
+| `ROCKETMQ` | 5.5.0 · RocketMQ client 5.5.1 | Local SYNC_FLUSH, native commit-log receipts and the separate Controller replica-promotion profile |
+| `ACTIVEMQ_CLASSIC` | 5.19.12 · OpenWire client 5.16.8 | KahaDB shared-store failover and exact native preceding receipts |
+| `ACTIVEMQ_ARTEMIS` | 2.57.0 · Core client 2.19.1 | Primary/backup shared store and exact native receipts on a non-destructive queue |
+| `REDIS_STREAMS` | 7.4.2 / 8.0.2 · Jedis 8.0.2 | AOF, WAITAOF, externally promoted primary, TLS and native entry receipts |
+| `NATS_JETSTREAM` | 2.11.8 · jnats 2.26.4 | TLS, three-replica quorum and native sequence receipts |
+
+Commercial distributed GaussDB, OceanBase Oracle tenants and GBase 8a/8s require their own accepted profiles. Additional storage, security and production-cluster combinations are tracked by the SDD product requirements. [Evidence ledger](../verification/baseline.json) · [Acceptance profiles](../sdd/001-control-recovery-compatibility/acceptance.en.md)
 
 ## Management requests
 

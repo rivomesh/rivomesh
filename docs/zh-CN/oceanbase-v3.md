@@ -64,3 +64,7 @@ java -jar sync-app/target/rivomesh-app-0.1.0-SNAPSHOT.jar run config/oceanbase-v
 ## 复现实库恢复
 
 构建当前发布包，运行 `tests/oceanbase-pipeline-run.sh`。用例检查租户、事务隔离与 epoch，再实测全量、增量、目标停机追平、Worker 强杀、两边独立 SQL 错误、修复和缺表隔离，结束后清理夹具数据库资源。`RIVOMESH_TEST_ARTIFACT` 可以指定仓库相对路径的冻结 JAR。早期 6 GiB 容器场景曾遇到 OBD 内存准入、租户恢复以及管理 DDL 超时。此次通过使用上面的资源档案和原事务断点。
+
+## Temurin 21 原生链路
+
+Temurin 21.0.12.1 制品 `84bce56d75ce5bff72d783e03e3abbb9fcffe8b8329b44de2ed2ab52f1520b70` 通过真实 MySQL 8.4.13 到该目标及 PostgreSQL 17.12 的全量与增量。验收覆盖 JSON、无主键重复行、原快照、目标中断与重启、Worker 强制终止恢复和独立 SQL 修复。 [验收证据](../verification/baseline.json)
