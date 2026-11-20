@@ -888,6 +888,7 @@ test('PostgreSQL source wizard scopes destinations and submits a masked failover
     assert.equal(f.targetType.querySelector('[value=CLICKHOUSE]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=KINGBASE]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=DM]').disabled,false);
+    assert.equal(f.targetType.querySelector('[value=OCEANBASE]').disabled,false);
     assert.equal(f.targetType.querySelector('[value=REDIS_STREAMS]').disabled,false);
     f.targetType.value='POSTGRESQL';f.targetType.dispatchEvent(new ui.w.Event('change'));
     for(const [name,value] of Object.entries({jobId:'web-pg',clusterId:'shared-pg',pgUrl:'jdbc:postgresql://writer:5432/accounts',pgDatabase:'accounts',pgSchemas:'sales, billing',pgVersion:'17.12',pgUsername:'reader',pgPassword:'PRIVATE_PG',pgPublication:'sales_pub'}))f[name].value=value;

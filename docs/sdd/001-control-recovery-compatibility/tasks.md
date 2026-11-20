@@ -126,6 +126,7 @@ RM-SDD-001 · 2026-11-17
 - [ ] T-SO-06 · PostgreSQL 源适配器 · P1 · 依赖：SO-01
   交付：完成一致性快照与LSN衔接、逻辑复制槽/发布、事务顺序/重复去重、Replica Identity前镜像、类型/DDL及故障恢复；槽/WAL丢失和切主按确切版本验证；GUI/CLI/文档可用。
   验收：AC-SO-06
+  - [x] PostgreSQL 到 OceanBase CE 4.3.5.6 MySQL 租户的全量、增量及原 WAL 槽恢复。
   - [x] PostgreSQL 到达梦的 JSON 文本、原生 BLOB、增量及原槽恢复。
   - [x] PostgreSQL 到金仓 PG 模式的实库全量、增量及原槽恢复。
   - [x] PostgreSQL 到 Hive 4.0.1 的实库全量、增量及原槽恢复。

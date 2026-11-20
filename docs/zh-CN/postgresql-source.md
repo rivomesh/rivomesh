@@ -40,6 +40,8 @@ PostgreSQL 17.12 同时写入 PostgreSQL、ClickHouse 25.8.33.6 和 Redis Stream
 
 `--dm` 夹具覆盖 PostgreSQL 17.12 到达梦 8.1.4.80 原生模式 0、UTF8 和 `BLANK_PAD_MODE=1`。评审 JSON 转 CLOB 的计划后，显式启用 `dm.acknowledgeTextConversions`。实库验证精确 DECIMAL、JSON 大整数、bytea 写入 BLOB 及无主键重复行，重启后沿用原 WAL 槽。 [达梦目标档案](dm-v3.md)
 
+`--oceanbase` 夹具验证 PostgreSQL 17.12 到 OceanBase CE 4.3.5.6 MySQL 模式租户与 PostgreSQL 的双目标同步。实库核对精确 DECIMAL、JSON 大整数、BYTEA、主键变更和无主键重复行单次删除。强制重启后两个目标保留原快照，从原 WAL 槽追平。 [OceanBase 目标档案](oceanbase-v3.md) · [验收记录](../verification/README.md#postgresql-to-native-oceanbase)
+
 创建任务时可启用 `source.postgresql.captureSecondaryIndexes: true`，将 PostgreSQL 二级索引纳入冻结结构，并在导出的快照下复核目录。该选项属于任务身份。已有任务若需开启，要先按计划建立新的基线。
 
 `--gauss-indexes` 实库夹具核对 openGauss 7.0.0-RC3 的普通索引、业务 UNIQUE 降为普通索引以及主键保留。部分索引、表达式、非默认排序规则或操作符类、INCLUDE、非 B-tree 和非默认排序需单独审核。复杂定义作为源元数据保存。历史 DDL 执行和商业分布式 GaussDB 由 LG-08、LG-01 继续验收。 [PostgreSQL 索引目录](https://www.postgresql.org/docs/17/catalog-pg-index.html) · [Gauss 索引策略](gaussdb-index-policy.md)

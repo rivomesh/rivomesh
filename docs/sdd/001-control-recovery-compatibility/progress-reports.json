@@ -13,7 +13,7 @@
     "SO-06 and SO-07: remaining native destination parity for PostgreSQL and Oracle.",
     "LG-03: analytical production topologies, distributed storage, backups and capacity.",
     "LG-08: historical DDL execution and transactional schema-state migration.",
-    "LG-01: native OceanBase, GBase and commercial GaussDB source-to-target profiles remain."
+    "LG-01: Oracle-to-OceanBase, additional GBase and commercial GaussDB profiles remain."
   ],
   "reportContents": [
     "Current totals",
@@ -45,7 +45,8 @@
   "lastAcceptedPublicWorkflowArtifact": "7658bc7f0c73af18f3627f0d4036b7efca89bf40dd87c3868469b5a68ef13275",
   "newSinceLastReport": [
     "Oracle Free to Doris 4.1.3 passed exact values, keyless CDC, key moves and original-SCN restart.",
-    "Native Oracle to Hive 4.0.1 retained previous Hive receipts and acknowledged offline work after restart at the original SCN."
+    "Native Oracle to Hive 4.0.1 retained previous Hive receipts and acknowledged offline work after restart at the original SCN.",
+    "PostgreSQL 17.12 to OceanBase CE 4.3.5.6 MySQL mode passed exact values, keyless CDC and original-slot restart."
   ],
   "lastScheduledReportAt": "2026-11-20T13:58:16+08:00",
   "lastVerifiedReactor": {

@@ -126,6 +126,7 @@ Implementation contract: [failed transactions](design-failed-transactions.en.md)
 - [ ] T-SO-06 · PostgreSQL source adapter · P1 · Depends on: SO-01
   Deliver: Implement consistent snapshot/LSN handoff,slots/publications,ordering/replay,replica identity,types/DDL and recovery;verify WAL/slot loss/promotion per version;expose GUI/CLI/docs.
   Acceptance: AC-SO-06
+  - [x] Native PostgreSQL to OceanBase CE 4.3.5.6 MySQL mode with snapshot, CDC and original-slot recovery.
   - [x] Native PostgreSQL to Dameng exact values, CDC and original-slot restart.
   - [x] Native PostgreSQL to Kingbase PG mode snapshot, CDC and original-slot restart.
   - [x] Native PostgreSQL to Hive 4.0.1 snapshot, CDC and restart.

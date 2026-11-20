@@ -878,3 +878,7 @@ Temurin 21 package `d911726b88136a823e47e33d96720cc6ba315f9adcc8b63c05797e1eb8b6
 ## Oracle to native Hive
 
 Temurin 21 package `ba16e988ab5b584f889063e31f4ee78cc86747f6198e6c7daf3197d1b828d583` passed 86 Java tests and 19 native checks with Oracle Free 23.26.4.0.0, Hive 4.0.1 with its embedded Derby metastore, and a PostgreSQL subscription. The Hive ACID view preserves exact Oracle NUMBER, civil DATE text, Base64 RAW, SQL NULL and duplicate occurrences. The fixture checks changed text and RAW keys, reads the offline archive at the original SCN after forced restart, and verifies that the prior Hive receipts remain while new receipts are added. The fixture removed its containers and volumes. [Reproduce](../../tests/oracle-source-probe.py) · [Evidence ledger](baseline.json)
+
+## PostgreSQL to native OceanBase
+
+Temurin 21 package `4bc551a22db911a8690578ebe0984a02df31ae3b3c352be90c8e0dbfc0972b4f` passed four native checks with PostgreSQL 17.12, OceanBase CE 4.3.5.6 in a MySQL-mode tenant and a PostgreSQL subscription. The fixture checks exact DECIMAL, JSON integers, bytes and keyless multiplicity, then applies a changed key and one duplicate deletion. Both targets retain their original snapshots and resume the original WAL slot on Worker restart. The successful fixture used a disposable host-mounted data directory and removed its containers, volumes and network. [Reproduce](../../tests/postgres-source-run.py) · [Evidence ledger](baseline.json)

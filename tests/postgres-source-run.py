@@ -34,6 +34,7 @@ type_profile.add_argument('--numeric-values', action='store_true',
                           help='Exercise exact bounded PostgreSQL NUMERIC with negative and fractional-only scales')
 type_profile.add_argument('--bytea-values', action='store_true',
                           help='Verify PostgreSQL BYTEA and out-of-line TOAST through PostgreSQL and MySQL')
+type_profile.add_argument('--oceanbase', action='store_true', help='Verify PostgreSQL CDC to an OceanBase MySQL tenant')
 type_profile.add_argument('--dm', action='store_true', help='Verify PostgreSQL CDC to native Dameng')
 type_profile.add_argument('--kingbase', action='store_true', help='Verify native PostgreSQL WAL to Kingbase PG mode')
 type_profile.add_argument('--gauss-indexes', action='store_true', help='Verify PostgreSQL secondary indexes on openGauss')
@@ -69,10 +70,10 @@ if args.tls and args.failover:
     parser.error('--tls verifies the direct source and target endpoints. Use --failover for the promotion profile')
 if (args.common_cut or args.truncate_review) and (args.failover or args.generated or args.uuid):
     parser.error('--common-cut and --truncate-review use the direct three-table publication profile')
-direct_fanout = any((args.redis_clickhouse, args.gauss_indexes, args.kingbase, args.dm, args.doris, args.doris_hive))
+direct_fanout = any((args.redis_clickhouse, args.gauss_indexes, args.kingbase, args.dm, args.oceanbase, args.doris, args.doris_hive))
 isolated_resources = args.bytea_values or args.ddl_review or direct_fanout
 if direct_fanout and (args.failover or args.generated or args.uuid or args.tls or args.ddl_review or args.delivery_timing):
-    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes, --kingbase, --dm or --doris-hive')
+    parser.error('Select the direct three-table PostgreSQL 17 profile for --redis-clickhouse, --gauss-indexes, --kingbase, --dm, --oceanbase or --doris-hive')
 if args.ddl_review and (args.failover or dual_targets):
     parser.error('--ddl-review is an independent native failure profile')
 artifact = args.artifact.resolve()
@@ -81,6 +82,7 @@ output.relative_to(ROOT)
 output.mkdir(parents=True, exist_ok=True)
 digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
 environment = dict(os.environ, RM_PG_PASSWORD=secrets.token_urlsafe(32), RM_PG_TOKEN=secrets.token_urlsafe(32), RM_PG_GAUSS_PASSWORD='Ri8!'+secrets.token_hex(12), RM_PG_KINGBASE_PASSWORD='Kb!'+secrets.token_hex(12), RM_PG_DM_PASSWORD='Dm8!'+secrets.token_hex(10))
+environment['RM_PG_OB_PASSWORD']='Ob8!'+secrets.token_hex(10)
 project = 'rivomesh-pg-source-' + uuid.uuid4().hex[:10]
 image='eclipse-temurin:'+str(args.jdk)+'-jre-jammy'
 version_major='18' if args.generated else '17'
@@ -102,6 +104,8 @@ if args.doris or args.doris_hive:
     report.update(doris=True,dorisHive=args.doris_hive, project=project, harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.dm:
     report.update(dm=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+if args.oceanbase:
+    report.update(oceanbase=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.kingbase:
     report.update(kingbase=True,project=project,harnessSha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 if args.redis_clickhouse:
@@ -221,6 +225,11 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             url='jdbc:postgresql://gauss:5432/sync_test?prepareThreshold=0&connectTimeout=5&socketTimeout=15',
             username='sync_test',password='${RM_PG_GAUSS_PASSWORD}',metadataSchema='ga_meta',
             uniquePolicy='DOWNGRADE_BUSINESS',mappings=dict(sales='ga_sales',billing='ga_billing')))
+    if args.oceanbase:
+        pipeline['targets'].append(dict(id='oceanbase',product='OCEANBASE',
+            url='jdbc:mysql://oceanbase:2881/?sslMode=DISABLED&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=30000',
+            username='root@test',password='${RM_PG_OB_PASSWORD}',metadataSchema='ob_meta',
+            mappings=dict(sales='ob_sales',billing='ob_billing')))
     live_source='source'
     platform=dict(bind='0.0.0.0',port=8080,authToken='${RM_PG_TOKEN}',tasksDirectory='/fixture/tasks',
                   dataDirectory='/fixture/platform',autoStart=True,pollMillis=200,workerHeapMiB=256)
@@ -239,6 +248,19 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
         report['previousNumericArtifactSha256']=hashlib.sha256(previous_numeric_jar.read_bytes()).hexdigest()
         services['runner']['volumes'].append(str(previous_numeric_jar)+':/app/previous-numeric.jar:ro')
     document=dict(services=services)
+    if args.oceanbase:
+        services['runner']['environment']['RM_PG_OB_PASSWORD']='${RM_PG_OB_PASSWORD}'
+        for service in ('source','target'):
+            services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
+        ob_data=home/'oceanbase-data'
+        ob_data.mkdir()
+        services['oceanbase']=dict(image='oceanbase/oceanbase-ce:4.3.5.6-106000012026040916',
+            mem_limit='10g',cpus=6,stop_grace_period='60s',
+            environment=dict(MODE='mini',OB_MEMORY_LIMIT='8G',OB_SYSTEM_MEMORY='1G',OB_TENANT_MEMORY_SIZE='3G',
+                             OB_TENANT_LOG_DISK_SIZE='2G',OB_TENANT_MIN_CPU='1',OB_DATAFILE_SIZE='2G',OB_LOG_DISK_SIZE='5G',
+                             OB_TENANT_PASSWORD='${RM_PG_OB_PASSWORD}'),
+            volumes=[str(ob_data)+':/root/ob','ob_config:/root/.obd/cluster'])
+        document['volumes']=dict(ob_config={})
     if args.dm:
         for service in ('source','target'):
             services[service]['tmpfs']=['/var/lib/postgresql/data:rw,size=256m','/var/run/postgresql:rw,size=8m,mode=1777']
@@ -420,6 +442,11 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
     def dm(statement):
         return compose('exec','-T','dm_probe','java','-cp','/app/rivomesh.jar:/tmp',
                        'DmSourceTargetProbe',statement).stdout.strip()
+
+    def oceanbase(statement, checked=True):
+        return compose('exec','-T','oceanbase','sh','-ec',
+                       'MYSQL_PWD="$OB_TENANT_PASSWORD" obclient -h127.0.0.1 -P2881 -uroot@test -NB -e "$1"',
+                       'fixture',statement,check=checked).stdout.strip()
 
     def kingbase(statement):
         return compose('exec','-T','kingbase','/home/kingbase/install/kingbase/bin/ksql',
@@ -652,6 +679,8 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             endpoints.extend(('redis','clickhouse'))
         if args.dm:
             endpoints.extend(('dm','dm_probe'))
+        if args.oceanbase:
+            endpoints.append('oceanbase')
         if args.kingbase:
             endpoints.append('kingbase')
         if args.gauss_indexes:
@@ -681,6 +710,15 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             require(lambda:compose('exec','-T','dm','/bin/bash','/fixture/health.sh',check=False).returncode==0,
                     'Dameng server ready',240)
             report['dmVersion']=require(lambda:dm('--version'),'Dameng JDBC ready',180)
+        if args.oceanbase:
+            def oceanbase_ready():
+                if compose('ps','--all','--status','exited','--quiet','oceanbase').stdout.strip():
+                    diagnostic=compose('logs','--no-color','--tail','25','oceanbase',check=False).stdout
+                    report['oceanbaseStartupError']='\n'.join(line for line in diagnostic.splitlines()
+                                                               if 'OBD-200' in line or 'boot failed' in line)
+                    raise RuntimeError('OceanBase exited before accepting tenant connections')
+                return oceanbase('SELECT VERSION()',checked=False)
+            report['oceanbaseVersion']=require(oceanbase_ready,'OceanBase tenant ready',420)
         if args.kingbase:
             report['kingbaseVersion']=require(lambda:kingbase('SELECT version()'),'Kingbase target ready',240)
             assert 'V009R001C001B0025' in report['kingbaseVersion']
@@ -996,6 +1034,40 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
             assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
             passed('Dameng and PostgreSQL keep original snapshots and the WAL slot after SIGKILL')
+            report['status']='PASS'
+            raise SystemExit(0)
+
+        if args.oceanbase:
+            expected={'pg','oceanbase'}
+
+            def native_rows(key, hexadecimal, duplicates, label):
+                row=oceanbase('SELECT id,amount,payload,LOWER(HEX(data)) FROM ob_sales.items',checked=False).split('\t')
+                return (len(row)==4 and row[:2]==[str(key),'123456789012.1234']
+                        and json.loads(row[2])=={'n':18446744073709551615} and row[3]==hexadecimal
+                        and oceanbase('SELECT COUNT(*) FROM ob_sales.duplicates')==str(duplicates)
+                        and oceanbase('SELECT label FROM ob_billing.ledger')==label)
+
+            require(lambda:native_rows(1,'001aff',2,'before'),'OceanBase exact snapshot',180)
+            snapshot_query="SELECT snapshot_id FROM ob_meta.rm3_sink_table WHERE snapshot_state='COMPLETE' ORDER BY table_id"
+            original=require(lambda:ids if len((ids:=oceanbase(snapshot_query)).splitlines())==3 else None,
+                             'all OceanBase snapshots complete')
+            passed('OceanBase preserves PostgreSQL JSON numbers, binary bytes, decimals and keyless multiplicity')
+            sql('source',"BEGIN; UPDATE sales.items SET id=9,data=decode('baff','hex') WHERE id=1; "
+                         "DELETE FROM sales.duplicates WHERE ctid=(SELECT ctid FROM sales.duplicates ORDER BY ctid LIMIT 1); "
+                         "UPDATE billing.ledger SET label='online' WHERE id=1; COMMIT")
+            require(lambda:native_rows(9,'baff',1,'online') and equal(),'OceanBase atomic mixed-schema update')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=1,'both SQL receipts')
+            passed('OceanBase applies the changed key and removes exactly one keyless row')
+            slot=sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            compose('kill','-s','SIGKILL','runner')
+            sql('source',"UPDATE billing.ledger SET label='offline' WHERE id=1")
+            compose('up','-d','runner')
+            require(lambda:native_rows(9,'baff',1,'offline') and equal(),'OceanBase offline WAL restart')
+            require(lambda:(status:=latest_fanout_cut(expected)) and int(status['lastSequence'])>=2,'both restarted SQL receipts')
+            assert original==oceanbase(snapshot_query)
+            assert snapshot_ids==sql('target','SELECT snapshot_id FROM copy_meta.rm3_sink_table ORDER BY table_id')
+            assert slot==sql('source',"SELECT slot_name FROM pg_replication_slots WHERE plugin='pgoutput'")
+            passed('OceanBase and PostgreSQL keep original snapshots and the WAL slot after SIGKILL')
             report['status']='PASS'
             raise SystemExit(0)
 
@@ -1840,7 +1912,7 @@ with (tempfile.TemporaryDirectory(prefix='pg-source-',dir=ROOT/'target') as temp
             log+='\n'+'\n'.join(worker_log.read_text(errors='replace').splitlines()[-80:])
         if isinstance(error,subprocess.CalledProcessError):
             log+='\n'+(error.stdout or '')+'\n'+(error.stderr or '')
-        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN','RM_PG_GAUSS_PASSWORD','RM_PG_KINGBASE_PASSWORD','RM_PG_DM_PASSWORD'):
+        for key in ('RM_PG_PASSWORD','RM_PG_TOKEN','RM_PG_GAUSS_PASSWORD','RM_PG_KINGBASE_PASSWORD','RM_PG_DM_PASSWORD','RM_PG_OB_PASSWORD'):
             log=log.replace(environment[key],'[REDACTED]')
         (output/'runner-redacted.log').write_text(log)
         raise

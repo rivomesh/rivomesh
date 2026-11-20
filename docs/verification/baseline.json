@@ -16300,5 +16300,44 @@
     "hiveImage": "apache/hive:4.0.1",
     "remainingHiveVolumes": 0,
     "focusedJavaChecks": 86
+  },
+  "postgresqlNativeOceanBase": {
+    "artifactSha256": "4bc551a22db911a8690578ebe0984a02df31ae3b3c352be90c8e0dbfc0972b4f",
+    "status": "PASS",
+    "checks": [
+      "PostgreSQL 17 consistent snapshot maps two schemas, JSONB, numeric, bytea and keyless duplicates",
+      "OceanBase preserves PostgreSQL JSON numbers, binary bytes, decimals and keyless multiplicity",
+      "OceanBase applies the changed key and removes exactly one keyless row",
+      "OceanBase and PostgreSQL keep original snapshots and the WAL slot after SIGKILL"
+    ],
+    "jdk": 21,
+    "runtimeImage": "eclipse-temurin:21-jre-jammy",
+    "sourceImage": "postgres:17.12",
+    "failover": false,
+    "rejectOldPrimary": false,
+    "uuid": false,
+    "dateValues": false,
+    "timestampValues": false,
+    "clockValues": false,
+    "deliveryTiming": false,
+    "tls": false,
+    "oceanbase": true,
+    "project": "rivomesh-pg-source-70ed84e8ed",
+    "harnessSha256": "8a60abb84eeaa0bcb6640e2cdf90226759e71b672d1945fcd7e0f0003f906033",
+    "oceanbaseVersion": "5.7.25-OceanBase_CE-v4.3.5.6",
+    "sourceVersion": "17.12 (Debian 17.12-1.pgdg13+1)",
+    "sourceImageId": "sha256:6865912920d21689de1485f9965b718ef0d5cac229ba7be3042d7251738bd9de",
+    "runtimeVersion": "21.0.13",
+    "runtimeImageId": "sha256:5dc4a70c407354e9efde7ee2c63a4b2fbe149683e466cc306f7af65281b414b4",
+    "runtimeArchitecture": "arm64",
+    "cleanupExitCode": 0,
+    "remaining": {
+      "containers": 0,
+      "volumes": 0,
+      "networks": 0
+    },
+    "oceanbaseImage": "oceanbase/oceanbase-ce:4.3.5.6-106000012026040916",
+    "oceanbaseMode": "MYSQL",
+    "hostMountedOceanbaseData": true
   }
 }
